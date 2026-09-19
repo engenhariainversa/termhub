@@ -1,3 +1,4 @@
+import type { IncomingMessage } from 'node:http';
 import { WebSocketServer } from 'ws';
 import type { FastifyBaseLogger } from 'fastify';
 import { CLOSE, MAX_FRAME, PROTOCOL_VERSION } from '@termhub/agent-protocol';
@@ -28,9 +29,15 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
   router.addPublic(/^\/agent\/ws\/?$/, async ({ req, socket, head }) => {
     const auth = req.headers.authorization ?? '';
     const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-    if (!AGENT_TOKEN_RE.test(token)) return rejectUpgrade(socket, 401, 'Unauthorized');
+    // A refused upgrade is the only trace an agent with a stale/revoked token leaves, so log
+    // it (never the token itself); `ip` is the client as seen through the proxy chain.
+    const refuse = (reason: 'malformed-token' | 'unknown-token') => {
+      log.warn({ ip: clientIp(req), reason }, 'agent upgrade rejected');
+      rejectUpgrade(socket, 401, 'Unauthorized');
+    };
+    if (!AGENT_TOKEN_RE.test(token)) return refuse('malformed-token');
     const machine = await deps.repos.machines.findByAgentTokenHash(hashAgentToken(token));
-    if (!machine) return rejectUpgrade(socket, 401, 'Unauthorized');
+    if (!machine) return refuse('unknown-token');
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       const conn = new AgentConnection(ws, { machineId: machine.id, log });
@@ -53,10 +60,15 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
           let closed = false;
           let seen: ReturnType<typeof setInterval> | undefined;
           let beat: ReturnType<typeof setInterval> | undefined;
-          conn.on('close', () => {
+          const attachedAt = Date.now();
+          conn.on('close', (code: number, reason: string) => {
             closed = true;
             if (seen) clearInterval(seen);
             if (beat) clearInterval(beat);
+            // 1006 with no reason = the TCP path died (or our heartbeat gave up on it); a code the
+            // agent chose (1000/1001…) means it hung up on purpose. Together with `connectedMs`
+            // this tells a crash-loop apart from an idle path that silently rotted.
+            log.info({ machineId: machine.id, code, reason, connectedMs: Date.now() - attachedAt }, 'agent disconnected');
           });
 
           const touch = (extra: { version?: string; os?: string; capabilities?: string[] } = {}) =>
@@ -83,4 +95,11 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
   });
 
   return wss;
+}
+
+/** Client address for log lines: the real IP forwarded by nginx/Cloudflare, else the socket peer. */
+function clientIp(req: IncomingMessage): string {
+  const forwarded = req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'];
+  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  return first?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
 }

@@ -79,13 +79,15 @@ describe('registerAgentWs', () => {
   let repos: { machines: { findByAgentTokenHash: ReturnType<typeof vi.fn>; touchAgent: ReturnType<typeof vi.fn> } };
   let registry: AgentRegistry;
   let port: number;
+  let log: FastifyBaseLogger;
 
   function start(opts: { helloTimeoutMs?: number } = {}) {
     server = http.createServer();
     const router = createUpgradeRouter(server, { auth: {} as AuthContext });
+    log = fakeLog();
     registerAgentWs(router, {
       repos: repos as unknown as Repositories,
-      log: fakeLog(),
+      log,
       registry,
       ...opts,
     });
@@ -294,5 +296,43 @@ describe('registerAgentWs', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // Observability: an agent that vanishes (the mac mini, 2026-09-19) left no trace on the server
+  // side — neither why the socket closed nor whether it tried to come back and was refused.
+  it('logs the close code and reason when an attached agent disconnects', async () => {
+    await start();
+    const res = await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: `Bearer ${GOOD}` });
+    const ws = res.ws!;
+    const hello = { type: 'hello', protocol: PROTOCOL_VERSION, agent_version: '0.1.6', os: 'macos', arch: 'arm64', hostname: 'mini', tmux: true, tools: ['tmux'] };
+    ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify(hello)));
+    await vi.waitFor(() => expect(registry.isOnline('m1')).toBe(true));
+
+    const offline = new Promise<void>((resolve) => registry.once('offline', () => resolve()));
+    ws.close(1001, 'going away');
+    await offline;
+
+    await vi.waitFor(() =>
+      expect(log.info).toHaveBeenCalledWith(
+        expect.objectContaining({ machineId: 'm1', code: 1001, reason: 'going away', connectedMs: expect.any(Number) }),
+        'agent disconnected',
+      ),
+    );
+  });
+
+  it('logs a refused upgrade (unknown token) without the token itself', async () => {
+    await start();
+    const bad = `thb_ag_${'b'.repeat(43)}`;
+    await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: `Bearer ${bad}` });
+
+    await vi.waitFor(() => expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ reason: 'unknown-token', ip: '127.0.0.1' }), 'agent upgrade rejected'));
+    const calls = (log.warn as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => JSON.stringify(c));
+    expect(calls.join('\n')).not.toContain(bad);
+  });
+
+  it('logs a refused upgrade with a malformed or missing token', async () => {
+    await start();
+    await open(`ws://127.0.0.1:${port}/agent/ws`);
+    await vi.waitFor(() => expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ reason: 'malformed-token' }), 'agent upgrade rejected'));
   });
 });
