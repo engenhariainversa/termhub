@@ -5,6 +5,9 @@
 # Tab monitor ingestion: per-client budget (the client IP comes from Cloudflare; an empty key is not limited)
 limit_req_zone $http_cf_connecting_ip zone=termhub_hooks:1m rate=20r/s;
 
+# MCP endpoint (global terminal): per-client budget; the app also limits per token
+limit_req_zone $http_cf_connecting_ip zone=termhub_mcp:1m rate=10r/s;
+
 # Landing page
 server {
     listen 80;
@@ -34,6 +37,21 @@ server {
         proxy_set_header X-Real-IP         $http_cf_connecting_ip;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
+        client_max_body_size 256k;
+    }
+    # Global terminal: MCP clients post here with a personal API token (public route; no Access on this host)
+    location = /mcp {
+        limit_except POST { deny all; }
+        limit_req zone=termhub_mcp burst=20 nodelay;
+        limit_req_status 429;
+        proxy_pass http://__APP_HOST__:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+        proxy_read_timeout 120s;
         client_max_body_size 256k;
     }
     location / {

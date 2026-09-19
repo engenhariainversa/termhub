@@ -106,7 +106,7 @@ schemas are English; error messages are pt-BR and say what to do next.
 | `list_ai_accounts` | id, provider, label, machine. Never the `configDir` path or any credential |
 | `find` | fuzzy name lookup across machines, projects and AI accounts (case/diacritic-insensitive substring, ranked), so "MacBook Pro M4" / "Hub Community" / "pedrogoiania" resolve in one call |
 | `read_screen` | last N lines of a tab (default 200, max 2000) via `captureScreen` |
-| `wait_for_state` | blocks until the tab leaves `working` or the timeout (max 90 s); subscribes to `monitor/bus.ts`, no polling. Timeout is not an error: `{ timed_out: true, state }`. For tabs with no hook state it uses the monitor's tmux fallback and says the state is approximate |
+| `wait_for_state` | blocks until the tab leaves `working` or the timeout (max 90 s); subscribes to `monitor/bus.ts`, no polling. Timeout is not an error: `{ timed_out: true, state }`. For tabs with no hook state it returns at once with a note pointing to `read_screen` (there is no tmux-polling fallback: the monitor is hook-driven) |
 
 ### 4.2 Scope `terminals`
 

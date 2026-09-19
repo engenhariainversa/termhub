@@ -110,7 +110,17 @@ Logs on macOS: `data/logs/`. On Linux: `journalctl --user -u termhub -f` (use `l
 
 ### API tokens (global terminal)
 
-Settings → **Tokens de API** creates personal tokens (`thb_pat_…`) for the global terminal: the MCP endpoint (coming in a follow-up release) that will let one agent session drive every machine of an account. Each token has scopes — `read`, `tasks`, `terminals` — that will be intersected with its owner's own permissions when the endpoint uses it; only its sha256 is stored, the token is shown once, and it can expire (30/90/365 days) or be revoked at any time. Calls made with a token will be recorded as metadata only (tool, ids, result, duration — never terminal content) and pruned after 30 days. Set `MCP_URL` (e.g. `https://termhub.dev/mcp`) once that endpoint is deployed to show the ready-made `claude mcp add` command when a token is created.
+Settings → **Tokens de API** creates personal tokens (`thb_pat_…`) for the global terminal: the MCP endpoint at `/mcp` that lets an agent session work with every machine of an account. Each token has scopes — `read`, `tasks`, `terminals` — intersected with its owner's own permissions; only its sha256 is stored, the token is shown once, and it can expire (30/90/365 days) or be revoked at any time. Every call is recorded as metadata only (tool, ids, result, duration — never terminal content) and pruned after 30 days. Set `MCP_URL` (e.g. `https://termhub.dev/mcp`) to show the ready-made `claude mcp add` command when a token is created.
+
+### Global terminal (MCP)
+
+`POST /mcp` speaks the MCP Streamable HTTP transport (stateless, JSON responses) and authenticates each request with `Authorization: Bearer <token>`. Connect Claude Code with:
+
+```bash
+claude mcp add --transport http termhub https://termhub.dev/mcp --header "Authorization: Bearer thb_pat_…"
+```
+
+Tools available today (scope `read`): `list_machines`, `list_projects`, `list_tabs`, `list_ai_accounts`, `find` (names → ids), `read_screen`, `wait_for_state`. A token sees only the tools its scopes and its owner's role allow; each token may make 120 calls per minute. In production the landing host forwards `/mcp` to the app outside Cloudflare Access (`deploy/nginx/termhub.dev.conf.tmpl`).
 
 ### Cloudflare Tunnel
 

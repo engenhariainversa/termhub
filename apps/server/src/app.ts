@@ -29,6 +29,7 @@ import { roleRoutes } from './routes/roles.js';
 import { userRoutes } from './routes/users.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { apiTokenRoutes } from './routes/api-tokens.js';
+import { mcpRoutes } from './mcp/route.js';
 import { actionForMethod, type Resource } from './auth/permissions.js';
 import { startTicketSyncScheduler } from './setup/tickets-sync.js';
 import { registerTerminalWs } from './terminal/ws.js';
@@ -40,6 +41,7 @@ import { SimulatorSessionManager } from './simulator/session-manager.js';
 import { realBackend } from './simulator/backend.js';
 import { seed } from './seed.js';
 
+const SERVER_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'apps', 'server', 'package.json'), 'utf8')).version as string;
 
 export interface App {
   fastify: FastifyInstance;
@@ -153,13 +155,16 @@ export async function buildApp(): Promise<App> {
     { prefix: '/api' },
   );
 
+  // --- MCP endpoint for the global terminal (public route: a personal API token authenticates each call) ---
+  await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION }));
+
   // --- Frontend buildado (produção) ---
   const webDist = path.join(ROOT_DIR, 'apps', 'web', 'dist');
   if (fs.existsSync(path.join(webDist, 'index.html'))) {
     await fastify.register(fastifyStatic, { root: webDist, prefix: '/', index: ['index.html'] });
     // SPA fallback: qualquer rota não-API devolve o index.html
     fastify.setNotFoundHandler((request, reply) => {
-      if (request.url.startsWith('/api/') || request.url.startsWith('/ws/')) {
+      if (request.url.startsWith('/api/') || request.url.startsWith('/ws/') || request.url.startsWith('/mcp')) {
         return reply.code(404).send({ error: 'Não encontrado' });
       }
       return reply.sendFile('index.html');
