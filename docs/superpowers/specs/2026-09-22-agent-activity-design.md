@@ -21,7 +21,7 @@ Success:
 - An agent editing files reads `codando` on the floor within a second or two of its first edit,
   and switches to `lendo arquivos` when it starts reading, with no reload.
 - Twenty consecutive edits cost the server one request, not twenty.
-- The server never receives a tool's input for a `PreToolUse` event.
+- The server never receives a tool's input for a `PreToolUse` event — except `AskUserQuestion`'s, whose input is the question written to be shown to the person (see `2026-09-25-chat-tab-questions-design.md` §4.1).
 - A machine whose agent has not updated, and any Codex tab, reads `trabalhando` — never a wrong
   category, never a blank.
 

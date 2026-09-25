@@ -1,6 +1,6 @@
 {
   "name": "@termhub/agent",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Agente do termhub: conecta esta máquina ao servidor por WebSocket de saída (sem SSH) e expõe os terminais tmux no navegador.",
   "license": "MIT",
   "private": false,

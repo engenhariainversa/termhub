@@ -35,8 +35,13 @@ export function expandHome(dir: string, home: string): string {
   return dir.startsWith('~/') ? `${home}/${dir.slice(2)}` : dir;
 }
 
-/** Claude Code hook events we subscribe to (see the server's monitor/state.ts for what each one means). */
-export const CLAUDE_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Notification', 'Stop', 'SessionEnd'] as const;
+/** Claude Code hook events we subscribe to (see the server's monitor/state.ts for what each one means).
+ * `PermissionRequest` is taken for its tool name only; the script prints nothing, which Claude Code
+ * reads as "no decision" — our hook never allows or denies (hook-script.test.ts keeps stdout empty). */
+export const CLAUDE_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'Notification', 'Stop', 'SessionEnd'] as const;
+
+/** Events Claude Code runs per tool: their entry needs a matcher ('*' = every tool). */
+const CLAUDE_TOOL_EVENTS: ReadonlySet<string> = new Set(['PreToolUse', 'PermissionRequest']);
 
 /**
  * Cursor CLI hook events we subscribe to (~/.cursor/hooks.json; see the server's monitor/state.ts).
@@ -68,6 +73,7 @@ if [ "$TOOL" = codex ]; then EVENT="$2"; else EVENT=$(cat 2>/dev/null); fi
 # screen, and only when the pair changed since the last one for this session — twenty edits in a row
 # are one request as long as the verb stays the same (a new verb mid-run is a new request). The marker is per tmux
 # session, under TMPDIR, with the session name reduced to filename-safe characters.
+# AskUserQuestion is the one exception (below).
 MARK="\${TMPDIR:-/tmp}/termhub-hook-$(printf '%s' "$SESSION" | tr -c 'A-Za-z0-9_-' '_')"
 case "$EVENT" in
   *'"hook_event_name":"PreToolUse"'*|*'"hook_event_name": "PreToolUse"'*)
@@ -82,30 +88,48 @@ case "$EVENT" in
     REST=\${REST#*'"'}
     NAME=\${REST%%'"'*}
     case "$NAME" in '' | *[!A-Za-z0-9_.-]*) exit 0 ;; esac
-    # Claude Code's spinner verb ("✻ Moonwalking… (12s · esc to interrupt)"): the visible pane is
-    # read here, on the machine, and only the verb may leave it — one word of 2 to 24 ASCII letters
-    # right after a spinner glyph at column 0 and a single space, immediately followed by "…" or
-    # "...", then the end of the line or a space. Column 0 because Claude Code draws its spinner
-    # there, while a draft in the input box or indented tool output can look just like one. The
-    # lowest such line of the last 24 non-blank rows wins (the live spinner sits above the todo list
-    # and the input box; blank rows under a short session are skipped). Both grep and sed run under
-    # LC_ALL=C: bytes the locale calls invalid then neither trip grep's "binary file matches" (which
-    # would also swallow the rest of the screen) nor sed's "illegal byte sequence" on macOS, and
-    # the match works the same on GNU, BSD and busybox. ASCII only on purpose: a customised verb
-    # with accents is dropped rather than half-matched. The case below checks the result again, so
-    # the hand-built JSON only ever gets letters.
-    VERB=$(tmux capture-pane -p -t "$TMUX_PANE" 2>/dev/null | LC_ALL=C grep -v '^[[:space:]]*$' 2>/dev/null | tail -n 24 |
-      LC_ALL=C sed -n -E 's/^(·|✢|✳|✶|✻|✽|\\*) ([A-Za-z]{2,24})(…|\\.\\.\\.)( .*)?$/\\2/p' | tail -n 1)
-    case "$VERB" in *[!A-Za-z]*) VERB= ;; esac
-    [ "\${#VERB}" -le 24 ] || VERB=
-    KEY="$NAME\${VERB:+ $VERB}"
-    [ "$(cat "$MARK" 2>/dev/null)" = "$KEY" ] && exit 0
-    printf '%s' "$KEY" 2>/dev/null > "$MARK"
-    if [ -n "$VERB" ]; then
-      EVENT=$(printf '{"hook_event_name":"PreToolUse","tool_name":"%s","verb":"%s"}' "$NAME" "$VERB")
-    else
-      EVENT=$(printf '{"hook_event_name":"PreToolUse","tool_name":"%s"}' "$NAME")
+    # AskUserQuestion's input is the question itself, written to be shown to the person (spec
+    # 2026-09-25 §4.1): the whole event goes as it came — the server keeps tool_use_id and
+    # tool_input and drops the rest — and the marker is neither read nor written, so two questions
+    # in a row are two questions. NAME is the event's own first "tool_name", never one nested in
+    # another tool's input.
+    if [ "$NAME" != AskUserQuestion ]; then
+      # Claude Code's spinner verb ("✻ Moonwalking… (12s · esc to interrupt)"): the visible pane is
+      # read here, on the machine, and only the verb may leave it — one word of 2 to 24 ASCII letters
+      # right after a spinner glyph at column 0 and a single space, immediately followed by "…" or
+      # "...", then the end of the line or a space. Column 0 because Claude Code draws its spinner
+      # there, while a draft in the input box or indented tool output can look just like one. The
+      # lowest such line of the last 24 non-blank rows wins (the live spinner sits above the todo list
+      # and the input box; blank rows under a short session are skipped). Both grep and sed run under
+      # LC_ALL=C: bytes the locale calls invalid then neither trip grep's "binary file matches" (which
+      # would also swallow the rest of the screen) nor sed's "illegal byte sequence" on macOS, and
+      # the match works the same on GNU, BSD and busybox. ASCII only on purpose: a customised verb
+      # with accents is dropped rather than half-matched. The case below checks the result again, so
+      # the hand-built JSON only ever gets letters.
+      VERB=$(tmux capture-pane -p -t "$TMUX_PANE" 2>/dev/null | LC_ALL=C grep -v '^[[:space:]]*$' 2>/dev/null | tail -n 24 |
+        LC_ALL=C sed -n -E 's/^(·|✢|✳|✶|✻|✽|\\*) ([A-Za-z]{2,24})(…|\\.\\.\\.)( .*)?$/\\2/p' | tail -n 1)
+      case "$VERB" in *[!A-Za-z]*) VERB= ;; esac
+      [ "\${#VERB}" -le 24 ] || VERB=
+      KEY="$NAME\${VERB:+ $VERB}"
+      [ "$(cat "$MARK" 2>/dev/null)" = "$KEY" ] && exit 0
+      printf '%s' "$KEY" 2>/dev/null > "$MARK"
+      if [ -n "$VERB" ]; then
+        EVENT=$(printf '{"hook_event_name":"PreToolUse","tool_name":"%s","verb":"%s"}' "$NAME" "$VERB")
+      else
+        EVENT=$(printf '{"hook_event_name":"PreToolUse","tool_name":"%s"}' "$NAME")
+      fi
     fi
+    ;;
+  # A permission prompt: only the tool's name travels, exactly like a tool call (never its input,
+  # never the suggestions). AskUserQuestion's own prompt is dropped — its PreToolUse already carried
+  # the question. Same first-"tool_name" rule and character set as above.
+  *'"hook_event_name":"PermissionRequest"'*|*'"hook_event_name": "PermissionRequest"'*)
+    REST=\${EVENT#*'"tool_name"'}
+    [ "$REST" != "$EVENT" ] || exit 0
+    REST=\${REST#*'"'}
+    NAME=\${REST%%'"'*}
+    case "$NAME" in '' | *[!A-Za-z0-9_.-]* | AskUserQuestion) exit 0 ;; esac
+    EVENT=$(printf '{"hook_event_name":"PermissionRequest","tool_name":"%s"}' "$NAME")
     ;;
   # A new turn starts fresh, and so does an answered notification: a permission prompt takes the tab
   # out of working, and the tool the person approves is the same one that set the marker, so without
@@ -157,7 +181,7 @@ export function mergeClaudeSettings(current: string, scriptPath: string, shown =
     const others = list.filter((e) => !isOurs(e));
     const entry: HookEntry = { hooks: [{ type: 'command', command: `${scriptPath} claude`, timeout: 10 } as { type: string; command: string }] };
     // A tool event's entry is filtered by tool name; '*' says every tool explicitly (so would no matcher).
-    if (event === 'PreToolUse') entry.matcher = '*';
+    if (CLAUDE_TOOL_EVENTS.has(event)) entry.matcher = '*';
     others.push(entry);
     next[event] = others;
   }
