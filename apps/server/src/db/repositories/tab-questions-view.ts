@@ -23,10 +23,15 @@ export async function describeTabQuestions(repos: Pick<Repositories, 'tabs'>, ro
   const ids = [...new Set(rows.map((r) => r.tab_id))];
   const tabs = ids.length ? await repos.tabs.findByIdsForOwner(ids, userId) : [];
   const nameOf = new Map(tabs.map((t) => [t.id, t.name]));
-  return rows.map((r) => ({
+  return rows.map((r) => toTabQuestionView(r, nameOf.get(r.tab_id) ?? null));
+}
+
+/** One row as a view, with the tab's name already resolved by the caller. */
+export function toTabQuestionView(r: TabQuestion, tabName: string | null): TabQuestionView {
+  return {
     id: r.id,
     tab_id: r.tab_id,
-    tab_name: nameOf.get(r.tab_id) ?? null,
+    tab_name: tabName,
     kind: r.kind,
     payload: r.payload,
     status: r.status,
@@ -35,5 +40,5 @@ export async function describeTabQuestions(repos: Pick<Repositories, 'tabs'>, ro
     created_at: r.created_at,
     answered_at: r.answered_at,
     closed_at: r.closed_at,
-  }));
+  };
 }

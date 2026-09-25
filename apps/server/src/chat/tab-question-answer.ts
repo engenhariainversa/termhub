@@ -3,7 +3,7 @@ import { ControlError, type ControlContext } from '../control/context.js';
 import { readScreen } from '../control/screen.js';
 import { sendInput, sendKey } from '../control/terminals.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
-import type { TabQuestionView } from '../db/repositories/tab-questions-view.js';
+import { toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import { choiceKeyPlan, permissionKeyPlan, type KeyStep } from './tab-question-keys.js';
 import { checkChoiceAnswer, choiceAnswerBody, permissionAnswerBody, type ChoiceAnswer, type ChoicePayload, type PermissionAnswer, type TabQuestionKind } from './tab-question-payload.js';
@@ -15,6 +15,10 @@ export const KEY_STEP_PAUSE_MS = 150;
 /** How much of the pane the live check and the excerpt read. */
 export const SCREEN_CHECK_LINES = 60;
 export const SCREEN_EXCERPT_LINES = 20;
+/** The footer both Claude Code dialogs end with ("… · Esc to cancel", "Esc to cancel · Tab to amend"). */
+export const DIALOG_FOOTER = 'Esc to cancel';
+/** How far above the footer the question's marker may sit: the dialog block, not the scrollback. */
+export const PROMPT_MARKER_LINES = 25;
 
 export type TabAnswer = ChoiceAnswer | PermissionAnswer;
 
@@ -49,13 +53,18 @@ export function lastNonBlankLines(text: string, n = SCREEN_EXCERPT_LINES): strin
 }
 
 /**
- * The live check (spec §5.3): the question must still be on screen. Whitespace is dropped on both
- * sides, because Claude Code wraps a long question over several indented rows. A permission prompt
- * reads "Do you want to proceed?" (or "Do you want to make this edit…?"): that line is required. The
- * tool's name alone is not enough, since it stays in the scrollback after the prompt is gone.
+ * The live check (spec §5.3): the question must be the dialog the tab is showing *now*. Two things,
+ * both required. The last non-blank line is a dialog's footer (`DIALOG_FOOTER`), so a tab back at
+ * its normal prompt never passes, whatever its scrollback says. And the marker sits within the last
+ * `PROMPT_MARKER_LINES` non-blank lines, that is inside the dialog block: the first question's text for
+ * a choice, "Do you want" for a permission (Claude Code asks "Do you want to proceed?" or "Do you want
+ * to make this edit…?"; the tool's name alone is not enough, it stays in the scrollback). Whitespace is
+ * dropped on both sides, because Claude Code wraps a long question over several indented rows.
  */
 export function promptVisible(screen: string, row: Pick<TabQuestion, 'kind' | 'payload'>): boolean {
-  const shown = squash(lastNonBlankLines(screen, SCREEN_CHECK_LINES));
+  const block = lastNonBlankLines(screen, PROMPT_MARKER_LINES);
+  if (!block.slice(block.lastIndexOf('\n') + 1).includes(DIALOG_FOOTER)) return false;
+  const shown = squash(block);
   if (row.kind === 'choice') {
     const first = (row.payload as ChoicePayload).questions[0];
     return !!first && shown.includes(squash(first.question).slice(0, 80));
@@ -64,7 +73,7 @@ export function promptVisible(screen: string, row: Pick<TabQuestion, 'kind' | 'p
 }
 
 const asHttp = (err: unknown): unknown => (err instanceof ControlError ? new HttpError(409, err.message, err.code) : err);
-const codeOf = (err: unknown): string => (err instanceof ControlError || err instanceof HttpError ? (err.code ?? 'SEND_FAILED') : 'SEND_FAILED');
+const codeOf = (err: unknown, fallback = 'SEND_FAILED'): string => (err instanceof ControlError || err instanceof HttpError ? (err.code ?? fallback) : fallback);
 const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 async function runKeyPlan(ctx: ControlContext, tabId: string, steps: KeyStep[], sleep: (ms: number) => Promise<void>): Promise<void> {
@@ -117,14 +126,25 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
     await runKeyPlan(ctx, tab.id, steps, deps.sleep ?? pause);
   } catch (err) {
     const code = codeOf(err);
-    const failed = await ctx.repos.tabQuestions.markFailed(row.id, code);
-    if (failed) await publishTabQuestions(ctx.repos, 'tab_question_answered', [failed]);
     deps.log.warn({ tabQuestionId: row.id, tabId: tab.id, kind: row.kind, code }, 'tab question answer failed');
+    // Recording the failure is best effort: a db or bus error here must not replace the send's own error.
+    try {
+      const failed = await ctx.repos.tabQuestions.markFailed(row.id, code);
+      if (failed) await publishTabQuestions(ctx.repos, 'tab_question_answered', [failed]);
+    } catch (recordErr) {
+      deps.log.warn({ tabQuestionId: row.id, tabId: tab.id, code: codeOf(recordErr, 'RECORD_FAILED') }, 'tab question failure not recorded');
+    }
     throw new HttpError(502, 'Não foi possível responder na aba', code);
   }
   deps.log.info({ tabQuestionId: row.id, tabId: tab.id, kind: row.kind, steps: steps.length }, 'tab question answered');
-  const [view] = await publishTabQuestions(ctx.repos, 'tab_question_answered', [claimed]);
-  return view;
+  // The keys are in the tab: announcing it is best effort and can no longer turn the answer into an error.
+  try {
+    const [view] = await publishTabQuestions(ctx.repos, 'tab_question_answered', [claimed]);
+    if (view) return view;
+  } catch (err) {
+    deps.log.warn({ tabQuestionId: row.id, tabId: tab.id, code: codeOf(err, 'PUBLISH_FAILED') }, 'tab question answer not announced');
+  }
+  return toTabQuestionView(claimed, tab.name);
 }
 
 /** The permission card's live excerpt (spec §6.1): read on demand, never stored nor logged. */

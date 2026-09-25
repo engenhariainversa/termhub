@@ -40,7 +40,7 @@ function ctxFor(current: TabQuestion | undefined, opts: { latest?: TabQuestion |
   const scoped = {
     tab: vi.fn(async (id: string) => {
       if (opts.outOfScope) throw notFound('Tab não encontrada');
-      return { tab: { id, kind: 'terminal', tmux_session: 'th-t1', state: 'waiting_permission' }, machine: { id: 'm1', type: 'agent' }, project: { id: 'p1' }, cwd: '/w' };
+      return { tab: { id, name: 'api', kind: 'terminal', tmux_session: 'th-t1', state: 'waiting_permission' }, machine: { id: 'm1', type: 'agent' }, project: { id: 'p1' }, cwd: '/w' };
     }),
   };
   const repos = { tabQuestions, tabs: { findByIdsForOwner: vi.fn(async () => [{ id: 't1', name: 'api' }]) } };
@@ -147,6 +147,21 @@ describe('answerTabQuestion', () => {
     expect(sendKey).not.toHaveBeenCalled();
   });
 
+  it('409 TAB_PROMPT_CHANGED on prose saying "Do you want me to…" with no dialog footer — nothing claimed nor typed', async () => {
+    const { ctx, tabQuestions } = ctxFor(permission());
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: '● Bash(npm test)\n● Do you want me to fix the failing test?\n────\n❯ \n' });
+    await rejects(answerTabQuestion(ctx, 'q2', { allow: false }, { log: log(), sleep: noSleep }), 409, 'TAB_PROMPT_CHANGED');
+    expect(tabQuestions.claim).not.toHaveBeenCalled();
+    expect(sendKey).not.toHaveBeenCalled();
+  });
+
+  it('409 TAB_PROMPT_CHANGED when the choice question is only in the scrollback', async () => {
+    const { ctx } = ctxFor(row());
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: `${screens.choice}\n● Blue it is.\n────\n❯ \n` });
+    await rejects(answerTabQuestion(ctx, 'q1', { answers: [{ selected: [0] }, { selected: [0] }] }, { log: log(), sleep: noSleep }), 409, 'TAB_PROMPT_CHANGED');
+    expect(sendKey).not.toHaveBeenCalled();
+  });
+
   it('an offline machine at the screen check is a 409 with its own code, nothing claimed', async () => {
     const { ctx, tabQuestions } = ctxFor(row());
     readScreen.mockRejectedValue(new ControlError('MACHINE_OFFLINE', 'A máquina está offline'));
@@ -162,6 +177,26 @@ describe('answerTabQuestion', () => {
     expect(tabQuestions.markFailed).toHaveBeenCalledWith('q1', 'MACHINE_OFFLINE');
     expect(events).toEqual([expect.objectContaining({ type: 'tab_question_answered', question: expect.objectContaining({ status: 'failed', error_code: 'MACHINE_OFFLINE' }) })]);
     expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', tabId: 't1', kind: 'choice', code: 'MACHINE_OFFLINE' }, 'tab question answer failed');
+  });
+
+  it('a failure to mark or announce the failed row keeps the send error (502, its code) and its warning', async () => {
+    const { ctx, tabQuestions } = ctxFor(row());
+    sendKey.mockRejectedValueOnce(new ControlError('MACHINE_OFFLINE', 'A máquina está offline'));
+    tabQuestions.markFailed.mockRejectedValueOnce(new Error('db down'));
+    const l = log();
+    await rejects(answerTabQuestion(ctx, 'q1', { answers: [{ selected: [0] }, { selected: [1] }] }, { log: l, sleep: noSleep }), 502, 'MACHINE_OFFLINE');
+    expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', tabId: 't1', kind: 'choice', code: 'MACHINE_OFFLINE' }, 'tab question answer failed');
+    expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', tabId: 't1', code: 'RECORD_FAILED' }, 'tab question failure not recorded');
+  });
+
+  it('once the keys were typed, a failure to announce it still answers 200 with the answered card', async () => {
+    const { ctx } = ctxFor(row());
+    (ctx.repos.tabs.findByIdsForOwner as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db down'));
+    const l = log();
+    const view = await answerTabQuestion(ctx, 'q1', { answers: [{ selected: [0] }, { selected: [1] }] }, { log: l, sleep: noSleep });
+    expect(view).toMatchObject({ id: 'q1', tab_name: 'api', status: 'answered' });
+    expect(l.info).toHaveBeenCalledWith(expect.objectContaining({ tabQuestionId: 'q1' }), 'tab question answered');
+    expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', tabId: 't1', code: 'PUBLISH_FAILED' }, 'tab question answer not announced');
   });
 
   it('logs ids, kind and step count — never the answer', async () => {
@@ -186,6 +221,9 @@ describe('answerTabQuestion', () => {
   });
 });
 
+const CHOICE_FOOTER = 'Enter to select · Tab/Arrow keys to navigate · Esc to cancel';
+const PERMISSION_FOOTER = 'Esc to cancel · Tab to amend';
+
 describe('promptVisible', () => {
   it('finds the first question on the captured card and the permission prompt on its own screen', () => {
     expect(promptVisible(screens.choice, row())).toBe(true);
@@ -196,7 +234,18 @@ describe('promptVisible', () => {
   });
   it('matches a question the terminal wrapped', () => {
     const long = { ...colors, question: 'Which of these deployment targets should the new staging environment use from now on?' };
-    expect(promptVisible('Which of these deployment targets should the new\n  staging environment use from now on?\n❯ 1. A', row({ payload: { questions: [long] } }))).toBe(true);
+    expect(promptVisible(`Which of these deployment targets should the new\n  staging environment use from now on?\n❯ 1. A\n${CHOICE_FOOTER}`, row({ payload: { questions: [long] } }))).toBe(true);
+  });
+  it('is anchored to the dialog: its footer must be the last non-blank line', () => {
+    // Claude's own prose asking "Do you want me to…", with the normal prompt below it: no dialog.
+    expect(promptVisible('● Done. Do you want me to also run the tests?\n\n────\n❯ \n────\n  ? for shortcuts\n', permission())).toBe(false);
+    // The choice question still in the scrollback, the tab back at its normal prompt.
+    expect(promptVisible(`${screens.choice}\n● Thanks, blue it is.\n────\n❯ \n────\n  ? for shortcuts\n`, row())).toBe(false);
+    // The footer is there but the marker scrolled more than 25 non-blank lines above it.
+    const far = ['Do you want to proceed?', ...Array.from({ length: 25 }, (_, i) => `line ${i}`), PERMISSION_FOOTER].join('\n');
+    expect(promptVisible(far, permission())).toBe(false);
+    const near = ['Do you want to proceed?', ...Array.from({ length: 23 }, (_, i) => `line ${i}`), PERMISSION_FOOTER].join('\n');
+    expect(promptVisible(near, permission())).toBe(true);
   });
 });
 

@@ -109,11 +109,15 @@ describe('answer bodies', () => {
     }
   });
 
-  it('permission: allow alone, deny with or without text, never text with allow nor a "!" command', () => {
+  it('permission: allow alone, deny with or without text, never text with allow nor a "!" or "/" command', () => {
     expect(permissionAnswerBody.parse({ allow: true })).toEqual({ allow: true });
     expect(permissionAnswerBody.parse({ allow: false, text: ' use pnpm ' })).toEqual({ allow: false, text: 'use pnpm' });
     expect(permissionAnswerBody.safeParse({ allow: true, text: 'x' }).success).toBe(false);
     expect(permissionAnswerBody.safeParse({ allow: false, text: '  !rm -rf /' }).success).toBe(false);
+    // After Escape, Claude Code is back at its prompt, where a leading "/" runs a slash command (/exit).
+    expect(permissionAnswerBody.safeParse({ allow: false, text: '/exit' }).success).toBe(false);
+    expect(permissionAnswerBody.safeParse({ allow: false, text: '  /clear' }).success).toBe(false);
+    expect(permissionAnswerBody.safeParse({ allow: false, text: 'use a/b instead' }).success).toBe(true);
     expect(permissionAnswerBody.safeParse({}).success).toBe(false);
   });
 });

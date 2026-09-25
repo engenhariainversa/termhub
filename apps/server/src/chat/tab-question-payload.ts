@@ -101,8 +101,10 @@ export type ChoiceAnswer = z.infer<typeof choiceAnswerBody>;
 export const permissionAnswerBody = z
   .object({ allow: z.boolean(), text: answerText.optional() })
   .refine((a) => !(a.allow && a.text !== undefined), { message: 'texto só acompanha uma negação', path: ['text'] })
-  // After a rejection Claude Code is back at its prompt, where a leading "!" runs the rest in bash.
-  .refine((a) => !a.text?.startsWith('!'), { message: 'o texto não pode começar com "!"', path: ['text'] });
+  // After a rejection Claude Code is back at its prompt, where a leading "!" runs the rest in bash
+  // and a leading "/" runs a slash command (`/exit`, `/clear`…).
+  .refine((a) => !a.text?.startsWith('!'), { message: 'o texto não pode começar com "!"', path: ['text'] })
+  .refine((a) => !a.text?.startsWith('/'), { message: 'o texto não pode começar com "/"', path: ['text'] });
 export type PermissionAnswer = z.infer<typeof permissionAnswerBody>;
 
 export type ChoiceAnswerProblem = 'ANSWER_COUNT' | 'ANSWER_OPTION' | 'ANSWER_SHAPE';

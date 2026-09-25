@@ -217,10 +217,14 @@ Same card in `apps/mobile/src/features/chat/view/tab-question-card.tsx`; store a
 - Push keeps notification kind `confirmation` with `data.kind = 'tab_question'` (the mobile-api
   notification enum is closed; a new kind would break older apps).
 - Closing: every `Notification` is exempt (an `idle_prompt` reminder must not close an open question).
-- Permission live check accepts "Do you want" (Claude Code also asks "Do you want to make this edit…?")
-  or the tool name.
-- Answer text is one line without control characters; a deny text starting with `!` is rejected
-  (after `Escape` it lands at Claude's prompt, where `!` runs bash).
+- Live check is anchored to the dialog the tab shows now: the last non-blank line of the capture
+  must contain the dialog footer "Esc to cancel", and the marker must appear within the last 25
+  non-blank lines — the first question's text for a choice, "Do you want" (only) for a permission
+  (Claude Code also asks "Do you want to make this edit…?"; the tool name alone does not count).
+- Answer text is one line without control characters; a deny text starting with `!` or `/` is
+  rejected (after `Escape` it lands at Claude's prompt, where `!` runs bash and `/` a slash command).
+- After the keys are sent, recording or announcing the result is best effort: a db/bus error there
+  never changes the HTTP result (the send error, if any, is kept).
 - Keys are sent with a new `KEY_STEP_PAUSE_MS = 150` between steps (no such pause existed).
 - Agent machines: the agent's `heal()` rewrites the script and merges the new settings entry on
   reconnect, so they need no manual reinstall after updating the agent.
