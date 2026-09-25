@@ -60,7 +60,7 @@ apps/mobile/
       settings/                 device, biometrics, host, leave
       theme/                    light/dark preference
       shared/                   signals, relative-time, small helpers
-    ui/                         Screen, Text, Button, Field, PinPad, Sheet, Card… (NativeWind)
+    ui/                         Screen, Text, Button, Field, PinInput, Sheet, Card… (NativeWind)
     theme/tokens.ts             palette (CSS vars) for both schemes
   test/                         jest setup, MMKV/SecureStore/key fakes
 ```
@@ -190,7 +190,7 @@ Biometrics (P§5.6): `enableBiometrics()` asks the OS prompt once (`expo-local-a
 
 ## 9. UI
 
-NativeWind v4 with `tailwind.config.js` (`darkMode: 'class'`, `nativewind/preset`) and `src/theme/tokens.ts` exporting the termhub palette for both schemes (`bg`, `surface`, `border`, `text`, `muted`, `accent` = `#5B63D3`, `accentSoft`, `danger`, `ok`), published as CSS variables by a `ThemeProvider` on the root `View` and mapped to `app-*` colour utilities, exactly as in Opa Pingou. System font; no font loading. Components in `src/ui`: `Screen` (safe area + padding), `Text` variants, `Button` (primary, secondary, danger, loading), `Field`, `PinPad` and `PinDots`, `Sheet` (bottom sheet on a `Modal`), `Card`, `EmptyState`, `Countdown`, `Banner`. Copy in pt-BR throughout.
+NativeWind v4 with `tailwind.config.js` (`darkMode: 'class'`, `nativewind/preset`) and `src/theme/tokens.ts` exporting the termhub palette for both schemes (`bg`, `surface`, `border`, `text`, `muted`, `accent` = `#5B63D3`, `accentSoft`, `danger`, `ok`), published as CSS variables by a `ThemeProvider` on the root `View` and mapped to `app-*` colour utilities, exactly as in Opa Pingou. System font; no font loading. Components in `src/ui`: `Screen` (safe area + padding), `Text` variants, `Button` (primary, secondary, danger, loading), `Field`, `PinInput` (the system number pad under `PinDots`) and `PinDots`, `Sheet` (bottom sheet on a `Modal`, rising with the keyboard), `Card`, `EmptyState`, `Countdown`, `Banner`. Copy in pt-BR throughout.
 
 ## 10. Testing
 

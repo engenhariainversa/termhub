@@ -15,16 +15,14 @@ jest.mock('@/features/session/viewmodel/useSessionStore', () => {
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { CreatePinScreen } from './create-pin-screen';
 
+/** The whole PIN at once, as the system number pad delivers it into the hidden field. */
 async function typePin(pin: string) {
-  for (const digit of pin) {
-    // eslint-disable-next-line no-await-in-loop -- sequential presses, each awaited to avoid overlap (see pin-pad.test.tsx)
-    await fireEvent.press(screen.getByRole('button', { name: digit }));
-  }
+  await fireEvent.changeText(screen.getByLabelText('PIN'), pin);
 }
 
 describe('Criar PIN', () => {
   beforeEach(() => {
-    useSessionStore.setState({ phase: 'pin_setup', error: null });
+    useSessionStore.setState({ phase: 'pin_setup', error: null, busy: false });
   });
 
   afterEach(() => {
@@ -68,5 +66,13 @@ describe('Criar PIN', () => {
     await typePin('654321');
     expect(spy).toHaveBeenCalledTimes(2);
     expect(spy).toHaveBeenLastCalledWith('654321', '654321');
+  });
+
+  it('shows that the device is being activated while createPin runs, instead of the PIN field', async () => {
+    useSessionStore.setState({ busy: true });
+    await render(<CreatePinScreen />);
+    expect(screen.getByText('Ativando este aparelho…')).toBeTruthy();
+    expect(screen.queryByLabelText('PIN')).toBeNull();
+    expect(screen.queryByText('Crie um PIN de 6 dígitos')).toBeNull();
   });
 });

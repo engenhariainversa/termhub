@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { View } from 'react-native';
-import { AppText, Countdown, PinDots, PinPad, Screen } from '@/ui';
+import { ActivityIndicator, View } from 'react-native';
+import { AppText, Button, Countdown, PinInput, Screen } from '@/ui';
 import { attemptsSuffix } from '../model/messages';
 import { useSessionStore } from '../viewmodel/useSessionStore';
 
 const PIN_LENGTH = 6;
 
-/** Desbloquear (P§5.3–5.6, design spec §5.4): numeric pad, and the biometric shortcut when
- * enabled. "Sair e remover este aparelho" lives in Ajustes, not here. */
+/** Desbloquear (P§5.3–5.6, design spec §5.4): the PIN on the system number pad, and the biometric
+ * shortcut when enabled. "Sair e remover este aparelho" lives in Ajustes, not here. */
 export function UnlockScreen() {
   const unlock = useSessionStore((s) => s.unlock);
   const unlockWithBiometrics = useSessionStore((s) => s.unlockWithBiometrics);
@@ -20,18 +20,13 @@ export function UnlockScreen() {
 
   const [pin, setPin] = useState('');
 
-  const onDigit = (digit: string) => {
-    if (pin.length >= PIN_LENGTH) return;
-    const next = pin + digit;
+  const onChange = (next: string) => {
     setPin(next);
     if (next.length === PIN_LENGTH) {
       setPin('');
       void unlock(next);
     }
   };
-
-  const onBackspace = () => setPin((p) => p.slice(0, -1));
-  const disabled = Boolean(lockedUntil) || busy;
 
   return (
     <Screen>
@@ -49,13 +44,24 @@ export function UnlockScreen() {
             {attemptsLeft !== null ? attemptsSuffix(attemptsLeft) : ''}
           </AppText>
         ) : null}
-        <PinDots filled={pin.length} error={Boolean(error) && !lockedUntil} />
-        <PinPad
-          onDigit={onDigit}
-          onBackspace={onBackspace}
-          onBiometrics={biometricsEnabled ? () => void unlockWithBiometrics() : undefined}
-          disabled={disabled}
-        />
+        {busy ? (
+          <View className="items-center gap-3 py-4">
+            <ActivityIndicator />
+            <AppText variant="muted">Conferindo o PIN…</AppText>
+          </View>
+        ) : (
+          <PinInput
+            value={pin}
+            onChange={onChange}
+            length={PIN_LENGTH}
+            disabled={Boolean(lockedUntil)}
+            error={Boolean(error) && !lockedUntil}
+            accessibilityLabel="PIN"
+          />
+        )}
+        {biometricsEnabled ? (
+          <Button label="Usar biometria" variant="ghost" onPress={() => void unlockWithBiometrics()} disabled={Boolean(lockedUntil) || busy} />
+        ) : null}
       </View>
     </Screen>
   );

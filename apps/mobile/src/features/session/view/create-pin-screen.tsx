@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { View } from 'react-native';
-import { AppText, Banner, PinDots, PinPad, Screen } from '@/ui';
+import { ActivityIndicator, View } from 'react-native';
+import { AppText, Banner, PinInput, Screen } from '@/ui';
 import { useSessionStore } from '../viewmodel/useSessionStore';
 
 const PIN_LENGTH = 6;
@@ -18,10 +18,8 @@ export function CreatePinScreen() {
   const [pin, setPin] = useState('');
   const [mismatch, setMismatch] = useState<string | null>(null);
 
-  const onDigit = (digit: string) => {
-    if (pin.length >= PIN_LENGTH) return;
+  const onChange = (next: string) => {
     setMismatch(null);
-    const next = pin + digit;
     setPin(next);
     if (next.length < PIN_LENGTH) return;
 
@@ -39,7 +37,7 @@ export function CreatePinScreen() {
       return;
     }
     // Unconditional, right after submitting: a server-side failure (the store's own `error`
-    // covers it) must not leave step 2 with a full, stuck pad.
+    // covers it) must not leave step 2 with a full, stuck field.
     const confirmed = next;
     const first = firstPin;
     setFirstPin('');
@@ -48,17 +46,23 @@ export function CreatePinScreen() {
     void createPin(first, confirmed);
   };
 
-  const onBackspace = () => setPin((p) => p.slice(0, -1));
-
   return (
     <Screen>
       <View className="flex-1 justify-center gap-6">
         <AppText variant="title">Criar PIN</AppText>
-        <AppText variant="muted">{step === 1 ? 'Crie um PIN de 6 dígitos' : 'Repita o PIN'}</AppText>
+        {busy ? null : <AppText variant="muted">{step === 1 ? 'Crie um PIN de 6 dígitos' : 'Repita o PIN'}</AppText>}
         {mismatch ? <Banner tone="danger" text={mismatch} /> : null}
         {storeError ? <Banner tone="danger" text={storeError} /> : null}
-        <PinDots filled={pin.length} />
-        <PinPad onDigit={onDigit} onBackspace={onBackspace} disabled={busy} />
+        {/* Activation (the server call, then scrypt wrapping the secret) takes a moment: say so, rather
+            than show step 1's empty field as if nothing happened. */}
+        {busy ? (
+          <View className="items-center gap-3 py-4">
+            <ActivityIndicator />
+            <AppText variant="muted">Ativando este aparelho…</AppText>
+          </View>
+        ) : (
+          <PinInput value={pin} onChange={onChange} length={PIN_LENGTH} accessibilityLabel="PIN" />
+        )}
       </View>
     </Screen>
   );

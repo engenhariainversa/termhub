@@ -15,16 +15,14 @@ jest.mock('@/features/session/viewmodel/useSessionStore', () => {
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { UnlockScreen } from './unlock-screen';
 
+/** The whole PIN at once, as the system number pad delivers it into the hidden field. */
 async function typePin(pin: string) {
-  for (const digit of pin) {
-    // eslint-disable-next-line no-await-in-loop -- sequential presses, each awaited to avoid overlap (see pin-pad.test.tsx)
-    await fireEvent.press(screen.getByRole('button', { name: digit }));
-  }
+  await fireEvent.changeText(screen.getByLabelText('PIN'), pin);
 }
 
 describe('Desbloquear', () => {
   beforeEach(() => {
-    useSessionStore.setState({ phase: 'locked', error: null, attemptsLeft: null, lockedUntil: null, biometricsEnabled: false });
+    useSessionStore.setState({ phase: 'locked', error: null, attemptsLeft: null, lockedUntil: null, biometricsEnabled: false, busy: false });
   });
 
   afterEach(() => {
@@ -44,30 +42,30 @@ describe('Desbloquear', () => {
     expect(screen.getByText('PIN incorreto. 2 tentativas restantes.')).toBeTruthy();
   });
 
-  it('shows the locked banner and countdown, and disables the pad', async () => {
+  it('shows the locked banner and countdown, and disables the PIN field', async () => {
     const spy = jest.spyOn(useSessionStore.getState(), 'unlock').mockResolvedValue(undefined);
     useSessionStore.setState({ lockedUntil: new Date(Date.now() + 5 * 60_000).toISOString() });
     await render(<UnlockScreen />);
     expect(screen.getByText('Aparelho bloqueado')).toBeTruthy();
     expect(screen.getByText(/^\d{2}:\d{2}$/)).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: '1' }));
+    expect(screen.getByLabelText('PIN').props.editable).toBe(false);
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('re-enables the pad once the lock countdown reaches zero, and a PIN can be typed again', async () => {
+  it('re-enables the PIN field once the lock countdown reaches zero, and a PIN can be typed again', async () => {
     jest.useFakeTimers();
     try {
       const spy = jest.spyOn(useSessionStore.getState(), 'unlock').mockResolvedValue(undefined);
       useSessionStore.setState({ lockedUntil: new Date(Date.now() + 3_000).toISOString(), error: 'Aparelho bloqueado por tentativas de PIN.' });
       await render(<UnlockScreen />);
-      expect(screen.getByRole('button', { name: '1' }).props.accessibilityState.disabled).toBe(true);
+      expect(screen.getByLabelText('PIN').props.editable).toBe(false);
 
       await act(async () => {
         jest.advanceTimersByTime(3_000);
       });
       expect(useSessionStore.getState()).toMatchObject({ lockedUntil: null, error: null, attemptsLeft: null });
       expect(screen.queryByText('Aparelho bloqueado')).toBeNull();
-      expect(screen.getByRole('button', { name: '1' }).props.accessibilityState.disabled).toBe(false);
+      expect(screen.getByLabelText('PIN').props.editable).toBe(true);
 
       await typePin('123456');
       expect(spy).toHaveBeenCalledWith('123456');
@@ -77,16 +75,23 @@ describe('Desbloquear', () => {
     }
   });
 
-  it('hides the Biometria key when biometrics are disabled', async () => {
+  it('hides "Usar biometria" when biometrics are disabled', async () => {
     await render(<UnlockScreen />);
-    expect(screen.queryByRole('button', { name: 'Biometria' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Usar biometria' })).toBeNull();
   });
 
-  it('shows the Biometria key and calls unlockWithBiometrics when biometrics are enabled', async () => {
+  it('shows "Usar biometria" and calls unlockWithBiometrics when biometrics are enabled', async () => {
     const spy = jest.spyOn(useSessionStore.getState(), 'unlockWithBiometrics').mockResolvedValue(undefined);
     useSessionStore.setState({ biometricsEnabled: true });
     await render(<UnlockScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Biometria' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Usar biometria' }));
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows that the PIN is being checked while unlock runs, instead of the PIN field', async () => {
+    useSessionStore.setState({ busy: true });
+    await render(<UnlockScreen />);
+    expect(screen.getByText('Conferindo o PIN…')).toBeTruthy();
+    expect(screen.queryByLabelText('PIN')).toBeNull();
   });
 });
