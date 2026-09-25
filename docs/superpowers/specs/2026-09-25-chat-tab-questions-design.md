@@ -206,3 +206,22 @@ Same card in `apps/mobile/src/features/chat/view/tab-question-card.tsx`; store a
 - Remembering decisions and answering alone (TER-57 builds on `tab_questions`).
 - Codex / Cursor prompts (no equivalent hook data).
 - Parsing screens of machines with the old hook script.
+
+## 9. Adjustments found while planning
+
+- Routes: the conversation read is `GET /api/chat?project=`; the mobile mirror lives under
+  `/api/m/v1/chat/...` (not `/m/chat/...`).
+- Columns use Prisma's `TIMESTAMP(3)` like every other table; a second index
+  `(conversation_id, created_at)` serves `GET /chat`.
+- `tabs.project_id` is required, so "tabs without a project" does not occur.
+- Push keeps notification kind `confirmation` with `data.kind = 'tab_question'` (the mobile-api
+  notification enum is closed; a new kind would break older apps).
+- Closing: every `Notification` is exempt (an `idle_prompt` reminder must not close an open question).
+- Permission live check accepts "Do you want" (Claude Code also asks "Do you want to make this edit…?")
+  or the tool name.
+- Answer text is one line without control characters; a deny text starting with `!` is rejected
+  (after `Escape` it lands at Claude's prompt, where `!` runs bash).
+- Keys are sent with a new `KEY_STEP_PAUSE_MS = 150` between steps (no such pause existed).
+- Agent machines: the agent's `heal()` rewrites the script and merges the new settings entry on
+  reconnect, so they need no manual reinstall after updating the agent.
+- "Exactly one of selected / text" applies to every question, not only single-select.
