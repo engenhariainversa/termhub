@@ -45,7 +45,7 @@ export interface SoundMix {
   treble: number;
 }
 
-export const DEFAULT_MIX: SoundMix = { ambience: 0.7, keyboard: 0.8, ding: 1, bass: 0, mid: 0, treble: 0 };
+export const DEFAULT_MIX: SoundMix = { ambience: 0.7, keyboard: 0.4, ding: 1, bass: 0, mid: 0, treble: 0 };
 /** How far each equaliser band goes, up or down, in dB. */
 export const EQ_RANGE_DB = 12;
 const MIX_KEY = 'termhub.city.sound-mix';
