@@ -30,12 +30,13 @@ const row = (over: Partial<TabQuestion> = {}): TabQuestion => ({
 });
 const permission = (over: Partial<TabQuestion> = {}) => row({ id: 'q2', kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null, ...over });
 
-function ctxFor(current: TabQuestion | undefined, opts: { latest?: TabQuestion | undefined; outOfScope?: boolean; claimLoses?: boolean } = {}) {
+function ctxFor(current: TabQuestion | undefined, opts: { latest?: TabQuestion | undefined; outOfScope?: boolean; claimLoses?: boolean; denied?: string[] } = {}) {
   const tabQuestions = {
     findByIdForUser: vi.fn(async (_id: string, userId: string) => (userId === 'u1' ? current : undefined)),
     findOpenForTab: vi.fn(async () => ('latest' in opts ? opts.latest : current)),
     claim: vi.fn(async (_id: string, _u: string, answer: unknown) => (opts.claimLoses || !current ? undefined : { ...current, status: 'answered' as const, answer: answer as never, answered_by: 'u1', answered_at: '2026-09-25T12:01:00.000Z' })),
     markFailed: vi.fn(async (_id: string, code: string) => (current ? { ...current, status: 'failed' as const, error_code: code } : undefined)),
+    closeOne: vi.fn(async (_id: string, status: 'answered_in_tab' | 'expired') => (current ? { ...current, status, closed_at: '2026-09-25T12:01:00.000Z' } : undefined)),
   };
   const scoped = {
     tab: vi.fn(async (id: string) => {
@@ -44,8 +45,9 @@ function ctxFor(current: TabQuestion | undefined, opts: { latest?: TabQuestion |
     }),
   };
   const repos = { tabQuestions, tabs: { findByIdsForOwner: vi.fn(async () => [{ id: 't1', name: 'api' }]) } };
-  const ctx = { repos, scoped, scope: { user: { id: 'u1' } } } as unknown as ControlContext;
-  return { ctx, tabQuestions, scoped };
+  const can = vi.fn(async (resource: string, action: string) => !(opts.denied ?? []).includes(`${resource}:${action}`));
+  const ctx = { repos, scoped, scope: { user: { id: 'u1' } }, can } as unknown as ControlContext;
+  return { ctx, tabQuestions, scoped, can };
 }
 const log = () => ({ info: vi.fn(), warn: vi.fn() });
 const noSleep = async () => undefined;
@@ -132,11 +134,35 @@ describe('answerTabQuestion', () => {
     expect(sendKey).not.toHaveBeenCalled();
   });
 
-  it('409 TAB_PROMPT_CHANGED when the question is not on the live screen — before any claim', async () => {
+  it('409 TAB_PROMPT_CHANGED when the question is not on the live screen — before any claim, and the card closes', async () => {
     const { ctx, tabQuestions } = ctxFor(row());
     readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: '$ ls\nREADME.md\n' });
     await rejects(answerTabQuestion(ctx, 'q1', { answers: [{ selected: [0] }, { selected: [0] }] }, { log: log() }), 409, 'TAB_PROMPT_CHANGED');
     expect(tabQuestions.claim).not.toHaveBeenCalled();
+    // Only this row, and only while it is still open: never the tab's other (newer) questions.
+    expect(tabQuestions.closeOne).toHaveBeenCalledWith('q1', 'answered_in_tab');
+    expect(events).toEqual([expect.objectContaining({ type: 'tab_question_closed', user_id: 'u1', question: expect.objectContaining({ id: 'q1', status: 'answered_in_tab' }) })]);
+  });
+
+  it('a row refused as not open or not the latest, or a screen that could not be read, stays untouched', async () => {
+    for (const { ctx, tabQuestions } of [ctxFor(row({ status: 'answered_in_tab' })), ctxFor(row(), { latest: row({ id: 'q9' }) })]) {
+      await rejects(answerTabQuestion(ctx, 'q1', { answers: [{ selected: [0] }, { selected: [0] }] }, { log: log() }), 409, 'TAB_PROMPT_CHANGED');
+      expect(tabQuestions.closeOne).not.toHaveBeenCalled();
+    }
+    const offline = ctxFor(row());
+    readScreen.mockRejectedValue(new ControlError('MACHINE_OFFLINE', 'A máquina está offline'));
+    await rejects(answerTabQuestion(offline.ctx, 'q1', { answers: [{ selected: [0] }, { selected: [0] }] }, { log: log() }), 409, 'MACHINE_OFFLINE');
+    expect(offline.tabQuestions.closeOne).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
+  it('403 FORBIDDEN without terminals:write — nothing loaded, claimed nor typed', async () => {
+    const { ctx, tabQuestions, can } = ctxFor(row(), { denied: ['terminals:write'] });
+    await rejects(answerTabQuestion(ctx, 'q1', { answers: [{ selected: [0] }, { selected: [0] }] }, { log: log(), sleep: noSleep }), 403, 'FORBIDDEN');
+    expect(can).toHaveBeenCalledWith('terminals', 'write');
+    expect(tabQuestions.claim).not.toHaveBeenCalled();
+    expect(readScreen).not.toHaveBeenCalled();
+    expect(sendKey).not.toHaveBeenCalled();
   });
 
   it('409 TAB_PROMPT_CHANGED when only the tool name is on screen, without "Do you want" — nothing claimed nor typed', async () => {
@@ -232,6 +258,13 @@ describe('promptVisible', () => {
     expect(promptVisible('$ ls\n', permission())).toBe(false);
     expect(promptVisible('● Bash(npm test)\n  ⎿  ok\n', permission())).toBe(false);
   });
+  it('ignores markdown and punctuation the terminal renders differently', () => {
+    const md = { ...colors, question: 'Should we run `pnpm test` or **"npm test"** before the merge?' };
+    // Claude Code renders the markdown (no backticks nor asterisks) and may curl the quotes.
+    const shown = `Should we run pnpm test or “npm test” before the merge?\n\u276f 1. A\n${CHOICE_FOOTER}`;
+    expect(promptVisible(shown, row({ payload: { questions: [md] } }))).toBe(true);
+    expect(promptVisible(`Should we run yarn test before the merge?\n${CHOICE_FOOTER}`, row({ payload: { questions: [md] } }))).toBe(false);
+  });
   it('matches a question the terminal wrapped', () => {
     const long = { ...colors, question: 'Which of these deployment targets should the new staging environment use from now on?' };
     expect(promptVisible(`Which of these deployment targets should the new\n  staging environment use from now on?\n❯ 1. A\n${CHOICE_FOOTER}`, row({ payload: { questions: [long] } }))).toBe(true);
@@ -255,6 +288,16 @@ describe('tabQuestionScreen', () => {
     readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: Array.from({ length: 30 }, (_, i) => `l${i}\n`).join('\n') });
     const { text } = await tabQuestionScreen(ctx, 'q2');
     expect(text.split('\n')).toEqual(Array.from({ length: 20 }, (_, i) => `l${i + 10}`));
+  });
+  it('403 FORBIDDEN without terminals:read, nothing read', async () => {
+    const { ctx, can } = ctxFor(permission(), { denied: ['terminals:read'] });
+    await rejects(tabQuestionScreen(ctx, 'q2'), 403, 'FORBIDDEN');
+    expect(can).toHaveBeenCalledWith('terminals', 'read');
+    expect(readScreen).not.toHaveBeenCalled();
+  });
+  it('404 when the question\'s tab is outside the scope, nothing read', async () => {
+    await rejects(tabQuestionScreen(ctxFor(permission(), { outOfScope: true }).ctx, 'q2'), 404, 'NOT_FOUND');
+    expect(readScreen).not.toHaveBeenCalled();
   });
   it('409 once it is closed, 404 when it is not this user\'s', async () => {
     await rejects(tabQuestionScreen(ctxFor(permission({ status: 'expired' })).ctx, 'q2'), 409, 'TAB_PROMPT_CHANGED');

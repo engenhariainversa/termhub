@@ -44,7 +44,8 @@ it('a permission card shows the live excerpt and allows, denies, or denies with 
   const loadScreen = vi.fn(async () => 'Bash command\n  touch probe-file.txt\nDo you want to proceed?');
   render(<TabQuestionCard question={permission()} answering={false} onAnswer={onAnswer} loadScreen={loadScreen} />);
   expect(screen.getByText('A aba «api» pede permissão para usar «Bash»')).toBeInTheDocument();
-  expect(await screen.findByText(/touch probe-file\.txt/)).toBeInTheDocument();
+  // Expanded by default: the tool's name alone does not say what is about to run.
+  expect(await screen.findByText(/touch probe-file\.txt/)).toBeVisible();
   expect(screen.getByText('Tela da aba')).toBeInTheDocument();
   expect(loadScreen).toHaveBeenCalledWith('q2');
   fireEvent.click(screen.getByRole('button', { name: 'Permitir' }));

@@ -239,3 +239,19 @@ Same card in `apps/mobile/src/features/chat/view/tab-question-card.tsx`; store a
 - Found in the e2e run (Claude Code 2.1.282): `AskUserQuestion` no longer fires `PermissionRequest`
   (only `PreToolUse` and the `permission_prompt` notification), so dropping it is only a safeguard;
   the key plan gained the lone multi-select review step and the multi-select free-text rule (§3, §5.4).
+- Final review: `ExitPlanMode`'s `PermissionRequest` opens no card (its dialog's "1" is "Yes, and
+  use auto mode", and its footer never passes the live check); the question stays in the tab.
+- Final review: when the live screen check refuses an answer, that row alone (conditionally, while
+  still `open`) closes as `answered_in_tab` with `closed_at` and `tab_question_closed` is published;
+  the answer is still 409 `TAB_PROMPT_CHANGED`. A row refused as not open / not latest, or a screen
+  that could not be read (offline), is untouched. Both sides of the marker comparison are reduced to
+  letters and digits, so rendered markdown or curled quotes do not cause false refusals.
+- Final review: answering needs the `terminals:write` grant and the live excerpt `terminals:read`
+  (403 `FORBIDDEN`, checked before anything is read, claimed or typed), the same grants as the MCP
+  `send_input` / `read_screen` tools; the excerpt also loads the tab through the scope (404).
+- Final review: a `permission` arriving while the tab already has an open permission row is a queue
+  in Claude Code (the tab shows the first dialog): the open row closes as `answered_in_tab` and
+  nothing opens — both are answered in the tab. The tab row is locked in `open`'s transaction so two
+  hooks of one tab land in order. The permission card's live excerpt is expanded by default.
+- Final review: the card goes only to a conversation of the project's owner (`user_id = owner_id`);
+  a project without an owner gets no card.

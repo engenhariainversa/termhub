@@ -71,9 +71,11 @@ function interpretClaude(ev: Record<string, unknown>): Interpreted | null {
       // Reduced to the tool's name on the machine; its state effect is the permission_prompt
       // notification's, which follows it. AskUserQuestion's own prompt opens nothing: its PreToolUse
       // already carried the question (the current script drops it; this covers anything else).
+      // ExitPlanMode's dialog is not a yes/no prompt either (its "1" is "Yes, and use auto mode"),
+      // so it opens nothing and stays in the tab.
       const tool = str(ev.tool_name);
       const base: Interpreted = { kind: 'waiting_permission', text: null, meta: { event: name, tool } };
-      const payload = tool === 'AskUserQuestion' ? null : parsePermissionTool(tool);
+      const payload = tool === 'AskUserQuestion' || tool === 'ExitPlanMode' ? null : parsePermissionTool(tool);
       return payload ? { ...base, question: { kind: 'permission', payload, tool_use_id: null } } : base;
     }
     case 'Notification': {

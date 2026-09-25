@@ -4,7 +4,7 @@ import { readScreen } from '../control/screen.js';
 import { sendInput, sendKey } from '../control/terminals.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
-import { HttpError, notFound } from '../lib/errors.js';
+import { forbidden, HttpError, notFound } from '../lib/errors.js';
 import { choiceKeyPlan, permissionKeyPlan, type KeyStep } from './tab-question-keys.js';
 import { checkChoiceAnswer, choiceAnswerBody, permissionAnswerBody, type ChoiceAnswer, type ChoicePayload, type PermissionAnswer, type TabQuestionKind } from './tab-question-payload.js';
 import { publishTabQuestions } from './tab-questions.js';
@@ -42,7 +42,12 @@ export function requirePinFor(_kind: TabQuestionKind, _answer: TabAnswer): boole
   return false;
 }
 
-const squash = (s: string) => s.replace(/\s+/g, '');
+/**
+ * Letters and digits only: whitespace (Claude Code wraps a long question over indented rows) and
+ * every mark the terminal may render differently from the tool's input (markdown backticks and
+ * asterisks, curled quotes, dashes) are dropped on both sides of the comparison.
+ */
+const squash = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '');
 /** The last `lines` non-blank rows of a capture, as one string. */
 export function lastNonBlankLines(text: string, n = SCREEN_EXCERPT_LINES): string {
   return text
@@ -58,8 +63,8 @@ export function lastNonBlankLines(text: string, n = SCREEN_EXCERPT_LINES): strin
  * its normal prompt never passes, whatever its scrollback says. And the marker sits within the last
  * `PROMPT_MARKER_LINES` non-blank lines, that is inside the dialog block: the first question's text for
  * a choice, "Do you want" for a permission (Claude Code asks "Do you want to proceed?" or "Do you want
- * to make this edit…?"; the tool's name alone is not enough, it stays in the scrollback). Whitespace is
- * dropped on both sides, because Claude Code wraps a long question over several indented rows.
+ * to make this edit…?"; the tool's name alone is not enough, it stays in the scrollback). Both sides are
+ * reduced to letters and digits (`squash`) before comparing.
  */
 export function promptVisible(screen: string, row: Pick<TabQuestion, 'kind' | 'payload'>): boolean {
   const block = lastNonBlankLines(screen, PROMPT_MARKER_LINES);
@@ -100,6 +105,8 @@ export interface AnswerDeps {
  * after the claim leaves the row `failed` with the code and answers 502. Logs ids, kind and counts.
  */
 export async function answerTabQuestion(ctx: ControlContext, id: string, raw: unknown, deps: AnswerDeps): Promise<TabQuestionView> {
+  // Answering types into a terminal: the same grant as the MCP write tools (send_input, send_key).
+  if (!(await ctx.can('terminals', 'write'))) throw forbidden('Responder na aba precisa da permissão terminals:write na sua role');
   const userId = ctx.scope.user.id;
   const row = await ctx.repos.tabQuestions.findByIdForUser(id, userId);
   if (!row) throw notFound('Pergunta não encontrada');
@@ -115,7 +122,17 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
   } catch (err) {
     throw asHttp(err);
   }
-  if (!promptVisible(screen, row)) throw promptChanged();
+  if (!promptVisible(screen, row)) {
+    // The tab moved on without telling us: this card is stale, so it leaves the screens now (only this
+    // row, only while still open). Best effort: the 409 is the answer either way.
+    try {
+      const closed = await ctx.repos.tabQuestions.closeOne(row.id, 'answered_in_tab');
+      if (closed) await publishTabQuestions(ctx.repos, 'tab_question_closed', [closed]);
+    } catch (err) {
+      deps.log.warn({ tabQuestionId: row.id, tabId: tab.id, code: codeOf(err, 'CLOSE_FAILED') }, 'stale tab question not closed');
+    }
+    throw promptChanged();
+  }
 
   deps.beforeSend?.(row, answer);
   const claimed = await ctx.repos.tabQuestions.claim(row.id, userId, answer);
@@ -149,11 +166,14 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
 
 /** The permission card's live excerpt (spec §6.1): read on demand, never stored nor logged. */
 export async function tabQuestionScreen(ctx: ControlContext, id: string): Promise<{ text: string }> {
+  // Terminal content: the same grant as the MCP read_screen tool.
+  if (!(await ctx.can('terminals', 'read'))) throw forbidden('Ver a tela da aba precisa da permissão terminals:read na sua role');
   const row = await ctx.repos.tabQuestions.findByIdForUser(id, ctx.scope.user.id);
   if (!row) throw notFound('Pergunta não encontrada');
   if (row.status !== 'open') throw promptChanged();
+  const { tab } = await ctx.scoped.tab(row.tab_id);
   try {
-    const { text } = await readScreen(ctx, { tab_id: row.tab_id, lines: SCREEN_CHECK_LINES });
+    const { text } = await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_CHECK_LINES });
     return { text: lastNonBlankLines(text) };
   } catch (err) {
     throw asHttp(err);

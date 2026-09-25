@@ -35,7 +35,11 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     await db.$disconnect();
   });
 
-  const open = (tabId: string, now?: Date) => repo.open({ tab_id: tabId, project_id: projectId, conversation_id: conversationId, kind: 'choice', payload, tool_use_id: 'toolu_1' }, now);
+  const open = async (tabId: string, now?: Date) => {
+    const r = await repo.open({ tab_id: tabId, project_id: projectId, conversation_id: conversationId, kind: 'choice', payload, tool_use_id: 'toolu_1' }, now);
+    return { question: r.question!, closed: r.closed };
+  };
+  const openPermission = (tabId: string, tool: string) => repo.open({ tab_id: tabId, project_id: projectId, conversation_id: conversationId, kind: 'permission', payload: { tool_name: tool }, tool_use_id: null });
 
   it('opens a question owned through its conversation, the tab\'s only open one', async () => {
     const { question, closed } = await open('t1');
@@ -83,6 +87,33 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect(await repo.findOpenForTab('t6')).toBeUndefined();
   });
 
+  it('a permission while another permission is open: both fall back to the tab (queued prompts)', async () => {
+    const first = (await openPermission('t8', 'Bash')).question!;
+    const { question, closed } = await openPermission('t8', 'Edit');
+    expect(question).toBeNull();
+    expect(closed).toEqual([expect.objectContaining({ id: first.id, status: 'answered_in_tab' })]);
+    expect(await repo.findOpenForTab('t8')).toBeUndefined();
+    // A choice still replaces an open permission, and a permission an open choice.
+    const perm = (await openPermission('t9', 'Bash')).question!;
+    const choice = await open('t9');
+    expect(choice.closed.map((q) => q.id)).toEqual([perm.id]);
+    const again = await openPermission('t9', 'Bash');
+    expect(again.question).toMatchObject({ kind: 'permission', status: 'open' });
+    expect(again.closed.map((q) => q.id)).toEqual([choice.question.id]);
+  });
+
+  it('closeOne: only that row, only while open', async () => {
+    const { question: a } = await open('t10');
+    const closed = await repo.closeOne(a.id, 'answered_in_tab');
+    expect(closed).toMatchObject({ id: a.id, status: 'answered_in_tab', user_id: userId });
+    expect(closed?.closed_at).not.toBeNull();
+    expect(await repo.closeOne(a.id, 'answered_in_tab')).toBeUndefined();
+    const { question: b } = await open('t11');
+    await repo.claim(b.id, userId, { answers: [{ selected: [0] }] });
+    expect(await repo.closeOne(b.id, 'answered_in_tab')).toBeUndefined();
+    expect((await repo.findByIdForUser(b.id, userId))?.status).toBe('answered');
+  });
+
   it('lists a conversation oldest first, and what the concierge was not told yet, once', async () => {
     const before = await repo.listByConversation(conversationId);
     const { question } = await open('t7');
@@ -97,10 +128,13 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect(await repo.listToInject(conversationId)).toEqual([]);
   });
 
-  it('findLatestActiveForProject: the most recently active non-archived conversation', async () => {
-    expect((await chat.findLatestActiveForProject(projectId))?.id).toBe(conversationId);
+  it('findLatestActiveForProject: the owner\'s most recently active non-archived conversation', async () => {
+    // A former owner's conversation on the project, more recent than the owner's: never picked.
+    const former = await chat.getOrCreateForProject(otherUserId, projectId);
+    await db.chatConversation.update({ where: { id: former.id }, data: { lastMessageAt: new Date(Date.now() + 60_000) } });
+    expect((await chat.findLatestActiveForProject(projectId, userId))?.id).toBe(conversationId);
     await chat.archive(conversationId);
-    expect(await chat.findLatestActiveForProject(projectId)).toBeUndefined();
-    expect(await chat.findLatestActiveForProject('nope')).toBeUndefined();
+    expect(await chat.findLatestActiveForProject(projectId, userId)).toBeUndefined();
+    expect(await chat.findLatestActiveForProject('nope', userId)).toBeUndefined();
   });
 });

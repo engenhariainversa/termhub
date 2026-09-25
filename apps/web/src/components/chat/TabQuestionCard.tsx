@@ -117,7 +117,7 @@ function PermissionBody({ question, answering, onAnswer, loadScreen }: TabQuesti
     <>
       <p className="whitespace-pre-wrap text-fg">{`${tabLabel(question)} pede permissão para usar «${question.payload.tool_name}»`}</p>
       {open && screen !== null && (
-        <details className="mt-2">
+        <details className="mt-2" open>
           <summary className="cursor-pointer text-xs text-fg-dim">Tela da aba</summary>
           <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap font-mono text-xs text-fg">{screen}</pre>
         </details>

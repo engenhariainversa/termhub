@@ -44,19 +44,23 @@ export async function closeTabQuestions(repos: Repositories, tabId: string, stat
 }
 
 /**
- * A tab asked something: the row goes into the project's most recently active conversation and the
- * card onto every screen showing it. A project nobody chats in gets nothing — the question stays in
- * the tab, as before — but whatever the tab had open is still closed: the screen moved on.
+ * A tab asked something: the row goes into the project owner's most recently active conversation and
+ * the card onto every screen showing it. A project nobody chats in (or with no owner) gets nothing —
+ * the question stays in the tab, as before — but whatever the tab had open is still closed: the
+ * screen moved on. A permission queued behind an open one opens nothing either (see `open`).
  */
 export async function openTabQuestion(repos: Repositories, tab: Pick<Tab, 'id' | 'project_id'>, input: TabQuestionInput): Promise<TabQuestion | null> {
-  const conversation = await repos.chat.findLatestActiveForProject(tab.project_id);
+  // Only the owner's chat: another user's conversation left on the project (a former owner, or an
+  // admin's) must not receive the card, which would let them answer a tab they no longer own.
+  const owner = (await repos.projects.findById(tab.project_id))?.owner_id;
+  const conversation = owner ? await repos.chat.findLatestActiveForProject(tab.project_id, owner) : undefined;
   if (!conversation) {
     await closeTabQuestions(repos, tab.id, 'answered_in_tab');
     return null;
   }
   const { question, closed } = await repos.tabQuestions.open({ tab_id: tab.id, project_id: tab.project_id, conversation_id: conversation.id, kind: input.kind, payload: input.payload, tool_use_id: input.tool_use_id });
   await publishTabQuestions(repos, 'tab_question_closed', closed);
-  await publishTabQuestions(repos, 'tab_question', [question]);
+  if (question) await publishTabQuestions(repos, 'tab_question', [question]);
   return question;
 }
 

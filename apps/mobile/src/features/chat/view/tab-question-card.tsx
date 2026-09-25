@@ -100,7 +100,8 @@ function ChoiceBody({ question, busy, onAnswer }: Props & { question: Choice }) 
 function PermissionBody({ question, busy, onAnswer, loadScreen }: Props & { question: Permission }) {
   const open = question.status === 'open';
   const [excerpt, setExcerpt] = useState<string | null>(null);
-  const [showing, setShowing] = useState(false);
+  // Expanded by default: the tool name alone does not say what is about to run.
+  const [showing, setShowing] = useState(true);
   const [denying, setDenying] = useState(false);
   const [text, setText] = useState('');
   useEffect(() => {

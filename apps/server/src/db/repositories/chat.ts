@@ -95,9 +95,9 @@ export class ChatRepository {
    * conversation that is still on screen somewhere — not archived, not tab-bound. A project nobody has
    * chatted in yet has none, and its tabs' questions stay in the tab.
    */
-  async findLatestActiveForProject(projectId: string): Promise<ChatConversation | undefined> {
+  async findLatestActiveForProject(projectId: string, ownerId: string): Promise<ChatConversation | undefined> {
     const row = await this.db.chatConversation.findFirst({
-      where: { projectId, tabId: null, archivedAt: null },
+      where: { projectId, userId: ownerId, tabId: null, archivedAt: null },
       orderBy: [{ lastMessageAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
     });
     return row ? mapConversation(row) : undefined;

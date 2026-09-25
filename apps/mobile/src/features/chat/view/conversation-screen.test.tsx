@@ -289,7 +289,11 @@ describe('Conversa', () => {
     const answer = stubAction('answerTabQuestion');
     await render(<ConversationScreen />);
     expect(await screen.findByText('A aba «api» pede permissão para usar «Bash»', undefined, LOAD)).toBeTruthy();
-    await fireEvent.press(await screen.findByRole('button', { name: 'Tela da aba' }));
+    // Expanded by default: the tool's name alone does not say what is about to run.
+    expect(await screen.findByText(/Do you want to proceed\?/, undefined, LOAD)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tela da aba' }));
+    expect(screen.queryByText(/Do you want to proceed\?/)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tela da aba' }));
     expect(screen.getByText(/Do you want to proceed\?/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Permitir' }));
     expect(answer).toHaveBeenLastCalledWith('q2', { allow: true });

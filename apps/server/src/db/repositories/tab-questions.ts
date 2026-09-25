@@ -85,10 +85,19 @@ async function closeIn(tx: Prisma.TransactionClient, tabId: string, status: TabQ
 export class TabQuestionsRepository {
   constructor(private db: PrismaClient) {}
 
-  /** A new question for a tab: whatever the tab still had open is closed first, in the same transaction. */
-  async open(input: OpenTabQuestionInput, now = new Date()): Promise<{ question: TabQuestion; closed: TabQuestion[] }> {
+  /**
+   * A new question for a tab: whatever the tab still had open is closed first, in the same transaction.
+   * A permission arriving while the tab already has an open permission is a queue in Claude Code (it
+   * shows the first dialog, the card would show the last): the open one is closed and nothing opens —
+   * both are answered in the tab. The tab row is locked first, so two hooks of one tab land in order.
+   */
+  async open(input: OpenTabQuestionInput, now = new Date()): Promise<{ question: TabQuestion | null; closed: TabQuestion[] }> {
     return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "tabs" WHERE id = ${input.tab_id} FOR UPDATE`;
+      const queued =
+        input.kind === 'permission' && (await tx.tabQuestion.findFirst({ where: { tabId: input.tab_id, status: 'open', kind: 'permission' }, select: { id: true } })) !== null;
       const closed = await closeIn(tx, input.tab_id, 'answered_in_tab', now);
+      if (queued) return { question: null, closed };
       const row = await tx.tabQuestion.create({
         data: {
           id: newId(),
@@ -108,6 +117,10 @@ export class TabQuestionsRepository {
   }
 
   async closeForTab(tabId: string, status: TabQuestionCloseStatus, now = new Date()): Promise<TabQuestion[]> {
+    // Called for almost every hook event of every tab: the common case (nothing on screen) is one
+    // indexed read, and only a tab with something to close pays for the transaction.
+    const any = await this.db.tabQuestion.findFirst({ where: { tabId, closedAt: null, status: { in: ['open', 'answered'] } }, select: { id: true } });
+    if (!any) return [];
     return this.db.$transaction((tx) => closeIn(tx, tabId, status, now));
   }
 
@@ -128,6 +141,18 @@ export class TabQuestionsRepository {
       data: { status: 'answered', answer: answer as never, answeredBy: userId, answeredAt: now },
     });
     return count === 0 ? undefined : this.findByIdForUser(id, userId);
+  }
+
+  /**
+   * `open → status`, for this one row only and conditionally: the answer's live check found the tab
+   * no longer showing it. Never the tab's other rows (a newer question may already be open), and a
+   * claim or close that got there first matches nothing.
+   */
+  async closeOne(id: string, status: TabQuestionCloseStatus, now = new Date()): Promise<TabQuestion | undefined> {
+    const { count } = await this.db.tabQuestion.updateMany({ where: { id, status: 'open' }, data: { status, closedAt: now } });
+    if (count === 0) return undefined;
+    const row = await this.db.tabQuestion.findUnique({ where: { id }, include: withOwner });
+    return row ? mapQuestion(row) : undefined;
   }
 
   /** The keys never reached the tab: only a claimed row can fail. */

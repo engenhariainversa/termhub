@@ -255,6 +255,15 @@ describe('interpretHookEvent — claude questions (spec 2026-09-25 §4.2)', () =
     expect(interpretHookEvent('claude', { hook_event_name: 'PermissionRequest', tool_name: 'a b' })?.question).toBeUndefined();
   });
 
+  it('ExitPlanMode\'s PermissionRequest opens nothing: its dialog is not a yes/no permission prompt', () => {
+    // Its "1" is "Yes, and use auto mode" and its footer never passes the live check.
+    expect(interpretHookEvent('claude', { hook_event_name: 'PermissionRequest', tool_name: 'ExitPlanMode' })).toEqual({
+      kind: 'waiting_permission',
+      text: null,
+      meta: { event: 'PermissionRequest', tool: 'ExitPlanMode' },
+    });
+  });
+
   it('the permission_prompt notification that follows is unchanged', () => {
     expect(interpretHookEvent('claude', fixture('notification-permission-prompt.json'))).toEqual({
       kind: 'waiting_permission',

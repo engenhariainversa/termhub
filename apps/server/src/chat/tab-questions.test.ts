@@ -16,12 +16,14 @@ const row = (over: Partial<TabQuestion> = {}): TabQuestion => ({
 const choice: Interpreted = { kind: 'working', text: null, activity: 'planning', verb: null, meta: { event: 'PreToolUse', tool: 'AskUserQuestion' }, question: { kind: 'choice', payload, tool_use_id: 'toolu_1' } };
 const log = () => ({ info: vi.fn(), warn: vi.fn() });
 
-function fakeRepos(opts: { conversation?: { id: string; user_id: string } | null; closed?: TabQuestion[]; opened?: TabQuestion } = {}) {
+function fakeRepos(opts: { conversation?: { id: string; user_id: string } | null; closed?: TabQuestion[]; opened?: TabQuestion | null; owner?: string | null } = {}) {
   const conversation = opts.conversation === undefined ? { id: 'c1', user_id: 'u1' } : (opts.conversation ?? undefined);
+  const owner = opts.owner === undefined ? 'u1' : opts.owner;
   return {
+    projects: { findById: vi.fn(async (id: string) => (id === 'p1' ? { id: 'p1', owner_id: owner } : undefined)) },
     chat: { findLatestActiveForProject: vi.fn(async () => conversation) },
     tabQuestions: {
-      open: vi.fn(async () => ({ question: opts.opened ?? row(), closed: opts.closed ?? [] })),
+      open: vi.fn(async () => ({ question: opts.opened === undefined ? row() : opts.opened, closed: opts.closed ?? [] })),
       closeForTab: vi.fn(async () => opts.closed ?? []),
     },
     tabs: { findByIdsForOwner: vi.fn(async (ids: string[], owner: string) => (owner === 'u1' && ids.includes('t1') ? [tab] : [])) },
@@ -57,6 +59,8 @@ describe('openTabQuestion', () => {
     const repos = fakeRepos({ closed: [replaced], opened: row({ id: 'q1' }) });
     const q = await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' });
     expect(q?.id).toBe('q1');
+    // Only the project owner's conversations: a former owner's chat never gets the card.
+    expect(repos.chat.findLatestActiveForProject).toHaveBeenCalledWith('p1', 'u1');
     expect(repos.tabQuestions.open).toHaveBeenCalledWith({ tab_id: 't1', project_id: 'p1', conversation_id: 'c1', kind: 'choice', payload, tool_use_id: 'toolu_1' });
     expect(events.map((e) => [e.type, 'question' in e ? e.question.id : null])).toEqual([
       ['tab_question_closed', 'q0'],
@@ -71,6 +75,20 @@ describe('openTabQuestion', () => {
     expect(repos.tabQuestions.open).not.toHaveBeenCalled();
     expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'answered_in_tab');
     expect(events.map((e) => e.type)).toEqual(['tab_question_closed']);
+  });
+
+  it('a project with no owner has no chat to show it in: nothing opens, the old question still closes', async () => {
+    const repos = fakeRepos({ owner: null, closed: [row({ id: 'q0', status: 'answered_in_tab' })] });
+    expect(await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' })).toBeNull();
+    expect(repos.chat.findLatestActiveForProject).not.toHaveBeenCalled();
+    expect(repos.tabQuestions.open).not.toHaveBeenCalled();
+    expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'answered_in_tab');
+  });
+
+  it('a permission queued behind an open one (the repo opens nothing): the old card closes, no new card', async () => {
+    const repos = fakeRepos({ opened: null, closed: [row({ id: 'q0', kind: 'permission', payload: { tool_name: 'Bash' }, status: 'answered_in_tab' })] });
+    expect(await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Edit' }, tool_use_id: null })).toBeNull();
+    expect(events.map((e) => [e.type, 'question' in e ? e.question.id : null])).toEqual([['tab_question_closed', 'q0']]);
   });
 });
 
