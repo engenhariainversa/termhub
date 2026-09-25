@@ -86,6 +86,7 @@ describe('checkTabSuggestion', () => {
     // so such a card could only fail.
     ['a slash command', { text: 'x\n\x1b[39m❯ \x1b[2m/compact\x1b[0m\n', styled: true }],
     ['a bash command', { text: 'x\n\x1b[39m❯ \x1b[2m!git status\x1b[0m\n', styled: true }],
+    ['a spaced bash command', { text: 'x\n\x1b[39m❯ \x1b[2m! git status\x1b[0m\n', styled: true }],
   ])('opens nothing for %s', async (_label, shot) => {
     captureStyledScreen.mockResolvedValue(shot);
     const repos = fakeRepos();
