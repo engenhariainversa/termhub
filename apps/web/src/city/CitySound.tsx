@@ -108,7 +108,8 @@ export function describeMix(m: SoundMix): string {
   return `ambiente ${pct(m.ambience)} · teclado ${pct(m.keyboard)} · aviso ${pct(m.ding)} · graves ${db(m.bass)} · médios ${db(m.mid)} · agudos ${db(m.treble)}`;
 }
 
-export function SoundPanel({ on, onToggle, mix, onChange, onClose }: { on: boolean; onToggle(): void; mix: SoundMix; onChange(mix: SoundMix): void; onClose(): void }) {
+/** `videos`: this page records videos (the public city), so the panel says they carry this mix. */
+export function SoundPanel({ on, onToggle, mix, onChange, onClose, videos = true }: { on: boolean; onToggle(): void; mix: SoundMix; onChange(mix: SoundMix): void; onClose(): void; videos?: boolean }) {
   const level = (key: 'ambience' | 'keyboard' | 'ding', label: string) => (
     <label className="grid grid-cols-[5.5rem_1fr_3rem] items-center gap-2 text-xs text-fg-muted">
       {label}
@@ -147,7 +148,7 @@ export function SoundPanel({ on, onToggle, mix, onChange, onClose }: { on: boole
       </div>
       <p className="select-all rounded bg-bg-3 px-2 py-1.5 text-xs text-fg-dim">{describeMix(mix)}</p>
       <div className="flex justify-between gap-2">
-        <p className="text-xs text-fg-dim">Os vídeos gravam com esta mixagem.</p>
+        <p className="text-xs text-fg-dim">{videos ? 'Os vídeos gravam com esta mixagem.' : ''}</p>
         <button type="button" className="shrink-0 rounded-md border border-line px-2 py-1 text-xs text-fg hover:bg-bg-3" onClick={() => onChange({ ...DEFAULT_MIX })}>
           Restaurar
         </button>

@@ -1,6 +1,7 @@
 import { TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { SoundPanel, useCitySound } from '../city/CitySound';
 import { useAuth } from '../lib/auth';
 import { useCityLink } from '../lib/city-link';
 import { useFocusMode } from '../lib/focus';
@@ -50,6 +51,9 @@ export function OfficePage() {
   // tabState reads a ref (lib/monitor.tsx), so it never changes identity; `items` is what actually
   // changes on a live push — keep it as a dep, or the model stops updating on monitor pushes.
   const city = useMemo(() => (office ? buildCityModel(office, tabState) : EMPTY_CITY), [office, tabState, items]);
+  // the same soundscape as the public city: on by default, started by the first gesture on the page
+  const sound = useCitySound(city);
+  const [soundOpen, setSoundOpen] = useState(false);
 
   // mirrors `city` for the scene-mount effect below: a scene created there must be seeded with
   // whatever is already known, not sit blank waiting for this effect to fire again.
@@ -189,6 +193,9 @@ export function OfficePage() {
             <span className="flex items-center gap-3 text-xs text-fg-muted">
               <StatusNotices building={here} connected={connected} stale={stale} />
               <ShareButton result={shareResult} />
+              <button className={`rounded px-2 py-1 hover:bg-bg-3 hover:text-fg ${sound.on ? 'text-fg' : ''}`} aria-expanded={soundOpen} onClick={() => setSoundOpen((open) => !open)}>
+                {sound.on ? 'som ligado' : 'som desligado'}
+              </button>
               <button className="rounded px-2 py-1 hover:bg-bg-3 hover:text-fg" onClick={() => setFocus(true)} title="Modo foco (F)">
                 modo foco
               </button>
@@ -203,9 +210,17 @@ export function OfficePage() {
           <div className="absolute right-3 top-3 flex items-center gap-3 rounded bg-bg-2/80 px-2 py-1 text-xs text-fg-muted">
             <StatusNotices building={here} connected={connected} stale={stale} />
             <ShareButton result={shareResult} />
+            <button className={`rounded hover:text-fg ${sound.on ? 'text-fg' : ''}`} aria-expanded={soundOpen} onClick={() => setSoundOpen((open) => !open)}>
+              {sound.on ? 'som ligado' : 'som desligado'}
+            </button>
             <button className="rounded hover:text-fg" onClick={() => setFocus(false)}>
               sair do foco (Esc)
             </button>
+          </div>
+        )}
+        {soundOpen && (
+          <div className={`absolute inset-x-0 z-20 max-h-full overflow-y-auto sm:left-auto sm:right-4 sm:w-[22rem] ${focus ? 'top-12' : 'top-0 sm:top-4'}`}>
+            <SoundPanel on={sound.on} onToggle={sound.toggle} mix={sound.mix} onChange={sound.setMix} onClose={() => setSoundOpen(false)} videos={false} />
           </div>
         )}
         {failed && <Overlay>Seu navegador não conseguiu desenhar o escritório.</Overlay>}
