@@ -162,8 +162,8 @@ The hourly purge in `app.ts` (`mobile/purge.ts`) expires stale enrolment request
 **Cloudflare.**
 
 - **Access: nothing changes.** `termhub.dev` has no Access; these paths live there.
-- WAF: a rate-limiting rule on `/api/m/v1/devices/requests` (10 per minute per IP) as a second layer. **Bot Fight Mode and managed challenges must not fire on `/api/m/*`** — a native app cannot solve a challenge — so a WAF rule that skips challenges on that path is part of the setup.
-- Location headers: `CF-IPCountry` arrives by default; enabling the "Add visitor location headers" managed transform gives `cf-ipcity` and is optional.
+- WAF: a rate-limiting rule on `/api/m/v1/devices/requests` (10 per minute per IP) as a second layer. **Bot Fight Mode and managed challenges must not fire on `/api/m/*`** — a native app cannot solve a challenge — so a WAF rule that skips challenges on that path is part of the setup. On jarvis the rate-limit and skip rules are in place and Bot Fight Mode is off (`fight_mode: false`, verified 2026-09-25), so the mobile paths are never challenged.
+- Location headers: `CF-IPCountry` arrives by default; enabling the "Add visitor location headers" managed transform gives `cf-ipcity` and is optional — on jarvis it is enabled (2026-09-25). Toggle it in the dashboard under **Rules → Settings → Managed Transforms**: the `PATCH /zones/{id}/managed_headers` API returns `request is not authorized` here even with a token holding Transform Rules Edit + Zone Settings Edit, so the dashboard toggle is the only way to set it.
 
 **A command-line phone.** `apps/server/src/cli/mobile-client.ts` plays the app against a running server, to try the API before any app exists:
 
