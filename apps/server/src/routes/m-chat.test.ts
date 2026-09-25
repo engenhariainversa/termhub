@@ -57,6 +57,7 @@ function build(opts: {
   grants?: { id: string; conversation_id: string; tab_id: string; tool: string; source_action_id: string | null; granted_by: string; created_at: string; expires_at: string; revoked_at: string | null; revoked_by: string | null }[];
   revoke?: ReturnType<typeof vi.fn>;
   findGrantByIdForUser?: ReturnType<typeof vi.fn>;
+  tabQuestions?: unknown[];
 } = {}) {
   const extraProjects = opts.extraProjects ?? [];
   const decide = opts.decide ?? vi.fn(async (_id: string, _userId: string, status: string) => ({ ...pendingAction, status }));
@@ -94,6 +95,7 @@ function build(opts: {
       listActiveProjectConversations: vi.fn(async () => [{ id: 'c_p1', project_id: 'p1', last_message_at: '2026-09-23T10:00:00.000Z' }]),
     },
     chatActions: { decide, findByIdForUser, listByConversation: vi.fn(async () => []) },
+    tabQuestions: { listByConversation: vi.fn(async () => opts.tabQuestions ?? []) },
     tabs: { findByIdsForOwner: vi.fn(async (ids: string[]) => (opts.tabs ?? []).filter((t) => ids.includes(t.id))) },
     chatGrants: {
       grant: vi.fn(async (input: { conversation_id: string; tab_id: string; tool: string; source_action_id: string; granted_by: string }) => ({ id: 'g1', ...input, created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z', revoked_at: null, revoked_by: null })),
@@ -164,6 +166,13 @@ describe('GET /chat', () => {
     expect(service.conversationFor).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), null);
     expect(repos.chat.listMessages).toHaveBeenCalledWith('c1');
     expect(repos.chatActions.listByConversation).toHaveBeenCalledWith('c1');
+  });
+
+  it('returns the tab questions too', async () => {
+    const q = { id: 'q1', tab_id: 't1', project_id: 'p1', conversation_id: 'c1', user_id: 'u1', kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null, status: 'open', answer: null, error_code: null, answered_by: null, answered_at: null, closed_at: null, injected_at: null, created_at: '' };
+    const { app } = build({ tabs: [{ id: 't1', project_id: 'p1', name: 'api' }], tabQuestions: [q] });
+    const res = await app.inject({ method: 'GET', url: '/chat' });
+    expect(res.json().tab_questions).toEqual([expect.objectContaining({ id: 'q1', tab_name: 'api', kind: 'permission' })]);
   });
 
   it('?project= reads that project conversation and its host', async () => {

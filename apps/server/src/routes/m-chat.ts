@@ -4,6 +4,9 @@ import { chatProjectsResponse, decisionProofMessage, deviceSelf, hostOptionsResp
 import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
+import { describeTabQuestions } from '../db/repositories/tab-questions-view.js';
+import { controlContextFor } from '../control/context.js';
+import { answerTabQuestion, requirePinFor, tabQuestionScreen } from '../chat/tab-question-answer.js';
 import { permissionsOf } from '../auth/permissions.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
@@ -16,6 +19,7 @@ const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
 const actionIdParam = z.object({ id: z.string().min(1).max(64) });
 const grantIdParam = z.object({ id: z.string().min(1).max(64) });
+const tabQuestionIdParam = z.object({ id: z.string().min(1).max(64) });
 const hostBody = z.object({ machine_id: z.string().min(1).max(64), ai_account_id: z.string().min(1).max(64).nullish() });
 
 /**
@@ -52,14 +56,16 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     const projectId = project ?? null;
     const user = request.scope.user;
     const conversation = await deps.chat.conversationFor(user, projectId);
-    const [messages, rows, host, grants] = await Promise.all([
+    const [messages, rows, host, grants, questionRows] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       deps.chat.hostFor(user, projectId),
       activeGrants(repos, user.id, conversation.id),
+      repos.tabQuestions.listByConversation(conversation.id),
     ]);
     const actions = await describeActions(repos, rows, user.id);
-    return { conversation, messages, actions, host, grants };
+    const tab_questions = await describeTabQuestions(repos, questionRows, user.id);
+    return { conversation, messages, actions, host, grants, tab_questions };
   });
 
   /** The user's projects, with their chat's status; a project with no conversation yet is idle. */
@@ -216,6 +222,25 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
   app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {
     const { id } = grantIdParam.parse(request.params);
     return { grant: await revokeGrant(repos, request.scope.user.id, id) };
+  });
+
+  /**
+   * The phone answers a tab's question like the web (spec 2026-09-25 §5.3). No PIN today:
+   * `requirePinFor` says no for every answer; the day it says yes, the proof flow goes here.
+   */
+  app.post('/tab-questions/:id/answer', { config: { action: 'create' } }, async (request) => {
+    const { id } = tabQuestionIdParam.parse(request.params);
+    const ctx = controlContextFor(repos, request.scope.user);
+    const beforeSend = (row: { kind: 'choice' | 'permission' }, answer: Parameters<typeof requirePinFor>[1]) => {
+      if (requirePinFor(row.kind, answer)) throw new HttpError(403, 'Esta resposta precisa do PIN', 'PIN_REQUIRED');
+    };
+    return { tab_question: await answerTabQuestion(ctx, id, request.body, { log: request.log, beforeSend }) };
+  });
+
+  /** The live excerpt a permission card shows (spec §6.1): read now, never stored nor logged. */
+  app.get('/tab-questions/:id/screen', async (request) => {
+    const { id } = tabQuestionIdParam.parse(request.params);
+    return tabQuestionScreen(controlContextFor(repos, request.scope.user), id);
   });
 }
 

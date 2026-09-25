@@ -2,6 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
+import { describeTabQuestions } from '../db/repositories/tab-questions-view.js';
+import { controlContextFor } from '../control/context.js';
+import { answerTabQuestion, tabQuestionScreen } from '../chat/tab-question-answer.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { chatBus } from '../chat/bus.js';
 import { activeGrants, assertGrantableAction, grantTab, revokeGrant } from '../chat/grants.js';
@@ -13,6 +16,7 @@ const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
 const actionIdParam = z.object({ id: z.string().min(1).max(64) });
 const decisionBody = z.object({ decision: z.enum(['approve', 'deny', 'approve_tab']) });
 const grantIdParam = z.object({ id: z.string().min(1).max(64) });
+const tabQuestionIdParam = z.object({ id: z.string().min(1).max(64) });
 /** The host pair the user picks: the machine, and optionally which of its Claude accounts. No account
  *  (absent or null) means the machine's own default config dir. */
 const hostBody = z.object({ machine_id: z.string().min(1).max(64), ai_account_id: z.string().min(1).max(64).nullish() });
@@ -33,7 +37,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // The trail comes from here, not from live events (which only update what is already on
     // screen): a reload must see every pending/decided action exactly as the server has it,
     // including an old denied row sitting beside a newer pending one for the same proposal.
-    const [messages, rows, host, grants] = await Promise.all([
+    const [messages, rows, host, grants, questionRows] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       // The state, not a rendered sentence: which machine will run the next message, or which of the
@@ -42,10 +46,12 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       // instead of only after a message fails.
       deps.service.hostFor(request.scope.user, projectId),
       activeGrants(repos, request.scope.user.id, conversation.id),
+      repos.tabQuestions.listByConversation(conversation.id),
     ]);
     // Scoped to this request's own user: a card must never resolve a name this user cannot see.
     const actions = await describeActions(repos, rows, request.scope.user.id);
-    return { conversation, messages, actions, host, grants };
+    const tab_questions = await describeTabQuestions(repos, questionRows, request.scope.user.id);
+    return { conversation, messages, actions, host, grants, tab_questions };
   });
 
   /**
@@ -151,5 +157,22 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
   app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {
     const { id } = grantIdParam.parse(request.params);
     return { grant: await revokeGrant(repos, request.scope.user.id, id) };
+  });
+
+  /**
+   * Answers a tab's question from its card (spec 2026-09-25 §5.3). The click is the confirmation: no
+   * gate card, no model turn. `create`, the permission deciding a card needs. The body is validated by
+   * the service against the question's own kind.
+   */
+  app.post('/tab-questions/:id/answer', { config: { action: 'create' } }, async (request) => {
+    const { id } = tabQuestionIdParam.parse(request.params);
+    const ctx = controlContextFor(repos, request.scope.user);
+    return { tab_question: await answerTabQuestion(ctx, id, request.body, { log: request.log }) };
+  });
+
+  /** The live excerpt a permission card shows (spec §6.1): read now, never stored nor logged. */
+  app.get('/tab-questions/:id/screen', async (request) => {
+    const { id } = tabQuestionIdParam.parse(request.params);
+    return tabQuestionScreen(controlContextFor(repos, request.scope.user), id);
   });
 }
