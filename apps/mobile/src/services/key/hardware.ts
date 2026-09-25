@@ -30,16 +30,18 @@ const normalise = (jwk: PublicKey): P256Jwk => {
 export class HardwareDeviceKey implements DeviceKey {
   constructor(private readonly keyTag: string = KEY_TAG) {}
 
+  // `generate` answers in the library's legacy JWK (standard, padded base64), while every proof
+  // carries `publicJwk()` (strict base64url): the server thumbprints both as strings, so they must
+  // be the same bytes. Read the key back through `getPublicKeyFixed` instead of using that answer.
   async create(): Promise<P256Jwk> {
     try {
-      return normalise(await generate(this.keyTag));
+      await generate(this.keyTag);
     } catch (err) {
-      if ((err as { message?: string } | undefined)?.message === 'KEY_ALREADY_EXISTS') {
-        await deleteKey(this.keyTag);
-        return normalise(await generate(this.keyTag));
-      }
-      throw err;
+      if ((err as { message?: string } | undefined)?.message !== 'KEY_ALREADY_EXISTS') throw err;
+      await deleteKey(this.keyTag);
+      await generate(this.keyTag);
     }
+    return this.publicJwk();
   }
 
   async exists(): Promise<boolean> {

@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { TTabQuestionAnswerBody } from '@/services/api/contract';
 import { AppText, Banner, Button, EmptyState, Screen, Sheet } from '@/ui';
 import { isGrantActive } from '../model/grant-time';
@@ -17,7 +18,8 @@ import { TabQuestionCard } from './tab-question-card';
 
 const entryKey = (entry: ChatEntry) => (entry.kind === 'message' ? `m:${entry.message.id}` : entry.kind === 'action' ? `a:${entry.action.id}` : `q:${entry.question.id}`);
 
-/** The conversation (spec §11.2): thread, action cards, host line, the trusted tabs and composer.
+/** The conversation (spec §11.2): thread, action cards, the host line when the host needs attention,
+ * the trusted tabs and composer.
  * The route param is a conversation id (a deep link), a project id or `general` — the store
  * resolves which. */
 export function ConversationScreen() {
@@ -40,6 +42,7 @@ export function ConversationScreen() {
   const loadTabQuestionScreen = useChatStore((s) => s.loadTabQuestionScreen);
   const reset = useChatStore((s) => s.reset);
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (id) void openByRoute(id);
@@ -69,7 +72,9 @@ export function ConversationScreen() {
 
   return (
     <Screen padded={false}>
-      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* The avoiding view measures its frame relative to its parent, which already sits below the
+          top safe area: without this offset it lifts the composer short by that inset, behind the keyboard. */}
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top}>
         <View className="flex-row items-center gap-2 border-b border-app-border px-2 py-2">
           <Button label="Voltar" variant="ghost" onPress={goBack} />
           <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
@@ -77,7 +82,9 @@ export function ConversationScreen() {
           </AppText>
           <Button label="Nova conversa" variant="ghost" onPress={() => setConfirmingReset(true)} />
         </View>
-        {slot?.host ? <HostLine host={slot.host} canChange={activeProject === null} /> : null}
+        {/* Only when something stands in the way (offline, no machine, none chosen, an old agent): where a
+            ready chat runs, and switching it, live in Ajustes. */}
+        {slot?.host && slot.host.kind !== 'ready' ? <HostLine host={slot.host} canChange={activeProject === null} /> : null}
         {shownError ? (
           <View className="px-4 pt-3">
             <Banner tone="danger" text={shownError} />
@@ -89,11 +96,16 @@ export function ConversationScreen() {
               <ActivityIndicator />
             </View>
           ) : (
-            <EmptyState title="Nenhuma mensagem ainda" hint="Escreva abaixo para começar a conversa." />
+            // A tap on the empty thread dismisses the keyboard, as dragging the list does below.
+            <Pressable accessible={false} className="flex-1" onPress={Keyboard.dismiss}>
+              <EmptyState title="Nenhuma mensagem ainda" hint="Escreva abaixo para começar a conversa." />
+            </Pressable>
           )
         ) : (
           <FlatList
             inverted
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
             data={entries}
             keyExtractor={entryKey}
             contentContainerClassName="gap-3 px-4 py-4"

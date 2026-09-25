@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
@@ -87,15 +87,15 @@ afterEach(() => {
 });
 
 describe('Conversa', () => {
-  it('renders the thread: the person in plain text, the assistant as markdown, the title and the host line', async () => {
+  it('renders the thread: the person in plain text, the assistant as markdown and the title, with no host line while the host is ready', async () => {
     await render(<ConversationScreen />);
     expect(await screen.findByText(SEEDED_USER, undefined, LOAD)).toBeTruthy();
     const markdown = screen.getAllByTestId('markdown').map((node) => node.props.children);
     expect(markdown).toContain(SEEDED_ASSISTANT);
     expect(markdown).not.toContain(SEEDED_USER);
     expect(screen.getByText('termhub')).toBeTruthy();
-    expect(screen.getByText('Esta conversa roda na máquina jarvis, na conta padrão do Claude dela.')).toBeTruthy();
-    // A project's host is fixed: only the account-wide chat offers the picker.
+    // A ready host needs nothing from the person: where the chat runs is in Ajustes.
+    expect(screen.queryByText('Esta conversa roda na máquina jarvis, na conta padrão do Claude dela.')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Trocar máquina ou conta' })).toBeNull();
   });
 
@@ -214,11 +214,19 @@ describe('Conversa', () => {
     expect(reset).toHaveBeenCalledTimes(1);
   });
 
-  it('the account-wide chat offers the host sheet, which sets the machine and account', async () => {
+  it('the account-wide chat, with no machine chosen, says so and offers the host sheet, which sets the machine and account', async () => {
     mockId = 'general';
     const setHost = stubAction('setHost');
     await render(<ConversationScreen />);
     expect(await screen.findByText('Chat geral', undefined, LOAD)).toBeTruthy();
+    await waitFor(() => expect(useChatStore.getState().conversations['']?.loaded).toBe(true), LOAD);
+    await act(async () => {
+      const slot = useChatStore.getState().conversations['']!;
+      useChatStore.setState({
+        conversations: { ...useChatStore.getState().conversations, '': { ...slot, host: { kind: 'not_chosen', machines: [{ id: 'm-jarvis', name: 'jarvis' }, { id: 'm-hulk', name: 'hulk' }], sessionAtStake: false } } },
+      });
+    });
+    expect(screen.getByText('Você tem mais de uma máquina: escolha em qual o chat vai rodar.')).toBeTruthy();
 
     await fireEvent.press(await screen.findByRole('button', { name: 'Trocar máquina ou conta' }, LOAD));
     expect(await screen.findByText('hulk', undefined, LOAD)).toBeTruthy();
