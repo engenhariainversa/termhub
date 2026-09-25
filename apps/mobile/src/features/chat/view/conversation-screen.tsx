@@ -16,7 +16,8 @@ import { MessageBubble } from './message-bubble';
 
 const entryKey = (entry: ChatEntry) => (entry.kind === 'message' ? `m:${entry.message.id}` : `a:${entry.action.id}`);
 
-/** The conversation (spec §11.2): thread, action cards, host line, the trusted tabs and composer.
+/** The conversation (spec §11.2): thread, action cards, the host line when the host needs attention,
+ * the trusted tabs and composer.
  * The route param is a conversation id (a deep link), a project id or `general` — the store
  * resolves which. */
 export function ConversationScreen() {
@@ -74,7 +75,9 @@ export function ConversationScreen() {
           </AppText>
           <Button label="Nova conversa" variant="ghost" onPress={() => setConfirmingReset(true)} />
         </View>
-        {slot?.host ? <HostLine host={slot.host} canChange={activeProject === null} /> : null}
+        {/* Only when something stands in the way (offline, no machine, none chosen, an old agent): where a
+            ready chat runs, and switching it, live in Ajustes. */}
+        {slot?.host && slot.host.kind !== 'ready' ? <HostLine host={slot.host} canChange={activeProject === null} /> : null}
         {shownError ? (
           <View className="px-4 pt-3">
             <Banner tone="danger" text={shownError} />
