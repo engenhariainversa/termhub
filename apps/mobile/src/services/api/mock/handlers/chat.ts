@@ -121,16 +121,18 @@ function chunkText(text: string): string[] {
 }
 
 function createConfirmationAction(state: MockState, now: number, conversationId: string, projectId: string | null, projectName: string | null): MockAction {
+  const tabId = projectId ? 't-api' : null;
   const action: MockAction = {
     id: randomId(10),
     conversation_id: conversationId,
     tool: 'send_input',
-    args: {},
+    // Like a real row, the proposal's own args name the tab the row targets.
+    args: tabId ? { tab_id: tabId } : {},
     class: 'write',
     status: 'pending',
     machine_id: projectId ? 'm-jarvis' : null,
     project_id: projectId,
-    tab_id: projectId ? 't-api' : null,
+    tab_id: tabId,
     grant_id: null,
     summary: projectId ? `digitar comando na aba api do projeto ${projectName}, no jarvis` : 'digitar comando no chat geral',
     created_at: new Date(now).toISOString(),

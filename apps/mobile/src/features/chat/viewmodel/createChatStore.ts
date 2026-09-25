@@ -288,7 +288,7 @@ export function createChatStore(deps: ChatDeps) {
                 // The session store performs the call with the proof while its PIN sheet stays open:
                 // a wrong PIN is answered there, and this only resolves once the server accepted it.
                 // The proof signs the decision word, so `approve_tab` asks the PIN for exactly that.
-                const word = decision;
+                const word = decision; // keeps the narrowed type (no 'deny') inside the closure below
                 await session().requestPinProof(actionId, (proof) => api.decide(session().auth(), actionId, { decision: word, ...proof }), word);
               }
               if (gen !== generation) return;

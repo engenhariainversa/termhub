@@ -87,7 +87,7 @@ export function seedFixtures(state: MockState, now: number): void {
     id: 'a-termhub-1',
     conversation_id: 'c-termhub',
     tool: 'send_input',
-    args: { text: 'npm test' },
+    args: { tab_id: 't-api', text: 'npm test' },
     class: 'write',
     status: 'pending',
     machine_id: 'm-jarvis',

@@ -82,6 +82,8 @@ it('GET chat answers the conversation, one pending action and a ready host', asy
   expect(chat.messages.length).toBeGreaterThanOrEqual(3);
   expect(chat.actions).toHaveLength(1);
   expect(chat.actions[0]).toMatchObject({ id: 'a-termhub-1', status: 'pending', class: 'write' });
+  // Like a real row: the proposal's own args name the tab the row targets.
+  expect(chat.actions[0]!.args).toMatchObject({ tab_id: chat.actions[0]!.tab_id });
   expect(chat.host).toEqual({
     kind: 'ready',
     machine: { id: 'm-jarvis', name: 'jarvis' },
@@ -167,7 +169,8 @@ it('a message containing confirma raises a confirmation event and a pending acti
 
   const chat = await api.chat(auth, 'p-termhub');
   const created = chat.actions.find((a) => a.id === confirmation!.action_id);
-  expect(created).toMatchObject({ status: 'pending', class: 'write' });
+  expect(created).toMatchObject({ status: 'pending', class: 'write', tab_id: 't-api' });
+  expect(created!.args).toMatchObject({ tab_id: 't-api' });
 
   collected.close();
 });
