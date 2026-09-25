@@ -17,6 +17,7 @@ const { patchMock, dataState, authState } = vi.hoisted(() => {
       loading: false,
       updateProject: (id: string, input: Record<string, unknown>) => patchMock(id, input),
       machinesOf: (p: Project): Machine[] => p.machines.flatMap((l) => dataState.current.machines.filter((m) => m.id === l.machine_id)),
+      refresh: async () => {},
     },
   };
   const authState = { current: { user: null as User | null } };
@@ -221,5 +222,32 @@ describe('ProjectPage with a card', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText('board k3')).toBeTruthy();
+  });
+});
+
+describe('ProjectPage with a project the list does not have yet', () => {
+  it('reads the list again before giving up, and shows the project it brings', async () => {
+    const fresh = project({ id: 'new1', name: 'iptransporte' });
+    const refresh = vi.fn(async () => {
+      dataState.current = { ...dataState.current, projects: [fresh] };
+    });
+    dataState.current = { ...dataState.current, projects: [], refresh };
+    renderPage(fresh);
+    expect(screen.getByText('Carregando…')).toBeTruthy();
+    // the re-read settles and the page renders again, now finding the project
+    await act(async () => {});
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Projeto não encontrado.')).toBeNull();
+    expect(screen.getAllByText('iptransporte').length).toBeGreaterThan(0);
+  });
+
+  it('says it is not there only after that one re-read', async () => {
+    const refresh = vi.fn(async () => {});
+    dataState.current = { ...dataState.current, projects: [], refresh };
+    renderPage(project({ id: 'gone' }));
+    expect(screen.getByText('Carregando…')).toBeTruthy();
+    await act(async () => {});
+    expect(await screen.findByText('Projeto não encontrado.')).toBeTruthy();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
