@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { Repositories } from '../db/repositories/index.js';
-import type { TabQuestion, TabQuestionCloseStatus } from '../db/repositories/tab-questions.js';
+import type { CloseForTabOptions, TabQuestion, TabQuestionCloseStatus } from '../db/repositories/tab-questions.js';
 import { describeTabQuestions, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import type { Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
@@ -37,8 +37,8 @@ export async function publishTabQuestions(repos: Pick<Repositories, 'tabs'>, typ
 }
 
 /** Closes the tab's question (if any) and says so. */
-export async function closeTabQuestions(repos: Repositories, tabId: string, status: TabQuestionCloseStatus): Promise<TabQuestion[]> {
-  const closed = await repos.tabQuestions.closeForTab(tabId, status);
+export async function closeTabQuestions(repos: Repositories, tabId: string, status: TabQuestionCloseStatus, opts?: CloseForTabOptions): Promise<TabQuestion[]> {
+  const closed = await repos.tabQuestions.closeForTab(tabId, status, undefined, opts);
   await publishTabQuestions(repos, 'tab_question_closed', closed);
   return closed;
 }
@@ -55,7 +55,8 @@ export async function openTabQuestion(repos: Repositories, tab: Pick<Tab, 'id' |
   const owner = (await repos.projects.findById(tab.project_id))?.owner_id;
   const conversation = owner ? await repos.chat.findLatestActiveForProject(tab.project_id, owner) : undefined;
   if (!conversation) {
-    await closeTabQuestions(repos, tab.id, 'answered_in_tab');
+    // A question event, not a closing one: it must not end a permission queue.
+    await closeTabQuestions(repos, tab.id, 'answered_in_tab', { endsQueue: false });
     return null;
   }
   const { question, closed } = await repos.tabQuestions.open({ tab_id: tab.id, project_id: tab.project_id, conversation_id: conversation.id, kind: input.kind, payload: input.payload, tool_use_id: input.tool_use_id });

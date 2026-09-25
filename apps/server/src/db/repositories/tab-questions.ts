@@ -38,6 +38,17 @@ export interface OpenTabQuestionInput {
 }
 
 const withOwner = { conversation: { select: { userId: true } } } as const;
+
+/**
+ * `error_code` of a permission row closed because another permission arrived behind it: the tab is in
+ * a permission queue (spec §9) until the next closing event, which clears it (`closeForTab`).
+ */
+export const PERMISSION_QUEUED = 'QUEUED';
+
+export interface CloseForTabOptions {
+  /** A closing hook event (PreToolUse, Stop…) ends a permission queue; a question event does not. Default true. */
+  endsQueue?: boolean;
+}
 type Row = PrismaTabQuestion & { conversation: { userId: string } };
 
 const iso = (d: Date | null) => d?.toISOString() ?? null;
@@ -88,14 +99,25 @@ export class TabQuestionsRepository {
   /**
    * A new question for a tab: whatever the tab still had open is closed first, in the same transaction.
    * A permission arriving while the tab already has an open permission is a queue in Claude Code (it
-   * shows the first dialog, the card would show the last): the open one is closed and nothing opens —
-   * both are answered in the tab. The tab row is locked first, so two hooks of one tab land in order.
+   * shows the first dialog, the card would show the last): the open one is closed, marked
+   * `PERMISSION_QUEUED`, and nothing opens. Until a closing event clears the mark, the tab stays in the
+   * queue — its newest row is that marked permission — and no permission opens a card: all of them are
+   * answered in the tab. A choice is never held, and being the newest row it ends the queue. The tab
+   * row is locked first, so two hooks of one tab land in order.
    */
   async open(input: OpenTabQuestionInput, now = new Date()): Promise<{ question: TabQuestion | null; closed: TabQuestion[] }> {
     return this.db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "tabs" WHERE id = ${input.tab_id} FOR UPDATE`;
-      const queued =
-        input.kind === 'permission' && (await tx.tabQuestion.findFirst({ where: { tabId: input.tab_id, status: 'open', kind: 'permission' }, select: { id: true } })) !== null;
+      let queued = false;
+      if (input.kind === 'permission') {
+        const newest = await tx.tabQuestion.findFirst({ where: { tabId: input.tab_id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, kind: true, status: true, errorCode: true } });
+        if (newest?.kind === 'permission' && newest.status === 'open') {
+          await tx.tabQuestion.update({ where: { id: newest.id }, data: { errorCode: PERMISSION_QUEUED } });
+          queued = true;
+        } else if (newest?.kind === 'permission' && newest.errorCode === PERMISSION_QUEUED) {
+          queued = true;
+        }
+      }
       const closed = await closeIn(tx, input.tab_id, 'answered_in_tab', now);
       if (queued) return { question: null, closed };
       const row = await tx.tabQuestion.create({
@@ -116,12 +138,18 @@ export class TabQuestionsRepository {
     });
   }
 
-  async closeForTab(tabId: string, status: TabQuestionCloseStatus, now = new Date()): Promise<TabQuestion[]> {
-    // Called for almost every hook event of every tab: the common case (nothing on screen) is one
-    // indexed read, and only a tab with something to close pays for the transaction.
-    const any = await this.db.tabQuestion.findFirst({ where: { tabId, closedAt: null, status: { in: ['open', 'answered'] } }, select: { id: true } });
+  async closeForTab(tabId: string, status: TabQuestionCloseStatus, now = new Date(), opts: CloseForTabOptions = {}): Promise<TabQuestion[]> {
+    const endsQueue = opts.endsQueue ?? true;
+    // Called for almost every hook event of every tab: the common case (nothing on screen, no queue)
+    // is one indexed read, and only a tab with something to close or clear pays for the transaction.
+    const onScreen = { closedAt: null, status: { in: ['open', 'answered'] } };
+    const any = await this.db.tabQuestion.findFirst({ where: { tabId, OR: endsQueue ? [onScreen, { errorCode: PERMISSION_QUEUED }] : [onScreen] }, select: { id: true } });
     if (!any) return [];
-    return this.db.$transaction((tx) => closeIn(tx, tabId, status, now));
+    return this.db.$transaction(async (tx) => {
+      const closed = await closeIn(tx, tabId, status, now);
+      if (endsQueue) await tx.tabQuestion.updateMany({ where: { tabId, errorCode: PERMISSION_QUEUED }, data: { errorCode: null } });
+      return closed;
+    });
   }
 
   async findOpenForTab(tabId: string): Promise<TabQuestion | undefined> {

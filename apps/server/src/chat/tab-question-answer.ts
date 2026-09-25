@@ -71,8 +71,9 @@ export function promptVisible(screen: string, row: Pick<TabQuestion, 'kind' | 'p
   if (!block.slice(block.lastIndexOf('\n') + 1).includes(DIALOG_FOOTER)) return false;
   const shown = squash(block);
   if (row.kind === 'choice') {
-    const first = (row.payload as ChoicePayload).questions[0];
-    return !!first && shown.includes(squash(first.question).slice(0, 80));
+    const marker = squash((row.payload as ChoicePayload).questions[0]?.question ?? '').slice(0, 80);
+    // A question with no letters or digits leaves no marker, and '' is in every screen.
+    return marker !== '' && shown.includes(marker);
   }
   return shown.includes(squash('Do you want'));
 }

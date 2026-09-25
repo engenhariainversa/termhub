@@ -265,6 +265,10 @@ describe('promptVisible', () => {
     expect(promptVisible(shown, row({ payload: { questions: [md] } }))).toBe(true);
     expect(promptVisible(`Should we run yarn test before the merge?\n${CHOICE_FOOTER}`, row({ payload: { questions: [md] } }))).toBe(false);
   });
+  it('a choice question with no letters or digits never matches', () => {
+    const bare = { ...colors, question: '?? — …' };
+    expect(promptVisible(`?? — …\n\u276f 1. Blue\n${CHOICE_FOOTER}`, row({ payload: { questions: [bare] } }))).toBe(false);
+  });
   it('matches a question the terminal wrapped', () => {
     const long = { ...colors, question: 'Which of these deployment targets should the new staging environment use from now on?' };
     expect(promptVisible(`Which of these deployment targets should the new\n  staging environment use from now on?\n❯ 1. A\n${CHOICE_FOOTER}`, row({ payload: { questions: [long] } }))).toBe(true);

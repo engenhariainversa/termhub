@@ -102,6 +102,32 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect(again.closed.map((q) => q.id)).toEqual([choice.question.id]);
   });
 
+  it('a permission queue lasts until a closing event: no card for the 2nd, 3rd… prompt, the next one after it opens', async () => {
+    const p1 = (await openPermission('t12', 'Bash')).question!;
+    const p2 = await openPermission('t12', 'Edit');
+    expect(p2).toEqual({ question: null, closed: [expect.objectContaining({ id: p1.id, status: 'answered_in_tab' })] });
+    // The tab still shows P1's dialog: a third prompt must not open a card either.
+    expect(await openPermission('t12', 'Write')).toEqual({ question: null, closed: [] });
+    expect(await repo.findOpenForTab('t12')).toBeUndefined();
+    // A closing event (PreToolUse, Stop…) ends the queue even with nothing on screen.
+    expect(await repo.closeForTab('t12', 'answered_in_tab')).toEqual([]);
+    const p4 = await openPermission('t12', 'Bash');
+    expect(p4.question).toMatchObject({ kind: 'permission', status: 'open' });
+    // A closing path that does not end the queue (a question event with no chat) keeps it.
+    await openPermission('t12', 'Edit'); // queues again
+    await repo.closeForTab('t12', 'answered_in_tab', new Date(), { endsQueue: false });
+    expect((await openPermission('t12', 'Bash')).question).toBeNull();
+  });
+
+  it('a choice is never held by a permission queue, and ends it', async () => {
+    await openPermission('t13', 'Bash');
+    await openPermission('t13', 'Edit'); // queued
+    const choice = await open('t13');
+    expect(choice.question).toMatchObject({ kind: 'choice', status: 'open' });
+    // The newest row is now the choice: a permission after it opens normally.
+    expect((await openPermission('t13', 'Bash')).question).toMatchObject({ kind: 'permission', status: 'open' });
+  });
+
   it('closeOne: only that row, only while open', async () => {
     const { question: a } = await open('t10');
     const closed = await repo.closeOne(a.id, 'answered_in_tab');

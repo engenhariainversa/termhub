@@ -255,3 +255,10 @@ Same card in `apps/mobile/src/features/chat/view/tab-question-card.tsx`; store a
   hooks of one tab land in order. The permission card's live excerpt is expanded by default.
 - Final review: the card goes only to a conversation of the project's owner (`user_id = owner_id`);
   a project without an owner gets no card.
+- Final review 2: a permission queue lasts from the moment a permission arrives while another
+  permission row is open until the next closing hook event (`closesOpenQuestion`: PreToolUse, Stop,
+  UserPromptSubmit, SessionEnd…) or tab expiry. The closed row is marked `error_code = 'QUEUED'`;
+  while the tab's newest row is such a permission, no permission opens a card (a third prompt would
+  otherwise open one while the tab still shows the first dialog). `closeForTab` clears the mark; the
+  no-conversation path of a question event does not. A choice is never held and, as the newest row,
+  ends the queue. A choice question with no letters or digits never passes the live check.
