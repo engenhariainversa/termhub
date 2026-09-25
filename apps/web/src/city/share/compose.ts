@@ -9,11 +9,28 @@ import type { CityModel } from '../../office/model';
 import type { PublicCity } from '../../lib/types';
 
 export type ShareFormat = 'story' | 'post';
+/** What a still or a video can be: a composed story or post, or `screen` — the camera's view, 16:9, nothing added. */
+export type CaptureFormat = ShareFormat | 'screen';
 
-export const FORMAT_SIZE: Record<ShareFormat, { width: number; height: number }> = {
+export const FORMAT_SIZE: Record<CaptureFormat, { width: number; height: number }> = {
   story: { width: 1080, height: 1920 },
   post: { width: 1920, height: 1080 },
+  screen: { width: 1920, height: 1080 },
 };
+
+export const SCREEN_ASPECT = 16 / 9;
+
+/**
+ * The part of a `width`×`height` view a 16:9 capture keeps: the largest centred 16:9 box, so the
+ * frame is filled with exactly what is on screen and only the overhang on one axis is cut. Also
+ * where the page draws its red "recording" frame, in CSS pixels.
+ */
+export function screenCrop(width: number, height: number, aspect = SCREEN_ASPECT): Rect {
+  if (width <= 0 || height <= 0) return { x: 0, y: 0, w: 0, h: 0 };
+  const w = Math.min(width, height * aspect);
+  const h = w / aspect;
+  return { x: (width - w) / 2, y: (height - h) / 2, w, h };
+}
 
 export interface ShareInfo {
   ownerName: string;
@@ -137,6 +154,19 @@ export function layoutFor(format: ShareFormat, info: ShareInfo): ShareLayout {
     link: linkLine(info.shortLink, { x: colX, y: 800, size: 56, weight: 700, tone: 'accent', align: 'left', maxWidth: colW }, 22),
     invite: line(invite, { x: colX, y: 880, size: 36, weight: 600, tone: 'fg', align: 'left', maxWidth: colW }),
   };
+}
+
+/** Paints one frame of any capture: the scene alone for `screen`, the composed layout otherwise. */
+export function paintCapture(ctx: CanvasRenderingContext2D, format: CaptureFormat, info: ShareInfo, scene: CanvasImageSource & { width: number; height: number }): void {
+  if (format !== 'screen') return drawFrame(ctx, layoutFor(format, info), scene);
+  const { width, height } = FORMAT_SIZE.screen;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, width, height);
+  const c = screenCrop(scene.width, scene.height);
+  if (c.w > 0) ctx.drawImage(scene, c.x, c.y, c.w, c.h, 0, 0, width, height);
+  ctx.restore();
 }
 
 /** Paints one frame. `scene` is the office canvas as it was just rendered (OfficeScene.onFrame). */

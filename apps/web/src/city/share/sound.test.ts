@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CityModel, DeskModel } from '../../office/model';
-import { layerGains, MAX_LAYERS, soundEvents } from './sound';
+import { cleanMix, DEFAULT_MIX, EQ_RANGE_DB, layerGains, MAX_LAYERS, soundEvents } from './sound';
 
 const desk = (id: string, pose: DeskModel['pose'], marker: DeskModel['marker'] = null) => ({ id, pose, marker }) as DeskModel;
 const city = (...buildings: Array<[string, DeskModel[]]>): CityModel => ({ needsYou: 0, buildings: buildings.map(([id, desks]) => ({ id, desks })) }) as unknown as CityModel;
@@ -51,5 +51,22 @@ describe('layerGains', () => {
     expect(two[2]).toBe(0);
     expect(two[0] ** 2 + two[1] ** 2).toBeCloseTo(1, 10);
     expect(layerGains(40)).toEqual(layerGains(MAX_LAYERS));
+  });
+});
+
+describe('cleanMix', () => {
+  it('starts from the default mix: ambience 70%, keyboard 80%, a flat equaliser', () => {
+    expect(cleanMix(null)).toEqual(DEFAULT_MIX);
+    expect(DEFAULT_MIX).toMatchObject({ ambience: 0.7, keyboard: 0.8, bass: 0, mid: 0, treble: 0 });
+  });
+
+  it('clamps what was stored and drops what it does not know', () => {
+    expect(cleanMix({ ambience: 3, keyboard: -1, bass: 99, treble: -99, mid: 'x', extra: 1 })).toEqual({
+      ...DEFAULT_MIX,
+      ambience: 1,
+      keyboard: 0,
+      bass: EQ_RANGE_DB,
+      treble: -EQ_RANGE_DB,
+    });
   });
 });

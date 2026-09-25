@@ -1,15 +1,18 @@
 /**
- * The 10-second story video (spec 2026-09-23 §2.4), recorded in real time in the visitor's
- * browser: a 1080×1920 canvas redrawn with the compositor on every scene frame gives the video
- * track (captureStream), the synthesised soundscape gives the audio track, and a MediaRecorder
- * writes both. No server work.
+ * The videos (spec 2026-09-23 §2.4), recorded in real time in the visitor's browser: the 10-second
+ * story (1080×1920, composed) and the screen recording (1920×1080, the camera's view, as long as the
+ * visitor keeps recording, up to SCREEN_VIDEO_MAX_MS). A canvas redrawn on every scene frame gives
+ * the video track (captureStream), the soundscape gives the audio track, and a MediaRecorder writes
+ * both. No server work.
  */
 import type { CityModel } from '../../office/model';
-import { drawFrame, FORMAT_SIZE, layoutFor, type ShareInfo } from './compose';
+import { FORMAT_SIZE, paintCapture, type CaptureFormat, type ShareInfo } from './compose';
 import type { FrameSource } from './images';
-import { createSoundscape, soundEvents } from './sound';
+import { createSoundscape, loadMix, soundEvents } from './sound';
 
 export const STORY_VIDEO_MS = 10_000;
+/** A screen recording stops by itself here, so a forgotten one does not fill the memory. */
+export const SCREEN_VIDEO_MAX_MS = 60_000;
 
 /**
  * First supported wins: H.264 + AAC in an MP4 is what Instagram takes, spelled several ways because
@@ -67,7 +70,13 @@ export class RecordingCancelled extends Error {
 }
 
 export interface RecordingResult { blob: Blob; mimeType: string }
-export interface Recording { done: Promise<RecordingResult>; cancel(): void }
+export interface Recording {
+  done: Promise<RecordingResult>;
+  /** stops and throws the recording away (`done` rejects with RecordingCancelled) */
+  cancel(): void;
+  /** stops early and keeps what was recorded so far (`done` resolves) */
+  finish(): void;
+}
 
 const PROGRESS_MS = 250;
 
@@ -117,16 +126,26 @@ export function runRecorder(opts: { stream: MediaStream; mimeType: string; durat
       outcome = 'cancelled';
       recorder.stop();
     },
+    finish() {
+      if (recorder.state !== 'inactive') recorder.stop();
+    },
   };
 }
 
-export function recordStory(opts: { source: FrameSource; info: () => ShareInfo; model: () => CityModel; durationMs?: number; onProgress?: (elapsedMs: number) => void }): Recording {
+type VideoOptions = { source: FrameSource; info: () => ShareInfo; model: () => CityModel; durationMs?: number; onProgress?: (elapsedMs: number) => void };
+
+export function recordStory(opts: VideoOptions): Recording {
+  return recordVideo({ ...opts, format: 'story', durationMs: opts.durationMs ?? STORY_VIDEO_MS });
+}
+
+export function recordVideo(opts: VideoOptions & { format: CaptureFormat; durationMs: number }): Recording {
   const mimeType = pickMimeType((t) => MediaRecorder.isTypeSupported(t));
   const canvas = document.createElement('canvas');
-  canvas.width = FORMAT_SIZE.story.width;
-  canvas.height = FORMAT_SIZE.story.height;
+  canvas.width = FORMAT_SIZE[opts.format].width;
+  canvas.height = FORMAT_SIZE[opts.format].height;
   const ctx = canvas.getContext('2d');
-  if (!mimeType || !ctx) return { done: Promise.reject(new Error('this browser cannot record the video')), cancel: () => {} };
+  const refused = (err: Error): Recording => ({ done: Promise.reject(err), cancel: () => {}, finish: () => {} });
+  if (!mimeType || !ctx) return refused(new Error('this browser cannot record the video'));
 
   // every piece is let go exactly once, whichever of them got built before something threw
   let audio: AudioContext | null = null;
@@ -145,12 +164,12 @@ export function recordStory(opts: { source: FrameSource; info: () => ShareInfo; 
 
   try {
     audio = new AudioContext();
-    const soundscape = createSoundscape(audio);
+    const soundscape = createSoundscape(audio, loadMix());
     sound = soundscape;
     let heard: CityModel | null = null;
     // redraw on every scene frame; the counts and the sounds follow the model the page draws
     off = opts.source.onFrame((scene) => {
-      drawFrame(ctx, layoutFor('story', opts.info()), scene);
+      paintCapture(ctx, opts.format, opts.info(), scene);
       const model = opts.model();
       if (model !== heard) {
         soundscape.play(soundEvents(heard, model));
@@ -159,10 +178,10 @@ export function recordStory(opts: { source: FrameSource; info: () => ShareInfo; 
     });
     const video = canvas.captureStream(30);
     stream = new MediaStream([...video.getVideoTracks(), ...soundscape.stream.getAudioTracks()]);
-    return runRecorder({ stream, mimeType, durationMs: opts.durationMs ?? STORY_VIDEO_MS, onProgress: opts.onProgress, cleanup });
+    return runRecorder({ stream, mimeType, durationMs: opts.durationMs, onProgress: opts.onProgress, cleanup });
   } catch (err) {
     // no AudioContext, no capture, a recorder that refuses the stream or will not start
     cleanup();
-    return { done: Promise.reject(err instanceof Error ? err : new Error('the recording could not start')), cancel: () => {} };
+    return refused(err instanceof Error ? err : new Error('the recording could not start'));
   }
 }

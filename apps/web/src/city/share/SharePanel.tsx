@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CityModel } from '../../office/model';
 import type { PublicCity } from '../../lib/types';
-import { shareInfoFor, type ShareFormat } from './compose';
+import { shareInfoFor, type CaptureFormat } from './compose';
 import { CopyLinkButton } from './CopyLinkButton';
 import { canShareFile, downloadFile, shareOrDownload } from './deliver';
 import { captureStill, fileNameFor, type FrameSource } from './images';
@@ -99,7 +99,7 @@ export function SharePanel({ scene, city, model, cityUrl, copyUrl, onClose }: { 
     setPhase({ kind: 'done', file, preview: URL.createObjectURL(file), video, warn });
   };
 
-  const still = async (format: ShareFormat) => {
+  const still = async (format: CaptureFormat) => {
     setPhase({ kind: 'busy' });
     try {
       finish(await captureStill(scene, format, info()), fileNameFor(city.nickname, format, 'png'), false, false);
@@ -155,6 +155,9 @@ export function SharePanel({ scene, city, model, cityUrl, copyUrl, onClose }: { 
           </button>
           <button type="button" className={OPTION} onClick={() => void still('post')}>
             Post (imagem)
+          </button>
+          <button type="button" className={OPTION} onClick={() => void still('screen')}>
+            Tela 16:9 (imagem)
           </button>
           <button type="button" className={OPTION} disabled={!videoOk} onClick={() => void video()}>
             Vídeo para story (10 s, com som)

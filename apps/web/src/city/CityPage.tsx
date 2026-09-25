@@ -4,7 +4,10 @@ import { OfficeScene } from '../office/scene/OfficeScene';
 import type { PublicCity } from '../lib/types';
 import { fetchCity, openCitySocket, robotsOf, toBuildingEntries, type CityFrame } from './api';
 import { BetaCard, LANDING_URL, useBetaCard } from './BetaCard';
+import { SoundPanel, useCitySound } from './CitySound';
+import { shareInfoFor } from './share/compose';
 import { CopyLinkButton } from './share/CopyLinkButton';
+import { clock, RecordingFrame, RecordingResult, useScreenRecorder } from './share/ScreenRecorder';
 import { SharePanel } from './share/SharePanel';
 import { cityPath, restFromUrl, type Rest } from './url';
 
@@ -197,6 +200,18 @@ export function CityPage({ nickname }: { nickname: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const sound = useCitySound(model);
+  const [soundOpen, setSoundOpen] = useState(false);
+  const cityRef = useRef(city);
+  cityRef.current = city;
+  const recorder = useScreenRecorder({
+    scene: () => sceneRef.current,
+    nickname,
+    info: () => shareInfoFor(cityRef.current!, modelRef.current, `${location.origin}${cityPath(nickname, { building: null })}`),
+    model: () => modelRef.current,
+  });
+  const recordingNow = recorder.state.kind === 'recording';
+
   if (missing) {
     return (
       // nothing else to show here, so the card is the page: open, and not something to put away
@@ -242,6 +257,20 @@ export function CityPage({ nickname }: { nickname: string }) {
               Compartilhar
             </button>
           )}
+          {!failed && recorder.supported && (
+            <button
+              type="button"
+              disabled={!canShare && !recordingNow}
+              onClick={() => (recordingNow ? recorder.stop() : void recorder.start())}
+              className={`inline-flex items-center gap-1.5 rounded px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50 ${recordingNow ? 'bg-danger/15 text-danger hover:bg-danger/25' : 'hover:bg-bg-3 hover:text-fg'}`}
+            >
+              <span aria-hidden="true" className={recordingNow ? 'h-2 w-2 rounded-[2px] bg-danger' : 'h-2 w-2 rounded-full bg-danger'} />
+              {recordingNow ? `Parar ${clock(recorder.state.kind === 'recording' ? recorder.state.elapsedMs : 0)}` : 'Gravar'}
+            </button>
+          )}
+          <button type="button" aria-expanded={soundOpen} onClick={() => setSoundOpen((open) => !open)} className={`rounded px-2 py-1 hover:bg-bg-3 hover:text-fg ${sound.on ? 'text-fg' : ''}`}>
+            {sound.on ? 'Som ligado' : 'Som'}
+          </button>
           <a className="hidden hover:text-fg sm:inline" href={LANDING_URL}>
             O que é o termhub?
           </a>
@@ -265,6 +294,27 @@ export function CityPage({ nickname }: { nickname: string }) {
           // pointer, so the rest of the scene stays as draggable and clickable as without it
           <div className="absolute inset-x-0 bottom-0 z-10 max-h-[75%] overflow-y-auto sm:bottom-4 sm:left-4 sm:right-auto sm:w-[22rem] sm:max-h-[calc(100%-2rem)]">
             <BetaCard ownerName={city?.owner_name ?? null} onCollapse={() => setBetaOpen(false)} className="rounded-t-xl border-t sm:rounded-lg sm:border" />
+          </div>
+        )}
+        {recordingNow && host && <RecordingFrame host={host} />}
+        {soundOpen && (
+          <div className="absolute inset-x-0 top-0 z-20 max-h-full overflow-y-auto sm:left-auto sm:right-4 sm:top-4 sm:w-[22rem]">
+            <SoundPanel on={sound.on} onToggle={sound.toggle} mix={sound.mix} onChange={sound.setMix} onClose={() => setSoundOpen(false)} />
+          </div>
+        )}
+        {recorder.state.kind === 'done' && (
+          <div className="absolute inset-x-0 top-0 z-30 max-h-full overflow-y-auto sm:left-auto sm:right-4 sm:top-4 sm:w-[26rem]">
+            <RecordingResult file={recorder.state.file} preview={recorder.state.preview} warn={recorder.state.warn} onClose={recorder.dismiss} />
+          </div>
+        )}
+        {recorder.state.kind === 'failed' && (
+          <div className="absolute inset-x-0 top-0 z-30 sm:left-auto sm:right-4 sm:top-4 sm:w-[22rem]">
+            <div role="status" className="flex items-center justify-between gap-2 rounded-b-xl border border-line bg-bg-2 p-3 text-sm text-fg-muted shadow-xl sm:rounded-lg">
+              Não foi possível gravar a tela.
+              <button type="button" className="rounded px-2 text-fg-muted hover:text-fg" aria-label="Fechar" onClick={recorder.dismiss}>
+                ×
+              </button>
+            </div>
           </div>
         )}
         {shareOpen && !failed && canShare && city && sceneRef.current && (

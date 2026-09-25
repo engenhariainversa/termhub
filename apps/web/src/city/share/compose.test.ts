@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CityModel, DeskModel } from '../../office/model';
 import type { PublicCity } from '../../lib/types';
-import { countsOf, displayLink, drawFrame, ellipsize, FORMAT_SIZE, GLYPH, layoutFor, liveLine, shareInfoFor, type ShareInfo, type ShareLayout, type TextBlock } from './compose';
+import { countsOf, displayLink, drawFrame, ellipsize, FORMAT_SIZE, GLYPH, layoutFor, liveLine, screenCrop, shareInfoFor, type ShareInfo, type ShareLayout, type TextBlock } from './compose';
 
 const info = (over: Partial<ShareInfo> = {}): ShareInfo => ({ ownerName: 'Pedro', working: 3, waiting: 1, shortLink: '77a.it/pedro', ...over });
 const blocks = (l: ShareLayout): TextBlock[] => [l.mark, l.title, l.live, l.link, l.invite];
@@ -140,5 +140,16 @@ describe('drawFrame', () => {
     drawFrame(ctx as unknown as CanvasRenderingContext2D, layoutFor('post', info()), { width: 0, height: 0 } as HTMLCanvasElement);
     expect(ctx.drawImage).not.toHaveBeenCalled();
     expect(ctx.fillText).toHaveBeenCalled();
+  });
+});
+
+describe('screenCrop', () => {
+  it('keeps the largest centred 16:9 box of the view', () => {
+    // wider than 16:9: the sides go
+    expect(screenCrop(2000, 900)).toEqual({ x: 200, y: 0, w: 1600, h: 900 });
+    // a phone held upright: the top and bottom go
+    expect(screenCrop(390, 700)).toEqual({ x: 0, y: (700 - 390 / (16 / 9)) / 2, w: 390, h: 390 / (16 / 9) });
+    expect(screenCrop(1920, 1080)).toEqual({ x: 0, y: 0, w: 1920, h: 1080 });
+    expect(screenCrop(0, 500)).toEqual({ x: 0, y: 0, w: 0, h: 0 });
   });
 });
