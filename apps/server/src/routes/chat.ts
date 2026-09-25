@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
-import type { ChatService } from '../chat/service.js';
+import { failureLabel, type ChatService } from '../chat/service.js';
 import { chatBus } from '../chat/bus.js';
 import { activeGrants, assertGrantableAction, grantTab, revokeGrant } from '../chat/grants.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
@@ -123,7 +123,17 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
 
     // Every open tab must see the decision, not only the one that clicked it.
     chatBus.publish({ type: 'decision', user_id: user.id, conversation_id: action.conversation_id, action_id: action.id, status });
-    const grant = decision === 'approve_tab' ? await grantTab(repos, user.id, action) : undefined;
+    // The approval above already happened and is already published: a grant that fails to be written
+    // must not turn it into an error, nor keep the model from being resumed. It degrades to a plain
+    // "Autorizar" — the card shows no grant and the user can trust the tab again from the next one.
+    let grant: Awaited<ReturnType<typeof grantTab>> | undefined;
+    if (decision === 'approve_tab') {
+      try {
+        grant = await grantTab(repos, user.id, action);
+      } catch (err) {
+        request.log.warn({ code: failureLabel(err), actionId: action.id }, 'chat grant failed after approval');
+      }
+    }
 
     try {
       const message = await deps.service.resumeAfterDecision(user, action);

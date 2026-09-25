@@ -503,6 +503,30 @@ describe('POST /chat/actions/:id/decision', () => {
     expect(events.map((e) => e.type)).toEqual(expect.arrayContaining(['decision', 'grant']));
   });
 
+  it('approve_tab whose grant fails still approves and resumes, with no grant in the answer or on the bus', async () => {
+    const eligible = { ...pendingAction, status: 'pending', args: { tab_id: 't1', text: 'oi' } };
+    const resumeAfterDecision = vi.fn(async () => undefined);
+    const { app, decide, repos } = build({ resumeAfterDecision, findByIdForUser: vi.fn(async () => eligible), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
+    vi.mocked(repos.chatGrants.grant).mockRejectedValueOnce(new Error('connection terminated'));
+    const events: ChatEvent[] = [];
+    const unsubscribe = chatBus.subscribe((e) => events.push(e));
+    let res;
+    try {
+      res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab', challenge: 'ch', pin_proof: 'proof-1' } });
+      await new Promise((r) => setTimeout(r, 20));
+    } finally {
+      unsubscribe();
+    }
+    expect(res.statusCode).toBe(200);
+    expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
+    expect(res.json().action).toMatchObject({ id: 'act1', status: 'approved' });
+    expect(res.json()).toMatchObject({ queued: true });
+    expect(res.json()).not.toHaveProperty('grant');
+    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(events.map((e) => e.type)).toContain('decision');
+    expect(events.map((e) => e.type)).not.toContain('grant');
+  });
+
   it('approve_tab: the PIN proof is bound to the decision word — a proof signed for "approve" cannot open a grant', async () => {
     // A route that mistakenly checked the proof against decisionProofMessage(..., 'approve') would
     // accept a proof that was only ever meant to approve, never to trust the tab. Staging checkPin to

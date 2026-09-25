@@ -426,6 +426,25 @@ it('approve_tab on an eligible send_input approves it, trusts the tab and says s
   expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
 });
 
+it('approve_tab whose grant fails still approves and resumes, with no grant in the answer or on the bus', async () => {
+  // The approval is already decided and published when the grant is written: a failing grant write
+  // must not turn it into an error, nor leave the model waiting for a resume that never comes.
+  const events: ChatEvent[] = [];
+  const off = chatBus.subscribe((e) => events.push(e));
+  const eligible = { ...pendingAction, status: 'pending', args: { tab_id: 't1', text: 'oi' } };
+  const { app, decide, repos, resumeAfterDecision } = build({ findByIdForUser: vi.fn(async () => eligible), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
+  vi.mocked(repos.chatGrants.grant).mockRejectedValueOnce(new Error('connection terminated'));
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab' } });
+  off();
+  expect(res.statusCode).toBe(200);
+  expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
+  expect(res.json().action).toMatchObject({ id: 'act1', status: 'approved' });
+  expect(res.json()).not.toHaveProperty('grant');
+  expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+  expect(events.map((e) => e.type)).toContain('decision');
+  expect(events.map((e) => e.type)).not.toContain('grant');
+});
+
 it.each([
   ['answering a permission', { tab_id: 't1', text: '1', answering_permission: true }, 'send_input'],
   ['run_command', { tab_id: 't1', command: 'ls' }, 'run_command'],

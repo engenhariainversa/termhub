@@ -195,8 +195,17 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     }
 
     chatBus.publish({ type: 'decision', user_id: user.id, conversation_id: action.conversation_id, action_id: action.id, status });
-    const grant = body.decision === 'approve_tab' ? await grantTab(repos, user.id, action) : undefined;
     const actionId = action.id;
+    // Same rule as the web route: the approval is already decided and published, so a grant that fails
+    // to be written degrades to a plain approval — logged by code only — and the resume still runs.
+    let grant: Awaited<ReturnType<typeof grantTab>> | undefined;
+    if (body.decision === 'approve_tab') {
+      try {
+        grant = await grantTab(repos, user.id, action);
+      } catch (err) {
+        request.log.warn({ code: failureLabel(err), actionId }, 'chat grant failed after approval');
+      }
+    }
     void Promise.resolve()
       .then(() => deps.chat.resumeAfterDecision(user, action))
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId }, 'mobile decision resume failed'));
