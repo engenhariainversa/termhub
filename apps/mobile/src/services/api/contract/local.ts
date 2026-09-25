@@ -29,6 +29,9 @@ import {
   p256Jwk,
   pushTokenBody,
   sendAccepted,
+  tabQuestionAnswerBody,
+  tabQuestionSchema,
+  tabQuestionScreenResponse,
   tokenBody,
   tokenResponse,
   verificationCodeSchema,
@@ -83,6 +86,7 @@ export const chatResponse = z.object({
   messages: z.array(chatMessageSchema),
   actions: z.array(chatActionSchema),
   grants: z.array(chatGrantSchema).default([]),
+  tab_questions: z.array(tabQuestionSchema).default([]),
   host: chatHostStateSchema,
 });
 
@@ -146,6 +150,9 @@ export type TNotificationsResponse = z.infer<typeof notificationsResponse>;
 export type TChatHostState = z.infer<typeof chatHostStateSchema>;
 export type TChatAction = z.infer<typeof chatActionSchema>;
 export type TChatGrant = z.infer<typeof chatGrantSchema>;
+export type TTabQuestion = z.infer<typeof tabQuestionSchema>;
+export type TTabQuestionAnswerBody = z.infer<typeof tabQuestionAnswerBody>;
+export type TTabQuestionScreenResponse = z.infer<typeof tabQuestionScreenResponse>;
 export type TChatConversation = z.infer<typeof chatConversationSchema>;
 export type TChatResponse = z.infer<typeof chatResponse>;
 export type TMeResponse = z.infer<typeof meResponse>;

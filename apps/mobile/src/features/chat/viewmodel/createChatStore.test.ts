@@ -402,7 +402,7 @@ it('persists projects and each conversation, never live or transient state', asy
 
   const saved = JSON.parse(mmkv.getString('chat')!).state;
   expect(Object.keys(saved).sort()).toEqual(['conversations', 'projects']);
-  expect(Object.keys(saved.conversations['p-termhub']).sort()).toEqual(['actions', 'conversation', 'grants', 'host', 'messages']);
+  expect(Object.keys(saved.conversations['p-termhub']).sort()).toEqual(['actions', 'conversation', 'grants', 'host', 'messages', 'tabQuestions']);
 
   // A cold start shows the thread before any fetch.
   const again = createChatStore({ api, session: () => ({ phase: 'locked', auth: () => { throw new Error('LOCKED'); }, handleApiError: () => false, requestPinProof: async () => { throw new Error('CANCELLED'); } }) });
@@ -444,4 +444,42 @@ it('refresh(projectId) re-reads that slot without switching activeProject, touch
   expect(events.mock.calls).toHaveLength(socketCallsBefore); // no new socket connection
   expect(slot(chat, null)).toMatchObject({ loaded: true, error: null, conversation: { id: 'c-general' } });
   expect(slot(chat, null).host).toMatchObject({ kind: 'ready', machine: { name: 'jarvis' } });
+});
+
+it('answerTabQuestion answers over the mock and the card turns answered; a second answer reads "A pergunta mudou na aba"', async () => {
+  const { chat } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await chat.getState().send('tem alguma pergunta?');
+  await jest.advanceTimersByTimeAsync(5000);
+  const q = slot(chat, 'p-termhub').tabQuestions.find((x) => x.status === 'open')!;
+  expect(q).toMatchObject({ kind: 'choice', tab_name: 'api' });
+
+  await chat.getState().answerTabQuestion(q.id, { answers: [{ selected: [0] }] });
+  await jest.advanceTimersByTimeAsync(0);
+  await flush();
+  expect(slot(chat, 'p-termhub').tabQuestions.find((x) => x.id === q.id)?.status).toBe('answered');
+  expect(chat.getState().answeringQuestionId).toBeNull();
+
+  await chat.getState().answerTabQuestion(q.id, { answers: [{ selected: [0] }] });
+  expect(chat.getState().error).toBe('A pergunta mudou na aba');
+});
+
+it('loadTabQuestionScreen answers the excerpt while open, null once it is not', async () => {
+  const { chat } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await chat.getState().send('preciso da sua permissão');
+  await jest.advanceTimersByTimeAsync(5000);
+  const q = slot(chat, 'p-termhub').tabQuestions.find((x) => x.kind === 'permission')!;
+  expect(await chat.getState().loadTabQuestionScreen(q.id)).toContain('Do you want to proceed?');
+  await chat.getState().answerTabQuestion(q.id, { allow: true });
+  expect(await chat.getState().loadTabQuestionScreen(q.id)).toBeNull();
+});
+
+it('keeps the tab questions of a slot across a restart (persisted with the thread)', async () => {
+  const { chat } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await chat.getState().send('tem alguma pergunta?');
+  await jest.advanceTimersByTimeAsync(5000);
+  const saved = JSON.parse(mmkv.getString('chat')!).state as { conversations: Record<string, { tabQuestions?: unknown[] }> };
+  expect(saved.conversations['p-termhub']!.tabQuestions!.length).toBeGreaterThan(0);
 });

@@ -13,7 +13,7 @@ jest.mock('expo-router', () => ({
 
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
-import type { TChatAction, TChatEvent, TChatGrant, TChatMessage, TChatResponse } from '@/services/api/contract';
+import type { TChatAction, TChatEvent, TChatGrant, TChatMessage, TChatResponse, TTabQuestion } from '@/services/api/contract';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { ConversationScreen } from './conversation-screen';
 
@@ -38,7 +38,7 @@ function addRows(rows: TChatMessage[], live: TChatEvent[]) {
 /** Replaces one of the store's actions for a test. Not `jest.spyOn(getState(), …)`: zustand
  * replaces the state object on every `setState`, so a restored spy would linger on the new one. */
 const realActions = { ...stores.chat.getState() };
-function stubAction<K extends 'decide' | 'reset' | 'setHost' | 'revokeGrant'>(name: K) {
+function stubAction<K extends 'decide' | 'reset' | 'setHost' | 'revokeGrant' | 'answerTabQuestion'>(name: K) {
   const fn = jest.fn(async () => undefined);
   useChatStore.setState({ [name]: fn } as Partial<ReturnType<typeof useChatStore.getState>>);
   return fn;
@@ -75,7 +75,15 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
-  useChatStore.setState({ error: null, live: [], decide: realActions.decide, reset: realActions.reset, setHost: realActions.setHost, revokeGrant: realActions.revokeGrant });
+  useChatStore.setState({
+    error: null,
+    live: [],
+    decide: realActions.decide,
+    reset: realActions.reset,
+    setHost: realActions.setHost,
+    revokeGrant: realActions.revokeGrant,
+    answerTabQuestion: realActions.answerTabQuestion,
+  });
 });
 
 describe('Conversa', () => {
@@ -239,5 +247,71 @@ describe('Conversa', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Voltar' }));
     expect(mockRouter.back).toHaveBeenCalledTimes(1);
     expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)');
+  });
+
+  const QUESTION_BASE = { tab_id: 't-api', tab_name: 'api', error_code: null, created_at: new Date().toISOString(), answered_at: null, closed_at: null };
+  const OPEN_CHOICE = { ...QUESTION_BASE, id: 'q1', kind: 'choice', status: 'open', answer: null, payload: { questions: [{ question: 'Qual banco usamos nos testes?', header: 'Banco', multi_select: false, options: [{ label: 'Postgres', description: 'O mesmo da produção.', recommended: true }, { label: 'SQLite', description: '', recommended: false }] }] } } as TTabQuestion;
+  const OPEN_PERMISSION = { ...QUESTION_BASE, id: 'q2', kind: 'permission', status: 'open', answer: null, payload: { tool_name: 'Bash' } } as TTabQuestion;
+
+  /** Serves the open project's `GET chat` with these tab questions. */
+  function serveQuestions(questions: TTabQuestion[]) {
+    const real = stores.api.chat.bind(stores.api);
+    jest.spyOn(stores.api, 'chat').mockImplementation(async (auth, projectId) => {
+      const res = await real(auth, projectId);
+      return projectId === 'p-termhub' ? { ...res, tab_questions: questions } : res;
+    });
+  }
+
+  it('renders a tab\'s question; picking an option and Responder answers it', async () => {
+    serveQuestions([OPEN_CHOICE]);
+    const answer = stubAction('answerTabQuestion');
+    await render(<ConversationScreen />);
+    expect(await screen.findByText('Qual banco usamos nos testes?', undefined, LOAD)).toBeTruthy();
+    expect(screen.getByText('A aba «api» perguntou')).toBeTruthy();
+    expect(screen.getByText('Recomendada')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('radio', { name: 'Postgres' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Responder' }));
+    expect(answer).toHaveBeenCalledWith('q1', { answers: [{ selected: [0] }] });
+  });
+
+  it('"Outra resposta" answers with the text', async () => {
+    serveQuestions([OPEN_CHOICE]);
+    const answer = stubAction('answerTabQuestion');
+    await render(<ConversationScreen />);
+    await fireEvent.changeText(await screen.findByLabelText('Outra resposta', undefined, LOAD), 'Os dois');
+    await fireEvent.press(screen.getByRole('button', { name: 'Responder' }));
+    expect(answer).toHaveBeenCalledWith('q1', { answers: [{ selected: [], text: 'Os dois' }] });
+  });
+
+  it('a permission card shows the live excerpt; Permitir, Negar and Negar e dizer… answer it', async () => {
+    serveQuestions([OPEN_PERMISSION]);
+    jest.spyOn(stores.api, 'tabQuestionScreen').mockResolvedValue({ text: 'Bash command\n  npm test\nDo you want to proceed?' });
+    const answer = stubAction('answerTabQuestion');
+    await render(<ConversationScreen />);
+    expect(await screen.findByText('A aba «api» pede permissão para usar «Bash»', undefined, LOAD)).toBeTruthy();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Tela da aba' }));
+    expect(screen.getByText(/Do you want to proceed\?/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Permitir' }));
+    expect(answer).toHaveBeenLastCalledWith('q2', { allow: true });
+    await fireEvent.press(screen.getByRole('button', { name: 'Negar' }));
+    expect(answer).toHaveBeenLastCalledWith('q2', { allow: false });
+    await fireEvent.press(screen.getByRole('button', { name: 'Negar e dizer…' }));
+    await fireEvent.changeText(screen.getByLabelText('O que dizer à aba'), 'use pnpm');
+    // Scoped to the card: the composer has its own "Enviar" button on screen at the same time.
+    await fireEvent.press(within(screen.getByTestId('tab-question-q2')).getByRole('button', { name: 'Enviar' }));
+    expect(answer).toHaveBeenLastCalledWith('q2', { allow: false, text: 'use pnpm' });
+  });
+
+  it.each([
+    [{ ...OPEN_CHOICE, status: 'answered', answer: { answers: [{ selected: [1] }] } } as TTabQuestion, ['Qual banco usamos nos testes? → SQLite', 'Respondida']],
+    [{ ...OPEN_PERMISSION, status: 'answered_in_tab' } as TTabQuestion, ['Respondida na aba']],
+    [{ ...OPEN_PERMISSION, status: 'expired' } as TTabQuestion, ['Expirada']],
+    [{ ...OPEN_PERMISSION, status: 'failed', error_code: 'MACHINE_OFFLINE', answer: { allow: true } } as TTabQuestion, ['Permitido', 'Falhou — a máquina está offline']],
+  ])('a closed tab question is read-only and says how it ended (%#)', async (q, texts) => {
+    serveQuestions([q]);
+    await render(<ConversationScreen />);
+    for (const t of texts) expect(await screen.findByText(t, undefined, LOAD)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Responder' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Permitir' })).toBeNull();
   });
 });

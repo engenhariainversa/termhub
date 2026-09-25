@@ -1,7 +1,7 @@
 // Ported verbatim from apps/web/src/lib/chat-timeline.test.ts (design spec §6): only the vitest
 // import (jest supplies the same globals) and the `message()` fixture (`usage` is a required field
 // of the contract's `ChatMessage`, unlike the web's own) were adapted.
-import type { ChatAction, ChatMessage } from './types';
+import type { ChatAction, ChatMessage, TabQuestion } from './types';
 import { chatTimeline } from './timeline';
 
 const T0 = '2026-01-01T00:00:00.000Z';
@@ -44,7 +44,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.action.id))).toEqual(['m1', 'a1', 'm2']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.question.id))).toEqual(['m1', 'a1', 'm2']);
   });
 
   it('breaks a tie by putting the message before the action, regardless of the arrays\' own order', () => {
@@ -76,7 +76,7 @@ describe('chatTimeline', () => {
     const shuffledActions = [actions[1]!, actions[0]!];
     const backward = chatTimeline(shuffledMessages, shuffledActions);
 
-    const idsOf = (entries: typeof forward) => entries.map((e) => (e.kind === 'message' ? e.message.id : e.action.id));
+    const idsOf = (entries: typeof forward) => entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.question.id));
     expect(idsOf(backward)).toEqual(idsOf(forward));
     expect(idsOf(forward)).toEqual(['m1', 'a1', 'm2', 'a2']);
   });
@@ -104,7 +104,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.action.id))).toEqual(['m1']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.question.id))).toEqual(['m1']);
   });
 
   it('keeps an action newer than the oldest message, including one tied with it', () => {
@@ -113,7 +113,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.action.id))).toEqual(['m1', 'a-tied', 'm2', 'a-newer']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.question.id))).toEqual(['m1', 'a-tied', 'm2', 'a-newer']);
   });
 
   it('measures the cutoff from the oldest message, not from the array\'s first element', () => {
@@ -124,7 +124,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.action.id))).toEqual(['m1', 'a1', 'm2']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.question.id))).toEqual(['m1', 'a1', 'm2']);
   });
 
   it('keeps every action when there are no messages at all: there is nothing to compare against', () => {
@@ -132,7 +132,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline([], actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.action.id))).toEqual(['a1', 'a2']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.question.id))).toEqual(['a1', 'a2']);
   });
 
   it('carries the row\'s own created_at as the entry\'s at', () => {
@@ -143,5 +143,11 @@ describe('chatTimeline', () => {
 
     expect(result[0]!.at).toBe(T0);
     expect(result[1]!.at).toBe(T1);
+  });
+
+  it('places a tab question by its time, after a message of the same instant, inside the message window', () => {
+    const q = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'permission', payload: { tool_name: 'Bash' }, answer: null, status: 'open', error_code: null, created_at: T1, answered_at: null, closed_at: null } as TabQuestion;
+    const entries = chatTimeline([message({ id: 'm1', created_at: T0 }), message({ id: 'm2', created_at: T1 })], [], [q, { ...q, id: 'q0', created_at: '2025-12-31T23:59:00.000Z' } as TabQuestion]);
+    expect(entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.question.id))).toEqual(['m1', 'm2', 'q1']);
   });
 });

@@ -18,7 +18,7 @@ const readyHost = {
   sessionAtStake: false,
 };
 
-const fixture = { conversation, messages: [], actions: [], grants: [], host: readyHost };
+const fixture = { conversation, messages: [], actions: [], grants: [], tab_questions: [], host: readyHost };
 
 describe('chatResponse', () => {
   it('parses a ready host', () => {
@@ -33,6 +33,11 @@ describe('chatResponse', () => {
   it('defaults grants to empty when an older server sends none', () => {
     const { grants: _grants, ...withoutGrants } = fixture;
     expect(chatResponse.parse(withoutGrants)).toEqual(fixture);
+  });
+
+  it('defaults tab_questions to empty when an older server sends none', () => {
+    const { tab_questions: _tabQuestions, ...withoutTabQuestions } = fixture;
+    expect(chatResponse.parse(withoutTabQuestions)).toEqual(fixture);
   });
 });
 

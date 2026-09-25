@@ -3,9 +3,20 @@
 // ("Permitir sempre nesta aba") and reset.
 import { decisionProof } from '../../../crypto/pin';
 import { randomId } from '../../../crypto/random';
-import { isTabGrantable, mobileDecisionBody, mobileMessageBody, resetBody, setHostBody, type TChatEvent, type TChatGrant, type TChatHostState } from '../../contract';
+import {
+  isTabGrantable,
+  mobileDecisionBody,
+  mobileMessageBody,
+  resetBody,
+  setHostBody,
+  tabQuestionAnswerBody,
+  type TChatEvent,
+  type TChatGrant,
+  type TChatHostState,
+  type TTabQuestion,
+} from '../../contract';
 import type { MockRouter } from '../router';
-import { broadcast, countPinFailure, type MockAction, type MockConversation, type MockGrant, type MockMessage, type MockState, verifyAuth, WireError } from '../state';
+import { broadcast, countPinFailure, type MockAction, type MockConversation, type MockGrant, type MockMessage, type MockState, type MockTabQuestion, verifyAuth, WireError } from '../state';
 import { pushConfirmationNotification, pushReplyNotification } from './notifications';
 
 const USER_ID = 'u1';
@@ -87,10 +98,51 @@ function grantTab(state: MockState, action: MockAction, now: number): MockGrant 
   return grant;
 }
 
+// --- tab questions (spec 2026-09-25 §6.3) ---------------------------------------------------------
+
+/** The wire shape of a question (the server's `TabQuestionView`): the mock's row minus its conversation. */
+function tabQuestionView(q: MockTabQuestion): TTabQuestion {
+  const { conversation_id: _conversation, ...view } = q;
+  return view as TTabQuestion;
+}
+
+/** The canned question a `pergunta` / `permiss` message makes the tab `api` ask. */
+function createTabQuestion(state: MockState, now: number, conversationId: string, kind: 'choice' | 'permission'): MockTabQuestion {
+  const common = { id: randomId(10), conversation_id: conversationId, tab_id: 't-api', tab_name: 'api', status: 'open' as const, error_code: null, created_at: new Date(now).toISOString(), answered_at: null, closed_at: null };
+  const question: MockTabQuestion =
+    kind === 'choice'
+      ? {
+          ...common,
+          kind: 'choice',
+          answer: null,
+          payload: {
+            questions: [
+              {
+                question: 'Qual banco usamos nos testes?',
+                header: 'Banco',
+                multi_select: false,
+                options: [
+                  { label: 'Postgres', description: 'O mesmo da produção.', recommended: true },
+                  { label: 'SQLite', description: 'Mais rápido, menos fiel.', recommended: false },
+                ],
+              },
+            ],
+          },
+        }
+      : { ...common, kind: 'permission', answer: null, payload: { tool_name: 'Bash' } };
+  state.tabQuestions.push(question);
+  return question;
+}
+
+/** What `GET …/screen` shows: the card as the tab would draw it. */
+function tabQuestionScreenText(q: MockTabQuestion): string {
+  return q.kind === 'choice' ? `${q.payload.questions[0]!.question}\n❯ 1. Postgres\n  2. SQLite\n  3. Type something.` : 'Bash command\n  npm test\n Do you want to proceed?\n ❯ 1. Yes\n   2. No';
+}
+
 // --- the canned reply and its streaming (ruling 3) ----------------------------------------------
 
 interface AnswerOutcome {
-  kind: 'normal' | 'confirmation' | 'error';
+  kind: 'normal' | 'confirmation' | 'error' | 'tab_question' | 'tab_permission';
   text: string;
 }
 
@@ -101,6 +153,8 @@ function pickAnswer(text: string): AnswerOutcome {
   if (/confirma/.test(text)) {
     return { kind: 'confirmation', text: 'Preciso que você confirme essa ação — fico esperando sua aprovação antes de continuar.' };
   }
+  if (/pergunta/.test(text)) return { kind: 'tab_question', text: 'A aba api tem uma pergunta para você — responda no card.' };
+  if (/permiss/.test(text)) return { kind: 'tab_permission', text: 'A aba api pede permissão — responda no card.' };
   if (/test|teste/.test(text)) return { kind: 'normal', text: 'Rodei `npm test` no jarvis: 1066 testes passaram, 137 pulados. Nada quebrou.' };
   if (/deploy/.test(text)) return { kind: 'normal', text: 'O último deploy foi há 2 h, verde. Quer que eu dispare outro?' };
   if (/status/.test(text)) return { kind: 'normal', text: 'Duas abas trabalhando, uma esperando você: a aba api pediu para rodar os testes.' };
@@ -228,6 +282,11 @@ function scheduleStream(o: StreamOptions): void {
         pushConfirmationNotification(o.state, o.now(), action, o.projectName);
       }
 
+      if (outcome.kind === 'tab_question' || outcome.kind === 'tab_permission') {
+        const question = createTabQuestion(o.state, o.now(), o.conversationId, outcome.kind === 'tab_question' ? 'choice' : 'permission');
+        broadcast(o.state, { type: 'tab_question', user_id: USER_ID, conversation_id: o.conversationId, question: tabQuestionView(question) });
+      }
+
       const chunks = chunkText(outcome.text);
       const emitChunk = (i: number) => {
         if (i >= chunks.length) {
@@ -278,6 +337,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
         messages: state.messages.get(conversation.id) ?? [],
         actions: actionsFor(state, conversation.id),
         grants: activeGrantsFor(state, conversation.id, ctx.now()),
+        tab_questions: state.tabQuestions.filter((q) => q.conversation_id === conversation.id).map(tabQuestionView),
         host: hostFor(conversation),
       },
     };
@@ -424,5 +484,27 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     grant.revoked = true;
     broadcast(state, { type: 'grant_revoked', user_id: USER_ID, conversation_id: grant.conversation_id, grant_id: grant.id });
     return { status: 200, body: { grant: grantView(grant) } };
+  });
+
+  /** Answers a tab's question (no PIN): 404 unknown, 409 once it is closed, 400 a body of the other kind. */
+  router.route('POST', '/api/m/v1/chat/tab-questions/:id/answer', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const question = state.tabQuestions.find((q) => q.id === ctx.params.id);
+    if (!question) throw new WireError(404, 'NOT_FOUND', 'Pergunta não encontrada');
+    if (question.status !== 'open') throw new WireError(409, 'TAB_PROMPT_CHANGED', 'A pergunta mudou na aba');
+    const body = tabQuestionAnswerBody.parse(ctx.body);
+    if ((question.kind === 'choice') !== 'answers' in body) throw new WireError(400, 'VALIDATION', 'Dados inválidos');
+    Object.assign(question, { status: 'answered', answer: body, answered_at: new Date(ctx.now()).toISOString() });
+    const view = tabQuestionView(question);
+    broadcast(state, { type: 'tab_question_answered', user_id: USER_ID, conversation_id: question.conversation_id, question: view });
+    return { status: 200, body: { tab_question: view } };
+  });
+
+  router.route('GET', '/api/m/v1/chat/tab-questions/:id/screen', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
+    const question = state.tabQuestions.find((q) => q.id === ctx.params.id);
+    if (!question) throw new WireError(404, 'NOT_FOUND', 'Pergunta não encontrada');
+    if (question.status !== 'open') throw new WireError(409, 'TAB_PROMPT_CHANGED', 'A pergunta mudou na aba');
+    return { status: 200, body: { text: tabQuestionScreenText(question) } };
   });
 }
