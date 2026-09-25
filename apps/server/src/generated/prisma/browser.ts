@@ -180,6 +180,13 @@ export type ChatAction = Prisma.ChatActionModel
  */
 export type ChatGrant = Prisma.ChatGrantModel
 /**
+ * Model TabQuestion
+ * A question an agent in a tab put to the person — Claude Code's AskUserQuestion (`choice`) or a
+ * permission prompt (`permission`) — shown as a card in the project's chat (spec 2026-09-25 §5).
+ * `payload` is the normalised question, never a screen; `answer` is what the chat answered.
+ */
+export type TabQuestion = Prisma.TabQuestionModel
+/**
  * Model InstanceSecret
  * A secret this instance generates for itself, once, and keeps: no env var to configure, and blue
  * and green read the same row. `public_id` keys the HMAC behind every id on the public city.
