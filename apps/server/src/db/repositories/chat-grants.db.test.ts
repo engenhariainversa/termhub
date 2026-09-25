@@ -39,7 +39,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatGrantsRepository (Pos
     expect(await repo.findActive(conversationId, 't2', 'send_input')).toBeUndefined();
     expect(await repo.findActive(conversationId, 't1', 'run_command')).toBeUndefined();
     expect(await repo.findActive(otherConversationId, 't1', 'send_input')).toBeUndefined();
-    expect((await repo.findActiveBySourceAction('act1'))?.id).toBe(g.id);
+    expect((await repo.findActiveBySourceAction(conversationId, 'act1'))?.id).toBe(g.id);
+    expect(await repo.findActiveBySourceAction(otherConversationId, 'act1')).toBeUndefined();
   });
 
   it('does not see a grant past its expiry', async () => {

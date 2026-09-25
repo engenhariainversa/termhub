@@ -271,7 +271,7 @@ export class ChatService {
    */
   private async injectionFor(user: User, action: ChatAction, freshSession: boolean): Promise<string> {
     if (action.status === 'denied') return injectionText(action, freshSession);
-    const grant = await this.deps.repos.chatGrants.findActiveBySourceAction(action.id);
+    const grant = await this.deps.repos.chatGrants.findActiveBySourceAction(action.conversation_id, action.id);
     const grantNote = grant ? GRANT_NOTE : '';
     if (!freshSession) return injectionText(action, freshSession) + grantNote;
     const [card] = await describeActions(this.deps.repos, [action], user.id);

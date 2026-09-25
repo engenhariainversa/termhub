@@ -41,6 +41,13 @@ const mapGrant = (g: PrismaChatGrant): ChatGrant => ({
   revoked_by: g.revokedBy,
 });
 
+/**
+ * Who may read what. Methods keyed by a conversation id (`findActive`, `listActive`,
+ * `findActiveBySourceAction`, `revokeForConversation`) trust that id: every caller derives it on the
+ * server — minted into the gated token, or the scope user's own conversation — never from a client.
+ * Methods keyed by an id a client sends (`findByIdForUser`, `revoke`) filter by the owning
+ * conversation's `user_id` in SQL, so another user's grant reads as no grant at all.
+ */
 export class ChatGrantsRepository {
   constructor(private db: PrismaClient) {}
 
@@ -81,9 +88,10 @@ export class ChatGrantsRepository {
     return rows.map(mapGrant);
   }
 
-  /** The active grant a confirmation card created, if any — for the injected sentence. */
-  async findActiveBySourceAction(actionId: string, now = new Date()): Promise<ChatGrant | undefined> {
-    const row = await this.db.chatGrant.findFirst({ where: { sourceActionId: actionId, revokedAt: null, expiresAt: { gt: now } } });
+  /** The active grant a confirmation card created, if any — for the injected sentence. Keyed by the
+   * card's conversation too, so the lookup rides the `(conversation_id)` index on every approval. */
+  async findActiveBySourceAction(conversationId: string, actionId: string, now = new Date()): Promise<ChatGrant | undefined> {
+    const row = await this.db.chatGrant.findFirst({ where: { conversationId, sourceActionId: actionId, revokedAt: null, expiresAt: { gt: now } } });
     return row ? mapGrant(row) : undefined;
   }
 

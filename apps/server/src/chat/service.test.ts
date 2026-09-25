@@ -512,7 +512,7 @@ it('resumeAfterDecision appends the grant note when the approval also trusted th
 
   await service.resumeAfterDecision(user, action());
 
-  expect(repos.chatGrants.findActiveBySourceAction).toHaveBeenCalledWith('a1');
+  expect(repos.chatGrants.findActiveBySourceAction).toHaveBeenCalledWith('c1', 'a1');
   expect(messages[0].text).toContain('os próximos send_input nesta aba, nesta conversa, rodam sem pedir confirmação');
   // Spec §2 "Agent tabs only": the model is told the two limits the gate enforces.
   expect(messages[0].text).toContain('só enquanto a aba estiver rodando um agente');
