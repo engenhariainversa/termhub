@@ -528,6 +528,18 @@ describe('POST /chat/actions/:id/decision', () => {
     expect(session.checkPin).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
   });
+
+  it('approve_tab: an already-decided action answers 409 before the challenge, the PIN or the grant are touched', async () => {
+    const decided = { ...pendingAction, status: 'approved', args: { tab_id: 't1', text: 'oi' } };
+    const { app, session, decide, repos } = build({ findByIdForUser: vi.fn(async () => decided) });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab', challenge: 'ch', pin_proof: 'proof-1' } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('Esta ação já foi decidida');
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+    expect(repos.chatGrants.grant).not.toHaveBeenCalled();
+  });
 });
 
 describe('grants', () => {

@@ -446,6 +446,16 @@ it('approve_tab on a row that is not this user\'s is a 404', async () => {
   expect(decide).not.toHaveBeenCalled();
 });
 
+it('approve_tab on a row already decided is a 409, deciding nothing and granting nothing', async () => {
+  const decided = { ...pendingAction, status: 'approved', args: { tab_id: 't1', text: 'oi' } };
+  const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => decided) });
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab' } });
+  expect(res.statusCode).toBe(409);
+  expect(res.json().error).toBe('Esta ação já foi decidida');
+  expect(decide).not.toHaveBeenCalled();
+  expect(repos.chatGrants.grant).not.toHaveBeenCalled();
+});
+
 it('DELETE /chat/grants/:id revokes and says so live', async () => {
   const events: ChatEvent[] = [];
   const off = chatBus.subscribe((e) => events.push(e));

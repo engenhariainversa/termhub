@@ -785,38 +785,106 @@ it.each([
 it('a recent "no" to the same text beats the grant', async () => {
   const typed: string[] = [];
   attachFakeTmux(typed);
-  const { app, actions, grants } = build({ gated: true });
+  const { app, actions, apiTokens, grants } = build({ gated: true });
   grants.seed('t1');
   actions.seed('denied', 'send_input', { tab_id: 't1', text: 'rm -rf' }, 1);
   const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'rm -rf' });
   expect(resultOf(res).isError).toBe(true);
+  expect(textOf(res)).toMatch(/recusou/i);
   expect(typed).toEqual([]);
   expect(actions.insertApproved).not.toHaveBeenCalled();
+  // The denial itself decided this, without ever consulting the grant: `applyGate` only looks at
+  // `chatGrants` from the branch that would otherwise ask, which a denial in force never reaches.
+  expect(grants.findActive).not.toHaveBeenCalled();
+  await settle();
+  expect(apiTokens.recordEvent.mock.calls[0][0]).toMatchObject({ tool: 'send_input', tab_id: 't1', ok: false, error_code: 'CONFIRMATION_DENIED' });
 });
 
 it('a trusted tab that is waiting on a permission types nothing and records WAITING_PERMISSION', async () => {
   const typed: string[] = [];
   attachFakeTmux(typed);
   const { app, actions, grants, tabs } = build({ gated: true });
-  grants.seed('t1');
+  const g = grants.seed('t1');
   Object.assign(tabs.get('t1')!, { state: 'waiting_permission', state_at: new Date().toISOString() });
   const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
   expect(resultOf(res).isError).toBe(true);
   expect(typed).toEqual([]);
   expect(actions.rows[0]).toMatchObject({ status: 'failed', error_code: 'WAITING_PERMISSION' });
   expect(collected.some((e) => e.type === 'confirmation')).toBe(false);
+  // A failed grant run still tells the trail live — the card just reads as failed, not as pending.
+  const live = collected.find((e) => e.type === 'granted_action') as { action: { status: string; grant_id: string } } | undefined;
+  expect(live?.action).toMatchObject({ status: 'failed', grant_id: g.id });
 });
 
 it('a trusted tab that no longer exists records TAB_GONE', async () => {
   const typed: string[] = [];
   attachFakeTmux(typed);
   const { app, actions, grants, tabs } = build({ gated: true });
-  grants.seed('t1');
+  const g = grants.seed('t1');
   tabs.delete('t1');
   const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
   expect(resultOf(res).isError).toBe(true);
   expect(typed).toEqual([]);
   expect(actions.rows[0]).toMatchObject({ status: 'failed', error_code: 'TAB_GONE' });
+  const live = collected.find((e) => e.type === 'granted_action') as { action: { status: string; grant_id: string } } | undefined;
+  expect(live?.action).toMatchObject({ status: 'failed', grant_id: g.id });
+});
+
+it('a grant on a foreign tab is TAB_GONE, never the foreign tab\'s own name', async () => {
+  // The tab exists (t9, "Terminal do vizinho"), but belongs to someone else. The re-validation the
+  // grant path shares with an approved row must read it through the owner-scoped batch, exactly as
+  // "never resolves another user's tab when re-validating an approval" proves for that other path.
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  const g = grants.seed('t9');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't9', text: 'oi' });
+
+  expect(resultOf(res).isError).toBe(true);
+  expect(typed).toEqual([]);
+  expect(actions.rows[0]).toMatchObject({ status: 'failed', error_code: 'TAB_GONE', grant_id: g.id });
+  expect(textOf(res)).not.toContain('Terminal do vizinho');
+  const live = collected.find((e) => e.type === 'granted_action') as { action: { status: string; summary: string } } | undefined;
+  expect(live?.action.status).toBe('failed');
+  expect(live?.action.summary).not.toContain('Terminal do vizinho');
+});
+
+it('an open confirmation for the same call wins over an active grant', async () => {
+  // The gate decides from the open row before it ever looks at a grant (`applyGate` only consults
+  // `chatGrants` in the branch reached when there is no row at all): a question already on screen for
+  // this exact proposal must keep being "wait", not suddenly execute because a grant showed up between
+  // the ask and the reply.
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' }); // opens a pending row, no grant yet
+  expect(actions.rows).toHaveLength(1);
+  grants.seed('t1');
+  grants.findActive.mockClear(); // only this call's own use of the grant matters from here on
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+
+  expect(resultOf(res).isError).toBe(true);
+  expect(textOf(res)).toMatch(/ainda está aguardando a confirmação/i);
+  expect(actions.insertApproved).not.toHaveBeenCalled();
+  expect(grants.findActive).not.toHaveBeenCalled();
+  expect(typed).toEqual([]);
+  expect(actions.rows).toHaveLength(1); // still just the one pending row
+});
+
+it('grant → direct send → revoke → asks again', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  const g = grants.seed('t1');
+  await callTool(app, 'send_input', { tab_id: 't1', text: 'primeira' });
+  expect(typed).toContain('primeira');
+  g.revoked_at = new Date().toISOString();
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'segunda' });
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(typed).not.toContain('segunda');
+  expect(actions.rows.map((r) => r.status)).toEqual(['executed', 'pending']);
 });
 
 it("a person's own token never looks at grants", async () => {
