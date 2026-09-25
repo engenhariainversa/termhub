@@ -1,6 +1,6 @@
 // Software device key: P-256 (@noble/curves), private key in SecureStore (design spec §2
-// "Device key"). Backs the mock on simulators and every Jest run; never used against the real
-// server in production (see index.ts).
+// "Device key"). Backs the mock, every Jest run and development builds on a simulator; never
+// used against the real server by a production build (see index.ts).
 import { p256 } from '@noble/curves/nist.js';
 import { b64url, fromB64url } from '../crypto/encoding';
 import { vault, type VaultKey } from '../vault';
