@@ -75,8 +75,19 @@ if [ "$TOOL" = codex ]; then EVENT="$2"; else EVENT=$(cat 2>/dev/null); fi
 # session, under TMPDIR, with the session name reduced to filename-safe characters.
 # AskUserQuestion is the one exception (below).
 MARK="\${TMPDIR:-/tmp}/termhub-hook-$(printf '%s' "$SESSION" | tr -c 'A-Za-z0-9_-' '_')"
-case "$EVENT" in
-  *'"hook_event_name":"PreToolUse"'*|*'"hook_event_name": "PreToolUse"'*)
+# The branch below is picked on the event's OWN hook_event_name — the FIRST "hook_event_name" key of
+# the payload (Claude Code serialises it before tool_input, same reasoning as tool_name below) —
+# never a value a substring search could find nested inside a tool's input (e.g. a PermissionRequest
+# whose tool_input happened to contain the text "hook_event_name":"PreToolUse").
+KIND_REST=\${EVENT#*'"hook_event_name"'}
+if [ "$KIND_REST" != "$EVENT" ]; then
+  KIND_REST=\${KIND_REST#*'"'}
+  KIND=\${KIND_REST%%'"'*}
+else
+  KIND=
+fi
+case "$KIND" in
+  PreToolUse)
     # The event's own tool name is the FIRST "tool_name" of the payload (Claude Code serialises it
     # before tool_input), so the shortest prefix is cut — a "tool_name" nested in a tool's input
     # must not win. Only letters, digits, "_", "." and "-" are posted (a bare Claude Code tool name,
@@ -91,9 +102,19 @@ case "$EVENT" in
     # AskUserQuestion's input is the question itself, written to be shown to the person (spec
     # 2026-09-25 §4.1): the whole event goes as it came — the server keeps tool_use_id and
     # tool_input and drops the rest — and the marker is neither read nor written, so two questions
-    # in a row are two questions. NAME is the event's own first "tool_name", never one nested in
-    # another tool's input.
-    if [ "$NAME" != AskUserQuestion ]; then
+    # in a row are two questions. NAME is real only when $REST (everything from the first "tool_name"
+    # on) holds no SECOND "tool_name": a real question never repeats that key, so a second one means
+    # the first was actually nested inside another tool's tool_input (tool_input serialised before
+    # tool_name) and NAME does not name the real tool — fall back to the ordinary name-only path below
+    # (which, worst case, mislabels that one event; it never forwards the input).
+    ASK=false
+    if [ "$NAME" = AskUserQuestion ]; then
+      case "$REST" in
+        *'"tool_name"'*) ;;
+        *) ASK=true ;;
+      esac
+    fi
+    if [ "$ASK" != true ]; then
       # Claude Code's spinner verb ("✻ Moonwalking… (12s · esc to interrupt)"): the visible pane is
       # read here, on the machine, and only the verb may leave it — one word of 2 to 24 ASCII letters
       # right after a spinner glyph at column 0 and a single space, immediately followed by "…" or
@@ -120,10 +141,10 @@ case "$EVENT" in
       fi
     fi
     ;;
-  # A permission prompt: only the tool's name travels, exactly like a tool call (never its input,
-  # never the suggestions). AskUserQuestion's own prompt is dropped — its PreToolUse already carried
-  # the question. Same first-"tool_name" rule and character set as above.
-  *'"hook_event_name":"PermissionRequest"'*|*'"hook_event_name": "PermissionRequest"'*)
+  PermissionRequest)
+    # A permission prompt: only the tool's name travels, exactly like a tool call (never its input,
+    # never the suggestions). AskUserQuestion's own prompt is dropped — its PreToolUse already carried
+    # the question. Same first-"tool_name" rule and character set as above.
     REST=\${EVENT#*'"tool_name"'}
     [ "$REST" != "$EVENT" ] || exit 0
     REST=\${REST#*'"'}
@@ -134,7 +155,7 @@ case "$EVENT" in
   # A new turn starts fresh, and so does an answered notification: a permission prompt takes the tab
   # out of working, and the tool the person approves is the same one that set the marker, so without
   # this reset the retry is suppressed and nothing says the tab is working again.
-  *'"hook_event_name":"SessionStart"'*|*'"hook_event_name": "SessionStart"'*|*'"hook_event_name":"UserPromptSubmit"'*|*'"hook_event_name": "UserPromptSubmit"'*|*'"hook_event_name":"Notification"'*|*'"hook_event_name": "Notification"'*)
+  SessionStart | UserPromptSubmit | Notification)
     rm -f "$MARK"
     ;;
 esac
