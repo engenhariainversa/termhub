@@ -186,8 +186,19 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
 
   it('a sent suggestion is claimed with its text and is told to the concierge', async () => {
     const { question: s } = await openSuggestion('ts4');
-    expect(await repo.claim(s!.id, userId, { text: 'commit it and push' })).toMatchObject({ status: 'answered', answer: { text: 'commit it and push' }, answered_by: userId });
+    expect(await repo.claimSuggestion(s!.id, otherUserId, { text: 'commit it' })).toBeUndefined();
+    expect(await repo.claimSuggestion(s!.id, userId, { text: 'commit it and push' })).toMatchObject({ status: 'answered', answer: { text: 'commit it and push' }, answered_by: userId });
+    expect(await repo.claimSuggestion(s!.id, userId, { text: 'commit it' })).toBeUndefined(); // the double click
     expect((await repo.listToInject(conversationId)).map((r) => r.id)).toContain(s!.id);
+  });
+
+  it('claims keep to their kind: a question is never sent as a suggestion, nor a suggestion answered as a question', async () => {
+    const { question: q } = await open('ts6');
+    expect(await repo.claimSuggestion(q.id, userId, { text: 'commit it' })).toBeUndefined();
+    expect((await repo.findByIdForUser(q.id, userId))?.status).toBe('open');
+    const { question: s } = await openSuggestion('ts7');
+    expect(await repo.claim(s!.id, userId, { allow: true })).toBeUndefined();
+    expect((await repo.findByIdForUser(s!.id, userId))?.status).toBe('open');
   });
 
   it('a suggestion never takes part in the permission queue', async () => {

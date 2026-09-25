@@ -7,6 +7,7 @@ import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { controlContextFor } from '../control/context.js';
 import { answerTabQuestion, requirePinFor, tabQuestionScreen } from '../chat/tab-question-answer.js';
+import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
 import { permissionsOf } from '../auth/permissions.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
@@ -241,6 +242,18 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
   app.get('/tab-questions/:id/screen', async (request) => {
     const { id } = tabQuestionIdParam.parse(request.params);
     return tabQuestionScreen(controlContextFor(repos, request.scope.user), id);
+  });
+
+  /** The phone sends a tab's suggestion like the web: no PIN (spec 2026-09-25 tab suggestions §2). */
+  app.post('/tab-suggestions/:id/send', { config: { action: 'create' } }, async (request) => {
+    const { id } = tabQuestionIdParam.parse(request.params);
+    return { tab_suggestion: await sendTabSuggestion(controlContextFor(repos, request.scope.user), id, request.body, { log: request.log }) };
+  });
+
+  /** "Dispensar" from the phone: the card closes, the tab is not touched. */
+  app.post('/tab-suggestions/:id/dismiss', { config: { action: 'create' } }, async (request) => {
+    const { id } = tabQuestionIdParam.parse(request.params);
+    return { tab_suggestion: await dismissTabSuggestion(controlContextFor(repos, request.scope.user), id, { log: request.log }) };
   });
 }
 

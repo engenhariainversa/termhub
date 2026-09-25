@@ -165,10 +165,22 @@ export class TabQuestionsRepository {
     return row ? mapQuestion(row) : undefined;
   }
 
-  /** `open → answered`, conditionally: a double click, a second device or a close that got there first all match nothing. */
-  async claim(id: string, userId: string, answer: TabRowAnswer, now = new Date()): Promise<TabQuestion | undefined> {
+  /**
+   * A question's `open → answered`, conditionally: a double click, a second device or a close that got
+   * there first all match nothing — and so does a suggestion, which is only ever sent (`claimSuggestion`).
+   */
+  async claim(id: string, userId: string, answer: ChoiceAnswer | PermissionAnswer, now = new Date()): Promise<TabQuestion | undefined> {
+    return this.claimKind(id, userId, { not: 'suggestion' }, answer, now);
+  }
+
+  /** "Enviar": a suggestion's `open → answered` with the text as sent; never matches a question. */
+  async claimSuggestion(id: string, userId: string, answer: SuggestionAnswer, now = new Date()): Promise<TabQuestion | undefined> {
+    return this.claimKind(id, userId, 'suggestion', answer, now);
+  }
+
+  private async claimKind(id: string, userId: string, kind: 'suggestion' | { not: 'suggestion' }, answer: TabRowAnswer, now: Date): Promise<TabQuestion | undefined> {
     const { count } = await this.db.tabQuestion.updateMany({
-      where: { id, status: 'open', conversation: { userId } },
+      where: { id, kind, status: 'open', conversation: { userId } },
       data: { status: 'answered', answer: answer as never, answeredBy: userId, answeredAt: now },
     });
     return count === 0 ? undefined : this.findByIdForUser(id, userId);
