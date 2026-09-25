@@ -233,6 +233,21 @@ async function execute(ctx: ControlContext, call: GatedCall, row: ChatAction): P
   }
 }
 
+/**
+ * The write that would have recorded a proposal (pending or already-approved) failed for a real
+ * reason — not the partial unique index catching a race, which the two callers below check for
+ * before reaching here. The original error is deliberately not rethrown: a rejected write carries
+ * the rejected data, so logging it upstream would put the proposed command — the whole point of
+ * `args` — in a log line. The audit row's code is the signal. Shared by `ask` and `executeGranted`,
+ * whose inserts hit the same failure modes and must answer the model identically.
+ */
+function actionNotRecorded(): never {
+  throw new ControlError(
+    'ACTION_NOT_RECORDED',
+    'Não foi possível registrar esta ação para o usuário confirmar, então nada foi executado. Avise que houve uma falha ao registrar o pedido e tente de novo em alguns segundos.',
+  );
+}
+
 /** Records the proposal and puts the question in the chat. */
 async function ask(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass): Promise<GateOutcome> {
   const target = targetOf(call.args);
@@ -240,19 +255,13 @@ async function ask(ctx: ControlContext, call: GatedCall, conversationId: string,
   try {
     // `args` is the proposal exactly as the concierge made it — the command, the prompt, the target.
     row = await ctx.repos.chatActions.insertPending({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...target });
-  } catch (err) {
+  } catch {
     // Two calls of the same proposal can both read "no open row" before either inserts; the partial
     // unique index then refuses the loser. The winner's question is already in the chat, so this call
     // is simply waiting on it — asking again would put the same question twice in front of the user.
     // (An approval that landed in this same instant is picked up by the next arrival of the call.)
     if (await ctx.repos.chatActions.findOpenByKey(conversationId, key)) return WAITING;
-    // Anything else is a real failure to record the proposal. The original error is deliberately not
-    // rethrown: a rejected write carries the rejected data, so logging it upstream would put the
-    // proposed command — the whole point of `args` — in a log line. The audit row's code is the signal.
-    throw new ControlError(
-      'ACTION_NOT_RECORDED',
-      'Não foi possível registrar esta ação para o usuário confirmar, então nada foi executado. Avise que houve uma falha ao registrar o pedido e tente de novo em alguns segundos.',
-    );
+    actionNotRecorded();
   }
   // Enriched the same way, and only in this one place, as `GET /api/chat`'s trail — the browser
   // must never resolve a machine/project/tab name or build the sentence itself. Scoped to the calling
@@ -288,17 +297,28 @@ async function executeGranted(ctx: ControlContext, call: GatedCall, conversation
   try {
     row = await ctx.repos.chatActions.insertApproved({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...targetOf(call.args), grant_id: grantId, decided_by: ctx.scope.user.id });
   } catch {
-    // The partial unique index refused it: an identical call arrived in the same instant and owns
-    // this execution. Same reading as a lost claim; the error itself is not rethrown (it carries args).
-    return ALREADY_CLAIMED;
+    // Either reading of a failed insert: the partial unique index refused it because an identical
+    // call arrived in the same instant and its (approved) row already occupies the key — the same
+    // race `ask` checks for, read the same way (`findOpenByKey`) — or the write failed for a real
+    // reason and nothing recorded the proposal at all.
+    if (await ctx.repos.chatActions.findOpenByKey(conversationId, key)) return ALREADY_CLAIMED;
+    actionNotRecorded();
   }
   try {
     return await execute(ctx, call, row);
   } finally {
-    const done = await ctx.repos.chatActions.findByIdForUser(row.id, ctx.scope.user.id).catch(() => undefined);
-    if (done) {
-      const [card] = await describeActions(ctx.repos, [done], ctx.scope.user.id);
-      chatBus.publish({ type: 'granted_action', user_id: ctx.scope.user.id, conversation_id: conversationId, action: card });
+    // Telling the trail live is best-effort: this step must never turn a keystroke that already ran
+    // (or whose failure `execute` already recorded) into a different outcome for the caller, and the
+    // grant is still active — a retry driven by an error here would type it again. A reload picks the
+    // row up from `GET /api/chat` regardless.
+    try {
+      const done = await ctx.repos.chatActions.findByIdForUser(row.id, ctx.scope.user.id);
+      if (done) {
+        const [card] = await describeActions(ctx.repos, [done], ctx.scope.user.id);
+        chatBus.publish({ type: 'granted_action', user_id: ctx.scope.user.id, conversation_id: conversationId, action: card });
+      }
+    } catch {
+      // live trail is best-effort; a reload shows the row
     }
   }
 }

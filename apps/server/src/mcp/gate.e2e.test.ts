@@ -215,6 +215,10 @@ function build(opts: { gated: boolean; conversationId?: string }) {
   const actions = fakeChatActions();
   const grants = fakeChatGrants();
   const chat = { getOrCreateForUser: vi.fn(async (userId: string) => ({ id: CONVERSATION, user_id: userId, cli_session_id: null, created_at: '' })) };
+  const projectsRepo = {
+    findById: vi.fn(async () => project),
+    findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === machine.owner_id && ids.includes(project.id) ? [project] : [])),
+  };
   const repos = {
     apiTokens,
     chat,
@@ -226,10 +230,7 @@ function build(opts: { gated: boolean; conversationId?: string }) {
       list: vi.fn(async () => [machine]),
       findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === machine.owner_id && ids.includes(machine.id) ? [machine] : [])),
     },
-    projects: {
-      findById: vi.fn(async () => project),
-      findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === machine.owner_id && ids.includes(project.id) ? [project] : [])),
-    },
+    projects: projectsRepo,
     projectMachines: {
       find: vi.fn(async () => link),
       listByProject: vi.fn(async () => [link]),
@@ -249,7 +250,7 @@ function build(opts: { gated: boolean; conversationId?: string }) {
   const app = Fastify();
   applyErrorHandler(app);
   app.register((a) => mcpRoutes(a, { repos, version: '0.0.0-test' }));
-  return { app, apiTokens, actions, tabs, grants };
+  return { app, apiTokens, actions, tabs, grants, projects: projectsRepo };
 }
 
 const callTool = (app: ReturnType<typeof Fastify>, name: string, args: object) =>
@@ -824,4 +825,61 @@ it("a person's own token never looks at grants", async () => {
   const { app, grants } = build({ gated: false });
   await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
   expect(grants.findActive).not.toHaveBeenCalled();
+});
+
+// Fix round 1 (TER-4): `executeGranted`'s own insert can fail two different ways, and its live-trail
+// publish must never turn an already-executed keystroke into a different outcome.
+
+it('answers ACTION_NOT_RECORDED and types nothing when the grant insert fails outright', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  grants.seed('t1');
+  // A rejected write carries the rejected data; whatever comes out of the gate must not.
+  actions.insertApproved.mockRejectedValueOnce(new Error('null value in column "args" violates ... { text: "comando secreto" }'));
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'comando secreto' });
+
+  expect(resultOf(res).isError).toBe(true);
+  expect(textOf(res)).toMatch(/registrar esta ação/i);
+  expect(textOf(res)).not.toContain('comando secreto');
+  expect(typed).toEqual([]);
+  expect(actions.rows).toHaveLength(0);
+});
+
+it('answers that a concurrent call already owns it when the grant insert loses the unique index', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  grants.seed('t1');
+  actions.insertApproved.mockRejectedValueOnce(new Error('duplicate key value violates unique constraint "chat_actions_one_open_per_key"'));
+  // The gate's own first check (before it ever tries to insert) sees nothing yet; by the time
+  // `executeGranted` re-checks after the failed insert, the winning call's row already occupies the key.
+  actions.findOpenByKey.mockImplementationOnce(async () => undefined);
+  actions.findOpenByKey.mockImplementationOnce(async () => ({ id: 'a-winner' }) as never);
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+
+  expect(resultOf(res).isError).toBe(true);
+  expect(textOf(res)).toMatch(/já está executando esta ação/i);
+  expect(typed).toEqual([]);
+  expect(actions.rows).toHaveLength(0); // nothing of this call's own was ever recorded
+});
+
+it('still succeeds, typing exactly once, when telling the trail live fails after a granted run', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, projects } = build({ gated: true });
+  grants.seed('t1');
+  // Forces the enrichment inside the post-execution publish step to throw — after `execute()`'s own
+  // `staleApproval` read (which only touches `tabs`) already succeeded and the keystroke already ran.
+  projects.findByIdsForOwner.mockRejectedValueOnce(new Error('connection terminated'));
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+
+  expect(resultOf(res).isError).toBeFalsy();
+  expect(typed).toEqual(['oi']); // exactly once: a retry must not be provoked by the publish failure
+  expect(actions.rows).toHaveLength(1);
+  expect(actions.rows[0].status).toBe('executed');
+  expect(collected.some((e) => e.type === 'granted_action')).toBe(false); // best-effort: swallowed
 });
