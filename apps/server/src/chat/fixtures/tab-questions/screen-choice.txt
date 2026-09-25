@@ -1,0 +1,27 @@
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 (1M context) · Claude Max
+ ▝▝   ▝▝   /home/dev/project
+
+
+❯ Use the AskUserQuestion tool to ask me two questions at once: (1) favorite color with 3 options, one marked Recommended, single select; (2) which fruits I
+  like, multiSelect with 3 options. Then after my answer, run the bash command: ls /tmp
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Color  ☐ Fruits  ✔ Submit  →
+
+What is your favorite color?
+
+❯ 1. Blue (Recommended)
+     Calm and classic.
+  2. Green
+     Fresh and natural.
+  3. Red
+     Bold and energetic.
+  4. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+
+
+
+

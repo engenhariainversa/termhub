@@ -1,0 +1,16 @@
+  - Background services: .NET debug pipes and sockets, systemd-private-* directories, tmux-1000 and snap-private-tmp.
+✻ Crunched for 9s · done 12:39 PM
+❯ Run this bash command: touch probe-file.txt
+  Creating an empty probe file
+  ⎿  $ touch probe-file.txt
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Tip: auto mode handles these prompts for you — choose "switch to auto mode" below
+   touch probe-file.txt
+   Create an empty probe file
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and always allow access to /home/dev/project from this project
+   3. Yes, and switch to auto mode · auto mode handles these prompts for you
+   4. No
+ Esc to cancel · Tab to amend
