@@ -21,6 +21,54 @@ function saveOn(on: boolean): void {
   }
 }
 
+/** A tenth of a second of silence as a WAV, made once: what the media-element trick below plays. */
+let silence: string | null = null;
+function silentWav(): string {
+  if (silence) return silence;
+  const rate = 8000;
+  const samples = rate / 10;
+  const buf = new ArrayBuffer(44 + samples * 2);
+  const v = new DataView(buf);
+  const text = (at: number, t: string) => [...t].forEach((c, i) => v.setUint8(at + i, c.charCodeAt(0)));
+  text(0, 'RIFF');
+  v.setUint32(4, 36 + samples * 2, true);
+  text(8, 'WAVEfmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  text(36, 'data');
+  v.setUint32(40, samples * 2, true);
+  silence = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  return silence;
+}
+
+/**
+ * iOS plays Web Audio in the "ambient" session, which the ring/silent switch mutes — while a
+ * <video> or <audio> plays in the "playback" one, which it does not. That is why the city stayed
+ * silent until a recorded video was played. Inside a gesture, ask for the playback session: by name
+ * where Safari has `navigator.audioSession` (17+), and by playing a moment of silence through a
+ * media element everywhere else. Harmless on every other browser.
+ */
+function preferPlayback(): void {
+  try {
+    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session && session.type !== 'playback') session.type = 'playback';
+  } catch {
+    // no audio session to ask for
+  }
+  try {
+    const el = new Audio(silentWav());
+    el.setAttribute('playsinline', '');
+    void el.play().catch(() => {});
+  } catch {
+    // no media element: the Web Audio resume below is all there is
+  }
+}
+
 /** What counts as the visitor's first gesture: browsers only let audio start inside one. */
 const GESTURES = ['pointerdown', 'touchend', 'click', 'keydown'] as const;
 
@@ -56,6 +104,7 @@ export function useCitySound(model: CityModel) {
     heard.current = modelRef.current;
     // a context made outside a gesture starts suspended: the first gesture anywhere wakes it
     const unlock = () => {
+      preferPlayback();
       void ctx.resume().then(() => {
         if (ctx.state === 'running') for (const g of GESTURES) window.removeEventListener(g, unlock, true);
       });
@@ -81,6 +130,7 @@ export function useCitySound(model: CityModel) {
     const next = !on;
     if (next) {
       try {
+        preferPlayback();
         fromClick.current = new AudioContext();
         void fromClick.current.resume();
       } catch {
