@@ -1,7 +1,7 @@
 // How one live event of the open conversation changes its thread (design spec §6): pure reducers
 // over the slice the chat store keeps — the thread's messages and actions and the `live` buffer
 // `foldLive` reads. The store decides which events reach here (`belongsTo`) and does the I/O.
-import type { ChatAction, ChatEvent, ChatGrant, ChatMessage } from './types';
+import type { ChatAction, ChatEvent, ChatGrant, ChatMessage, TabQuestion } from './types';
 
 /** The most live events kept at once — a long answer streams hundreds of deltas. */
 export const LIVE_CAP = 500;
@@ -12,6 +12,8 @@ export interface EventSlice {
   live: ChatEvent[];
   /** The conversation's trusted tabs; at most one per tab (a new grant replaces the old one). */
   grants: ChatGrant[];
+  /** The tabs' questions pushed into this conversation (spec 2026-09-25 §6.3). */
+  tabQuestions: TabQuestion[];
 }
 
 /** The message a live event is about, if any. */
@@ -35,6 +37,11 @@ function upsertMessage(messages: ChatMessage[], message: ChatMessage): ChatMessa
 export function settlePending(actions: ChatAction[], id: string, status: 'approved' | 'denied'): ChatAction[] {
   if (!actions.some((a) => a.id === id && a.status === 'pending')) return actions;
   return actions.map((a) => (a.id === id ? { ...a, status } : a));
+}
+
+/** Every tab-question event carries the whole card: replace it by id, or append it. */
+export function upsertTabQuestion(list: TabQuestion[], q: TabQuestion): TabQuestion[] {
+  return list.some((x) => x.id === q.id) ? list.map((x) => (x.id === q.id ? q : x)) : [...list, q];
 }
 
 function actionFromConfirmation(e: Extract<ChatEvent, { type: 'confirmation' }>): ChatAction {
@@ -83,6 +90,10 @@ export function applyEvent(slice: EventSlice, e: ChatEvent): { slice: EventSlice
         slice: { ...slice, actions: slice.actions.some((a) => a.id === e.action.id) ? slice.actions.map((a) => (a.id === e.action.id ? e.action : a)) : [...slice.actions, e.action] },
         reread: false,
       };
+    case 'tab_question':
+    case 'tab_question_answered':
+    case 'tab_question_closed':
+      return { slice: { ...slice, tabQuestions: upsertTabQuestion(slice.tabQuestions, e.question) }, reread: false };
     case 'delta':
     case 'action':
     case 'reset':

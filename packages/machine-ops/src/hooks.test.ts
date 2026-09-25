@@ -64,6 +64,13 @@ describe('mergeClaudeSettings', () => {
       '~/.claude-work/settings.json: o campo "hooks" não é um objeto',
     );
   });
+
+  it('subscribes PermissionRequest with the every-tool matcher, like PreToolUse', () => {
+    const out = JSON.parse(mergeClaudeSettings('', script)) as { hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]> };
+    expect(CLAUDE_HOOK_EVENTS).toContain('PermissionRequest');
+    expect(out.hooks.PermissionRequest[0].matcher).toBe('*');
+    expect(out.hooks.PermissionRequest[0].hooks[0].command).toBe(`${script} claude`);
+  });
 });
 
 describe('stripClaudeSettings', () => {

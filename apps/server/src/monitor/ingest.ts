@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { noteHookEvent } from '../chat/tab-questions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Tab } from '../db/repositories/types.js';
 import { monitorBus } from './bus.js';
@@ -19,12 +20,21 @@ export async function ingestHookEvent(
   if (!tab) return { ok: false, reason: 'unknown_session' };
   const interpreted = interpretHookEvent(input.tool, input.event);
   if (!interpreted) return { ok: false, reason: 'ignored' };
+  const updated = await recordInterpretation(repos, log, tab, input.tool, interpreted);
+  // After the tab row (spec 2026-09-25 §4.2): a question opens a card in the project's chat, any
+  // other event closes the one on screen. Never throws.
+  await noteHookEvent(repos, log, updated, interpreted);
+  return { ok: true, tab: updated };
+}
+
+/** The tab's side of an interpreted event: the light activity path, or a recorded state. */
+async function recordInterpretation(repos: Repositories, log: FastifyBaseLogger, tab: Tab, tool: HookTool, interpreted: Interpreted): Promise<Tab> {
   // A tool (or spinner verb) change on a tab already working is not a state change: the light path
   // moves only the activity and its verb (no event row) and still tells the subscribers. The script
   // already posts only on a change; the equality check here is a defensive no-op for anything else.
   if (interpreted.activity !== undefined && tab.state === 'working' && interpreted.kind === 'working') {
     const verb = interpreted.verb ?? null;
-    if (tab.activity === interpreted.activity && tab.activity_verb === verb) return { ok: true, tab };
+    if (tab.activity === interpreted.activity && tab.activity_verb === verb) return tab;
     // Nothing updated: the tab stopped working (or is gone) between the read above and this write —
     // the conditional UPDATE is what decides, not the row we read. The full path takes it from here.
     const updated = await repos.tabs.setActivity(tab.id, interpreted.activity, verb);
@@ -33,10 +43,10 @@ export async function ingestHookEvent(
       // the verb came off the person's screen: only whether there was one is logged
       log.debug({ tabId: tab.id, machineId: machine?.id, activity: interpreted.activity, hasVerb: verb !== null }, 'monitor: tab activity');
       publishTabChange(updated, tab.project_id, machine);
-      return { ok: true, tab: updated };
+      return updated;
     }
   }
-  return { ok: true, tab: await applyState(repos, log, tab, input.tool, interpreted) };
+  return applyState(repos, log, tab, tool, interpreted);
 }
 
 /** Records the event for the tab, updates its state and publishes the change. */

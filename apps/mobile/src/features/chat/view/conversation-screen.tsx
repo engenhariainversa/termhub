@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { TTabQuestionAnswerBody } from '@/services/api/contract';
 import { AppText, Banner, Button, EmptyState, Screen, Sheet } from '@/ui';
 import { isGrantActive } from '../model/grant-time';
 import { foldLive } from '../model/live';
@@ -13,8 +14,9 @@ import { Composer } from './composer';
 import { GrantsStrip } from './grants-strip';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
+import { TabQuestionCard } from './tab-question-card';
 
-const entryKey = (entry: ChatEntry) => (entry.kind === 'message' ? `m:${entry.message.id}` : `a:${entry.action.id}`);
+const entryKey = (entry: ChatEntry) => (entry.kind === 'message' ? `m:${entry.message.id}` : entry.kind === 'action' ? `a:${entry.action.id}` : `q:${entry.question.id}`);
 
 /** The conversation (spec §11.2): thread, action cards, the host line when the host needs attention,
  * the trusted tabs and composer.
@@ -35,6 +37,9 @@ export function ConversationScreen() {
   const decide = useChatStore((s) => s.decide);
   const revokingId = useChatStore((s) => s.revokingId);
   const revokeGrant = useChatStore((s) => s.revokeGrant);
+  const answeringQuestionId = useChatStore((s) => s.answeringQuestionId);
+  const answerTabQuestion = useChatStore((s) => s.answerTabQuestion);
+  const loadTabQuestionScreen = useChatStore((s) => s.loadTabQuestionScreen);
   const reset = useChatStore((s) => s.reset);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const insets = useSafeAreaInsets();
@@ -47,13 +52,15 @@ export function ConversationScreen() {
   const messages = slot?.messages;
   const actions = slot?.actions;
   const grants = useMemo(() => slot?.grants ?? [], [slot?.grants]);
-  const extra = useMemo(() => ({ fold, decidingId, grants, revokingId }), [fold, decidingId, grants, revokingId]);
+  const tabQuestions = slot?.tabQuestions;
+  const extra = useMemo(() => ({ fold, decidingId, grants, revokingId, answeringQuestionId }), [fold, decidingId, grants, revokingId, answeringQuestionId]);
   // A deep link followed after unlock replaces `/unlock` with this screen: nothing behind it.
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const onDecide = useCallback((actionId: string, decision: ChatDecision) => void decide(actionId, decision), [decide]);
   const onRevoke = useCallback((grantId: string) => void revokeGrant(grantId), [revokeGrant]);
+  const onAnswer = useCallback((id: string, body: TTabQuestionAnswerBody) => void answerTabQuestion(id, body), [answerTabQuestion]);
   // Newest first, for the inverted list that keeps the thread pinned to its end.
-  const entries = useMemo(() => chatTimeline(messages ?? [], actions ?? []).reverse(), [messages, actions]);
+  const entries = useMemo(() => chatTimeline(messages ?? [], actions ?? [], tabQuestions ?? []).reverse(), [messages, actions, tabQuestions]);
 
   const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? 'Conversa') : 'Chat geral';
   const shownError = error ?? slot?.error ?? null;
@@ -106,7 +113,9 @@ export function ConversationScreen() {
             // there re-runs `renderItem`, and the memoised rows re-render only where their own props changed.
             extraData={extra}
             renderItem={({ item }) =>
-              item.kind === 'message' ? (
+              item.kind === 'tab_question' ? (
+                <TabQuestionCard question={item.question} busy={answeringQuestionId !== null} onAnswer={onAnswer} loadScreen={loadTabQuestionScreen} />
+              ) : item.kind === 'message' ? (
                 <MessageBubble message={item.message} streamed={fold.deltas.get(item.message.id)} started={fold.started.has(item.message.id)} />
               ) : (
                 <ActionCard

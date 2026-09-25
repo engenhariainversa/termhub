@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChatAction, ChatMessage } from './types';
+import type { ChatAction, ChatMessage, TabQuestion } from './types';
 import { chatTimeline } from './chat-timeline';
 
 const T0 = '2026-01-01T00:00:00.000Z';
@@ -140,5 +140,23 @@ describe('chatTimeline', () => {
 
     expect(result[0].at).toBe(T0);
     expect(result[1].at).toBe(T1);
+  });
+});
+
+function tabQuestion(overrides: Partial<TabQuestion> = {}): TabQuestion {
+  return { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'permission', payload: { tool_name: 'Bash' }, answer: null, status: 'open', error_code: null, created_at: T1, answered_at: null, closed_at: null, ...overrides } as TabQuestion;
+}
+
+describe('chatTimeline — tab questions', () => {
+  it('places a question by its time, after a message of the same instant', () => {
+    const entries = chatTimeline([message({ id: 'm1', created_at: T0 }), message({ id: 'm2', created_at: T1 })], [action({ id: 'a1', created_at: T2 })], [tabQuestion({ id: 'q1', created_at: T1 })]);
+    expect(entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.question.id))).toEqual(['m1', 'm2', 'q1', 'a1']);
+  });
+  it('drops a question older than the message window, keeps them all with no messages', () => {
+    expect(chatTimeline([message({ created_at: T1 })], [], [tabQuestion({ created_at: T0 })]).map((e) => e.kind)).toEqual(['message']);
+    expect(chatTimeline([], [], [tabQuestion()]).map((e) => e.kind)).toEqual(['tab_question']);
+  });
+  it('keeps working with two arguments', () => {
+    expect(chatTimeline([message()], []).map((e) => e.kind)).toEqual(['message']);
   });
 });

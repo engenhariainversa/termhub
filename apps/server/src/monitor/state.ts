@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseAskUserQuestion, parsePermissionTool, toolUseIdOf, type TabQuestionInput } from '../chat/tab-question-payload.js';
 import type { Tab, TabActivity, TabState } from '../db/repositories/types.js';
 import { activityOf } from './activity.js';
 
@@ -24,6 +25,11 @@ export interface Interpreted {
    * its answer, while every Codex turn ends the same way with no working state in between.
    */
   continuesWait?: true;
+  /**
+   * A question the tab put to the person (spec 2026-09-25 §4.2): an `AskUserQuestion` card or a
+   * permission prompt. For the tab-question service only — never stored on the tab nor its events.
+   */
+  question?: TabQuestionInput;
 }
 
 /**
@@ -52,9 +58,25 @@ function interpretClaude(ev: Record<string, unknown>): Interpreted | null {
       return { kind: 'working', text: null, meta: { event: name } };
     case 'PreToolUse': {
       // the script already reduced this event to the tool's name and the spinner's verb; whatever
-      // else arrives is ignored, and a verb that is not a plain word is dropped, not the event
+      // else arrives is ignored, and a verb that is not a plain word is dropped, not the event.
+      // The one exception is AskUserQuestion, forwarded whole: its input is the question, written to
+      // be shown to the person — parsed into `question`, never into meta or text.
       const tool = str(ev.tool_name);
-      return { kind: 'working', text: null, activity: activityOf(tool), verb: verbOf(ev.verb), meta: { event: name, tool } };
+      const base: Interpreted = { kind: 'working', text: null, activity: activityOf(tool), verb: verbOf(ev.verb), meta: { event: name, tool } };
+      if (tool !== 'AskUserQuestion') return base;
+      const payload = parseAskUserQuestion(ev.tool_input);
+      return payload ? { ...base, question: { kind: 'choice', payload, tool_use_id: toolUseIdOf(ev.tool_use_id) } } : base;
+    }
+    case 'PermissionRequest': {
+      // Reduced to the tool's name on the machine; its state effect is the permission_prompt
+      // notification's, which follows it. AskUserQuestion's own prompt opens nothing: its PreToolUse
+      // already carried the question (the current script drops it; this covers anything else).
+      // ExitPlanMode's dialog is not a yes/no prompt either (its "1" is "Yes, and use auto mode"),
+      // so it opens nothing and stays in the tab.
+      const tool = str(ev.tool_name);
+      const base: Interpreted = { kind: 'waiting_permission', text: null, meta: { event: name, tool } };
+      const payload = tool === 'AskUserQuestion' || tool === 'ExitPlanMode' ? null : parsePermissionTool(tool);
+      return payload ? { ...base, question: { kind: 'permission', payload, tool_use_id: null } } : base;
     }
     case 'Notification': {
       const type = str(ev.notification_type);

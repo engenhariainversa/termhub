@@ -14,14 +14,14 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { SessionState } from '@/features/session/model/session.types';
 import { sessionEnded } from '@/features/shared/signals';
-import type { TChatProjectItem, THostOptionsResponse } from '@/services/api/contract';
+import type { TChatProjectItem, THostOptionsResponse, TTabQuestionAnswerBody } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { MobileApi } from '@/services/api/types';
 import { mmkvStateStorage } from '@/services/storage';
 import { applyEvent, settlePending } from '../model/events';
 import { belongsTo } from '../model/filter';
 import { CHAT_MSG } from '../model/messages';
-import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage } from '../model/types';
+import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, TabQuestion } from '../model/types';
 
 /** `approve_tab` approves the card *and* trusts its tab for send_input ("Permitir sempre nesta aba"). */
 export type ChatDecision = 'approve' | 'deny' | 'approve_tab';
@@ -41,6 +41,8 @@ export interface ConversationSlot {
   actions: ChatAction[];
   /** The tabs trusted in this conversation (the server lists those still in force). */
   grants: ChatGrant[];
+  /** The tabs' questions pushed into this conversation (spec 2026-09-25 §6.3). */
+  tabQuestions: TabQuestion[];
   host: ChatHostState | null;
   /** A `GET chat` answered since this store started (a persisted slot is shown, but not loaded). */
   loaded: boolean;
@@ -61,6 +63,8 @@ export interface ChatState {
   decidingId: string | null;
   /** The grant whose "Revogar" is in flight. */
   revokingId: string | null;
+  /** The tab question whose answer is in flight. */
+  answeringQuestionId: string | null;
   hostOptions: THostOptionsResponse | null;
   /** The last failed action of the screen on show, in pt-BR. */
   error: string | null;
@@ -76,6 +80,10 @@ export interface ChatState {
   /** "Revogar" a trusted tab of the open conversation. A grant already revoked elsewhere (409) is
    * dropped quietly: it is gone either way. */
   revokeGrant(grantId: string): Promise<void>;
+  /** Answers a tab's question from its card — no PIN. A question the tab moved past (409) says so and re-reads. */
+  answerTabQuestion(questionId: string, body: TTabQuestionAnswerBody): Promise<void>;
+  /** The tab's live excerpt for a permission card; null when it cannot be read (closed, offline). */
+  loadTabQuestionScreen(questionId: string): Promise<string | null>;
   reset(): Promise<void>;
   loadHostOptions(): Promise<void>;
   setHost(machineId: string, aiAccountId?: string): Promise<void>;
@@ -94,7 +102,7 @@ export interface ChatState {
 
 type Data = Omit<ChatState, { [K in keyof ChatState]: ChatState[K] extends (...args: never[]) => unknown ? K : never }[keyof ChatState]>;
 
-type PersistedSlot = Pick<ConversationSlot, 'conversation' | 'messages' | 'actions' | 'grants' | 'host'>;
+type PersistedSlot = Pick<ConversationSlot, 'conversation' | 'messages' | 'actions' | 'grants' | 'tabQuestions' | 'host'>;
 type Persisted = { projects: TChatProjectItem[]; conversations: Record<string, PersistedSlot> };
 
 const initialData = (): Data => ({
@@ -107,11 +115,12 @@ const initialData = (): Data => ({
   sending: false,
   decidingId: null,
   revokingId: null,
+  answeringQuestionId: null,
   hostOptions: null,
   error: null,
 });
 
-const emptySlot = (): ConversationSlot => ({ conversation: null, messages: [], actions: [], grants: [], host: null, loaded: false, error: null });
+const emptySlot = (): ConversationSlot => ({ conversation: null, messages: [], actions: [], grants: [], tabQuestions: [], host: null, loaded: false, error: null });
 const keyOf = (projectId: string | null): string => projectId ?? '';
 const projectOf = (key: string): string | null => (key === '' ? null : key);
 
@@ -160,7 +169,16 @@ export function createChatStore(deps: ChatDeps) {
           try {
             const res = await api.chat(session().auth(), projectOf(key));
             if (stale()) return;
-            patchSlot(key, () => ({ conversation: res.conversation, messages: res.messages, actions: res.actions, grants: res.grants, host: res.host, loaded: true, error: null }));
+            patchSlot(key, () => ({
+              conversation: res.conversation,
+              messages: res.messages,
+              actions: res.actions,
+              grants: res.grants,
+              tabQuestions: res.tab_questions,
+              host: res.host,
+              loaded: true,
+              error: null,
+            }));
           } catch (e) {
             if (stale() || isLocked(e) || session().handleApiError(e)) return;
             patchSlot(key, () => ({ error: isApiError(e) ? e.message : CHAT_MSG.network }));
@@ -172,10 +190,10 @@ export function createChatStore(deps: ChatDeps) {
           if (key === null) return;
           const current = get().conversations[key] ?? emptySlot();
           if (!belongsTo(current.conversation?.id ?? null)(e)) return;
-          const before = { messages: current.messages, actions: current.actions, live: get().live, grants: current.grants };
+          const before = { messages: current.messages, actions: current.actions, live: get().live, grants: current.grants, tabQuestions: current.tabQuestions };
           const { slice, reread: mustReread } = applyEvent(before, e);
           if (slice === before) return;
-          patchSlot(key, () => ({ messages: slice.messages, actions: slice.actions, grants: slice.grants }));
+          patchSlot(key, () => ({ messages: slice.messages, actions: slice.actions, grants: slice.grants, tabQuestions: slice.tabQuestions }));
           set({ live: slice.live });
           if (mustReread) void reread(key);
         };
@@ -253,7 +271,7 @@ export function createChatStore(deps: ChatDeps) {
             closeSocket?.();
             closeSocket = null;
             readSeq.clear();
-            set({ connected: false, live: [], activeProject: undefined, sending: false, decidingId: null, revokingId: null });
+            set({ connected: false, live: [], activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionId: null });
           },
 
           async send(text) {
@@ -329,6 +347,37 @@ export function createChatStore(deps: ChatDeps) {
             }
           },
 
+          async answerTabQuestion(questionId, body) {
+            const projectId = get().activeProject;
+            if (projectId === undefined || get().answeringQuestionId !== null) return;
+            const key = keyOf(projectId);
+            const gen = generation;
+            set({ answeringQuestionId: questionId, error: null });
+            try {
+              await api.answerTabQuestion(session().auth(), questionId, body);
+              // The `tab_question_answered` event brings the card; the re-read covers a socket that is down.
+              if (gen === generation) void reread(key);
+            } catch (e) {
+              if (gen !== generation) return;
+              if (isApiError(e, 'TAB_PROMPT_CHANGED')) {
+                set({ error: CHAT_MSG.tabPromptChanged });
+                void reread(key); // show how it ended
+              } else {
+                fail(gen, e);
+              }
+            } finally {
+              if (gen === generation) set({ answeringQuestionId: null });
+            }
+          },
+
+          async loadTabQuestionScreen(questionId) {
+            try {
+              return (await api.tabQuestionScreen(session().auth(), questionId)).text;
+            } catch {
+              return null;
+            }
+          },
+
           async reset() {
             const projectId = get().activeProject;
             if (projectId === undefined) return;
@@ -339,7 +388,7 @@ export function createChatStore(deps: ChatDeps) {
               await api.reset(session().auth(), projectId);
               if (gen !== generation) return;
               set({ live: [] });
-              patchSlot(key, () => ({ messages: [], actions: [], grants: [] })); // a reset ends the old conversation's grants too
+              patchSlot(key, () => ({ messages: [], actions: [], grants: [], tabQuestions: [] })); // a reset ends the old conversation's grants too
               await reread(key);
             } catch (e) {
               fail(gen, e);
@@ -394,7 +443,7 @@ export function createChatStore(deps: ChatDeps) {
         partialize: (s): Persisted => ({
           projects: s.projects,
           conversations: Object.fromEntries(
-            Object.entries(s.conversations).map(([key, c]) => [key, { conversation: c.conversation, messages: c.messages, actions: c.actions, grants: c.grants, host: c.host }]),
+            Object.entries(s.conversations).map(([key, c]) => [key, { conversation: c.conversation, messages: c.messages, actions: c.actions, grants: c.grants, tabQuestions: c.tabQuestions, host: c.host }]),
           ),
         }),
         merge: (persisted, current) => {

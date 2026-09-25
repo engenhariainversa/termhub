@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { ChatMessage } from '../db/repositories/chat.js';
 import type { ChatActionClass } from '../db/repositories/chat-actions.js';
 import type { ChatActionCard, ChatGrantView } from '../db/repositories/chat-actions-view.js';
+import type { TabQuestionView } from '../db/repositories/tab-questions-view.js';
 
 /** What the browser is told while an answer is being written. Terminal content never travels here:
  * an action carries the tool and its arguments, never a captured screen (spec §7.1). Every event names
@@ -35,7 +36,14 @@ export type ChatEvent =
   | { type: 'run_finished'; user_id: string; conversation_id: string; message_id: string | null; ok: boolean; error_code: string | null }
   /** A call the concierge made under a tab grant, already executed or failed: the trail's row for
    * it (spec 2026-09-25 §5). Nobody was asked, so without this the trail would only show it on reload. */
-  | { type: 'granted_action'; user_id: string; conversation_id: string; action: ChatActionCard };
+  | { type: 'granted_action'; user_id: string; conversation_id: string; action: ChatActionCard }
+  /** A tab asked something (spec 2026-09-25 §5.2): the whole card. Pushed to the project's most
+   * recently active conversation; its text is the question itself, never a screen. */
+  | { type: 'tab_question'; user_id: string; conversation_id: string; question: TabQuestionView }
+  /** The chat answered it — or the answer could not be typed (`status: 'failed'`). */
+  | { type: 'tab_question_answered'; user_id: string; conversation_id: string; question: TabQuestionView }
+  /** It left the tab's screen: answered there, replaced, or the tab is gone. An answered card stays answered. */
+  | { type: 'tab_question_closed'; user_id: string; conversation_id: string; question: TabQuestionView };
 
 class ChatBus {
   private emitter = new EventEmitter();

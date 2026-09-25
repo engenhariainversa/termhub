@@ -4,12 +4,14 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { ChatConversation, ChatMessage } from '../db/repositories/chat.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
+import { describeTabQuestions } from '../db/repositories/tab-questions-view.js';
 import type { User } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { chatBus } from './bus.js';
 import { hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
 import { projectSystemPrompt } from './project-prompt.js';
 import { parseFrame, type ChatFailureReason } from './stream.js';
+import { tabQuestionContext } from './tab-question-context.js';
 import { mintConciergeToken } from './token.js';
 
 /**
@@ -364,6 +366,21 @@ export class ChatService {
     return projectSystemPrompt(project, links.filter((l) => nameOf.has(l.machine_id)).map((l) => ({ machine: nameOf.get(l.machine_id)!, cwd: l.cwd })));
   }
 
+  /** The tabs' answered questions this conversation's model was not told yet, as the lines to prepend,
+   * marked told. A failure costs the context — logged by label, never by content — not the message. */
+  private async tabQuestionContextFor(user: User, conversationId: string): Promise<string | null> {
+    try {
+      const rows = await this.deps.repos.tabQuestions.listToInject(conversationId);
+      if (rows.length === 0) return null;
+      const views = await describeTabQuestions(this.deps.repos, rows, user.id);
+      await this.deps.repos.tabQuestions.markInjected(rows.map((r) => r.id));
+      return tabQuestionContext(views);
+    } catch (err) {
+      console.error('chat: tab question context skipped', { conversation_id: conversationId, error: failureLabel(err) });
+      return null;
+    }
+  }
+
   /** One whole run in a given conversation — what a decision's re-injection and the drain await. */
   private async sendIn(user: User, conversation: ChatConversation, text: string, opts?: { beforeRun?: () => Promise<void> }): Promise<ChatMessage> {
     return (await this.startIn(user, conversation, text, opts)).done;
@@ -414,6 +431,12 @@ export class ChatService {
       // mark a decision injected that it never actually sent (fix round 2).
       if (opts?.beforeRun) await opts.beforeRun();
 
+      // What the chat answered in the project's tabs since the model last heard (spec 2026-09-25
+      // §5.5): prepended to this run's input only — the stored message stays the person's own words.
+      // Read and stamped under the lock, before the run: at most once, like a decision's injection.
+      const context = await this.tabQuestionContextFor(user, conversation.id);
+      const runText = context ? `${context}\n\n${text}` : text;
+
       const question = await this.deps.repos.chat.addMessage({ conversation_id: conversation.id, role: 'user', text });
       chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversation.id, message: question });
 
@@ -422,7 +445,7 @@ export class ChatService {
 
       // Not awaited: this call resolves now, and the lock passes to `finishRun`, whose own `finally`
       // releases it whether or not anybody ever awaits `done`.
-      const done = this.finishRun(user, conversation, text, question, answer, runner, host.configDir, appendSystemPrompt);
+      const done = this.finishRun(user, conversation, runText, question, answer, runner, host.configDir, appendSystemPrompt);
       handedOff = true;
       return { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id, done };
     } finally {

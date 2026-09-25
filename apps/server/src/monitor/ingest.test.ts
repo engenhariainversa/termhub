@@ -4,6 +4,8 @@ import type { Tab } from '../db/repositories/types.js';
 
 const publish = vi.fn();
 vi.mock('./bus.js', () => ({ monitorBus: { publish: (...a: unknown[]) => publish(...a) } }));
+const note = vi.fn(async (..._args: unknown[]) => undefined);
+vi.mock('../chat/tab-questions.js', () => ({ noteHookEvent: (...a: unknown[]) => note(...a) }));
 
 const { ingestHookEvent } = await import('./ingest.js');
 
@@ -107,5 +109,43 @@ describe('ingestHookEvent — activity', () => {
     await ingestHookEvent(repos(tab({ state: 'working', activity: 'coding' })).r, spy as never, pre('Edit', 'Zyzzyvating'));
     expect(spy.info.mock.calls.length + spy.debug.mock.calls.length).toBe(2);
     expect(JSON.stringify([spy.info.mock.calls, spy.debug.mock.calls])).not.toContain('Zyzzyvating');
+  });
+});
+
+describe('ingestHookEvent — tab questions', () => {
+  const ask = { hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_use_id: 'toolu_1', tool_input: { questions: [{ question: 'Qual cor?', header: 'Cor', options: [{ label: 'Azul (Recommended)', description: 'Calma' }, { label: 'Verde', description: 'Fresca' }], multiSelect: false }] } };
+
+  it('hands the interpretation, question included, to the tab-question service — even on the light path that writes nothing', async () => {
+    note.mockClear();
+    const { r, recordEvent, setActivity } = repos(tab({ state: 'working', activity: 'planning' }));
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: ask });
+    expect(recordEvent).not.toHaveBeenCalled();
+    expect(setActivity).not.toHaveBeenCalled();
+    expect(note).toHaveBeenCalledTimes(1);
+    const [, , passedTab, interpreted] = note.mock.calls[0]!;
+    expect(passedTab).toMatchObject({ id: 't1' });
+    expect(interpreted).toMatchObject({ question: { kind: 'choice', tool_use_id: 'toolu_1' } });
+  });
+
+  it('hands over the updated tab after a full state change', async () => {
+    note.mockClear();
+    const { r } = repos(tab({ state: 'waiting_permission' }));
+    await ingestHookEvent(r, log, pre('Bash'));
+    expect(note.mock.calls[0]![2]).toMatchObject({ id: 't1', state: 'working' });
+  });
+
+  it('does not call the service for an event the interpreter ignores, nor for an unknown session', async () => {
+    note.mockClear();
+    await ingestHookEvent(repos(tab({})).r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: { hook_event_name: 'SubagentStop' } });
+    const none = repos(tab({}));
+    (none.r.tabs.findByTmuxSession as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    await ingestHookEvent(none.r, log, pre('Edit'));
+    expect(note).not.toHaveBeenCalled();
+  });
+
+  it('never logs the question', async () => {
+    const spy = { info: vi.fn(), debug: vi.fn(), warn: vi.fn() };
+    await ingestHookEvent(repos(tab({ state: 'waiting_input' })).r, spy as never, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: ask });
+    expect(JSON.stringify([spy.info.mock.calls, spy.debug.mock.calls])).not.toContain('Qual cor');
   });
 });

@@ -19,6 +19,7 @@ import {
   meResponse,
   notificationsResponse,
   sendAccepted,
+  tabQuestionScreenResponse,
   tokenResponse,
   type TChallengeBody,
   type TDeviceActivateBody,
@@ -26,6 +27,7 @@ import {
   type TMobileDecisionBody,
   type TMobileMessageBody,
   type TSetHostBody,
+  type TTabQuestionAnswerBody,
   type TTokenBody,
 } from './contract';
 import { buildProof } from './dpop';
@@ -210,6 +212,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     decide: (a: Auth, actionId: string, body: TMobileDecisionBody) =>
       empty('POST', `/api/m/v1/chat/actions/${actionId}/decision`, { token: a.accessToken, body }),
     revokeGrant: (a: Auth, grantId: string) => empty('DELETE', `/api/m/v1/chat/grants/${encodeURIComponent(grantId)}`, { token: a.accessToken }),
+    answerTabQuestion: (a: Auth, id: string, body: TTabQuestionAnswerBody) =>
+      empty('POST', `/api/m/v1/chat/tab-questions/${encodeURIComponent(id)}/answer`, { token: a.accessToken, body }),
+    tabQuestionScreen: (a: Auth, id: string) =>
+      call('GET', `/api/m/v1/chat/tab-questions/${encodeURIComponent(id)}/screen`, tabQuestionScreenResponse, { token: a.accessToken }),
 
     notifications: (a: Auth, before?: string) =>
       call('GET', `/api/m/v1/notifications${before ? `?before=${encodeURIComponent(before)}` : ''}`, notificationsResponse, {

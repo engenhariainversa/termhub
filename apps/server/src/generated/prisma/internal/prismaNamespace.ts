@@ -424,6 +424,7 @@ export const ModelName = {
   ChatMessage: 'ChatMessage',
   ChatAction: 'ChatAction',
   ChatGrant: 'ChatGrant',
+  TabQuestion: 'TabQuestion',
   InstanceSecret: 'InstanceSecret',
   ProjectGroup: 'ProjectGroup',
   ProjectGroupItem: 'ProjectGroupItem',
@@ -448,7 +449,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "machineHook" | "ticket" | "taskColumn" | "task" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAction" | "chatGrant" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "machineHook" | "ticket" | "taskColumn" | "task" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAction" | "chatGrant" | "tabQuestion" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2450,6 +2451,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    TabQuestion: {
+      payload: Prisma.$TabQuestionPayload<ExtArgs>
+      fields: Prisma.TabQuestionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TabQuestionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TabQuestionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload>
+        }
+        findFirst: {
+          args: Prisma.TabQuestionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TabQuestionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload>
+        }
+        findMany: {
+          args: Prisma.TabQuestionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload>[]
+        }
+        create: {
+          args: Prisma.TabQuestionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload>
+        }
+        createMany: {
+          args: Prisma.TabQuestionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TabQuestionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload>[]
+        }
+        delete: {
+          args: Prisma.TabQuestionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload>
+        }
+        update: {
+          args: Prisma.TabQuestionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload>
+        }
+        deleteMany: {
+          args: Prisma.TabQuestionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TabQuestionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TabQuestionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload>[]
+        }
+        upsert: {
+          args: Prisma.TabQuestionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabQuestionPayload>
+        }
+        aggregate: {
+          args: Prisma.TabQuestionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTabQuestion>
+        }
+        groupBy: {
+          args: Prisma.TabQuestionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TabQuestionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TabQuestionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TabQuestionCountAggregateOutputType> | number
+        }
+      }
+    }
     InstanceSecret: {
       payload: Prisma.$InstanceSecretPayload<ExtArgs>
       fields: Prisma.InstanceSecretFieldRefs
@@ -3575,6 +3650,27 @@ export const ChatGrantScalarFieldEnum = {
 export type ChatGrantScalarFieldEnum = (typeof ChatGrantScalarFieldEnum)[keyof typeof ChatGrantScalarFieldEnum]
 
 
+export const TabQuestionScalarFieldEnum = {
+  id: 'id',
+  tabId: 'tabId',
+  projectId: 'projectId',
+  conversationId: 'conversationId',
+  kind: 'kind',
+  payload: 'payload',
+  toolUseId: 'toolUseId',
+  status: 'status',
+  answer: 'answer',
+  errorCode: 'errorCode',
+  answeredBy: 'answeredBy',
+  answeredAt: 'answeredAt',
+  closedAt: 'closedAt',
+  injectedAt: 'injectedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type TabQuestionScalarFieldEnum = (typeof TabQuestionScalarFieldEnum)[keyof typeof TabQuestionScalarFieldEnum]
+
+
 export const InstanceSecretScalarFieldEnum = {
   name: 'name',
   value: 'value',
@@ -4162,6 +4258,7 @@ export type GlobalOmitConfig = {
   chatMessage?: Prisma.ChatMessageOmit
   chatAction?: Prisma.ChatActionOmit
   chatGrant?: Prisma.ChatGrantOmit
+  tabQuestion?: Prisma.TabQuestionOmit
   instanceSecret?: Prisma.InstanceSecretOmit
   projectGroup?: Prisma.ProjectGroupOmit
   projectGroupItem?: Prisma.ProjectGroupItemOmit

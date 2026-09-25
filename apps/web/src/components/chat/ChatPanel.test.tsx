@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatPanel } from './ChatPanel';
-import type { ChatAction, ChatGrant, ChatMessage } from '../../lib/types';
+import type { ChatAction, ChatGrant, ChatMessage, TabQuestion } from '../../lib/types';
 
 const chatMock = vi.fn();
 const sendMock = vi.fn();
@@ -15,6 +15,8 @@ const machinesMock = vi.fn();
 const accountsMock = vi.fn();
 const resetMock = vi.fn();
 const revokeMock = vi.fn();
+const answerMock = vi.fn();
+const screenMock = vi.fn();
 
 vi.mock('../../lib/api', () => {
   // Same signature as the real one: the page shows `message`, so a stand-in that swallows it would
@@ -37,6 +39,8 @@ vi.mock('../../lib/api', () => {
       setChatHost: (...a: unknown[]) => setHostMock(...a),
       resetChat: (...a: unknown[]) => resetMock(...a),
       revokeChatGrant: (...a: unknown[]) => revokeMock(...a),
+      answerTabQuestion: (...a: unknown[]) => answerMock(...a),
+      tabQuestionScreen: (...a: unknown[]) => screenMock(...a),
       machines: { list: (...a: unknown[]) => machinesMock(...a) },
       aiAccounts: { list: (...a: unknown[]) => accountsMock(...a) },
     },
@@ -95,6 +99,9 @@ beforeEach(() => {
   accountsMock.mockReset();
   resetMock.mockReset();
   revokeMock.mockReset();
+  answerMock.mockReset();
+  screenMock.mockReset();
+  screenMock.mockResolvedValue({ text: 'Do you want to proceed?' });
   accountsMock.mockResolvedValue({ accounts: [] });
   auth.state = { user: { id: 'u1' }, viewAs: null };
   chatMock.mockResolvedValue({ conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })], actions: [] });
@@ -284,4 +291,55 @@ it('a grant event adds the strip, a grant_revoked removes it, a granted_action a
 
   onEvent({ type: 'grant_revoked', conversation_id: 'c_p1', grant_id: 'g1' });
   await waitFor(() => expect(screen.queryByText(/Enviando direto para/)).toBeNull());
+});
+
+const question = (over: Partial<TabQuestion> & { id: string }): TabQuestion =>
+  ({ tab_id: 't1', tab_name: 'api', kind: 'permission', payload: { tool_name: 'Bash' }, answer: null, status: 'open', error_code: null, created_at: '2026-09-21T00:00:00.000Z', answered_at: null, closed_at: null, ...over }) as TabQuestion;
+
+it('shows a tab question from GET /chat and answers it with one click', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [], tab_questions: [question({ id: 'q1' })] });
+  answerMock.mockResolvedValue({ tab_question: question({ id: 'q1', status: 'answered', answer: { allow: true } } as Partial<TabQuestion> & { id: string }) });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Permitir' }));
+  await waitFor(() => expect(answerMock).toHaveBeenCalledWith('q1', { allow: true }));
+  expect(await screen.findByText('Respondida')).toBeInTheDocument();
+  expect(screenMock).toHaveBeenCalledWith('q1');
+});
+
+it('a stale question reads "A pergunta mudou na aba"', async () => {
+  const { ApiError } = await import('../../lib/api');
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [], tab_questions: [question({ id: 'q1' })] });
+  answerMock.mockRejectedValue(new ApiError(409, 'A pergunta mudou na aba', 'TAB_PROMPT_CHANGED'));
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Negar' }));
+  expect(await screen.findByText('A pergunta mudou na aba')).toBeInTheDocument();
+});
+
+it('tab question events add and update the card; another conversation\'s are ignored', async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { events: [], connected: true };
+  });
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [] });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalled());
+  onEvent({ type: 'tab_question', conversation_id: 'c_other', question: question({ id: 'q9', tab_name: 'OUTRA' }) });
+  expect(screen.queryByText(/OUTRA/)).toBeNull();
+  onEvent({ type: 'tab_question', conversation_id: 'c_p1', question: question({ id: 'q1' }) });
+  expect(await screen.findByText('A aba «api» pede permissão para usar «Bash»')).toBeInTheDocument();
+  onEvent({ type: 'tab_question_closed', conversation_id: 'c_p1', question: question({ id: 'q1', status: 'answered_in_tab' }) });
+  expect(await screen.findByText('Respondida na aba')).toBeInTheDocument();
 });

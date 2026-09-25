@@ -206,6 +206,7 @@ model Project {
   setup          ProjectSetup?
   tickets        Ticket[]
   chatConversations ChatConversation[]
+  tabQuestions   TabQuestion[]
   groupItems     ProjectGroupItem[]
   agentColumn    TaskColumn?   @relation("ProjectAgentColumn", fields: [agentColumnId], references: [id], onDelete: SetNull)
   /// The project's board columns, in `position` order.
@@ -627,6 +628,7 @@ model ChatConversation {
   messages      ChatMessage[]
   actions       ChatAction[]
   grants        ChatGrant[]
+  tabQuestions  TabQuestion[]
 
   @@index([userId, createdAt])
   @@index([machineId])
@@ -707,6 +709,38 @@ model ChatGrant {
 
   @@index([conversationId])
   @@map("chat_grants")
+}
+
+/// A question an agent in a tab put to the person — Claude Code's AskUserQuestion (`choice`) or a
+/// permission prompt (`permission`) — shown as a card in the project's chat (spec 2026-09-25 §5).
+/// `payload` is the normalised question, never a screen; `answer` is what the chat answered.
+model TabQuestion {
+  id             String           @id
+  /// Not a foreign key: tabs come and go, and a removed tab closes its question as `expired`.
+  tabId          String           @map("tab_id")
+  projectId      String           @map("project_id")
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conversationId String           @map("conversation_id")
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// choice | permission
+  kind           String
+  payload        Json
+  toolUseId      String?          @map("tool_use_id")
+  /// open | answered | answered_in_tab | expired | failed
+  status         String
+  answer         Json?
+  errorCode      String?          @map("error_code")
+  answeredBy     String?          @map("answered_by")
+  answeredAt     DateTime?        @map("answered_at")
+  /// When the question left the tab's screen (the next hook event, or the tab removed).
+  closedAt       DateTime?        @map("closed_at")
+  /// When the concierge was told about the answer (spec §5.5): set once, before the run.
+  injectedAt     DateTime?        @map("injected_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@index([tabId, status])
+  @@index([conversationId, createdAt])
+  @@map("tab_questions")
 }
 
 /// A secret this instance generates for itself, once, and keeps: no env var to configure, and blue

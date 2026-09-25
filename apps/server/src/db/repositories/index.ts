@@ -22,6 +22,7 @@ import { ApiTokensRepository } from './api-tokens.js';
 import { ChatRepository } from './chat.js';
 import { ChatActionsRepository } from './chat-actions.js';
 import { ChatGrantsRepository } from './chat-grants.js';
+import { TabQuestionsRepository } from './tab-questions.js';
 import { InstanceSecretsRepository } from './instance-secrets.js';
 import { ProjectGroupsRepository } from './project-groups.js';
 import { DeviceRequestsRepository } from './device-requests.js';
@@ -54,6 +55,7 @@ export interface Repositories {
   chat: ChatRepository;
   chatActions: ChatActionsRepository;
   chatGrants: ChatGrantsRepository;
+  tabQuestions: TabQuestionsRepository;
   instanceSecrets: InstanceSecretsRepository;
   projectGroups: ProjectGroupsRepository;
   deviceRequests: DeviceRequestsRepository;
@@ -88,6 +90,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     chat: new ChatRepository(db),
     chatActions: new ChatActionsRepository(db),
     chatGrants: new ChatGrantsRepository(db),
+    tabQuestions: new TabQuestionsRepository(db),
     instanceSecrets: new InstanceSecretsRepository(db),
     projectGroups: new ProjectGroupsRepository(db),
     deviceRequests: new DeviceRequestsRepository(db),
@@ -107,6 +110,7 @@ export type { Upload } from './uploads.js';
 export { SYSTEM_ROLE_IDS } from './roles.js';
 export type { ChatConversation, ChatMessage, ChatRole } from './chat.js';
 export type { ChatAction, ChatActionClass, ChatActionStatus, InsertPendingInput } from './chat-actions.js';
+export type { TabQuestion, TabQuestionStatus } from './tab-questions.js';
 export { ProjectRuleError } from './projects.js';
 export type { ProjectRuleCode } from './projects.js';
 export { ProjectGroupRuleError } from './project-groups.js';

@@ -31,6 +31,7 @@ function build(opts: {
   grants?: { id: string; conversation_id: string; tab_id: string; tool: string; source_action_id: string | null; granted_by: string; created_at: string; expires_at: string; revoked_at: string | null; revoked_by: string | null }[];
   revoke?: ReturnType<typeof vi.fn>;
   findGrantByIdForUser?: ReturnType<typeof vi.fn>;
+  tabQuestions?: unknown[];
 } = {}) {
   const send = opts.send ?? vi.fn(async () => ({ id: 'm2', role: 'assistant', text: 'Nada rodando.' }));
   const resumeAfterDecision = opts.resumeAfterDecision ?? vi.fn(async () => ({ id: 'm3', role: 'assistant', text: 'Feito.' }));
@@ -63,6 +64,7 @@ function build(opts: {
   const repos = {
     chat: { listMessages: vi.fn(async () => [{ id: 'm1', role: 'user', text: 'oi' }]), setHost, clearProjectSessions },
     chatActions: { decide, findByIdForUser, listByConversation },
+    tabQuestions: { listByConversation: vi.fn(async () => opts.tabQuestions ?? []) },
     tabs: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === fixturesOwner ? tabs.filter((t) => ids.includes(t.id)) : [])) },
     projects: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === fixturesOwner ? projects.filter((p) => ids.includes(p.id)) : [])) },
     // Both the trail's machine names and the host's own machine, owner-scoped exactly like the
@@ -99,6 +101,14 @@ it('returns the conversation with its messages', async () => {
   const res = await app.inject({ method: 'GET', url: '/chat' });
   expect(res.statusCode).toBe(200);
   expect(res.json()).toMatchObject({ conversation: { id: 'c1' }, messages: [{ id: 'm1', text: 'oi' }] });
+});
+
+it('GET / returns the conversation\'s tab questions, named owner-scoped', async () => {
+  const q = { id: 'q1', tab_id: 't1', project_id: 'p1', conversation_id: 'c1', user_id: 'u1', kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null, status: 'open', answer: null, error_code: null, answered_by: null, answered_at: null, closed_at: null, injected_at: null, created_at: '2026-09-25T12:00:00.000Z' };
+  const { app, repos } = build({ tabs: [{ id: 't1', project_id: 'p1', name: 'api' }], tabQuestions: [q] });
+  const res = await app.inject({ method: 'GET', url: '/chat' });
+  expect(res.json().tab_questions).toEqual([{ id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'permission', payload: { tool_name: 'Bash' }, status: 'open', answer: null, error_code: null, created_at: '2026-09-25T12:00:00.000Z', answered_at: null, closed_at: null }]);
+  expect(repos.tabQuestions.listByConversation).toHaveBeenCalledWith('c1');
 });
 
 it('returns the host state on the same read as the history, so the screen can say it before anything is typed', async () => {

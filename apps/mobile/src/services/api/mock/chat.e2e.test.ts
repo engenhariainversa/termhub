@@ -427,3 +427,44 @@ it('a refused upgrade renews the token and the next attempt opens', async () => 
   expect(collected.closes).toEqual([{ code: 1006, final: false }]);
   collected.close();
 });
+
+it('a message containing pergunta raises a tab question; answering it once works, twice is 409', async () => {
+  const clock = { value: START };
+  const { api, auth } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+
+  await api.sendMessage(auth, { text: 'tem alguma pergunta pendente?', project_id: 'p-termhub' });
+  await jest.advanceTimersByTimeAsync(5000);
+
+  const opened = collected.events.find((e): e is Extract<TChatEvent, { type: 'tab_question' }> => e.type === 'tab_question');
+  expect(opened?.question).toMatchObject({ kind: 'choice', status: 'open', tab_id: 't-api', tab_name: 'api' });
+  const id = opened!.question.id;
+  expect((await api.chat(auth, 'p-termhub')).tab_questions.map((q) => q.id)).toContain(id);
+  expect((await api.tabQuestionScreen(auth, id)).text).toContain('Qual banco usamos nos testes?');
+
+  await api.answerTabQuestion(auth, id, { answers: [{ selected: [0] }] });
+  await jest.advanceTimersByTimeAsync(0);
+  expect(collected.events.some((e) => e.type === 'tab_question_answered' && e.question.id === id && e.question.status === 'answered')).toBe(true);
+  expect((await api.chat(auth, 'p-termhub')).tab_questions.find((q) => q.id === id)).toMatchObject({ status: 'answered', answer: { answers: [{ selected: [0] }] } });
+
+  await expect(api.answerTabQuestion(auth, id, { answers: [{ selected: [0] }] })).rejects.toMatchObject({ status: 409, code: 'TAB_PROMPT_CHANGED' });
+  await expect(api.tabQuestionScreen(auth, id)).rejects.toMatchObject({ status: 409 });
+  await expect(api.answerTabQuestion(auth, 'nope', { allow: true })).rejects.toMatchObject({ status: 404 });
+
+  collected.close();
+});
+
+it('a message containing permissão raises a permission question for Bash', async () => {
+  const clock = { value: START };
+  const { api, auth } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+  await api.sendMessage(auth, { text: 'preciso da sua permissão', project_id: 'p-termhub' });
+  await jest.advanceTimersByTimeAsync(5000);
+  const opened = collected.events.find((e): e is Extract<TChatEvent, { type: 'tab_question' }> => e.type === 'tab_question');
+  expect(opened?.question).toMatchObject({ kind: 'permission', payload: { tool_name: 'Bash' } });
+  await expect(api.answerTabQuestion(auth, opened!.question.id, { answers: [{ selected: [0] }] })).rejects.toMatchObject({ status: 400 });
+  await api.answerTabQuestion(auth, opened!.question.id, { allow: false, text: 'use pnpm' });
+  collected.close();
+});

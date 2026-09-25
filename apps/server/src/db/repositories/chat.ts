@@ -90,6 +90,19 @@ export class ChatRepository {
     return this.getOrCreateActive(userId, projectId);
   }
 
+  /**
+   * Where a tab's question is pushed (spec 2026-09-25 §5.2): the project's most recently active
+   * conversation that is still on screen somewhere — not archived, not tab-bound. A project nobody has
+   * chatted in yet has none, and its tabs' questions stay in the tab.
+   */
+  async findLatestActiveForProject(projectId: string, ownerId: string): Promise<ChatConversation | undefined> {
+    const row = await this.db.chatConversation.findFirst({
+      where: { projectId, userId: ownerId, tabId: null, archivedAt: null },
+      orderBy: [{ lastMessageAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return row ? mapConversation(row) : undefined;
+  }
+
   async findByIdForUser(id: string, userId: string): Promise<ChatConversation | undefined> {
     const row = await this.db.chatConversation.findFirst({ where: { id, userId } });
     return row ? mapConversation(row) : undefined;

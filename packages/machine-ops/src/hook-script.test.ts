@@ -161,6 +161,87 @@ describe('termhub-hook script', () => {
     expect(readFileSync(join(tmp, markers[0]), 'utf8')).toBe('Edit');
   });
 
+  describe('questions and permission prompts (spec 2026-09-25 §4.1)', () => {
+    const ask = {
+      session_id: 's1',
+      transcript_path: '/home/dev/.claude/projects/-home-dev-project/s1.jsonl',
+      cwd: '/home/dev/project',
+      permission_mode: 'default',
+      hook_event_name: 'PreToolUse',
+      tool_name: 'AskUserQuestion',
+      tool_input: { questions: [{ question: 'Qual cor?', header: 'Cor', options: [{ label: 'Azul (Recommended)', description: 'Calma' }, { label: 'Verde', description: 'Fresca' }], multiSelect: false }] },
+      tool_use_id: 'toolu_01',
+    };
+
+    it('forwards an AskUserQuestion PreToolUse whole, and prints nothing', async () => {
+      expect(runAs('claude', ask)).toBe('');
+      const sent = await bodies(1);
+      expect(JSON.parse(sent[0])).toEqual({ tool: 'claude', session: 'th-abc', event: ask });
+    });
+
+    it('never de-duplicates a question and never touches the marker', async () => {
+      run({ hook_event_name: 'PreToolUse', tool_name: 'Edit' });
+      run(ask);
+      run(ask);
+      run({ hook_event_name: 'PreToolUse', tool_name: 'Edit' });
+      await bodies(3);
+      await sleep(200);
+      expect(logged().map((b) => eventOf(b).tool_name)).toEqual(['Edit', 'AskUserQuestion', 'AskUserQuestion']);
+      expect(readFileSync(join(tmp, readdirSync(tmp)[0]), 'utf8')).toBe('Edit');
+    });
+
+    it('does not forward whole a tool whose input merely names AskUserQuestion', async () => {
+      run({ hook_event_name: 'PreToolUse', tool_name: 'Task', tool_input: { tool_name: 'AskUserQuestion', prompt: 'secret' } });
+      const sent = await bodies(1);
+      expect(eventOf(sent[0])).toEqual({ hook_event_name: 'PreToolUse', tool_name: 'Task' });
+    });
+
+    it('never forwards the input when tool_input (naming AskUserQuestion) is serialised before the real tool_name', async () => {
+      // Claude Code writes hook_event_name and tool_name before tool_input, but the whole-forward
+      // path must not rely on that order alone: if the first "tool_name" found is actually nested
+      // inside another tool's input, the fallback is the ordinary name-only path — never the input.
+      const event = { hook_event_name: 'PreToolUse', tool_input: { tool_name: 'AskUserQuestion', prompt: 'secret' }, tool_name: 'Task' };
+      run(event);
+      const sent = await bodies(1);
+      expect(sent[0]).not.toContain('secret');
+      expect(sent[0]).not.toContain('tool_input');
+      expect(Object.keys(eventOf(sent[0])).sort()).toEqual(['hook_event_name', 'tool_name']);
+    });
+
+    it('drops an AskUserQuestion PermissionRequest even when its input nests a fake "hook_event_name":"PreToolUse"', async () => {
+      // The branch is picked on the event's own (first) hook_event_name, not by searching the whole
+      // payload for the substring: a nested lookalike must not steer a PermissionRequest into the
+      // PreToolUse path, where AskUserQuestion would be forwarded whole.
+      const event = {
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'AskUserQuestion',
+        tool_input: {
+          questions: ask.tool_input.questions,
+          evidence: { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'rm -rf /secret' } },
+        },
+      };
+      expect(runAs('claude', event)).toBe('');
+      await sleep(300);
+      expect(existsSync(log)).toBe(false);
+    });
+
+    it('reduces a PermissionRequest to the tool name, and prints nothing', async () => {
+      const event = { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'rm -rf /secret' }, permission_suggestions: [{ type: 'addDirectories', directories: ['/secret'] }] };
+      expect(runAs('claude', event)).toBe('');
+      const sent = await bodies(1);
+      expect(JSON.parse(sent[0])).toEqual({ tool: 'claude', session: 'th-abc', event: { hook_event_name: 'PermissionRequest', tool_name: 'Bash' } });
+      expect(sent[0]).not.toContain('secret');
+    });
+
+    it('drops AskUserQuestion\'s own PermissionRequest (its PreToolUse carried the question) and odd names', async () => {
+      expect(runAs('claude', { hook_event_name: 'PermissionRequest', tool_name: 'AskUserQuestion', tool_input: ask.tool_input })).toBe('');
+      run({ hook_event_name: 'PermissionRequest', tool_name: 'Ev"il' });
+      run({ hook_event_name: 'PermissionRequest' });
+      await sleep(300);
+      expect(existsSync(log)).toBe(false);
+    });
+  });
+
   describe('spinner verb', () => {
     /** What the fake tmux answers to capture-pane: the visible pane, top to bottom. */
     const screen = (...lines: string[]) => writeFileSync(pane, `${lines.join('\n')}\n`);
