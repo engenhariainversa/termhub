@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChatAction, ChatMessage, TabQuestion } from './types';
+import type { ChatAction, ChatMessage, TabQuestion, TabSuggestion } from './types';
 import { chatTimeline } from './chat-timeline';
 
 const T0 = '2026-01-01T00:00:00.000Z';
@@ -158,5 +158,19 @@ describe('chatTimeline — tab questions', () => {
   });
   it('keeps working with two arguments', () => {
     expect(chatTimeline([message()], []).map((e) => e.kind)).toEqual(['message']);
+  });
+});
+
+describe('tab suggestions', () => {
+  const suggestion = (over: Partial<TabSuggestion> = {}): TabSuggestion => ({ id: 's1', tab_id: 't1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: T1, answered_at: null, closed_at: null, ...over });
+  const message = (id: string, created_at: string): ChatMessage => ({ id, conversation_id: 'c1', role: 'assistant', text: 'x', error_code: null, created_at }) as ChatMessage;
+
+  it('interleaves a suggestion by created_at, after the message of the same instant', () => {
+    const entries = chatTimeline([message('m1', T0), message('m2', T1)], [], [], [suggestion()]);
+    expect(entries.map((e) => e.kind)).toEqual(['message', 'message', 'tab_suggestion']);
+  });
+
+  it('follows the message window like a question card', () => {
+    expect(chatTimeline([message('m1', T1)], [], [], [suggestion({ created_at: T0 })])).toHaveLength(1);
   });
 });

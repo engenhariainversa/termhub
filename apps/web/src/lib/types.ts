@@ -838,6 +838,26 @@ export type TabQuestionPermission = TabQuestionBase & { kind: 'permission'; payl
  */
 export type TabQuestion = TabQuestionChoice | TabQuestionPermission;
 
+export type TabSuggestionStatus = TabQuestionStatus | 'dismissed';
+/**
+ * Claude Code's dimmed next prompt in a tab (spec 2026-09-25 tab suggestions §6.4): a card with the text
+ * editable, Enviar / Dispensar. `answer.text` is what was sent. Plain text only — never render it as HTML.
+ */
+export interface TabSuggestion {
+  id: string;
+  tab_id: string;
+  /** The tab's name at read time; null once the tab is gone. */
+  tab_name: string | null;
+  kind: 'suggestion';
+  payload: { text: string };
+  status: TabSuggestionStatus;
+  answer: { text: string } | null;
+  error_code: string | null;
+  created_at: string;
+  answered_at: string | null;
+  closed_at: string | null;
+}
+
 /**
  * Pushed over /ws/chat for the signed-in user only; carries no history. The socket is per user, not
  * per conversation — it carries the account-wide chat and every project chat together — so every
@@ -864,7 +884,9 @@ export type ChatEvent =
   /** An action the server ran straight away under a trusted tab, with no confirmation card first. */
   | { type: 'granted_action'; action: ChatAction; conversation_id?: string }
   /** A tab asked something, the chat answered it (or failed to), or it left the tab's screen: the whole card each time. */
-  | { type: 'tab_question' | 'tab_question_answered' | 'tab_question_closed'; question: TabQuestion; conversation_id?: string };
+  | { type: 'tab_question' | 'tab_question_answered' | 'tab_question_closed'; question: TabQuestion; conversation_id?: string }
+  /** A tab shows a suggestion, or it was sent, dismissed or left the screen: the whole card each time. */
+  | { type: 'tab_suggestion' | 'tab_suggestion_closed'; suggestion: TabSuggestion; conversation_id?: string };
 
 /** `GET /chat/projects`: which project chats have anything going on, for a sidebar badge. */
 export interface ProjectChatStatus {
