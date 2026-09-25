@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { STATE_TEXT_MAX, interpretHookEvent, needsYou } from './state.js';
 
@@ -204,5 +206,60 @@ describe('needsYou', () => {
     expect(needsYou({ state: 'idle', state_at: '2026-01-01T00:00:00.000Z', state_seen_at: null })).toBe(false);
     expect(needsYou({ state: null, state_at: null, state_seen_at: null })).toBe(false);
     expect(needsYou({ state: 'waiting_input', state_at: null, state_seen_at: null })).toBe(false);
+  });
+});
+
+const fixture = (name: string) => JSON.parse(readFileSync(join(import.meta.dirname, '../chat/fixtures/tab-questions', name), 'utf8')) as Record<string, unknown>;
+
+describe('interpretHookEvent — claude questions (spec 2026-09-25 §4.2)', () => {
+  it('an AskUserQuestion PreToolUse stays working and carries the normalised question and its tool_use_id', () => {
+    const r = interpretHookEvent('claude', fixture('pretooluse-ask-two-questions.json'));
+    expect(r).toMatchObject({ kind: 'working', text: null, activity: 'planning', meta: { event: 'PreToolUse', tool: 'AskUserQuestion' } });
+    expect(r?.question?.kind).toBe('choice');
+    expect(r?.question?.tool_use_id).toBe('toolu_01XsgR974r49WEBYg2aeDAGq');
+    expect(r?.question?.kind === 'choice' && r.question.payload.questions[0]!.options[0]).toEqual({ label: 'Blue', description: 'Calm and classic.', recommended: true });
+  });
+
+  it('keeps nothing of the question outside `question`: not in meta, not in text', () => {
+    const r = interpretHookEvent('claude', fixture('pretooluse-ask-two-questions.json'))!;
+    const { question: _question, ...rest } = r;
+    expect(JSON.stringify(rest)).not.toContain('favorite');
+    expect(JSON.stringify(rest)).not.toContain('/home/dev');
+  });
+
+  it('drops a question whose input does not parse, and the event still reads as working', () => {
+    const r = interpretHookEvent('claude', { hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [] } });
+    expect(r).toEqual({ kind: 'working', text: null, activity: 'planning', verb: null, meta: { event: 'PreToolUse', tool: 'AskUserQuestion' } });
+  });
+
+  it('never builds a question from another tool\'s input', () => {
+    const r = interpretHookEvent('claude', { hook_event_name: 'PreToolUse', tool_name: 'Task', tool_input: fixture('pretooluse-ask-two-questions.json').tool_input });
+    expect(r?.question).toBeUndefined();
+  });
+
+  it('a PermissionRequest is waiting_permission with a permission question naming the tool only', () => {
+    expect(interpretHookEvent('claude', { hook_event_name: 'PermissionRequest', tool_name: 'Bash' })).toEqual({
+      kind: 'waiting_permission',
+      text: null,
+      meta: { event: 'PermissionRequest', tool: 'Bash' },
+      question: { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null },
+    });
+    // The whole captured event (an old script, or a future one) still yields the name only.
+    const whole = interpretHookEvent('claude', fixture('permissionrequest-bash.json'));
+    expect(JSON.stringify(whole)).not.toContain('probe-file');
+    expect(whole?.question).toEqual({ kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null });
+  });
+
+  it('AskUserQuestion\'s own PermissionRequest opens nothing (its PreToolUse did), and an odd name neither', () => {
+    expect(interpretHookEvent('claude', fixture('permissionrequest-ask-one-question.json'))).toEqual({ kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'AskUserQuestion' } });
+    expect(interpretHookEvent('claude', { hook_event_name: 'PermissionRequest', tool_name: 'a b' })?.question).toBeUndefined();
+  });
+
+  it('the permission_prompt notification that follows is unchanged', () => {
+    expect(interpretHookEvent('claude', fixture('notification-permission-prompt.json'))).toEqual({
+      kind: 'waiting_permission',
+      text: 'Claude needs your permission',
+      meta: { event: 'Notification', type: 'permission_prompt' },
+    });
   });
 });
