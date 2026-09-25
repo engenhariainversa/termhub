@@ -154,6 +154,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh, grants]);
 
+  // coming back to the tab (another window, the phone unlocked) re-reads the lists, so machines and
+  // projects made or removed elsewhere meanwhile show up without a reload
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refresh]);
+
   useEffect(() => {
     const t = setInterval(() => {
       for (const m of machinesRef.current) void checkStatus(m.id);

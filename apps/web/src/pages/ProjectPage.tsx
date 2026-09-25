@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useData } from '../lib/data';
 import { PROJECT_STATUS_LABEL } from '../lib/types';
@@ -31,11 +32,24 @@ export function ProjectPage({ card }: Props = {}) {
   const params = useParams<{ id: string; section?: string }>();
   const id = card?.projectId ?? params.id;
   const section = card ? 'tasks' : params.section;
-  const { projects, machinesOf, statuses, loading } = useData();
+  const { projects, machinesOf, statuses, loading, refresh } = useData();
   const project = projects.find((p) => p.id === id);
   const current: ProjectSection = SECTIONS.find((s) => s.path === (section ?? ''))?.key ?? 'terminals';
 
-  if (loading) return <FullScreenMessage>Carregando…</FullScreenMessage>;
+  // the list is read when the app opens: a project made since (another tab, the phone, an agent)
+  // is not in it yet, so an id it lacks is asked for once more before the page says it is not there
+  const [reread, setReread] = useState<string | null>(null);
+  const missing = !loading && !project && !!id;
+  useEffect(() => {
+    if (!missing || reread === id) return;
+    let alive = true;
+    void refresh().finally(() => alive && setReread(id!));
+    return () => {
+      alive = false;
+    };
+  }, [missing, reread, id, refresh]);
+
+  if (loading || (missing && reread !== id)) return <FullScreenMessage>Carregando…</FullScreenMessage>;
   if (!project) return <FullScreenMessage>Projeto não encontrado.</FullScreenMessage>;
   const projectMachines = machinesOf(project);
   const online = projectMachines.some((m) => statuses[m.id] === 'online');
