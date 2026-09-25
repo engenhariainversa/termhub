@@ -45,3 +45,7 @@ export const tabQuestionAnswerBody = z.union([
 ]);
 /** `GET chat/tab-questions/:id/screen`: the last lines of the tab, live, for a permission card. */
 export const tabQuestionScreenResponse = z.object({ text: z.string() });
+
+/** `POST chat/tab-suggestions/:id/send`: the text to type, as edited. The server is the judge of the rest
+ * (one line, no control characters, no leading "!" or "/"). No PIN (spec 2026-09-25 tab suggestions §2). */
+export const tabSuggestionSendBody = z.object({ text: z.string().trim().min(1).max(2000) });

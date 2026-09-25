@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
-import type { TChatAction, TChatConversation, TChatGrant, TChatMessage, TDeviceInfo, TNotificationRow, TTabQuestion } from '../contract';
+import type { TChatAction, TChatConversation, TChatGrant, TChatMessage, TDeviceInfo, TNotificationRow, TTabQuestion, TTabSuggestion } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
  * `transport.ts`. `error` is pt-BR text; `extra` carries `attempts_left` / `retry_after`, spread
@@ -118,6 +118,9 @@ export type MockNotification = TNotificationRow;
 /** A tab's question (spec 2026-09-25): the wire shape plus the conversation it was pushed into. */
 export type MockTabQuestion = TTabQuestion & { conversation_id: string };
 
+/** A tab's suggestion (spec 2026-09-25 tab suggestions): the wire shape plus the conversation it was pushed into. */
+export type MockTabSuggestion = TTabSuggestion & { conversation_id: string };
+
 export interface MockState {
   requests: Map<string, MockDeviceRequest>;
   devices: Map<string, MockDevice>;
@@ -137,6 +140,8 @@ export interface MockState {
   grants: MockGrant[];
   /** Oldest first; answered rows stay (a second answer is a 409, as on the server). */
   tabQuestions: MockTabQuestion[];
+  /** Oldest first; closed rows stay (a second send is a 409, as on the server). */
+  tabSuggestions: MockTabSuggestion[];
   /** Oldest first (push order); routes read it newest-first by reversing. */
   notifications: MockNotification[];
   /** The conversation currently "live" for a project (or, keyed by `null`, the account-wide
@@ -160,6 +165,7 @@ export function createMockState(): MockState {
     actions: new Map(),
     grants: [],
     tabQuestions: [],
+    tabSuggestions: [],
     notifications: [],
     activeConversation: new Map(),
     busyProjects: new Set(),

@@ -13,7 +13,7 @@ jest.mock('expo-router', () => ({
 
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
-import type { TChatAction, TChatEvent, TChatGrant, TChatMessage, TChatResponse, TTabQuestion } from '@/services/api/contract';
+import type { TChatAction, TChatEvent, TChatGrant, TChatMessage, TChatResponse, TTabQuestion, TTabSuggestion } from '@/services/api/contract';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { ConversationScreen } from './conversation-screen';
 
@@ -38,7 +38,7 @@ function addRows(rows: TChatMessage[], live: TChatEvent[]) {
 /** Replaces one of the store's actions for a test. Not `jest.spyOn(getState(), …)`: zustand
  * replaces the state object on every `setState`, so a restored spy would linger on the new one. */
 const realActions = { ...stores.chat.getState() };
-function stubAction<K extends 'decide' | 'reset' | 'setHost' | 'revokeGrant' | 'answerTabQuestion'>(name: K) {
+function stubAction<K extends 'decide' | 'reset' | 'setHost' | 'revokeGrant' | 'answerTabQuestion' | 'sendTabSuggestion' | 'dismissTabSuggestion'>(name: K) {
   const fn = jest.fn(async () => undefined);
   useChatStore.setState({ [name]: fn } as Partial<ReturnType<typeof useChatStore.getState>>);
   return fn;
@@ -83,6 +83,8 @@ afterEach(() => {
     setHost: realActions.setHost,
     revokeGrant: realActions.revokeGrant,
     answerTabQuestion: realActions.answerTabQuestion,
+    sendTabSuggestion: realActions.sendTabSuggestion,
+    dismissTabSuggestion: realActions.dismissTabSuggestion,
   });
 });
 
@@ -325,5 +327,42 @@ describe('Conversa', () => {
     for (const t of texts) expect(await screen.findByText(t, undefined, LOAD)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Responder' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Permitir' })).toBeNull();
+  });
+
+  const OPEN_SUGGESTION = { id: 's1', tab_id: 't-api', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: new Date().toISOString(), answered_at: null, closed_at: null } as TTabSuggestion;
+
+  /** Serves the open project's `GET chat` with these tab suggestions. */
+  function serveSuggestions(suggestions: TTabSuggestion[]) {
+    const real = stores.api.chat.bind(stores.api);
+    jest.spyOn(stores.api, 'chat').mockImplementation(async (auth, projectId) => {
+      const res = await real(auth, projectId);
+      return projectId === 'p-termhub' ? { ...res, tab_suggestions: suggestions } : res;
+    });
+  }
+
+  it("renders a tab's suggestion; Enviar sends the edited text, Dispensar dismisses", async () => {
+    serveSuggestions([OPEN_SUGGESTION]);
+    const sendSuggestion = stubAction('sendTabSuggestion');
+    const dismissSuggestion = stubAction('dismissTabSuggestion');
+    await render(<ConversationScreen />);
+    expect(await screen.findByText('«api» sugere:', undefined, LOAD)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Texto da sugestão'), '  commit it and push ');
+    // Scoped to the card: the composer has its own "Enviar" button on screen at the same time.
+    await fireEvent.press(within(screen.getByTestId('tab-suggestion-s1')).getByRole('button', { name: 'Enviar' }));
+    expect(sendSuggestion).toHaveBeenCalledWith('s1', 'commit it and push');
+    await fireEvent.press(screen.getByRole('button', { name: 'Dispensar' }));
+    expect(dismissSuggestion).toHaveBeenCalledWith('s1');
+  });
+
+  it.each([
+    [{ ...OPEN_SUGGESTION, status: 'answered', answer: { text: 'commit it and push' } } as TTabSuggestion, ['commit it and push', 'Enviada']],
+    [{ ...OPEN_SUGGESTION, status: 'dismissed' } as TTabSuggestion, ['Dispensada']],
+    [{ ...OPEN_SUGGESTION, status: 'answered_in_tab' } as TTabSuggestion, ['Respondida na aba']],
+  ])('a closed suggestion is read-only and says how it ended (%#)', async (s, texts) => {
+    serveSuggestions([s]);
+    await render(<ConversationScreen />);
+    for (const t of texts) expect(await screen.findByText(t, undefined, LOAD)).toBeTruthy();
+    expect(screen.queryByLabelText('Texto da sugestão')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Dispensar' })).toBeNull();
   });
 });
