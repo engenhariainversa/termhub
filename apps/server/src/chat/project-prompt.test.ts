@@ -16,6 +16,11 @@ it('says so when the project has no machine yet', () => {
   expect(projectSystemPrompt({ name: 'X', key: 'X' }, [])).toContain('no machine linked yet');
 });
 
+it('tells the concierge that tab questions are the person\'s cards, not its to relay or answer', () => {
+  const text = projectSystemPrompt({ name: 'X', key: 'X' }, []);
+  expect(text).toMatch(/reach the person as cards in this chat: do not relay them as text, and do not answer them with send_key or send_input while such a card is open/);
+});
+
 it('stays under the protocol cap even with many long paths', () => {
   const links = Array.from({ length: 200 }, (_, i) => ({ machine: `m${i}`, cwd: `/very/long/path/${'d'.repeat(40)}/${i}` }));
   expect(projectSystemPrompt({ name: 'X', key: 'X' }, links).length).toBeLessThanOrEqual(4000);

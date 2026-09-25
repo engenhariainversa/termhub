@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Repositories } from '../db/repositories/index.js';
 import type { User } from '../db/repositories/types.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
+import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { chatBus, type ChatEvent } from './bus.js';
 import { HttpError } from '../lib/errors.js';
 import { ChatService, purgeExpiredActions, type RunnerClient } from './service.js';
@@ -30,7 +31,7 @@ const action = (overrides: Partial<ChatAction> = {}): ChatAction => ({
   ...overrides,
 });
 
-function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActions?: ChatAction[]; host?: { machines?: unknown[]; capabilities?: string[] | null; account?: { id: string; provider: string; machine_id: string; config_dir: string | null } } } = {}) {
+function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActions?: ChatAction[]; tabQuestions?: TabQuestion[]; host?: { machines?: unknown[]; capabilities?: string[] | null; account?: { id: string; provider: string; machine_id: string; config_dir: string | null } } } = {}) {
   // The host pair every case but the host-specific ones takes for granted: one agent machine of this
   // user's own, online, with an agent that knows how to run a chat (see host.test.ts for the choice
   // itself). `configDirs` is gone — the account travels as the chosen `ai_account`'s config dir.
@@ -118,10 +119,19 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
   const machine = { id: 'm1', name: 'jarvis' };
   const ownedBy = <T extends { id: string }>(row: T) => vi.fn(async (ids: string[], ownerId: string) => (ownerId === user.id && ids.includes(row.id) ? [row] : []));
   const host = { id: 'm1', name: 'jarvis', type: 'agent', agent_version: '0.5.0' };
+  /** Answered-but-untold questions, drained by `markInjected` exactly like the repository. */
+  const toInject = [...(opts.tabQuestions ?? [])];
+  const tabQuestions = {
+    listToInject: vi.fn(async (_conversationId: string) => [...toInject]),
+    markInjected: vi.fn(async (ids: string[]) => {
+      for (const id of ids) toInject.splice(toInject.findIndex((q) => q.id === id), 1);
+    }),
+  };
   const repos = {
     chat,
     apiTokens: { listByUser: vi.fn(async () => []), create: vi.fn(async () => ({})), revoke: vi.fn(async () => undefined), revokeForConversation: vi.fn(async () => 0) },
     chatActions,
+    tabQuestions,
     tabs: { findByIdsForOwner: ownedBy(tab) },
     tasks: { findByIdsForOwner: vi.fn(async () => []) },
     projects: { findByIdsForOwner: ownedBy(project) },
@@ -142,7 +152,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
   const service = new ChatService({ repos, agents, runnerFor: (machineId) => (hosted.push(machineId), runner) });
   /** Every `RunnerInput` the service handed a runner, in order. */
   const inputs = () => vi.mocked(runner.run).mock.calls.map((c) => c[0]);
-  return { service, chat, chatActions, actionsStore, runner, hosted, messages, conversation, projectConversation, repos, host, inputs };
+  return { service, chat, chatActions, tabQuestions, actionsStore, runner, hosted, messages, conversation, projectConversation, repos, host, inputs };
 }
 
 const delta = (text: string) => JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text } } });
@@ -665,6 +675,33 @@ it('drains two decisions queued behind one run, one per completion, oldest first
   expect(userTexts[2]).toContain('close_tab'); // a2: decided second
   expect(chatActions.markInjected).toHaveBeenNthCalledWith(1, 'a1');
   expect(chatActions.markInjected).toHaveBeenNthCalledWith(2, 'a2');
+});
+
+const answeredQuestion = (): TabQuestion => ({
+  id: 'q1', tab_id: 't1', project_id: 'p1', conversation_id: 'c1', user_id: 'u1', kind: 'choice',
+  payload: { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: '', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] },
+  tool_use_id: 'toolu_1', status: 'answered', answer: { answers: [{ selected: [1] }] }, error_code: null, answered_by: 'u1', answered_at: '2026-09-25T12:01:00.000Z', closed_at: null, injected_at: null, created_at: '2026-09-25T12:00:00.000Z',
+});
+
+it('tells the next run what the chat answered in the tabs, once, without storing it as the person\'s message', async () => {
+  const { service, messages, inputs, tabQuestions } = build([delta('ok'), done()], { tabQuestions: [answeredQuestion()] });
+  await service.send(user, 'e agora?');
+  expect(inputs()[0]!.text).toBe('Enquanto isso:\n- a aba «Terminal 1» perguntou «Qual cor?»; o usuário respondeu «Verde».\n\ne agora?');
+  expect(messages.find((m) => m.role === 'user')?.text).toBe('e agora?');
+  expect(tabQuestions.listToInject).toHaveBeenCalledWith('c1');
+  expect(tabQuestions.markInjected).toHaveBeenCalledWith(['q1']);
+  await service.send(user, 'e depois?');
+  expect(inputs()[1]!.text).toBe('e depois?');
+});
+
+it('a failing read costs the context, never the message, and logs metadata only', async () => {
+  const { service, inputs, tabQuestions } = build([delta('ok'), done()], { tabQuestions: [answeredQuestion()] });
+  tabQuestions.listToInject.mockRejectedValueOnce(Object.assign(new Error('Qual cor?'), { code: 'P1001' }));
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  await service.send(user, 'e agora?');
+  expect(inputs()[0]!.text).toBe('e agora?');
+  expect(errors).toHaveBeenCalledWith('chat: tab question context skipped', { conversation_id: 'c1', error: 'P1001' });
+  errors.mockRestore();
 });
 
 const host0 = { id: 'm1', name: 'jarvis', type: 'agent', agent_version: '0.5.0' };
