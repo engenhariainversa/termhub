@@ -41,7 +41,17 @@ export interface ChoicePayload {
 export interface PermissionPayload {
   tool_name: string;
 }
+/** Claude Code's dimmed next prompt, read off the tab's screen (spec 2026-09-25 tab suggestions §6.1). */
+export interface SuggestionPayload {
+  text: string;
+}
+/** What the person sent for it, as edited. */
+export interface SuggestionAnswer {
+  text: string;
+}
 export type TabQuestionKind = 'choice' | 'permission';
+/** Every kind a `tab_questions` row holds: a question the tab asked, or a suggestion it shows. */
+export type TabRowKind = TabQuestionKind | 'suggestion';
 /** What the interpretation of a hook event hands the tab-question service. */
 export type TabQuestionInput =
   | { kind: 'choice'; payload: ChoicePayload; tool_use_id: string | null }
@@ -88,7 +98,7 @@ export function toolUseIdOf(v: unknown): string | null {
  * Enter halfway through the answer, and any other control byte is a key, not text (the same reasoning
  * as `CONTROL_CHARS` in control/agents.ts, stricter: not even a newline).
  */
-const answerText = z.string().trim().min(1).max(ANSWER_TEXT_MAX).regex(/^[^\x00-\x1f\x7f]*$/, 'sem caracteres de controle nem quebras de linha');
+export const answerText = z.string().trim().min(1).max(ANSWER_TEXT_MAX).regex(/^[^\x00-\x1f\x7f]*$/, 'sem caracteres de controle nem quebras de linha');
 
 export const choiceAnswerBody = z.object({
   answers: z

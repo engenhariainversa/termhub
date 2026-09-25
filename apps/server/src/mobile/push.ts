@@ -129,7 +129,9 @@ export class MobilePushService {
       const ctx = await this.names(event.user_id, projectId, event.tab_id, event.machine_id);
       const data = { kind: 'confirmation', conversation_id: event.conversation_id, project_id: projectId, action_id: event.action_id };
       await this.deliver(event.user_id, 'confirmation', confirmationText(ctx), data, await this.offline(event.user_id));
-    } else if (event.type === 'tab_question') {
+    } else if (event.type === 'tab_question' && event.question.kind !== 'suggestion') {
+      // (A suggestion never rides `tab_question` — it has its own events and is never pushed — the
+      // kind check only narrows the view's type.)
       // Same channel as a confirmation — the history row keeps that kind, which every app version
       // parses — with its own `data.kind` so a newer app can tell them apart.
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);

@@ -4,7 +4,7 @@ import { chatProjectsResponse, decisionProofMessage, deviceSelf, hostOptionsResp
 import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
-import { describeTabQuestions } from '../db/repositories/tab-questions-view.js';
+import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { controlContextFor } from '../control/context.js';
 import { answerTabQuestion, requirePinFor, tabQuestionScreen } from '../chat/tab-question-answer.js';
 import { permissionsOf } from '../auth/permissions.js';
@@ -64,8 +64,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       repos.tabQuestions.listByConversation(conversation.id),
     ]);
     const actions = await describeActions(repos, rows, user.id);
-    const tab_questions = await describeTabQuestions(repos, questionRows, user.id);
-    return { conversation, messages, actions, host, grants, tab_questions };
+    const { tab_questions, tab_suggestions } = splitTabRows(await describeTabQuestions(repos, questionRows, user.id));
+    return { conversation, messages, actions, host, grants, tab_questions, tab_suggestions };
   });
 
   /** The user's projects, with their chat's status; a project with no conversation yet is idle. */

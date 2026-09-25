@@ -320,3 +320,12 @@ describe('tabQuestionScreen', () => {
     expect(lastNonBlankLines('a\n\n  \nb\n', 5)).toBe('a\nb');
   });
 });
+
+describe('suggestion rows', () => {
+  it('are not questions: 404 on answer and screen, nothing read', async () => {
+    const { ctx } = ctxFor(row({ id: 's1', kind: 'suggestion', payload: { text: 'commit it' }, tool_use_id: null }));
+    await rejects(answerTabQuestion(ctx, 's1', { allow: true }, { log: log(), sleep: noSleep }), 404, 'NOT_FOUND');
+    await rejects(tabQuestionScreen(ctx, 's1'), 404, 'NOT_FOUND');
+    expect(readScreen).not.toHaveBeenCalled();
+  });
+});

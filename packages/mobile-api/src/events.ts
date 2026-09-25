@@ -73,6 +73,24 @@ export const tabQuestionSchema = z.discriminatedUnion('kind', [
     answer: z.object({ allow: z.boolean(), text: z.string().optional() }).nullable(),
   }),
 ]);
+/** A suggestion's life: `dismissed` is its own ("Dispensar"); a question never has it. */
+export const tabSuggestionStatus = z.enum(['open', 'answered', 'answered_in_tab', 'expired', 'failed', 'dismissed']);
+/** Mirrors a suggestion row's `TabQuestionView` (spec 2026-09-25 tab suggestions §6.2): Claude Code's
+ * dimmed next prompt in a tab; `answer.text` is what the person sent. Kept apart from `tabQuestionSchema`
+ * so an app that predates it keeps parsing `tab_question*` events and `tab_questions`. */
+export const tabSuggestionSchema = z.object({
+  id: z.string(),
+  tab_id: z.string(),
+  tab_name: z.string().nullable(),
+  kind: z.literal('suggestion'),
+  payload: z.object({ text: z.string() }),
+  status: tabSuggestionStatus,
+  answer: z.object({ text: z.string() }).nullable(),
+  error_code: z.string().nullable(),
+  created_at: z.string(),
+  answered_at: z.string().nullable(),
+  closed_at: z.string().nullable(),
+});
 
 // Mirrors the `ChatEvent` union in `apps/server/src/chat/bus.ts`, plus the `hello` variant the
 // mobile socket sends first (there is no browser-side equivalent: the app has no other way to
@@ -105,6 +123,8 @@ export const chatEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('tab_question'), user_id: z.string(), conversation_id: z.string(), question: tabQuestionSchema }),
   z.object({ type: z.literal('tab_question_answered'), user_id: z.string(), conversation_id: z.string(), question: tabQuestionSchema }),
   z.object({ type: z.literal('tab_question_closed'), user_id: z.string(), conversation_id: z.string(), question: tabQuestionSchema }),
+  z.object({ type: z.literal('tab_suggestion'), user_id: z.string(), conversation_id: z.string(), suggestion: tabSuggestionSchema }),
+  z.object({ type: z.literal('tab_suggestion_closed'), user_id: z.string(), conversation_id: z.string(), suggestion: tabSuggestionSchema }),
   z.object({
     type: z.literal('run_finished'),
     user_id: z.string(),

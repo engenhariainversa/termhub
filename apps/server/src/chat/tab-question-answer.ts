@@ -22,6 +22,10 @@ export const PROMPT_MARKER_LINES = 25;
 
 export type TabAnswer = ChoiceAnswer | PermissionAnswer;
 
+/** A `tab_questions` row that is a question — not a suggestion (spec 2026-09-25 tab suggestions §6.1). */
+export type QuestionRow = TabQuestion & { kind: TabQuestionKind };
+export const isQuestionRow = (row: TabQuestion | undefined): row is QuestionRow => row !== undefined && row.kind !== 'suggestion';
+
 export const promptChanged = () => new HttpError(409, 'A pergunta mudou na aba', 'TAB_PROMPT_CHANGED');
 
 /** The body, validated against the row's own kind and question (spec §5.3). */
@@ -96,7 +100,7 @@ export interface AnswerDeps {
   /** Test seam for the pause between keys. */
   sleep?: (ms: number) => Promise<void>;
   /** The mobile route's PIN hook (`requirePinFor`): runs after every check, before the claim. */
-  beforeSend?: (row: TabQuestion, answer: TabAnswer) => void;
+  beforeSend?: (row: QuestionRow, answer: TabAnswer) => void;
 }
 
 /**
@@ -109,8 +113,10 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
   // Answering types into a terminal: the same grant as the MCP write tools (send_input, send_key).
   if (!(await ctx.can('terminals', 'write'))) throw forbidden('Responder na aba precisa da permissão terminals:write na sua role');
   const userId = ctx.scope.user.id;
-  const row = await ctx.repos.tabQuestions.findByIdForUser(id, userId);
-  if (!row) throw notFound('Pergunta não encontrada');
+  const found = await ctx.repos.tabQuestions.findByIdForUser(id, userId);
+  // A suggestion has its own routes (tab-suggestion-send.ts): here it is no question at all.
+  if (!isQuestionRow(found)) throw notFound('Pergunta não encontrada');
+  const row = found;
   const answer = parseAnswer(row, raw);
   const { tab } = await ctx.scoped.tab(row.tab_id);
   if (row.status !== 'open') throw promptChanged();
@@ -170,7 +176,7 @@ export async function tabQuestionScreen(ctx: ControlContext, id: string): Promis
   // Terminal content: the same grant as the MCP read_screen tool.
   if (!(await ctx.can('terminals', 'read'))) throw forbidden('Ver a tela da aba precisa da permissão terminals:read na sua role');
   const row = await ctx.repos.tabQuestions.findByIdForUser(id, ctx.scope.user.id);
-  if (!row) throw notFound('Pergunta não encontrada');
+  if (!isQuestionRow(row)) throw notFound('Pergunta não encontrada');
   if (row.status !== 'open') throw promptChanged();
   const { tab } = await ctx.scoped.tab(row.tab_id);
   try {

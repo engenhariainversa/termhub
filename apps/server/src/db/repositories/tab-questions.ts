@@ -1,9 +1,11 @@
 import type { PrismaClient } from '../prisma.js';
 import type { Prisma, TabQuestion as PrismaTabQuestion } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
-import type { ChoiceAnswer, ChoicePayload, PermissionAnswer, PermissionPayload, TabQuestionKind } from '../../chat/tab-question-payload.js';
+import type { ChoiceAnswer, ChoicePayload, PermissionAnswer, PermissionPayload, SuggestionAnswer, SuggestionPayload, TabRowKind } from '../../chat/tab-question-payload.js';
 
-export type TabQuestionStatus = 'open' | 'answered' | 'answered_in_tab' | 'expired' | 'failed';
+export type TabQuestionStatus = 'open' | 'answered' | 'answered_in_tab' | 'expired' | 'failed' | 'dismissed';
+export type TabRowPayload = ChoicePayload | PermissionPayload | SuggestionPayload;
+export type TabRowAnswer = ChoiceAnswer | PermissionAnswer | SuggestionAnswer;
 /** How a question leaves the screen when the chat did not answer it: the person answered in the tab
  * (or anything else happened there), or the tab is gone. */
 export type TabQuestionCloseStatus = 'answered_in_tab' | 'expired';
@@ -15,11 +17,11 @@ export interface TabQuestion {
   conversation_id: string;
   /** The conversation's owner: whom the bus events and the push go to, and who may answer. */
   user_id: string;
-  kind: TabQuestionKind;
-  payload: ChoicePayload | PermissionPayload;
+  kind: TabRowKind;
+  payload: TabRowPayload;
   tool_use_id: string | null;
   status: TabQuestionStatus;
-  answer: ChoiceAnswer | PermissionAnswer | null;
+  answer: TabRowAnswer | null;
   error_code: string | null;
   answered_by: string | null;
   answered_at: string | null;
@@ -32,8 +34,8 @@ export interface OpenTabQuestionInput {
   tab_id: string;
   project_id: string;
   conversation_id: string;
-  kind: TabQuestionKind;
-  payload: ChoicePayload | PermissionPayload;
+  kind: TabRowKind;
+  payload: TabRowPayload;
   tool_use_id: string | null;
 }
 
@@ -58,11 +60,11 @@ const mapQuestion = (q: Row): TabQuestion => ({
   project_id: q.projectId,
   conversation_id: q.conversationId,
   user_id: q.conversation.userId,
-  kind: q.kind as TabQuestionKind,
-  payload: q.payload as unknown as ChoicePayload | PermissionPayload,
+  kind: q.kind as TabRowKind,
+  payload: q.payload as unknown as TabRowPayload,
   tool_use_id: q.toolUseId,
   status: q.status as TabQuestionStatus,
-  answer: (q.answer ?? null) as unknown as ChoiceAnswer | PermissionAnswer | null,
+  answer: (q.answer ?? null) as unknown as TabRowAnswer | null,
   error_code: q.errorCode,
   answered_by: q.answeredBy,
   answered_at: iso(q.answeredAt),
@@ -103,14 +105,15 @@ export class TabQuestionsRepository {
    * `PERMISSION_QUEUED`, and nothing opens. Until a closing event clears the mark, the tab stays in the
    * queue — its newest row is that marked permission — and no permission opens a card: all of them are
    * answered in the tab. A choice is never held, and being the newest row it ends the queue. The tab
-   * row is locked first, so two hooks of one tab land in order.
+   * row is locked first, so two hooks of one tab land in order. A suggestion row never counts here: it is
+   * not part of Claude Code's permission queue (spec 2026-09-25 tab suggestions §6.1).
    */
   async open(input: OpenTabQuestionInput, now = new Date()): Promise<{ question: TabQuestion | null; closed: TabQuestion[] }> {
     return this.db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "tabs" WHERE id = ${input.tab_id} FOR UPDATE`;
       let queued = false;
       if (input.kind === 'permission') {
-        const newest = await tx.tabQuestion.findFirst({ where: { tabId: input.tab_id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, kind: true, status: true, errorCode: true } });
+        const newest = await tx.tabQuestion.findFirst({ where: { tabId: input.tab_id, kind: { not: 'suggestion' } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, kind: true, status: true, errorCode: true } });
         if (newest?.kind === 'permission' && newest.status === 'open') {
           await tx.tabQuestion.update({ where: { id: newest.id }, data: { errorCode: PERMISSION_QUEUED } });
           queued = true;
@@ -163,10 +166,19 @@ export class TabQuestionsRepository {
   }
 
   /** `open → answered`, conditionally: a double click, a second device or a close that got there first all match nothing. */
-  async claim(id: string, userId: string, answer: ChoiceAnswer | PermissionAnswer, now = new Date()): Promise<TabQuestion | undefined> {
+  async claim(id: string, userId: string, answer: TabRowAnswer, now = new Date()): Promise<TabQuestion | undefined> {
     const { count } = await this.db.tabQuestion.updateMany({
       where: { id, status: 'open', conversation: { userId } },
       data: { status: 'answered', answer: answer as never, answeredBy: userId, answeredAt: now },
+    });
+    return count === 0 ? undefined : this.findByIdForUser(id, userId);
+  }
+
+  /** "Dispensar": `open → dismissed` for a suggestion of this user, conditionally. The tab is not touched. */
+  async dismiss(id: string, userId: string, now = new Date()): Promise<TabQuestion | undefined> {
+    const { count } = await this.db.tabQuestion.updateMany({
+      where: { id, kind: 'suggestion', status: 'open', conversation: { userId } },
+      data: { status: 'dismissed', closedAt: now },
     });
     return count === 0 ? undefined : this.findByIdForUser(id, userId);
   }

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
-import { describeTabQuestions } from '../db/repositories/tab-questions-view.js';
+import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { controlContextFor } from '../control/context.js';
 import { answerTabQuestion, tabQuestionScreen } from '../chat/tab-question-answer.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
@@ -50,8 +50,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     ]);
     // Scoped to this request's own user: a card must never resolve a name this user cannot see.
     const actions = await describeActions(repos, rows, request.scope.user.id);
-    const tab_questions = await describeTabQuestions(repos, questionRows, request.scope.user.id);
-    return { conversation, messages, actions, host, grants, tab_questions };
+    const { tab_questions, tab_suggestions } = splitTabRows(await describeTabQuestions(repos, questionRows, request.scope.user.id));
+    return { conversation, messages, actions, host, grants, tab_questions, tab_suggestions };
   });
 
   /**

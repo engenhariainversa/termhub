@@ -163,4 +163,38 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect(await chat.findLatestActiveForProject(projectId, userId)).toBeUndefined();
     expect(await chat.findLatestActiveForProject('nope', userId)).toBeUndefined();
   });
+
+  const openSuggestion = (tabId: string, text = 'commit it') => repo.open({ tab_id: tabId, project_id: projectId, conversation_id: conversationId, kind: 'suggestion', payload: { text }, tool_use_id: null });
+
+  it("a suggestion is a row like the others: the tab's open one, closed by the tab's next event", async () => {
+    const { question: s } = await openSuggestion('ts1');
+    expect(s).toMatchObject({ kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', user_id: userId, tool_use_id: null });
+    expect((await repo.findOpenForTab('ts1'))?.id).toBe(s!.id);
+    expect(await repo.closeForTab('ts1', 'answered_in_tab')).toEqual([expect.objectContaining({ id: s!.id, status: 'answered_in_tab' })]);
+  });
+
+  it('dismiss: only an open suggestion, only its owner, once — never a question', async () => {
+    const { question: s } = await openSuggestion('ts2');
+    expect(await repo.dismiss(s!.id, otherUserId)).toBeUndefined();
+    const d = await repo.dismiss(s!.id, userId);
+    expect(d).toMatchObject({ id: s!.id, status: 'dismissed' });
+    expect(d?.closed_at).not.toBeNull();
+    expect(await repo.dismiss(s!.id, userId)).toBeUndefined();
+    const { question: q } = await open('ts3');
+    expect(await repo.dismiss(q.id, userId)).toBeUndefined();
+  });
+
+  it('a sent suggestion is claimed with its text and is told to the concierge', async () => {
+    const { question: s } = await openSuggestion('ts4');
+    expect(await repo.claim(s!.id, userId, { text: 'commit it and push' })).toMatchObject({ status: 'answered', answer: { text: 'commit it and push' }, answered_by: userId });
+    expect((await repo.listToInject(conversationId)).map((r) => r.id)).toContain(s!.id);
+  });
+
+  it('a suggestion never takes part in the permission queue', async () => {
+    await openPermission('ts5', 'Bash');
+    expect((await openPermission('ts5', 'Edit')).question).toBeNull(); // the queue starts
+    expect((await openSuggestion('ts5')).question).not.toBeNull();
+    // Still queued: the suggestion is not "the newest row" of the queue rule.
+    expect((await openPermission('ts5', 'Write')).question).toBeNull();
+  });
 });
