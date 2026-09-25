@@ -15,6 +15,10 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
   let otherUserId: string;
   let projectId: string;
   let conversationId: string;
+  const machineId = newId();
+  /** Real tab rows (the suggestion rule reads the tab), keyed by the short names the tests use. */
+  const tabIds: Record<string, string> = Object.fromEntries(['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'ts9'].map((k) => [k, newId()]));
+  const tid = (k: string) => tabIds[k] ?? k;
 
   beforeAll(async () => {
     db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
@@ -27,19 +31,24 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     await db.user.create({ data: { id: otherUserId, email: `${otherUserId}@test.local`, name: 'other' } });
     await db.project.create({ data: { id: projectId, key: `Q${projectId.slice(-5).toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`, name: 'proj', ownerId: userId } });
     conversationId = (await chat.getOrCreateForProject(userId, projectId)).id;
+    // A suggestion opens only on a real tab that waits for input: these are the tabs the suggestion tests use.
+    await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId: userId } });
+    await db.tab.createMany({ data: ['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8'].map((id) => ({ id: tabIds[id]!, projectId, machineId, name: id, state: 'waiting_input' as const })) });
+    await db.tab.create({ data: { id: tabIds.ts9!, projectId, machineId, name: 'ts9', state: 'working' } });
   });
 
   afterAll(async () => {
     await db.project.deleteMany({ where: { id: projectId } }); // cascades its conversations and questions
+    await db.machine.deleteMany({ where: { id: machineId } });
     await db.user.deleteMany({ where: { id: { in: [userId, otherUserId] } } });
     await db.$disconnect();
   });
 
   const open = async (tabId: string, now?: Date) => {
-    const r = await repo.open({ tab_id: tabId, project_id: projectId, conversation_id: conversationId, kind: 'choice', payload, tool_use_id: 'toolu_1' }, now);
+    const r = await repo.open({ tab_id: tid(tabId), project_id: projectId, conversation_id: conversationId, kind: 'choice', payload, tool_use_id: 'toolu_1' }, now);
     return { question: r.question!, closed: r.closed };
   };
-  const openPermission = (tabId: string, tool: string) => repo.open({ tab_id: tabId, project_id: projectId, conversation_id: conversationId, kind: 'permission', payload: { tool_name: tool }, tool_use_id: null });
+  const openPermission = (tabId: string, tool: string) => repo.open({ tab_id: tid(tabId), project_id: projectId, conversation_id: conversationId, kind: 'permission', payload: { tool_name: tool }, tool_use_id: null });
 
   it('opens a question owned through its conversation, the tab\'s only open one', async () => {
     const { question, closed } = await open('t1');
@@ -164,13 +173,13 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect(await chat.findLatestActiveForProject('nope', userId)).toBeUndefined();
   });
 
-  const openSuggestion = (tabId: string, text = 'commit it') => repo.open({ tab_id: tabId, project_id: projectId, conversation_id: conversationId, kind: 'suggestion', payload: { text }, tool_use_id: null });
+  const openSuggestion = (tabId: string, text = 'commit it') => repo.open({ tab_id: tid(tabId), project_id: projectId, conversation_id: conversationId, kind: 'suggestion', payload: { text }, tool_use_id: null });
 
   it("a suggestion is a row like the others: the tab's open one, closed by the tab's next event", async () => {
     const { question: s } = await openSuggestion('ts1');
     expect(s).toMatchObject({ kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', user_id: userId, tool_use_id: null });
-    expect((await repo.findOpenForTab('ts1'))?.id).toBe(s!.id);
-    expect(await repo.closeForTab('ts1', 'answered_in_tab')).toEqual([expect.objectContaining({ id: s!.id, status: 'answered_in_tab' })]);
+    expect((await repo.findOpenForTab(tid('ts1')))?.id).toBe(s!.id);
+    expect(await repo.closeForTab(tid('ts1'), 'answered_in_tab')).toEqual([expect.objectContaining({ id: s!.id, status: 'answered_in_tab' })]);
   });
 
   it('dismiss: only an open suggestion, only its owner, once — never a question', async () => {
@@ -207,5 +216,32 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect((await openSuggestion('ts5')).question).not.toBeNull();
     // Still queued: the suggestion is not "the newest row" of the queue rule.
     expect((await openPermission('ts5', 'Write')).question).toBeNull();
+  });
+
+  it('a suggestion opens nothing, and closes nothing, while the tab still shows a question', async () => {
+    const { question: p } = await openPermission('ts8', 'Bash');
+    expect(await openSuggestion('ts8')).toEqual({ question: null, closed: [] });
+    expect((await repo.findOpenForTab(tid('ts8')))?.id).toBe(p!.id);
+    // Answered from the chat but still on the tab's screen: still a question there.
+    await repo.claim(p!.id, userId, { allow: true });
+    expect(await openSuggestion('ts8')).toEqual({ question: null, closed: [] });
+    expect((await repo.findByIdForUser(p!.id, userId))).toMatchObject({ status: 'answered', closed_at: null });
+  });
+
+  it('a suggestion opens nothing on a tab that no longer waits for input, or no longer exists', async () => {
+    expect(await openSuggestion('ts9')).toEqual({ question: null, closed: [] });
+    expect(await openSuggestion('gone')).toEqual({ question: null, closed: [] });
+    expect(await repo.findOpenForTab(tid('ts9'))).toBeUndefined();
+  });
+
+  it('lists up to 200 questions and the newest 50 suggestions: suggestions never push a question out', async () => {
+    const conv = await db.chatConversation.create({ data: { id: newId(), userId, projectId } });
+    const t0 = Date.parse('2026-09-25T10:00:00.000Z');
+    const at = (i: number) => new Date(t0 + i * 1000);
+    const q = { id: newId(), tabId: 'tl', projectId, conversationId: conv.id, kind: 'choice', payload, status: 'answered_in_tab', createdAt: at(0) };
+    const sugg = Array.from({ length: 60 }, (_, i) => ({ id: newId(), tabId: 'tl', projectId, conversationId: conv.id, kind: 'suggestion', payload: { text: `s${i}` }, status: 'answered_in_tab', createdAt: at(i + 1) }));
+    await db.tabQuestion.createMany({ data: [q, ...sugg] });
+    const listed = await repo.listByConversation(conv.id);
+    expect(listed.map((r) => r.id)).toEqual([q.id, ...sugg.slice(10).map((r) => r.id)]);
   });
 });

@@ -47,6 +47,10 @@ const withOwner = { conversation: { select: { userId: true } } } as const;
  */
 export const PERMISSION_QUEUED = 'QUEUED';
 
+/** `listByConversation`'s windows, one per kind of row. */
+export const LIST_QUESTIONS_MAX = 200;
+export const LIST_SUGGESTIONS_MAX = 50;
+
 export interface CloseForTabOptions {
   /** A closing hook event (PreToolUse, Stop…) ends a permission queue; a question event does not. Default true. */
   endsQueue?: boolean;
@@ -106,11 +110,19 @@ export class TabQuestionsRepository {
    * queue — its newest row is that marked permission — and no permission opens a card: all of them are
    * answered in the tab. A choice is never held, and being the newest row it ends the queue. The tab
    * row is locked first, so two hooks of one tab land in order. A suggestion row never counts here: it is
-   * not part of Claude Code's permission queue (spec 2026-09-25 tab suggestions §6.1).
+   * not part of Claude Code's permission queue (spec 2026-09-25 tab suggestions §6.1). A suggestion is
+   * read seconds after the `Stop`, so it opens only if the tab, under that lock, still waits for input
+   * and shows no question (open, or answered from the chat but still on screen): otherwise nothing opens
+   * and nothing closes.
    */
   async open(input: OpenTabQuestionInput, now = new Date()): Promise<{ question: TabQuestion | null; closed: TabQuestion[] }> {
     return this.db.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM "tabs" WHERE id = ${input.tab_id} FOR UPDATE`;
+      const [tab] = await tx.$queryRaw<{ state: string | null }[]>`SELECT state::text AS state FROM "tabs" WHERE id = ${input.tab_id} FOR UPDATE`;
+      if (input.kind === 'suggestion') {
+        if (tab?.state !== 'waiting_input') return { question: null, closed: [] };
+        const question = await tx.tabQuestion.findFirst({ where: { tabId: input.tab_id, kind: { not: 'suggestion' }, closedAt: null, status: { in: ['open', 'answered'] } }, select: { id: true } });
+        if (question) return { question: null, closed: [] };
+      }
       let queued = false;
       if (input.kind === 'permission') {
         const newest = await tx.tabQuestion.findFirst({ where: { tabId: input.tab_id, kind: { not: 'suggestion' } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, kind: true, status: true, errorCode: true } });
@@ -215,10 +227,18 @@ export class TabQuestionsRepository {
     return row ? mapQuestion(row) : undefined;
   }
 
-  /** The newest `limit`, returned oldest-first — the same window rule as `ChatRepository.listMessages`. */
-  async listByConversation(conversationId: string, limit = 200): Promise<TabQuestion[]> {
-    const rows = await this.db.tabQuestion.findMany({ where: { conversationId }, include: withOwner, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit });
-    return rows.reverse().map(mapQuestion);
+  /**
+   * The newest 200 questions and the newest 50 suggestions, merged oldest-first — the same window rule as
+   * `ChatRepository.listMessages`. Separate windows: a chatty tab's suggestions never push a question out.
+   */
+  async listByConversation(conversationId: string): Promise<TabQuestion[]> {
+    const newest = [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
+    const [questions, suggestions] = await Promise.all([
+      this.db.tabQuestion.findMany({ where: { conversationId, kind: { not: 'suggestion' } }, include: withOwner, orderBy: newest, take: LIST_QUESTIONS_MAX }),
+      this.db.tabQuestion.findMany({ where: { conversationId, kind: 'suggestion' }, include: withOwner, orderBy: newest, take: LIST_SUGGESTIONS_MAX }),
+    ]);
+    const rows = [...questions, ...suggestions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    return rows.map(mapQuestion);
   }
 
   /** Answered from the chat and not yet told to the concierge (spec §5.5), in the order they were answered. */

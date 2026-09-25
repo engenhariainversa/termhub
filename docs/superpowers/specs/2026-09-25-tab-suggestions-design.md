@@ -71,7 +71,8 @@ Fixtures in `apps/server/src/chat/fixtures/tab-suggestions/` (from an isolated t
   A suggestion starting with `/` or `!` opens no card: Claude Code does suggest slash commands
   (`/compact` was seen live), and sending refuses both (§6.2), so such a card could only fail.
 - A suggestion never takes part in the permission queue rules and never closes an open choice or
-  permission question (there is none after `Stop`).
+  permission question: under the tab row lock, it opens nothing (and closes nothing) unless the tab
+  is still `waiting_input` and shows no question (`open`, or `answered` and not yet closed).
 - Closing: like other questions, the tab's next closing hook event closes it (`answered_in_tab`);
   **Dispensar** closes it as `dismissed` (new status value) without touching the tab.
 
@@ -131,3 +132,7 @@ sugere:", editable text field prefilled, **Enviar** (disabled while sending or e
 - The suggestion was seen drawn 1.46–2.80 s after the `Stop`, so the wait is 5000 ms, not 3000.
 - Dismissing is best effort past the row update, like sending: a failed announcement is logged by
   code and the dismissed card is still the answer.
+- The suggestion's open re-checks the tab under its row lock (state `waiting_input`, no question on
+  screen): the 5 s wait leaves room for a question or a new turn to land first.
+- A conversation's cards are listed as the newest 200 questions plus the newest 50 suggestions,
+  merged oldest-first, so suggestions never push a question out of the window.
