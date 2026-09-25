@@ -8,12 +8,14 @@ import { permissionsOf } from '../auth/permissions.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { chatBus } from '../chat/bus.js';
+import { activeGrants, assertGrantableAction, grantTab, revokeGrant } from '../chat/grants.js';
 import { HttpError, conflict, notFound, unauthorized } from '../lib/errors.js';
 import { DeviceLockedError, PinInvalidError, deviceRevoked, type SessionService } from '../mobile/session.js';
 
 const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
 const actionIdParam = z.object({ id: z.string().min(1).max(64) });
+const grantIdParam = z.object({ id: z.string().min(1).max(64) });
 const hostBody = z.object({ machine_id: z.string().min(1).max(64), ai_account_id: z.string().min(1).max(64).nullish() });
 
 /**
@@ -50,13 +52,14 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     const projectId = project ?? null;
     const user = request.scope.user;
     const conversation = await deps.chat.conversationFor(user, projectId);
-    const [messages, rows, host] = await Promise.all([
+    const [messages, rows, host, grants] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       deps.chat.hostFor(user, projectId),
+      activeGrants(repos, user.id, conversation.id),
     ]);
     const actions = await describeActions(repos, rows, user.id);
-    return { conversation, messages, actions, host };
+    return { conversation, messages, actions, host, grants };
   });
 
   /** The user's projects, with their chat's status; a project with no conversation yet is idle. */
@@ -160,15 +163,16 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     const body = mobileDecisionBody.parse(request.body);
     const user = request.scope.user;
 
-    if (body.decision === 'approve') {
+    if (body.decision === 'approve' || body.decision === 'approve_tab') {
       const device = deviceOf(request);
-      const existing = await repos.chatActions.findByIdForUser(id, user.id);
+      // An ineligible grant is refused before the challenge is spent or the PIN checked.
+      const existing = body.decision === 'approve_tab' ? await assertGrantableAction(repos, user.id, id) : await repos.chatActions.findByIdForUser(id, user.id);
       if (!existing) throw notFound('Ação não encontrada');
       if (existing.status !== 'pending') throw conflict('Esta ação já foi decidida');
 
       if (!(await deps.session.consumeDecisionChallenge(device, body.challenge, id))) throw new HttpError(400, 'Desafio inválido ou expirado', 'CHALLENGE_INVALID');
 
-      const pin = await deps.session.checkPin(device, decisionProofMessage(body.challenge, id, 'approve'), body.pin_proof, { ip: request.ip });
+      const pin = await deps.session.checkPin(device, decisionProofMessage(body.challenge, id, body.decision), body.pin_proof, { ip: request.ip });
       // Mapped exactly as `POST /session/token` maps it; the action stays pending on every failure.
       if (!pin.ok) {
         if (pin.code === 'DEVICE_LOCKED') {
@@ -183,7 +187,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       }
     }
 
-    const status = body.decision === 'approve' ? 'approved' : 'denied';
+    const status = body.decision === 'deny' ? 'denied' : 'approved';
     const action = await repos.chatActions.decide(id, user.id, status);
     if (!action) {
       const existing = await repos.chatActions.findByIdForUser(id, user.id);
@@ -191,11 +195,18 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     }
 
     chatBus.publish({ type: 'decision', user_id: user.id, conversation_id: action.conversation_id, action_id: action.id, status });
+    const grant = body.decision === 'approve_tab' ? await grantTab(repos, user.id, action) : undefined;
     const actionId = action.id;
     void Promise.resolve()
       .then(() => deps.chat.resumeAfterDecision(user, action))
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId }, 'mobile decision resume failed'));
-    return { action, queued: true, note: DECISION_NOTE };
+    return { action, queued: true, note: DECISION_NOTE, grant };
+  });
+
+  /** "Revogar" from the phone. No PIN: it only takes power away. `create`, like deciding a card. */
+  app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {
+    const { id } = grantIdParam.parse(request.params);
+    return { grant: await revokeGrant(repos, request.scope.user.id, id) };
   });
 }
 

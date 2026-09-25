@@ -31,6 +31,8 @@ const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
     created_at: '2026-09-24T12:00:00.000Z',
   },
   decision: { type: 'decision', ...base, action_id: 'a1', status: 'approved' },
+  grant: { type: 'grant', ...base, grant: { id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'a1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z', tab_name: 'api' } },
+  grant_revoked: { type: 'grant_revoked', ...base, grant_id: 'g1' },
   run_finished: { type: 'run_finished', ...base, message_id: null, ok: false, error_code: 'CHAT_FAILED' },
   granted_action: { type: 'granted_action', ...base, action: { id: 'a2', tool: 'send_input', args: { tab_id: 't1', text: 'oi' }, class: 'write', status: 'executed', machine_id: null, project_id: null, tab_id: 't1', grant_id: 'g1', summary: 'digitar `oi` na aba api', created_at: '2026-09-25T10:01:00.000Z' } },
 };
