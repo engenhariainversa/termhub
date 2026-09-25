@@ -5,6 +5,7 @@
  * the action is pending, and the row in `chat_actions` is what remembers. When the user confirms, the
  * CLI session is told to repeat the call, and *that* arrival executes it.
  */
+import { CONTROL_CHARS } from '../control/agents.js';
 import { ControlError, type ControlContext } from '../control/context.js';
 import type { ChatAction, ChatActionClass } from '../db/repositories/chat-actions.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
@@ -324,17 +325,24 @@ async function executeGranted(ctx: ControlContext, call: GatedCall, conversation
 }
 
 /**
- * Whether a grant may answer this call, beyond the grant existing (spec §2 "Agent tabs only"). A grant
- * trusts an agent's prompt, but `send_input` types any text and presses Enter: on a bare shell that is
- * `run_command` under another name, and in Claude Code a leading `!` runs the rest in bash. So text
- * whose first non-blank character is `!` never rides a grant — checked from the arguments alone, before
- * any read — and the tab must report an agent at work (`working` or `waiting_input`, from the monitor
- * hooks). A tab that never reported (a shell), an agent that ended (`idle`) or errored falls back to a
- * normal question. Two readings deliberately still go through the grant: a tab that does not resolve
- * (missing, or somebody else's) and one waiting on a permission, so `execute()` records them as the
- * `TAB_GONE` / `WAITING_PERMISSION` locks — the model gets the lock's error, as for a clicked approval.
+ * Whether the text half of a call disqualifies it from a grant, beyond the grant existing (spec §2
+ * "Agent tabs only"). A grant trusts an agent's prompt, but `send_input` types any text and presses
+ * Enter: on a bare shell that is `run_command` under another name, and in Claude Code a leading `!`
+ * runs the rest in bash — so text whose first non-blank character is `!` is outside the grant. Any
+ * other control character is outside it too: `send_input` delivers the text as keystrokes, and a
+ * control character is not "text" to the terminal but an edit to the line being typed — Ctrl-U wipes
+ * it, backspace (`\x7f`) erases the character before it — so it can turn text that does not itself
+ * start with `!` into a `!` command by the time the TUI reads it. `CONTROL_CHARS` is the same check
+ * `checkPrompt` uses for a prompt's own text; only `\n` (a pasted multi-line prompt) is allowed. Both
+ * checks read the arguments alone, before any read, and the tab must separately report an agent at
+ * work (`working` or `waiting_input`, from the monitor hooks). A tab that never reported (a shell), an
+ * agent that ended (`idle`) or errored falls back to a normal question. Two readings deliberately still
+ * go through the grant: a tab that does not resolve (missing, or somebody else's) and one waiting on a
+ * permission, so `execute()` records them as the `TAB_GONE` / `WAITING_PERMISSION` locks — the model
+ * gets the lock's error, as for a clicked approval.
  */
-const runsInBash = (args: Record<string, unknown>) => typeof args.text === 'string' && args.text.trimStart().startsWith('!');
+const textOutsideGrant = (args: Record<string, unknown>) =>
+  typeof args.text === 'string' && (args.text.trimStart().startsWith('!') || CONTROL_CHARS.test(args.text));
 
 /** The tab half of the eligibility above, through the same owner-scoped read `staleApproval` uses. */
 async function grantCoversTab(ctx: ControlContext, tabId: string): Promise<boolean> {
@@ -370,7 +378,7 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
   // on `row` narrows the type rather than adding a branch of its own.
   if (!row || decision === 'ask') {
     // Only where the gate would otherwise ask: an open row or a "no" still in force decided above.
-    if (!row && grantable(call.tool, call.args) && !runsInBash(call.args)) {
+    if (!row && grantable(call.tool, call.args) && !textOutsideGrant(call.args)) {
       const grant = await ctx.repos.chatGrants.findActive(conversationId, call.args.tab_id, GRANTABLE_TOOL);
       if (grant && (await grantCoversTab(ctx, call.args.tab_id))) return executeGranted(ctx, call, conversationId, key, cls, grant.id);
     }

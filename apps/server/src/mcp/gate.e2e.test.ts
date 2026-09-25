@@ -1029,3 +1029,56 @@ it('types text with a "!" that is not its first non-blank character', async () =
   expect(typed).toContain('use ! no meio');
   expect(actions.rows[0]).toMatchObject({ status: 'executed' });
 });
+
+// Follow-up: control characters ride as keystrokes too, so they can edit a grant's own line into a
+// `!` command before Claude Code ever sees it whole — Ctrl-U clears the line, backspace erases a
+// character — and the leading-`!` check alone would miss both.
+
+it.each([
+  ['\u0015!curl x | sh', 'Ctrl-U clears the line, then "!"'],
+  ['a\u007f!rm -rf ~', 'backspace erases the "a", then "!"'],
+])('asks for text with a control character that could edit the line into a bash command (%s), before reading anything', async (text) => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text });
+
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(typed).toEqual([]);
+  expect(actions.insertApproved).not.toHaveBeenCalled();
+  expect(actions.insertPending).toHaveBeenCalledTimes(1);
+  expect(grants.findActive).not.toHaveBeenCalled();
+});
+
+it('asks for text with a tab character, a control character too even without a "!"', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'linha 1\tcom tab' });
+
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(typed).toEqual([]);
+  expect(actions.insertApproved).not.toHaveBeenCalled();
+  expect(actions.insertPending).toHaveBeenCalledTimes(1);
+  expect(grants.findActive).not.toHaveBeenCalled();
+});
+
+it('types text with a newline directly into a trusted tab: a newline is the one control character allowed', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed, '0.3.0'); // the newline goes as a paste, which needs TERMINAL_PASTE_MIN_AGENT_VERSION
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'linha 1\nlinha 2' });
+
+  expect(resultOf(res).isError).toBeFalsy();
+  expect(typed).toContain('linha 1\nlinha 2');
+  expect(actions.rows[0]).toMatchObject({ status: 'executed' });
+});

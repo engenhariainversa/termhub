@@ -143,8 +143,9 @@ const approvedProposal = (action: ChatAction, summary?: string): string =>
 
 /** Appended when the approval came with "Permitir sempre nesta aba": the model should stop expecting
  * a question per message to that tab, know it can still be revoked, and know the limits the gate keeps
- * (spec §2 "Agent tabs only"): an agent must be running in the tab, and "!" text is always asked. */
-const GRANT_NOTE = ' O usuário também permitiu digitar nesta aba sem confirmar: os próximos send_input nesta aba, nesta conversa, rodam sem pedir confirmação, até ele revogar ou por 24 horas, e só enquanto a aba estiver rodando um agente. Isso não vale para run_command, send_key, para responder permissões nem para texto que comece com "!".';
+ * (spec §2 "Agent tabs only"): an agent must be running in the tab, and "!" text or any control
+ * character other than a newline is always asked. */
+const GRANT_NOTE = ' O usuário também permitiu digitar nesta aba sem confirmar: os próximos send_input nesta aba, nesta conversa, rodam sem pedir confirmação, até ele revogar ou por 24 horas, e só enquanto a aba estiver rodando um agente. Isso não vale para run_command, send_key, para responder permissões, para texto que comece com "!" nem para texto com caracteres de controle.';
 
 export class ChatService {
   /** One run per conversation: two `claude -p` processes on the same --session-id would race. */

@@ -21,7 +21,7 @@ card. The user wants to say once: "for this conversation, you may type into this
 | Lifetime | While the conversation lasts, capped at **24 h** from the grant. "Nova conversa" (reset) ends it; so does deleting the conversation. Granting again for the same tab replaces the old grant and restarts the 24 h. |
 | Where it is granted | A third button on an eligible confirmation card: **"Permitir sempre nesta aba"**. It approves that card *and* creates the grant. |
 | Where it shows / is revoked | Both: a strip above the message box ("Enviando direto para a aba X até HH:MM · Revogar"), one per active grant, and the card that granted it ("Permitido nesta aba até HH:MM · Revogar"). |
-| Agent tabs only | `send_input` types any text and presses Enter, so on a bare shell it *is* `run_command`, and in Claude Code a leading `!` runs bash directly. A grant therefore applies only while the tab reports an agent that is running or waiting for input (`tab.state` is `working` or `waiting_input`, from the monitor hooks), and never to text whose first non-blank character is `!`. A shell tab (state never reported), an agent that ended (`idle`, from `SessionEnd`) or errored, and `!` text all fall back to asking. Decided by the user after the final review (2026-09-25). |
+| Agent tabs only | `send_input` types any text and presses Enter, so on a bare shell it *is* `run_command`, and in Claude Code a leading `!` runs bash directly. A grant therefore applies only while the tab reports an agent that is running or waiting for input (`tab.state` is `working` or `waiting_input`, from the monitor hooks), and never to text whose first non-blank character is `!`. A shell tab (state never reported), an agent that ended (`idle`, from `SessionEnd`) or errored, and `!` text all fall back to asking. Decided by the user after the final review (2026-09-25). Follow-up (2026-09-25): text containing any control character other than a newline is also outside a grant — `send_input` delivers text as keystrokes, and a control character (Ctrl-U, backspace…) can edit the line into a `!` command without the text itself starting with `!` (e.g. `"\x15!curl … | sh"`, `"a\x7f!rm -rf ~"`); same fallback to asking. |
 | Safety locks | Unchanged and still binding: `TAB_GONE`, `WAITING_PERMISSION`, `PROMPT_CHANGED`. A grant never turns into a new question when a lock trips: the model gets the lock's error and nothing is typed. |
 | Precedence | An open row for the same call (pending / approved) or a denial still in force (`DENIAL_HOLDS_MS`) decides first, exactly as today. A "no" beats a grant. |
 | Audit | Every call executed under a grant is a `chat_actions` row (status `executed` / `failed`, real `error_code`, `duration_ms`), linked to the grant by `grant_id`. |
@@ -82,9 +82,12 @@ otherwise                    → ask (unchanged)
   targetId(call.args.tab_id)`. A single pure function in `gate.ts`, shared with the decision route
   so the button is only offered, and only accepted, for calls the gate would honour.
 - Before using the grant the gate checks, in this order: the text does not start with `!` (after
-  leading whitespace), and the tab — read through the same owner-scoped `findByIdsForOwner` — reports
-  `working` or `waiting_input`. Otherwise it asks, exactly as without a grant. A tab that is missing
-  or waiting on a permission still goes through `execute()`, so it is recorded as `TAB_GONE` /
+  leading whitespace) and contains no control character other than a newline (`CONTROL_CHARS` from
+  `control/agents.ts`, the same check `checkPrompt` runs on a prompt's own text — a control character
+  is a keystroke that can edit the line into a `!` command even when the text itself does not start
+  with one), and the tab — read through the same owner-scoped `findByIdsForOwner` — reports `working`
+  or `waiting_input`. Otherwise it asks, exactly as without a grant. A tab that is missing or waiting
+  on a permission still goes through `execute()`, so it is recorded as `TAB_GONE` /
   `WAITING_PERMISSION` like before.
 - `execute()` is reused as is: claim, then `staleApproval` (so `TAB_GONE` and
   `WAITING_PERMISSION` trip exactly as for a clicked approval; `PROMPT_CHANGED` cannot apply since
