@@ -36,3 +36,12 @@ export const hostOptionsResponse = z.object({
     })
   ),
 });
+
+/** `POST chat/tab-questions/:id/answer`. The server checks it against the question itself (count,
+ * options, one of picked/typed); this is the shape the app sends. No PIN (spec 2026-09-25 §2). */
+export const tabQuestionAnswerBody = z.union([
+  z.object({ answers: z.array(z.object({ selected: z.array(z.number().int().min(0).max(3)).max(4), text: z.string().max(2000).optional() })).min(1).max(4) }),
+  z.object({ allow: z.boolean(), text: z.string().max(2000).optional() }),
+]);
+/** `GET chat/tab-questions/:id/screen`: the last lines of the tab, live, for a permission card. */
+export const tabQuestionScreenResponse = z.object({ text: z.string() });

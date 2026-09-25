@@ -37,6 +37,7 @@ import { registerMonitorWs } from './monitor/ws.js';
 import { chatRoutes } from './routes/chat.js';
 import { ChatService, purgeExpiredActions } from './chat/service.js';
 import { agentRunner } from './chat/runner.js';
+import { startTabQuestionExpiry } from './chat/tab-questions.js';
 import { registerChatWs } from './chat/ws.js';
 import { roleRoutes } from './routes/roles.js';
 import { userRoutes } from './routes/users.js';
@@ -238,10 +239,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
   const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);
+  const stopTabQuestionExpiry = startTabQuestionExpiry(repos, fastify.log);
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     stopSync();
     stopAgentUpdates();
+    stopTabQuestionExpiry();
     await simulators.shutdownAll();
     await closePrisma();
   });

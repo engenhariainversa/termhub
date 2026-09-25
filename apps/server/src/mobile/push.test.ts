@@ -235,6 +235,32 @@ describe('MobilePushService', () => {
     await flush();
     expect(t.repos.userNotifications.create).not.toHaveBeenCalled();
   });
+
+  it('a tab question is a confirmation-channel notification naming the tab, never the question', async () => {
+    const { service, repos, sent } = setup();
+    stop = service.start();
+    chatBus.publish({
+      type: 'tab_question',
+      user_id: 'u1',
+      conversation_id: 'cp',
+      question: { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'choice', payload: { questions: [{ question: 'Apagar o banco?', header: 'DB', multi_select: false, options: [{ label: 'Sim', description: '', recommended: false }, { label: 'Não', description: '', recommended: true }] }] }, status: 'open', answer: null, error_code: null, created_at: '', answered_at: null, closed_at: null },
+    });
+    await flush();
+    expect(repos.userNotifications.create).toHaveBeenCalledWith(expect.objectContaining({ kind: 'confirmation', data: { kind: 'tab_question', conversation_id: 'cp', project_id: 'p1', tab_question_id: 'q1' } }));
+    expect(sent[0]![0]).toMatchObject({ title: 'termhub precisa de você', body: 'A aba api fez uma pergunta.' });
+    expect(JSON.stringify(sent)).not.toContain('Apagar');
+  });
+
+  it('answered and closed tab questions push nothing', async () => {
+    const { service, sent, repos } = setup();
+    stop = service.start();
+    const question = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'permission' as const, payload: { tool_name: 'Bash' }, status: 'answered' as const, answer: { allow: true }, error_code: null, created_at: '', answered_at: '', closed_at: null };
+    chatBus.publish({ type: 'tab_question_answered', user_id: 'u1', conversation_id: 'cp', question });
+    chatBus.publish({ type: 'tab_question_closed', user_id: 'u1', conversation_id: 'cp', question });
+    await flush();
+    expect(sent).toEqual([]);
+    expect(repos.userNotifications.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('ExpoPushSender', () => {

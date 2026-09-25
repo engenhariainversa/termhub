@@ -7,6 +7,19 @@ import type { ChatEvent } from '../chat/bus.js';
 // refuses it when the mobile contract (`chatEventSchema`) does not accept it. Together they keep
 // what /ws/m/chat forwards and what the app parses from drifting apart.
 const base = { user_id: 'u1', conversation_id: 'c1' };
+const question = {
+  id: 'q1',
+  tab_id: 't1',
+  tab_name: 'api',
+  kind: 'choice' as const,
+  payload: { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: 'Calma', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] },
+  status: 'open' as const,
+  answer: null,
+  error_code: null,
+  created_at: '2026-09-25T12:00:00.000Z',
+  answered_at: null,
+  closed_at: null,
+};
 const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
   message: {
     type: 'message',
@@ -35,6 +48,9 @@ const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
   grant_revoked: { type: 'grant_revoked', ...base, grant_id: 'g1' },
   run_finished: { type: 'run_finished', ...base, message_id: null, ok: false, error_code: 'CHAT_FAILED' },
   granted_action: { type: 'granted_action', ...base, action: { id: 'a2', tool: 'send_input', args: { tab_id: 't1', text: 'oi' }, class: 'write', status: 'executed', machine_id: null, project_id: null, tab_id: 't1', grant_id: 'g1', summary: 'digitar `oi` na aba api', created_at: '2026-09-25T10:01:00.000Z' } },
+  tab_question: { type: 'tab_question', ...base, question },
+  tab_question_answered: { type: 'tab_question_answered', ...base, question: { ...question, status: 'answered', answer: { answers: [{ selected: [0] }] }, answered_at: '2026-09-25T12:01:00.000Z' } },
+  tab_question_closed: { type: 'tab_question_closed', ...base, question: { ...question, kind: 'permission', payload: { tool_name: 'Bash' }, status: 'answered_in_tab', closed_at: '2026-09-25T12:02:00.000Z' } },
 };
 
 describe('ChatEvent / chatEventSchema parity', () => {

@@ -5,7 +5,7 @@ import type { Device } from '../db/repositories/devices.js';
 import type { DeviceRequest } from '../db/repositories/device-requests.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { User } from '../db/repositories/types.js';
-import { confirmationText, deviceRequestText, replyText, type PushContext, type PushText } from './push-text.js';
+import { confirmationText, deviceRequestText, replyText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { SlidingWindow } from './rate-limit.js';
 import type { MobileSocketRegistry } from './revocation.js';
 
@@ -129,6 +129,13 @@ export class MobilePushService {
       const ctx = await this.names(event.user_id, projectId, event.tab_id, event.machine_id);
       const data = { kind: 'confirmation', conversation_id: event.conversation_id, project_id: projectId, action_id: event.action_id };
       await this.deliver(event.user_id, 'confirmation', confirmationText(ctx), data, await this.offline(event.user_id));
+    } else if (event.type === 'tab_question') {
+      // Same channel as a confirmation — the history row keeps that kind, which every app version
+      // parses — with its own `data.kind` so a newer app can tell them apart.
+      const projectId = await this.conversationProject(event.conversation_id, event.user_id);
+      const ctx = await this.names(event.user_id, projectId, event.question.tab_id, null);
+      const data = { kind: 'tab_question', conversation_id: event.conversation_id, project_id: projectId, tab_question_id: event.question.id };
+      await this.deliver(event.user_id, 'confirmation', tabQuestionText(ctx, event.question.kind), data, await this.offline(event.user_id));
     } else if (event.type === 'run_finished' && event.ok) {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, null, null);

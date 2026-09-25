@@ -37,3 +37,9 @@ export function deviceRequestText(r: { model: string; city: string | null; count
   const who = place ? `${r.model} (${place})` : r.model;
   return { title: 'Novo aparelho pede acesso', body: `${who} pediu acesso à sua conta. Confira o código e aprove ou recuse na web.` };
 }
+
+/** A tab asked something in a project's chat (spec 2026-09-25 §6.1): which tab, never what it asked. */
+export function tabQuestionText(ctx: PushContext, kind: 'choice' | 'permission'): PushText {
+  const tab = ctx.tabName ? `A aba ${ctx.tabName}` : 'Uma aba';
+  return { title: `${ctx.projectName ?? 'termhub'} precisa de você`, body: kind === 'permission' ? `${tab} pede permissão para continuar.` : `${tab} fez uma pergunta.` };
+}

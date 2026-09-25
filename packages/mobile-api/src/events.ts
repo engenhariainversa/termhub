@@ -44,6 +44,36 @@ export const chatGrantSchema = z.object({
   tab_name: z.string().nullable(),
 });
 
+/** Mirrors `TabQuestionView` (apps/server/src/db/repositories/tab-questions-view.ts): a question a tab
+ * put to the person, with what the chat answered. `recommended` comes out of Claude Code's own label. */
+export const tabQuestionOption = z.object({ label: z.string(), description: z.string(), recommended: z.boolean() });
+export const tabQuestionItem = z.object({ question: z.string(), header: z.string(), multi_select: z.boolean(), options: z.array(tabQuestionOption) });
+export const tabQuestionStatus = z.enum(['open', 'answered', 'answered_in_tab', 'expired', 'failed']);
+const tabQuestionCommon = {
+  id: z.string(),
+  tab_id: z.string(),
+  tab_name: z.string().nullable(),
+  status: tabQuestionStatus,
+  error_code: z.string().nullable(),
+  created_at: z.string(),
+  answered_at: z.string().nullable(),
+  closed_at: z.string().nullable(),
+};
+export const tabQuestionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    ...tabQuestionCommon,
+    kind: z.literal('choice'),
+    payload: z.object({ questions: z.array(tabQuestionItem) }),
+    answer: z.object({ answers: z.array(z.object({ selected: z.array(z.number().int()), text: z.string().optional() })) }).nullable(),
+  }),
+  z.object({
+    ...tabQuestionCommon,
+    kind: z.literal('permission'),
+    payload: z.object({ tool_name: z.string() }),
+    answer: z.object({ allow: z.boolean(), text: z.string().optional() }).nullable(),
+  }),
+]);
+
 // Mirrors the `ChatEvent` union in `apps/server/src/chat/bus.ts`, plus the `hello` variant the
 // mobile socket sends first (there is no browser-side equivalent: the app has no other way to
 // learn the protocol version and the server's clock before its first real event).
@@ -72,6 +102,9 @@ export const chatEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('grant'), user_id: z.string(), conversation_id: z.string(), grant: chatGrantSchema }),
   z.object({ type: z.literal('grant_revoked'), user_id: z.string(), conversation_id: z.string(), grant_id: z.string() }),
   z.object({ type: z.literal('granted_action'), user_id: z.string(), conversation_id: z.string(), action: chatActionSchema }),
+  z.object({ type: z.literal('tab_question'), user_id: z.string(), conversation_id: z.string(), question: tabQuestionSchema }),
+  z.object({ type: z.literal('tab_question_answered'), user_id: z.string(), conversation_id: z.string(), question: tabQuestionSchema }),
+  z.object({ type: z.literal('tab_question_closed'), user_id: z.string(), conversation_id: z.string(), question: tabQuestionSchema }),
   z.object({
     type: z.literal('run_finished'),
     user_id: z.string(),
