@@ -8,8 +8,11 @@ import { failureLabel } from './service.js';
 import { ANSWER_TEXT_MAX } from './tab-question-payload.js';
 import { publishTabQuestions } from './tab-questions.js';
 
-/** How long after Claude's `Stop` the prompt is read: the suggestion is drawn shortly after the turn ends (spec §3, §6.1). */
-export const SUGGESTION_DELAY_MS = 3000;
+/**
+ * How long after Claude's `Stop` the prompt is read: the suggestion is drawn shortly after the turn ends
+ * (seen 1.46–2.80 s later), so the wait keeps a margin over that (spec §3, §6.1).
+ */
+export const SUGGESTION_DELAY_MS = 5000;
 /** The input box sits at the bottom of the pane. */
 export const SUGGESTION_CAPTURE_LINES = 15;
 export const SUGGESTION_MAX = ANSWER_TEXT_MAX;

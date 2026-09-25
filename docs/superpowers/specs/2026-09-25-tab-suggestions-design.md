@@ -64,7 +64,7 @@ Fixtures in `apps/server/src/chat/fixtures/tab-suggestions/` (from an isolated t
 
 - Reuse `tab_questions` with a new `kind = 'suggestion'` (plain text column: no migration), `payload = { text }` (≤ 2000 chars, one line, control chars stripped).
 - Trigger: after ingesting a Claude `Stop` event (tab → `waiting_input`) for a tab whose project has
-  a conversation (same owner rule as TER-56), wait `SUGGESTION_DELAY_MS = 3000`, capture styled (last
+  a conversation (same owner rule as TER-56), wait `SUGGESTION_DELAY_MS = 5000`, capture styled (last
   15 lines), and if `promptSuggestion` finds text, open a suggestion row. The wait is fire-and-forget
   (never delays the hook POST); if any hook event of the tab arrives meanwhile, nothing opens.
   Machines whose capture is not styled (old agent) never get suggestion cards.
@@ -128,3 +128,6 @@ sugere:", editable text field prefilled, **Enviar** (disabled while sending or e
 - A failure after the claim marks the row `failed` and answers 502; dismissing an already-closed
   suggestion answers 200 without an event; dismiss needs only chat access (it never touches the tab).
 - Every hook event of the tab cancels a pending suggestion check, even events the interpreter ignores.
+- The suggestion was seen drawn 1.46–2.80 s after the `Stop`, so the wait is 5000 ms, not 3000.
+- Dismissing is best effort past the row update, like sending: a failed announcement is logged by
+  code and the dismissed card is still the answer.

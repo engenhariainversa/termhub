@@ -149,6 +149,18 @@ describe('sendTabSuggestion', () => {
     expect(tabQuestions.claimSuggestion).not.toHaveBeenCalled();
   });
 
+  it('a live check that cannot read the tab answers its error: nothing closed, claimed or typed', async () => {
+    captureStyledScreen.mockRejectedValueOnce(new ControlError('MACHINE_FAILED', 'Falha na máquina'));
+    const { ctx, tabQuestions } = ctxFor(row());
+    const err = await sendTabSuggestion(ctx, 's1', { text: 'commit it' }, { log: log() }).then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(HttpError);
+    expect(err).toMatchObject({ code: 'MACHINE_FAILED' });
+    expect(tabQuestions.closeOne).not.toHaveBeenCalled();
+    expect(tabQuestions.claimSuggestion).not.toHaveBeenCalled();
+    expect(sendInput).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
   it('a send that fails after the claim marks the card failed and answers 502', async () => {
     sendInput.mockRejectedValueOnce(new ControlError('MACHINE_OFFLINE', 'A máquina está offline'));
     const { ctx, tabQuestions } = ctxFor(row());
@@ -167,6 +179,16 @@ describe('dismissTabSuggestion', () => {
     expect(events).toEqual([expect.objectContaining({ type: 'tab_suggestion_closed', suggestion: expect.objectContaining({ status: 'dismissed' }) })]);
     expect(captureStyledScreen).not.toHaveBeenCalled();
     expect(sendInput).not.toHaveBeenCalled();
+  });
+
+  it('a dismiss whose announcement fails still answers dismissed, and logs by code only', async () => {
+    const { ctx } = ctxFor(row());
+    (ctx.repos as unknown as { tabs: { findByIdsForOwner: ReturnType<typeof vi.fn> } }).tabs.findByIdsForOwner.mockRejectedValueOnce(new Error('db down'));
+    const l = log();
+    const view = await dismissTabSuggestion(ctx, 's1', { log: l });
+    expect(view).toMatchObject({ id: 's1', status: 'dismissed' });
+    expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 's1', tabId: 't1', code: 'PUBLISH_FAILED' }, 'tab suggestion dismiss not announced');
+    expect(JSON.stringify(l.warn.mock.calls)).not.toContain('db down');
   });
 
   it('a suggestion already sent or closed stays as it is, and nothing is announced', async () => {

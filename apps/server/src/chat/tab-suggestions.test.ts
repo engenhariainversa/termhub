@@ -118,6 +118,10 @@ describe('checkTabSuggestion', () => {
 });
 
 describe('scheduleTabSuggestion', () => {
+  it('waits 5 s: the suggestion was seen drawn 1.5–2.8 s after the Stop', () => {
+    expect(SUGGESTION_DELAY_MS).toBe(5000);
+  });
+
   it(`reads the prompt ${SUGGESTION_DELAY_MS} ms after the Stop, not before`, async () => {
     fakeTimers();
     const repos = fakeRepos();
@@ -144,12 +148,12 @@ describe('scheduleTabSuggestion', () => {
     fakeTimers();
     const repos = fakeRepos();
     scheduleTabSuggestion(asRepos(repos), log(), 't1');
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(SUGGESTION_DELAY_MS - 1000);
     scheduleTabSuggestion(asRepos(repos), log(), 't1');
     cancelTabSuggestion('t2');
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(SUGGESTION_DELAY_MS - 1);
     expect(repos.tabs.findById).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(1);
     await settle();
     expect(repos.tabQuestions.open).toHaveBeenCalledTimes(1);
   });

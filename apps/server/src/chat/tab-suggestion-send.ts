@@ -114,6 +114,12 @@ export async function dismissTabSuggestion(ctx: ControlContext, id: string, deps
     return view;
   }
   deps.log.info({ tabQuestionId: row.id, tabId: row.tab_id, kind: 'suggestion' }, 'tab suggestion dismissed');
-  const [view] = await publishTabQuestions(ctx.repos, 'tab_question_closed', [dismissed]);
-  return view;
+  // The row is dismissed: announcing it is best effort and can no longer turn the dismiss into an error.
+  try {
+    const [view] = await publishTabQuestions(ctx.repos, 'tab_question_closed', [dismissed]);
+    if (view) return view;
+  } catch (err) {
+    deps.log.warn({ tabQuestionId: row.id, tabId: row.tab_id, code: codeOf(err, 'PUBLISH_FAILED') }, 'tab suggestion dismiss not announced');
+  }
+  return toTabQuestionView(dismissed, null);
 }
