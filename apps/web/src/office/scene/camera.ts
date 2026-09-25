@@ -1,4 +1,4 @@
-/** The camera: pure view math, plus the class that binds wheel and drag to it. No PixiJS here. */
+/** The camera: pure view math, plus the class that binds wheel, drag and pinch to it. No PixiJS here. */
 export interface View {
   x: number;
   y: number;
@@ -57,7 +57,8 @@ export class Camera {
   private cleanup: Array<() => void> = [];
 
   constructor(private readonly canvas: HTMLCanvasElement) {
-    let last: { x: number; y: number } | null = null;
+    // every finger (or the mouse) on the canvas: one drags, two pinch and pan together
+    const pointers = new Map<number, { x: number; y: number }>();
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       if (this.locked) return;
@@ -66,34 +67,55 @@ export class Camera {
       this.onUserMove?.();
     };
     const onDown = (e: PointerEvent) => {
-      this.dragged = 0;
+      if (pointers.size === 0) this.dragged = 0;
       // a locked camera starts no drag at all (a tap on a room still counts as a click)
-      last = this.locked ? null : { x: e.clientX, y: e.clientY };
+      if (!this.locked) pointers.set(e.pointerId ?? 0, { x: e.clientX, y: e.clientY });
     };
     const onMove = (e: PointerEvent) => {
-      if (!last) return;
+      const id = e.pointerId ?? 0;
+      const prev = pointers.get(id);
+      if (!prev) return;
       // locked mid-drag: the press ends here, so unlocking later does not make the picture jump
       if (this.locked) {
-        last = null;
+        pointers.clear();
         return;
       }
-      const dx = e.clientX - last.x;
-      const dy = e.clientY - last.y;
+      const next = { x: e.clientX, y: e.clientY };
+      const other = [...pointers].find(([k]) => k !== id)?.[1];
+      pointers.set(id, next);
+      if (other) {
+        // a pinch: zoom by how far the fingers spread, around their midpoint, and pan with it
+        const r = canvas.getBoundingClientRect();
+        const before = Math.hypot(prev.x - other.x, prev.y - other.y);
+        const after = Math.hypot(next.x - other.x, next.y - other.y);
+        // zoom around where the midpoint was, then carry the picture to where it is now, so what
+        // was under the fingers stays under them
+        const mid = { x: (prev.x + other.x) / 2 - r.left, y: (prev.y + other.y) / 2 - r.top };
+        const zoomed = before > 0 ? zoomAt(this.target, mid.x, mid.y, after / before) : this.target;
+        this.target = { ...zoomed, x: zoomed.x + (next.x - prev.x) / 2, y: zoomed.y + (next.y - prev.y) / 2 };
+        // two fingers are never a tap
+        this.dragged += 5 + Math.abs(after - before);
+        this.onUserMove?.();
+        return;
+      }
+      const dx = next.x - prev.x;
+      const dy = next.y - prev.y;
       this.dragged += Math.abs(dx) + Math.abs(dy);
       this.target = { ...this.target, x: this.target.x + dx, y: this.target.y + dy };
-      last = { x: e.clientX, y: e.clientY };
       if (this.dragged >= 5) this.onUserMove?.();
     };
-    const onUp = () => (last = null);
+    const onUp = (e: PointerEvent) => pointers.delete(e.pointerId ?? 0);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('pointerdown', onDown);
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
     this.cleanup.push(() => {
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     });
   }
 
