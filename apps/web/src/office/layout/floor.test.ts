@@ -13,11 +13,11 @@ describe('layoutFloor', () => {
       expect(d.gx).toBeLessThan(floor.width);
       expect(d.gy).toBeLessThan(floor.height);
     }
-    expect(floor.desks.slice(0, 2)).toEqual([{ gx: 1, gy: 1 }, { gx: 3, gy: 1 }]);
+    expect(floor.desks.slice(0, 2)).toEqual([{ gx: 1.5, gy: 2 }, { gx: 3.5, gy: 2 }]);
   });
 
   it('grows with the desks and keeps a small floor for a building with none', () => {
-    expect(layoutFloor(0)).toEqual({ width: 5, height: 3, desks: [] });
+    expect(layoutFloor(0)).toEqual({ width: 5, height: 4, desks: [] });
     const area = (n: number) => layoutFloor(n).width * layoutFloor(n).height;
     expect(area(40)).toBeGreaterThan(area(4));
   });

@@ -21,7 +21,7 @@ describe('layoutCity', () => {
   });
   it('gives a building with no desk a minimal block, so its sign has ground to stand on', () => {
     const city = layoutCity([block('empty', 0)]);
-    expect([city.blocks[0].width, city.blocks[0].height]).toEqual([5, 3]);
+    expect([city.blocks[0].width, city.blocks[0].height]).toEqual([5, 4]);
     expect(city.blocks[0].floor.desks).toEqual([]);
   });
   it('is an empty, finite city for no buildings', () => {
@@ -46,10 +46,10 @@ describe('floorOnCity / bounds', () => {
   it('frames the pavement the block is drawn with, not only its floor', () => {
     const city = layoutCity([block('a', 2)]);
     const b = city.blocks[0];
-    expect([b.origin, b.width, b.height]).toEqual([{ gx: 0, gy: 0 }, 5, 3]);
+    expect([b.origin, b.width, b.height]).toEqual([{ gx: 0, gy: 0 }, 5, 4]);
     // drawBlock paints the footprint grown by BLOCK_MARGIN on every side: 64 px per tile across, 32 down, 28 px of walls on top
     expect(BLOCK_MARGIN).toBe(1);
-    expect(blockBounds(b, 28)).toEqual({ x: -160, y: -60, w: 384, h: 220 });
+    expect(blockBounds(b, 28)).toEqual({ x: -192, y: -60, w: 416, h: 236 });
     expect(cityBounds(city, 28)).toEqual(blockBounds(b, 28));
   });
   it('puts a later block of the same row to the right of an earlier one, and the city spans both', () => {

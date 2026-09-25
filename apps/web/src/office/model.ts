@@ -132,11 +132,16 @@ export function truncateLabel(text: string, max: number): string {
   return chars.length <= max ? chars.join('') : `${chars.slice(0, max - 1).join('')}…`;
 }
 
-/** FNV-1a over the id: the same tab is always the same person. */
-export function lookOf(id: string, variants: number): number {
+/** FNV-1a over a string, as an unsigned 32-bit number: the same id always hashes the same. */
+export function fnv1a(id: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193);
-  return (h >>> 0) % variants;
+  return h >>> 0;
+}
+
+/** The same tab is always the same person. */
+export function lookOf(id: string, variants: number): number {
+  return fnv1a(id) % variants;
 }
 
 const oneLine = (s: string) => s.trim().replace(/\s+/g, ' ');

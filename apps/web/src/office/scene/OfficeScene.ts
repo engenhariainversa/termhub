@@ -1,8 +1,9 @@
 /** The city in PixiJS: one block per project (a building), its desks on one floor. Knows nothing about tabs, the API or React. */
-import { Application, CanvasSource, Container, Rectangle, Texture, UPDATE_PRIORITY, type Graphics } from 'pixi.js';
+import { Application, CanvasSource, Container, ImageSource, Rectangle, Texture, UPDATE_PRIORITY, type Graphics } from 'pixi.js';
 import { BLOCK_MARGIN, blockBounds, cityBounds, floorOnCity, layoutCity, type CityLayout, type PlacedBlock } from '../layout/city';
 import { depthOf, toScreen } from '../layout/iso';
 import { sameFocus, type CityModel, type FocusTarget } from '../model';
+import { ART_URLS } from '../pack/art';
 import { generatedPack } from '../pack/generated';
 import type { PackManifest } from '../pack/manifest';
 import { Camera, sameBox, type Box } from './camera';
@@ -10,8 +11,11 @@ import { deskLabelsVisible } from './detail';
 import { FrameListeners } from './frames';
 import { BuildingSign, DeskOverlay } from './Overlay';
 import { DeskView, type Textures } from './PersonView';
+import { RoomLamp } from './RoomLamp';
+import { RoomRacks } from './RoomRacks';
 import { drawBlock, drawFloor, WALL_H } from './RoomView';
 import { shapeOf } from './shape';
+import { RoomWallPlaque } from './wallPlaque';
 
 /** Room above a block's walls, so framing a block does not cut its top off. */
 const SIGN_H = 24;
@@ -32,6 +36,14 @@ interface DrawnBuilding {
   floor: Graphics;
   lit: boolean;
   sign: BuildingSign;
+  /** the project's name, framed on the back wall */
+  plaque: RoomWallPlaque;
+  /** the name the plaque shows, so a tick that changed nothing does not repaint it */
+  label: string;
+  /** wall lamp: on = warm wash, off = the same fixture, dark */
+  lamp: RoomLamp;
+  /** shelves, cabinets and the server rack against the back walls */
+  racks: RoomRacks;
   /** every desk of this building, so its light going out dims them all without a rebuild */
   views: DeskView[];
 }
@@ -54,6 +66,8 @@ export class OfficeScene {
   private readonly things = new Container();
   private readonly overlay = new Container();
   private textures: Textures = {};
+  /** pixel-art sheets from `pack/art`, loaded beside the generated atlas */
+  private art: Record<string, Texture> = {};
   /** the pack's atlas: ours to free, since nothing else knows about it */
   private source: CanvasSource | null = null;
   private manifest: PackManifest | null = null;
@@ -92,6 +106,8 @@ export class OfficeScene {
     if (this.app || this.mounting || this.destroyed) return;
     this.mounting = true;
     const app = new Application();
+    // the art sheets download and decode while Pixi picks its renderer, not after it
+    const art = this.loadArt();
     try {
       await app.init({ resizeTo: host, background: 0x0f1115, antialias: false, autoDensity: true, resolution: window.devicePixelRatio || 1 });
     } catch (err) {
@@ -101,7 +117,10 @@ export class OfficeScene {
       app.destroy(true, { children: true });
       throw err;
     }
+    await art;
     this.mounting = false;
+    // unmounted meanwhile: destroy() found no app to free (it is only published below) and
+    // loadArt() added no sheet behind it, so this app is all that is left
     if (this.destroyed) return app.destroy(true, { children: true });
     this.app = app;
     host.appendChild(app.canvas);
@@ -166,8 +185,33 @@ export class OfficeScene {
     this.app = null;
     for (const frames of Object.values(this.textures)) for (const texture of frames) texture.destroy();
     this.textures = {};
+    for (const texture of Object.values(this.art)) texture.destroy(true);
+    this.art = {};
     this.source?.destroy();
     this.source = null;
+  }
+
+  /**
+   * Loads the PNGs of `pack/art` as nearest-neighbour textures. A sheet that fails to decode is left
+   * out, and whatever needs it falls back (a desk to the generated pack, a piece of furniture to nothing).
+   * A sheet already loaded (a mount retried after a failed init) is kept rather than replaced.
+   */
+  private async loadArt(): Promise<void> {
+    await Promise.all(
+      Object.entries(ART_URLS).map(async ([key, url]) => {
+        if (this.art[key]) return;
+        const img = new Image();
+        img.src = url;
+        try {
+          await img.decode();
+        } catch {
+          return;
+        }
+        // unmounted while it decoded: destroy() has freed the sheets it found, so add none behind it
+        if (this.destroyed) return;
+        this.art[key] = new Texture({ source: new ImageSource({ resource: img, scaleMode: 'nearest' }) });
+      }),
+    );
   }
 
   get fps(): number {
@@ -206,13 +250,21 @@ export class OfficeScene {
       const drawn = this.buildings.get(building.id);
       if (!drawn) continue;
       // a building going dark is not a new city: repaint it and dim its desks where they stand
-      if (drawn.lit !== building.lit) {
+      const relit = drawn.lit !== building.lit;
+      if (relit) {
         drawn.lit = building.lit;
         drawBlock(drawn.block, building.lit, drawn.ground);
         drawFloor(floorOnCity(drawn.block), building.lit, drawn.floor);
         for (const view of drawn.views) view.root.alpha = building.lit ? 1 : UNLIT_ALPHA;
+        drawn.lamp.apply(building.lit);
+        drawn.racks.apply(building.lit);
       }
       drawn.sign.apply(building);
+      // repainting the plaque rebuilds its frame and re-measures its text: only when it would look different
+      if (relit || drawn.label !== building.label) {
+        drawn.label = building.label;
+        drawn.plaque.apply(floorOnCity(drawn.block), { label: building.label, lit: building.lit });
+      }
       for (const d of building.desks) {
         const desk = this.desks.get(deskKey(building.id, d.id));
         desk?.view.apply(d);
@@ -294,12 +346,19 @@ export class OfficeScene {
       const sign = new BuildingSign(front, building);
       sign.root.on('pointertap', () => this.clicked(() => this.handlers.onPickSign(building.id)));
       this.overlay.addChild(sign.root);
-      const drawn: DrawnBuilding = { block, ground, floor, lit: building.lit, sign, views: [] };
+      // the lamp goes down with the walls, under everything in `things`: its wash lands on the wall
+      // and floor behind the furniture and the desks, never over them
+      const lamp = new RoomLamp(placed, building.lit);
+      this.floor.addChild(lamp.root);
+      const plaque = new RoomWallPlaque(placed, { label: building.label, lit: building.lit });
+      const racks = new RoomRacks(building.id, placed, building.desks.length, this.art, building.lit);
+      this.things.addChild(plaque.root, ...racks.sprites);
+      const drawn: DrawnBuilding = { block, ground, floor, lit: building.lit, sign, plaque, label: building.label, lamp, racks, views: [] };
       this.buildings.set(building.id, drawn);
       building.desks.forEach((d, j) => {
         const cell = { gx: placed.origin.gx + placed.layout.desks[j].gx, gy: placed.origin.gy + placed.layout.desks[j].gy };
         const at = toScreen(cell.gx, cell.gy);
-        const view = new DeskView(d, this.textures, this.manifest!, this.reducedMotion);
+        const view = new DeskView(d, this.textures, this.manifest!, this.reducedMotion, this.art);
         view.root.position.set(at.x, at.y);
         view.root.zIndex = depthOf(cell);
         // an unlit building's furniture and people fade; their markers, in the overlay, do not
