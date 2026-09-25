@@ -40,7 +40,7 @@ src/services/
   vault.ts    the SecureStore wrapper for the app's few secrets (a closed set of `VaultKey`s)
   storage.ts  the MMKV instance and the zustand StateStorage every persisted store uses
 
-src/ui/       Screen, Text, Button, Field, PinPad, Sheet, Card, Banner… (NativeWind v4)
+src/ui/       Screen, Text, Button, Field, PinInput, Sheet, Card, Banner… (NativeWind v4)
 src/theme/tokens.ts  the termhub palette (CSS variables), both colour schemes
 test/         jest setup, fakes for MMKV/SecureStore/expo-device/expo-local-authentication/the
               hardware key module, and shared test helpers (`test/helpers/enrolled-session.ts`,

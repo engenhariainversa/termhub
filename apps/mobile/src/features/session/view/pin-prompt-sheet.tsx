@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
-import { AppText, Button, PinDots, PinPad, Sheet } from '@/ui';
+import { ActivityIndicator, View } from 'react-native';
+import { AppText, Button, PinInput, Sheet } from '@/ui';
 import { attemptsSuffix } from '../model/messages';
 import { useSessionStore } from '../viewmodel/useSessionStore';
 
@@ -22,16 +22,14 @@ export function PinPromptSheet() {
   const [pin, setPin] = useState('');
 
   // A fresh prompt (new action id, or none at all — e.g. a cancel with a partial entry) starts
-  // from an empty pad. A *rejected* PIN keeps the same prompt open (only `error` changes), so
-  // `onDigit` below clears the pad unconditionally on every submission — this effect alone would
+  // from an empty field. A *rejected* PIN keeps the same prompt open (only `error` changes), so
+  // `onChange` below clears the field unconditionally on every submission — this effect alone would
   // leave a wrong PIN's six digits stuck on screen.
   useEffect(() => {
     setPin('');
   }, [pinPrompt?.actionId]);
 
-  const onDigit = (digit: string) => {
-    if (pin.length >= PIN_LENGTH) return;
-    const next = pin + digit;
+  const onChange = (next: string) => {
     setPin(next);
     if (next.length === PIN_LENGTH) {
       setPin('');
@@ -39,24 +37,26 @@ export function PinPromptSheet() {
     }
   };
 
-  const onBackspace = () => setPin((p) => p.slice(0, -1));
-
   return (
     <Sheet open={pinPrompt !== null} onClose={cancelPinPrompt} title={pinPrompt?.decision === 'approve_tab' ? 'Permitir sempre nesta aba' : 'Autorizar esta ação'}>
       <View className="gap-6">
-        <PinDots filled={pin.length} error={Boolean(error)} />
+        {busy ? (
+          <View className="items-center gap-3 py-4">
+            <ActivityIndicator />
+            <AppText variant="muted">Conferindo o PIN…</AppText>
+          </View>
+        ) : (
+          <PinInput value={pin} onChange={onChange} length={PIN_LENGTH} error={Boolean(error)} accessibilityLabel="PIN" />
+        )}
         {error ? (
           <AppText className="text-app-danger">
             {error}
             {attemptsLeft !== null ? attemptsSuffix(attemptsLeft) : ''}
           </AppText>
         ) : null}
-        <PinPad
-          onDigit={onDigit}
-          onBackspace={onBackspace}
-          onBiometrics={biometricsEnabled ? () => void resolvePinPrompt('biometrics') : undefined}
-          disabled={busy}
-        />
+        {biometricsEnabled ? (
+          <Button label="Usar biometria" variant="secondary" onPress={() => void resolvePinPrompt('biometrics')} disabled={busy} />
+        ) : null}
         <Button label="Cancelar" variant="ghost" onPress={cancelPinPrompt} disabled={busy} />
       </View>
     </Sheet>

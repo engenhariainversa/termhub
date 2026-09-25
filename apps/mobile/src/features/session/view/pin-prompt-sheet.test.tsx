@@ -9,11 +9,9 @@ import { PinPromptSheet } from './pin-prompt-sheet';
 /** The first proof of a file signs P-256 and derives the wrap key: slow while suites share the CPU. */
 const LOAD = { timeout: 15_000 };
 
+/** The whole PIN at once, as the system number pad delivers it into the hidden field. */
 async function typePin(pin: string) {
-  for (const digit of pin) {
-    // eslint-disable-next-line no-await-in-loop -- sequential presses, each awaited to avoid overlap (see pin-pad.test.tsx)
-    await fireEvent.press(screen.getByRole('button', { name: digit }));
-  }
+  await fireEvent.changeText(screen.getByLabelText('PIN'), pin);
 }
 
 /** What the chat store's `decide('approve')` does: the approval performed with the proof, against
@@ -38,7 +36,7 @@ afterEach(async () => {
 });
 
 describe('PinPromptSheet', () => {
-  it('a wrong PIN keeps the prompt open with "PIN incorreto." and the attempts left, clears the pad, and the right PIN then goes through', async () => {
+  it('a wrong PIN keeps the prompt open with "PIN incorreto." and the attempts left, clears the field, and the right PIN then goes through', async () => {
     const decide = jest.spyOn(stores.api, 'decide');
     await render(<PinPromptSheet />);
     let approved = false;
@@ -56,17 +54,18 @@ describe('PinPromptSheet', () => {
     expect(useSessionStore.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', decision: 'approve' });
     expect(approved).toBe(false);
 
-    // The pad took a fresh six digits: it was cleared and re-enabled after the rejection.
+    // The field took a fresh six digits: it was cleared and re-enabled after the rejection.
     await typePin('123456');
     await waitFor(() => expect(approved).toBe(true), LOAD);
     expect(decide).toHaveBeenCalledTimes(2);
     expect(useSessionStore.getState()).toMatchObject({ pinPrompt: null, error: null, attemptsLeft: null });
   }, 20_000);
 
-  it('disables the pad and Cancelar while busy', async () => {
+  it('shows that the PIN is being checked, instead of the PIN field, and disables Cancelar while busy', async () => {
     useSessionStore.setState({ pinPrompt: { actionId: 'a1', decision: 'approve' }, busy: true });
     await render(<PinPromptSheet />);
-    expect(screen.getByRole('button', { name: '1' }).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText('Conferindo o PIN…')).toBeTruthy();
+    expect(screen.queryByLabelText('PIN')).toBeNull();
     expect(screen.getByRole('button', { name: 'Cancelar' }).props.accessibilityState.disabled).toBe(true);
   });
 
