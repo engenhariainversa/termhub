@@ -4,6 +4,13 @@ import { REMOTE_PATH_PREFIX, assertSessionName, runOnMachine } from '../terminal
 import { agentRpc } from './errors.js';
 
 const tmux = () => config.terminal.tmuxPath;
+const clampLines = (lines: number) => Math.max(1, Math.min(5000, Math.trunc(lines)));
+
+/** A capture that may carry SGR escapes: `styled` says whether it does (an agent older than 0.5.2 cannot). */
+export interface StyledCapture {
+  text: string;
+  styled: boolean;
+}
 
 /**
  * Captures the last `lines` of a tmux pane's output as plain text. Internal helper only
@@ -12,7 +19,7 @@ const tmux = () => config.terminal.tmuxPath;
  */
 export async function captureScreen(machine: Machine, session: string, lines = 500): Promise<string> {
   assertSessionName(session);
-  const n = Math.max(1, Math.min(5000, Math.trunc(lines)));
+  const n = clampLines(lines);
 
   if (machine.type === 'agent') {
     const { text } = await agentRpc(machine, 'tmux.capture', { session, lines: n });
@@ -29,4 +36,25 @@ export async function captureScreen(machine: Machine, session: string, lines = 5
     `${REMOTE_PATH_PREFIX}tmux capture-pane -p -S -${n} -t '=${session}:'`,
   );
   return r.code === 0 ? r.stdout : '';
+}
+
+/**
+ * Like `captureScreen`, with the attributes kept as escapes (`capture-pane -e`, spec 2026-09-25 tab
+ * suggestions §4): only `terminal/ansi.ts` reads the result. Never logged.
+ */
+export async function captureStyledScreen(machine: Machine, session: string, lines = 500): Promise<StyledCapture> {
+  assertSessionName(session);
+  const n = clampLines(lines);
+
+  if (machine.type === 'agent') {
+    const r = await agentRpc(machine, 'tmux.capture', { session, lines: n, escapes: true });
+    return { text: r.text, styled: r.escapes === true };
+  }
+
+  const r = await runOnMachine(
+    machine,
+    { file: tmux(), args: ['capture-pane', '-p', '-e', '-S', `-${n}`, '-t', `=${session}:`] },
+    `${REMOTE_PATH_PREFIX}tmux capture-pane -p -e -S -${n} -t '=${session}:'`,
+  );
+  return { text: r.code === 0 ? r.stdout : '', styled: true };
 }

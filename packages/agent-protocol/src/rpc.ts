@@ -42,7 +42,15 @@ const def = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(params: P, result: 
 export const RPC = {
   'tmux.list': def(z.object({}), z.object({ sessions: z.array(sessionName) })),
   'tmux.kill': def(z.object({ session: sessionName }), z.object({ killed: z.boolean() })),
-  'tmux.capture': def(z.object({ session: sessionName, lines: z.number().int().min(1).max(5000) }), z.object({ text: z.string() })),
+  /**
+   * `escapes`: keep the SGR attributes (`capture-pane -e`) so the server can tell dimmed text from typed
+   * text (since agent 0.5.2). An older agent strips the unknown param and answers plain text with no
+   * `escapes` in the result — which is how the server knows.
+   */
+  'tmux.capture': def(
+    z.object({ session: sessionName, lines: z.number().int().min(1).max(5000), escapes: z.boolean().optional() }),
+    z.object({ text: z.string(), escapes: z.boolean().optional() }),
+  ),
   /** Idempotent: creates the detached session in `cwd` when it is missing. `created` says whether it had to. */
   'tmux.ensure': def(z.object({ session: sessionName, cwd: machinePath }), z.object({ created: z.boolean() }), 10_000),
   /**

@@ -15,7 +15,7 @@ import type { AgentConnection } from './connection.js';
 import { AgentClosedError, AgentRpcError, AgentTimeoutError } from './connection.js';
 import { toHttpError } from './errors.js';
 import { agents, AgentOfflineError } from './registry.js';
-import { captureScreen } from './screen.js';
+import { captureScreen, captureStyledScreen } from './screen.js';
 
 function agentMachine(id = 'm1'): Machine {
   return {
@@ -259,6 +259,20 @@ describe('agent machine operations use named RPCs', () => {
     expect(text).toBe('hello screen');
     expect(conn.rpc).toHaveBeenCalledWith('tmux.capture', { session: 'sess1', lines: 100 }, undefined);
     expect(execFile).not.toHaveBeenCalled();
+  });
+
+  it('captureStyledScreen asks the agent for escapes and trusts its answer', async () => {
+    const machine = agentMachine();
+    const conn = attachFakeConn(machine.id, () => ({ text: '❯ \x1b[2mcommit it\x1b[0m', escapes: true }));
+    await expect(captureStyledScreen(machine, 'sess1', 15)).resolves.toEqual({ text: '❯ \x1b[2mcommit it\x1b[0m', styled: true });
+    expect(conn.rpc).toHaveBeenCalledWith('tmux.capture', { session: 'sess1', lines: 15, escapes: true }, undefined);
+    expect(execFile).not.toHaveBeenCalled();
+  });
+
+  it('captureStyledScreen: an agent older than 0.5.2 answers plain text, and says nothing about escapes', async () => {
+    const machine = agentMachine();
+    attachFakeConn(machine.id, () => ({ text: '❯ commit it' }));
+    await expect(captureStyledScreen(machine, 'sess1', 15)).resolves.toEqual({ text: '❯ commit it', styled: false });
   });
 
   it('runOnMachine throws for an agent machine', () => {

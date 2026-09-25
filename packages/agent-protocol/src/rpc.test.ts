@@ -83,6 +83,13 @@ describe('rpc catalog', () => {
     expect(rpcErrorSchema.parse({ code: 'eperm', message: 'x', path: '/v' }).code).toBe('eperm');
     expect(rpcErrorSchema.safeParse({ code: 'boom', message: 'x' }).success).toBe(false);
   });
+  it('tmux.capture takes an optional escapes flag and may say so in its result', () => {
+    expect(RPC['tmux.capture'].params.safeParse({ session: 'a', lines: 15, escapes: true }).success).toBe(true);
+    expect(RPC['tmux.capture'].params.safeParse({ session: 'a', lines: 15 }).success).toBe(true);
+    expect(RPC['tmux.capture'].params.safeParse({ session: 'a', lines: 15, escapes: 'yes' }).success).toBe(false);
+    expect(RPC['tmux.capture'].result.safeParse({ text: 'x' }).success).toBe(true); // an agent older than 0.5.2
+    expect(RPC['tmux.capture'].result.safeParse({ text: 'x', escapes: true }).success).toBe(true);
+  });
 });
 
 describe('terminal RPCs', () => {

@@ -12,7 +12,7 @@ vi.mock('../terminal/machine-exec.js', async (importOriginal) => {
   return { ...actual, runOnMachine: runOnMachineMock };
 });
 
-import { captureScreen } from './screen.js';
+import { captureScreen, captureStyledScreen } from './screen.js';
 
 function localMachine(): Machine {
   return {
@@ -107,6 +107,38 @@ describe('captureScreen (local/ssh)', () => {
 
   it('an invalid session name throws before ever calling runOnMachine', async () => {
     await expect(captureScreen(localMachine(), 'bad session!', 10)).rejects.toThrow();
+    expect(runOnMachineMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('captureStyledScreen (local/ssh)', () => {
+  beforeEach(() => {
+    runOnMachineMock.mockReset();
+  });
+
+  it('local machine: capture-pane -e keeps the attributes, and says the text is styled', async () => {
+    runOnMachineMock.mockResolvedValue({ code: 0, stdout: '❯ \x1b[2mcommit it\x1b[0m\n', stderr: '', timedOut: false });
+    await expect(captureStyledScreen(localMachine(), 'th-a', 15)).resolves.toEqual({ text: '❯ \x1b[2mcommit it\x1b[0m\n', styled: true });
+    expect(runOnMachineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'local' }),
+      { file: config.terminal.tmuxPath, args: ['capture-pane', '-p', '-e', '-S', '-15', '-t', '=th-a:'] },
+      expect.any(String),
+    );
+  });
+
+  it('ssh machine: the remote command carries -e', async () => {
+    runOnMachineMock.mockResolvedValue({ code: 0, stdout: '', stderr: '', timedOut: false });
+    await captureStyledScreen(sshMachine(), 'th-a', 15);
+    expect(runOnMachineMock.mock.calls[0]?.[2] as string).toContain(`capture-pane -p -e -S -15 -t '=th-a:'`);
+  });
+
+  it('a non-zero exit is an empty screen, as with the plain capture', async () => {
+    runOnMachineMock.mockResolvedValue({ code: 1, stdout: 'ignored', stderr: 'boom', timedOut: false });
+    await expect(captureStyledScreen(localMachine(), 'th-a')).resolves.toEqual({ text: '', styled: true });
+  });
+
+  it('an invalid session name throws before ever calling runOnMachine', async () => {
+    await expect(captureStyledScreen(localMachine(), 'bad session!', 10)).rejects.toThrow();
     expect(runOnMachineMock).not.toHaveBeenCalled();
   });
 });
