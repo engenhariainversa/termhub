@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "license": "MIT",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "index.ts",
   "scripts": {
     "build:contract": "npm run build -w @termhub/mobile-api",
     "prestart": "npm run build:contract",

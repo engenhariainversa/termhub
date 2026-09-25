@@ -1,4 +1,3 @@
-import 'react-native-get-random-values';
 import '../global.css';
 import { Stack, useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
