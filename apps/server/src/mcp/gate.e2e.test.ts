@@ -6,7 +6,7 @@ import { hashApiToken } from '../auth/api-tokens.js';
 import { canAccess } from '../auth/permissions.js';
 import { chatBus } from '../chat/bus.js';
 import { idempotencyKeyFor } from '../chat/gate.js';
-import type { ChatAction, InsertPendingInput } from '../db/repositories/chat-actions.js';
+import type { ChatAction, InsertApprovedInput, InsertPendingInput } from '../db/repositories/chat-actions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { applyErrorHandler } from '../lib/errors.js';
 import { mcpRoutes } from './route.js';
@@ -111,6 +111,34 @@ function fakeChatActions() {
       rows.push(row);
       return row;
     }),
+    /** Same duplicate check and row shape as `insertPending`, but born `approved`, already tied to
+     * the grant that answered it and to whoever granted it. */
+    insertApproved: vi.fn(async (input: InsertApprovedInput) => {
+      if (rows.some((r) => sameKey(r, input.conversation_id, input.idempotency_key ?? '') && isOpen(r))) {
+        throw new Error('duplicate key value violates unique constraint "chat_actions_one_open_per_key"');
+      }
+      const row: ChatAction = {
+        id: `a${rows.length + 1}`,
+        conversation_id: input.conversation_id,
+        message_id: input.message_id ?? null,
+        tool: input.tool,
+        args: input.args,
+        class: input.class,
+        status: 'approved',
+        idempotency_key: input.idempotency_key ?? null,
+        machine_id: input.machine_id ?? null,
+        project_id: input.project_id ?? null,
+        tab_id: input.tab_id ?? null,
+        grant_id: input.grant_id,
+        error_code: null,
+        duration_ms: null,
+        decided_by: input.decided_by,
+        decided_at: new Date().toISOString(),
+        created_at: PENDING_CREATED_AT,
+      };
+      rows.push(row);
+      return row;
+    }),
     markExecuted: vi.fn(async (id: string, ok: boolean, errorCode?: string | null, durationMs?: number | null) => {
       const row = rows.find((r) => r.id === id);
       if (!row) return;
@@ -150,6 +178,22 @@ function fakeChatActions() {
   };
 }
 
+function fakeChatGrants() {
+  const grants: { id: string; conversation_id: string; tab_id: string; tool: string; expires_at: string; revoked_at: string | null }[] = [];
+  return {
+    grants,
+    /** A grant as the decision route leaves it; `expiresInMinutes` < 0 stages an expired one. */
+    seed: (tabId: string, opts: { conversationId?: string; expiresInMinutes?: number; revoked?: boolean } = {}) => {
+      const g = { id: `g${grants.length + 1}`, conversation_id: opts.conversationId ?? CONVERSATION, tab_id: tabId, tool: 'send_input', expires_at: new Date(Date.now() + (opts.expiresInMinutes ?? 60) * 60_000).toISOString(), revoked_at: opts.revoked ? new Date().toISOString() : null };
+      grants.push(g);
+      return g;
+    },
+    findActive: vi.fn(async (conversationId: string, tabId: string, tool: string) =>
+      grants.find((g) => g.conversation_id === conversationId && g.tab_id === tabId && g.tool === tool && g.revoked_at === null && Date.parse(g.expires_at) > Date.now()),
+    ),
+  };
+}
+
 function build(opts: { gated: boolean; conversationId?: string }) {
   const tab = (id: string, name: string) => ({ id, project_id: 'p1', machine_id: 'm1', name, kind: 'terminal', tmux_session: `termhub-p1-${id}`, simulator_udid: null, position: 0, state: null, state_text: null, state_tool: null, state_at: null, state_seen_at: null, created_at: '', created_by_token_id: null });
   const tabs = new Map<string, Record<string, unknown>>([
@@ -169,11 +213,13 @@ function build(opts: { gated: boolean; conversationId?: string }) {
     recordEvent: vi.fn(async () => {}),
   };
   const actions = fakeChatActions();
+  const grants = fakeChatGrants();
   const chat = { getOrCreateForUser: vi.fn(async (userId: string) => ({ id: CONVERSATION, user_id: userId, cli_session_id: null, created_at: '' })) };
   const repos = {
     apiTokens,
     chat,
     chatActions: actions,
+    chatGrants: grants,
     users: { findById: vi.fn(async () => ({ id: 'u1', role_id: 'r' })) },
     machines: {
       findById: vi.fn(async () => machine),
@@ -203,7 +249,7 @@ function build(opts: { gated: boolean; conversationId?: string }) {
   const app = Fastify();
   applyErrorHandler(app);
   app.register((a) => mcpRoutes(a, { repos, version: '0.0.0-test' }));
-  return { app, apiTokens, actions, tabs };
+  return { app, apiTokens, actions, tabs, grants };
 }
 
 const callTool = (app: ReturnType<typeof Fastify>, name: string, args: object) =>
@@ -684,4 +730,98 @@ it("never resolves another user's tab when re-validating an approval", async () 
   expect(typed).toEqual([]);
   expect(actions.markExecuted).toHaveBeenCalledWith(row.id, false, 'TAB_GONE', expect.any(Number));
   expect(actions.rows[0].status).toBe('failed');
+});
+
+it('types at once into a trusted tab, and leaves an executed audit row tied to the grant', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  const g = grants.seed('t1');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'sim, pode seguir' });
+  expect(resultOf(res).isError).toBeFalsy();
+  expect(typed).toContain('sim, pode seguir');
+  expect(actions.insertPending).not.toHaveBeenCalled();
+  expect(actions.rows).toHaveLength(1);
+  expect(actions.rows[0]).toMatchObject({ status: 'executed', grant_id: g.id, decided_by: 'u1', tab_id: 't1' });
+  const live = collected.find((e) => e.type === 'granted_action') as { action: { status: string; grant_id: string; summary: string } } | undefined;
+  expect(live?.action).toMatchObject({ status: 'executed', grant_id: g.id });
+  expect(collected.some((e) => e.type === 'confirmation')).toBe(false);
+});
+
+it.each([
+  ['answering a permission', 'send_input', { tab_id: 't1', text: '1', answering_permission: true }],
+  ['run_command', 'run_command', { tab_id: 't1', command: 'ls' }],
+  ['send_key', 'send_key', { tab_id: 't1', key: 'Enter' }],
+])('still asks for %s on a trusted tab', async (_label, tool, args) => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  grants.seed('t1');
+  const res = await callTool(app, tool, args);
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(actions.insertPending).toHaveBeenCalledTimes(1);
+  expect(typed).toEqual([]);
+});
+
+it.each([
+  ['another tab', () => ({ tabId: 't2' })],
+  ['another conversation', () => ({ tabId: 't1', conversationId: 'c_other' })],
+  ['an expired grant', () => ({ tabId: 't1', expiresInMinutes: -1 })],
+  ['a revoked grant', () => ({ tabId: 't1', revoked: true })],
+])('asks when the only grant is for %s', async (_label, grantOf) => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  const { tabId, ...opts } = grantOf();
+  grants.seed(tabId, opts);
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(actions.insertPending).toHaveBeenCalledTimes(1);
+  expect(typed).toEqual([]);
+});
+
+it('a recent "no" to the same text beats the grant', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  grants.seed('t1');
+  actions.seed('denied', 'send_input', { tab_id: 't1', text: 'rm -rf' }, 1);
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'rm -rf' });
+  expect(resultOf(res).isError).toBe(true);
+  expect(typed).toEqual([]);
+  expect(actions.insertApproved).not.toHaveBeenCalled();
+});
+
+it('a trusted tab that is waiting on a permission types nothing and records WAITING_PERMISSION', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  Object.assign(tabs.get('t1')!, { state: 'waiting_permission', state_at: new Date().toISOString() });
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+  expect(resultOf(res).isError).toBe(true);
+  expect(typed).toEqual([]);
+  expect(actions.rows[0]).toMatchObject({ status: 'failed', error_code: 'WAITING_PERMISSION' });
+  expect(collected.some((e) => e.type === 'confirmation')).toBe(false);
+});
+
+it('a trusted tab that no longer exists records TAB_GONE', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  tabs.delete('t1');
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+  expect(resultOf(res).isError).toBe(true);
+  expect(typed).toEqual([]);
+  expect(actions.rows[0]).toMatchObject({ status: 'failed', error_code: 'TAB_GONE' });
+});
+
+it("a person's own token never looks at grants", async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, grants } = build({ gated: false });
+  await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+  expect(grants.findActive).not.toHaveBeenCalled();
 });

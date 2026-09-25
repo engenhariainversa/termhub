@@ -32,6 +32,7 @@ const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
   },
   decision: { type: 'decision', ...base, action_id: 'a1', status: 'approved' },
   run_finished: { type: 'run_finished', ...base, message_id: null, ok: false, error_code: 'CHAT_FAILED' },
+  granted_action: { type: 'granted_action', ...base, action: { id: 'a2', tool: 'send_input', args: { tab_id: 't1', text: 'oi' }, class: 'write', status: 'executed', machine_id: null, project_id: null, tab_id: 't1', grant_id: 'g1', summary: 'digitar `oi` na aba api', created_at: '2026-09-25T10:01:00.000Z' } },
 };
 
 describe('ChatEvent / chatEventSchema parity', () => {

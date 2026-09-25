@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { ChatMessage } from '../db/repositories/chat.js';
 import type { ChatActionClass } from '../db/repositories/chat-actions.js';
+import type { ChatActionCard } from '../db/repositories/chat-actions-view.js';
 
 /** What the browser is told while an answer is being written. Terminal content never travels here:
  * an action carries the tool and its arguments, never a captured screen (spec §7.1). Every event names
@@ -27,7 +28,10 @@ export type ChatEvent =
    * could not even be attempted (the concierge refused it) — with no message at all, its empty
    * assistant row already deleted. `error_code` is the stored answer's code, or `SETUP_FAILED`.
    * Metadata only: never the answer's text. Browsers ignore it; the push service listens for it. */
-  | { type: 'run_finished'; user_id: string; conversation_id: string; message_id: string | null; ok: boolean; error_code: string | null };
+  | { type: 'run_finished'; user_id: string; conversation_id: string; message_id: string | null; ok: boolean; error_code: string | null }
+  /** A call the concierge made under a tab grant, already executed or failed: the trail's row for
+   * it (spec 2026-09-25 §5). Nobody was asked, so without this the trail would only show it on reload. */
+  | { type: 'granted_action'; user_id: string; conversation_id: string; action: ChatActionCard };
 
 class ChatBus {
   private emitter = new EventEmitter();

@@ -1,5 +1,5 @@
-import { expect, it } from 'vitest';
-import { actionClass, gateDecision, idempotencyKeyFor } from './gate.js';
+import { describe, expect, it } from 'vitest';
+import { actionClass, gateDecision, grantable, idempotencyKeyFor } from './gate.js';
 
 it('classifies every tool the MCP exposes, and defaults an unknown one to irreversible', () => {
   expect(actionClass('list_machines', {})).toBe('read');
@@ -43,4 +43,17 @@ it('decides from the row: nothing asks, pending waits, approved allows, denied r
   expect(gateDecision({ status: 'approved' } as never, 'write')).toBe('allow');
   expect(gateDecision({ status: 'denied' } as never, 'write')).toBe('refuse');
   expect(gateDecision({ status: 'expired' } as never, 'write')).toBe('refuse');
+});
+
+describe('grantable', () => {
+  it('is only send_input to a named tab that is not answering a permission', () => {
+    expect(grantable('send_input', { tab_id: 't1', text: 'oi' })).toBe(true);
+    expect(grantable('send_input', { tab_id: 't1', text: 'oi', answering_permission: false })).toBe(true);
+    expect(grantable('send_input', { tab_id: 't1', text: '1', answering_permission: true })).toBe(false);
+    expect(grantable('send_input', { text: 'oi' })).toBe(false);
+    expect(grantable('send_input', { tab_id: '', text: 'oi' })).toBe(false);
+    expect(grantable('send_input', { tab_id: 'x'.repeat(65), text: 'oi' })).toBe(false);
+    expect(grantable('run_command', { tab_id: 't1', command: 'ls' })).toBe(false);
+    expect(grantable('send_key', { tab_id: 't1', key: 'Enter' })).toBe(false);
+  });
 });

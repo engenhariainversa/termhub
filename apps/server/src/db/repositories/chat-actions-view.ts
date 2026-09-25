@@ -17,6 +17,7 @@ export interface ChatActionCard {
   machine_id: string | null;
   project_id: string | null;
   tab_id: string | null;
+  grant_id: string | null;
   summary: string;
   created_at: string;
 }
@@ -123,6 +124,7 @@ const toCard = (action: ChatAction, summary: string): ChatActionCard => ({
   machine_id: action.machine_id,
   project_id: action.project_id,
   tab_id: action.tab_id,
+  grant_id: action.grant_id,
   summary,
   created_at: action.created_at,
 });

@@ -11,7 +11,7 @@ import { describeActions } from '../db/repositories/chat-actions-view.js';
 import type { Tab } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { chatBus } from './bus.js';
-import { actionClass, gateDecision, idempotencyKeyFor } from './gate.js';
+import { actionClass, gateDecision, grantable, GRANTABLE_TOOL, idempotencyKeyFor } from './gate.js';
 import { ACTION_TTL_MS } from './service.js';
 
 /** What the gate did: the tool's own value, or a pt-BR error for the caller to answer with. The
@@ -277,6 +277,32 @@ async function ask(ctx: ControlContext, call: GatedCall, conversationId: string,
   return { ok: false, code: 'CONFIRMATION_PENDING', message: PENDING(call.tool) };
 }
 
+/**
+ * Runs a call a tab grant already answered ("Permitir sempre nesta aba", spec 2026-09-25). The row is
+ * born `approved` and goes through `execute()` like a clicked approval — the claim, `staleApproval`
+ * (so a dead tab or a tab waiting on a permission still blocks) and the audit — and the trail is told
+ * live, since no card was ever shown for it.
+ */
+async function executeGranted(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass, grantId: string): Promise<GateOutcome> {
+  let row: ChatAction;
+  try {
+    row = await ctx.repos.chatActions.insertApproved({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...targetOf(call.args), grant_id: grantId, decided_by: ctx.scope.user.id });
+  } catch {
+    // The partial unique index refused it: an identical call arrived in the same instant and owns
+    // this execution. Same reading as a lost claim; the error itself is not rethrown (it carries args).
+    return ALREADY_CLAIMED;
+  }
+  try {
+    return await execute(ctx, call, row);
+  } finally {
+    const done = await ctx.repos.chatActions.findByIdForUser(row.id, ctx.scope.user.id).catch(() => undefined);
+    if (done) {
+      const [card] = await describeActions(ctx.repos, [done], ctx.scope.user.id);
+      chatBus.publish({ type: 'granted_action', user_id: ctx.scope.user.id, conversation_id: conversationId, action: card });
+    }
+  }
+}
+
 /** The gate itself: run the call, or answer why it did not run. */
 export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<GateOutcome> {
   const cls = actionClass(call.tool, call.args);
@@ -302,7 +328,14 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
   const decision = gateDecision(row, cls);
   // `allow` and `refuse` only come back with a row (without one the decision is `ask`), so the guard
   // on `row` narrows the type rather than adding a branch of its own.
-  if (!row || decision === 'ask') return ask(ctx, call, conversationId, key, cls);
+  if (!row || decision === 'ask') {
+    // Only where the gate would otherwise ask: an open row or a "no" still in force decided above.
+    if (!row && grantable(call.tool, call.args)) {
+      const grant = await ctx.repos.chatGrants.findActive(conversationId, call.args.tab_id, GRANTABLE_TOOL);
+      if (grant) return executeGranted(ctx, call, conversationId, key, cls, grant.id);
+    }
+    return ask(ctx, call, conversationId, key, cls);
+  }
   if (decision === 'waiting') return WAITING;
   if (decision === 'allow') return execute(ctx, call, row);
   return REFUSED;
