@@ -5,14 +5,16 @@ import { ChatComposer } from './ChatComposer';
 import { ChatGrantStrip } from './ChatGrantStrip';
 import { ChatHost } from './ChatHost';
 import { ChatTurn } from './ChatTurn';
+import { TabQuestionCard } from './TabQuestionCard';
 import { ConfirmDialog } from '../Modal';
 import { api, ApiError } from '../../lib/api';
 import { useChatStream } from '../../lib/chat';
 import { chatTimeline } from '../../lib/chat-timeline';
 import { isNearBottom } from '../../lib/chat-scroll';
 import { isGrantActive } from './grant-time';
+import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
 import { useAuth } from '../../lib/auth';
-import type { AiAccount, ChatAction, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatMessage } from '../../lib/types';
+import type { AiAccount, ChatAction, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatMessage, TabQuestion, TabQuestionAnswer } from '../../lib/types';
 
 /**
  * Why the box refuses, one short line per host state — the long version is the card above the thread
@@ -68,6 +70,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    *  load/reconnect, kept live by `grant`/`grant_revoked` events. */
   const [grants, setGrants] = useState<ChatGrant[]>([]);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  /** The tabs' questions of this conversation (spec 2026-09-25 §6.2), from `GET /api/chat` and the three events. */
+  const [tabQuestions, setTabQuestions] = useState<TabQuestion[]>([]);
+  const [answeringQuestionId, setAnsweringQuestionId] = useState<string | null>(null);
+  const [questionErrors, setQuestionErrors] = useState<Record<string, string>>({});
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,10 +133,11 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const load = useCallback(async () => {
     // No project = the account-wide chat: called with no argument, because the response must be
     // `request<...>('GET', '/chat')` exactly — a server that predates project chats knows nothing else.
-    const { conversation, messages, actions, host, grants } = projectId ? await api.chat(projectId) : await api.chat();
+    const { conversation, messages, actions, host, grants, tab_questions } = projectId ? await api.chat(projectId) : await api.chat();
     setMessages(messages);
     setActions(actions ?? []);
     setGrants(grants ?? []);
+    setTabQuestions(tab_questions ?? []);
     setHost(host ?? null);
     setHostAccountId(conversation.ai_account_id ?? null);
     setConversationId(conversation.id);
@@ -165,6 +172,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       } else if (e.type === 'grant') setGrants((prev) => [...prev.filter((g) => g.id !== e.grant.id && g.tab_id !== e.grant.tab_id), e.grant]);
       else if (e.type === 'grant_revoked') setGrants((prev) => prev.filter((g) => g.id !== e.grant_id));
       else if (e.type === 'granted_action') setActions((prev) => (prev.some((a) => a.id === e.action.id) ? prev.map((a) => (a.id === e.action.id ? e.action : a)) : [...prev, e.action]));
+      else if (e.type === 'tab_question' || e.type === 'tab_question_answered' || e.type === 'tab_question_closed') setTabQuestions((prev) => upsertTabQuestion(prev, e.question));
     },
     [load, mine],
   );
@@ -219,6 +227,23 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setRevokingId(null);
     }
   };
+
+  /** A click on a tab question's card is the answer: no confirmation, no model turn. */
+  const answerQuestion = async (id: string, body: TabQuestionAnswer) => {
+    setAnsweringQuestionId(id);
+    setQuestionErrors(({ [id]: _dropped, ...rest }) => rest);
+    try {
+      const { tab_question } = await api.answerTabQuestion(id, body);
+      setTabQuestions((prev) => upsertTabQuestion(prev, tab_question));
+    } catch (e) {
+      const text = e instanceof ApiError && e.code === 'TAB_PROMPT_CHANGED' ? PROMPT_CHANGED_TEXT : e instanceof ApiError ? e.message : 'Não foi possível responder';
+      setQuestionErrors((prev) => ({ ...prev, [id]: text }));
+    } finally {
+      setAnsweringQuestionId(null);
+    }
+  };
+  /** Stable, so the permission card's effect runs once per question. */
+  const loadTabQuestionScreen = useCallback(async (id: string) => (await api.tabQuestionScreen(id)).text, []);
 
   /**
    * Opens the change picker and reads the two halves of the pair, once, on demand: they are only needed
@@ -320,8 +345,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     return { deltas, actions, started };
   }, [events]);
 
-  /** Messages and gate cards as one chronological thread, so a card reads where it was proposed. */
-  const timeline = useMemo(() => chatTimeline(messages, actions), [messages, actions]);
+  /** Messages, gate cards and tab questions as one chronological thread, so a card reads where it was proposed. */
+  const timeline = useMemo(() => chatTimeline(messages, actions, tabQuestions), [messages, actions, tabQuestions]);
   /**
    * The row a running answer would be written into: only the newest one can still be the live one.
    * Keyed on the id, not on a position: the loop below walks the merged timeline, where an index
@@ -413,6 +438,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setActions([]);
       setQueuedNotes({});
       setGrants([]);
+      setTabQuestions([]);
+      setQuestionErrors({});
       await load();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Não foi possível começar uma nova conversa');
@@ -516,6 +543,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         }}
       >
         {timeline.map((entry) => {
+          if (entry.kind === 'tab_question') {
+            const q = entry.question;
+            return <TabQuestionCard key={`q:${q.id}`} question={q} answering={answeringQuestionId === q.id} error={questionErrors[q.id]} onAnswer={(body) => void answerQuestion(q.id, body)} loadScreen={loadTabQuestionScreen} />;
+          }
           if (entry.kind === 'action') {
             const g = grants.find((cand) => cand.source_action_id === entry.action.id && isGrantActive(cand));
             return (

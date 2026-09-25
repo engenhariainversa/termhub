@@ -797,6 +797,47 @@ export interface ChatGrant {
   tab_name: string | null;
 }
 
+/** One option of a tab's question; `recommended` came out of Claude Code's own "(Recommended)". */
+export interface TabQuestionOption {
+  label: string;
+  description: string;
+  recommended: boolean;
+}
+export interface TabQuestionItem {
+  question: string;
+  header: string;
+  multi_select: boolean;
+  options: TabQuestionOption[];
+}
+export type TabQuestionStatus = 'open' | 'answered' | 'answered_in_tab' | 'expired' | 'failed';
+/** One entry per question: option indexes (0-based), or the typed text. */
+export interface ChoiceAnswer {
+  answers: { selected: number[]; text?: string }[];
+}
+export interface PermissionAnswer {
+  allow: boolean;
+  text?: string;
+}
+export type TabQuestionAnswer = ChoiceAnswer | PermissionAnswer;
+interface TabQuestionBase {
+  id: string;
+  tab_id: string;
+  /** The tab's name at read time; null once the tab is gone. */
+  tab_name: string | null;
+  status: TabQuestionStatus;
+  error_code: string | null;
+  created_at: string;
+  answered_at: string | null;
+  closed_at: string | null;
+}
+export type TabQuestionChoice = TabQuestionBase & { kind: 'choice'; payload: { questions: TabQuestionItem[] }; answer: ChoiceAnswer | null };
+export type TabQuestionPermission = TabQuestionBase & { kind: 'permission'; payload: { tool_name: string }; answer: PermissionAnswer | null };
+/**
+ * A question an agent in a tab asked (spec 2026-09-25): shown as a card in the project's chat and
+ * answered from there. Plain text only — never render any of it as HTML: it is what an agent wrote.
+ */
+export type TabQuestion = TabQuestionChoice | TabQuestionPermission;
+
 /**
  * Pushed over /ws/chat for the signed-in user only; carries no history. The socket is per user, not
  * per conversation — it carries the account-wide chat and every project chat together — so every
@@ -821,7 +862,9 @@ export type ChatEvent =
   /** A grant was revoked (by this or another tab, or because it expired and a reset ended it). */
   | { type: 'grant_revoked'; grant_id: string; conversation_id?: string }
   /** An action the server ran straight away under a trusted tab, with no confirmation card first. */
-  | { type: 'granted_action'; action: ChatAction; conversation_id?: string };
+  | { type: 'granted_action'; action: ChatAction; conversation_id?: string }
+  /** A tab asked something, the chat answered it (or failed to), or it left the tab's screen: the whole card each time. */
+  | { type: 'tab_question' | 'tab_question_answered' | 'tab_question_closed'; question: TabQuestion; conversation_id?: string };
 
 /** `GET /chat/projects`: which project chats have anything going on, for a sidebar badge. */
 export interface ProjectChatStatus {
