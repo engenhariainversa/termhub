@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
-import type { TChatAction, TChatConversation, TChatMessage, TDeviceInfo, TNotificationRow } from '../contract';
+import type { TChatAction, TChatConversation, TChatGrant, TChatMessage, TDeviceInfo, TNotificationRow } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
  * `transport.ts`. `error` is pt-BR text; `extra` carries `attempts_left` / `retry_after`, spread
@@ -104,6 +104,14 @@ export interface MockAction extends TChatAction {
   conversation_id: string;
 }
 
+/** A trusted tab ("Permitir sempre nesta aba"): the wire shape plus what the server keeps beside
+ * it — the conversation it belongs to and whether it was revoked. `GET chat` lists the ones of
+ * that conversation still in force (not revoked, not expired). */
+export interface MockGrant extends TChatGrant {
+  conversation_id: string;
+  revoked: boolean;
+}
+
 /** Field-for-field the wire shape of a notification row (contract `notifications.ts`). */
 export type MockNotification = TNotificationRow;
 
@@ -122,6 +130,8 @@ export interface MockState {
   /** Conversation id -> its messages, oldest first. */
   messages: Map<string, MockMessage[]>;
   actions: Map<string, MockAction>;
+  /** Oldest first; revoked rows stay (a second revoke is a 409, as on the server). */
+  grants: MockGrant[];
   /** Oldest first (push order); routes read it newest-first by reversing. */
   notifications: MockNotification[];
   /** The conversation currently "live" for a project (or, keyed by `null`, the account-wide
@@ -143,6 +153,7 @@ export function createMockState(): MockState {
     conversations: new Map(),
     messages: new Map(),
     actions: new Map(),
+    grants: [],
     notifications: [],
     activeConversation: new Map(),
     busyProjects: new Set(),

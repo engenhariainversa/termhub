@@ -53,7 +53,7 @@ describe('PinPromptSheet', () => {
     await typePin('000000');
     expect(await screen.findByText('PIN incorreto. 2 tentativas restantes.', undefined, LOAD)).toBeTruthy();
     await expect(decide.mock.results[0]!.value).rejects.toMatchObject({ code: 'PIN_INVALID' });
-    expect(useSessionStore.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1' });
+    expect(useSessionStore.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', decision: 'approve' });
     expect(approved).toBe(false);
 
     // The pad took a fresh six digits: it was cleared and re-enabled after the rejection.
@@ -64,9 +64,20 @@ describe('PinPromptSheet', () => {
   }, 20_000);
 
   it('disables the pad and Cancelar while busy', async () => {
-    useSessionStore.setState({ pinPrompt: { actionId: 'a1' }, busy: true });
+    useSessionStore.setState({ pinPrompt: { actionId: 'a1', decision: 'approve' }, busy: true });
     await render(<PinPromptSheet />);
     expect(screen.getByRole('button', { name: '1' }).props.accessibilityState.disabled).toBe(true);
     expect(screen.getByRole('button', { name: 'Cancelar' }).props.accessibilityState.disabled).toBe(true);
+  });
+
+  it('says "Permitir sempre nesta aba" for approve_tab and "Autorizar esta ação" for approve', async () => {
+    useSessionStore.setState({ pinPrompt: { actionId: 'a1', decision: 'approve_tab' } });
+    await render(<PinPromptSheet />);
+    expect(screen.getByText('Permitir sempre nesta aba')).toBeTruthy();
+    expect(screen.queryByText('Autorizar esta ação')).toBeNull();
+    await act(async () => {
+      useSessionStore.setState({ pinPrompt: { actionId: 'a1', decision: 'approve' } });
+    });
+    expect(screen.getByText('Autorizar esta ação')).toBeTruthy();
   });
 });

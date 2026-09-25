@@ -21,9 +21,10 @@ import { mmkvStateStorage } from '@/services/storage';
 import { applyEvent, settlePending } from '../model/events';
 import { belongsTo } from '../model/filter';
 import { CHAT_MSG } from '../model/messages';
-import type { ChatAction, ChatConversation, ChatEvent, ChatHostState, ChatMessage } from '../model/types';
+import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage } from '../model/types';
 
-export type ChatDecision = 'approve' | 'deny';
+/** `approve_tab` approves the card *and* trusts its tab for send_input ("Permitir sempre nesta aba"). */
+export type ChatDecision = 'approve' | 'deny' | 'approve_tab';
 
 /** What the chat store needs from the session store (read through a getter, so tests can inject
  * a session store built over the same mock transport). */
@@ -38,6 +39,8 @@ export interface ConversationSlot {
   conversation: ChatConversation | null;
   messages: ChatMessage[];
   actions: ChatAction[];
+  /** The tabs trusted in this conversation (the server lists those still in force). */
+  grants: ChatGrant[];
   host: ChatHostState | null;
   /** A `GET chat` answered since this store started (a persisted slot is shown, but not loaded). */
   loaded: boolean;
@@ -56,6 +59,8 @@ export interface ChatState {
   connected: boolean;
   sending: boolean;
   decidingId: string | null;
+  /** The grant whose "Revogar" is in flight. */
+  revokingId: string | null;
   hostOptions: THostOptionsResponse | null;
   /** The last failed action of the screen on show, in pt-BR. */
   error: string | null;
@@ -68,6 +73,9 @@ export interface ChatState {
   /** Resolves `true` once the server accepted the message (`202`). */
   send(text: string): Promise<boolean>;
   decide(actionId: string, decision: ChatDecision): Promise<void>;
+  /** "Revogar" a trusted tab of the open conversation. A grant already revoked elsewhere (409) is
+   * dropped quietly: it is gone either way. */
+  revokeGrant(grantId: string): Promise<void>;
   reset(): Promise<void>;
   loadHostOptions(): Promise<void>;
   setHost(machineId: string, aiAccountId?: string): Promise<void>;
@@ -86,7 +94,7 @@ export interface ChatState {
 
 type Data = Omit<ChatState, { [K in keyof ChatState]: ChatState[K] extends (...args: never[]) => unknown ? K : never }[keyof ChatState]>;
 
-type PersistedSlot = Pick<ConversationSlot, 'conversation' | 'messages' | 'actions' | 'host'>;
+type PersistedSlot = Pick<ConversationSlot, 'conversation' | 'messages' | 'actions' | 'grants' | 'host'>;
 type Persisted = { projects: TChatProjectItem[]; conversations: Record<string, PersistedSlot> };
 
 const initialData = (): Data => ({
@@ -98,11 +106,12 @@ const initialData = (): Data => ({
   connected: false,
   sending: false,
   decidingId: null,
+  revokingId: null,
   hostOptions: null,
   error: null,
 });
 
-const emptySlot = (): ConversationSlot => ({ conversation: null, messages: [], actions: [], host: null, loaded: false, error: null });
+const emptySlot = (): ConversationSlot => ({ conversation: null, messages: [], actions: [], grants: [], host: null, loaded: false, error: null });
 const keyOf = (projectId: string | null): string => projectId ?? '';
 const projectOf = (key: string): string | null => (key === '' ? null : key);
 
@@ -151,7 +160,7 @@ export function createChatStore(deps: ChatDeps) {
           try {
             const res = await api.chat(session().auth(), projectOf(key));
             if (stale()) return;
-            patchSlot(key, () => ({ conversation: res.conversation, messages: res.messages, actions: res.actions, host: res.host, loaded: true, error: null }));
+            patchSlot(key, () => ({ conversation: res.conversation, messages: res.messages, actions: res.actions, grants: res.grants, host: res.host, loaded: true, error: null }));
           } catch (e) {
             if (stale() || isLocked(e) || session().handleApiError(e)) return;
             patchSlot(key, () => ({ error: isApiError(e) ? e.message : CHAT_MSG.network }));
@@ -163,10 +172,10 @@ export function createChatStore(deps: ChatDeps) {
           if (key === null) return;
           const current = get().conversations[key] ?? emptySlot();
           if (!belongsTo(current.conversation?.id ?? null)(e)) return;
-          const before = { messages: current.messages, actions: current.actions, live: get().live };
+          const before = { messages: current.messages, actions: current.actions, live: get().live, grants: current.grants };
           const { slice, reread: mustReread } = applyEvent(before, e);
           if (slice === before) return;
-          patchSlot(key, () => ({ messages: slice.messages, actions: slice.actions }));
+          patchSlot(key, () => ({ messages: slice.messages, actions: slice.actions, grants: slice.grants }));
           set({ live: slice.live });
           if (mustReread) void reread(key);
         };
@@ -244,7 +253,7 @@ export function createChatStore(deps: ChatDeps) {
             closeSocket?.();
             closeSocket = null;
             readSeq.clear();
-            set({ connected: false, live: [], activeProject: undefined, sending: false, decidingId: null });
+            set({ connected: false, live: [], activeProject: undefined, sending: false, decidingId: null, revokingId: null });
           },
 
           async send(text) {
@@ -278,12 +287,16 @@ export function createChatStore(deps: ChatDeps) {
               } else {
                 // The session store performs the call with the proof while its PIN sheet stays open:
                 // a wrong PIN is answered there, and this only resolves once the server accepted it.
-                await session().requestPinProof(actionId, (proof) => api.decide(session().auth(), actionId, { decision: 'approve', ...proof }));
+                // The proof signs the decision word, so `approve_tab` asks the PIN for exactly that.
+                const word = decision; // keeps the narrowed type (no 'deny') inside the closure below
+                await session().requestPinProof(actionId, (proof) => api.decide(session().auth(), actionId, { decision: word, ...proof }), word);
               }
               if (gen !== generation) return;
               // The `decision` event confirms it; this only saves a flicker back to "pending". Only a
               // card still pending moves: a re-read may already have it executed, failed or expired.
-              patchSlot(key, (slot) => ({ actions: settlePending(slot.actions, actionId, decision === 'approve' ? 'approved' : 'denied') }));
+              patchSlot(key, (slot) => ({ actions: settlePending(slot.actions, actionId, decision === 'deny' ? 'denied' : 'approved') }));
+              // The `grant` event brings the trusted tab; the re-read puts it on screen even if the socket is down.
+              if (decision === 'approve_tab') void reread(key);
             } catch (e) {
               if (gen !== generation || isCancelled(e)) return;
               if (isApiError(e) && e.status === 409) {
@@ -297,6 +310,25 @@ export function createChatStore(deps: ChatDeps) {
             }
           },
 
+          async revokeGrant(grantId) {
+            const projectId = get().activeProject;
+            if (projectId === undefined || get().revokingId !== null) return;
+            const key = keyOf(projectId);
+            const gen = generation;
+            set({ revokingId: grantId, error: null });
+            const drop = () => patchSlot(key, (slot) => ({ grants: slot.grants.filter((g) => g.id !== grantId) }));
+            try {
+              await api.revokeGrant(session().auth(), grantId);
+              if (gen === generation) drop();
+            } catch (e) {
+              if (gen !== generation) return;
+              if (isApiError(e) && e.status === 409) drop();
+              else fail(gen, e);
+            } finally {
+              if (gen === generation) set({ revokingId: null });
+            }
+          },
+
           async reset() {
             const projectId = get().activeProject;
             if (projectId === undefined) return;
@@ -307,7 +339,7 @@ export function createChatStore(deps: ChatDeps) {
               await api.reset(session().auth(), projectId);
               if (gen !== generation) return;
               set({ live: [] });
-              patchSlot(key, () => ({ messages: [], actions: [] }));
+              patchSlot(key, () => ({ messages: [], actions: [], grants: [] })); // a reset ends the old conversation's grants too
               await reread(key);
             } catch (e) {
               fail(gen, e);
@@ -362,7 +394,7 @@ export function createChatStore(deps: ChatDeps) {
         partialize: (s): Persisted => ({
           projects: s.projects,
           conversations: Object.fromEntries(
-            Object.entries(s.conversations).map(([key, c]) => [key, { conversation: c.conversation, messages: c.messages, actions: c.actions, host: c.host }]),
+            Object.entries(s.conversations).map(([key, c]) => [key, { conversation: c.conversation, messages: c.messages, actions: c.actions, grants: c.grants, host: c.host }]),
           ),
         }),
         merge: (persisted, current) => {

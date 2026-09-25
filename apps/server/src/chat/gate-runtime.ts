@@ -5,13 +5,14 @@
  * the action is pending, and the row in `chat_actions` is what remembers. When the user confirms, the
  * CLI session is told to repeat the call, and *that* arrival executes it.
  */
+import { CONTROL_CHARS } from '../control/agents.js';
 import { ControlError, type ControlContext } from '../control/context.js';
 import type { ChatAction, ChatActionClass } from '../db/repositories/chat-actions.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import type { Tab } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { chatBus } from './bus.js';
-import { actionClass, gateDecision, idempotencyKeyFor } from './gate.js';
+import { actionClass, gateDecision, grantable, GRANTABLE_TOOL, idempotencyKeyFor } from './gate.js';
 import { ACTION_TTL_MS } from './service.js';
 
 /** What the gate did: the tool's own value, or a pt-BR error for the caller to answer with. The
@@ -233,6 +234,21 @@ async function execute(ctx: ControlContext, call: GatedCall, row: ChatAction): P
   }
 }
 
+/**
+ * The write that would have recorded a proposal (pending or already-approved) failed for a real
+ * reason — not the partial unique index catching a race, which the two callers below check for
+ * before reaching here. The original error is deliberately not rethrown: a rejected write carries
+ * the rejected data, so logging it upstream would put the proposed command — the whole point of
+ * `args` — in a log line. The audit row's code is the signal. Shared by `ask` and `executeGranted`,
+ * whose inserts hit the same failure modes and must answer the model identically.
+ */
+function actionNotRecorded(): never {
+  throw new ControlError(
+    'ACTION_NOT_RECORDED',
+    'Não foi possível registrar esta ação para o usuário confirmar, então nada foi executado. Avise que houve uma falha ao registrar o pedido e tente de novo em alguns segundos.',
+  );
+}
+
 /** Records the proposal and puts the question in the chat. */
 async function ask(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass): Promise<GateOutcome> {
   const target = targetOf(call.args);
@@ -240,19 +256,13 @@ async function ask(ctx: ControlContext, call: GatedCall, conversationId: string,
   try {
     // `args` is the proposal exactly as the concierge made it — the command, the prompt, the target.
     row = await ctx.repos.chatActions.insertPending({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...target });
-  } catch (err) {
+  } catch {
     // Two calls of the same proposal can both read "no open row" before either inserts; the partial
     // unique index then refuses the loser. The winner's question is already in the chat, so this call
     // is simply waiting on it — asking again would put the same question twice in front of the user.
     // (An approval that landed in this same instant is picked up by the next arrival of the call.)
     if (await ctx.repos.chatActions.findOpenByKey(conversationId, key)) return WAITING;
-    // Anything else is a real failure to record the proposal. The original error is deliberately not
-    // rethrown: a rejected write carries the rejected data, so logging it upstream would put the
-    // proposed command — the whole point of `args` — in a log line. The audit row's code is the signal.
-    throw new ControlError(
-      'ACTION_NOT_RECORDED',
-      'Não foi possível registrar esta ação para o usuário confirmar, então nada foi executado. Avise que houve uma falha ao registrar o pedido e tente de novo em alguns segundos.',
-    );
+    actionNotRecorded();
   }
   // Enriched the same way, and only in this one place, as `GET /api/chat`'s trail — the browser
   // must never resolve a machine/project/tab name or build the sentence itself. Scoped to the calling
@@ -275,6 +285,70 @@ async function ask(ctx: ControlContext, call: GatedCall, conversationId: string,
     created_at: row.created_at,
   });
   return { ok: false, code: 'CONFIRMATION_PENDING', message: PENDING(call.tool) };
+}
+
+/**
+ * Runs a call a tab grant already answered ("Permitir sempre nesta aba", spec 2026-09-25). The row is
+ * born `approved` and goes through `execute()` like a clicked approval — the claim, `staleApproval`
+ * (so a dead tab or a tab waiting on a permission still blocks) and the audit — and the trail is told
+ * live, since no card was ever shown for it.
+ */
+async function executeGranted(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass, grantId: string): Promise<GateOutcome> {
+  let row: ChatAction;
+  try {
+    row = await ctx.repos.chatActions.insertApproved({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...targetOf(call.args), grant_id: grantId, decided_by: ctx.scope.user.id });
+  } catch {
+    // Either reading of a failed insert: the partial unique index refused it because an identical
+    // call arrived in the same instant and its (approved) row already occupies the key — the same
+    // race `ask` checks for, read the same way (`findOpenByKey`) — or the write failed for a real
+    // reason and nothing recorded the proposal at all.
+    if (await ctx.repos.chatActions.findOpenByKey(conversationId, key)) return ALREADY_CLAIMED;
+    actionNotRecorded();
+  }
+  try {
+    return await execute(ctx, call, row);
+  } finally {
+    // Telling the trail live is best-effort: this step must never turn a keystroke that already ran
+    // (or whose failure `execute` already recorded) into a different outcome for the caller, and the
+    // grant is still active — a retry driven by an error here would type it again. A reload picks the
+    // row up from `GET /api/chat` regardless.
+    try {
+      const done = await ctx.repos.chatActions.findByIdForUser(row.id, ctx.scope.user.id);
+      if (done) {
+        const [card] = await describeActions(ctx.repos, [done], ctx.scope.user.id);
+        chatBus.publish({ type: 'granted_action', user_id: ctx.scope.user.id, conversation_id: conversationId, action: card });
+      }
+    } catch {
+      // live trail is best-effort; a reload shows the row
+    }
+  }
+}
+
+/**
+ * Whether the text half of a call disqualifies it from a grant, beyond the grant existing (spec §2
+ * "Agent tabs only"). A grant trusts an agent's prompt, but `send_input` types any text and presses
+ * Enter: on a bare shell that is `run_command` under another name, and in Claude Code a leading `!`
+ * runs the rest in bash — so text whose first non-blank character is `!` is outside the grant. Any
+ * other control character is outside it too: `send_input` delivers the text as keystrokes, and a
+ * control character is not "text" to the terminal but an edit to the line being typed — Ctrl-U wipes
+ * it, backspace (`\x7f`) erases the character before it — so it can turn text that does not itself
+ * start with `!` into a `!` command by the time the TUI reads it. `CONTROL_CHARS` is the same check
+ * `checkPrompt` uses for a prompt's own text; only `\n` (a pasted multi-line prompt) is allowed. Both
+ * checks read the arguments alone, before any read, and the tab must separately report an agent at
+ * work (`working` or `waiting_input`, from the monitor hooks). A tab that never reported (a shell), an
+ * agent that ended (`idle`) or errored falls back to a normal question. Two readings deliberately still
+ * go through the grant: a tab that does not resolve (missing, or somebody else's) and one waiting on a
+ * permission, so `execute()` records them as the `TAB_GONE` / `WAITING_PERMISSION` locks — the model
+ * gets the lock's error, as for a clicked approval.
+ */
+const textOutsideGrant = (args: Record<string, unknown>) =>
+  typeof args.text === 'string' && (args.text.trimStart().startsWith('!') || CONTROL_CHARS.test(args.text));
+
+/** The tab half of the eligibility above, through the same owner-scoped read `staleApproval` uses. */
+async function grantCoversTab(ctx: ControlContext, tabId: string): Promise<boolean> {
+  const [tab] = await ctx.repos.tabs.findByIdsForOwner([tabId], ctx.scope.user.id);
+  if (!tab) return true; // recorded as TAB_GONE by `execute()`
+  return tab.state === 'working' || tab.state === 'waiting_input' || tab.state === 'waiting_permission';
 }
 
 /** The gate itself: run the call, or answer why it did not run. */
@@ -302,7 +376,14 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
   const decision = gateDecision(row, cls);
   // `allow` and `refuse` only come back with a row (without one the decision is `ask`), so the guard
   // on `row` narrows the type rather than adding a branch of its own.
-  if (!row || decision === 'ask') return ask(ctx, call, conversationId, key, cls);
+  if (!row || decision === 'ask') {
+    // Only where the gate would otherwise ask: an open row or a "no" still in force decided above.
+    if (!row && grantable(call.tool, call.args) && !textOutsideGrant(call.args)) {
+      const grant = await ctx.repos.chatGrants.findActive(conversationId, call.args.tab_id, GRANTABLE_TOOL);
+      if (grant && (await grantCoversTab(ctx, call.args.tab_id))) return executeGranted(ctx, call, conversationId, key, cls, grant.id);
+    }
+    return ask(ctx, call, conversationId, key, cls);
+  }
   if (decision === 'waiting') return WAITING;
   if (decision === 'allow') return execute(ctx, call, row);
   return REFUSED;

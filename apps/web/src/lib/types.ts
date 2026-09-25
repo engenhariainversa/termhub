@@ -779,6 +779,22 @@ export interface ChatAction {
   tab_id: string | null;
   summary: string;
   created_at: string;
+  /** The grant this run happened under ("aba confiada"), if the server ran it without asking. */
+  grant_id?: string | null;
+}
+
+/**
+ * A "Permitir sempre nesta aba" grant, as the server enriches it: `tab_name` is the tab's name at
+ * read time, or null once the tab is gone — the card and the strip still name it plainly either way.
+ */
+export interface ChatGrant {
+  id: string;
+  tab_id: string;
+  tool: string;
+  source_action_id: string | null;
+  created_at: string;
+  expires_at: string;
+  tab_name: string | null;
 }
 
 /**
@@ -799,7 +815,13 @@ export type ChatEvent =
    * never resolve a name from this event, the server already did it. */
   | ({ type: 'confirmation'; action_id: string; conversation_id?: string } & Omit<ChatAction, 'id' | 'status'>)
   /** Someone answered a pending action (possibly in another tab): update the card by its id. */
-  | { type: 'decision'; action_id: string; status: 'approved' | 'denied'; conversation_id?: string };
+  | { type: 'decision'; action_id: string; status: 'approved' | 'denied'; conversation_id?: string }
+  /** A new (or renewed) trusted-tab grant, e.g. from "Permitir sempre nesta aba" in another tab. */
+  | { type: 'grant'; grant: ChatGrant; conversation_id?: string }
+  /** A grant was revoked (by this or another tab, or because it expired and a reset ended it). */
+  | { type: 'grant_revoked'; grant_id: string; conversation_id?: string }
+  /** An action the server ran straight away under a trusted tab, with no confirmation card first. */
+  | { type: 'granted_action'; action: ChatAction; conversation_id?: string };
 
 /** `GET /chat/projects`: which project chats have anything going on, for a sidebar badge. */
 export interface ProjectChatStatus {

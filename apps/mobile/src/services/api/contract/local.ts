@@ -8,7 +8,9 @@ import {
   challengeBody,
   challengeResponse,
   chatActionClass,
+  chatActionSchema,
   chatEventSchema,
+  chatGrantSchema,
   chatMessage,
   chatProjectItem,
   chatProjectsResponse,
@@ -64,21 +66,6 @@ export const chatHostStateSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('agent_too_old'), machine: chatHostMachine, version: z.string() }),
 ]);
 
-/** Mirrors `ChatAction` (web types.ts ~691): a write the concierge proposed, enriched with a
- * server-composed pt-BR `summary` — never a tool name and three ids. */
-export const chatActionSchema = z.object({
-  id: z.string(),
-  tool: z.string(),
-  args: z.unknown(),
-  class: chatActionClass,
-  status: z.enum(['pending', 'approved', 'denied', 'expired', 'executed', 'failed']),
-  machine_id: z.string().nullable(),
-  project_id: z.string().nullable(),
-  tab_id: z.string().nullable(),
-  summary: z.string(),
-  created_at: z.string(),
-});
-
 /** Mirrors `ChatConversation` (web types.ts ~587), the fields the phone needs. */
 export const chatConversationSchema = z.object({
   id: z.string(),
@@ -95,6 +82,7 @@ export const chatResponse = z.object({
   conversation: chatConversationSchema,
   messages: z.array(chatMessageSchema),
   actions: z.array(chatActionSchema),
+  grants: z.array(chatGrantSchema).default([]),
   host: chatHostStateSchema,
 });
 
@@ -157,6 +145,7 @@ export type TNotificationsResponse = z.infer<typeof notificationsResponse>;
 
 export type TChatHostState = z.infer<typeof chatHostStateSchema>;
 export type TChatAction = z.infer<typeof chatActionSchema>;
+export type TChatGrant = z.infer<typeof chatGrantSchema>;
 export type TChatConversation = z.infer<typeof chatConversationSchema>;
 export type TChatResponse = z.infer<typeof chatResponse>;
 export type TMeResponse = z.infer<typeof meResponse>;

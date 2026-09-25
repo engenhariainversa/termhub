@@ -27,6 +27,10 @@ function build(opts: {
   aiAccounts?: { id: string; provider: string; machine_id: string; config_dir: string | null }[];
   clearProjectSessions?: ReturnType<typeof vi.fn>;
   setHost?: ReturnType<typeof vi.fn>;
+  /** Active grants `listActive` answers with, as `GET /chat` returns them. */
+  grants?: { id: string; conversation_id: string; tab_id: string; tool: string; source_action_id: string | null; granted_by: string; created_at: string; expires_at: string; revoked_at: string | null; revoked_by: string | null }[];
+  revoke?: ReturnType<typeof vi.fn>;
+  findGrantByIdForUser?: ReturnType<typeof vi.fn>;
 } = {}) {
   const send = opts.send ?? vi.fn(async () => ({ id: 'm2', role: 'assistant', text: 'Nada rodando.' }));
   const resumeAfterDecision = opts.resumeAfterDecision ?? vi.fn(async () => ({ id: 'm3', role: 'assistant', text: 'Feito.' }));
@@ -73,6 +77,12 @@ function build(opts: {
     },
     aiAccounts: { findById: vi.fn(async (id: string) => aiAccounts.find((a) => a.id === id)) },
     tasks: { findByIdsForOwner: vi.fn(async () => []) },
+    chatGrants: {
+      grant: vi.fn(async (input: { conversation_id: string; tab_id: string; tool: string; source_action_id: string; granted_by: string }) => ({ id: 'g1', ...input, created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z', revoked_at: null, revoked_by: null })),
+      listActive: vi.fn(async () => opts.grants ?? []),
+      revoke: opts.revoke ?? vi.fn(async (id: string) => ({ id, conversation_id: 'c1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', granted_by: 'u1', created_at: '', expires_at: '', revoked_at: 'now', revoked_by: 'u1' })),
+      findByIdForUser: opts.findGrantByIdForUser ?? vi.fn(async () => undefined),
+    },
   };
   const app = Fastify();
   applyErrorHandler(app);
@@ -399,4 +409,92 @@ it('a double click on the same decision still answers 409 the second time, havin
   expect(first.statusCode).toBe(200);
   expect(second.statusCode).toBe(409);
   expect(resumeAfterDecision).toHaveBeenCalledTimes(1); // injected once — the second click never reaches it
+});
+
+it('approve_tab on an eligible send_input approves it, trusts the tab and says so live', async () => {
+  const events: ChatEvent[] = [];
+  const off = chatBus.subscribe((e) => events.push(e));
+  const eligible = { ...pendingAction, status: 'pending', args: { tab_id: 't1', text: 'oi' } };
+  const { app, decide, repos, resumeAfterDecision } = build({ findByIdForUser: vi.fn(async () => eligible), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab' } });
+  off();
+  expect(res.statusCode).toBe(200);
+  expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
+  expect(repos.chatGrants.grant).toHaveBeenCalledWith({ conversation_id: 'c1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', granted_by: 'u1' });
+  expect(res.json().grant).toMatchObject({ id: 'g1', tab_id: 't1', tab_name: 'Terminal 1', source_action_id: 'act1' });
+  expect(events.map((e) => e.type)).toEqual(expect.arrayContaining(['decision', 'grant']));
+  expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+});
+
+it('approve_tab whose grant fails still approves and resumes, with no grant in the answer or on the bus', async () => {
+  // The approval is already decided and published when the grant is written: a failing grant write
+  // must not turn it into an error, nor leave the model waiting for a resume that never comes.
+  const events: ChatEvent[] = [];
+  const off = chatBus.subscribe((e) => events.push(e));
+  const eligible = { ...pendingAction, status: 'pending', args: { tab_id: 't1', text: 'oi' } };
+  const { app, decide, repos, resumeAfterDecision } = build({ findByIdForUser: vi.fn(async () => eligible), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
+  vi.mocked(repos.chatGrants.grant).mockRejectedValueOnce(new Error('connection terminated'));
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab' } });
+  off();
+  expect(res.statusCode).toBe(200);
+  expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
+  expect(res.json().action).toMatchObject({ id: 'act1', status: 'approved' });
+  expect(res.json()).not.toHaveProperty('grant');
+  expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+  expect(events.map((e) => e.type)).toContain('decision');
+  expect(events.map((e) => e.type)).not.toContain('grant');
+});
+
+it.each([
+  ['answering a permission', { tab_id: 't1', text: '1', answering_permission: true }, 'send_input'],
+  ['run_command', { tab_id: 't1', command: 'ls' }, 'run_command'],
+])('approve_tab refuses %s with 400 and decides nothing', async (_l, args, tool) => {
+  const row = { ...pendingAction, status: 'pending', tool, args };
+  const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => row) });
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab' } });
+  expect(res.statusCode).toBe(400);
+  expect(res.json().code).toBe('GRANT_NOT_ALLOWED');
+  expect(decide).not.toHaveBeenCalled();
+  expect(repos.chatGrants.grant).not.toHaveBeenCalled();
+});
+
+it('approve_tab on a row that is not this user\'s is a 404', async () => {
+  const { app, decide } = build({ findByIdForUser: vi.fn(async () => undefined) });
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab' } });
+  expect(res.statusCode).toBe(404);
+  expect(decide).not.toHaveBeenCalled();
+});
+
+it('approve_tab on a row already decided is a 409, deciding nothing and granting nothing', async () => {
+  const decided = { ...pendingAction, status: 'approved', args: { tab_id: 't1', text: 'oi' } };
+  const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => decided) });
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab' } });
+  expect(res.statusCode).toBe(409);
+  expect(res.json().error).toBe('Esta ação já foi decidida');
+  expect(decide).not.toHaveBeenCalled();
+  expect(repos.chatGrants.grant).not.toHaveBeenCalled();
+});
+
+it('DELETE /chat/grants/:id revokes and says so live', async () => {
+  const events: ChatEvent[] = [];
+  const off = chatBus.subscribe((e) => events.push(e));
+  const { app, repos } = build();
+  const res = await app.inject({ method: 'DELETE', url: '/chat/grants/g1' });
+  off();
+  expect(res.statusCode).toBe(200);
+  expect(repos.chatGrants.revoke).toHaveBeenCalledWith('g1', 'u1');
+  expect(events).toContainEqual(expect.objectContaining({ type: 'grant_revoked', grant_id: 'g1', conversation_id: 'c1' }));
+});
+
+it('DELETE /chat/grants/:id: 404 when unknown, 409 when already revoked', async () => {
+  const gone = build({ revoke: vi.fn(async () => undefined) });
+  expect((await gone.app.inject({ method: 'DELETE', url: '/chat/grants/nope' })).statusCode).toBe(404);
+  const done = build({ revoke: vi.fn(async () => undefined), findGrantByIdForUser: vi.fn(async () => ({ id: 'g1', revoked_at: 'x' })) });
+  expect((await done.app.inject({ method: 'DELETE', url: '/chat/grants/g1' })).statusCode).toBe(409);
+});
+
+it('GET /chat returns the conversation\'s active grants with the tab name', async () => {
+  const { app } = build({ grants: [{ id: 'g1', conversation_id: 'c1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', granted_by: 'u1', created_at: 'a', expires_at: 'b', revoked_at: null, revoked_by: null }], tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
+  const res = await app.inject({ method: 'GET', url: '/chat' });
+  expect(res.json().grants).toEqual([{ id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', created_at: 'a', expires_at: 'b', tab_name: 'Terminal 1' }]);
 });

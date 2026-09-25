@@ -77,6 +77,7 @@ export const ModelName = {
   ChatConversation: 'ChatConversation',
   ChatMessage: 'ChatMessage',
   ChatAction: 'ChatAction',
+  ChatGrant: 'ChatGrant',
   InstanceSecret: 'InstanceSecret',
   ProjectGroup: 'ProjectGroup',
   ProjectGroupItem: 'ProjectGroupItem',
@@ -496,6 +497,7 @@ export const ChatActionScalarFieldEnum = {
   machineId: 'machineId',
   projectId: 'projectId',
   tabId: 'tabId',
+  grantId: 'grantId',
   errorCode: 'errorCode',
   durationMs: 'durationMs',
   decidedBy: 'decidedBy',
@@ -505,6 +507,22 @@ export const ChatActionScalarFieldEnum = {
 } as const
 
 export type ChatActionScalarFieldEnum = (typeof ChatActionScalarFieldEnum)[keyof typeof ChatActionScalarFieldEnum]
+
+
+export const ChatGrantScalarFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  tabId: 'tabId',
+  tool: 'tool',
+  sourceActionId: 'sourceActionId',
+  grantedBy: 'grantedBy',
+  createdAt: 'createdAt',
+  expiresAt: 'expiresAt',
+  revokedAt: 'revokedAt',
+  revokedBy: 'revokedBy'
+} as const
+
+export type ChatGrantScalarFieldEnum = (typeof ChatGrantScalarFieldEnum)[keyof typeof ChatGrantScalarFieldEnum]
 
 
 export const InstanceSecretScalarFieldEnum = {

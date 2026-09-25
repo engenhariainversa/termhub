@@ -2,19 +2,22 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, View } from 'react-native';
 import { AppText, Banner, Button, EmptyState, Screen, Sheet } from '@/ui';
+import { isGrantActive } from '../model/grant-time';
 import { foldLive } from '../model/live';
 import { chatTimeline, type ChatEntry } from '../model/timeline';
 import type { ChatDecision } from '../viewmodel/createChatStore';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ActionCard } from './action-card';
 import { Composer } from './composer';
+import { GrantsStrip } from './grants-strip';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
 
 const entryKey = (entry: ChatEntry) => (entry.kind === 'message' ? `m:${entry.message.id}` : `a:${entry.action.id}`);
 
-/** The conversation (spec §11.2): thread, action cards, host line and composer. The route param is
- * a conversation id (a deep link), a project id or `general` — the store resolves which. */
+/** The conversation (spec §11.2): thread, action cards, host line, the trusted tabs and composer.
+ * The route param is a conversation id (a deep link), a project id or `general` — the store
+ * resolves which. */
 export function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -28,6 +31,8 @@ export function ConversationScreen() {
   const decidingId = useChatStore((s) => s.decidingId);
   const send = useChatStore((s) => s.send);
   const decide = useChatStore((s) => s.decide);
+  const revokingId = useChatStore((s) => s.revokingId);
+  const revokeGrant = useChatStore((s) => s.revokeGrant);
   const reset = useChatStore((s) => s.reset);
   const [confirmingReset, setConfirmingReset] = useState(false);
 
@@ -36,12 +41,14 @@ export function ConversationScreen() {
   }, [id, openByRoute]);
 
   const fold = useMemo(() => foldLive(live), [live]);
-  const extra = useMemo(() => ({ fold, decidingId }), [fold, decidingId]);
+  const messages = slot?.messages;
+  const actions = slot?.actions;
+  const grants = useMemo(() => slot?.grants ?? [], [slot?.grants]);
+  const extra = useMemo(() => ({ fold, decidingId, grants, revokingId }), [fold, decidingId, grants, revokingId]);
   // A deep link followed after unlock replaces `/unlock` with this screen: nothing behind it.
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const onDecide = useCallback((actionId: string, decision: ChatDecision) => void decide(actionId, decision), [decide]);
-  const messages = slot?.messages;
-  const actions = slot?.actions;
+  const onRevoke = useCallback((grantId: string) => void revokeGrant(grantId), [revokeGrant]);
   // Newest first, for the inverted list that keeps the thread pinned to its end.
   const entries = useMemo(() => chatTimeline(messages ?? [], actions ?? []).reverse(), [messages, actions]);
 
@@ -83,18 +90,26 @@ export function ConversationScreen() {
             data={entries}
             keyExtractor={entryKey}
             contentContainerClassName="gap-3 px-4 py-4"
-            // The rows read `fold` and `decidingId` besides `entries`: a change there re-runs
-            // `renderItem`, and the memoised rows re-render only where their own props changed.
+            // The rows read `fold`, `decidingId`, `grants` and `revokingId` besides `entries`: a change
+            // there re-runs `renderItem`, and the memoised rows re-render only where their own props changed.
             extraData={extra}
             renderItem={({ item }) =>
               item.kind === 'message' ? (
                 <MessageBubble message={item.message} streamed={fold.deltas.get(item.message.id)} started={fold.started.has(item.message.id)} />
               ) : (
-                <ActionCard action={item.action} busy={decidingId !== null} onDecide={onDecide} />
+                <ActionCard
+                  action={item.action}
+                  busy={decidingId !== null}
+                  onDecide={onDecide}
+                  grant={grants.find((g) => g.source_action_id === item.action.id && isGrantActive(g))}
+                  revoking={revokingId !== null}
+                  onRevoke={onRevoke}
+                />
               )
             }
           />
         )}
+        <GrantsStrip grants={grants} revokingId={revokingId} onRevoke={onRevoke} />
         <Composer sending={sending} onSend={send} />
       </KeyboardAvoidingView>
       <Sheet open={confirmingReset} onClose={() => setConfirmingReset(false)} title="Começar uma nova conversa?">

@@ -21,6 +21,7 @@ import { UploadsRepository } from './uploads.js';
 import { ApiTokensRepository } from './api-tokens.js';
 import { ChatRepository } from './chat.js';
 import { ChatActionsRepository } from './chat-actions.js';
+import { ChatGrantsRepository } from './chat-grants.js';
 import { InstanceSecretsRepository } from './instance-secrets.js';
 import { ProjectGroupsRepository } from './project-groups.js';
 import { DeviceRequestsRepository } from './device-requests.js';
@@ -52,6 +53,7 @@ export interface Repositories {
   apiTokens: ApiTokensRepository;
   chat: ChatRepository;
   chatActions: ChatActionsRepository;
+  chatGrants: ChatGrantsRepository;
   instanceSecrets: InstanceSecretsRepository;
   projectGroups: ProjectGroupsRepository;
   deviceRequests: DeviceRequestsRepository;
@@ -85,6 +87,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     apiTokens: new ApiTokensRepository(db),
     chat: new ChatRepository(db),
     chatActions: new ChatActionsRepository(db),
+    chatGrants: new ChatGrantsRepository(db),
     instanceSecrets: new InstanceSecretsRepository(db),
     projectGroups: new ProjectGroupsRepository(db),
     deviceRequests: new DeviceRequestsRepository(db),

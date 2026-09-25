@@ -9,7 +9,7 @@ import { openTab } from './terminals.js';
 export const PROMPT_MAX_CHARS = 4000;
 const TAB_NAME_MAX = 60;
 /** Bytes the shell would read as keystrokes instead of text (tab completion, ^C, ^D, ESC…): only newline is allowed. */
-const CONTROL_CHARS = /[\x00-\x09\x0b-\x1f\x7f]/;
+export const CONTROL_CHARS = /[\x00-\x09\x0b-\x1f\x7f]/;
 
 /**
  * The prompt as it will be typed: `\r\n` folded to `\n` (a newline inside the quoted argument only makes the

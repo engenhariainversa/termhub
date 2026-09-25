@@ -1,5 +1,6 @@
 import type { Repositories } from './index.js';
 import type { ChatAction, ChatActionClass, ChatActionStatus } from './chat-actions.js';
+import type { ChatGrant } from './chat-grants.js';
 import type { Task } from './types.js';
 
 /**
@@ -17,6 +18,7 @@ export interface ChatActionCard {
   machine_id: string | null;
   project_id: string | null;
   tab_id: string | null;
+  grant_id: string | null;
   summary: string;
   created_at: string;
 }
@@ -123,6 +125,7 @@ const toCard = (action: ChatAction, summary: string): ChatActionCard => ({
   machine_id: action.machine_id,
   project_id: action.project_id,
   tab_id: action.tab_id,
+  grant_id: action.grant_id,
   summary,
   created_at: action.created_at,
 });
@@ -213,4 +216,33 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
     const summary = summarize(action, task, loc);
     return toCard(action, summary);
   });
+}
+
+/** A grant as the chat shows it: the tab by name (owner-scoped, like the cards), no user ids. */
+export interface ChatGrantView {
+  id: string;
+  tab_id: string;
+  tool: string;
+  source_action_id: string | null;
+  created_at: string;
+  expires_at: string;
+  /** Null when the tab is gone (or not this user's): the strip then says "uma aba que não existe mais". */
+  tab_name: string | null;
+}
+
+/** Enriches a batch of tab grants with the tab's name, exactly like `describeActions` — one batched,
+ * owner-scoped lookup, never one per grant, and another user's tab is indistinguishable from a gone one. */
+export async function describeGrants(repos: Repositories, grants: ChatGrant[], ownerId: string): Promise<ChatGrantView[]> {
+  const tabIds = [...new Set(grants.map((g) => g.tab_id))];
+  const tabs = tabIds.length ? await repos.tabs.findByIdsForOwner(tabIds, ownerId) : [];
+  const nameById = new Map(tabs.map((t) => [t.id, t.name]));
+  return grants.map((g) => ({
+    id: g.id,
+    tab_id: g.tab_id,
+    tool: g.tool,
+    source_action_id: g.source_action_id,
+    created_at: g.created_at,
+    expires_at: g.expires_at,
+    tab_name: nameById.get(g.tab_id) ?? null,
+  }));
 }

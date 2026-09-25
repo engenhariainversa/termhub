@@ -423,6 +423,7 @@ export const ModelName = {
   ChatConversation: 'ChatConversation',
   ChatMessage: 'ChatMessage',
   ChatAction: 'ChatAction',
+  ChatGrant: 'ChatGrant',
   InstanceSecret: 'InstanceSecret',
   ProjectGroup: 'ProjectGroup',
   ProjectGroupItem: 'ProjectGroupItem',
@@ -447,7 +448,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "machineHook" | "ticket" | "taskColumn" | "task" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAction" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "machineHook" | "ticket" | "taskColumn" | "task" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAction" | "chatGrant" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2375,6 +2376,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ChatGrant: {
+      payload: Prisma.$ChatGrantPayload<ExtArgs>
+      fields: Prisma.ChatGrantFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ChatGrantFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ChatGrantFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload>
+        }
+        findFirst: {
+          args: Prisma.ChatGrantFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ChatGrantFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload>
+        }
+        findMany: {
+          args: Prisma.ChatGrantFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload>[]
+        }
+        create: {
+          args: Prisma.ChatGrantCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload>
+        }
+        createMany: {
+          args: Prisma.ChatGrantCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ChatGrantCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload>[]
+        }
+        delete: {
+          args: Prisma.ChatGrantDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload>
+        }
+        update: {
+          args: Prisma.ChatGrantUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload>
+        }
+        deleteMany: {
+          args: Prisma.ChatGrantDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ChatGrantUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ChatGrantUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload>[]
+        }
+        upsert: {
+          args: Prisma.ChatGrantUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatGrantPayload>
+        }
+        aggregate: {
+          args: Prisma.ChatGrantAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateChatGrant>
+        }
+        groupBy: {
+          args: Prisma.ChatGrantGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ChatGrantGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ChatGrantCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ChatGrantCountAggregateOutputType> | number
+        }
+      }
+    }
     InstanceSecret: {
       payload: Prisma.$InstanceSecretPayload<ExtArgs>
       fields: Prisma.InstanceSecretFieldRefs
@@ -3472,6 +3547,7 @@ export const ChatActionScalarFieldEnum = {
   machineId: 'machineId',
   projectId: 'projectId',
   tabId: 'tabId',
+  grantId: 'grantId',
   errorCode: 'errorCode',
   durationMs: 'durationMs',
   decidedBy: 'decidedBy',
@@ -3481,6 +3557,22 @@ export const ChatActionScalarFieldEnum = {
 } as const
 
 export type ChatActionScalarFieldEnum = (typeof ChatActionScalarFieldEnum)[keyof typeof ChatActionScalarFieldEnum]
+
+
+export const ChatGrantScalarFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  tabId: 'tabId',
+  tool: 'tool',
+  sourceActionId: 'sourceActionId',
+  grantedBy: 'grantedBy',
+  createdAt: 'createdAt',
+  expiresAt: 'expiresAt',
+  revokedAt: 'revokedAt',
+  revokedBy: 'revokedBy'
+} as const
+
+export type ChatGrantScalarFieldEnum = (typeof ChatGrantScalarFieldEnum)[keyof typeof ChatGrantScalarFieldEnum]
 
 
 export const InstanceSecretScalarFieldEnum = {
@@ -4069,6 +4161,7 @@ export type GlobalOmitConfig = {
   chatConversation?: Prisma.ChatConversationOmit
   chatMessage?: Prisma.ChatMessageOmit
   chatAction?: Prisma.ChatActionOmit
+  chatGrant?: Prisma.ChatGrantOmit
   instanceSecret?: Prisma.InstanceSecretOmit
   projectGroup?: Prisma.ProjectGroupOmit
   projectGroupItem?: Prisma.ProjectGroupItemOmit

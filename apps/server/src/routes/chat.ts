@@ -2,15 +2,17 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
-import type { ChatService } from '../chat/service.js';
+import { failureLabel, type ChatService } from '../chat/service.js';
 import { chatBus } from '../chat/bus.js';
+import { activeGrants, assertGrantableAction, grantTab, revokeGrant } from '../chat/grants.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
 
 const messageBody = z.object({ text: z.string().trim().min(1).max(8000), project_id: z.string().min(1).max(64).nullish() });
 const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
 const actionIdParam = z.object({ id: z.string().min(1).max(64) });
-const decisionBody = z.object({ decision: z.enum(['approve', 'deny']) });
+const decisionBody = z.object({ decision: z.enum(['approve', 'deny', 'approve_tab']) });
+const grantIdParam = z.object({ id: z.string().min(1).max(64) });
 /** The host pair the user picks: the machine, and optionally which of its Claude accounts. No account
  *  (absent or null) means the machine's own default config dir. */
 const hostBody = z.object({ machine_id: z.string().min(1).max(64), ai_account_id: z.string().min(1).max(64).nullish() });
@@ -31,7 +33,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // The trail comes from here, not from live events (which only update what is already on
     // screen): a reload must see every pending/decided action exactly as the server has it,
     // including an old denied row sitting beside a newer pending one for the same proposal.
-    const [messages, rows, host] = await Promise.all([
+    const [messages, rows, host, grants] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       // The state, not a rendered sentence: which machine will run the next message, or which of the
@@ -39,10 +41,11 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       // here — on the same read as the history — so the chat can say so before anything is typed
       // instead of only after a message fails.
       deps.service.hostFor(request.scope.user, projectId),
+      activeGrants(repos, request.scope.user.id, conversation.id),
     ]);
     // Scoped to this request's own user: a card must never resolve a name this user cannot see.
     const actions = await describeActions(repos, rows, request.scope.user.id);
-    return { conversation, messages, actions, host };
+    return { conversation, messages, actions, host, grants };
   });
 
   /**
@@ -99,8 +102,12 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
   app.post('/actions/:id/decision', async (request) => {
     const { id } = actionIdParam.parse(request.params);
     const { decision } = decisionBody.parse(request.body);
-    const status = decision === 'approve' ? 'approved' : 'denied';
+    const status = decision === 'deny' ? 'denied' : 'approved';
     const user = request.scope.user;
+
+    // "Permitir sempre nesta aba" is only for what the gate will honour — checked before anything is
+    // decided, so a refused request changes nothing (404 not found, 400 GRANT_NOT_ALLOWED otherwise).
+    if (decision === 'approve_tab') await assertGrantableAction(repos, user.id, id);
 
     // The decision itself, and only it, decides who may answer this row — `decide` filters by the
     // owning conversation's user_id in SQL, so wrong id, another user's row and an already-decided
@@ -116,16 +123,33 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
 
     // Every open tab must see the decision, not only the one that clicked it.
     chatBus.publish({ type: 'decision', user_id: user.id, conversation_id: action.conversation_id, action_id: action.id, status });
+    // The approval above already happened and is already published: a grant that fails to be written
+    // must not turn it into an error, nor keep the model from being resumed. It degrades to a plain
+    // "Autorizar" — the card shows no grant and the user can trust the tab again from the next one.
+    let grant: Awaited<ReturnType<typeof grantTab>> | undefined;
+    if (decision === 'approve_tab') {
+      try {
+        grant = await grantTab(repos, user.id, action);
+      } catch (err) {
+        request.log.warn({ code: failureLabel(err), actionId: action.id }, 'chat grant failed after approval');
+      }
+    }
 
     try {
       const message = await deps.service.resumeAfterDecision(user, action);
-      return { action, message };
+      return { action, message, grant };
     } catch (err) {
       // The decision above already happened and was already published — a busy run must not turn a
       // successful decision into a 409. The row stays approved/denied with no injection yet; the run
       // holding the lock will pick it up and inject it through `drainNextDecision` once it finishes.
-      if (err instanceof HttpError && err.code === 'CHAT_BUSY') return { action, queued: true, note: QUEUED_NOTE };
+      if (err instanceof HttpError && err.code === 'CHAT_BUSY') return { action, queued: true, note: QUEUED_NOTE, grant };
       throw err;
     }
+  });
+
+  /** "Revogar". Declared as `create`, the permission deciding a card needs: whoever can grant can revoke. */
+  app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {
+    const { id } = grantIdParam.parse(request.params);
+    return { grant: await revokeGrant(repos, request.scope.user.id, id) };
   });
 }

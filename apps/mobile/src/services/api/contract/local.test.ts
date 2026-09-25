@@ -18,7 +18,7 @@ const readyHost = {
   sessionAtStake: false,
 };
 
-const fixture = { conversation, messages: [], actions: [], host: readyHost };
+const fixture = { conversation, messages: [], actions: [], grants: [], host: readyHost };
 
 describe('chatResponse', () => {
   it('parses a ready host', () => {
@@ -28,6 +28,11 @@ describe('chatResponse', () => {
   it('refuses a host kind it does not know', () => {
     const bad = { ...fixture, host: { kind: 'nope' } };
     expect(() => chatResponse.parse(bad)).toThrow();
+  });
+
+  it('defaults grants to empty when an older server sends none', () => {
+    const { grants: _grants, ...withoutGrants } = fixture;
+    expect(chatResponse.parse(withoutGrants)).toEqual(fixture);
   });
 });
 

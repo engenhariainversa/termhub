@@ -196,6 +196,14 @@ export type ChatMessage = Prisma.ChatMessageModel
  */
 export type ChatAction = Prisma.ChatActionModel
 /**
+ * Model ChatGrant
+ * "Permitir sempre nesta aba": the user let the concierge type into one tab without asking, for
+ * one conversation, until `expires_at` (24 h) or a revocation. Only `send_input` without
+ * `answering_permission` (spec 2026-09-25). One active row per conversation + tab + tool — a partial
+ * unique index that lives only in the migration, like `chat_actions_one_open_per_key`.
+ */
+export type ChatGrant = Prisma.ChatGrantModel
+/**
  * Model InstanceSecret
  * A secret this instance generates for itself, once, and keeps: no env var to configure, and blue
  * and green read the same row. `public_id` keys the HMAC behind every id on the public city.

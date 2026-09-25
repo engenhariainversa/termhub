@@ -141,6 +141,12 @@ const injectionText = (action: ChatAction, freshSession: boolean, summary?: stri
 const approvedProposal = (action: ChatAction, summary?: string): string =>
   `${summary ? ` A ação autorizada foi: ${summary}.` : ''} Refaça exatamente esta chamada, com estes argumentos e nenhuma alteração: ${JSON.stringify(action.args)}.`;
 
+/** Appended when the approval came with "Permitir sempre nesta aba": the model should stop expecting
+ * a question per message to that tab, know it can still be revoked, and know the limits the gate keeps
+ * (spec §2 "Agent tabs only"): an agent must be running in the tab, and "!" text or any control
+ * character other than a newline is always asked. */
+const GRANT_NOTE = ' O usuário também permitiu digitar nesta aba sem confirmar: os próximos send_input nesta aba, nesta conversa, rodam sem pedir confirmação, até ele revogar ou por 24 horas, e só enquanto a aba estiver rodando um agente. Isso não vale para run_command, send_key, para responder permissões, para texto que comece com "!" nem para texto com caracteres de controle.';
+
 export class ChatService {
   /** One run per conversation: two `claude -p` processes on the same --session-id would race. */
   private running = new Set<string>();
@@ -201,6 +207,7 @@ export class ChatService {
     this.running.add(current.id);
     try {
       await this.deps.repos.chatActions.expireOpenForConversation(current.id);
+      await this.deps.repos.chatGrants.revokeForConversation(current.id);
       await this.deps.repos.apiTokens.revokeForConversation(current.id);
       await this.deps.repos.chat.archive(current.id);
     } finally {
@@ -264,9 +271,12 @@ export class ChatService {
    * a fresh session has lost the transcript that would otherwise say what was approved.
    */
   private async injectionFor(user: User, action: ChatAction, freshSession: boolean): Promise<string> {
-    if (!freshSession || action.status === 'denied') return injectionText(action, freshSession);
+    if (action.status === 'denied') return injectionText(action, freshSession);
+    const grant = await this.deps.repos.chatGrants.findActiveBySourceAction(action.conversation_id, action.id);
+    const grantNote = grant ? GRANT_NOTE : '';
+    if (!freshSession) return injectionText(action, freshSession) + grantNote;
     const [card] = await describeActions(this.deps.repos, [action], user.id);
-    return injectionText(action, freshSession, card.summary);
+    return injectionText(action, freshSession, card.summary) + grantNote;
   }
 
   /**

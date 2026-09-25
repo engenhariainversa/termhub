@@ -626,6 +626,7 @@ model ChatConversation {
   createdAt     DateTime      @default(now()) @map("created_at")
   messages      ChatMessage[]
   actions       ChatAction[]
+  grants        ChatGrant[]
 
   @@index([userId, createdAt])
   @@index([machineId])
@@ -669,6 +670,8 @@ model ChatAction {
   machineId      String?          @map("machine_id")
   projectId      String?          @map("project_id")
   tabId          String?          @map("tab_id")
+  /// The grant this action ran under (`chat_grants`), when it was not asked but allowed by one.
+  grantId        String?          @map("grant_id")
   errorCode      String?          @map("error_code")
   durationMs     Int?             @map("duration_ms")
   decidedBy      String?          @map("decided_by")
@@ -682,6 +685,28 @@ model ChatAction {
 
   @@index([conversationId, createdAt])
   @@map("chat_actions")
+}
+
+/// "Permitir sempre nesta aba": the user let the concierge type into one tab without asking, for
+/// one conversation, until `expires_at` (24 h) or a revocation. Only `send_input` without
+/// `answering_permission` (spec 2026-09-25). One active row per conversation + tab + tool — a partial
+/// unique index that lives only in the migration, like `chat_actions_one_open_per_key`.
+model ChatGrant {
+  id             String           @id
+  conversationId String           @map("conversation_id")
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tabId          String           @map("tab_id")
+  tool           String
+  sourceActionId String?          @map("source_action_id")
+  grantedBy      String           @map("granted_by")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  expiresAt      DateTime         @map("expires_at")
+  revokedAt      DateTime?        @map("revoked_at")
+  /// Null when the system ended it (a reset), a user id when someone clicked "Revogar".
+  revokedBy      String?          @map("revoked_by")
+
+  @@index([conversationId])
+  @@map("chat_grants")
 }
 
 /// A secret this instance generates for itself, once, and keeps: no env var to configure, and blue

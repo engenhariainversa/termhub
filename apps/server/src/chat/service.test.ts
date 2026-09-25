@@ -20,6 +20,7 @@ const action = (overrides: Partial<ChatAction> = {}): ChatAction => ({
   machine_id: null,
   project_id: null,
   tab_id: 't1',
+  grant_id: null,
   error_code: null,
   duration_ms: null,
   decided_by: 'u1',
@@ -127,6 +128,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
     projectMachines: { listByProject: vi.fn(async (): Promise<{ machine_id: string; cwd: string }[]> => [{ machine_id: 'm1', cwd: '/srv/app' }]) },
     machines: { findByIdsForOwner: ownedBy(machine), list: vi.fn(async (owner: string | null) => (owner === user.id ? (opts.host?.machines ?? [host]) : [])) },
     aiAccounts: { findById: vi.fn(async () => opts.host?.account) },
+    chatGrants: { revokeForConversation: vi.fn(async () => 0), findActiveBySourceAction: vi.fn(async () => undefined) },
   } as unknown as Repositories;
   const agents = {
     capabilities: vi.fn(() => (opts.host && 'capabilities' in opts.host ? (opts.host.capabilities ?? null) : ['pty', 'claude', 'claude.system_prompt'])),
@@ -504,6 +506,29 @@ it('resumeAfterDecision never repeats the proposal for a denial, fresh session o
   expect(repos.tabs.findByIdsForOwner).not.toHaveBeenCalled();
 });
 
+it('resumeAfterDecision appends the grant note when the approval also trusted the tab', async () => {
+  const { service, messages, repos } = build([delta('feito'), done()]);
+  vi.mocked(repos.chatGrants.findActiveBySourceAction).mockResolvedValueOnce({ id: 'g1' } as never);
+
+  await service.resumeAfterDecision(user, action());
+
+  expect(repos.chatGrants.findActiveBySourceAction).toHaveBeenCalledWith('c1', 'a1');
+  expect(messages[0].text).toContain('os próximos send_input nesta aba, nesta conversa, rodam sem pedir confirmação');
+  // Spec §2 "Agent tabs only": the model is told the two limits the gate enforces.
+  expect(messages[0].text).toContain('só enquanto a aba estiver rodando um agente');
+  expect(messages[0].text).toContain('texto que comece com "!"');
+});
+
+it('resumeAfterDecision says nothing about a grant when none is active, and never for a denial', async () => {
+  const { service, messages } = build([delta('feito'), done()]);
+
+  await service.resumeAfterDecision(user, action());
+  expect(messages[0].text).not.toContain('rodam sem pedir confirmação');
+
+  await service.resumeAfterDecision(user, action({ id: 'a2', status: 'denied' }));
+  expect(messages[2].text).not.toContain('rodam sem pedir confirmação'); // the second call's own injected line
+});
+
 it('resumeAfterDecision answers busy when a run is already in flight, without marking the decision injected or typing anything', async () => {
   // Fix round 2: `decide()` (the route) has already flipped the row durably and published it before
   // this is ever reached — a busy lock must leave the row exactly as `decide` left it (approved or
@@ -759,6 +784,8 @@ describe('reset', () => {
     const fresh = await service.reset(user, 'p1');
     expect(repos.chat.archive).toHaveBeenCalledWith('c_p1');
     expect(repos.chatActions.expireOpenForConversation).toHaveBeenCalledWith('c_p1');
+    // "Nova conversa" ends every grant the conversation held, exactly like its open questions.
+    expect(repos.chatGrants.revokeForConversation).toHaveBeenCalledWith('c_p1');
     expect(repos.apiTokens.revokeForConversation).toHaveBeenCalledWith('c_p1');
     expect(fresh.id).not.toBe('c_p1');
     expect(fresh.archived_at).toBeNull();

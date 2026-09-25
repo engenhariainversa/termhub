@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatPanel } from './ChatPanel';
-import type { ChatAction, ChatMessage } from '../../lib/types';
+import type { ChatAction, ChatGrant, ChatMessage } from '../../lib/types';
 
 const chatMock = vi.fn();
 const sendMock = vi.fn();
@@ -14,6 +14,7 @@ const setHostMock = vi.fn();
 const machinesMock = vi.fn();
 const accountsMock = vi.fn();
 const resetMock = vi.fn();
+const revokeMock = vi.fn();
 
 vi.mock('../../lib/api', () => {
   // Same signature as the real one: the page shows `message`, so a stand-in that swallows it would
@@ -35,6 +36,7 @@ vi.mock('../../lib/api', () => {
       decideChatAction: (...a: unknown[]) => decideMock(...a),
       setChatHost: (...a: unknown[]) => setHostMock(...a),
       resetChat: (...a: unknown[]) => resetMock(...a),
+      revokeChatGrant: (...a: unknown[]) => revokeMock(...a),
       machines: { list: (...a: unknown[]) => machinesMock(...a) },
       aiAccounts: { list: (...a: unknown[]) => accountsMock(...a) },
     },
@@ -73,6 +75,16 @@ const action = (over: Partial<ChatAction> & { id: string }): ChatAction => ({
 /** A host that can run the conversation, reused across the tests below that don't care what it is. */
 const READY = { kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null, account: { kind: 'default' }, sessionAtStake: false };
 
+const grant = (over: Partial<ChatGrant> & { id: string }): ChatGrant => ({
+  tab_id: 't1',
+  tool: 'send_input',
+  source_action_id: 'a1',
+  created_at: '2026-09-21T00:00:00.000Z',
+  expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+  tab_name: 'Terminal 1',
+  ...over,
+});
+
 beforeEach(() => {
   chatMock.mockReset();
   sendMock.mockReset();
@@ -82,6 +94,7 @@ beforeEach(() => {
   machinesMock.mockReset();
   accountsMock.mockReset();
   resetMock.mockReset();
+  revokeMock.mockReset();
   accountsMock.mockResolvedValue({ accounts: [] });
   auth.state = { user: { id: 'u1' }, viewAs: null };
   chatMock.mockResolvedValue({ conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })], actions: [] });
@@ -216,4 +229,59 @@ it('in a project, a host that is not chosen points to /chat instead of offering 
     </MemoryRouter>,
   );
   expect(await screen.findByRole('link', { name: /escolher a máquina do chat/i })).toHaveAttribute('href', '/chat');
+});
+
+it('the strip from GET /chat revokes a grant', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [grant({ id: 'g1' })] });
+  revokeMock.mockResolvedValue({ grant: grant({ id: 'g1' }) });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText(/Enviando direto para a aba Terminal 1 até/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Revogar' }));
+  await waitFor(() => expect(revokeMock).toHaveBeenCalledWith('g1'));
+  await waitFor(() => expect(screen.queryByText(/Enviando direto para/)).toBeNull());
+});
+
+it('"Permitir sempre nesta aba" on a pending card records the grant and shows it on the strip and the card', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' })], host: READY, grants: [] });
+  decideMock.mockResolvedValue({ action: { id: 'a1', status: 'approved' }, grant: grant({ id: 'g1' }) });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Permitir sempre nesta aba' }));
+  await waitFor(() => expect(decideMock).toHaveBeenCalledWith('a1', 'approve_tab'));
+  expect(await screen.findByText(/Enviando direto para a aba Terminal 1 até/)).toBeInTheDocument();
+  expect(screen.getByText(/^Permitido nesta aba até/)).toBeInTheDocument();
+});
+
+it('a grant event adds the strip, a grant_revoked removes it, a granted_action appends a card, and events of another conversation are ignored', async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { events: [], connected: true };
+  });
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [] });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalled());
+
+  onEvent({ type: 'grant', conversation_id: 'c_other', grant: grant({ id: 'g_other' }) });
+  expect(screen.queryByText(/Enviando direto para/)).toBeNull();
+
+  onEvent({ type: 'grant', conversation_id: 'c_p1', grant: grant({ id: 'g1' }) });
+  expect(await screen.findByText(/Enviando direto para a aba Terminal 1 até/)).toBeInTheDocument();
+
+  onEvent({ type: 'granted_action', conversation_id: 'c_p1', action: action({ id: 'a2', status: 'executed', grant_id: 'g1' }) });
+  expect(await screen.findByText('Executado · aba confiada')).toBeInTheDocument();
+
+  onEvent({ type: 'grant_revoked', conversation_id: 'c_p1', grant_id: 'g1' });
+  await waitFor(() => expect(screen.queryByText(/Enviando direto para/)).toBeNull());
 });

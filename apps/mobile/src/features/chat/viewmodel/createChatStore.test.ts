@@ -148,13 +148,55 @@ it("decide(id, 'approve') asks requestPinProof(id) and, once resolved, the card 
   await openAndConnect(chat, 'p-termhub');
 
   const deciding = chat.getState().decide('a-termhub-1', 'approve');
-  expect(store.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1' });
+  expect(store.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', decision: 'approve' });
   expect(chat.getState().decidingId).toBe('a-termhub-1');
 
   await store.getState().resolvePinPrompt(PIN);
   await deciding;
   expect(slot(chat, 'p-termhub').actions[0]!.status).toBe('approved');
   expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
+});
+
+it("decide(id, 'approve_tab') asks the PIN for approve_tab and, once resolved, the tab is trusted", async () => {
+  const { chat, store } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const deciding = chat.getState().decide('a-termhub-1', 'approve_tab');
+  expect(store.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', decision: 'approve_tab' });
+  await store.getState().resolvePinPrompt(PIN);
+  await deciding;
+  expect(slot(chat, 'p-termhub').actions[0]!.status).toBe('approved');
+  expect(slot(chat, 'p-termhub').grants).toEqual([expect.objectContaining({ tab_id: 't-api', source_action_id: 'a-termhub-1' })]);
+});
+
+it('revokeGrant(id) drops the grant', async () => {
+  const { chat, store } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const deciding = chat.getState().decide('a-termhub-1', 'approve_tab');
+  await store.getState().resolvePinPrompt(PIN);
+  await deciding;
+  const [g] = slot(chat, 'p-termhub').grants;
+  await chat.getState().revokeGrant(g!.id);
+  expect(slot(chat, 'p-termhub').grants).toEqual([]);
+  expect(chat.getState()).toMatchObject({ revokingId: null, error: null });
+});
+
+it('revokeGrant of a grant already revoked elsewhere (409) drops it quietly; another failure shows its text and keeps it', async () => {
+  const { chat, api, store } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const deciding = chat.getState().decide('a-termhub-1', 'approve_tab');
+  await store.getState().resolvePinPrompt(PIN);
+  await deciding;
+  const [g] = slot(chat, 'p-termhub').grants;
+
+  jest.spyOn(api, 'revokeGrant').mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'Falhou.'));
+  await chat.getState().revokeGrant(g!.id);
+  expect(slot(chat, 'p-termhub').grants).toHaveLength(1);
+  expect(chat.getState()).toMatchObject({ revokingId: null, error: 'Falhou.' });
+
+  jest.spyOn(api, 'revokeGrant').mockRejectedValueOnce(new ApiError(409, 'CONFLICT', 'Esta permissão já foi revogada'));
+  await chat.getState().revokeGrant(g!.id);
+  expect(slot(chat, 'p-termhub').grants).toEqual([]);
+  expect(chat.getState()).toMatchObject({ revokingId: null, error: null });
 });
 
 it("decide(id, 'approve') performs the decision inside the prompt: a wrong PIN leaves the sheet open with the error, the card pending; the right one approves", async () => {
@@ -360,7 +402,7 @@ it('persists projects and each conversation, never live or transient state', asy
 
   const saved = JSON.parse(mmkv.getString('chat')!).state;
   expect(Object.keys(saved).sort()).toEqual(['conversations', 'projects']);
-  expect(Object.keys(saved.conversations['p-termhub']).sort()).toEqual(['actions', 'conversation', 'host', 'messages']);
+  expect(Object.keys(saved.conversations['p-termhub']).sort()).toEqual(['actions', 'conversation', 'grants', 'host', 'messages']);
 
   // A cold start shows the thread before any fetch.
   const again = createChatStore({ api, session: () => ({ phase: 'locked', auth: () => { throw new Error('LOCKED'); }, handleApiError: () => false, requestPinProof: async () => { throw new Error('CANCELLED'); } }) });

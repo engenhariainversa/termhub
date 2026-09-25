@@ -1,7 +1,7 @@
 // How one live event of the open conversation changes its thread (design spec §6): pure reducers
 // over the slice the chat store keeps — the thread's messages and actions and the `live` buffer
 // `foldLive` reads. The store decides which events reach here (`belongsTo`) and does the I/O.
-import type { ChatAction, ChatEvent, ChatMessage } from './types';
+import type { ChatAction, ChatEvent, ChatGrant, ChatMessage } from './types';
 
 /** The most live events kept at once — a long answer streams hundreds of deltas. */
 export const LIVE_CAP = 500;
@@ -10,6 +10,8 @@ export interface EventSlice {
   messages: ChatMessage[];
   actions: ChatAction[];
   live: ChatEvent[];
+  /** The conversation's trusted tabs; at most one per tab (a new grant replaces the old one). */
+  grants: ChatGrant[];
 }
 
 /** The message a live event is about, if any. */
@@ -45,6 +47,7 @@ function actionFromConfirmation(e: Extract<ChatEvent, { type: 'confirmation' }>)
     machine_id: e.machine_id,
     project_id: e.project_id,
     tab_id: e.tab_id,
+    grant_id: null,
     summary: e.summary,
     created_at: e.created_at,
   };
@@ -70,6 +73,16 @@ export function applyEvent(slice: EventSlice, e: ChatEvent): { slice: EventSlice
       return { slice: { ...slice, actions: [...slice.actions, actionFromConfirmation(e)] }, reread: false };
     case 'decision':
       return { slice: { ...slice, actions: settlePending(slice.actions, e.action_id, e.status) }, reread: false };
+    case 'grant':
+      return { slice: { ...slice, grants: [...slice.grants.filter((g) => g.id !== e.grant.id && g.tab_id !== e.grant.tab_id), e.grant] }, reread: false };
+    case 'grant_revoked':
+      return { slice: { ...slice, grants: slice.grants.filter((g) => g.id !== e.grant_id) }, reread: false };
+    case 'granted_action':
+      // A send_input run under a grant never asked: its card arrives whole, already executed.
+      return {
+        slice: { ...slice, actions: slice.actions.some((a) => a.id === e.action.id) ? slice.actions.map((a) => (a.id === e.action.id ? e.action : a)) : [...slice.actions, e.action] },
+        reread: false,
+      };
     case 'delta':
     case 'action':
     case 'reset':

@@ -69,6 +69,13 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatActionsRepository (Po
     expect(await repo.findByIdForUser(newId(), userId)).toBeUndefined();
   });
 
+  it('inserts an action already approved under a grant, and it can be claimed', async () => {
+    const row = await repo.insertApproved({ conversation_id: conversationId, tool: 'send_input', args: { tab_id: 't1', text: 'sim' }, class: 'write', idempotency_key: 'kg1', tab_id: 't1', grant_id: 'g1', decided_by: userId });
+    expect(row).toMatchObject({ status: 'approved', grant_id: 'g1', decided_by: userId });
+    expect(row.decided_at).not.toBeNull();
+    expect(await repo.claimApproved(row.id)).toBe(true);
+  });
+
   it('finds a denial by its key, with when it was decided, and ignores an executed row', async () => {
     const refused = await pending('k8');
     await repo.decide(refused.id, userId, 'denied');
@@ -142,6 +149,20 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatActionsRepository (Po
       expect(await repo.findNextToInject(otherConversationId)).toBeUndefined();
     } finally {
       await db.user.delete({ where: { id: otherUserId } }); // cascades the conversation and its actions
+    }
+  });
+
+  it('never hands a grant-run row to the injection, since no card was ever decided for it', async () => {
+    // Own conversation, for the same reason as the test above.
+    const otherUserId = newId();
+    await db.user.create({ data: { id: otherUserId, email: `${otherUserId}@test.local`, name: 'test' } });
+    const otherConversationId = (await new ChatRepository(db).getOrCreateForUser(otherUserId)).id;
+    try {
+      const granted = await repo.insertApproved({ conversation_id: otherConversationId, tool: 'send_input', args: { tab_id: 't1', text: 'sim' }, class: 'write', idempotency_key: 'inj-g', tab_id: 't1', grant_id: 'g1', decided_by: otherUserId });
+      expect(granted.status).toBe('approved');
+      expect(await repo.findNextToInject(otherConversationId)).toBeUndefined();
+    } finally {
+      await db.user.delete({ where: { id: otherUserId } });
     }
   });
 

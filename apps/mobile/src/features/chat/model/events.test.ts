@@ -4,9 +4,9 @@ import type { ChatAction, ChatEvent, ChatMessage } from './types';
 const at = '2026-09-24T12:00:00.000Z';
 const base = { user_id: 'u1', conversation_id: 'c1' };
 const row = (id: string, extra: Partial<ChatMessage> = {}): ChatMessage => ({ id, conversation_id: 'c1', role: 'assistant', text: '', usage: null, error_code: null, created_at: at, ...extra });
-const action = (id: string, status: ChatAction['status'] = 'pending'): ChatAction => ({ id, tool: 't', args: {}, class: 'write', status, machine_id: null, project_id: null, tab_id: null, summary: 's', created_at: at });
+const action = (id: string, status: ChatAction['status'] = 'pending'): ChatAction => ({ id, tool: 't', args: {}, class: 'write', status, machine_id: null, project_id: null, tab_id: null, grant_id: null, summary: 's', created_at: at });
 const delta = (messageId: string, text: string): ChatEvent => ({ type: 'delta', ...base, message_id: messageId, delta: text });
-const empty: EventSlice = { messages: [], actions: [], live: [] };
+const empty: EventSlice = { messages: [], actions: [], live: [], grants: [] };
 
 it('an announced assistant row stays in live; its final row replaces it and clears its deltas, and both ask for a re-read', () => {
   const announced = applyEvent(empty, { type: 'message', ...base, message: row('m1') });
@@ -52,10 +52,38 @@ it('a decision only settles a pending card: a card that already ran is never mov
 });
 
 it('a run_finished event neither crashes nor changes the thread', () => {
-  const thread: EventSlice = { messages: [row('m1', { text: 'oi' })], actions: [action('a1')], live: [delta('m1', 'oi')] };
+  const thread: EventSlice = { messages: [row('m1', { text: 'oi' })], actions: [action('a1')], live: [delta('m1', 'oi')], grants: [] };
   const finished: ChatEvent = { type: 'run_finished', ...base, message_id: 'm1', ok: true, error_code: null };
   const failed: ChatEvent = { type: 'run_finished', ...base, message_id: null, ok: false, error_code: 'HOST_GONE' };
   expect(applyEvent(thread, finished)).toEqual({ slice: thread, reread: false });
   expect(applyEvent(thread, finished).slice).toBe(thread);
   expect(applyEvent(thread, failed).slice).toBe(thread);
+});
+
+describe('tab grants', () => {
+  const grant = { id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'a1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2099-01-01T00:00:00.000Z', tab_name: 'api' };
+  const slice: EventSlice = { messages: [], actions: [action('a1')], live: [], grants: [] };
+
+  it('a grant event adds it; a second grant for the same tab replaces the first', () => {
+    const added = applyEvent(slice, { type: 'grant', ...base, grant });
+    expect(added).toEqual({ slice: { ...slice, grants: [grant] }, reread: false });
+    const again = applyEvent(added.slice, { type: 'grant', ...base, grant: { ...grant, id: 'g2' } });
+    expect(again.slice.grants).toEqual([{ ...grant, id: 'g2' }]);
+    expect(again.reread).toBe(false);
+  });
+
+  it('grant_revoked removes it by id', () => {
+    const granted: EventSlice = { ...slice, grants: [grant, { ...grant, id: 'g2', tab_id: 't2' }] };
+    const revoked = applyEvent(granted, { type: 'grant_revoked', ...base, grant_id: 'g1' });
+    expect(revoked).toEqual({ slice: { ...granted, grants: [{ ...grant, id: 'g2', tab_id: 't2' }] }, reread: false });
+  });
+
+  it('granted_action appends the card, and replaces a card with the same id', () => {
+    const ran: ChatAction = { ...action('a2', 'executed'), grant_id: 'g1' };
+    const appended = applyEvent(slice, { type: 'granted_action', ...base, action: ran });
+    expect(appended).toEqual({ slice: { ...slice, actions: [action('a1'), ran] }, reread: false });
+    const replaced = applyEvent(slice, { type: 'granted_action', ...base, action: { ...action('a1', 'executed'), grant_id: 'g1' } });
+    expect(replaced.slice.actions).toEqual([{ ...action('a1', 'executed'), grant_id: 'g1' }]);
+    expect(replaced.reread).toBe(false);
+  });
 });

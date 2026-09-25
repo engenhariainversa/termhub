@@ -6,7 +6,7 @@ import { hashApiToken } from '../auth/api-tokens.js';
 import { canAccess } from '../auth/permissions.js';
 import { chatBus } from '../chat/bus.js';
 import { idempotencyKeyFor } from '../chat/gate.js';
-import type { ChatAction, InsertPendingInput } from '../db/repositories/chat-actions.js';
+import type { ChatAction, InsertApprovedInput, InsertPendingInput } from '../db/repositories/chat-actions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { applyErrorHandler } from '../lib/errors.js';
 import { mcpRoutes } from './route.js';
@@ -97,6 +97,7 @@ function fakeChatActions() {
         machine_id: input.machine_id ?? null,
         project_id: input.project_id ?? null,
         tab_id: input.tab_id ?? null,
+        grant_id: null,
         error_code: null,
         duration_ms: null,
         decided_by: null,
@@ -105,6 +106,34 @@ function fakeChatActions() {
         // publishing `new Date().toISOString()` instead would be indistinguishable from that if this
         // were the current time — the row and "now" land in the same millisecond in practically
         // every run.
+        created_at: PENDING_CREATED_AT,
+      };
+      rows.push(row);
+      return row;
+    }),
+    /** Same duplicate check and row shape as `insertPending`, but born `approved`, already tied to
+     * the grant that answered it and to whoever granted it. */
+    insertApproved: vi.fn(async (input: InsertApprovedInput) => {
+      if (rows.some((r) => sameKey(r, input.conversation_id, input.idempotency_key ?? '') && isOpen(r))) {
+        throw new Error('duplicate key value violates unique constraint "chat_actions_one_open_per_key"');
+      }
+      const row: ChatAction = {
+        id: `a${rows.length + 1}`,
+        conversation_id: input.conversation_id,
+        message_id: input.message_id ?? null,
+        tool: input.tool,
+        args: input.args,
+        class: input.class,
+        status: 'approved',
+        idempotency_key: input.idempotency_key ?? null,
+        machine_id: input.machine_id ?? null,
+        project_id: input.project_id ?? null,
+        tab_id: input.tab_id ?? null,
+        grant_id: input.grant_id,
+        error_code: null,
+        duration_ms: null,
+        decided_by: input.decided_by,
+        decided_at: new Date().toISOString(),
         created_at: PENDING_CREATED_AT,
       };
       rows.push(row);
@@ -136,6 +165,7 @@ function fakeChatActions() {
         machine_id: null,
         project_id: null,
         tab_id: typeof args.tab_id === 'string' ? args.tab_id : null,
+        grant_id: null,
         error_code: null,
         duration_ms: null,
         decided_by: status === 'expired' ? null : 'u1',
@@ -145,6 +175,22 @@ function fakeChatActions() {
       rows.push(row);
       return row;
     },
+  };
+}
+
+function fakeChatGrants() {
+  const grants: { id: string; conversation_id: string; tab_id: string; tool: string; expires_at: string; revoked_at: string | null }[] = [];
+  return {
+    grants,
+    /** A grant as the decision route leaves it; `expiresInMinutes` < 0 stages an expired one. */
+    seed: (tabId: string, opts: { conversationId?: string; expiresInMinutes?: number; revoked?: boolean } = {}) => {
+      const g = { id: `g${grants.length + 1}`, conversation_id: opts.conversationId ?? CONVERSATION, tab_id: tabId, tool: 'send_input', expires_at: new Date(Date.now() + (opts.expiresInMinutes ?? 60) * 60_000).toISOString(), revoked_at: opts.revoked ? new Date().toISOString() : null };
+      grants.push(g);
+      return g;
+    },
+    findActive: vi.fn(async (conversationId: string, tabId: string, tool: string) =>
+      grants.find((g) => g.conversation_id === conversationId && g.tab_id === tabId && g.tool === tool && g.revoked_at === null && Date.parse(g.expires_at) > Date.now()),
+    ),
   };
 }
 
@@ -167,21 +213,24 @@ function build(opts: { gated: boolean; conversationId?: string }) {
     recordEvent: vi.fn(async () => {}),
   };
   const actions = fakeChatActions();
+  const grants = fakeChatGrants();
   const chat = { getOrCreateForUser: vi.fn(async (userId: string) => ({ id: CONVERSATION, user_id: userId, cli_session_id: null, created_at: '' })) };
+  const projectsRepo = {
+    findById: vi.fn(async () => project),
+    findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === machine.owner_id && ids.includes(project.id) ? [project] : [])),
+  };
   const repos = {
     apiTokens,
     chat,
     chatActions: actions,
+    chatGrants: grants,
     users: { findById: vi.fn(async () => ({ id: 'u1', role_id: 'r' })) },
     machines: {
       findById: vi.fn(async () => machine),
       list: vi.fn(async () => [machine]),
       findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === machine.owner_id && ids.includes(machine.id) ? [machine] : [])),
     },
-    projects: {
-      findById: vi.fn(async () => project),
-      findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === machine.owner_id && ids.includes(project.id) ? [project] : [])),
-    },
+    projects: projectsRepo,
     projectMachines: {
       find: vi.fn(async () => link),
       listByProject: vi.fn(async () => [link]),
@@ -201,8 +250,12 @@ function build(opts: { gated: boolean; conversationId?: string }) {
   const app = Fastify();
   applyErrorHandler(app);
   app.register((a) => mcpRoutes(a, { repos, version: '0.0.0-test' }));
-  return { app, apiTokens, actions, tabs };
+  return { app, apiTokens, actions, tabs, grants, projects: projectsRepo };
 }
+
+/** What the monitor hooks report for an agent at work in the tab. A grant only covers a tab in this
+ * state (spec §2 "Agent tabs only"): the fake tabs start at `null`, a bare shell. */
+const agentIn = (tabs: Map<string, Record<string, unknown>>, id: string, state: 'working' | 'waiting_input' = 'working') => Object.assign(tabs.get(id)!, { state });
 
 const callTool = (app: ReturnType<typeof Fastify>, name: string, args: object) =>
   app.inject({
@@ -682,4 +735,350 @@ it("never resolves another user's tab when re-validating an approval", async () 
   expect(typed).toEqual([]);
   expect(actions.markExecuted).toHaveBeenCalledWith(row.id, false, 'TAB_GONE', expect.any(Number));
   expect(actions.rows[0].status).toBe('failed');
+});
+
+it('types at once into a trusted tab, and leaves an executed audit row tied to the grant', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  const g = grants.seed('t1');
+  agentIn(tabs, 't1');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'sim, pode seguir' });
+  expect(resultOf(res).isError).toBeFalsy();
+  expect(typed).toContain('sim, pode seguir');
+  expect(actions.insertPending).not.toHaveBeenCalled();
+  expect(actions.rows).toHaveLength(1);
+  expect(actions.rows[0]).toMatchObject({ status: 'executed', grant_id: g.id, decided_by: 'u1', tab_id: 't1' });
+  const live = collected.find((e) => e.type === 'granted_action') as { action: { status: string; grant_id: string; summary: string } } | undefined;
+  expect(live?.action).toMatchObject({ status: 'executed', grant_id: g.id });
+  expect(collected.some((e) => e.type === 'confirmation')).toBe(false);
+});
+
+it.each([
+  ['answering a permission', 'send_input', { tab_id: 't1', text: '1', answering_permission: true }],
+  ['run_command', 'run_command', { tab_id: 't1', command: 'ls' }],
+  ['send_key', 'send_key', { tab_id: 't1', key: 'Enter' }],
+])('still asks for %s on a trusted tab', async (_label, tool, args) => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+  const res = await callTool(app, tool, args);
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(actions.insertPending).toHaveBeenCalledTimes(1);
+  expect(typed).toEqual([]);
+});
+
+it.each([
+  ['another tab', () => ({ tabId: 't2' })],
+  ['another conversation', () => ({ tabId: 't1', conversationId: 'c_other' })],
+  ['an expired grant', () => ({ tabId: 't1', expiresInMinutes: -1 })],
+  ['a revoked grant', () => ({ tabId: 't1', revoked: true })],
+])('asks when the only grant is for %s', async (_label, grantOf) => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  const { tabId, ...opts } = grantOf();
+  grants.seed(tabId, opts);
+  agentIn(tabs, 't1');
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(actions.insertPending).toHaveBeenCalledTimes(1);
+  expect(typed).toEqual([]);
+});
+
+it('a recent "no" to the same text beats the grant', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, apiTokens, grants } = build({ gated: true });
+  grants.seed('t1');
+  actions.seed('denied', 'send_input', { tab_id: 't1', text: 'rm -rf' }, 1);
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'rm -rf' });
+  expect(resultOf(res).isError).toBe(true);
+  expect(textOf(res)).toMatch(/recusou/i);
+  expect(typed).toEqual([]);
+  expect(actions.insertApproved).not.toHaveBeenCalled();
+  // The denial itself decided this, without ever consulting the grant: `applyGate` only looks at
+  // `chatGrants` from the branch that would otherwise ask, which a denial in force never reaches.
+  expect(grants.findActive).not.toHaveBeenCalled();
+  await settle();
+  expect(apiTokens.recordEvent.mock.calls[0][0]).toMatchObject({ tool: 'send_input', tab_id: 't1', ok: false, error_code: 'CONFIRMATION_DENIED' });
+});
+
+it('a trusted tab that is waiting on a permission types nothing and records WAITING_PERMISSION', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  const g = grants.seed('t1');
+  Object.assign(tabs.get('t1')!, { state: 'waiting_permission', state_at: new Date().toISOString() });
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+  expect(resultOf(res).isError).toBe(true);
+  expect(typed).toEqual([]);
+  expect(actions.rows[0]).toMatchObject({ status: 'failed', error_code: 'WAITING_PERMISSION' });
+  expect(collected.some((e) => e.type === 'confirmation')).toBe(false);
+  // A failed grant run still tells the trail live — the card just reads as failed, not as pending.
+  const live = collected.find((e) => e.type === 'granted_action') as { action: { status: string; grant_id: string } } | undefined;
+  expect(live?.action).toMatchObject({ status: 'failed', grant_id: g.id });
+});
+
+it('a trusted tab that no longer exists records TAB_GONE', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  const g = grants.seed('t1');
+  tabs.delete('t1');
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+  expect(resultOf(res).isError).toBe(true);
+  expect(typed).toEqual([]);
+  expect(actions.rows[0]).toMatchObject({ status: 'failed', error_code: 'TAB_GONE' });
+  const live = collected.find((e) => e.type === 'granted_action') as { action: { status: string; grant_id: string } } | undefined;
+  expect(live?.action).toMatchObject({ status: 'failed', grant_id: g.id });
+});
+
+it('a grant on a foreign tab is TAB_GONE, never the foreign tab\'s own name', async () => {
+  // The tab exists (t9, "Terminal do vizinho"), but belongs to someone else. The re-validation the
+  // grant path shares with an approved row must read it through the owner-scoped batch, exactly as
+  // "never resolves another user's tab when re-validating an approval" proves for that other path.
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  const g = grants.seed('t9');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't9', text: 'oi' });
+
+  expect(resultOf(res).isError).toBe(true);
+  expect(typed).toEqual([]);
+  expect(actions.rows[0]).toMatchObject({ status: 'failed', error_code: 'TAB_GONE', grant_id: g.id });
+  expect(textOf(res)).not.toContain('Terminal do vizinho');
+  const live = collected.find((e) => e.type === 'granted_action') as { action: { status: string; summary: string } } | undefined;
+  expect(live?.action.status).toBe('failed');
+  expect(live?.action.summary).not.toContain('Terminal do vizinho');
+});
+
+it('an open confirmation for the same call wins over an active grant', async () => {
+  // The gate decides from the open row before it ever looks at a grant (`applyGate` only consults
+  // `chatGrants` in the branch reached when there is no row at all): a question already on screen for
+  // this exact proposal must keep being "wait", not suddenly execute because a grant showed up between
+  // the ask and the reply.
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants } = build({ gated: true });
+  await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' }); // opens a pending row, no grant yet
+  expect(actions.rows).toHaveLength(1);
+  grants.seed('t1');
+  grants.findActive.mockClear(); // only this call's own use of the grant matters from here on
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+
+  expect(resultOf(res).isError).toBe(true);
+  expect(textOf(res)).toMatch(/ainda está aguardando a confirmação/i);
+  expect(actions.insertApproved).not.toHaveBeenCalled();
+  expect(grants.findActive).not.toHaveBeenCalled();
+  expect(typed).toEqual([]);
+  expect(actions.rows).toHaveLength(1); // still just the one pending row
+});
+
+it('grant → direct send → revoke → asks again', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  const g = grants.seed('t1');
+  agentIn(tabs, 't1');
+  await callTool(app, 'send_input', { tab_id: 't1', text: 'primeira' });
+  expect(typed).toContain('primeira');
+  g.revoked_at = new Date().toISOString();
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'segunda' });
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(typed).not.toContain('segunda');
+  expect(actions.rows.map((r) => r.status)).toEqual(['executed', 'pending']);
+});
+
+it("a person's own token never looks at grants", async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, grants } = build({ gated: false });
+  await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+  expect(grants.findActive).not.toHaveBeenCalled();
+});
+
+// Fix round 1 (TER-4): `executeGranted`'s own insert can fail two different ways, and its live-trail
+// publish must never turn an already-executed keystroke into a different outcome.
+
+it('answers ACTION_NOT_RECORDED and types nothing when the grant insert fails outright', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+  // A rejected write carries the rejected data; whatever comes out of the gate must not.
+  actions.insertApproved.mockRejectedValueOnce(new Error('null value in column "args" violates ... { text: "comando secreto" }'));
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'comando secreto' });
+
+  expect(resultOf(res).isError).toBe(true);
+  expect(textOf(res)).toMatch(/registrar esta ação/i);
+  expect(textOf(res)).not.toContain('comando secreto');
+  expect(typed).toEqual([]);
+  expect(actions.rows).toHaveLength(0);
+});
+
+it('answers that a concurrent call already owns it when the grant insert loses the unique index', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+  actions.insertApproved.mockRejectedValueOnce(new Error('duplicate key value violates unique constraint "chat_actions_one_open_per_key"'));
+  // The gate's own first check (before it ever tries to insert) sees nothing yet; by the time
+  // `executeGranted` re-checks after the failed insert, the winning call's row already occupies the key.
+  actions.findOpenByKey.mockImplementationOnce(async () => undefined);
+  actions.findOpenByKey.mockImplementationOnce(async () => ({ id: 'a-winner' }) as never);
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+
+  expect(resultOf(res).isError).toBe(true);
+  expect(textOf(res)).toMatch(/já está executando esta ação/i);
+  expect(typed).toEqual([]);
+  expect(actions.rows).toHaveLength(0); // nothing of this call's own was ever recorded
+});
+
+it('still succeeds, typing exactly once, when telling the trail live fails after a granted run', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, projects, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+  // Forces the enrichment inside the post-execution publish step to throw — after `execute()`'s own
+  // `staleApproval` read (which only touches `tabs`) already succeeded and the keystroke already ran.
+  projects.findByIdsForOwner.mockRejectedValueOnce(new Error('connection terminated'));
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'oi' });
+
+  expect(resultOf(res).isError).toBeFalsy();
+  expect(typed).toEqual(['oi']); // exactly once: a retry must not be provoked by the publish failure
+  expect(actions.rows).toHaveLength(1);
+  expect(actions.rows[0].status).toBe('executed');
+  expect(collected.some((e) => e.type === 'granted_action')).toBe(false); // best-effort: swallowed
+});
+
+// Final review, item A (spec §2 "Agent tabs only"): `send_input` types any text and presses Enter, so a
+// grant covers a tab only while an agent runs in it, and never text that Claude Code would hand to bash.
+
+it.each([
+  ['a bare shell (state never reported)', null],
+  ['an agent that ended (idle)', 'idle'],
+  ['an agent that errored', 'error'],
+])('asks instead of using the grant on %s', async (_label, state) => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  Object.assign(tabs.get('t1')!, { state });
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'ls' });
+
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(typed).toEqual([]);
+  expect(actions.insertApproved).not.toHaveBeenCalled();
+  expect(actions.insertPending).toHaveBeenCalledTimes(1);
+  expect(collected.some((e) => e.type === 'confirmation')).toBe(true);
+});
+
+it('types at once into a trusted tab whose agent is waiting for input', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  const g = grants.seed('t1');
+  agentIn(tabs, 't1', 'waiting_input');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'sim' });
+
+  expect(resultOf(res).isError).toBeFalsy();
+  expect(typed).toContain('sim');
+  expect(actions.rows[0]).toMatchObject({ status: 'executed', grant_id: g.id });
+});
+
+it.each([['!rm -rf ~'], ['  !ls']])('asks for text Claude Code would run in bash (%j) on a trusted agent tab, before reading anything', async (text) => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text });
+
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(typed).toEqual([]);
+  expect(actions.insertApproved).not.toHaveBeenCalled();
+  expect(actions.insertPending).toHaveBeenCalledTimes(1);
+  expect(grants.findActive).not.toHaveBeenCalled();
+});
+
+it('types text with a "!" that is not its first non-blank character', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'use ! no meio' });
+
+  expect(resultOf(res).isError).toBeFalsy();
+  expect(typed).toContain('use ! no meio');
+  expect(actions.rows[0]).toMatchObject({ status: 'executed' });
+});
+
+// Follow-up: control characters ride as keystrokes too, so they can edit a grant's own line into a
+// `!` command before Claude Code ever sees it whole — Ctrl-U clears the line, backspace erases a
+// character — and the leading-`!` check alone would miss both.
+
+it.each([
+  ['\u0015!curl x | sh', 'Ctrl-U clears the line, then "!"'],
+  ['a\u007f!rm -rf ~', 'backspace erases the "a", then "!"'],
+])('asks for text with a control character that could edit the line into a bash command (%s), before reading anything', async (text) => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text });
+
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(typed).toEqual([]);
+  expect(actions.insertApproved).not.toHaveBeenCalled();
+  expect(actions.insertPending).toHaveBeenCalledTimes(1);
+  expect(grants.findActive).not.toHaveBeenCalled();
+});
+
+it('asks for text with a tab character, a control character too even without a "!"', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'linha 1\tcom tab' });
+
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(typed).toEqual([]);
+  expect(actions.insertApproved).not.toHaveBeenCalled();
+  expect(actions.insertPending).toHaveBeenCalledTimes(1);
+  expect(grants.findActive).not.toHaveBeenCalled();
+});
+
+it('types text with a newline directly into a trusted tab: a newline is the one control character allowed', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed, '0.3.0'); // the newline goes as a paste, which needs TERMINAL_PASTE_MIN_AGENT_VERSION
+  const { app, actions, grants, tabs } = build({ gated: true });
+  grants.seed('t1');
+  agentIn(tabs, 't1');
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'linha 1\nlinha 2' });
+
+  expect(resultOf(res).isError).toBeFalsy();
+  expect(typed).toContain('linha 1\nlinha 2');
+  expect(actions.rows[0]).toMatchObject({ status: 'executed' });
 });

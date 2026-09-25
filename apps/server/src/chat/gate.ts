@@ -95,6 +95,20 @@ export function idempotencyKeyFor(conversationId: string, tool: string, args: un
   return createHash('sha256').update(canonical).digest('hex');
 }
 
+/** The one tool a tab grant can cover (spec 2026-09-25): free text typed at a prompt. */
+export const GRANTABLE_TOOL = 'send_input';
+
+/**
+ * Whether "Permitir sempre nesta aba" may cover this call. Only `send_input` to a named tab, and
+ * never with `answering_permission`: answering a permission dialog, like `send_key` and
+ * `run_command`, always asks. Shared by the gate and the decision route, so the button is offered and
+ * accepted for exactly the calls the gate will honour.
+ */
+export function grantable(tool: string, args: Record<string, unknown>): args is Record<string, unknown> & { tab_id: string } {
+  const tab = args.tab_id;
+  return tool === GRANTABLE_TOOL && args.answering_permission !== true && typeof tab === 'string' && tab.length >= 1 && tab.length <= 64;
+}
+
 /**
  * Decides whether to allow, ask, wait, or refuse a proposed action.
  * - No row + read class → allow (reads are always safe)

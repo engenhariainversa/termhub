@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import type { ChatAction } from './chat-actions.js';
-import { describeActions } from './chat-actions-view.js';
+import type { ChatGrant } from './chat-grants.js';
+import { describeActions, describeGrants } from './chat-actions-view.js';
 
 const OWNER = 'u1';
 const OTHER_OWNER = 'u2';
@@ -17,6 +18,7 @@ const action = (over: Partial<ChatAction>): ChatAction => ({
   machine_id: null,
   project_id: null,
   tab_id: null,
+  grant_id: null,
   error_code: null,
   duration_ms: null,
   decided_by: null,
@@ -199,4 +201,41 @@ it('passes whichever owner the caller gives it straight through to every reposit
   expect(repos.tabs.findByIdsForOwner).toHaveBeenCalledWith(['t1'], OTHER_OWNER);
   // From OTHER_OWNER's point of view, `tab` (fixture belongs to OWNER) does not exist either.
   expect(card.summary).toBe('digitar `a` numa aba que não existe mais');
+});
+
+const grant = (over: Partial<ChatGrant>): ChatGrant => ({
+  id: 'g1',
+  conversation_id: 'c1',
+  tab_id: 't1',
+  tool: 'send_input',
+  source_action_id: 'a1',
+  granted_by: OWNER,
+  created_at: '2026-09-25T10:00:00.000Z',
+  expires_at: '2026-09-26T10:00:00.000Z',
+  revoked_at: null,
+  revoked_by: null,
+  ...over,
+});
+
+it('describeGrants names the grant\'s tab, dropping every user id', async () => {
+  const repos = fakeRepos();
+  const [view] = await describeGrants(repos, [grant({ tab_id: tab.id })], OWNER);
+  expect(view).toEqual({ id: 'g1', tab_id: tab.id, tool: 'send_input', source_action_id: 'a1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z', tab_name: tab.name });
+});
+
+it('describeGrants says the tab does not exist for a gone or foreign tab, never leaking its name', async () => {
+  const repos = fakeRepos();
+  const [view] = await describeGrants(repos, [grant({ tab_id: foreignTab.id })], OWNER);
+  expect(view.tab_name).toBeNull();
+});
+
+it('describeGrants batches: one lookup for the whole list, deduped, and none at all for an empty list', async () => {
+  const repos = fakeRepos();
+  await describeGrants(repos, [grant({ id: 'g1', tab_id: tab.id }), grant({ id: 'g2', tab_id: tab.id })], OWNER);
+  expect(repos.tabs.findByIdsForOwner).toHaveBeenCalledTimes(1);
+  expect(repos.tabs.findByIdsForOwner).toHaveBeenCalledWith([tab.id], OWNER);
+
+  const repos2 = fakeRepos();
+  await describeGrants(repos2, [], OWNER);
+  expect(repos2.tabs.findByIdsForOwner).not.toHaveBeenCalled();
 });
