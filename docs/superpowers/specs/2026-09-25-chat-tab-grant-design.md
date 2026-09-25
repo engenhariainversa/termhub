@@ -97,7 +97,8 @@ otherwise                    → ask (unchanged)
 - `DELETE /chat/grants/:id` revokes (owner-scoped; 404 otherwise, 409 if already revoked) and
   publishes `grant_revoked`.
 - `GET /chat` gains `grants: ChatGrant[]` (active ones of the conversation) and each action card
-  gains `grant_id` (the grant it ran under) and `granted` (the active grant it created, if any).
+  gains `grant_id` (the grant it ran under). The card that created an active grant is found by the
+  grant's `source_action_id`; the card carries nothing extra for it.
 - Reset (`ChatService.reset`) calls `revokeForConversation` beside `expireOpenForConversation`.
 - Bus events (all carry `user_id` and `conversation_id`):
   - `grant` — `{ grant }` after a grant is created.
