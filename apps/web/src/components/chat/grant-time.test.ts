@@ -1,0 +1,14 @@
+import { expect, it } from 'vitest';
+import { isGrantActive, untilLabel } from './grant-time';
+
+const now = new Date(2026, 8, 25, 10, 0); // local time, 25 Sep 2026 10:00
+it('says the hour when it ends today', () => {
+  expect(untilLabel(new Date(2026, 8, 25, 14, 32).toISOString(), now)).toBe('até 14:32');
+});
+it('says tomorrow when it ends tomorrow', () => {
+  expect(untilLabel(new Date(2026, 8, 26, 9, 5).toISOString(), now)).toBe('até amanhã, 09:05');
+});
+it('is active only before its expiry', () => {
+  expect(isGrantActive({ expires_at: new Date(2026, 8, 25, 10, 1).toISOString() }, now)).toBe(true);
+  expect(isGrantActive({ expires_at: new Date(2026, 8, 25, 9, 59).toISOString() }, now)).toBe(false);
+});

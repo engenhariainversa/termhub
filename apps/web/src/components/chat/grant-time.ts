@@ -1,0 +1,10 @@
+const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+/** "até 14:32", or "até amanhã, 09:05" — a grant lasts at most 24 h, so those are the only two days. */
+export function untilLabel(expiresAt: string, now = new Date()): string {
+  const end = new Date(expiresAt);
+  return end.toDateString() === now.toDateString() ? `até ${hhmm(end)}` : `até amanhã, ${hhmm(end)}`;
+}
+
+/** The server is the judge (it re-checks on every call); this only hides a strip that has run out. */
+export const isGrantActive = (g: { expires_at: string }, now = new Date()) => Date.parse(g.expires_at) > now.getTime();

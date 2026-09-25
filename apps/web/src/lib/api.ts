@@ -1,4 +1,4 @@
-import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatConversation, ChatHostState, ChatMessage, CityLink, CreatedApiToken, InviteResult, ViewAs, OfficeCity, PermissionAction, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ProjectSetup, ProjectSetupData, Simulator, Tab, TabEvent, TabKind, Task, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary } from './types';
+import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatConversation, ChatGrant, ChatHostState, ChatMessage, CityLink, CreatedApiToken, InviteResult, ViewAs, OfficeCity, PermissionAction, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ProjectSetup, ProjectSetupData, Simulator, Tab, TabEvent, TabKind, Task, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -166,9 +166,9 @@ export const api = {
   /** The active conversation of a scope: no project = the account-wide chat (`/chat`); a project id =
    * that project's own chat (404 when it is not the signed-in user's). `actions` is the trail as it
    * truly is server-side (survives a reload); live socket events only update it, they are never its
-   * source of truth. */
+   * source of truth. `grants` is optional: an older server that predates trusted tabs has none. */
   chat: (projectId?: string | null) =>
-    request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
+    request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[] }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
   /**
    * Chooses the machine that runs the conversation, and which of its Claude accounts (no account =
    * that machine's own default login). Both halves of the pair travel here, in one call: the chat's
@@ -195,12 +195,16 @@ export const api = {
   chatProjects: () => request<{ projects: ProjectChatStatus[] }>('GET', '/chat/projects'),
   /**
    * 200 normally; 200 with `queued: true` and a pt-BR `note` when a run is in flight (the decision is
-   * recorded and will be applied once it finishes); 404 unknown/not yours; 409 already decided.
+   * recorded and will be applied once it finishes); 404 unknown/not yours; 409 already decided (400
+   * `GRANT_NOT_ALLOWED` for `approve_tab` on an action the server does not consider grantable).
    * `action` is the raw decided row (not the enriched card `GET /api/chat` returns — no `summary`
    * here): only its `id`/`status` are honoured, and the card's summary is kept as already known.
+   * `grant` is the new (or renewed) trusted-tab grant, present only for `approve_tab`.
    */
-  decideChatAction: (id: string, decision: 'approve' | 'deny') =>
-    request<{ action: { id: string; status: ChatActionStatus }; message?: ChatMessage; queued?: true; note?: string }>('POST', `/chat/actions/${id}/decision`, { decision }),
+  decideChatAction: (id: string, decision: 'approve' | 'deny' | 'approve_tab') =>
+    request<{ action: { id: string; status: ChatActionStatus }; message?: ChatMessage; queued?: true; note?: string; grant?: ChatGrant }>('POST', `/chat/actions/${id}/decision`, { decision }),
+  /** "Revogar": 404 unknown/not yours, 409 already revoked. */
+  revokeChatGrant: (id: string) => request<{ grant: ChatGrant }>('DELETE', `/chat/grants/${encodeURIComponent(id)}`),
   monitor: {
     tabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/tabs'),
     /** every open terminal tab of the scope, reported a state or not (the sidebar's agents) */

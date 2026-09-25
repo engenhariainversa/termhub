@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChatActionCard } from './ChatActionCard';
 import { ChatComposer } from './ChatComposer';
+import { ChatGrantStrip } from './ChatGrantStrip';
 import { ChatHost } from './ChatHost';
 import { ChatTurn } from './ChatTurn';
 import { ConfirmDialog } from '../Modal';
@@ -9,8 +10,9 @@ import { api, ApiError } from '../../lib/api';
 import { useChatStream } from '../../lib/chat';
 import { chatTimeline } from '../../lib/chat-timeline';
 import { isNearBottom } from '../../lib/chat-scroll';
+import { isGrantActive } from './grant-time';
 import { useAuth } from '../../lib/auth';
-import type { AiAccount, ChatAction, ChatEvent, ChatHostMachine, ChatHostState, ChatMessage } from '../../lib/types';
+import type { AiAccount, ChatAction, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatMessage } from '../../lib/types';
 
 /**
  * Why the box refuses, one short line per host state — the long version is the card above the thread
@@ -62,6 +64,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   /** A `queued: true` decision is not an error: the pt-BR note the server sent, shown under that card
    * until the next reload replaces it with the real, applied state. */
   const [queuedNotes, setQueuedNotes] = useState<Record<string, string>>({});
+  /** The conversation's trusted-tab grants, sourced the same way as `actions`: `GET /api/chat` on
+   *  load/reconnect, kept live by `grant`/`grant_revoked` events. */
+  const [grants, setGrants] = useState<ChatGrant[]>([]);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,9 +127,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const load = useCallback(async () => {
     // No project = the account-wide chat: called with no argument, because the response must be
     // `request<...>('GET', '/chat')` exactly — a server that predates project chats knows nothing else.
-    const { conversation, messages, actions, host } = projectId ? await api.chat(projectId) : await api.chat();
+    const { conversation, messages, actions, host, grants } = projectId ? await api.chat(projectId) : await api.chat();
     setMessages(messages);
     setActions(actions ?? []);
+    setGrants(grants ?? []);
     setHost(host ?? null);
     setHostAccountId(conversation.ai_account_id ?? null);
     setConversationId(conversation.id);
@@ -155,7 +162,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       } else if (e.type === 'decision') {
         // Someone answered — possibly in another open tab. Keyed on the action id alone.
         setActions((prev) => prev.map((a) => (a.id === e.action_id ? { ...a, status: e.status } : a)));
-      }
+      } else if (e.type === 'grant') setGrants((prev) => [...prev.filter((g) => g.id !== e.grant.id && g.tab_id !== e.grant.tab_id), e.grant]);
+      else if (e.type === 'grant_revoked') setGrants((prev) => prev.filter((g) => g.id !== e.grant_id));
+      else if (e.type === 'granted_action') setActions((prev) => (prev.some((a) => a.id === e.action.id) ? prev.map((a) => (a.id === e.action.id ? e.action : a)) : [...prev, e.action]));
     },
     [load, mine],
   );
@@ -164,7 +173,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   // renders anything of another conversation either.
   const events = useMemo(() => allEvents.filter(mine), [allEvents, mine]);
 
-  const decide = async (id: string, decision: 'approve' | 'deny') => {
+  const decide = async (id: string, decision: 'approve' | 'deny' | 'approve_tab') => {
     setDecidingId(id);
     setActionError(null);
     try {
@@ -173,20 +182,41 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       // its status is applied, keeping the card's already-known summary and other fields as they are.
       setActions((prev) => prev.map((a) => (a.id === id ? { ...a, status: res.action.status } : a)));
       if (res.queued && res.note) setQueuedNotes((prev) => ({ ...prev, [id]: res.note! }));
+      // A re-grant for the same tab replaces the older one, as on the server.
+      if (res.grant) setGrants((prev) => [...prev.filter((g) => g.id !== res.grant!.id && g.tab_id !== res.grant!.tab_id), res.grant!]);
     } catch (e) {
       // A host that cannot run the answer right now (offline, most often) answers this with its own
       // 409 — but `decide` already recorded the decision before that throw, and the server injects it
       // the next time the conversation runs. So it reads as what it is: answered, and waiting on the
       // machine. Anything else really did fail.
       if (e instanceof ApiError && e.code !== undefined && HOST_CODES.has(e.code)) {
-        const status = decision === 'approve' ? 'approved' : 'denied';
+        const status = decision === 'deny' ? 'denied' : 'approved';
         setActions((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
         setQueuedNotes((prev) => ({ ...prev, [id]: `${e.message} A decisão já está registrada e será aplicada quando o chat voltar a rodar.` }));
-        // …and the host line above the thread must agree with that sentence.
+        // …and the host line above the thread must agree with that sentence. The grant itself (for
+        // approve_tab) was only created if the server got that far before the busy/offline answer;
+        // this re-read is what brings it in when it was.
         await load();
       } else setActionError(e instanceof ApiError ? e.message : 'Não foi possível registrar a decisão');
     } finally {
       setDecidingId(null);
+    }
+  };
+
+  /** "Revogar", from the card or from the strip. */
+  const revoke = async (grantId: string) => {
+    setRevokingId(grantId);
+    setActionError(null);
+    try {
+      await api.revokeChatGrant(grantId);
+      setGrants((prev) => prev.filter((g) => g.id !== grantId));
+    } catch (e) {
+      // 409: it was already revoked (another tab, or it expired and a reset ended it) — the strip is
+      // stale, not wrong.
+      if (e instanceof ApiError && e.status === 409) setGrants((prev) => prev.filter((g) => g.id !== grantId));
+      else setActionError(e instanceof ApiError ? e.message : 'Não foi possível revogar a permissão');
+    } finally {
+      setRevokingId(null);
     }
   };
 
@@ -382,6 +412,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setConfirmReset(false);
       setActions([]);
       setQueuedNotes({});
+      setGrants([]);
       await load();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Não foi possível começar uma nova conversa');
@@ -485,8 +516,23 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         }}
       >
         {timeline.map((entry) => {
-          if (entry.kind === 'action')
-            return <ChatActionCard key={entry.action.id} action={entry.action} deciding={decidingId === entry.action.id} note={queuedNotes[entry.action.id]} onDecide={(decision) => void decide(entry.action.id, decision)} />;
+          if (entry.kind === 'action') {
+            const g = grants.find((cand) => cand.source_action_id === entry.action.id && isGrantActive(cand));
+            return (
+              <ChatActionCard
+                key={entry.action.id}
+                action={entry.action}
+                deciding={decidingId === entry.action.id}
+                note={queuedNotes[entry.action.id]}
+                grant={g}
+                revoking={g !== undefined && revokingId === g.id}
+                onRevoke={() => {
+                  if (g) void revoke(g.id);
+                }}
+                onDecide={(decision) => void decide(entry.action.id, decision)}
+              />
+            );
+          }
           const m = entry.message;
           const streaming = live.deltas.get(m.id);
           // An assistant row with no text and no error is either the answer being written right now
@@ -499,6 +545,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       </ol>
       {actionError && <p className="mb-2 text-sm text-danger">{actionError}</p>}
       {error && <p className="mb-2 text-sm text-danger">{error}</p>}
+      <ChatGrantStrip grants={grants} revokingId={revokingId} onRevoke={(id) => void revoke(id)} />
       {/* A host that cannot run the message is why the box refuses, and the box says so. */}
       <ChatComposer value={text} onChange={setText} onSend={() => void send()} sending={sending} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} />
     </div>
