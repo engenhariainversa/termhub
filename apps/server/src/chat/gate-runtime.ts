@@ -323,6 +323,26 @@ async function executeGranted(ctx: ControlContext, call: GatedCall, conversation
   }
 }
 
+/**
+ * Whether a grant may answer this call, beyond the grant existing (spec §2 "Agent tabs only"). A grant
+ * trusts an agent's prompt, but `send_input` types any text and presses Enter: on a bare shell that is
+ * `run_command` under another name, and in Claude Code a leading `!` runs the rest in bash. So text
+ * whose first non-blank character is `!` never rides a grant — checked from the arguments alone, before
+ * any read — and the tab must report an agent at work (`working` or `waiting_input`, from the monitor
+ * hooks). A tab that never reported (a shell), an agent that ended (`idle`) or errored falls back to a
+ * normal question. Two readings deliberately still go through the grant: a tab that does not resolve
+ * (missing, or somebody else's) and one waiting on a permission, so `execute()` records them as the
+ * `TAB_GONE` / `WAITING_PERMISSION` locks — the model gets the lock's error, as for a clicked approval.
+ */
+const runsInBash = (args: Record<string, unknown>) => typeof args.text === 'string' && args.text.trimStart().startsWith('!');
+
+/** The tab half of the eligibility above, through the same owner-scoped read `staleApproval` uses. */
+async function grantCoversTab(ctx: ControlContext, tabId: string): Promise<boolean> {
+  const [tab] = await ctx.repos.tabs.findByIdsForOwner([tabId], ctx.scope.user.id);
+  if (!tab) return true; // recorded as TAB_GONE by `execute()`
+  return tab.state === 'working' || tab.state === 'waiting_input' || tab.state === 'waiting_permission';
+}
+
 /** The gate itself: run the call, or answer why it did not run. */
 export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<GateOutcome> {
   const cls = actionClass(call.tool, call.args);
@@ -350,9 +370,9 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
   // on `row` narrows the type rather than adding a branch of its own.
   if (!row || decision === 'ask') {
     // Only where the gate would otherwise ask: an open row or a "no" still in force decided above.
-    if (!row && grantable(call.tool, call.args)) {
+    if (!row && grantable(call.tool, call.args) && !runsInBash(call.args)) {
       const grant = await ctx.repos.chatGrants.findActive(conversationId, call.args.tab_id, GRANTABLE_TOOL);
-      if (grant) return executeGranted(ctx, call, conversationId, key, cls, grant.id);
+      if (grant && (await grantCoversTab(ctx, call.args.tab_id))) return executeGranted(ctx, call, conversationId, key, cls, grant.id);
     }
     return ask(ctx, call, conversationId, key, cls);
   }

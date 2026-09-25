@@ -142,8 +142,9 @@ const approvedProposal = (action: ChatAction, summary?: string): string =>
   `${summary ? ` A ação autorizada foi: ${summary}.` : ''} Refaça exatamente esta chamada, com estes argumentos e nenhuma alteração: ${JSON.stringify(action.args)}.`;
 
 /** Appended when the approval came with "Permitir sempre nesta aba": the model should stop expecting
- * a question per message to that tab, and know it can still be revoked. */
-const GRANT_NOTE = ' O usuário também permitiu digitar nesta aba sem confirmar: os próximos send_input nesta aba, nesta conversa, rodam sem pedir confirmação, até ele revogar ou por 24 horas. Isso não vale para run_command, send_key nem para responder permissões.';
+ * a question per message to that tab, know it can still be revoked, and know the limits the gate keeps
+ * (spec §2 "Agent tabs only"): an agent must be running in the tab, and "!" text is always asked. */
+const GRANT_NOTE = ' O usuário também permitiu digitar nesta aba sem confirmar: os próximos send_input nesta aba, nesta conversa, rodam sem pedir confirmação, até ele revogar ou por 24 horas, e só enquanto a aba estiver rodando um agente. Isso não vale para run_command, send_key, para responder permissões nem para texto que comece com "!".';
 
 export class ChatService {
   /** One run per conversation: two `claude -p` processes on the same --session-id would race. */
