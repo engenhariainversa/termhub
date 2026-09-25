@@ -5,7 +5,16 @@ export const sendAccepted = z.object({ conversation_id: z.string(), user_message
 export const mobileDecisionBody = z.discriminatedUnion('decision', [
   z.object({ decision: z.literal('deny') }),
   z.object({ decision: z.literal('approve'), challenge: z.string().min(1).max(128), pin_proof: z.string().min(1).max(128) }),
+  /** Approve *and* trust the tab for send_input in this conversation (24 h max). PIN-proven like approve. */
+  z.object({ decision: z.literal('approve_tab'), challenge: z.string().min(1).max(128), pin_proof: z.string().min(1).max(128) }),
 ]);
+
+/** Mirrors the server's `grantable` (apps/server/src/chat/gate.ts), which is the judge: only
+ * `send_input` to a tab, never answering a permission. Decides whether the card offers the button. */
+export function isTabGrantable(action: { tool: string; args: unknown; tab_id: string | null }): boolean {
+  const args = (action.args ?? {}) as Record<string, unknown>;
+  return action.tool === 'send_input' && args.answering_permission !== true && Boolean(action.tab_id);
+}
 
 export const chatProjectItem = z.object({
   id: z.string(),

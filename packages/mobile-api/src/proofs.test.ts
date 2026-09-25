@@ -8,4 +8,8 @@ describe('proof helpers', () => {
   it('the decision message binds challenge, action and the word approve, newline-separated', () => {
     expect(decisionProofMessage('c1', 'a1', 'approve')).toBe('c1\na1\napprove');
   });
+  it('a grant is signed with its own word, so an "approve" proof cannot open one', () => {
+    expect(decisionProofMessage('c1', 'a1', 'approve_tab')).toBe('c1\na1\napprove_tab');
+    expect(decisionProofMessage('c1', 'a1', 'approve_tab')).not.toBe(decisionProofMessage('c1', 'a1', 'approve'));
+  });
 });

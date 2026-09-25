@@ -128,7 +128,12 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     return renewing;
   };
 
-  async function call<T>(htm: string, path: string, schema: z.ZodType<T>, opts: CallOptions = {}): Promise<T> {
+  // `z.ZodType<T, z.ZodTypeDef, any>`, not the one-arg `z.ZodType<T>`: a schema with a `.default(...)`
+  // field (e.g. `chatResponse.grants`) has an Input type stricter (optional) than its Output type T,
+  // and pinning T's Input parameter to T too — what `z.ZodType<T>` does — makes inference pick up that
+  // narrower Input, so callers below end up with an optional field TypeScript then refuses to hand to
+  // `MobileApi`'s (output-typed) return type. Leaving Input as `any` infers T from Output alone.
+  async function call<T>(htm: string, path: string, schema: z.ZodType<T, z.ZodTypeDef, any>, opts: CallOptions = {}): Promise<T> {
     const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json' };
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
     if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
