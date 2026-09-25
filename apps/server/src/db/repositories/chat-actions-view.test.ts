@@ -17,6 +17,7 @@ const action = (over: Partial<ChatAction>): ChatAction => ({
   machine_id: null,
   project_id: null,
   tab_id: null,
+  grant_id: null,
   error_code: null,
   duration_ms: null,
   decided_by: null,

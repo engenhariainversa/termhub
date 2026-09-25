@@ -20,6 +20,7 @@ const action = (overrides: Partial<ChatAction> = {}): ChatAction => ({
   machine_id: null,
   project_id: null,
   tab_id: 't1',
+  grant_id: null,
   error_code: null,
   duration_ms: null,
   decided_by: 'u1',

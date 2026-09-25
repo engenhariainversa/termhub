@@ -21,6 +21,7 @@ export interface ChatAction {
   machine_id: string | null;
   project_id: string | null;
   tab_id: string | null;
+  grant_id: string | null;
   error_code: string | null;
   duration_ms: number | null;
   decided_by: string | null;
@@ -41,6 +42,11 @@ export interface InsertPendingInput {
   tab_id?: string | null;
 }
 
+export interface InsertApprovedInput extends InsertPendingInput {
+  grant_id: string;
+  decided_by: string;
+}
+
 const mapAction = (a: PrismaChatAction): ChatAction => ({
   id: a.id,
   conversation_id: a.conversationId,
@@ -53,6 +59,7 @@ const mapAction = (a: PrismaChatAction): ChatAction => ({
   machine_id: a.machineId,
   project_id: a.projectId,
   tab_id: a.tabId,
+  grant_id: a.grantId,
   error_code: a.errorCode,
   duration_ms: a.durationMs,
   decided_by: a.decidedBy,
@@ -117,6 +124,34 @@ export class ChatActionsRepository {
         machineId: input.machine_id ?? null,
         projectId: input.project_id ?? null,
         tabId: input.tab_id ?? null,
+      },
+    });
+    return mapAction(row);
+  }
+
+  /**
+   * An action the user never saw as a card because a grant ("Permitir sempre nesta aba") already
+   * answered it: inserted `approved`, decided now by the user who granted, so the gate's `execute()`
+   * claims and audits it exactly like a clicked approval. Subject to the same partial unique index
+   * as `insertPending` — a parallel identical call loses here.
+   */
+  async insertApproved(input: InsertApprovedInput): Promise<ChatAction> {
+    const row = await this.db.chatAction.create({
+      data: {
+        id: newId(),
+        conversationId: input.conversation_id,
+        messageId: input.message_id ?? null,
+        tool: input.tool,
+        args: input.args as never,
+        class: input.class,
+        status: 'approved',
+        idempotencyKey: input.idempotency_key ?? null,
+        machineId: input.machine_id ?? null,
+        projectId: input.project_id ?? null,
+        tabId: input.tab_id ?? null,
+        grantId: input.grant_id,
+        decidedBy: input.decided_by,
+        decidedAt: new Date(),
       },
     });
     return mapAction(row);
