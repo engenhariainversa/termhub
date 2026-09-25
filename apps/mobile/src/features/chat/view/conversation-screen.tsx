@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText, Banner, Button, EmptyState, Screen, Sheet } from '@/ui';
 import { isGrantActive } from '../model/grant-time';
 import { foldLive } from '../model/live';
@@ -35,6 +36,7 @@ export function ConversationScreen() {
   const revokeGrant = useChatStore((s) => s.revokeGrant);
   const reset = useChatStore((s) => s.reset);
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (id) void openByRoute(id);
@@ -62,7 +64,9 @@ export function ConversationScreen() {
 
   return (
     <Screen padded={false}>
-      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* The avoiding view measures its frame relative to its parent, which already sits below the
+          top safe area: without this offset it lifts the composer short by that inset, behind the keyboard. */}
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top}>
         <View className="flex-row items-center gap-2 border-b border-app-border px-2 py-2">
           <Button label="Voltar" variant="ghost" onPress={goBack} />
           <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
@@ -82,11 +86,16 @@ export function ConversationScreen() {
               <ActivityIndicator />
             </View>
           ) : (
-            <EmptyState title="Nenhuma mensagem ainda" hint="Escreva abaixo para começar a conversa." />
+            // A tap on the empty thread dismisses the keyboard, as dragging the list does below.
+            <Pressable accessible={false} className="flex-1" onPress={Keyboard.dismiss}>
+              <EmptyState title="Nenhuma mensagem ainda" hint="Escreva abaixo para começar a conversa." />
+            </Pressable>
           )
         ) : (
           <FlatList
             inverted
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
             data={entries}
             keyExtractor={entryKey}
             contentContainerClassName="gap-3 px-4 py-4"
