@@ -2,49 +2,94 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CityModel } from '../office/model';
 import { createSoundscape, DEFAULT_MIX, EQ_RANGE_DB, loadMix, saveMix, soundEvents, type SoundMix, type Soundscape } from './share/sound';
 
+const ON_KEY = 'termhub.city.sound-on';
+
+/** On unless this visitor turned it off here before. */
+function loadOn(): boolean {
+  try {
+    return localStorage.getItem(ON_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+function saveOn(on: boolean): void {
+  try {
+    localStorage.setItem(ON_KEY, on ? 'on' : 'off');
+  } catch {
+    // storage blocked: the choice lasts as long as the page
+  }
+}
+
+/** What counts as the visitor's first gesture: browsers only let audio start inside one. */
+const GESTURES = ['pointerdown', 'touchend', 'click', 'keydown'] as const;
+
 /**
- * The city's sound on the page: off until the visitor turns it on (browsers only start audio from a
- * click), then the same soundscape the videos carry, out loud and following the city as it changes.
- * The mix is the visitor's and is kept in this browser; the videos record with it too.
+ * The city's sound on the page: on by default (unless this visitor turned it off before), the same
+ * soundscape the videos carry, out loud and following the city as it changes. Browsers keep a page
+ * silent until the visitor touches it, so the sound is set up on arrival and starts on the first
+ * touch, click or key anywhere on the page — a drag of the city included. The mix is the visitor's
+ * and is kept in this browser; the videos record with it too.
  */
 export function useCitySound(model: CityModel) {
-  const [on, setOn] = useState(false);
+  const [on, setOn] = useState(loadOn);
   const [mix, setMixState] = useState<SoundMix>(loadMix);
   const audio = useRef<{ ctx: AudioContext; sound: Soundscape } | null>(null);
   const heard = useRef<CityModel | null>(null);
-
-  const stop = useCallback(() => {
-    audio.current?.sound.stop();
-    void audio.current?.ctx.close();
-    audio.current = null;
-    heard.current = null;
-  }, []);
-
-  // called from the click itself: an AudioContext made outside a gesture starts suspended
-  const toggle = useCallback(() => {
-    if (audio.current) {
-      stop();
-      setOn(false);
-      return;
-    }
-    try {
-      const ctx = new AudioContext();
-      audio.current = { ctx, sound: createSoundscape(ctx, loadMix(), { speakers: true }) };
-      void ctx.resume();
-      setOn(true);
-    } catch {
-      setOn(false);
-    }
-  }, [stop]);
+  /** a context made inside the "ligar" click, so it starts running; the effect takes it from here */
+  const fromClick = useRef<AudioContext | null>(null);
+  const modelRef = useRef(model);
+  modelRef.current = model;
 
   useEffect(() => {
-    if (!on || !audio.current) return;
-    if (model === heard.current) return;
+    if (!on) return;
+    let ctx: AudioContext;
+    try {
+      ctx = fromClick.current ?? new AudioContext();
+    } catch {
+      return;
+    }
+    fromClick.current = null;
+    const sound = createSoundscape(ctx, loadMix(), { speakers: true });
+    audio.current = { ctx, sound };
+    sound.play(soundEvents(null, modelRef.current));
+    heard.current = modelRef.current;
+    // a context made outside a gesture starts suspended: the first gesture anywhere wakes it
+    const unlock = () => {
+      void ctx.resume().then(() => {
+        if (ctx.state === 'running') for (const g of GESTURES) window.removeEventListener(g, unlock, true);
+      });
+    };
+    for (const g of GESTURES) window.addEventListener(g, unlock, true);
+    void ctx.resume().catch(() => {});
+    return () => {
+      for (const g of GESTURES) window.removeEventListener(g, unlock, true);
+      sound.stop();
+      void ctx.close();
+      audio.current = null;
+      heard.current = null;
+    };
+  }, [on]);
+
+  useEffect(() => {
+    if (!on || !audio.current || model === heard.current) return;
     audio.current.sound.play(soundEvents(heard.current, model));
     heard.current = model;
   }, [on, model]);
 
-  useEffect(() => stop, [stop]);
+  const toggle = useCallback(() => {
+    const next = !on;
+    if (next) {
+      try {
+        fromClick.current = new AudioContext();
+        void fromClick.current.resume();
+      } catch {
+        fromClick.current = null;
+      }
+    }
+    saveOn(next);
+    setOn(next);
+  }, [on]);
 
   const setMix = useCallback((next: SoundMix) => {
     setMixState(next);
