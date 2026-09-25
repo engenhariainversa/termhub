@@ -238,6 +238,7 @@ export class ChatActionsRepository {
         conversationId,
         status: { in: ['approved', 'denied'] satisfies ChatActionStatus[] },
         injectedAt: null,
+        grantId: null, // a grant-run row is never a user decision to re-inject: nobody saw its card
         ...(excludeIds.length ? { id: { notIn: excludeIds } } : {}),
       },
       orderBy: [{ decidedAt: 'asc' }, { id: 'asc' }],

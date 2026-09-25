@@ -152,6 +152,20 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatActionsRepository (Po
     }
   });
 
+  it('never hands a grant-run row to the injection, since no card was ever decided for it', async () => {
+    // Own conversation, for the same reason as the test above.
+    const otherUserId = newId();
+    await db.user.create({ data: { id: otherUserId, email: `${otherUserId}@test.local`, name: 'test' } });
+    const otherConversationId = (await new ChatRepository(db).getOrCreateForUser(otherUserId)).id;
+    try {
+      const granted = await repo.insertApproved({ conversation_id: otherConversationId, tool: 'send_input', args: { tab_id: 't1', text: 'sim' }, class: 'write', idempotency_key: 'inj-g', tab_id: 't1', grant_id: 'g1', decided_by: otherUserId });
+      expect(granted.status).toBe('approved');
+      expect(await repo.findNextToInject(otherConversationId)).toBeUndefined();
+    } finally {
+      await db.user.delete({ where: { id: otherUserId } });
+    }
+  });
+
   it('expires rows older than the cutoff and leaves fresh ones alone', async () => {
     const old = await pending('k6');
     await db.$executeRawUnsafe(`update chat_actions set created_at = now() - interval '2 days' where id = $1`, old.id);
