@@ -3,7 +3,7 @@ import { buildCityModel, resolveFocus, sameFocus, type CityModel, type FocusTarg
 import { OfficeScene } from '../office/scene/OfficeScene';
 import type { PublicCity } from '../lib/types';
 import { fetchCity, openCitySocket, robotsOf, toBuildingEntries, type CityFrame } from './api';
-import { BetaCard, LANDING_URL, useBetaCard } from './BetaCard';
+import { BetaCard, BetaTeaser, LANDING_URL, useBetaCard } from './BetaCard';
 import { SoundPanel, useCitySound } from './CitySound';
 import { shareInfoFor } from './share/compose';
 import { CopyLinkButton } from './share/CopyLinkButton';
@@ -59,6 +59,12 @@ export function CityPage({ nickname }: { nickname: string }) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const [failed, setFailed] = useState(false);
   const [betaOpen, setBetaOpen] = useBetaCard();
+  /** on a phone the card opens as one line; the whole form only once the visitor asks for it */
+  const [betaFull, setBetaFull] = useState(false);
+  const collapseBeta = useCallback(() => {
+    setBetaOpen(false);
+    setBetaFull(false);
+  }, [setBetaOpen]);
   const [shareOpen, setShareOpen] = useState(false);
   const shareButton = useRef<HTMLButtonElement>(null);
   /** the panel closed (its ×, Esc): the focus goes back to the button that opened it */
@@ -276,7 +282,10 @@ export function CityPage({ nickname }: { nickname: string }) {
           </a>
           <button
             type="button"
-            onClick={() => setBetaOpen(true)}
+            onClick={() => {
+              setBetaOpen(true);
+              setBetaFull(true);
+            }}
             aria-expanded={betaOpen}
             className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-white shadow-md shadow-accent/30 ring-1 ring-accent/60 transition-colors hover:bg-accent-hover"
           >
@@ -290,10 +299,15 @@ export function CityPage({ nickname }: { nickname: string }) {
         {failed && <Overlay>Seu navegador não conseguiu desenhar a cidade.</Overlay>}
         {!failed && !city && <Overlay>Carregando a cidade…</Overlay>}
         {betaOpen && (
-          // a bottom sheet on a phone, a card in the corner from `sm` up; only its own box takes the
-          // pointer, so the rest of the scene stays as draggable and clickable as without it
-          <div className="absolute inset-x-0 bottom-0 z-10 max-h-[75%] overflow-y-auto sm:bottom-4 sm:left-4 sm:right-auto sm:w-[22rem] sm:max-h-[calc(100%-2rem)]">
-            <BetaCard ownerName={city?.owner_name ?? null} onCollapse={() => setBetaOpen(false)} className="rounded-t-xl border-t sm:rounded-lg sm:border" />
+          // a bottom sheet on a phone (once asked for), a card in the corner from `sm` up; only its
+          // own box takes the pointer, so the rest of the scene stays as draggable and clickable
+          <div className={`absolute inset-x-0 bottom-0 z-10 max-h-[75%] overflow-y-auto sm:bottom-4 sm:left-4 sm:right-auto sm:block sm:w-[22rem] sm:max-h-[calc(100%-2rem)] ${betaFull ? '' : 'hidden'}`}>
+            <BetaCard ownerName={city?.owner_name ?? null} onCollapse={collapseBeta} className="rounded-t-xl border-t sm:rounded-lg sm:border" />
+          </div>
+        )}
+        {betaOpen && !betaFull && (
+          <div className="absolute inset-x-0 bottom-0 z-10 sm:hidden">
+            <BetaTeaser ownerName={city?.owner_name ?? null} onExpand={() => setBetaFull(true)} onCollapse={collapseBeta} />
           </div>
         )}
         {recordingNow && host && <RecordingFrame host={host} />}
