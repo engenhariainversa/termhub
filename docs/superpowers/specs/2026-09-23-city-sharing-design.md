@@ -78,11 +78,13 @@ Files: `termhub-cidade-<nickname>-story.png`, `termhub-cidade-<nickname>-post.pn
 
 ### 2.5 The city soundscape
 
-`apps/web/src/city/share/sound.ts`. Synthesised with Web Audio — no audio files, no rights.
+`apps/web/src/city/share/sound.ts`, with two Pixabay recordings in `apps/web/src/city/share/audio/`
+(Pixabay Content License, no attribution required).
 
-- A low ambient hum for the whole clip.
-- Keyboard clicks whose density follows the number of robots whose activity is coding/typing.
-- A soft "ding" each time a robot raises its hand (enters a waiting-for-you state) during the clip.
+- An office ambience for the whole clip, at 40%.
+- A recorded keyboard, at 80%, layered once per robot whose activity is coding/typing (up to three
+  layers, offset in the loop), silent when none is.
+- A soft synthesised "ding" each time a robot raises its hand (enters a waiting-for-you state) during the clip.
 
 `soundEvents(prev, next)` is a pure function from two model snapshots to the events to play. Sound
 goes only into the recording; the page itself never plays audio.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CityModel, DeskModel } from '../../office/model';
-import { soundEvents } from './sound';
+import { layerGains, MAX_LAYERS, soundEvents } from './sound';
 
 const desk = (id: string, pose: DeskModel['pose'], marker: DeskModel['marker'] = null) => ({ id, pose, marker }) as DeskModel;
 const city = (...buildings: Array<[string, DeskModel[]]>): CityModel => ({ needsYou: 0, buildings: buildings.map(([id, desks]) => ({ id, desks })) }) as unknown as CityModel;
@@ -40,5 +40,16 @@ describe('soundEvents', () => {
   it('plays nothing when nothing changed', () => {
     const same = city(['b1', [desk('a', 'type'), desk('b', 'raise', 'input')]]);
     expect(soundEvents(same, city(['b1', [desk('a', 'type'), desk('b', 'raise', 'input')]]))).toEqual([]);
+  });
+});
+
+describe('layerGains', () => {
+  it('opens one keyboard layer per typing robot, up to the cap, at one loop’s total loudness', () => {
+    expect(layerGains(0)).toEqual([0, 0, 0]);
+    expect(layerGains(1)).toEqual([1, 0, 0]);
+    const two = layerGains(2);
+    expect(two[2]).toBe(0);
+    expect(two[0] ** 2 + two[1] ** 2).toBeCloseTo(1, 10);
+    expect(layerGains(40)).toEqual(layerGains(MAX_LAYERS));
   });
 });
