@@ -82,6 +82,10 @@ describe('checkTabSuggestion', () => {
   it.each([
     ['text the person typed', { text: screens.typed, styled: true }],
     ['an older agent (plain capture)', { text: 'x\n❯ commit it\n', styled: false }],
+    // Seen live (Claude Code 2.1.283): "/compact" as the suggestion. Sending refuses a leading / or !,
+    // so such a card could only fail.
+    ['a slash command', { text: 'x\n\x1b[39m❯ \x1b[2m/compact\x1b[0m\n', styled: true }],
+    ['a bash command', { text: 'x\n\x1b[39m❯ \x1b[2m!git status\x1b[0m\n', styled: true }],
   ])('opens nothing for %s', async (_label, shot) => {
     captureStyledScreen.mockResolvedValue(shot);
     const repos = fakeRepos();

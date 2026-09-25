@@ -45,7 +45,8 @@ export async function checkTabSuggestion(repos: Repositories, log: Log, tabId: s
     const machine = await repos.machines.findById(tab.machine_id);
     if (!machine || (machine.type === 'agent' && !agents.isOnline(machine.id))) return;
     const text = await readSuggestion(machine, tab.tmux_session);
-    if (text === null || !still()) return;
+    // Claude Code also suggests slash commands ("/compact"); sending refuses a leading / or !, so no card.
+    if (text === null || /^[/!]/.test(text) || !still()) return;
     const { question, closed } = await repos.tabQuestions.open({ tab_id: tab.id, project_id: tab.project_id, conversation_id: conversation.id, kind: 'suggestion', payload: { text }, tool_use_id: null });
     await publishTabQuestions(repos, 'tab_question_closed', closed);
     if (question) {

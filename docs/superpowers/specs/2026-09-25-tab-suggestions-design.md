@@ -68,6 +68,8 @@ Fixtures in `apps/server/src/chat/fixtures/tab-suggestions/` (from an isolated t
   15 lines), and if `promptSuggestion` finds text, open a suggestion row. The wait is fire-and-forget
   (never delays the hook POST); if any hook event of the tab arrives meanwhile, nothing opens.
   Machines whose capture is not styled (old agent) never get suggestion cards.
+  A suggestion starting with `/` or `!` opens no card: Claude Code does suggest slash commands
+  (`/compact` was seen live), and sending refuses both (§6.2), so such a card could only fail.
 - A suggestion never takes part in the permission queue rules and never closes an open choice or
   permission question (there is none after `Stop`).
 - Closing: like other questions, the tab's next closing hook event closes it (`answered_in_tab`);
