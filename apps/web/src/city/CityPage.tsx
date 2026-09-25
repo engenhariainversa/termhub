@@ -269,7 +269,7 @@ export function CityPage({ nickname }: { nickname: string }) {
             </button>
           )}
           <button type="button" aria-expanded={soundOpen} onClick={() => setSoundOpen((open) => !open)} className={`rounded px-2 py-1 hover:bg-bg-3 hover:text-fg ${sound.on ? 'text-fg' : ''}`}>
-            {sound.on ? 'Som ligado' : 'Som'}
+            {sound.on ? 'Som ligado' : 'Som desligado'}
           </button>
           <a className="hidden hover:text-fg sm:inline" href={LANDING_URL}>
             O que é o termhub?

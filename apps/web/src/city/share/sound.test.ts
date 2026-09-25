@@ -55,9 +55,9 @@ describe('layerGains', () => {
 });
 
 describe('cleanMix', () => {
-  it('starts from the default mix: ambience 70%, keyboard 80%, a flat equaliser', () => {
+  it('starts from the default mix: ambience 70%, keyboard 40%, a flat equaliser', () => {
     expect(cleanMix(null)).toEqual(DEFAULT_MIX);
-    expect(DEFAULT_MIX).toMatchObject({ ambience: 0.7, keyboard: 0.8, bass: 0, mid: 0, treble: 0 });
+    expect(DEFAULT_MIX).toMatchObject({ ambience: 0.7, keyboard: 0.4, bass: 0, mid: 0, treble: 0 });
   });
 
   it('clamps what was stored and drops what it does not know', () => {

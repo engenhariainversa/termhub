@@ -79,10 +79,11 @@ Files: `termhub-cidade-<nickname>-story.png`, `termhub-cidade-<nickname>-post.pn
 ### 2.5 The city soundscape
 
 `apps/web/src/city/share/sound.ts`, with two Pixabay recordings in `apps/web/src/city/share/audio/`
-(Pixabay Content License, no attribution required).
+(Pixabay Content License, no attribution required). The levels and a three-band equaliser are the
+visitor's, set in the page's "Som" panel and kept in the browser; the videos record with them.
 
-- An office ambience for the whole clip, at 40%.
-- A recorded keyboard, at 80%, layered once per robot whose activity is coding/typing (up to three
+- An office ambience for the whole clip, at 70% by default.
+- A recorded keyboard, at 40% by default, layered once per robot whose activity is coding/typing (up to three
   layers, offset in the loop), silent when none is.
 - A soft synthesised "ding" each time a robot raises its hand (enters a waiting-for-you state) during the clip.
 
