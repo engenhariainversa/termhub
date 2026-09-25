@@ -21,7 +21,7 @@ import { mmkvStateStorage } from '@/services/storage';
 import { applyEvent, settlePending } from '../model/events';
 import { belongsTo } from '../model/filter';
 import { CHAT_MSG } from '../model/messages';
-import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, TabQuestion } from '../model/types';
+import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, TabQuestion, TabSuggestion } from '../model/types';
 
 /** `approve_tab` approves the card *and* trusts its tab for send_input ("Permitir sempre nesta aba"). */
 export type ChatDecision = 'approve' | 'deny' | 'approve_tab';
@@ -43,6 +43,8 @@ export interface ConversationSlot {
   grants: ChatGrant[];
   /** The tabs' questions pushed into this conversation (spec 2026-09-25 §6.3). */
   tabQuestions: TabQuestion[];
+  /** The tabs' suggestions pushed into this conversation. */
+  tabSuggestions: TabSuggestion[];
   host: ChatHostState | null;
   /** A `GET chat` answered since this store started (a persisted slot is shown, but not loaded). */
   loaded: boolean;
@@ -65,6 +67,8 @@ export interface ChatState {
   revokingId: string | null;
   /** The tab question whose answer is in flight. */
   answeringQuestionId: string | null;
+  /** The tab suggestion whose send or dismiss is in flight. */
+  busySuggestionId: string | null;
   hostOptions: THostOptionsResponse | null;
   /** The last failed action of the screen on show, in pt-BR. */
   error: string | null;
@@ -84,6 +88,10 @@ export interface ChatState {
   answerTabQuestion(questionId: string, body: TTabQuestionAnswerBody): Promise<void>;
   /** The tab's live excerpt for a permission card; null when it cannot be read (closed, offline). */
   loadTabQuestionScreen(questionId: string): Promise<string | null>;
+  /** Sends a tab's suggestion, as edited — no PIN. A suggestion the tab moved past (409) says so and re-reads. */
+  sendTabSuggestion(suggestionId: string, text: string): Promise<void>;
+  /** "Dispensar": the card closes; the tab is not touched. */
+  dismissTabSuggestion(suggestionId: string): Promise<void>;
   reset(): Promise<void>;
   loadHostOptions(): Promise<void>;
   setHost(machineId: string, aiAccountId?: string): Promise<void>;
@@ -102,7 +110,7 @@ export interface ChatState {
 
 type Data = Omit<ChatState, { [K in keyof ChatState]: ChatState[K] extends (...args: never[]) => unknown ? K : never }[keyof ChatState]>;
 
-type PersistedSlot = Pick<ConversationSlot, 'conversation' | 'messages' | 'actions' | 'grants' | 'tabQuestions' | 'host'>;
+type PersistedSlot = Pick<ConversationSlot, 'conversation' | 'messages' | 'actions' | 'grants' | 'tabQuestions' | 'tabSuggestions' | 'host'>;
 type Persisted = { projects: TChatProjectItem[]; conversations: Record<string, PersistedSlot> };
 
 const initialData = (): Data => ({
@@ -116,11 +124,12 @@ const initialData = (): Data => ({
   decidingId: null,
   revokingId: null,
   answeringQuestionId: null,
+  busySuggestionId: null,
   hostOptions: null,
   error: null,
 });
 
-const emptySlot = (): ConversationSlot => ({ conversation: null, messages: [], actions: [], grants: [], tabQuestions: [], host: null, loaded: false, error: null });
+const emptySlot = (): ConversationSlot => ({ conversation: null, messages: [], actions: [], grants: [], tabQuestions: [], tabSuggestions: [], host: null, loaded: false, error: null });
 const keyOf = (projectId: string | null): string => projectId ?? '';
 const projectOf = (key: string): string | null => (key === '' ? null : key);
 
@@ -175,6 +184,7 @@ export function createChatStore(deps: ChatDeps) {
               actions: res.actions,
               grants: res.grants,
               tabQuestions: res.tab_questions,
+              tabSuggestions: res.tab_suggestions,
               host: res.host,
               loaded: true,
               error: null,
@@ -190,10 +200,10 @@ export function createChatStore(deps: ChatDeps) {
           if (key === null) return;
           const current = get().conversations[key] ?? emptySlot();
           if (!belongsTo(current.conversation?.id ?? null)(e)) return;
-          const before = { messages: current.messages, actions: current.actions, live: get().live, grants: current.grants, tabQuestions: current.tabQuestions };
+          const before = { messages: current.messages, actions: current.actions, live: get().live, grants: current.grants, tabQuestions: current.tabQuestions, tabSuggestions: current.tabSuggestions };
           const { slice, reread: mustReread } = applyEvent(before, e);
           if (slice === before) return;
-          patchSlot(key, () => ({ messages: slice.messages, actions: slice.actions, grants: slice.grants, tabQuestions: slice.tabQuestions }));
+          patchSlot(key, () => ({ messages: slice.messages, actions: slice.actions, grants: slice.grants, tabQuestions: slice.tabQuestions, tabSuggestions: slice.tabSuggestions }));
           set({ live: slice.live });
           if (mustReread) void reread(key);
         };
@@ -223,6 +233,30 @@ export function createChatStore(deps: ChatDeps) {
               else if (code === 4400) set({ error: CHAT_MSG.updateApp });
             },
           });
+        };
+
+        /** Enviar / Dispensar share one flow: one at a time, the event brings the card, a 409 re-reads. */
+        const actOnSuggestion = async (suggestionId: string, call: () => Promise<void>): Promise<void> => {
+          const projectId = get().activeProject;
+          if (projectId === undefined || get().busySuggestionId !== null) return;
+          const key = keyOf(projectId);
+          const gen = generation;
+          set({ busySuggestionId: suggestionId, error: null });
+          try {
+            await call();
+            // The `tab_suggestion_closed` event brings the card; the re-read covers a socket that is down.
+            if (gen === generation) void reread(key);
+          } catch (e) {
+            if (gen !== generation) return;
+            if (isApiError(e, 'TAB_PROMPT_CHANGED')) {
+              set({ error: CHAT_MSG.tabSuggestionChanged });
+              void reread(key); // show how it ended
+            } else {
+              fail(gen, e);
+            }
+          } finally {
+            if (gen === generation) set({ busySuggestionId: null });
+          }
         };
 
         return {
@@ -271,7 +305,7 @@ export function createChatStore(deps: ChatDeps) {
             closeSocket?.();
             closeSocket = null;
             readSeq.clear();
-            set({ connected: false, live: [], activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionId: null });
+            set({ connected: false, live: [], activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionId: null, busySuggestionId: null });
           },
 
           async send(text) {
@@ -378,6 +412,14 @@ export function createChatStore(deps: ChatDeps) {
             }
           },
 
+          sendTabSuggestion(suggestionId, text) {
+            return actOnSuggestion(suggestionId, () => api.sendTabSuggestion(session().auth(), suggestionId, { text }));
+          },
+
+          dismissTabSuggestion(suggestionId) {
+            return actOnSuggestion(suggestionId, () => api.dismissTabSuggestion(session().auth(), suggestionId));
+          },
+
           async reset() {
             const projectId = get().activeProject;
             if (projectId === undefined) return;
@@ -388,7 +430,7 @@ export function createChatStore(deps: ChatDeps) {
               await api.reset(session().auth(), projectId);
               if (gen !== generation) return;
               set({ live: [] });
-              patchSlot(key, () => ({ messages: [], actions: [], grants: [], tabQuestions: [] })); // a reset ends the old conversation's grants too
+              patchSlot(key, () => ({ messages: [], actions: [], grants: [], tabQuestions: [], tabSuggestions: [] })); // a reset ends the old conversation's grants too
               await reread(key);
             } catch (e) {
               fail(gen, e);
@@ -443,7 +485,7 @@ export function createChatStore(deps: ChatDeps) {
         partialize: (s): Persisted => ({
           projects: s.projects,
           conversations: Object.fromEntries(
-            Object.entries(s.conversations).map(([key, c]) => [key, { conversation: c.conversation, messages: c.messages, actions: c.actions, grants: c.grants, tabQuestions: c.tabQuestions, host: c.host }]),
+            Object.entries(s.conversations).map(([key, c]) => [key, { conversation: c.conversation, messages: c.messages, actions: c.actions, grants: c.grants, tabQuestions: c.tabQuestions, tabSuggestions: c.tabSuggestions, host: c.host }]),
           ),
         }),
         merge: (persisted, current) => {

@@ -10,13 +10,15 @@ import {
   resetBody,
   setHostBody,
   tabQuestionAnswerBody,
+  tabSuggestionSendBody,
   type TChatEvent,
   type TChatGrant,
   type TChatHostState,
   type TTabQuestion,
+  type TTabSuggestion,
 } from '../../contract';
 import type { MockRouter } from '../router';
-import { broadcast, countPinFailure, type MockAction, type MockConversation, type MockGrant, type MockMessage, type MockState, type MockTabQuestion, verifyAuth, WireError } from '../state';
+import { broadcast, countPinFailure, type MockAction, type MockConversation, type MockGrant, type MockMessage, type MockState, type MockTabQuestion, type MockTabSuggestion, verifyAuth, WireError } from '../state';
 import { pushConfirmationNotification, pushReplyNotification } from './notifications';
 
 const USER_ID = 'u1';
@@ -139,10 +141,24 @@ function tabQuestionScreenText(q: MockTabQuestion): string {
   return q.kind === 'choice' ? `${q.payload.questions[0]!.question}\n❯ 1. Postgres\n  2. SQLite\n  3. Type something.` : 'Bash command\n  npm test\n Do you want to proceed?\n ❯ 1. Yes\n   2. No';
 }
 
+// --- tab suggestions (spec 2026-09-25 tab suggestions §6) -------------------------------------------
+
+function tabSuggestionView(s: MockTabSuggestion): TTabSuggestion {
+  const { conversation_id: _conversation, ...view } = s;
+  return view as TTabSuggestion;
+}
+
+/** The canned suggestion a `sugest…` message makes the tab `api` show. */
+function createTabSuggestion(state: MockState, now: number, conversationId: string): MockTabSuggestion {
+  const suggestion: MockTabSuggestion = { id: randomId(10), conversation_id: conversationId, tab_id: 't-api', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: new Date(now).toISOString(), answered_at: null, closed_at: null };
+  state.tabSuggestions.push(suggestion);
+  return suggestion;
+}
+
 // --- the canned reply and its streaming (ruling 3) ----------------------------------------------
 
 interface AnswerOutcome {
-  kind: 'normal' | 'confirmation' | 'error' | 'tab_question' | 'tab_permission';
+  kind: 'normal' | 'confirmation' | 'error' | 'tab_question' | 'tab_permission' | 'tab_suggestion';
   text: string;
 }
 
@@ -155,6 +171,7 @@ function pickAnswer(text: string): AnswerOutcome {
   }
   if (/pergunta/.test(text)) return { kind: 'tab_question', text: 'A aba api tem uma pergunta para você — responda no card.' };
   if (/permiss/.test(text)) return { kind: 'tab_permission', text: 'A aba api pede permissão — responda no card.' };
+  if (/sugest/.test(text)) return { kind: 'tab_suggestion', text: 'A aba api sugere um próximo passo — veja o card.' };
   if (/test|teste/.test(text)) return { kind: 'normal', text: 'Rodei `npm test` no jarvis: 1066 testes passaram, 137 pulados. Nada quebrou.' };
   if (/deploy/.test(text)) return { kind: 'normal', text: 'O último deploy foi há 2 h, verde. Quer que eu dispare outro?' };
   if (/status/.test(text)) return { kind: 'normal', text: 'Duas abas trabalhando, uma esperando você: a aba api pediu para rodar os testes.' };
@@ -287,6 +304,11 @@ function scheduleStream(o: StreamOptions): void {
         broadcast(o.state, { type: 'tab_question', user_id: USER_ID, conversation_id: o.conversationId, question: tabQuestionView(question) });
       }
 
+      if (outcome.kind === 'tab_suggestion') {
+        const suggestion = createTabSuggestion(o.state, o.now(), o.conversationId);
+        broadcast(o.state, { type: 'tab_suggestion', user_id: USER_ID, conversation_id: o.conversationId, suggestion: tabSuggestionView(suggestion) });
+      }
+
       const chunks = chunkText(outcome.text);
       const emitChunk = (i: number) => {
         if (i >= chunks.length) {
@@ -338,6 +360,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
         actions: actionsFor(state, conversation.id),
         grants: activeGrantsFor(state, conversation.id, ctx.now()),
         tab_questions: state.tabQuestions.filter((q) => q.conversation_id === conversation.id).map(tabQuestionView),
+        tab_suggestions: state.tabSuggestions.filter((s) => s.conversation_id === conversation.id).map(tabSuggestionView),
         host: hostFor(conversation),
       },
     };
@@ -506,5 +529,30 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     if (!question) throw new WireError(404, 'NOT_FOUND', 'Pergunta não encontrada');
     if (question.status !== 'open') throw new WireError(409, 'TAB_PROMPT_CHANGED', 'A pergunta mudou na aba');
     return { status: 200, body: { text: tabQuestionScreenText(question) } };
+  });
+
+  /** Sends a tab's suggestion (no PIN): 404 unknown, 409 once it is not open. */
+  router.route('POST', '/api/m/v1/chat/tab-suggestions/:id/send', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const suggestion = state.tabSuggestions.find((s) => s.id === ctx.params.id);
+    if (!suggestion) throw new WireError(404, 'NOT_FOUND', 'Sugestão não encontrada');
+    if (suggestion.status !== 'open') throw new WireError(409, 'TAB_PROMPT_CHANGED', 'A sugestão mudou na aba');
+    const body = tabSuggestionSendBody.parse(ctx.body);
+    Object.assign(suggestion, { status: 'answered', answer: { text: body.text }, answered_at: new Date(ctx.now()).toISOString() });
+    const view = tabSuggestionView(suggestion);
+    broadcast(state, { type: 'tab_suggestion_closed', user_id: USER_ID, conversation_id: suggestion.conversation_id, suggestion: view });
+    return { status: 200, body: { tab_suggestion: view } };
+  });
+
+  /** "Dispensar": idempotent — a suggestion that is not open any more comes back as it is. */
+  router.route('POST', '/api/m/v1/chat/tab-suggestions/:id/dismiss', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const suggestion = state.tabSuggestions.find((s) => s.id === ctx.params.id);
+    if (!suggestion) throw new WireError(404, 'NOT_FOUND', 'Sugestão não encontrada');
+    if (suggestion.status === 'open') {
+      Object.assign(suggestion, { status: 'dismissed', closed_at: new Date(ctx.now()).toISOString() });
+      broadcast(state, { type: 'tab_suggestion_closed', user_id: USER_ID, conversation_id: suggestion.conversation_id, suggestion: tabSuggestionView(suggestion) });
+    }
+    return { status: 200, body: { tab_suggestion: tabSuggestionView(suggestion) } };
   });
 }

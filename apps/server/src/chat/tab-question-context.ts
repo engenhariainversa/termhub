@@ -1,5 +1,5 @@
 import type { TabQuestionView } from '../db/repositories/tab-questions-view.js';
-import type { ChoiceAnswer, ChoicePayload, PermissionAnswer, PermissionPayload } from './tab-question-payload.js';
+import type { ChoiceAnswer, ChoicePayload, PermissionAnswer, PermissionPayload, SuggestionAnswer, SuggestionPayload } from './tab-question-payload.js';
 
 /**
  * Every string interpolated between « and » here can come from the tab side (the question, its
@@ -21,6 +21,11 @@ const sanitise = (s: string): string =>
 const tabOf = (q: TabQuestionView) => `«${sanitise(q.tab_name ?? q.tab_id)}»`;
 
 function linesOf(q: TabQuestionView): string[] {
+  if (q.kind === 'suggestion') {
+    // Only a sent suggestion is news for the concierge; a dismissed one never reaches here (not `answered`).
+    const sent = (q.answer as SuggestionAnswer | null)?.text;
+    return sent === undefined ? [] : [`- a aba ${tabOf(q)} sugeria «${sanitise((q.payload as SuggestionPayload).text)}»; o usuário enviou «${sanitise(sent)}».`];
+  }
   if (q.kind === 'permission') {
     const a = q.answer as PermissionAnswer | null;
     const said = !a ? 'não respondeu' : a.allow ? 'permitiu' : a.text ? `negou e disse «${sanitise(a.text)}»` : 'negou';

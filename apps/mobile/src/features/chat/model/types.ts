@@ -3,7 +3,7 @@
 // `copy.ts`) is a line-for-line copy of the web's own modules, and matching its type names is what
 // keeps that copy readable side by side with the source it was copied from. Delete this file once
 // `@termhub/mobile-api` exports these types directly (design spec §6).
-import type { TChatAction, TChatConversation, TChatEvent, TChatGrant, TChatHostState, TChatMessage, TTabQuestion } from '@/services/api/contract';
+import type { TChatAction, TChatConversation, TChatEvent, TChatGrant, TChatHostState, TChatMessage, TTabQuestion, TTabSuggestion } from '@/services/api/contract';
 
 export type ChatMessage = TChatMessage;
 export type ChatAction = TChatAction;
@@ -14,6 +14,8 @@ export type ChatEvent = TChatEvent;
 export type ChatGrant = TChatGrant;
 /** A question an agent in a tab asked (spec 2026-09-25). */
 export type TabQuestion = TTabQuestion;
+/** Claude Code's dimmed next prompt in a tab (spec 2026-09-25 tab suggestions). */
+export type TabSuggestion = TTabSuggestion;
 
 /**
  * Why an answer stopped, transcribed verbatim from `apps/web/src/lib/types.ts` (~lines 611-632):

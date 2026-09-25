@@ -22,6 +22,7 @@ import type {
   TSetHostBody,
   TTabQuestionAnswerBody,
   TTabQuestionScreenResponse,
+  TTabSuggestionSendBody,
   TTokenBody,
   TTokenResponse,
 } from './contract';
@@ -68,6 +69,10 @@ export interface MobileApi {
   answerTabQuestion(auth: Auth, questionId: string, body: TTabQuestionAnswerBody): Promise<void>;
   /** The tab's last lines, live, for a permission card; 409 once the question is closed. */
   tabQuestionScreen(auth: Auth, questionId: string): Promise<TTabQuestionScreenResponse>;
+  /** Sends a tab's suggestion, as edited — no PIN. 409 `TAB_PROMPT_CHANGED` when the tab's prompt changed, 404 unknown. */
+  sendTabSuggestion(auth: Auth, suggestionId: string, body: TTabSuggestionSendBody): Promise<void>;
+  /** "Dispensar": closes the card, the tab is not touched. Idempotent; 404 unknown. */
+  dismissTabSuggestion(auth: Auth, suggestionId: string): Promise<void>;
 
   // notifications (P§9)
   notifications(auth: Auth, before?: string): Promise<TNotificationsResponse>;

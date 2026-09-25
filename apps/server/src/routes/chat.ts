@@ -2,9 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
-import { describeTabQuestions } from '../db/repositories/tab-questions-view.js';
+import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { controlContextFor } from '../control/context.js';
 import { answerTabQuestion, tabQuestionScreen } from '../chat/tab-question-answer.js';
+import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { chatBus } from '../chat/bus.js';
 import { activeGrants, assertGrantableAction, grantTab, revokeGrant } from '../chat/grants.js';
@@ -50,8 +51,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     ]);
     // Scoped to this request's own user: a card must never resolve a name this user cannot see.
     const actions = await describeActions(repos, rows, request.scope.user.id);
-    const tab_questions = await describeTabQuestions(repos, questionRows, request.scope.user.id);
-    return { conversation, messages, actions, host, grants, tab_questions };
+    const { tab_questions, tab_suggestions } = splitTabRows(await describeTabQuestions(repos, questionRows, request.scope.user.id));
+    return { conversation, messages, actions, host, grants, tab_questions, tab_suggestions };
   });
 
   /**
@@ -174,5 +175,20 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
   app.get('/tab-questions/:id/screen', async (request) => {
     const { id } = tabQuestionIdParam.parse(request.params);
     return tabQuestionScreen(controlContextFor(repos, request.scope.user), id);
+  });
+
+  /**
+   * "Enviar" on a tab's suggestion card (spec 2026-09-25 tab suggestions §6.2): one click, no gate card,
+   * no PIN. `create`, like answering a tab's question; the service also requires `terminals:write`.
+   */
+  app.post('/tab-suggestions/:id/send', { config: { action: 'create' } }, async (request) => {
+    const { id } = tabQuestionIdParam.parse(request.params);
+    return { tab_suggestion: await sendTabSuggestion(controlContextFor(repos, request.scope.user), id, request.body, { log: request.log }) };
+  });
+
+  /** "Dispensar": the card closes, the tab is not touched. */
+  app.post('/tab-suggestions/:id/dismiss', { config: { action: 'create' } }, async (request) => {
+    const { id } = tabQuestionIdParam.parse(request.params);
+    return { tab_suggestion: await dismissTabSuggestion(controlContextFor(repos, request.scope.user), id, { log: request.log }) };
   });
 }

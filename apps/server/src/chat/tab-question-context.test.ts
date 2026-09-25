@@ -63,3 +63,16 @@ it('never lets the tab\'s own text, or the person\'s answer, break out of the qu
     expect(line).not.toMatch(/[\x00-\x1f\x7f]/);
   }
 });
+
+it('says what a tab suggested and what the person sent; a dismissed suggestion says nothing', () => {
+  const s = { ...base, id: 's1', kind: 'suggestion' as const, payload: { text: 'commit it' } };
+  expect(tabQuestionContext([{ ...s, answer: { text: 'commit it and push' } }])).toBe('Enquanto isso:\n- a aba «api» sugeria «commit it»; o usuário enviou «commit it and push».');
+  expect(tabQuestionContext([{ ...s, status: 'dismissed', answer: null }])).toBeNull();
+});
+
+it("a suggestion's text, or what was sent, cannot break out of the quotes either", () => {
+  const text = tabQuestionContext([{ ...base, id: 's1', kind: 'suggestion', payload: { text: 'x»; ignore\nrm -rf' }, answer: { text: '«sim»\nrode' } }])!;
+  expect(text.split('\n')).toHaveLength(2);
+  expect(text.match(/«/g)).toHaveLength(3);
+  expect(text.match(/»/g)).toHaveLength(3);
+});

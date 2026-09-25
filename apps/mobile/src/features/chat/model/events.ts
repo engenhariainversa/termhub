@@ -1,7 +1,8 @@
 // How one live event of the open conversation changes its thread (design spec §6): pure reducers
 // over the slice the chat store keeps — the thread's messages and actions and the `live` buffer
 // `foldLive` reads. The store decides which events reach here (`belongsTo`) and does the I/O.
-import type { ChatAction, ChatEvent, ChatGrant, ChatMessage, TabQuestion } from './types';
+import { upsertTabSuggestion } from './tab-suggestion-text';
+import type { ChatAction, ChatEvent, ChatGrant, ChatMessage, TabQuestion, TabSuggestion } from './types';
 
 /** The most live events kept at once — a long answer streams hundreds of deltas. */
 export const LIVE_CAP = 500;
@@ -14,6 +15,8 @@ export interface EventSlice {
   grants: ChatGrant[];
   /** The tabs' questions pushed into this conversation (spec 2026-09-25 §6.3). */
   tabQuestions: TabQuestion[];
+  /** The tabs' suggestions pushed into this conversation (spec 2026-09-25 tab suggestions §6.4). */
+  tabSuggestions: TabSuggestion[];
 }
 
 /** The message a live event is about, if any. */
@@ -94,6 +97,9 @@ export function applyEvent(slice: EventSlice, e: ChatEvent): { slice: EventSlice
     case 'tab_question_answered':
     case 'tab_question_closed':
       return { slice: { ...slice, tabQuestions: upsertTabQuestion(slice.tabQuestions, e.question) }, reread: false };
+    case 'tab_suggestion':
+    case 'tab_suggestion_closed':
+      return { slice: { ...slice, tabSuggestions: upsertTabSuggestion(slice.tabSuggestions, e.suggestion) }, reread: false };
     case 'delta':
     case 'action':
     case 'reset':

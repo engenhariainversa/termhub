@@ -15,8 +15,10 @@ import { GrantsStrip } from './grants-strip';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
 import { TabQuestionCard } from './tab-question-card';
+import { TabSuggestionCard } from './tab-suggestion-card';
 
-const entryKey = (entry: ChatEntry) => (entry.kind === 'message' ? `m:${entry.message.id}` : entry.kind === 'action' ? `a:${entry.action.id}` : `q:${entry.question.id}`);
+const entryKey = (entry: ChatEntry) =>
+  entry.kind === 'message' ? `m:${entry.message.id}` : entry.kind === 'action' ? `a:${entry.action.id}` : entry.kind === 'tab_suggestion' ? `s:${entry.suggestion.id}` : `q:${entry.question.id}`;
 
 /** The conversation (spec §11.2): thread, action cards, the host line when the host needs attention,
  * the trusted tabs and composer.
@@ -40,6 +42,9 @@ export function ConversationScreen() {
   const answeringQuestionId = useChatStore((s) => s.answeringQuestionId);
   const answerTabQuestion = useChatStore((s) => s.answerTabQuestion);
   const loadTabQuestionScreen = useChatStore((s) => s.loadTabQuestionScreen);
+  const busySuggestionId = useChatStore((s) => s.busySuggestionId);
+  const sendTabSuggestion = useChatStore((s) => s.sendTabSuggestion);
+  const dismissTabSuggestion = useChatStore((s) => s.dismissTabSuggestion);
   const reset = useChatStore((s) => s.reset);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const insets = useSafeAreaInsets();
@@ -53,14 +58,23 @@ export function ConversationScreen() {
   const actions = slot?.actions;
   const grants = useMemo(() => slot?.grants ?? [], [slot?.grants]);
   const tabQuestions = slot?.tabQuestions;
-  const extra = useMemo(() => ({ fold, decidingId, grants, revokingId, answeringQuestionId }), [fold, decidingId, grants, revokingId, answeringQuestionId]);
+  const tabSuggestions = slot?.tabSuggestions;
+  const extra = useMemo(
+    () => ({ fold, decidingId, grants, revokingId, answeringQuestionId, busySuggestionId }),
+    [fold, decidingId, grants, revokingId, answeringQuestionId, busySuggestionId],
+  );
   // A deep link followed after unlock replaces `/unlock` with this screen: nothing behind it.
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const onDecide = useCallback((actionId: string, decision: ChatDecision) => void decide(actionId, decision), [decide]);
   const onRevoke = useCallback((grantId: string) => void revokeGrant(grantId), [revokeGrant]);
   const onAnswer = useCallback((id: string, body: TTabQuestionAnswerBody) => void answerTabQuestion(id, body), [answerTabQuestion]);
+  const onSendSuggestion = useCallback((id: string, text: string) => void sendTabSuggestion(id, text), [sendTabSuggestion]);
+  const onDismissSuggestion = useCallback((id: string) => void dismissTabSuggestion(id), [dismissTabSuggestion]);
   // Newest first, for the inverted list that keeps the thread pinned to its end.
-  const entries = useMemo(() => chatTimeline(messages ?? [], actions ?? [], tabQuestions ?? []).reverse(), [messages, actions, tabQuestions]);
+  const entries = useMemo(
+    () => chatTimeline(messages ?? [], actions ?? [], tabQuestions ?? [], tabSuggestions ?? []).reverse(),
+    [messages, actions, tabQuestions, tabSuggestions],
+  );
 
   const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? 'Conversa') : 'Chat geral';
   const shownError = error ?? slot?.error ?? null;
@@ -113,7 +127,9 @@ export function ConversationScreen() {
             // there re-runs `renderItem`, and the memoised rows re-render only where their own props changed.
             extraData={extra}
             renderItem={({ item }) =>
-              item.kind === 'tab_question' ? (
+              item.kind === 'tab_suggestion' ? (
+                <TabSuggestionCard suggestion={item.suggestion} busy={busySuggestionId !== null} onSend={onSendSuggestion} onDismiss={onDismissSuggestion} />
+              ) : item.kind === 'tab_question' ? (
                 <TabQuestionCard question={item.question} busy={answeringQuestionId !== null} onAnswer={onAnswer} loadScreen={loadTabQuestionScreen} />
               ) : item.kind === 'message' ? (
                 <MessageBubble message={item.message} streamed={fold.deltas.get(item.message.id)} started={fold.started.has(item.message.id)} />

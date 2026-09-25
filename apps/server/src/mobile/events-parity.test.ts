@@ -20,6 +20,19 @@ const question = {
   answered_at: null,
   closed_at: null,
 };
+const suggestion = {
+  id: 's1',
+  tab_id: 't1',
+  tab_name: 'api',
+  kind: 'suggestion' as const,
+  payload: { text: 'commit it' },
+  status: 'open' as const,
+  answer: null,
+  error_code: null,
+  created_at: '2026-09-25T12:00:00.000Z',
+  answered_at: null,
+  closed_at: null,
+};
 const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
   message: {
     type: 'message',
@@ -51,6 +64,8 @@ const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
   tab_question: { type: 'tab_question', ...base, question },
   tab_question_answered: { type: 'tab_question_answered', ...base, question: { ...question, status: 'answered', answer: { answers: [{ selected: [0] }] }, answered_at: '2026-09-25T12:01:00.000Z' } },
   tab_question_closed: { type: 'tab_question_closed', ...base, question: { ...question, kind: 'permission', payload: { tool_name: 'Bash' }, status: 'answered_in_tab', closed_at: '2026-09-25T12:02:00.000Z' } },
+  tab_suggestion: { type: 'tab_suggestion', ...base, suggestion },
+  tab_suggestion_closed: { type: 'tab_suggestion_closed', ...base, suggestion: { ...suggestion, status: 'dismissed', closed_at: '2026-09-25T12:02:00.000Z' } },
 };
 
 describe('ChatEvent / chatEventSchema parity', () => {

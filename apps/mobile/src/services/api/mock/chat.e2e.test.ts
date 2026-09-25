@@ -468,3 +468,27 @@ it('a message containing permissão raises a permission question for Bash', asyn
   await api.answerTabQuestion(auth, opened!.question.id, { allow: false, text: 'use pnpm' });
   collected.close();
 });
+
+it('a message containing sugestão raises a tab suggestion; sending it once works, twice is 409; dismissing is idempotent', async () => {
+  const clock = { value: START };
+  const { api, auth } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+
+  await api.sendMessage(auth, { text: 'alguma sugestão?', project_id: 'p-termhub' });
+  await jest.advanceTimersByTimeAsync(5000);
+  const opened = collected.events.find((e): e is Extract<TChatEvent, { type: 'tab_suggestion' }> => e.type === 'tab_suggestion');
+  expect(opened?.suggestion).toMatchObject({ kind: 'suggestion', status: 'open', tab_name: 'api', payload: { text: 'commit it' } });
+  const id = opened!.suggestion.id;
+  expect((await api.chat(auth, 'p-termhub')).tab_suggestions.map((s) => s.id)).toContain(id);
+  expect((await api.chat(auth, 'p-termhub')).tab_questions.map((q) => q.id)).not.toContain(id);
+
+  await api.sendTabSuggestion(auth, id, { text: 'commit it and push' });
+  await jest.advanceTimersByTimeAsync(0);
+  expect(collected.events.some((e) => e.type === 'tab_suggestion_closed' && e.suggestion.id === id && e.suggestion.status === 'answered')).toBe(true);
+  await expect(api.sendTabSuggestion(auth, id, { text: 'commit it' })).rejects.toMatchObject({ status: 409, code: 'TAB_PROMPT_CHANGED' });
+  await api.dismissTabSuggestion(auth, id); // already sent: stays sent, no error
+  expect((await api.chat(auth, 'p-termhub')).tab_suggestions.find((s) => s.id === id)).toMatchObject({ status: 'answered', answer: { text: 'commit it and push' } });
+  await expect(api.dismissTabSuggestion(auth, 'nope')).rejects.toMatchObject({ status: 404 });
+  collected.close();
+});

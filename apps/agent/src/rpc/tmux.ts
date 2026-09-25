@@ -45,11 +45,12 @@ export async function capture(params: RpcParams<'tmux.capture'>): Promise<RpcRes
   // attached (as here, run from execFile) a bare '=name' fails with "can't find pane:
   // =name" instead of defaulting to that session's active window/pane. kill-session takes a
   // target-session, which resolves a bare '=name' fine, so it doesn't need this.
-  const r = await run(tmuxPath(), ['capture-pane', '-p', '-S', `-${params.lines}`, '-t', `=${params.session}:`]);
+  // `-e` keeps colours and attributes as escapes: the server reads a dimmed suggestion off them.
+  const r = await run(tmuxPath(), ['capture-pane', '-p', ...(params.escapes ? ['-e'] : []), '-S', `-${params.lines}`, '-t', `=${params.session}:`]);
   const failure = processFailure(r);
   if (failure) throw failure;
   if (r.code !== 0) throw new RpcFailure('notfound', 'session not found');
-  return { text: r.stdout };
+  return params.escapes ? { text: r.stdout, escapes: true } : { text: r.stdout };
 }
 
 /** Target-pane form: tmux only resolves an exact ('=') target-pane when it is colon-qualified (see capture). */

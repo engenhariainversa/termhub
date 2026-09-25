@@ -175,6 +175,14 @@ describe('GET /chat', () => {
     expect(res.json().tab_questions).toEqual([expect.objectContaining({ id: 'q1', tab_name: 'api', kind: 'permission' })]);
   });
 
+  it('returns the suggestions apart from the tab questions', async () => {
+    const common = { tab_id: 't1', project_id: 'p1', conversation_id: 'c1', user_id: 'u1', tool_use_id: null, status: 'open', answer: null, error_code: null, answered_by: null, answered_at: null, closed_at: null, injected_at: null, created_at: '' };
+    const { app } = build({ tabs: [{ id: 't1', project_id: 'p1', name: 'api' }], tabQuestions: [{ ...common, id: 'q1', kind: 'permission', payload: { tool_name: 'Bash' } }, { ...common, id: 's1', kind: 'suggestion', payload: { text: 'commit it' } }] });
+    const res = await app.inject({ method: 'GET', url: '/chat' });
+    expect(res.json().tab_questions).toEqual([expect.objectContaining({ id: 'q1' })]);
+    expect(res.json().tab_suggestions).toEqual([expect.objectContaining({ id: 's1', kind: 'suggestion', payload: { text: 'commit it' } })]);
+  });
+
   it('?project= reads that project conversation and its host', async () => {
     const { app, service } = build();
     const res = await app.inject({ method: 'GET', url: '/chat?project=p1' });

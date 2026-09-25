@@ -28,6 +28,7 @@ import {
   type TMobileMessageBody,
   type TSetHostBody,
   type TTabQuestionAnswerBody,
+  type TTabSuggestionSendBody,
   type TTokenBody,
 } from './contract';
 import { buildProof } from './dpop';
@@ -216,6 +217,9 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       empty('POST', `/api/m/v1/chat/tab-questions/${encodeURIComponent(id)}/answer`, { token: a.accessToken, body }),
     tabQuestionScreen: (a: Auth, id: string) =>
       call('GET', `/api/m/v1/chat/tab-questions/${encodeURIComponent(id)}/screen`, tabQuestionScreenResponse, { token: a.accessToken }),
+    sendTabSuggestion: (a: Auth, id: string, body: TTabSuggestionSendBody) =>
+      empty('POST', `/api/m/v1/chat/tab-suggestions/${encodeURIComponent(id)}/send`, { token: a.accessToken, body }),
+    dismissTabSuggestion: (a: Auth, id: string) => empty('POST', `/api/m/v1/chat/tab-suggestions/${encodeURIComponent(id)}/dismiss`, { token: a.accessToken, body: {} }),
 
     notifications: (a: Auth, before?: string) =>
       call('GET', `/api/m/v1/notifications${before ? `?before=${encodeURIComponent(before)}` : ''}`, notificationsResponse, {

@@ -402,7 +402,7 @@ it('persists projects and each conversation, never live or transient state', asy
 
   const saved = JSON.parse(mmkv.getString('chat')!).state;
   expect(Object.keys(saved).sort()).toEqual(['conversations', 'projects']);
-  expect(Object.keys(saved.conversations['p-termhub']).sort()).toEqual(['actions', 'conversation', 'grants', 'host', 'messages', 'tabQuestions']);
+  expect(Object.keys(saved.conversations['p-termhub']).sort()).toEqual(['actions', 'conversation', 'grants', 'host', 'messages', 'tabQuestions', 'tabSuggestions']);
 
   // A cold start shows the thread before any fetch.
   const again = createChatStore({ api, session: () => ({ phase: 'locked', auth: () => { throw new Error('LOCKED'); }, handleApiError: () => false, requestPinProof: async () => { throw new Error('CANCELLED'); } }) });
@@ -482,4 +482,34 @@ it('keeps the tab questions of a slot across a restart (persisted with the threa
   await jest.advanceTimersByTimeAsync(5000);
   const saved = JSON.parse(mmkv.getString('chat')!).state as { conversations: Record<string, { tabQuestions?: unknown[] }> };
   expect(saved.conversations['p-termhub']!.tabQuestions!.length).toBeGreaterThan(0);
+});
+
+it('sendTabSuggestion sends over the mock and the card reads as sent; a second send reads "A sugestão mudou na aba"', async () => {
+  const { chat } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await chat.getState().send('alguma sugestão?');
+  await jest.advanceTimersByTimeAsync(5000);
+  const s = slot(chat, 'p-termhub').tabSuggestions.find((x) => x.status === 'open')!;
+  expect(s).toMatchObject({ kind: 'suggestion', tab_name: 'api', payload: { text: 'commit it' } });
+
+  await chat.getState().sendTabSuggestion(s.id, 'commit it and push');
+  await jest.advanceTimersByTimeAsync(0);
+  await flush();
+  expect(slot(chat, 'p-termhub').tabSuggestions.find((x) => x.id === s.id)).toMatchObject({ status: 'answered', answer: { text: 'commit it and push' } });
+  expect(chat.getState().busySuggestionId).toBeNull();
+
+  await chat.getState().sendTabSuggestion(s.id, 'commit it');
+  expect(chat.getState().error).toBe('A sugestão mudou na aba');
+});
+
+it('dismissTabSuggestion closes the card as dismissed', async () => {
+  const { chat } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await chat.getState().send('alguma sugestão?');
+  await jest.advanceTimersByTimeAsync(5000);
+  const s = slot(chat, 'p-termhub').tabSuggestions.find((x) => x.status === 'open')!;
+  await chat.getState().dismissTabSuggestion(s.id);
+  await jest.advanceTimersByTimeAsync(0);
+  await flush();
+  expect(slot(chat, 'p-termhub').tabSuggestions.find((x) => x.id === s.id)?.status).toBe('dismissed');
 });

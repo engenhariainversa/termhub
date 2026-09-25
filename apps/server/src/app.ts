@@ -38,6 +38,7 @@ import { chatRoutes } from './routes/chat.js';
 import { ChatService, purgeExpiredActions } from './chat/service.js';
 import { agentRunner } from './chat/runner.js';
 import { startTabQuestionExpiry } from './chat/tab-questions.js';
+import { stopTabSuggestions } from './chat/tab-suggestions.js';
 import { registerChatWs } from './chat/ws.js';
 import { roleRoutes } from './routes/roles.js';
 import { userRoutes } from './routes/users.js';
@@ -245,6 +246,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopSync();
     stopAgentUpdates();
     stopTabQuestionExpiry();
+    stopTabSuggestions();
     await simulators.shutdownAll();
     await closePrisma();
   });

@@ -6,6 +6,7 @@ import { ChatGrantStrip } from './ChatGrantStrip';
 import { ChatHost } from './ChatHost';
 import { ChatTurn } from './ChatTurn';
 import { TabQuestionCard } from './TabQuestionCard';
+import { TabSuggestionCard } from './TabSuggestionCard';
 import { ConfirmDialog } from '../Modal';
 import { api, ApiError } from '../../lib/api';
 import { useChatStream } from '../../lib/chat';
@@ -13,8 +14,9 @@ import { chatTimeline } from '../../lib/chat-timeline';
 import { isNearBottom } from '../../lib/chat-scroll';
 import { isGrantActive } from './grant-time';
 import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
+import { SUGGESTION_CHANGED_TEXT, upsertTabSuggestion } from './tab-suggestion-text';
 import { useAuth } from '../../lib/auth';
-import type { AiAccount, ChatAction, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatMessage, TabQuestion, TabQuestionAnswer } from '../../lib/types';
+import type { AiAccount, ChatAction, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatMessage, TabQuestion, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
 
 /**
  * Why the box refuses, one short line per host state — the long version is the card above the thread
@@ -74,6 +76,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const [tabQuestions, setTabQuestions] = useState<TabQuestion[]>([]);
   const [answeringQuestionId, setAnsweringQuestionId] = useState<string | null>(null);
   const [questionErrors, setQuestionErrors] = useState<Record<string, string>>({});
+  /** The tabs' suggestions of this conversation (spec 2026-09-25 tab suggestions §6.4), from `GET /api/chat` and their two events. */
+  const [tabSuggestions, setTabSuggestions] = useState<TabSuggestion[]>([]);
+  const [busySuggestionId, setBusySuggestionId] = useState<string | null>(null);
+  const [suggestionErrors, setSuggestionErrors] = useState<Record<string, string>>({});
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,11 +139,12 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const load = useCallback(async () => {
     // No project = the account-wide chat: called with no argument, because the response must be
     // `request<...>('GET', '/chat')` exactly — a server that predates project chats knows nothing else.
-    const { conversation, messages, actions, host, grants, tab_questions } = projectId ? await api.chat(projectId) : await api.chat();
+    const { conversation, messages, actions, host, grants, tab_questions, tab_suggestions } = projectId ? await api.chat(projectId) : await api.chat();
     setMessages(messages);
     setActions(actions ?? []);
     setGrants(grants ?? []);
     setTabQuestions(tab_questions ?? []);
+    setTabSuggestions(tab_suggestions ?? []);
     setHost(host ?? null);
     setHostAccountId(conversation.ai_account_id ?? null);
     setConversationId(conversation.id);
@@ -173,6 +180,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       else if (e.type === 'grant_revoked') setGrants((prev) => prev.filter((g) => g.id !== e.grant_id));
       else if (e.type === 'granted_action') setActions((prev) => (prev.some((a) => a.id === e.action.id) ? prev.map((a) => (a.id === e.action.id ? e.action : a)) : [...prev, e.action]));
       else if (e.type === 'tab_question' || e.type === 'tab_question_answered' || e.type === 'tab_question_closed') setTabQuestions((prev) => upsertTabQuestion(prev, e.question));
+      else if (e.type === 'tab_suggestion' || e.type === 'tab_suggestion_closed') setTabSuggestions((prev) => upsertTabSuggestion(prev, e.suggestion));
     },
     [load, mine],
   );
@@ -244,6 +252,21 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   };
   /** Stable, so the permission card's effect runs once per question. */
   const loadTabQuestionScreen = useCallback(async (id: string) => (await api.tabQuestionScreen(id)).text, []);
+
+  /** Enviar / Dispensar on a suggestion card: one click, no confirmation, no model turn. */
+  const actOnSuggestion = async (id: string, act: () => Promise<{ tab_suggestion: TabSuggestion }>, fallback: string) => {
+    setBusySuggestionId(id);
+    setSuggestionErrors(({ [id]: _dropped, ...rest }) => rest);
+    try {
+      const { tab_suggestion } = await act();
+      setTabSuggestions((prev) => upsertTabSuggestion(prev, tab_suggestion));
+    } catch (e) {
+      const text = e instanceof ApiError && e.code === 'TAB_PROMPT_CHANGED' ? SUGGESTION_CHANGED_TEXT : e instanceof ApiError ? e.message : fallback;
+      setSuggestionErrors((prev) => ({ ...prev, [id]: text }));
+    } finally {
+      setBusySuggestionId(null);
+    }
+  };
 
   /**
    * Opens the change picker and reads the two halves of the pair, once, on demand: they are only needed
@@ -346,7 +369,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   }, [events]);
 
   /** Messages, gate cards and tab questions as one chronological thread, so a card reads where it was proposed. */
-  const timeline = useMemo(() => chatTimeline(messages, actions, tabQuestions), [messages, actions, tabQuestions]);
+  const timeline = useMemo(() => chatTimeline(messages, actions, tabQuestions, tabSuggestions), [messages, actions, tabQuestions, tabSuggestions]);
   /**
    * The row a running answer would be written into: only the newest one can still be the live one.
    * Keyed on the id, not on a position: the loop below walks the merged timeline, where an index
@@ -440,6 +463,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setGrants([]);
       setTabQuestions([]);
       setQuestionErrors({});
+      setTabSuggestions([]);
+      setSuggestionErrors({});
       await load();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Não foi possível começar uma nova conversa');
@@ -543,6 +568,19 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         }}
       >
         {timeline.map((entry) => {
+          if (entry.kind === 'tab_suggestion') {
+            const s = entry.suggestion;
+            return (
+              <TabSuggestionCard
+                key={`s:${s.id}`}
+                suggestion={s}
+                busy={busySuggestionId === s.id}
+                error={suggestionErrors[s.id]}
+                onSend={(text) => void actOnSuggestion(s.id, () => api.sendTabSuggestion(s.id, text), 'Não foi possível enviar')}
+                onDismiss={() => void actOnSuggestion(s.id, () => api.dismissTabSuggestion(s.id), 'Não foi possível dispensar')}
+              />
+            );
+          }
           if (entry.kind === 'tab_question') {
             const q = entry.question;
             return <TabQuestionCard key={`q:${q.id}`} question={q} answering={answeringQuestionId === q.id} error={questionErrors[q.id]} onAnswer={(body) => void answerQuestion(q.id, body)} loadScreen={loadTabQuestionScreen} />;

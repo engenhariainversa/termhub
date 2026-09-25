@@ -43,7 +43,12 @@ export type ChatEvent =
   /** The chat answered it — or the answer could not be typed (`status: 'failed'`). */
   | { type: 'tab_question_answered'; user_id: string; conversation_id: string; question: TabQuestionView }
   /** It left the tab's screen: answered there, replaced, or the tab is gone. An answered card stays answered. */
-  | { type: 'tab_question_closed'; user_id: string; conversation_id: string; question: TabQuestionView };
+  | { type: 'tab_question_closed'; user_id: string; conversation_id: string; question: TabQuestionView }
+  /** A tab stopped with Claude Code's dimmed next prompt in its input (spec 2026-09-25 tab suggestions
+   * §6): the card. Never pushed to the phone (noise). Its own events: older apps parse `tab_question`. */
+  | { type: 'tab_suggestion'; user_id: string; conversation_id: string; suggestion: TabQuestionView }
+  /** It was sent (`answered`, or `failed`), dismissed, or left the tab's screen. */
+  | { type: 'tab_suggestion_closed'; user_id: string; conversation_id: string; suggestion: TabQuestionView };
 
 class ChatBus {
   private emitter = new EventEmitter();

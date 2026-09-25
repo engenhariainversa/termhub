@@ -70,6 +70,12 @@ describe('tmux rpc handlers', () => {
     expect(run).toHaveBeenCalledWith('tmux', ['capture-pane', '-p', '-S', '-200', '-t', '=th-a:']);
   });
 
+  it('tmux.capture with escapes adds -e and says the text carries them', async () => {
+    run.mockResolvedValue({ code: 0, stdout: '❯ \x1b[2mcommit it\x1b[0m\n', stderr: '', timedOut: false });
+    await expect(capture({ session: 'th-a', lines: 15, escapes: true })).resolves.toEqual({ text: '❯ \x1b[2mcommit it\x1b[0m\n', escapes: true });
+    expect(run).toHaveBeenCalledWith('tmux', ['capture-pane', '-p', '-e', '-S', '-15', '-t', '=th-a:']);
+  });
+
   it('tmux.capture raises notfound on a non-zero exit', async () => {
     run.mockResolvedValue({ code: 1, stdout: '', stderr: "can't find session th-a", timedOut: false });
     await expect(capture({ session: 'th-a', lines: 200 })).rejects.toMatchObject({ code: 'notfound' });

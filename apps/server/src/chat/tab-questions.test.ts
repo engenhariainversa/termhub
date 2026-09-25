@@ -5,7 +5,7 @@ import type { Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import type { Interpreted } from '../monitor/state.js';
 import { chatBus, type ChatEvent } from './bus.js';
-import { closesOpenQuestion, noteHookEvent, openTabQuestion, startTabQuestionExpiry } from './tab-questions.js';
+import { closesOpenQuestion, noteHookEvent, openTabQuestion, publishTabQuestions, startTabQuestionExpiry } from './tab-questions.js';
 
 const tab = { id: 't1', project_id: 'p1', machine_id: 'm1', name: 'api' } as Tab;
 const payload = { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: '', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] };
@@ -131,5 +131,17 @@ describe('startTabQuestionExpiry', () => {
     expect(repos.tabQuestions.closeForTab).toHaveBeenCalledTimes(1);
     expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'expired', undefined, undefined);
     expect(events.map((e) => e.type)).toEqual(['tab_question_closed']);
+  });
+});
+
+describe('publishTabQuestions', () => {
+  it('a suggestion row goes out on its own events, never as a tab question', async () => {
+    const repos = fakeRepos();
+    const s = row({ id: 's1', kind: 'suggestion', payload: { text: 'commit it' }, tool_use_id: null });
+    await publishTabQuestions(asRepos(repos), 'tab_question', [s]);
+    await publishTabQuestions(asRepos(repos), 'tab_question_answered', [{ ...s, status: 'answered', answer: { text: 'commit it' } }]);
+    await publishTabQuestions(asRepos(repos), 'tab_question_closed', [{ ...s, status: 'dismissed' }]);
+    expect(events.map((e) => e.type)).toEqual(['tab_suggestion', 'tab_suggestion_closed', 'tab_suggestion_closed']);
+    expect(events[0]).toMatchObject({ user_id: 'u1', conversation_id: 'c1', suggestion: { id: 's1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' } } });
   });
 });

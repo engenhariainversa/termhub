@@ -1,6 +1,6 @@
-import type { ChoiceAnswer, ChoicePayload, PermissionAnswer, PermissionPayload, TabQuestionKind } from '../../chat/tab-question-payload.js';
+import type { TabRowKind } from '../../chat/tab-question-payload.js';
 import type { Repositories } from './index.js';
-import type { TabQuestion, TabQuestionStatus } from './tab-questions.js';
+import type { TabQuestion, TabQuestionStatus, TabRowAnswer, TabRowPayload } from './tab-questions.js';
 
 /** A tab's question as both clients render it (`GET /chat`, the bus, the phone): the row minus what
  * only the server needs, plus the tab's name at read time (null once the tab is gone). */
@@ -8,10 +8,10 @@ export interface TabQuestionView {
   id: string;
   tab_id: string;
   tab_name: string | null;
-  kind: TabQuestionKind;
-  payload: ChoicePayload | PermissionPayload;
+  kind: TabRowKind;
+  payload: TabRowPayload;
   status: TabQuestionStatus;
-  answer: ChoiceAnswer | PermissionAnswer | null;
+  answer: TabRowAnswer | null;
   error_code: string | null;
   created_at: string;
   answered_at: string | null;
@@ -41,4 +41,12 @@ export function toTabQuestionView(r: TabQuestion, tabName: string | null): TabQu
     answered_at: r.answered_at,
     closed_at: r.closed_at,
   };
+}
+
+/**
+ * `GET /chat` keeps suggestions out of `tab_questions` (spec 2026-09-25 tab suggestions §6.2): an app
+ * that predates them parses that array strictly. They travel in `tab_suggestions`.
+ */
+export function splitTabRows(views: TabQuestionView[]): { tab_questions: TabQuestionView[]; tab_suggestions: TabQuestionView[] } {
+  return { tab_questions: views.filter((v) => v.kind !== 'suggestion'), tab_suggestions: views.filter((v) => v.kind === 'suggestion') };
 }

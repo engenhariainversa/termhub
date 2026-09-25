@@ -6,6 +6,9 @@ const publish = vi.fn();
 vi.mock('./bus.js', () => ({ monitorBus: { publish: (...a: unknown[]) => publish(...a) } }));
 const note = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock('../chat/tab-questions.js', () => ({ noteHookEvent: (...a: unknown[]) => note(...a) }));
+const schedule = vi.fn();
+const cancel = vi.fn();
+vi.mock('../chat/tab-suggestions.js', () => ({ scheduleTabSuggestion: (...a: unknown[]) => schedule(...a), cancelTabSuggestion: (...a: unknown[]) => cancel(...a) }));
 
 const { ingestHookEvent } = await import('./ingest.js');
 
@@ -147,5 +150,34 @@ describe('ingestHookEvent — tab questions', () => {
     const spy = { info: vi.fn(), debug: vi.fn(), warn: vi.fn() };
     await ingestHookEvent(repos(tab({ state: 'waiting_input' })).r, spy as never, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: ask });
     expect(JSON.stringify([spy.info.mock.calls, spy.debug.mock.calls])).not.toContain('Qual cor');
+  });
+});
+
+describe('ingestHookEvent — suggestions', () => {
+  it('a Claude Stop schedules the suggestion check; every event of the tab first cancels a pending one', async () => {
+    schedule.mockClear();
+    cancel.mockClear();
+    const { r } = repos(tab({ state: 'working' }));
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: { hook_event_name: 'Stop' } });
+    expect(cancel).toHaveBeenCalledWith('t1');
+    expect(schedule).toHaveBeenCalledWith(r, log, 't1');
+    expect(cancel.mock.invocationCallOrder[0]!).toBeLessThan(schedule.mock.invocationCallOrder[0]!);
+  });
+
+  it('any other event only cancels — even one the interpreter ignores', async () => {
+    schedule.mockClear();
+    cancel.mockClear();
+    const { r } = repos(tab({ state: 'waiting_input' }));
+    await ingestHookEvent(r, log, pre('Edit'));
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: { hook_event_name: 'SomethingNew' } });
+    expect(cancel).toHaveBeenCalledTimes(2);
+    expect(schedule).not.toHaveBeenCalled();
+  });
+
+  it('a Codex turn end is not a Claude Stop', async () => {
+    schedule.mockClear();
+    const { r } = repos(tab({ state: 'working' }));
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'codex', session: 'th-t1', event: { type: 'agent-turn-complete', 'last-assistant-message': 'ok' } });
+    expect(schedule).not.toHaveBeenCalled();
   });
 });

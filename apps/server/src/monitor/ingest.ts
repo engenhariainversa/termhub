@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { noteHookEvent } from '../chat/tab-questions.js';
+import { cancelTabSuggestion, scheduleTabSuggestion } from '../chat/tab-suggestions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Tab } from '../db/repositories/types.js';
 import { monitorBus } from './bus.js';
@@ -18,12 +19,17 @@ export async function ingestHookEvent(
 ): Promise<IngestResult> {
   const tab = await repos.tabs.findByTmuxSession(input.machineId, input.session);
   if (!tab) return { ok: false, reason: 'unknown_session' };
+  // Any hook event of the tab means its screen moved: a suggestion check still waiting opens nothing
+  // (spec 2026-09-25 tab suggestions §6.1).
+  cancelTabSuggestion(tab.id);
   const interpreted = interpretHookEvent(input.tool, input.event);
   if (!interpreted) return { ok: false, reason: 'ignored' };
   const updated = await recordInterpretation(repos, log, tab, input.tool, interpreted);
   // After the tab row (spec 2026-09-25 §4.2): a question opens a card in the project's chat, any
   // other event closes the one on screen. Never throws.
   await noteHookEvent(repos, log, updated, interpreted);
+  // Claude Code draws its suggested next prompt shortly after the turn ends: look in a few seconds.
+  if (input.tool === 'claude' && interpreted.meta.event === 'Stop') scheduleTabSuggestion(repos, log, updated.id);
   return { ok: true, tab: updated };
 }
 

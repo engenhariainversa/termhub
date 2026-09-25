@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatPanel } from './ChatPanel';
-import type { ChatAction, ChatGrant, ChatMessage, TabQuestion } from '../../lib/types';
+import type { ChatAction, ChatGrant, ChatMessage, TabQuestion, TabSuggestion } from '../../lib/types';
 
 const chatMock = vi.fn();
 const sendMock = vi.fn();
@@ -17,6 +17,8 @@ const resetMock = vi.fn();
 const revokeMock = vi.fn();
 const answerMock = vi.fn();
 const screenMock = vi.fn();
+const sendSuggestionMock = vi.fn();
+const dismissSuggestionMock = vi.fn();
 
 vi.mock('../../lib/api', () => {
   // Same signature as the real one: the page shows `message`, so a stand-in that swallows it would
@@ -41,6 +43,8 @@ vi.mock('../../lib/api', () => {
       revokeChatGrant: (...a: unknown[]) => revokeMock(...a),
       answerTabQuestion: (...a: unknown[]) => answerMock(...a),
       tabQuestionScreen: (...a: unknown[]) => screenMock(...a),
+      sendTabSuggestion: (...a: unknown[]) => sendSuggestionMock(...a),
+      dismissTabSuggestion: (...a: unknown[]) => dismissSuggestionMock(...a),
       machines: { list: (...a: unknown[]) => machinesMock(...a) },
       aiAccounts: { list: (...a: unknown[]) => accountsMock(...a) },
     },
@@ -101,6 +105,8 @@ beforeEach(() => {
   revokeMock.mockReset();
   answerMock.mockReset();
   screenMock.mockReset();
+  sendSuggestionMock.mockReset();
+  dismissSuggestionMock.mockReset();
   screenMock.mockResolvedValue({ text: 'Do you want to proceed?' });
   accountsMock.mockResolvedValue({ accounts: [] });
   auth.state = { user: { id: 'u1' }, viewAs: null };
@@ -341,5 +347,62 @@ it('tab question events add and update the card; another conversation\'s are ign
   onEvent({ type: 'tab_question', conversation_id: 'c_p1', question: question({ id: 'q1' }) });
   expect(await screen.findByText('A aba «api» pede permissão para usar «Bash»')).toBeInTheDocument();
   onEvent({ type: 'tab_question_closed', conversation_id: 'c_p1', question: question({ id: 'q1', status: 'answered_in_tab' }) });
+  expect(await screen.findByText('Respondida na aba')).toBeInTheDocument();
+});
+
+const suggestion = (over: Partial<TabSuggestion> & { id: string }): TabSuggestion => ({ tab_id: 't1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: '2026-09-21T00:00:00.000Z', answered_at: null, closed_at: null, ...over });
+const card = async () => (await screen.findByText('«api» sugere:')).closest('li') as HTMLElement;
+
+it('shows a tab suggestion from GET /chat and sends it, as edited, with one click', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [], tab_questions: [], tab_suggestions: [suggestion({ id: 's1' })] });
+  sendSuggestionMock.mockResolvedValue({ tab_suggestion: suggestion({ id: 's1', status: 'answered', answer: { text: 'commit it and push' } }) });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  const li = await card();
+  fireEvent.change(within(li).getByLabelText('Texto da sugestão'), { target: { value: 'commit it and push' } });
+  fireEvent.click(within(li).getByRole('button', { name: 'Enviar' }));
+  await waitFor(() => expect(sendSuggestionMock).toHaveBeenCalledWith('s1', 'commit it and push'));
+  expect(await screen.findByText('Enviada')).toBeInTheDocument();
+});
+
+it('Dispensar closes the card; a stale suggestion reads "A sugestão mudou na aba"', async () => {
+  const { ApiError } = await import('../../lib/api');
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [], tab_suggestions: [suggestion({ id: 's1' }), suggestion({ id: 's2', tab_name: 'web', created_at: '2026-09-21T00:01:00.000Z' })] });
+  dismissSuggestionMock.mockResolvedValue({ tab_suggestion: suggestion({ id: 's1', status: 'dismissed' }) });
+  sendSuggestionMock.mockRejectedValue(new ApiError(409, 'A sugestão mudou na aba', 'TAB_PROMPT_CHANGED'));
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  fireEvent.click(within(await card()).getByRole('button', { name: 'Dispensar' }));
+  expect(await screen.findByText('Dispensada')).toBeInTheDocument();
+  expect(dismissSuggestionMock).toHaveBeenCalledWith('s1');
+  const other = (await screen.findByText('«web» sugere:')).closest('li') as HTMLElement;
+  fireEvent.click(within(other).getByRole('button', { name: 'Enviar' }));
+  expect(await screen.findByText('A sugestão mudou na aba')).toBeInTheDocument();
+});
+
+it("tab suggestion events add and update the card; another conversation's are ignored", async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { events: [], connected: true };
+  });
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [] });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalled());
+  onEvent({ type: 'tab_suggestion', conversation_id: 'c_other', suggestion: suggestion({ id: 's9', tab_name: 'OUTRA' }) });
+  expect(screen.queryByText(/OUTRA/)).toBeNull();
+  onEvent({ type: 'tab_suggestion', conversation_id: 'c_p1', suggestion: suggestion({ id: 's1' }) });
+  expect(await screen.findByText('«api» sugere:')).toBeInTheDocument();
+  onEvent({ type: 'tab_suggestion_closed', conversation_id: 'c_p1', suggestion: suggestion({ id: 's1', status: 'answered_in_tab' }) });
   expect(await screen.findByText('Respondida na aba')).toBeInTheDocument();
 });

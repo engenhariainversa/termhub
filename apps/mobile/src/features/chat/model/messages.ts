@@ -7,4 +7,5 @@ export const CHAT_MSG = {
   updateApp: 'Atualize o app para continuar.',
   network: 'Não foi possível falar com o servidor. Tente de novo.',
   tabPromptChanged: 'A pergunta mudou na aba',
+  tabSuggestionChanged: 'A sugestão mudou na aba',
 } as const;

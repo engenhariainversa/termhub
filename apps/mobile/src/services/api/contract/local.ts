@@ -32,6 +32,8 @@ import {
   tabQuestionAnswerBody,
   tabQuestionSchema,
   tabQuestionScreenResponse,
+  tabSuggestionSchema,
+  tabSuggestionSendBody,
   tokenBody,
   tokenResponse,
   verificationCodeSchema,
@@ -87,6 +89,7 @@ export const chatResponse = z.object({
   actions: z.array(chatActionSchema),
   grants: z.array(chatGrantSchema).default([]),
   tab_questions: z.array(tabQuestionSchema).default([]),
+  tab_suggestions: z.array(tabSuggestionSchema).default([]),
   host: chatHostStateSchema,
 });
 
@@ -153,6 +156,8 @@ export type TChatGrant = z.infer<typeof chatGrantSchema>;
 export type TTabQuestion = z.infer<typeof tabQuestionSchema>;
 export type TTabQuestionAnswerBody = z.infer<typeof tabQuestionAnswerBody>;
 export type TTabQuestionScreenResponse = z.infer<typeof tabQuestionScreenResponse>;
+export type TTabSuggestion = z.infer<typeof tabSuggestionSchema>;
+export type TTabSuggestionSendBody = z.infer<typeof tabSuggestionSendBody>;
 export type TChatConversation = z.infer<typeof chatConversationSchema>;
 export type TChatResponse = z.infer<typeof chatResponse>;
 export type TMeResponse = z.infer<typeof meResponse>;

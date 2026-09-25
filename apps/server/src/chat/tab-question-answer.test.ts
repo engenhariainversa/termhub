@@ -8,14 +8,14 @@ import { chatBus, type ChatEvent } from './bus.js';
 
 const sendKey = vi.fn(async (_ctx: unknown, input: { tab_id: string; key: string }) => ({ tab_id: input.tab_id, key: input.key, sent: true }));
 const sendInput = vi.fn(async (_ctx: unknown, input: { tab_id: string }) => ({ tab_id: input.tab_id, sent: true }));
-const readScreen = vi.fn(async (_ctx: unknown, input: { tab_id: string; lines?: number }) => ({ tab_id: input.tab_id, lines: input.lines ?? 60, text: screens.choice }));
+const readScreen = vi.fn(async (_ctx: unknown, input: { tab_id: string; lines?: number }, _opts?: { plain?: boolean }) => ({ tab_id: input.tab_id, lines: input.lines ?? 60, text: screens.choice, styled: false }));
 // Partial mocks: everything else these modules export stays real for whoever else imports them.
 vi.mock('../control/terminals.js', async (orig) => ({
   ...(await orig<typeof import('../control/terminals.js')>()),
   sendKey: (...a: unknown[]) => sendKey(a[0], a[1] as never),
   sendInput: (...a: unknown[]) => sendInput(a[0], a[1] as never),
 }));
-vi.mock('../control/screen.js', async (orig) => ({ ...(await orig<typeof import('../control/screen.js')>()), readScreen: (...a: unknown[]) => readScreen(a[0], a[1] as never) }));
+vi.mock('../control/screen.js', async (orig) => ({ ...(await orig<typeof import('../control/screen.js')>()), readScreen: (...a: unknown[]) => readScreen(a[0], a[1] as never, a[2] as never) }));
 
 const { answerTabQuestion, lastNonBlankLines, promptVisible, requirePinFor, tabQuestionScreen } = await import('./tab-question-answer.js');
 
@@ -64,7 +64,7 @@ let events: ChatEvent[];
 let unsubscribe: () => void;
 beforeEach(() => {
   vi.clearAllMocks();
-  readScreen.mockImplementation(async (_ctx, input) => ({ tab_id: input.tab_id, lines: 60, text: screens.choice }));
+  readScreen.mockImplementation(async (_ctx, input) => ({ tab_id: input.tab_id, lines: 60, text: screens.choice, styled: false }));
   events = [];
   unsubscribe = chatBus.subscribe((e) => events.push(e));
 });
@@ -87,6 +87,12 @@ describe('answerTabQuestion', () => {
     expect(events).toEqual([expect.objectContaining({ type: 'tab_question_answered', user_id: 'u1', conversation_id: 'c1', question: expect.objectContaining({ status: 'answered' }) })]);
   });
 
+  it('reads the live screen plain: ⟦…⟧ is for the concierge, not for this check', async () => {
+    const { ctx } = ctxFor(row());
+    await answerTabQuestion(ctx, 'q1', { answers: [{ selected: [1] }, { selected: [2, 0] }] }, { log: log(), sleep: noSleep });
+    expect(readScreen).toHaveBeenCalledWith(expect.anything(), { tab_id: 't1', lines: 60 }, { plain: true });
+  });
+
   it('types free text literally, answering the prompt on purpose, then Enter', async () => {
     const { ctx } = ctxFor(row({ payload: { questions: [colors] } }));
     await answerTabQuestion(ctx, 'q1', { answers: [{ selected: [], text: 'Purple' }] }, { log: log(), sleep: noSleep });
@@ -97,7 +103,7 @@ describe('answerTabQuestion', () => {
   it('pauses between keys, never before the first', async () => {
     const sleep = vi.fn(async () => undefined);
     const { ctx } = ctxFor(permission());
-    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission });
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
     await answerTabQuestion(ctx, 'q2', { allow: false, text: 'use pnpm' }, { log: log(), sleep });
     expect(steps()).toEqual(['key:Escape', 'text:use pnpm', 'key:Enter']);
     expect(sleep.mock.calls).toEqual([[150], [150]]);
@@ -105,7 +111,7 @@ describe('answerTabQuestion', () => {
 
   it('allow is "1"', async () => {
     const { ctx } = ctxFor(permission());
-    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission });
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
     await answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep });
     expect(steps()).toEqual(['key:1']);
   });
@@ -136,7 +142,7 @@ describe('answerTabQuestion', () => {
 
   it('409 TAB_PROMPT_CHANGED when the question is not on the live screen — before any claim, and the card closes', async () => {
     const { ctx, tabQuestions } = ctxFor(row());
-    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: '$ ls\nREADME.md\n' });
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: '$ ls\nREADME.md\n', styled: false });
     await rejects(answerTabQuestion(ctx, 'q1', { answers: [{ selected: [0] }, { selected: [0] }] }, { log: log() }), 409, 'TAB_PROMPT_CHANGED');
     expect(tabQuestions.claim).not.toHaveBeenCalled();
     // Only this row, and only while it is still open: never the tab's other (newer) questions.
@@ -167,7 +173,7 @@ describe('answerTabQuestion', () => {
 
   it('409 TAB_PROMPT_CHANGED when only the tool name is on screen, without "Do you want" — nothing claimed nor typed', async () => {
     const { ctx, tabQuestions } = ctxFor(permission());
-    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: '● Bash(npm test)\n  ⎿  Tests 3 passed\n> ' });
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: '● Bash(npm test)\n  ⎿  Tests 3 passed\n> ', styled: false });
     await rejects(answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep }), 409, 'TAB_PROMPT_CHANGED');
     expect(tabQuestions.claim).not.toHaveBeenCalled();
     expect(sendKey).not.toHaveBeenCalled();
@@ -175,7 +181,7 @@ describe('answerTabQuestion', () => {
 
   it('409 TAB_PROMPT_CHANGED on prose saying "Do you want me to…" with no dialog footer — nothing claimed nor typed', async () => {
     const { ctx, tabQuestions } = ctxFor(permission());
-    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: '● Bash(npm test)\n● Do you want me to fix the failing test?\n────\n❯ \n' });
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: '● Bash(npm test)\n● Do you want me to fix the failing test?\n────\n❯ \n', styled: false });
     await rejects(answerTabQuestion(ctx, 'q2', { allow: false }, { log: log(), sleep: noSleep }), 409, 'TAB_PROMPT_CHANGED');
     expect(tabQuestions.claim).not.toHaveBeenCalled();
     expect(sendKey).not.toHaveBeenCalled();
@@ -183,7 +189,7 @@ describe('answerTabQuestion', () => {
 
   it('409 TAB_PROMPT_CHANGED when the choice question is only in the scrollback', async () => {
     const { ctx } = ctxFor(row());
-    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: `${screens.choice}\n● Blue it is.\n────\n❯ \n` });
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: `${screens.choice}\n● Blue it is.\n────\n❯ \n`, styled: false });
     await rejects(answerTabQuestion(ctx, 'q1', { answers: [{ selected: [0] }, { selected: [0] }] }, { log: log(), sleep: noSleep }), 409, 'TAB_PROMPT_CHANGED');
     expect(sendKey).not.toHaveBeenCalled();
   });
@@ -235,7 +241,7 @@ describe('answerTabQuestion', () => {
 
   it('asks `beforeSend` after the checks and before the claim; the PIN is never required today', async () => {
     const { ctx, tabQuestions } = ctxFor(permission());
-    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission });
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
     const beforeSend = vi.fn(() => {
       throw new HttpError(403, 'PIN', 'PIN_REQUIRED');
     });
@@ -289,9 +295,14 @@ describe('promptVisible', () => {
 describe('tabQuestionScreen', () => {
   it('answers the last 20 non-blank lines while the question is open', async () => {
     const { ctx } = ctxFor(permission());
-    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: Array.from({ length: 30 }, (_, i) => `l${i}\n`).join('\n') });
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: Array.from({ length: 30 }, (_, i) => `l${i}\n`).join('\n'), styled: false });
     const { text } = await tabQuestionScreen(ctx, 'q2');
     expect(text.split('\n')).toEqual(Array.from({ length: 20 }, (_, i) => `l${i + 10}`));
+  });
+  it('the excerpt is the plain screen', async () => {
+    const { ctx } = ctxFor(permission());
+    await tabQuestionScreen(ctx, 'q2');
+    expect(readScreen).toHaveBeenCalledWith(expect.anything(), { tab_id: 't1', lines: 60 }, { plain: true });
   });
   it('403 FORBIDDEN without terminals:read, nothing read', async () => {
     const { ctx, can } = ctxFor(permission(), { denied: ['terminals:read'] });
@@ -307,5 +318,14 @@ describe('tabQuestionScreen', () => {
     await rejects(tabQuestionScreen(ctxFor(permission({ status: 'expired' })).ctx, 'q2'), 409, 'TAB_PROMPT_CHANGED');
     await rejects(tabQuestionScreen(ctxFor(undefined).ctx, 'q2'), 404, 'NOT_FOUND');
     expect(lastNonBlankLines('a\n\n  \nb\n', 5)).toBe('a\nb');
+  });
+});
+
+describe('suggestion rows', () => {
+  it('are not questions: 404 on answer and screen, nothing read', async () => {
+    const { ctx } = ctxFor(row({ id: 's1', kind: 'suggestion', payload: { text: 'commit it' }, tool_use_id: null }));
+    await rejects(answerTabQuestion(ctx, 's1', { allow: true }, { log: log(), sleep: noSleep }), 404, 'NOT_FOUND');
+    await rejects(tabQuestionScreen(ctx, 's1'), 404, 'NOT_FOUND');
+    expect(readScreen).not.toHaveBeenCalled();
   });
 });

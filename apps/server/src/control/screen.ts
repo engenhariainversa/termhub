@@ -1,8 +1,9 @@
-import { captureScreen } from '../agent/screen.js';
+import { captureScreen, captureStyledScreen } from '../agent/screen.js';
 import { agents } from '../agent/registry.js';
 import type { Tab, TabState } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { monitorBus } from '../monitor/bus.js';
+import { renderStyled } from '../terminal/ansi.js';
 import { ControlError, type ControlContext } from './context.js';
 
 export const SCREEN_DEFAULT_LINES = 200;
@@ -21,14 +22,25 @@ export function assertTerminal(tab: Tab): asserts tab is Tab & { tmux_session: s
   if (tab.kind !== 'terminal' || !tab.tmux_session) throw new ControlError('NOT_A_TERMINAL', 'Esta aba não é um terminal');
 }
 
-/** Last lines of a terminal tab (plain text, as tmux shows them). Never logged. */
-export async function readScreen(ctx: ControlContext, input: { tab_id: string; lines?: number }): Promise<{ tab_id: string; lines: number; text: string }> {
+/**
+ * Last lines of a terminal tab (spec 2026-09-25 tab suggestions §5): dimmed runs come back as ⟦…⟧, so
+ * Claude Code's suggested prompt never reads as typed text. `styled: false` when the machine could not
+ * keep the attributes (an agent older than 0.5.2). `plain` is for the server's own screen checks, which
+ * compare plain text. Never logged.
+ */
+export async function readScreen(
+  ctx: ControlContext,
+  input: { tab_id: string; lines?: number },
+  opts: { plain?: boolean } = {},
+): Promise<{ tab_id: string; lines: number; text: string; styled: boolean }> {
   const { tab, machine } = await ctx.scoped.tab(input.tab_id);
   assertTerminal(tab);
   if (machine.type === 'agent' && !agents.isOnline(machine.id)) throw offline();
   const lines = clamp(input.lines, SCREEN_DEFAULT_LINES, SCREEN_MAX_LINES);
   try {
-    return { tab_id: tab.id, lines, text: await captureScreen(machine, tab.tmux_session, lines) };
+    if (opts.plain) return { tab_id: tab.id, lines, text: await captureScreen(machine, tab.tmux_session, lines), styled: false };
+    const shot = await captureStyledScreen(machine, tab.tmux_session, lines);
+    return { tab_id: tab.id, lines, text: shot.styled ? renderStyled(shot.text) : shot.text, styled: shot.styled };
   } catch (e) {
     // agentRpc turns a connection that dropped mid-call into a bare 503 (toHttpError)
     if (e instanceof HttpError && e.statusCode === 503) throw offline();

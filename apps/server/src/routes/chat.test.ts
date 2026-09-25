@@ -508,3 +508,13 @@ it('GET /chat returns the conversation\'s active grants with the tab name', asyn
   const res = await app.inject({ method: 'GET', url: '/chat' });
   expect(res.json().grants).toEqual([{ id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', created_at: 'a', expires_at: 'b', tab_name: 'Terminal 1' }]);
 });
+
+it('GET / keeps suggestions out of tab_questions and lists them in tab_suggestions', async () => {
+  const common = { tab_id: 't1', project_id: 'p1', conversation_id: 'c1', user_id: 'u1', tool_use_id: null, answer: null, error_code: null, answered_by: null, answered_at: null, closed_at: null, injected_at: null, created_at: '2026-09-25T12:00:00.000Z' };
+  const q = { ...common, id: 'q1', kind: 'permission', payload: { tool_name: 'Bash' }, status: 'open' };
+  const s = { ...common, id: 's1', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open' };
+  const { app } = build({ tabs: [{ id: 't1', project_id: 'p1', name: 'api' }], tabQuestions: [q, s] });
+  const res = await app.inject({ method: 'GET', url: '/chat' });
+  expect(res.json().tab_questions.map((x: { id: string }) => x.id)).toEqual(['q1']);
+  expect(res.json().tab_suggestions).toEqual([{ id: 's1', tab_id: 't1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: '2026-09-25T12:00:00.000Z', answered_at: null, closed_at: null }]);
+});

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../agent/screen.js', () => ({ captureScreen: vi.fn() }));
+vi.mock('../agent/screen.js', () => ({ captureScreen: vi.fn(), captureStyledScreen: vi.fn() }));
 
-import { captureScreen } from '../agent/screen.js';
+import { captureScreen, captureStyledScreen } from '../agent/screen.js';
 import { AgentOfflineError, agents } from '../agent/registry.js';
 import { toHttpError } from '../agent/errors.js';
 import { AgentTimeoutError } from '../agent/connection.js';
@@ -35,6 +35,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
   vi.mocked(captureScreen).mockReset();
+  vi.mocked(captureStyledScreen).mockReset();
   vi.spyOn(agents, 'isOnline').mockReturnValue(true);
 });
 afterEach(() => {
@@ -43,13 +44,31 @@ afterEach(() => {
 });
 
 describe('readScreen', () => {
-  it('captures the default 200 lines and clamps to 2000', async () => {
-    vi.mocked(captureScreen).mockResolvedValue('$ ls\nREADME.md\n');
+  it('captures the default 200 lines, styled, and clamps to 2000', async () => {
+    vi.mocked(captureStyledScreen).mockResolvedValue({ text: '$ ls\nREADME.md\n', styled: true });
     const r = await readScreen(ctx(), { tab_id: 't1' });
-    expect(r).toEqual({ tab_id: 't1', lines: 200, text: '$ ls\nREADME.md\n' });
-    expect(captureScreen).toHaveBeenCalledWith(m1, 'th-t1', 200);
+    expect(r).toEqual({ tab_id: 't1', lines: 200, text: '$ ls\nREADME.md\n', styled: true });
+    expect(captureStyledScreen).toHaveBeenCalledWith(m1, 'th-t1', 200);
     await readScreen(ctx(), { tab_id: 't1', lines: 99999 });
-    expect(vi.mocked(captureScreen).mock.calls[1][2]).toBe(2000);
+    expect(vi.mocked(captureStyledScreen).mock.calls[1]![2]).toBe(2000);
+  });
+
+  it('marks dimmed text ⟦…⟧: Claude Code\'s suggestion is not typed text', async () => {
+    vi.mocked(captureStyledScreen).mockResolvedValue({ text: '\x1b[39m❯ \x1b[2mcommit it\x1b[0m\n', styled: true });
+    const r = await readScreen(ctx(), { tab_id: 't1' });
+    expect(r.text).toBe('❯ ⟦commit it⟧\n');
+    expect(r.styled).toBe(true);
+  });
+
+  it('an older agent answers plain text: passed through as it is, styled false', async () => {
+    vi.mocked(captureStyledScreen).mockResolvedValue({ text: '❯ commit it\n', styled: false });
+    expect(await readScreen(ctx(), { tab_id: 't1' })).toMatchObject({ text: '❯ commit it\n', styled: false });
+  });
+
+  it('plain: true reads the plain capture (TER-56\'s own checks)', async () => {
+    vi.mocked(captureScreen).mockResolvedValue('❯ commit it\n');
+    expect(await readScreen(ctx(), { tab_id: 't1', lines: 60 }, { plain: true })).toEqual({ tab_id: 't1', lines: 60, text: '❯ commit it\n', styled: false });
+    expect(captureStyledScreen).not.toHaveBeenCalled();
   });
 
   it('refuses simulator tabs and foreign tabs', async () => {
@@ -60,22 +79,22 @@ describe('readScreen', () => {
   it('reports an offline agent machine as MACHINE_OFFLINE without trying to capture', async () => {
     vi.mocked(agents.isOnline).mockReturnValue(false);
     await expect(readScreen(ctx(), { tab_id: 't1' })).rejects.toMatchObject({ code: 'MACHINE_OFFLINE', message: 'A máquina está offline: o termhub-agent dela não está conectado' });
-    expect(captureScreen).not.toHaveBeenCalled();
+    expect(captureStyledScreen).not.toHaveBeenCalled();
   });
 
   it('reports an agent that dropped mid-capture as MACHINE_OFFLINE', async () => {
-    // exactly what captureScreen -> agentRpc -> toHttpError throws when the connection is gone
+    // exactly what captureStyledScreen -> agentRpc -> toHttpError throws when the connection is gone
     const dropped = toHttpError(new AgentOfflineError('agent offline: m1'));
     expect(dropped).toMatchObject({ statusCode: 503, message: 'Agente desconectado' });
     // mockRejectedValueOnce: with the beforeEach mockReset, vitest 3.2.7's persistent mockRejectedValue
     // spuriously reports an awaited rejection as unhandled (same pattern as terminal/ws.test.ts).
-    vi.mocked(captureScreen).mockRejectedValueOnce(dropped);
+    vi.mocked(captureStyledScreen).mockRejectedValueOnce(dropped);
     await expect(readScreen(ctx(), { tab_id: 't1' })).rejects.toMatchObject({ code: 'MACHINE_OFFLINE' });
   });
 
   it('keeps other machine failures as they are', async () => {
     const timeout = toHttpError(new AgentTimeoutError('agent rpc timeout: tmux.capture'));
-    vi.mocked(captureScreen).mockRejectedValueOnce(timeout);
+    vi.mocked(captureStyledScreen).mockRejectedValueOnce(timeout);
     await expect(readScreen(ctx(), { tab_id: 't1' })).rejects.toBe(timeout);
   });
 });
