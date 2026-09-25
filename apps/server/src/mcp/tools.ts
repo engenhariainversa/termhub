@@ -87,7 +87,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'read_screen',
-    description: `Read the last lines of a terminal tab as plain text (default 200, max ${SCREEN_MAX_LINES}).`,
+    description: `Read the last lines of a terminal tab (default 200, max ${SCREEN_MAX_LINES}). Text between ⟦ and ⟧ is dimmed on screen — usually Claude Code's suggested next prompt: nobody typed it, so never report it as an unsent message and never press Enter because of it (you may offer to send it). styled: false means the machine's agent is too old to mark dimmed text, so text after ❯ may be a suggestion too.`,
     scope: 'read', resource: 'terminals', action: 'read',
     input: { tab_id: id, lines: z.number().int().min(1).max(SCREEN_MAX_LINES).optional() },
     run: (ctx, a) => readScreen(ctx, a as { tab_id: string; lines?: number }),

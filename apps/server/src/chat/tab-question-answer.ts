@@ -119,7 +119,7 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
 
   let screen: string;
   try {
-    screen = (await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_CHECK_LINES })).text;
+    screen = (await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_CHECK_LINES }, { plain: true })).text;
   } catch (err) {
     throw asHttp(err);
   }
@@ -174,7 +174,7 @@ export async function tabQuestionScreen(ctx: ControlContext, id: string): Promis
   if (row.status !== 'open') throw promptChanged();
   const { tab } = await ctx.scoped.tab(row.tab_id);
   try {
-    const { text } = await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_CHECK_LINES });
+    const { text } = await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_CHECK_LINES }, { plain: true });
     return { text: lastNonBlankLines(text) };
   } catch (err) {
     throw asHttp(err);
