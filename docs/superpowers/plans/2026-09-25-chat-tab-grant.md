@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let the user trust one tab for `send_input` for the rest of a chat conversation (max 24 h), from the confirmation card, with a visible and revocable grant and every run audited in `chat_actions`.
+**Goal:** On the web and in the mobile app, let the user trust one tab for `send_input` for the rest of a chat conversation (max 24 h), from the confirmation card, with a visible and revocable grant and every run audited in `chat_actions`.
 
 **Architecture:** A new `chat_grants` table (conversation + tab + tool, `expires_at`, `revoked_at`) behind `ChatGrantsRepository`. The gate (`applyGate`) consults an active grant only where it would otherwise ask, inserts an already-approved `chat_actions` row carrying `grant_id`, and runs it through the existing `execute()` so every lock (`TAB_GONE`, `WAITING_PERMISSION`, `PROMPT_CHANGED`) stays in force. The decision route learns `approve_tab`, a `DELETE /chat/grants/:id` revokes, and the web card + a strip above the composer show and revoke grants.
 
@@ -10,10 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-25-chat-tab-grant-design.md` (read it first).
 
-**Board:** card TER-2 (project `termhub`, id `lxjlcaa8gd35`). Subtasks: TER-3 `9budkbmcxfgj`, TER-4 `wz8ry2yy3nek`, TER-5 `88u5bxqc3m80`, TER-6 `hnr3tu8hzm6f`. The controller (not the implementer) moves each subtask to done after its task passes review.
+**Board:** card TER-2 (project `termhub`, id `lxjlcaa8gd35`). Subtasks: TER-3 `9budkbmcxfgj`, TER-4 `wz8ry2yy3nek`, TER-5 `88u5bxqc3m80`, TER-6 `hnr3tu8hzm6f`, TER-58 `yw0175zqa0hy` (mobile app). The controller (not the implementer) moves each subtask to done after its task passes review.
 
 ## Global Constraints
 
+- **Chat parity:** everything here works on the web and in the mobile app (`@termhub/mobile`), same behaviour, same pt-BR copy.
+- Mobile PIN: "Permitir sempre nesta aba" requires the PIN like "Autorizar"; its proof signs the word `approve_tab` (`decisionProofMessage(challenge, actionId, 'approve_tab')`), never `approve`. "Revogar" needs no PIN.
 - Code, comments, identifiers, commit messages: English. **UI copy: pt-BR**, verbatim from this plan.
 - Commit subject imperative, ≤ 72 chars; every commit ends with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
 - Routes never import Prisma; go through `apps/server/src/db/repositories`. Every request input validated with zod.
@@ -39,6 +41,8 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
 - Server unit tests: `NODE 'npm test -w @termhub/server -- <file-or-pattern>'`
 - Server db tests: `NODE 'cd apps/server && npx prisma migrate deploy && cd ../.. && TERMHUB_DB_TESTS=1 npm test -w @termhub/server -- <file>'`
 - Web tests: `NODE 'npm test -w @termhub/web -- <file>'`
+- Contract package: `NODE 'npm test -w @termhub/mobile-api && npm run build -w @termhub/mobile-api'` — **rebuild it (`dist/`) after every change to it**: the server and the app both import the built package.
+- Mobile tests (jest): `NODE 'npm run build -w @termhub/mobile-api && npm test -w @termhub/mobile -- <pattern>'`; typecheck: `NODE 'npm run typecheck -w @termhub/mobile'`
 - Typecheck: `NODE 'npm run typecheck -w @termhub/server'` / web: `NODE 'npm run build -w @termhub/web'`
 - After finishing: `rm -rf .npm` (cache the container leaves behind). Leave `th-tabgrant-db` running until the last task; the controller removes it at the end (`docker rm -f th-tabgrant-db`).
 
@@ -58,11 +62,21 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
 | `apps/server/src/chat/bus.ts` | events `grant`, `grant_revoked`, `granted_action` |
 | `apps/server/src/routes/chat.ts` | `approve_tab`, `DELETE /grants/:id`, `grants` in `GET /` |
 | `apps/server/src/chat/service.ts` | reset revokes; injection mentions the grant |
+| `packages/mobile-api/src/{events,chat,proofs}.ts` | shared card/grant schemas, 3 events, `approve_tab` body, proof word |
+| `apps/server/src/mobile/events-parity.test.ts` | one sample per new bus event |
+| `apps/server/src/chat/grants.ts` (new) | grant/revoke logic shared by web and mobile routes |
+| `apps/server/src/routes/m-chat.ts` | mobile `approve_tab` (PIN), `DELETE /grants/:id`, `grants` in `GET /` |
 | `apps/web/src/lib/types.ts`, `apps/web/src/lib/api.ts` | `ChatGrant`, events, API calls |
 | `apps/web/src/components/chat/grant-time.ts` (new) | "até HH:MM" / "até amanhã, HH:MM" |
 | `apps/web/src/components/chat/ChatActionCard.tsx` | third button, granted state, "aba confiada" |
 | `apps/web/src/components/chat/ChatGrantStrip.tsx` (new) | strip above the composer |
 | `apps/web/src/components/chat/ChatPanel.tsx` | grants state, events, revoke |
+| `apps/mobile/src/services/api/{contract/local.ts,types.ts,client.ts}` | `grants` in chat response, `revokeGrant` |
+| `apps/mobile/src/services/api/mock/handlers/chat.ts` (+ `mock/state.ts`) | mock server: grants, `approve_tab`, DELETE, events |
+| `apps/mobile/src/services/crypto/pin.ts`, `apps/mobile/src/features/session/**` | proof word per decision; PIN sheet knows which decision it signs |
+| `apps/mobile/src/features/chat/model/{events,grant-time}.ts` | reducer for the 3 events; "até HH:MM" |
+| `apps/mobile/src/features/chat/viewmodel/createChatStore.ts` | grants in the slot, `decide('approve_tab')`, `revokeGrant` |
+| `apps/mobile/src/features/chat/view/{action-card,grants-strip,conversation-screen}.tsx` | third button, granted state, strip |
 
 ---
 
@@ -420,7 +434,161 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
 
 ---
 
-### Task 2 (TER-4): The gate honours an active grant
+### Task 2 (TER-58, contract): Shared mobile contract for grants
+
+**Files:**
+- Modify: `packages/mobile-api/src/events.ts`, `packages/mobile-api/src/chat.ts`, `packages/mobile-api/src/proofs.ts`
+- Modify: `packages/mobile-api/src/proofs.test.ts`; Create: `packages/mobile-api/src/chat.test.ts`, `packages/mobile-api/src/events.test.ts` (or extend if present)
+- Modify: `apps/mobile/src/services/api/contract/local.ts` (drop its own `chatActionSchema`, re-export the shared one)
+
+**Interfaces:**
+- Produces (from `@termhub/mobile-api`):
+  ```ts
+  export const chatActionStatus: z.ZodEnum<['pending','approved','denied','expired','executed','failed']>;
+  export const chatActionSchema: z.ZodObject<{ id; tool; args; class; status; machine_id; project_id; tab_id; grant_id /* string|null, optional */; summary; created_at }>;
+  export const chatGrantSchema: z.ZodObject<{ id; tab_id; tool; source_action_id /* string|null */; created_at; expires_at; tab_name /* string|null */ }>;
+  // chatEventSchema gains:
+  //   { type: 'grant', user_id, conversation_id, grant: chatGrantSchema }
+  //   { type: 'grant_revoked', user_id, conversation_id, grant_id: string }
+  //   { type: 'granted_action', user_id, conversation_id, action: chatActionSchema }
+  // mobileDecisionBody gains: { decision: 'approve_tab', challenge, pin_proof }
+  export type PinDecision = 'approve' | 'approve_tab';
+  export const decisionProofMessage: (challenge: string, actionId: string, decision: PinDecision) => string;
+  /** Mirrors the server's `grantable` (apps/server/src/chat/gate.ts). */
+  export function isTabGrantable(action: { tool: string; args: unknown; tab_id: string | null }): boolean;
+  ```
+
+- [ ] **Step 1: Failing tests.**
+  `proofs.test.ts`, add:
+  ```ts
+  it('a grant is signed with its own word, so an "approve" proof cannot open one', () => {
+    expect(decisionProofMessage('c1', 'a1', 'approve_tab')).toBe('c1\na1\napprove_tab');
+    expect(decisionProofMessage('c1', 'a1', 'approve_tab')).not.toBe(decisionProofMessage('c1', 'a1', 'approve'));
+  });
+  ```
+  `chat.test.ts`:
+  ```ts
+  import { describe, expect, it } from 'vitest';
+  import { isTabGrantable, mobileDecisionBody } from './chat.js';
+
+  describe('mobileDecisionBody', () => {
+    it('accepts approve_tab with a challenge and a PIN proof, and refuses it without', () => {
+      expect(mobileDecisionBody.safeParse({ decision: 'approve_tab', challenge: 'c', pin_proof: 'p' }).success).toBe(true);
+      expect(mobileDecisionBody.safeParse({ decision: 'approve_tab' }).success).toBe(false);
+    });
+  });
+
+  describe('isTabGrantable', () => {
+    const base = { tool: 'send_input', args: { tab_id: 't1', text: 'oi' }, tab_id: 't1' };
+    it('is only send_input to a tab, not answering a permission', () => {
+      expect(isTabGrantable(base)).toBe(true);
+      expect(isTabGrantable({ ...base, args: { tab_id: 't1', text: '1', answering_permission: true } })).toBe(false);
+      expect(isTabGrantable({ ...base, tool: 'run_command' })).toBe(false);
+      expect(isTabGrantable({ ...base, tab_id: null })).toBe(false);
+    });
+  });
+  ```
+  `events.test.ts`:
+  ```ts
+  import { describe, expect, it } from 'vitest';
+  import { chatEventSchema } from './events.js';
+
+  const base = { user_id: 'u1', conversation_id: 'c1' };
+  const grant = { id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'a1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z', tab_name: 'api' };
+  const card = { id: 'a2', tool: 'send_input', args: { tab_id: 't1', text: 'oi' }, class: 'write', status: 'executed', machine_id: null, project_id: null, tab_id: 't1', grant_id: 'g1', summary: 'digitar `oi` na aba api', created_at: '2026-09-25T10:01:00.000Z' };
+
+  describe('chatEventSchema: grants', () => {
+    it.each([
+      ['grant', { type: 'grant', ...base, grant }],
+      ['grant_revoked', { type: 'grant_revoked', ...base, grant_id: 'g1' }],
+      ['granted_action', { type: 'granted_action', ...base, action: card }],
+    ])('accepts %s', (_t, e) => {
+      const r = chatEventSchema.safeParse(e);
+      expect(r.success, JSON.stringify(r.error?.issues)).toBe(true);
+    });
+    it('keeps grant_id on the card', () => {
+      const r = chatEventSchema.parse({ type: 'granted_action', ...base, action: card });
+      expect(r.type === 'granted_action' && r.action.grant_id).toBe('g1');
+    });
+  });
+  ```
+- [ ] **Step 2: Run** `NODE 'npm test -w @termhub/mobile-api'` → FAIL.
+- [ ] **Step 3: Implement.**
+  `events.ts` — move the card schema here from the app (so the socket can validate `granted_action`) and add the grant schema and the three events to `chatEventSchema`'s union:
+  ```ts
+  export const chatActionStatus = z.enum(['pending', 'approved', 'denied', 'expired', 'executed', 'failed']);
+
+  /** Mirrors the server's `ChatActionCard` (chat-actions-view.ts): a write the concierge proposed, with
+   * the server-composed pt-BR `summary`. `grant_id` names the tab grant it ran under (optional: older
+   * servers do not send it). */
+  export const chatActionSchema = z.object({
+    id: z.string(),
+    tool: z.string(),
+    args: z.unknown(),
+    class: chatActionClass,
+    status: chatActionStatus,
+    machine_id: z.string().nullable(),
+    project_id: z.string().nullable(),
+    tab_id: z.string().nullable(),
+    grant_id: z.string().nullable().optional(),
+    summary: z.string(),
+    created_at: z.string(),
+  });
+
+  /** "Permitir sempre nesta aba" while it holds (server `ChatGrantView`). */
+  export const chatGrantSchema = z.object({
+    id: z.string(),
+    tab_id: z.string(),
+    tool: z.string(),
+    source_action_id: z.string().nullable(),
+    created_at: z.string(),
+    expires_at: z.string(),
+    tab_name: z.string().nullable(),
+  });
+  ```
+  and inside the `z.discriminatedUnion('type', [...])`, after `decision`:
+  ```ts
+    z.object({ type: z.literal('grant'), user_id: z.string(), conversation_id: z.string(), grant: chatGrantSchema }),
+    z.object({ type: z.literal('grant_revoked'), user_id: z.string(), conversation_id: z.string(), grant_id: z.string() }),
+    z.object({ type: z.literal('granted_action'), user_id: z.string(), conversation_id: z.string(), action: chatActionSchema }),
+  ```
+  (the schemas must be declared above `chatEventSchema`.)
+  `chat.ts`:
+  ```ts
+  export const mobileDecisionBody = z.discriminatedUnion('decision', [
+    z.object({ decision: z.literal('deny') }),
+    z.object({ decision: z.literal('approve'), challenge: z.string().min(1).max(128), pin_proof: z.string().min(1).max(128) }),
+    /** Approve *and* trust the tab for send_input in this conversation (24 h max). PIN-proven like approve. */
+    z.object({ decision: z.literal('approve_tab'), challenge: z.string().min(1).max(128), pin_proof: z.string().min(1).max(128) }),
+  ]);
+
+  /** Mirrors the server's `grantable` (apps/server/src/chat/gate.ts), which is the judge: only
+   * `send_input` to a tab, never answering a permission. Decides whether the card offers the button. */
+  export function isTabGrantable(action: { tool: string; args: unknown; tab_id: string | null }): boolean {
+    const args = (action.args ?? {}) as Record<string, unknown>;
+    return action.tool === 'send_input' && args.answering_permission !== true && Boolean(action.tab_id);
+  }
+  ```
+  `proofs.ts`:
+  ```ts
+  /** Which decision a PIN proof is for. Signed into the message, so a proof made for "Autorizar" can
+   * never be spent on "Permitir sempre nesta aba" (a 24 h grant) — or the other way round. */
+  export type PinDecision = 'approve' | 'approve_tab';
+
+  export const decisionProofMessage = (challenge: string, actionId: string, decision: PinDecision) => `${challenge}\n${actionId}\n${decision}`;
+  ```
+  Update the doc comment above it to say "to approve a pending action (or approve it and trust its tab)". Make sure `index.ts` still re-exports `events`, `chat`, `proofs` (it does with `export *`; check).
+  `apps/mobile/src/services/api/contract/local.ts`: delete the local `chatActionSchema` definition and import `chatActionSchema` from `@termhub/mobile-api` instead (add it to the existing import list); keep `TChatAction = z.infer<typeof chatActionSchema>`; add `chatGrantSchema` to the import and `export type TChatGrant = z.infer<typeof chatGrantSchema>;`. In `chatResponse` add `grants: z.array(chatGrantSchema).default([]),` (an older server sends none).
+- [ ] **Step 4: Run** `NODE 'npm test -w @termhub/mobile-api && npm run build -w @termhub/mobile-api'` → PASS; then `NODE 'npm run typecheck -w @termhub/mobile && npm test -w @termhub/mobile -- contract'` → PASS (the app's contract tests still pass with the moved schema), and `NODE 'npm run typecheck -w @termhub/server'` → PASS (the server's `m-chat.ts` still calls `decisionProofMessage(…, 'approve')`, which stays valid).
+- [ ] **Step 5: Commit**
+  ```bash
+  git add packages/mobile-api apps/mobile/src/services/api/contract
+  git commit -m "Mobile contract: tab grants, approve_tab and its PIN proof (TER-58)"
+  ```
+
+---
+
+### Task 3 (TER-4): The gate honours an active grant
 
 **Files:**
 - Modify: `apps/server/src/chat/gate.ts`, `apps/server/src/chat/gate.test.ts`
@@ -485,6 +653,12 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
      * it (spec 2026-09-25 §5). Nobody was asked, so without this the trail would only show it on reload. */
     | { type: 'granted_action'; user_id: string; conversation_id: string; action: ChatActionCard }
   ```
+
+  Adding a `ChatEvent` member requires a sample in `apps/server/src/mobile/events-parity.test.ts` (its `samples` record is keyed by every event type). Add:
+  ```ts
+    granted_action: { type: 'granted_action', ...base, action: { id: 'a2', tool: 'send_input', args: { tab_id: 't1', text: 'oi' }, class: 'write', status: 'executed', machine_id: null, project_id: null, tab_id: 't1', grant_id: 'g1', summary: 'digitar `oi` na aba api', created_at: '2026-09-25T10:01:00.000Z' } },
+  ```
+  (Task 2 already taught `chatEventSchema` this event; `NODE 'npm test -w @termhub/server -- src/mobile/events-parity.test.ts'` must pass.)
 
 - [ ] **Step 5: Failing e2e tests** in `apps/server/src/mcp/gate.e2e.test.ts`. Extend the fakes first:
   - In `fakeChatActions()`, add `insertApproved` next to `insertPending` (same duplicate check, same row shape, but `status: 'approved'`, `grant_id: input.grant_id`, `decided_by: input.decided_by`, `decided_at: new Date().toISOString()`), and give `insertPending`'s and `seed`'s rows `grant_id: null`.
@@ -656,23 +830,26 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
 
 - [ ] **Step 9: Commit**
   ```bash
-  git add apps/server/src/chat apps/server/src/db/repositories/chat-actions-view.ts apps/server/src/db/repositories/chat-actions-view.test.ts apps/server/src/mcp/gate.e2e.test.ts
+  git add apps/server/src/chat apps/server/src/db/repositories/chat-actions-view.ts apps/server/src/db/repositories/chat-actions-view.test.ts apps/server/src/mcp/gate.e2e.test.ts apps/server/src/mobile/events-parity.test.ts
   git commit -m "Chat gate: run send_input on a trusted tab without asking (TER-4)"
   ```
 
 ---
 
-### Task 3 (TER-4/TER-5 server side): Grant, list and revoke through the chat API
+### Task 4 (TER-4): Grant, list and revoke through the web and mobile chat APIs
 
 **Files:**
 - Modify: `apps/server/src/db/repositories/chat-actions-view.ts` (+ test): `describeGrants`
 - Modify: `apps/server/src/chat/bus.ts`: `grant`, `grant_revoked`
+- Create: `apps/server/src/chat/grants.ts`
 - Modify: `apps/server/src/routes/chat.ts`, `apps/server/src/routes/chat.test.ts`
+- Modify: `apps/server/src/routes/m-chat.ts`, `apps/server/src/routes/m-chat.test.ts`
+- Modify: `apps/server/src/mobile/events-parity.test.ts`
 - Modify: `apps/server/src/chat/service.ts`, `apps/server/src/chat/service.test.ts`
 
 **Interfaces:**
-- Consumes: `grantable`, `GRANTABLE_TOOL` (Task 2); `ChatGrantsRepository` (Task 1).
-- Produces (wire shapes the web relies on in Task 4):
+- Consumes: `grantable`, `GRANTABLE_TOOL` (Task 3); `ChatGrantsRepository` (Task 1); `mobileDecisionBody` with `approve_tab` and `decisionProofMessage(…, PinDecision)` (Task 2).
+- Produces (wire shapes the web (Task 5) and the app (Task 6) rely on):
   ```ts
   // chat-actions-view.ts
   export interface ChatGrantView { id: string; tab_id: string; tool: string; source_action_id: string | null; created_at: string; expires_at: string; tab_name: string | null }
@@ -685,6 +862,15 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
   POST /chat/actions/:id/decision    body { decision: 'approve' | 'deny' | 'approve_tab' }
        approve_tab → same answer as approve plus `grant: ChatGrantView`; 400 GRANT_NOT_ALLOWED; 404; 409
   DELETE /chat/grants/:id            → { grant: ChatGrantView }; 404 not found; 409 already revoked
+  // mobile, under /api/m/v1 (device auth + DPoP)
+  GET    /chat                       → { …, grants: ChatGrantView[] }
+  POST   /chat/actions/:id/decision  body { decision: 'approve_tab', challenge, pin_proof } (proof signs 'approve_tab') → { action, queued: true, note, grant }
+  DELETE /chat/grants/:id            → { grant }; 404; 409 — no PIN
+  // chat/grants.ts
+  export function assertGrantableAction(repos: Repositories, userId: string, actionId: string): Promise<ChatAction>;
+  export function grantTab(repos: Repositories, userId: string, action: ChatAction): Promise<ChatGrantView>;
+  export function revokeGrant(repos: Repositories, userId: string, grantId: string): Promise<ChatGrantView>;
+  export function activeGrants(repos: Repositories, userId: string, conversationId: string): Promise<ChatGrantView[]>;
   ```
 
 - [ ] **Step 1: Failing tests.** In `routes/chat.test.ts`, extend `build()`: accept `grants?: ChatGrant-like[]` and add to `repos`:
@@ -761,7 +947,15 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
   - reset calls `repos.chatGrants.revokeForConversation(<archived conversation id>)`;
   - the injected sentence for an approved action that has an active grant (`chatGrants.findActiveBySourceAction` resolves one) contains `Os próximos send_input nesta aba, nesta conversa, rodam sem pedir confirmação`; without a grant it does not. Every existing fake `repos` in that file needs `chatGrants: { revokeForConversation: vi.fn(async () => 0), findActiveBySourceAction: vi.fn(async () => undefined) }`.
 
-- [ ] **Step 2: Run** `NODE 'npm test -w @termhub/server -- src/routes/chat.test.ts src/chat/service.test.ts'` → new tests FAIL.
+  In `routes/m-chat.test.ts`, inside `describe('POST /chat/actions/:id/decision')` and a new `describe('grants')`, following that file's `build({ decide, findByIdForUser, checkPin, consumeDecisionChallenge, resumeAfterDecision, … })` pattern (read it first; add a `chatGrants` fake to its repos exactly like the web one above):
+  - `approve_tab` with a valid challenge + proof: `checkPin` is called with the message `decisionProofMessage('ch', 'act1', 'approve_tab')`, `decide('act1', 'u1', 'approved')` runs, `chatGrants.grant` is called with `{ conversation_id: 'c1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', granted_by: 'u1' }`, the response carries `grant`, and a `grant` event is published.
+  - A proof signed for `approve` does not open a grant: stage `checkPin` to succeed only for the `approve_tab` message (`vi.fn(async (_d, message) => message.endsWith('
+approve_tab') ? { ok: true } : { ok: false, code: 'PIN_INVALID', failures: 1 })`) and assert the call made with `decision: 'approve_tab'` passed that message (and that a route mistakenly using `'approve'` would get 401 — i.e. assert the exact message argument).
+  - `approve_tab` on an ineligible row (`run_command`, or `send_input` with `answering_permission: true`) → 400 `GRANT_NOT_ALLOWED`, and neither `consumeDecisionChallenge` nor `checkPin` nor `decide` was called.
+  - `DELETE /chat/grants/g1` → 200, `chatGrants.revoke('g1', 'u1')`, `grant_revoked` published; unknown → 404; already revoked → 409.
+  - `GET /chat` returns `grants` with `tab_name`.
+
+- [ ] **Step 2: Run** `NODE 'npm run build -w @termhub/mobile-api && npm test -w @termhub/server -- src/routes/chat.test.ts src/routes/m-chat.test.ts src/chat/service.test.ts src/mobile/events-parity.test.ts'` → new tests FAIL.
 
 - [ ] **Step 3: Implement.**
   `chat-actions-view.ts`:
@@ -794,53 +988,92 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
     /** "Revogar": every open screen drops it. */
     | { type: 'grant_revoked'; user_id: string; conversation_id: string; grant_id: string }
   ```
-  `routes/chat.ts`:
-  - `const decisionBody = z.object({ decision: z.enum(['approve', 'deny', 'approve_tab']) });`, `const grantIdParam = z.object({ id: z.string().min(1).max(64) });`, import `grantable, GRANTABLE_TOOL` from `../chat/gate.js` and `describeGrants` from the view.
-  - In `GET /`: add `repos.chatGrants.listActive(conversation.id)` to the `Promise.all`, then `const grants = await describeGrants(repos, activeGrants, request.scope.user.id);` and return `{ conversation, messages, actions, host, grants }`.
-  - In the decision handler, before `decide`:
-    ```ts
-    const status = decision === 'deny' ? 'denied' : 'approved';
-    // "Permitir sempre nesta aba" is only for what the gate will honour (`grantable`): checked on the
-    // row as the user sees it, before anything is decided, so a refused request changes nothing.
-    if (decision === 'approve_tab') {
-      const row = await repos.chatActions.findByIdForUser(id, user.id);
-      if (!row) throw notFound('Ação não encontrada');
-      if (row.status !== 'pending') throw conflict('Esta ação já foi decidida');
-      if (!grantable(row.tool, (row.args ?? {}) as Record<string, unknown>)) throw new HttpError(400, 'Só dá para permitir sempre o envio de texto para uma aba', 'GRANT_NOT_ALLOWED');
+  `apps/server/src/chat/grants.ts` (new) — the grant/revoke logic, written once and called by both the web routes and the mobile routes:
+  ```ts
+  import type { ChatAction } from '../db/repositories/chat-actions.js';
+  import { describeGrants, type ChatGrantView } from '../db/repositories/chat-actions-view.js';
+  import type { Repositories } from '../db/repositories/index.js';
+  import { conflict, HttpError, notFound } from '../lib/errors.js';
+  import { chatBus } from './bus.js';
+  import { grantable, GRANTABLE_TOOL } from './gate.js';
+
+  /**
+   * "Permitir sempre nesta aba" is only for what the gate will honour (`grantable`): checked on the row
+   * as the user sees it, before anything is decided (and, on the phone, before the PIN challenge is
+   * spent), so a refused request changes nothing. Owner-scoped: another user's row is a 404.
+   */
+  export async function assertGrantableAction(repos: Repositories, userId: string, actionId: string): Promise<ChatAction> {
+    const row = await repos.chatActions.findByIdForUser(actionId, userId);
+    if (!row) throw notFound('Ação não encontrada');
+    if (row.status !== 'pending') throw conflict('Esta ação já foi decidida');
+    if (!grantable(row.tool, (row.args ?? {}) as Record<string, unknown>)) throw new HttpError(400, 'Só dá para permitir sempre o envio de texto para uma aba', 'GRANT_NOT_ALLOWED');
+    return row;
+  }
+
+  /** Trusts the tab of an action the user just approved, and tells every open screen (web and phone).
+   * Created before the decision is re-injected, so the injected sentence can mention it. */
+  export async function grantTab(repos: Repositories, userId: string, action: ChatAction): Promise<ChatGrantView> {
+    if (!action.tab_id) throw new HttpError(400, 'Só dá para permitir sempre o envio de texto para uma aba', 'GRANT_NOT_ALLOWED');
+    const created = await repos.chatGrants.grant({ conversation_id: action.conversation_id, tab_id: action.tab_id, tool: GRANTABLE_TOOL, source_action_id: action.id, granted_by: userId });
+    const [grant] = await describeGrants(repos, [created], userId);
+    chatBus.publish({ type: 'grant', user_id: userId, conversation_id: action.conversation_id, grant });
+    return grant;
+  }
+
+  /** "Revogar", from the strip or from the card that granted it. 404 unknown or not this user's,
+   * 409 already revoked. */
+  export async function revokeGrant(repos: Repositories, userId: string, grantId: string): Promise<ChatGrantView> {
+    const revoked = await repos.chatGrants.revoke(grantId, userId);
+    if (!revoked) {
+      const existing = await repos.chatGrants.findByIdForUser(grantId, userId);
+      throw existing ? conflict('Esta permissão já foi revogada') : notFound('Permissão não encontrada');
     }
-    ```
-    After the existing `decision` publish:
+    chatBus.publish({ type: 'grant_revoked', user_id: userId, conversation_id: revoked.conversation_id, grant_id: revoked.id });
+    const [grant] = await describeGrants(repos, [revoked], userId);
+    return grant;
+  }
+
+  /** The conversation's grants still in force, as `GET /chat` (web and phone) returns them. */
+  export async function activeGrants(repos: Repositories, userId: string, conversationId: string): Promise<ChatGrantView[]> {
+    return describeGrants(repos, await repos.chatGrants.listActive(conversationId), userId);
+  }
+  ```
+  `routes/chat.ts` (web):
+  - `const decisionBody = z.object({ decision: z.enum(['approve', 'deny', 'approve_tab']) });`, `const grantIdParam = z.object({ id: z.string().min(1).max(64) });`, import `activeGrants, assertGrantableAction, grantTab, revokeGrant` from `../chat/grants.js`.
+  - In `GET /`: add `activeGrants(repos, request.scope.user.id, conversation.id)` to the `Promise.all` and return `{ conversation, messages, actions, host, grants }`.
+  - In the decision handler: `const status = decision === 'deny' ? 'denied' : 'approved';` and, before `decide`, `if (decision === 'approve_tab') await assertGrantableAction(repos, user.id, id);`. After the existing `decision` publish: `const grant = decision === 'approve_tab' ? await grantTab(repos, user.id, action) : undefined;` and include `grant` in both return shapes (`{ action, message, grant }` / `{ action, queued: true, note: QUEUED_NOTE, grant }`).
+  - New route. A bare `DELETE` maps to `chat:delete` (`actionForMethod` in `apps/server/src/auth/permissions.ts`), a grant the chat roles may not hold, while deciding a card needs `chat:create`; whoever can grant must be able to revoke, hence the explicit action:
     ```ts
-    let grant: ChatGrantView | undefined;
-    if (decision === 'approve_tab' && action.tab_id) {
-      const created = await repos.chatGrants.grant({ conversation_id: action.conversation_id, tab_id: action.tab_id, tool: GRANTABLE_TOOL, source_action_id: action.id, granted_by: user.id });
-      [grant] = await describeGrants(repos, [created], user.id);
-      chatBus.publish({ type: 'grant', user_id: user.id, conversation_id: action.conversation_id, grant });
-    }
-    ```
-    and include `grant` in both return shapes (`{ action, message, grant }` / `{ action, queued: true, note: QUEUED_NOTE, grant }`). The grant is created before `resumeAfterDecision` so the injected sentence can mention it.
-  - New route:
-    ```ts
-    /** "Revogar" on the strip or on the card that granted it. */
-    app.delete('/grants/:id', async (request) => {
+    /** "Revogar". Declared as `create`, the permission deciding a card needs: whoever can grant can revoke. */
+    app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {
       const { id } = grantIdParam.parse(request.params);
-      const user = request.scope.user;
-      const revoked = await repos.chatGrants.revoke(id, user.id);
-      if (!revoked) {
-        const existing = await repos.chatGrants.findByIdForUser(id, user.id);
-        throw existing ? conflict('Esta permissão já foi revogada') : notFound('Permissão não encontrada');
-      }
-      chatBus.publish({ type: 'grant_revoked', user_id: user.id, conversation_id: revoked.conversation_id, grant_id: revoked.id });
-      const [grant] = await describeGrants(repos, [revoked], user.id);
-      return { grant };
+      return { grant: await revokeGrant(repos, request.scope.user.id, id) };
     });
     ```
-    Permissions: the chat plugin is registered with `guarded('chat', …)` and a route without
-    `config.action` gets `actionForMethod(method)` (`apps/server/src/auth/permissions.ts`), which for
-    `DELETE` is `chat:delete` — a grant the chat roles may not hold, while the decision route (a bare
-    `POST`) needs `chat:create`. Revoking must be possible for anyone who can grant, so declare the
-    route as `app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => { … })`,
-    with a one-line comment saying why.
+  `routes/m-chat.ts` (mobile, `/api/m/v1/chat`):
+  - Import `activeGrants, assertGrantableAction, grantTab, revokeGrant` and add `const grantIdParam = z.object({ id: z.string().min(1).max(64) });` (or reuse an existing id param schema there).
+  - `GET /`: add `activeGrants(repos, user.id, conversation.id)` to the `Promise.all`, return `grants` too.
+  - Decision route: the PIN branch now covers both PIN-proven decisions. Replace `if (body.decision === 'approve') {` with:
+    ```ts
+    if (body.decision === 'approve' || body.decision === 'approve_tab') {
+      const device = deviceOf(request);
+      // An ineligible grant is refused before the challenge is spent or the PIN checked.
+      const existing = body.decision === 'approve_tab' ? await assertGrantableAction(repos, user.id, id) : await repos.chatActions.findByIdForUser(id, user.id);
+    ```
+    keep the existing `!existing` / `status !== 'pending'` checks (harmless after `assertGrantableAction`), and pass the decision word to the proof: `decisionProofMessage(body.challenge, id, body.decision)`. Then `const status = body.decision === 'deny' ? 'denied' : 'approved';`, and after the `decision` publish: `const grant = body.decision === 'approve_tab' ? await grantTab(repos, user.id, action) : undefined;` returning `{ action, queued: true, note: DECISION_NOTE, grant }`.
+  - New route (device auth as every mobile route; no PIN — revoking only takes power away):
+    ```ts
+    /** "Revogar" from the phone. No PIN: it only takes power away. `create`, like deciding a card. */
+    app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {
+      const { id } = grantIdParam.parse(request.params);
+      return { grant: await revokeGrant(repos, request.scope.user.id, id) };
+    });
+    ```
+  Parity: add to `apps/server/src/mobile/events-parity.test.ts`:
+  ```ts
+    grant: { type: 'grant', ...base, grant: { id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'a1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z', tab_name: 'api' } },
+    grant_revoked: { type: 'grant_revoked', ...base, grant_id: 'g1' },
+  ```
   `service.ts`:
   - In `reset`, after `expireOpenForConversation(current.id)`: `await this.deps.repos.chatGrants.revokeForConversation(current.id);`
   - `injectionFor`: compute the grant note for approved actions and pass it through:
@@ -862,17 +1095,17 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
     ```
     Make the service test's expected substring match this sentence (`Os próximos` → use `os próximos send_input nesta aba, nesta conversa, rodam sem pedir confirmação`).
 
-- [ ] **Step 4: Run** the two test files → PASS; full server unit suite + typecheck → PASS.
+- [ ] **Step 4: Run** the four test files → PASS; full server unit suite + typecheck → PASS.
 
 - [ ] **Step 5: Commit**
   ```bash
   git add apps/server/src
-  git commit -m "Chat API: approve_tab, grant list and revoke (TER-4)"
+  git commit -m "Chat API: approve_tab, grant list and revoke, web and mobile (TER-4)"
   ```
 
 ---
 
-### Task 4 (TER-5): Card button, granted state and the strip
+### Task 5 (TER-5): Web — card button, granted state and the strip
 
 **Files:**
 - Modify: `apps/web/src/lib/types.ts` (near line 771), `apps/web/src/lib/api.ts` (near lines 170 and 204)
@@ -882,7 +1115,7 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
 - Modify: `apps/web/src/components/chat/ChatPanel.tsx`, `apps/web/src/components/chat/ChatPanel.test.tsx`
 
 **Interfaces:**
-- Consumes: the HTTP/event shapes of Task 3.
+- Consumes: the HTTP/event shapes of Task 4.
 - Produces:
   ```ts
   // types.ts
@@ -1110,11 +1343,211 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
 
 ---
 
-### Task 5 (TER-6): Coverage check and full verification
+### Task 6 (TER-58): Mobile app — button, granted state, strip, PIN word
+
+Read first: `docs/superpowers/specs/2026-09-24-mobile-app-mock-design.md` §4 (the API port and the mock transport) and §6 (chat feature), and `apps/mobile/README.md` "Conventions". The app is MVVM: pure model (`model/*.ts`, jest `logic` project), a zustand store (`viewmodel/`), views (`view/*.tsx`, jest `ui` project). Every HTTP call goes through the `MobileApi` port, implemented by `HttpMobileApi` against either the real server or the in-process mock server (`services/api/mock`), so the mock must learn every new route and event too.
+
+**Files:**
+- Modify: `apps/mobile/src/services/api/types.ts` (port), `apps/mobile/src/services/api/client.ts`
+- Modify: `apps/mobile/src/services/api/mock/handlers/chat.ts`, `apps/mobile/src/services/api/mock/state.ts`
+- Modify: `apps/mobile/src/services/crypto/pin.ts`
+- Modify: `apps/mobile/src/features/session/viewmodel/createSessionStore.ts`, `apps/mobile/src/features/session/session.types.ts` (or wherever `requestPinProof` is typed), `apps/mobile/src/features/session/view/pin-prompt-sheet.tsx` (+ their tests)
+- Create: `apps/mobile/src/features/chat/model/grant-time.ts` (+ `grant-time.test.ts`)
+- Modify: `apps/mobile/src/features/chat/model/events.ts` (+ `events.test.ts`), `apps/mobile/src/features/chat/model/types.ts`
+- Modify: `apps/mobile/src/features/chat/viewmodel/createChatStore.ts` (+ test)
+- Modify: `apps/mobile/src/features/chat/view/action-card.tsx`, `apps/mobile/src/features/chat/view/conversation-screen.tsx` (+ `conversation-screen.test.tsx`); Create: `apps/mobile/src/features/chat/view/grants-strip.tsx`
+- Modify: `apps/mobile/test/helpers/ui-stores.ts` (widen `stubAction` to `'revokeGrant'`)
+
+**Interfaces:**
+- Consumes: from `@termhub/mobile-api` (Task 2): `chatGrantSchema`/`TChatGrant`, `isTabGrantable`, `PinDecision`, `decisionProofMessage`, the three events, `mobileDecisionBody` with `approve_tab`. HTTP (Task 4): `GET /api/m/v1/chat` → `grants`; decision `approve_tab` (PIN) → `{ …, grant }`; `DELETE /api/m/v1/chat/grants/:id` → `{ grant }`.
+- Produces:
+  ```ts
+  // services/api/types.ts (MobileApi)
+  revokeGrant(auth: Auth, grantId: string): Promise<void>;
+  // services/crypto/pin.ts
+  export const decisionProof: (secret: Uint8Array, challenge: string, actionId: string, decision: PinDecision) => string;
+  // session store
+  requestPinProof(actionId: string, perform: (proof: { challenge: string; pin_proof: string }) => Promise<void>, decision?: PinDecision): Promise<void>; // default 'approve'
+  pinPrompt: { actionId: string; decision: PinDecision } | null
+  // chat model
+  export type ChatGrant = TChatGrant;
+  EventSlice gains grants: ChatGrant[]
+  // chat store
+  export type ChatDecision = 'approve' | 'deny' | 'approve_tab';
+  ConversationSlot gains grants: ChatGrant[]
+  revokeGrant(grantId: string): Promise<void>;
+  revokingId: string | null;
+  // model/grant-time.ts
+  export function untilLabel(expiresAt: string, now?: Date): string; // "até 14:32" | "até amanhã, 14:32"
+  export function isGrantActive(g: { expires_at: string }, now?: Date): boolean;
+  ```
+
+- [ ] **Step 1: PIN word — failing tests.** In the session store tests (`createSessionStore.test.ts`), add: `requestPinProof('a1', perform, 'approve_tab')` sets `pinPrompt` to `{ actionId: 'a1', decision: 'approve_tab' }`, and after `resolvePinPrompt(PIN)` the proof `perform` received verifies against `decisionProofMessage(challenge, 'a1', 'approve_tab')` (recompute with the same secret the test helper enrols, or assert via the mock server accepting it — see Step 5); and the existing expectations of `pinPrompt` toEqual `{ actionId }` become `{ actionId, decision: 'approve' }`. In the pin-prompt-sheet test: with `pinPrompt.decision === 'approve_tab'` the sheet title is "Permitir sempre nesta aba"; with `'approve'` it stays "Autorizar esta ação". Run `NODE 'npm run build -w @termhub/mobile-api && npm test -w @termhub/mobile -- session'` → FAIL.
+- [ ] **Step 2: Implement the PIN word.**
+  `pin.ts`:
+  ```ts
+  import { decisionProofMessage, type PinDecision } from '@termhub/mobile-api';
+  /** The PIN key's signature over the decision it authorises — `approve` or `approve_tab` are signed as
+   * different messages, so a proof for one can never be spent on the other. */
+  export const decisionProof = (secret: Uint8Array, challenge: string, actionId: string, decision: PinDecision): string =>
+    b64url(hmac(sha256, secret, utf8(decisionProofMessage(challenge, actionId, decision))));
+  ```
+  Session store: `requestPinProof(actionId, perform, decision = 'approve')` stores `pinPrompt: { actionId, decision }` and remembers `decision` next to `perform` in its pending "waiting" record; `resolvePinPrompt` builds `pin_proof: decisionProof(secret, challenge, actionId, waiting.decision)`. Update the type of `requestPinProof` and `pinPrompt`. `pin-prompt-sheet.tsx`: `title={pinPrompt?.decision === 'approve_tab' ? 'Permitir sempre nesta aba' : 'Autorizar esta ação'}`. Update every other `decisionProof(` caller (grep) to pass `'approve'`. Run → PASS.
+- [ ] **Step 3: Model — failing tests.** `grant-time.test.ts`: the same three tests as the web's `grant-time.test.ts` (Task 5, Step 2), importing from `./grant-time`. `events.test.ts` (extend its `action()` helper with `grant_id: null`), with `const grant = { id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'a1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2099-01-01T00:00:00.000Z', tab_name: 'api' };` and a slice `{ messages: [], actions: [action('a1')], live: [], grants: [] }`:
+  - `grant` adds it; a second `grant` for the same `tab_id` with a new id replaces the first;
+  - `grant_revoked` removes it by id;
+  - `granted_action` appends the card, and replaces a card with the same id if present;
+  - none of the three asks for a reread.
+  Run → FAIL.
+- [ ] **Step 4: Implement the model.** `grant-time.ts`: copy of the web's (Task 5, Step 3), with a header comment "Verbatim from apps/web/src/components/chat/grant-time.ts". `types.ts`: `export type ChatGrant = TChatGrant;` (from the contract). `events.ts`: add `grants: ChatGrant[]` to `EventSlice`, `grant_id: null` in `actionFromConfirmation`, and in `applyEvent`:
+  ```ts
+      case 'grant':
+        return { slice: { ...slice, grants: [...slice.grants.filter((g) => g.id !== e.grant.id && g.tab_id !== e.grant.tab_id), e.grant] }, reread: false };
+      case 'grant_revoked':
+        return { slice: { ...slice, grants: slice.grants.filter((g) => g.id !== e.grant_id) }, reread: false };
+      case 'granted_action':
+        return {
+          slice: { ...slice, actions: slice.actions.some((a) => a.id === e.action.id) ? slice.actions.map((a) => (a.id === e.action.id ? e.action : a)) : [...slice.actions, e.action] },
+          reread: false,
+        };
+  ```
+  Run → PASS.
+- [ ] **Step 5: API port, client and mock — failing test.** In `apps/mobile/src/services/api/mock/chat.e2e.test.ts` (read its setup first), add: against the mock, `decide(auth, 'a-termhub-1', { decision: 'approve_tab', ...proof })` with a proof made for `'approve_tab'` succeeds, the next `chat()` returns one grant for `t-api` and the action approved, and an `approve_tab` sent with a proof made for `'approve'` is refused 401 `PIN_INVALID`; `revokeGrant(auth, grantId)` removes it (next `chat()` has no grants) and a second call is 409; the socket receives `grant` then `grant_revoked`. Run → FAIL.
+- [ ] **Step 6: Implement port, client and mock.**
+  - `types.ts`: `revokeGrant(auth: Auth, grantId: string): Promise<void>;`
+  - `client.ts`: ``revokeGrant: (a, grantId) => empty('DELETE', `/api/m/v1/chat/grants/${encodeURIComponent(grantId)}`, { token: a.accessToken }),``
+  - `mock/state.ts`: keep `grants: (TChatGrant & { conversation_id: string; revoked: boolean })[]` in the mock state (initially empty), and give `MockAction` its `grant_id` (null in fixtures).
+  - `mock/handlers/chat.ts`: `GET /api/m/v1/chat` returns `grants` (active, not revoked, not expired, of that conversation, with `tab_name` from the fixture tab); the decision handler accepts `approve_tab` exactly like `approve` but verifies the proof with the word `'approve_tab'` (it currently hard-codes `'approve'` near line 351 — pass `body.decision`), refuses an ineligible action with 400 `GRANT_NOT_ALLOWED` (use `isTabGrantable`), then creates the grant (replacing any other for the same tab), broadcasts `decision` and `grant`, and returns `{ grant }`; new `DELETE /api/m/v1/chat/grants/:id` (404 / 409 / 200 + broadcast `grant_revoked`).
+  Run → PASS.
+- [ ] **Step 7: Store — failing tests** in `createChatStore.test.ts` (real `HttpMobileApi` + mock, as the file already does):
+  ```ts
+  it("decide(id, 'approve_tab') asks the PIN for approve_tab and, once resolved, the tab is trusted", async () => {
+    const { chat, store } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const deciding = chat.getState().decide('a-termhub-1', 'approve_tab');
+    expect(store.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', decision: 'approve_tab' });
+    await store.getState().resolvePinPrompt(PIN);
+    await deciding;
+    expect(slot(chat, 'p-termhub').actions[0]!.status).toBe('approved');
+    expect(slot(chat, 'p-termhub').grants).toEqual([expect.objectContaining({ tab_id: 't-api', source_action_id: 'a-termhub-1' })]);
+  });
+
+  it('revokeGrant(id) drops the grant', async () => {
+    const { chat, store } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const deciding = chat.getState().decide('a-termhub-1', 'approve_tab');
+    await store.getState().resolvePinPrompt(PIN);
+    await deciding;
+    const [g] = slot(chat, 'p-termhub').grants;
+    await chat.getState().revokeGrant(g!.id);
+    expect(slot(chat, 'p-termhub').grants).toEqual([]);
+  });
+  ```
+  (If the decision answer's `grant` is not read by `decide` because `api.decide` returns `void`, the grant arrives by the `grant` event or by a reread — assert after `await` on whatever the file uses to flush events, e.g. `jest.runOnlyPendingTimers()` / the helper the file already has.) Run → FAIL.
+- [ ] **Step 8: Implement the store.**
+  - `ChatDecision = 'approve' | 'deny' | 'approve_tab'`; `ConversationSlot` gains `grants: ChatGrant[]` (default `[]` wherever a slot is created, and in `PersistedSlot` / `partialize` like `actions`); `reread` copies `res.grants`; `onEvent` patches `grants` from `applyEvent`'s slice like `actions`.
+  - `decide`: the non-deny branch becomes `await session().requestPinProof(actionId, (proof) => api.decide(session().auth(), actionId, { decision, ...proof }), decision);` (with `decision` narrowed to `'approve' | 'approve_tab'`); on success `settlePending(..., 'approved')` for both, then `if (decision === 'approve_tab') void reread(key);` so the grant is on screen even if the socket is down.
+  - `revokeGrant(grantId)`: guarded by `revokingId === null`; `set({ revokingId: grantId, error: null })`; `await api.revokeGrant(session().auth(), grantId)`; on success or on a 409, remove it from the active slot's `grants`; other errors go through the file's `fail(gen, e)`; `finally` clears `revokingId`. Add `revokingId: null` to the initial state.
+  Run → PASS.
+- [ ] **Step 9: Views — failing tests** in `conversation-screen.test.tsx` (the file mocks the stores via `test/helpers/ui-stores`; widen `stubAction` to accept `'revokeGrant'`; the fixture `a-termhub-1` is a pending `send_input` on tab `t-api`):
+  ```ts
+  it('offers "Permitir sempre nesta aba" on a pending send_input; it calls decide(id, approve_tab)', async () => {
+    const decide = stubAction('decide');
+    await render(<ConversationScreen />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Permitir sempre nesta aba' }, LOAD));
+    expect(decide).toHaveBeenCalledWith('a-termhub-1', 'approve_tab');
+  });
+  it('shows the active grant above the composer and on the card that granted it; Revogar calls revokeGrant', async () => {
+    // Seed the slot with the action approved and one grant for it (use the helper the file uses to seed the chat store):
+    // grants: [{ id: 'g1', tab_id: 't-api', tool: 'send_input', source_action_id: 'a-termhub-1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2099-01-01T00:00:00.000Z', tab_name: 'api' }]
+    const revokeGrant = stubAction('revokeGrant');
+    await render(<ConversationScreen />);
+    expect(await screen.findByText(/^Enviando direto para a aba api até/, undefined, LOAD)).toBeTruthy();
+    expect(screen.getByText(/^Permitido até/)).toBeTruthy();
+    const [first] = screen.getAllByRole('button', { name: 'Revogar' });
+    await fireEvent.press(first!);
+    expect(revokeGrant).toHaveBeenCalledWith('g1');
+  });
+  it('a card run under a grant reads "executada · aba confiada"', async () => {
+    // seed one action { ...executed send_input, grant_id: 'g1' }
+    await render(<ConversationScreen />);
+    expect(await screen.findByText('executada · aba confiada', undefined, LOAD)).toBeTruthy();
+  });
+  it('does not offer it for run_command or answering_permission', async () => {
+    // seed one pending run_command action
+    await render(<ConversationScreen />);
+    await screen.findByText(/rodar o comando/, undefined, LOAD);
+    expect(screen.queryByRole('button', { name: 'Permitir sempre nesta aba' })).toBeNull();
+  });
+  ```
+  Run → FAIL.
+- [ ] **Step 10: Implement the views.**
+  `action-card.tsx` — props gain `grant?: ChatGrant; revoking: boolean; onRevoke(grantId: string): void`:
+  ```tsx
+  {action.status === 'pending' ? (
+    <View className="gap-2">
+      <View className="flex-row gap-2">
+        <View className="flex-1">
+          <Button label="Autorizar" onPress={() => onDecide(action.id, 'approve')} disabled={busy} />
+        </View>
+        <View className="flex-1">
+          <Button label="Recusar" variant="secondary" onPress={() => onDecide(action.id, 'deny')} disabled={busy} />
+        </View>
+      </View>
+      {isTabGrantable(action) && <Button label="Permitir sempre nesta aba" variant="secondary" onPress={() => onDecide(action.id, 'approve_tab')} disabled={busy} />}
+    </View>
+  ) : (
+    <AppText variant="muted">{STATUS_LABEL[action.status]}{action.grant_id ? ' · aba confiada' : ''}</AppText>
+  )}
+  {grant && (
+    <View className="flex-row items-center justify-between gap-2">
+      <AppText variant="muted">Permitido {untilLabel(grant.expires_at)}</AppText>
+      <Button label="Revogar" variant="secondary" onPress={() => onRevoke(grant.id)} disabled={revoking} />
+    </View>
+  )}
+  ```
+  (Use the `Button` variants that exist in `@/ui` — check `src/ui` for a small/link-style variant and prefer it for "Revogar" if there is one.)
+  `grants-strip.tsx`:
+  ```tsx
+  import { View } from 'react-native';
+  import { AppText, Button } from '@/ui';
+  import { isGrantActive, untilLabel } from '../model/grant-time';
+  import type { ChatGrant } from '../model/types';
+
+  /** The trusted tabs of this conversation, right above the composer (spec 2026-09-25 §6.1). */
+  export function GrantsStrip({ grants, revokingId, onRevoke }: { grants: ChatGrant[]; revokingId: string | null; onRevoke(id: string): void }) {
+    const active = grants.filter((g) => isGrantActive(g));
+    if (active.length === 0) return null;
+    return (
+      <View className="gap-1 px-4 pb-2">
+        {active.map((g) => (
+          <View key={g.id} className="flex-row items-center justify-between gap-2 rounded-xl border border-app-accent bg-app-surface2 px-3 py-2">
+            <AppText variant="muted" className="flex-1">
+              Enviando direto para {g.tab_name ? `a aba ${g.tab_name}` : 'uma aba que não existe mais'} {untilLabel(g.expires_at)}
+            </AppText>
+            <Button label="Revogar" variant="secondary" onPress={() => onRevoke(g.id)} disabled={revokingId === g.id} />
+          </View>
+        ))}
+      </View>
+    );
+  }
+  ```
+  (If `AppText` does not take `className`, wrap it in a `View className="flex-1"`.)
+  `conversation-screen.tsx`: read `grants` from the active slot and `revokingId`/`revokeGrant` from the chat store; pass `grant={grants.find((g) => g.source_action_id === item.action.id && isGrantActive(g))}`, `revoking={revokingId !== null}`, `onRevoke={revokeGrant}` to `ActionCard`; add `grants`, `revokingId` to the `extra` passed as `extraData`; render `<GrantsStrip grants={grants} revokingId={revokingId} onRevoke={revokeGrant} />` directly above `<Composer … />`.
+  Run the screen tests, then the whole mobile suite and typecheck → PASS.
+- [ ] **Step 11: Commit**
+  ```bash
+  git add apps/mobile
+  git commit -m "Mobile chat: trust a tab with the PIN, show and revoke it (TER-58)"
+  ```
+
+---
+
+### Task 7 (TER-6): Coverage check and full verification
 
 **Files:** only tests, if a gap is found.
 
-- [ ] **Step 1: Coverage review against spec §7.** For each bullet in the spec's Tests section, point at the test that covers it (Tasks 1–4). Any bullet without a test: write it now in the matching file, run it, and see it pass. In particular confirm there is a test for the full loop in `gate.e2e.test.ts` — add it if Tasks 2–3 did not:
+- [ ] **Step 1: Coverage review against spec §7.** For each bullet in the spec's Tests section, point at the test that covers it (Tasks 1–6). Any bullet without a test: write it now in the matching file, run it, and see it pass. In particular confirm there is a test for the full loop in `gate.e2e.test.ts` — add it if Tasks 2–3 did not:
   ```ts
   it('grant → direct send → revoke → asks again', async () => {
     const typed: string[] = [];
@@ -1133,7 +1566,9 @@ NODE 'npm ci && npm run prisma:generate -w @termhub/server && npm run build:pack
 - [ ] **Step 2: Full verification** (all must pass; paste the summary lines into the report):
   ```bash
   NODE 'cd apps/server && npx prisma migrate deploy && npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code'
+  NODE 'npm test -w @termhub/mobile-api && npm run build -w @termhub/mobile-api'
   NODE 'TERMHUB_DB_TESTS=1 npm test -w @termhub/server'
+  NODE 'npm test -w @termhub/mobile'
   NODE 'npm test -w @termhub/web'
   NODE 'npm run typecheck -w @termhub/server && npm run build -w @termhub/web && npm run build -w @termhub/landing && npm run typecheck -w @termhub/mobile'
   rm -rf .npm
