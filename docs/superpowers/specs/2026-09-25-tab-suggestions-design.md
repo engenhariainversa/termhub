@@ -112,3 +112,17 @@ sugere:", editable text field prefilled, **Enviar** (disabled while sending or e
 
 - Codex / Cursor suggestions.
 - Accepting the suggestion with Tab (we type the text, which also allows editing).
+
+## 9. Adjustments found while planning
+
+- TER-56's live check and permission excerpt go through `readScreen`; it takes `{ plain: true }` so
+  they stay plain while the concierge's `read_screen` is styled.
+- An agent's styled answer is flagged in the RPC result (`escapes: true`); an old agent drops the
+  unknown param and answers plain text (`styled: false`).
+- Suggestion rows share `tab_questions`, so: closed suggestions are published as their own events on
+  every close path; the permission-queue "newest row" lookup skips suggestions; the choice/permission
+  answer and screen routes answer 404 for a suggestion id.
+- Sending refuses a text starting with `!` or `/` (same rule as TER-56's deny text).
+- A failure after the claim marks the row `failed` and answers 502; dismissing an already-closed
+  suggestion answers 200 without an event; dismiss needs only chat access (it never touches the tab).
+- Every hook event of the tab cancels a pending suggestion check, even events the interpreter ignores.
