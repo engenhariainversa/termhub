@@ -12,6 +12,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { sessionEnded } from '@/features/shared/signals';
+import type { PinDecision } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { socketWake } from '@/services/api/wake';
 import { b64url, fromB64url } from '@/services/crypto/encoding';
@@ -49,7 +50,7 @@ const initialData = (mockControls: SessionDeps['mockControls']): Data => ({
 const isApiError = (e: unknown, code: string): e is ApiError => e instanceof ApiError && e.code === code;
 
 type PinProof = { challenge: string; pin_proof: string };
-type Prompt = { perform(proof: PinProof): Promise<void>; resolve(): void; reject(e: unknown): void };
+type Prompt = { perform(proof: PinProof): Promise<void>; decision: PinDecision; resolve(): void; reject(e: unknown): void };
 
 export function createSessionStore(deps: SessionDeps) {
   const { api, key, vault, mockControls } = deps;
@@ -325,11 +326,11 @@ export function createSessionStore(deps: SessionDeps) {
             return { accessToken };
           },
 
-          requestPinProof(actionId, perform) {
+          requestPinProof(actionId, perform, decision = 'approve') {
             dropPrompt();
             return new Promise<void>((resolve, reject) => {
-              prompt = { perform, resolve, reject };
-              set({ pinPrompt: { actionId }, error: null, attemptsLeft: null });
+              prompt = { perform, decision, resolve, reject };
+              set({ pinPrompt: { actionId, decision }, error: null, attemptsLeft: null });
             });
           },
 
@@ -350,7 +351,7 @@ export function createSessionStore(deps: SessionDeps) {
               if (!secret) return patch({ busy: false, error: MSG.usePin });
               const { challenge } = await api.challenge({ device_id: get().deviceId!, purpose: 'decision', action_id: actionId });
               if (superseded()) return patch({ busy: false });
-              proof = { challenge, pin_proof: decisionProof(secret, challenge, actionId) };
+              proof = { challenge, pin_proof: decisionProof(secret, challenge, actionId, waiting.decision) };
             } catch (e) {
               return fail(gen, e);
             }

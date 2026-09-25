@@ -4,6 +4,7 @@
 import { hmac } from '@noble/hashes/hmac.js';
 import { scryptAsync } from '@noble/hashes/scrypt.js';
 import { sha256 } from '@noble/hashes/sha2.js';
+import { decisionProofMessage, type PinDecision } from '@termhub/mobile-api';
 import { b64url, utf8 } from './encoding';
 
 export const PIN_RE = /^\d{6}$/;
@@ -37,6 +38,7 @@ export const unwrapSecret = wrapSecret;
 /** base64url(HMAC-SHA256(secret, challenge)) — proves possession of the unwrapped secret. */
 export const pinProof = (secret: Uint8Array, challenge: string): string => b64url(hmac(sha256, secret, utf8(challenge)));
 
-/** Signs challenge, action id and "approve", newline-separated. */
-export const decisionProof = (secret: Uint8Array, challenge: string, actionId: string): string =>
-  b64url(hmac(sha256, secret, utf8(`${challenge}\n${actionId}\napprove`)));
+/** The PIN key's signature over the decision it authorises — `approve` or `approve_tab` are signed as
+ * different messages, so a proof for one can never be spent on the other. */
+export const decisionProof = (secret: Uint8Array, challenge: string, actionId: string, decision: PinDecision): string =>
+  b64url(hmac(sha256, secret, utf8(decisionProofMessage(challenge, actionId, decision))));

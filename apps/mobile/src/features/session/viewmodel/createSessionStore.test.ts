@@ -1,11 +1,14 @@
 // The session store (design spec §5) driven over the real `HttpMobileApi` and the in-memory
 // `MockTransport`, with the SecureStore / MMKV fakes of the `logic` project underneath.
+import { hmac } from '@noble/hashes/hmac.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import * as SecureStore from 'expo-secure-store';
+import { decisionProofMessage } from '@termhub/mobile-api';
 import { createChatStore } from '@/features/chat/viewmodel/createChatStore';
 import { sessionEnded } from '@/features/shared/signals';
 import { socketWake } from '@/services/api/wake';
 import { ApiError } from '@/services/api/errors';
-import { fromB64url } from '@/services/crypto/encoding';
+import { b64url, fromB64url, utf8 } from '@/services/crypto/encoding';
 import { decisionProof } from '@/services/crypto/pin';
 import { mmkv } from '@/services/storage';
 import { vault } from '@/services/vault';
@@ -257,12 +260,12 @@ it('requestPinProof performs the decision with the proof while the prompt stays 
   });
 
   const pending = store.getState().requestPinProof('act-1', perform);
-  expect(store.getState().pinPrompt).toEqual({ actionId: 'act-1' });
+  expect(store.getState().pinPrompt).toEqual({ actionId: 'act-1', decision: 'approve' });
   await store.getState().resolvePinPrompt(PIN);
   await pending;
   expect(challenge).toHaveBeenCalledWith({ device_id: store.getState().deviceId, purpose: 'decision', action_id: 'act-1' });
   expect(perform).toHaveBeenCalledTimes(1);
-  expect(seen[0]!.pin_proof).toBe(decisionProof(secret, seen[0]!.challenge, 'act-1'));
+  expect(seen[0]!.pin_proof).toBe(decisionProof(secret, seen[0]!.challenge, 'act-1', 'approve'));
   expect(store.getState()).toMatchObject({ pinPrompt: null, busy: false, error: null });
 
   const other = jest.fn(noop);
@@ -271,6 +274,24 @@ it('requestPinProof performs the decision with the proof while the prompt stays 
   await expect(cancelled).rejects.toThrow('CANCELLED');
   expect(other).not.toHaveBeenCalled();
   expect(store.getState().pinPrompt).toBeNull();
+});
+
+it("requestPinProof(id, perform, 'approve_tab') asks for approve_tab and signs that word, never approve", async () => {
+  const ctx = setup();
+  const secret = fromB64url(await enrol(ctx));
+  const { store } = ctx;
+  const seen: Proof[] = [];
+  const perform = jest.fn(async (proof: Proof) => {
+    seen.push(proof);
+  });
+
+  const pending = store.getState().requestPinProof('a1', perform, 'approve_tab');
+  expect(store.getState().pinPrompt).toEqual({ actionId: 'a1', decision: 'approve_tab' });
+  await store.getState().resolvePinPrompt(PIN);
+  await pending;
+  expect(perform).toHaveBeenCalledTimes(1);
+  expect(seen[0]!.pin_proof).toBe(b64url(hmac(sha256, secret, utf8(decisionProofMessage(seen[0]!.challenge, 'a1', 'approve_tab')))));
+  expect(seen[0]!.pin_proof).not.toBe(decisionProof(secret, seen[0]!.challenge, 'a1', 'approve'));
 });
 
 it('a PIN_INVALID from perform keeps the prompt open with the error and attempts left; the next PIN goes through', async () => {
@@ -577,7 +598,7 @@ describe('guards', () => {
     await store.getState().resolvePinPrompt(PIN);
     await b!;
     const proof = performB.mock.calls[0]![0];
-    expect(proof.pin_proof).toBe(decisionProof(secret, proof.challenge, 'act-B'));
+    expect(proof.pin_proof).toBe(decisionProof(secret, proof.challenge, 'act-B', 'approve'));
     expect(store.getState().pinPrompt).toBeNull();
   });
 

@@ -42,7 +42,7 @@ export function PinPromptSheet() {
   const onBackspace = () => setPin((p) => p.slice(0, -1));
 
   return (
-    <Sheet open={pinPrompt !== null} onClose={cancelPinPrompt} title="Autorizar esta ação">
+    <Sheet open={pinPrompt !== null} onClose={cancelPinPrompt} title={pinPrompt?.decision === 'approve_tab' ? 'Permitir sempre nesta aba' : 'Autorizar esta ação'}>
       <View className="gap-6">
         <PinDots filled={pin.length} error={Boolean(error)} />
         {error ? (

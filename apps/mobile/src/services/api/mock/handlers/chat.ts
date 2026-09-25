@@ -1,10 +1,11 @@
 // Chat routes (P§6, design spec §4.2 "Chat"/"Controls"): projects, the conversation payload,
-// sending a message (`202` then a reply streamed over the socket), decisions and reset.
+// sending a message (`202` then a reply streamed over the socket), decisions, trusted tabs
+// ("Permitir sempre nesta aba") and reset.
 import { decisionProof } from '../../../crypto/pin';
 import { randomId } from '../../../crypto/random';
-import { mobileDecisionBody, mobileMessageBody, resetBody, setHostBody, type TChatEvent, type TChatHostState } from '../../contract';
+import { isTabGrantable, mobileDecisionBody, mobileMessageBody, resetBody, setHostBody, type TChatEvent, type TChatGrant, type TChatHostState } from '../../contract';
 import type { MockRouter } from '../router';
-import { broadcast, countPinFailure, type MockAction, type MockConversation, type MockMessage, type MockState, verifyAuth, WireError } from '../state';
+import { broadcast, countPinFailure, type MockAction, type MockConversation, type MockGrant, type MockMessage, type MockState, verifyAuth, WireError } from '../state';
 import { pushConfirmationNotification, pushReplyNotification } from './notifications';
 
 const USER_ID = 'u1';
@@ -46,6 +47,44 @@ function conversationFor(state: MockState, projectId: string | null): MockConver
 
 function actionsFor(state: MockState, conversationId: string): MockAction[] {
   return [...state.actions.values()].filter((a) => a.conversation_id === conversationId);
+}
+
+/** A grant lasts at most 24 h, like the server's `GRANT_TTL_MS`. */
+const GRANT_TTL_MS = 24 * 60 * 60_000;
+
+/** The tabs the fixtures' actions point at, by id -> name (the server joins the tab row for
+ * `tab_name`; a tab the mock does not know is one that "no longer exists": `null`). */
+const TAB_NAMES: Record<string, string> = { 't-api': 'api' };
+
+/** The wire shape of a grant (the server's `ChatGrantView`). */
+function grantView(g: MockGrant): TChatGrant {
+  return { id: g.id, tab_id: g.tab_id, tool: g.tool, source_action_id: g.source_action_id, created_at: g.created_at, expires_at: g.expires_at, tab_name: g.tab_name };
+}
+
+/** `GET chat`'s `grants`: the conversation's grants still in force, oldest first. */
+function activeGrantsFor(state: MockState, conversationId: string, now: number): TChatGrant[] {
+  return state.grants.filter((g) => g.conversation_id === conversationId && !g.revoked && Date.parse(g.expires_at) > now).map(grantView);
+}
+
+/** Trusts the tab of `action` (just approved): any other grant of the same tab in that conversation
+ * is revoked first — at most one per tab, as the server's partial unique index keeps it. */
+function grantTab(state: MockState, action: MockAction, now: number): MockGrant {
+  for (const g of state.grants) {
+    if (g.conversation_id === action.conversation_id && g.tab_id === action.tab_id && !g.revoked) g.revoked = true;
+  }
+  const grant: MockGrant = {
+    id: randomId(10),
+    conversation_id: action.conversation_id,
+    tab_id: action.tab_id!,
+    tool: 'send_input',
+    source_action_id: action.id,
+    created_at: new Date(now).toISOString(),
+    expires_at: new Date(now + GRANT_TTL_MS).toISOString(),
+    tab_name: TAB_NAMES[action.tab_id!] ?? null,
+    revoked: false,
+  };
+  state.grants.push(grant);
+  return grant;
 }
 
 // --- the canned reply and its streaming (ruling 3) ----------------------------------------------
@@ -92,6 +131,7 @@ function createConfirmationAction(state: MockState, now: number, conversationId:
     machine_id: projectId ? 'm-jarvis' : null,
     project_id: projectId,
     tab_id: projectId ? 't-api' : null,
+    grant_id: null,
     summary: projectId ? `digitar comando na aba api do projeto ${projectName}, no jarvis` : 'digitar comando no chat geral',
     created_at: new Date(now).toISOString(),
   };
@@ -235,6 +275,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
         conversation,
         messages: state.messages.get(conversation.id) ?? [],
         actions: actionsFor(state, conversation.id),
+        grants: activeGrantsFor(state, conversation.id, ctx.now()),
         host: hostFor(conversation),
       },
     };
@@ -303,6 +344,8 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const projectId = body.project_id ?? null;
     const previous = conversationFor(state, projectId);
     previous.archived_at = new Date(ctx.now()).toISOString();
+    // A reset ends the old conversation's trusted tabs too (the server's `revokeForConversation`).
+    for (const g of state.grants) if (g.conversation_id === previous.id) g.revoked = true;
 
     const conversation: MockConversation = {
       id: randomId(10),
@@ -337,8 +380,13 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
       return { status: 200, body: {} };
     }
 
-    // `approve` submits a PIN guess exactly like `session/token` does, so a device already locked
-    // out is blocked the same way, without this attempt counting again.
+    // An ineligible grant is refused before the challenge is spent or the PIN checked.
+    if (body.decision === 'approve_tab' && !isTabGrantable({ tool: action.tool, args: action.args, tab_id: action.tab_id })) {
+      throw new WireError(400, 'GRANT_NOT_ALLOWED', 'Só dá para permitir sempre o envio de texto para uma aba');
+    }
+
+    // `approve` / `approve_tab` submit a PIN guess exactly like `session/token` does, so a device
+    // already locked out is blocked the same way, without this attempt counting again.
     if (device.lockedUntil !== undefined && device.lockedUntil > now) {
       const retryAfter = Math.ceil((device.lockedUntil - now) / 1000);
       throw new WireError(423, 'DEVICE_LOCKED', 'Aparelho bloqueado por tentativas de PIN.', { retry_after: retryAfter });
@@ -348,7 +396,8 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const bound = !!chal && !chal.used && now <= chal.expiresAt && chal.deviceId === device.id && chal.purpose === 'decision' && chal.actionId === action.id;
     if (bound) chal!.used = true;
 
-    const expectedProof = bound ? decisionProof(device.pinSecret, body.challenge, action.id) : null;
+    // The proof signs the decision word: one made for `approve` is refused for `approve_tab`.
+    const expectedProof = bound ? decisionProof(device.pinSecret, body.challenge, action.id, body.decision) : null;
     if (!bound || body.pin_proof !== expectedProof) {
       const attemptsLeft = countPinFailure(state, device, now);
       throw new WireError(401, 'PIN_INVALID', 'PIN incorreto.', { attempts_left: attemptsLeft });
@@ -357,6 +406,21 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     device.pinFailures = 0;
     action.status = 'approved';
     broadcast(state, { type: 'decision', user_id: USER_ID, conversation_id: action.conversation_id, action_id: action.id, status: 'approved' });
-    return { status: 200, body: {} };
+    if (body.decision === 'approve') return { status: 200, body: {} };
+
+    const grant = grantView(grantTab(state, action, now));
+    broadcast(state, { type: 'grant', user_id: USER_ID, conversation_id: action.conversation_id, grant });
+    return { status: 200, body: { grant } };
+  });
+
+  /** "Revogar" (no PIN: it only takes power away): 404 unknown, 409 already revoked. */
+  router.route('DELETE', '/api/m/v1/chat/grants/:id', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'DELETE', htu: ctx.htu, now: ctx.now() });
+    const grant = state.grants.find((g) => g.id === ctx.params.id);
+    if (!grant) throw new WireError(404, 'NOT_FOUND', 'Permissão não encontrada');
+    if (grant.revoked) throw new WireError(409, 'CONFLICT', 'Esta permissão já foi revogada');
+    grant.revoked = true;
+    broadcast(state, { type: 'grant_revoked', user_id: USER_ID, conversation_id: grant.conversation_id, grant_id: grant.id });
+    return { status: 200, body: { grant: grantView(grant) } };
   });
 }

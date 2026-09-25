@@ -209,6 +209,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     reset: (a: Auth, projectId: string | null) => empty('POST', '/api/m/v1/chat/reset', { token: a.accessToken, body: { project_id: projectId } }),
     decide: (a: Auth, actionId: string, body: TMobileDecisionBody) =>
       empty('POST', `/api/m/v1/chat/actions/${actionId}/decision`, { token: a.accessToken, body }),
+    revokeGrant: (a: Auth, grantId: string) => empty('DELETE', `/api/m/v1/chat/grants/${encodeURIComponent(grantId)}`, { token: a.accessToken }),
 
     notifications: (a: Auth, before?: string) =>
       call('GET', `/api/m/v1/notifications${before ? `?before=${encodeURIComponent(before)}` : ''}`, notificationsResponse, {

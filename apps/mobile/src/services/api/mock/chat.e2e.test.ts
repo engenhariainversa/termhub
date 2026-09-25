@@ -184,7 +184,7 @@ it('decides an action: approve resolves and emits decision, repeating it is 409,
     api.decide(auth, 'a-termhub-1', {
       decision: 'approve',
       challenge: wrongPurpose.challenge,
-      pin_proof: decisionProof(secret, wrongPurpose.challenge, 'a-termhub-1'),
+      pin_proof: decisionProof(secret, wrongPurpose.challenge, 'a-termhub-1', 'approve'),
     }),
   ).rejects.toMatchObject({ status: 401, code: 'PIN_INVALID' });
 
@@ -193,7 +193,7 @@ it('decides an action: approve resolves and emits decision, repeating it is 409,
     api.decide(auth, 'a-termhub-1', {
       decision: 'approve',
       challenge: boundChallenge.challenge,
-      pin_proof: decisionProof(secret, boundChallenge.challenge, 'some-other-action'),
+      pin_proof: decisionProof(secret, boundChallenge.challenge, 'some-other-action', 'approve'),
     }),
   ).rejects.toMatchObject({ status: 401, code: 'PIN_INVALID' });
 
@@ -212,7 +212,7 @@ it('decides an action: approve resolves and emits decision, repeating it is 409,
   const actionId = confirmation.action_id;
 
   const chal = await api.challenge({ device_id: deviceId, purpose: 'decision', action_id: actionId });
-  const proof = decisionProof(secret, chal.challenge, actionId);
+  const proof = decisionProof(secret, chal.challenge, actionId, 'approve');
   await api.decide(auth, actionId, { decision: 'approve', challenge: chal.challenge, pin_proof: proof });
 
   const approveEvent = collected.events.find((e): e is Extract<TChatEvent, { type: 'decision' }> => e.type === 'decision' && e.action_id === actionId);
@@ -222,6 +222,63 @@ it('decides an action: approve resolves and emits decision, repeating it is 409,
     status: 409,
     code: 'ALREADY_DECIDED',
   });
+
+  collected.close();
+});
+
+it('approve_tab approves and trusts the tab with a proof for approve_tab only; revokeGrant ends it once', async () => {
+  const clock = { value: START };
+  const { api, auth, deviceId, secret } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+
+  // A proof signed for `approve` cannot be spent on `approve_tab`.
+  const first = await api.challenge({ device_id: deviceId, purpose: 'decision', action_id: 'a-termhub-1' });
+  await expect(
+    api.decide(auth, 'a-termhub-1', { decision: 'approve_tab', challenge: first.challenge, pin_proof: decisionProof(secret, first.challenge, 'a-termhub-1', 'approve') }),
+  ).rejects.toMatchObject({ status: 401, code: 'PIN_INVALID' });
+  expect((await api.chat(auth, 'p-termhub')).grants).toEqual([]);
+
+  const chal = await api.challenge({ device_id: deviceId, purpose: 'decision', action_id: 'a-termhub-1' });
+  await api.decide(auth, 'a-termhub-1', { decision: 'approve_tab', challenge: chal.challenge, pin_proof: decisionProof(secret, chal.challenge, 'a-termhub-1', 'approve_tab') });
+
+  const chat = await api.chat(auth, 'p-termhub');
+  expect(chat.actions.find((a) => a.id === 'a-termhub-1')!.status).toBe('approved');
+  expect(chat.grants).toEqual([expect.objectContaining({ tab_id: 't-api', tool: 'send_input', source_action_id: 'a-termhub-1', tab_name: 'api' })]);
+  const grantId = chat.grants[0]!.id;
+  // Only the conversation that granted it sees it.
+  expect((await api.chat(auth, null)).grants).toEqual([]);
+
+  await api.revokeGrant(auth, grantId);
+  expect((await api.chat(auth, 'p-termhub')).grants).toEqual([]);
+  await expect(api.revokeGrant(auth, grantId)).rejects.toMatchObject({ status: 409 });
+  await expect(api.revokeGrant(auth, 'nope')).rejects.toMatchObject({ status: 404 });
+
+  const own = collected.events.filter((e) => e.type === 'decision' || e.type === 'grant' || e.type === 'grant_revoked');
+  expect(own.map((e) => e.type)).toEqual(['decision', 'grant', 'grant_revoked']);
+  expect(own[1]).toMatchObject({ type: 'grant', conversation_id: 'c-termhub', grant: { id: grantId, tab_id: 't-api' } });
+  expect(own[2]).toMatchObject({ type: 'grant_revoked', conversation_id: 'c-termhub', grant_id: grantId });
+
+  collected.close();
+});
+
+it('approve_tab on an action that is not send_input to a tab is 400 GRANT_NOT_ALLOWED, before the challenge is spent', async () => {
+  const clock = { value: START };
+  const { api, auth, deviceId, secret } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+  // The account-wide chat's confirmation has no tab.
+  await api.sendMessage(auth, { text: 'confirma essa ação', project_id: null });
+  await jest.advanceTimersByTimeAsync(5000);
+  const { action_id: actionId } = collected.events.find((e): e is Extract<TChatEvent, { type: 'confirmation' }> => e.type === 'confirmation')!;
+
+  const chal = await api.challenge({ device_id: deviceId, purpose: 'decision', action_id: actionId });
+  await expect(
+    api.decide(auth, actionId, { decision: 'approve_tab', challenge: chal.challenge, pin_proof: decisionProof(secret, chal.challenge, actionId, 'approve_tab') }),
+  ).rejects.toMatchObject({ status: 400, code: 'GRANT_NOT_ALLOWED' });
+  // the same challenge still approves it plainly
+  await api.decide(auth, actionId, { decision: 'approve', challenge: chal.challenge, pin_proof: decisionProof(secret, chal.challenge, actionId, 'approve') });
+  expect((await api.chat(auth, null)).grants).toEqual([]);
 
   collected.close();
 });

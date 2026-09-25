@@ -1,4 +1,5 @@
 // The session feature's state (design spec §5.1). The router reads `phase` and nothing else.
+import type { PinDecision } from '@/services/api/contract';
 import type { MockControls } from '@/services/api/mock';
 import type { Auth, MobileApi } from '@/services/api/types';
 import type { DeviceKey } from '@/services/key/types';
@@ -47,7 +48,9 @@ export interface SessionState {
   busy: boolean;
   notice: string | null;
   mockControls: MockControls | null;
-  pinPrompt: { actionId: string } | null;
+  /** The approval the PIN sheet is asking for: `decision` is the word the proof signs, and picks
+   * the sheet's title ("Autorizar esta ação" / "Permitir sempre nesta aba"). */
+  pinPrompt: { actionId: string; decision: PinDecision } | null;
 
   /** Routes an API error that ends or locks the session (chat and notification stores call it
    * too): `DEVICE_REVOKED` wipes, `DEVICE_LOCKED` locks with the countdown, `PIN_INVALID` shows
@@ -67,8 +70,9 @@ export interface SessionState {
   /** Opens the PIN sheet for an approval (P§5.6). `resolvePinPrompt` computes the proof and
    * awaits `perform(proof)` with the sheet still open: `PIN_INVALID` keeps it open with the error
    * and the attempts left; `DEVICE_LOCKED` relocks (rejects `CANCELLED`); success resolves; any
-   * other error closes it and rejects with that error. A cancel rejects `CANCELLED`. */
-  requestPinProof(actionId: string, perform: (proof: { challenge: string; pin_proof: string }) => Promise<void>): Promise<void>;
+   * other error closes it and rejects with that error. A cancel rejects `CANCELLED`. The proof
+   * signs `decision` (default `approve`): a proof for one decision is refused for the other. */
+  requestPinProof(actionId: string, perform: (proof: { challenge: string; pin_proof: string }) => Promise<void>, decision?: PinDecision): Promise<void>;
   resolvePinPrompt(pin: string | 'biometrics'): Promise<void>;
   cancelPinPrompt(): void;
   /** The lock's countdown reached zero: clears `lockedUntil`, `error` and `attemptsLeft` so the

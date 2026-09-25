@@ -20,8 +20,9 @@ describe('pin model', () => {
   it('pin_proof is base64url(HMAC-SHA256(secret, challenge))', () => {
     expect(pinProof(secret, 'chal')).toBe(b64url(hmac(sha256, secret, utf8('chal'))));
   });
-  it('decision proof signs challenge, action id and "approve", newline-separated', () => {
-    expect(decisionProof(secret, 'c1', 'a1')).toBe(b64url(hmac(sha256, secret, utf8('c1\na1\napprove'))));
+  it('decision proof signs challenge, action id and the decision word, newline-separated', () => {
+    expect(decisionProof(secret, 'c1', 'a1', 'approve')).toBe(b64url(hmac(sha256, secret, utf8('c1\na1\napprove'))));
+    expect(decisionProof(secret, 'c1', 'a1', 'approve_tab')).toBe(b64url(hmac(sha256, secret, utf8('c1\na1\napprove_tab'))));
   });
 
   it('derives with the production cost (N = 2^14) unless the ui Jest project lowers it', () => {

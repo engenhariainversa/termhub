@@ -13,7 +13,7 @@ jest.mock('expo-router', () => ({
 
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
-import type { TChatEvent, TChatMessage } from '@/services/api/contract';
+import type { TChatAction, TChatEvent, TChatGrant, TChatMessage, TChatResponse } from '@/services/api/contract';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { ConversationScreen } from './conversation-screen';
 
@@ -38,11 +38,24 @@ function addRows(rows: TChatMessage[], live: TChatEvent[]) {
 /** Replaces one of the store's actions for a test. Not `jest.spyOn(getState(), …)`: zustand
  * replaces the state object on every `setState`, so a restored spy would linger on the new one. */
 const realActions = { ...stores.chat.getState() };
-function stubAction<K extends 'decide' | 'reset' | 'setHost'>(name: K) {
+function stubAction<K extends 'decide' | 'reset' | 'setHost' | 'revokeGrant'>(name: K) {
   const fn = jest.fn(async () => undefined);
   useChatStore.setState({ [name]: fn } as Partial<ReturnType<typeof useChatStore.getState>>);
   return fn;
 }
+
+/** Serves the open project's `GET chat` with its actions and grants changed — the screen re-reads
+ * on open, so a slot seeded straight into the store would be overwritten by the mock's answer. */
+function serveChat(patch: (res: TChatResponse) => Pick<TChatResponse, 'actions' | 'grants'>) {
+  const real = stores.api.chat.bind(stores.api);
+  jest.spyOn(stores.api, 'chat').mockImplementation(async (auth, projectId) => {
+    const res = await real(auth, projectId);
+    return projectId === 'p-termhub' ? { ...res, ...patch(res) } : res;
+  });
+}
+
+const GRANT: TChatGrant = { id: 'g1', tab_id: 't-api', tool: 'send_input', source_action_id: 'a-termhub-1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2099-01-01T00:00:00.000Z', tab_name: 'api' };
+const withAction = (res: TChatResponse, patch: Partial<TChatAction>): TChatAction[] => res.actions.map((a) => (a.id === 'a-termhub-1' ? { ...a, ...patch } : a));
 
 /** The first load of a file signs its first P-256 proof, slow while other suites share the CPU. */
 const LOAD = { timeout: 15_000 };
@@ -62,7 +75,7 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
-  useChatStore.setState({ error: null, live: [], decide: realActions.decide, reset: realActions.reset, setHost: realActions.setHost });
+  useChatStore.setState({ error: null, live: [], decide: realActions.decide, reset: realActions.reset, setHost: realActions.setHost, revokeGrant: realActions.revokeGrant });
 });
 
 describe('Conversa', () => {
@@ -120,9 +133,51 @@ describe('Conversa', () => {
   it('Autorizar opens the PIN sheet', async () => {
     await render(<ConversationScreen />);
     await fireEvent.press(await screen.findByRole('button', { name: 'Autorizar' }, LOAD));
-    expect(useSessionStore.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1' });
+    expect(useSessionStore.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', decision: 'approve' });
     await act(() => useSessionStore.getState().cancelPinPrompt());
     expect(useChatStore.getState().decidingId).toBeNull();
+  });
+
+  it('offers "Permitir sempre nesta aba" on a pending send_input; it calls decide(id, approve_tab)', async () => {
+    const decide = stubAction('decide');
+    await render(<ConversationScreen />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Permitir sempre nesta aba' }, LOAD));
+    expect(decide).toHaveBeenCalledWith('a-termhub-1', 'approve_tab');
+  });
+
+  it('shows the active grant above the composer and on the card that granted it; Revogar calls revokeGrant', async () => {
+    serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT] }));
+    const revokeGrant = stubAction('revokeGrant');
+    await render(<ConversationScreen />);
+    expect(await screen.findByText(/^Enviando direto para a aba api até/, undefined, LOAD)).toBeTruthy();
+    expect(screen.getByText(/^Permitido até/)).toBeTruthy();
+    const revoke = screen.getAllByRole('button', { name: 'Revogar' });
+    expect(revoke).toHaveLength(2);
+    await fireEvent.press(revoke[0]!);
+    expect(revokeGrant).toHaveBeenCalledWith('g1');
+  });
+
+  it('a card run under a grant reads "executada · aba confiada"', async () => {
+    serveChat((res) => ({ actions: withAction(res, { status: 'executed', grant_id: 'g1' }), grants: [] }));
+    await render(<ConversationScreen />);
+    expect(await screen.findByText('executada · aba confiada', undefined, LOAD)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Revogar' })).toBeNull();
+  });
+
+  it('does not offer it for run_command or answering_permission', async () => {
+    serveChat((res) => ({ actions: withAction(res, { tool: 'run_command', summary: 'rodar o comando `ls` na aba api' }), grants: [] }));
+    await render(<ConversationScreen />);
+    await screen.findByText(/rodar o comando/, undefined, LOAD);
+    expect(screen.getByRole('button', { name: 'Autorizar' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Permitir sempre nesta aba' })).toBeNull();
+  });
+
+  it('does not offer it for a send_input that answers a permission', async () => {
+    serveChat((res) => ({ actions: withAction(res, { args: { text: '1', answering_permission: true }, summary: 'responder a permissão na aba api' }), grants: [] }));
+    await render(<ConversationScreen />);
+    await screen.findByText('responder a permissão na aba api', undefined, LOAD);
+    expect(screen.getByRole('button', { name: 'Autorizar' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Permitir sempre nesta aba' })).toBeNull();
   });
 
   it('the composer sends on the button and clears; the mic is disabled with "em breve"', async () => {

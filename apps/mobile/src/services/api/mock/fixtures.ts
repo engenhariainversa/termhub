@@ -93,6 +93,7 @@ export function seedFixtures(state: MockState, now: number): void {
     machine_id: 'm-jarvis',
     project_id: 'p-termhub',
     tab_id: 't-api',
+    grant_id: null,
     summary: 'digitar `npm test` na aba api do projeto termhub, no jarvis',
     created_at: new Date(now - 15 * 60_000).toISOString(),
   };
