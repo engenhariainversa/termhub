@@ -41,16 +41,21 @@ Captured in an isolated tmux (`-L th-probe`) with a logging hook; fixtures live 
   - Question tabs header `←  ☐ Color  ☐ Fruits  ✔ Submit  →` (only when there are 2+ questions).
   - Single-select: a digit picks the option and moves to the next question (or submits when it is
     the only question).
-  - Multi-select: a digit toggles `[ ]`/`[✔]`; `Tab` moves to the next question / the Submit tab.
-  - Free text: the digit right after the last option ("Type something.") focuses an inline field;
-    the text is typed literally, then `Enter`.
+  - Multi-select: a digit toggles `[ ]`/`[✔]` without moving the focus; `Tab` moves to the next
+    question / the Submit tab. The Submit tab is shown even for a lone multi-select question, so
+    `Tab` after it lands on "Review your answers" (seen in the e2e run).
+  - Free text, single-select: the digit right after the last option ("Type something.") focuses an
+    inline field; the text is typed literally, then `Enter` (which submits a lone question at once).
+  - Free text, multi-select: the "[ ] Type something" row takes text only while focused (a digit
+    only toggles it, and with the focus there digits are typed into it): `Down` once per option
+    reaches it, typing checks it, `Tab` moves to the question's "Next"/"Submit" row and `Enter`
+    leaves the question (seen in the e2e run).
   - Submit tab ("Review your answers") answers `1` = "Submit answers".
   - Permission: options vary ("Yes", "Yes, and always allow…", "Yes, and switch to auto mode",
     "No"); `1` is always "Yes"; `Escape` always rejects.
-- Not yet observed, confirmed by the e2e task before the key plan is final: a digit on a
-    single-question single-select submitting at once, and `Tab` after a single-question multi-select
-    reaching the submit step.
-- Every key needed is already in `TMUX_KEYS` (`1`–`9`, `Tab`, `Enter`, `Escape`): no protocol change.
+- Confirmed by the e2e task (Task 10): a digit on a single-question single-select submits at once;
+  `Tab` after a single-question multi-select reaches the review step, which still needs `1`.
+- Every key needed is already in `TMUX_KEYS` (`1`–`9`, `Tab`, `Enter`, `Escape`, `Down`): no protocol change.
 
 ## 4. Capture (machine → server)
 
@@ -144,8 +149,10 @@ Input: normalised payload + answer. Output: a list of steps `{ key }` / `{ text 
 `sendKey` / literal typing (no Enter). Rules from §3:
 
 - per question i: single-select → digit `selected+1`; multi-select → digit per selected index, then
-  `Tab`; free text → digit `options.length+1`, `{ text }`, `Enter`.
-- after the last question, when there are 2+ questions: `1` (Submit tab).
+  `Tab`; free text on a single-select → digit `options.length+1`, `{ text }`, `Enter`; free text on
+  a multi-select → `Down` × `options.length`, `{ text }`, `Tab`, `Enter`.
+- after the last question, when there are 2+ questions or the last one is a multi-select: `1`
+  (Submit tab).
 - permission: `allow` → `1`; deny → `Escape`, then, with `text`, `{ text }` + `Enter` (Claude is
   back at its prompt after the rejection).
 - Options beyond 9 are impossible (Claude Code caps at 4); the zod schema rejects them anyway.
@@ -229,3 +236,6 @@ Same card in `apps/mobile/src/features/chat/view/tab-question-card.tsx`; store a
 - Agent machines: the agent's `heal()` rewrites the script and merges the new settings entry on
   reconnect, so they need no manual reinstall after updating the agent.
 - "Exactly one of selected / text" applies to every question, not only single-select.
+- Found in the e2e run (Claude Code 2.1.282): `AskUserQuestion` no longer fires `PermissionRequest`
+  (only `PreToolUse` and the `permission_prompt` notification), so dropping it is only a safeguard;
+  the key plan gained the lone multi-select review step and the multi-select free-text rule (§3, §5.4).

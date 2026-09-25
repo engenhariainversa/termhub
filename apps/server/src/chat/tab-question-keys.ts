@@ -13,16 +13,24 @@ function digit(n: number): TmuxKey {
 }
 
 /**
- * The keys that answer Claude Code's question card (spec §3 and §5.4), from the screen as captured:
- * a digit picks a single-select option and moves on; on a multi-select a digit toggles and Tab moves
- * on; the digit after the last option focuses the free-text field, whose text is typed and submitted
- * with Enter; with 2+ questions the last step lands on the Submit tab, where "1" is "Submit answers".
+ * The keys that answer Claude Code's question card (spec §3 and §5.4), as seen on Claude Code 2.1.282:
+ * a digit picks a single-select option and moves on (or submits, when it is the only question); the
+ * digit after the last option focuses its free-text field, whose text is typed and sent with Enter.
+ * On a multi-select a digit toggles without moving the focus and Tab moves on; its free-text row takes
+ * the text only once focused (Down past the options; a digit only toggles it), then Tab reaches the
+ * question's "Next"/"Submit" row and Enter leaves it. Every multi-select, even a lone one, leads to the
+ * review step when it is last, and so do 2+ questions: there "1" is "Submit answers".
  * Pure: the answer is already checked against the payload (`checkChoiceAnswer`).
  */
 export function choiceKeyPlan(payload: ChoicePayload, answer: ChoiceAnswer): KeyStep[] {
   const steps: KeyStep[] = [];
   payload.questions.forEach((q, i) => {
     const a = answer.answers[i]!;
+    if (a.text !== undefined && q.multi_select) {
+      for (let n = 0; n < q.options.length; n++) steps.push({ key: 'Down' });
+      steps.push({ text: a.text }, { key: 'Tab' }, { key: 'Enter' });
+      return;
+    }
     if (a.text !== undefined) {
       steps.push({ key: digit(q.options.length + 1) }, { text: a.text }, { key: 'Enter' });
       return;
@@ -34,7 +42,7 @@ export function choiceKeyPlan(payload: ChoicePayload, answer: ChoiceAnswer): Key
     for (const s of [...a.selected].sort((x, y) => x - y)) steps.push({ key: digit(s + 1) });
     steps.push({ key: 'Tab' });
   });
-  if (payload.questions.length >= 2) steps.push({ key: '1' });
+  if (payload.questions.length >= 2 || payload.questions.at(-1)?.multi_select) steps.push({ key: '1' });
   return steps;
 }
 

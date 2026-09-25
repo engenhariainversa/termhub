@@ -18,8 +18,20 @@ describe('choiceKeyPlan (spec §5.4)', () => {
     expect(choiceKeyPlan(one, { answers: [{ selected: [2] }] })).toEqual([{ key: '3' }]);
   });
 
-  it('a single multi-select question: its digits and Tab, no Submit step', () => {
-    expect(choiceKeyPlan(multiOnly, { answers: [{ selected: [0, 1] }] })).toEqual([{ key: '1' }, { key: '2' }, { key: 'Tab' }]);
+  it('a single multi-select question: its digits, Tab, then "1" on the review step it lands on', () => {
+    expect(choiceKeyPlan(multiOnly, { answers: [{ selected: [0, 1] }] })).toEqual([{ key: '1' }, { key: '2' }, { key: 'Tab' }, { key: '1' }]);
+  });
+
+  it('a single single-select question with free text submits on Enter, no review step', () => {
+    expect(choiceKeyPlan(one, { answers: [{ selected: [], text: 'Mate' }] })).toEqual([{ key: String(one.questions[0]!.options.length + 1) }, { text: 'Mate' }, { key: 'Enter' }]);
+  });
+
+  it('multi-select free text: Down to the field (a digit there only toggles it), the text, Tab to the Next/Submit row, Enter', () => {
+    const n = multiOnly.questions[0]!.options.length;
+    const down = Array.from({ length: n }, () => ({ key: 'Down' }));
+    expect(choiceKeyPlan(multiOnly, { answers: [{ selected: [], text: 'Kiwi' }] })).toEqual([...down, { text: 'Kiwi' }, { key: 'Tab' }, { key: 'Enter' }, { key: '1' }]);
+    const multiFirst: ChoicePayload = { questions: [two.questions[1]!, two.questions[0]!] };
+    expect(choiceKeyPlan(multiFirst, { answers: [{ selected: [], text: 'Kiwi' }, { selected: [0] }] })).toEqual([...down, { text: 'Kiwi' }, { key: 'Tab' }, { key: 'Enter' }, { key: '1' }, { key: '1' }]);
   });
 
   it('free text: the digit after the last option, the text, Enter', () => {
