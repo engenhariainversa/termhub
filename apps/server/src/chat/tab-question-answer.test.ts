@@ -139,6 +139,14 @@ describe('answerTabQuestion', () => {
     expect(tabQuestions.claim).not.toHaveBeenCalled();
   });
 
+  it('409 TAB_PROMPT_CHANGED when only the tool name is on screen, without "Do you want" — nothing claimed nor typed', async () => {
+    const { ctx, tabQuestions } = ctxFor(permission());
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: '● Bash(npm test)\n  ⎿  Tests 3 passed\n> ' });
+    await rejects(answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep }), 409, 'TAB_PROMPT_CHANGED');
+    expect(tabQuestions.claim).not.toHaveBeenCalled();
+    expect(sendKey).not.toHaveBeenCalled();
+  });
+
   it('an offline machine at the screen check is a 409 with its own code, nothing claimed', async () => {
     const { ctx, tabQuestions } = ctxFor(row());
     readScreen.mockRejectedValue(new ControlError('MACHINE_OFFLINE', 'A máquina está offline'));
@@ -184,6 +192,7 @@ describe('promptVisible', () => {
     expect(promptVisible(screens.permission, permission())).toBe(true);
     expect(promptVisible(screens.permission, row())).toBe(false);
     expect(promptVisible('$ ls\n', permission())).toBe(false);
+    expect(promptVisible('● Bash(npm test)\n  ⎿  ok\n', permission())).toBe(false);
   });
   it('matches a question the terminal wrapped', () => {
     const long = { ...colors, question: 'Which of these deployment targets should the new staging environment use from now on?' };

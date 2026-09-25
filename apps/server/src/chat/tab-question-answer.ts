@@ -6,7 +6,7 @@ import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import type { TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import { choiceKeyPlan, permissionKeyPlan, type KeyStep } from './tab-question-keys.js';
-import { checkChoiceAnswer, choiceAnswerBody, permissionAnswerBody, type ChoiceAnswer, type ChoicePayload, type PermissionAnswer, type PermissionPayload, type TabQuestionKind } from './tab-question-payload.js';
+import { checkChoiceAnswer, choiceAnswerBody, permissionAnswerBody, type ChoiceAnswer, type ChoicePayload, type PermissionAnswer, type TabQuestionKind } from './tab-question-payload.js';
 import { publishTabQuestions } from './tab-questions.js';
 
 /** Pause between two keys of one answer: Claude Code redraws its card after each key, and a burst of
@@ -51,7 +51,8 @@ export function lastNonBlankLines(text: string, n = SCREEN_EXCERPT_LINES): strin
 /**
  * The live check (spec §5.3): the question must still be on screen. Whitespace is dropped on both
  * sides, because Claude Code wraps a long question over several indented rows. A permission prompt
- * reads "Do you want to proceed?" (or "Do you want to make this edit…?") and names its tool.
+ * reads "Do you want to proceed?" (or "Do you want to make this edit…?"): that line is required. The
+ * tool's name alone is not enough, since it stays in the scrollback after the prompt is gone.
  */
 export function promptVisible(screen: string, row: Pick<TabQuestion, 'kind' | 'payload'>): boolean {
   const shown = squash(lastNonBlankLines(screen, SCREEN_CHECK_LINES));
@@ -59,7 +60,7 @@ export function promptVisible(screen: string, row: Pick<TabQuestion, 'kind' | 'p
     const first = (row.payload as ChoicePayload).questions[0];
     return !!first && shown.includes(squash(first.question).slice(0, 80));
   }
-  return shown.includes(squash('Do you want')) || shown.includes((row.payload as PermissionPayload).tool_name);
+  return shown.includes(squash('Do you want'));
 }
 
 const asHttp = (err: unknown): unknown => (err instanceof ControlError ? new HttpError(409, err.message, err.code) : err);
