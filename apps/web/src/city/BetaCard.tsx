@@ -82,3 +82,23 @@ export function BetaCard({ ownerName, onCollapse, className = 'rounded-lg border
     </section>
   );
 }
+
+/**
+ * The invitation on a phone before it is asked for: one line at the bottom of the screen instead of
+ * the whole form, so the city stays in view. "Quero participar" opens the full card.
+ */
+export function BetaTeaser({ ownerName, onExpand, onCollapse }: { ownerName: string | null; onExpand: () => void; onCollapse: () => void }) {
+  return (
+    <section aria-label="Convite para o beta" className="flex items-center gap-2 border-t border-line bg-bg-2/95 px-3 py-2 shadow-2xl shadow-black/40 backdrop-blur">
+      <p className="min-w-0 flex-1 truncate text-xs text-fg-muted">
+        {ownerName ? `Agentes de IA de ${ownerName} ao vivo.` : 'Agentes de IA ao vivo.'} <span className="text-fg">Beta grátis.</span>
+      </p>
+      <button type="button" onClick={onExpand} className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover">
+        Quero participar
+      </button>
+      <button type="button" onClick={onCollapse} aria-label="Fechar convite" title="Fechar convite" className="shrink-0 rounded px-1.5 text-lg leading-none text-fg-muted hover:bg-bg-3 hover:text-fg">
+        <span aria-hidden="true">×</span>
+      </button>
+    </section>
+  );
+}

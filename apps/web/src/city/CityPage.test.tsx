@@ -142,6 +142,30 @@ describe('CityPage', () => {
     expect(card()).toBeTruthy();
   });
 
+  it('on a phone, opens as one line and shows the whole form only when asked', async () => {
+    fetchMock.mockResolvedValueOnce(json(CITY));
+    render(<CityPage nickname="pedro" />);
+    await screen.findByText(/Cidade de Pedro/);
+    // the full card is hidden below `sm` (CSS), the one-line invitation shown there instead
+    const sheet = () => card()!.parentElement!;
+    expect(sheet().className).toMatch(/(^|\s)hidden(\s|$)/);
+    expect(screen.getByRole('region', { name: 'Convite para o beta' }).textContent).toMatch(/Agentes de IA de Pedro ao vivo/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quero participar' }));
+    expect(sheet().className).not.toMatch(/(^|\s)hidden(\s|$)/);
+    expect(screen.queryByRole('region', { name: 'Convite para o beta' })).toBeNull();
+  });
+
+  it('closes the one-line invitation for good, like the card', async () => {
+    fetchMock.mockResolvedValueOnce(json(CITY));
+    render(<CityPage nickname="pedro" />);
+    await screen.findByText(/Cidade de Pedro/);
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar convite' }));
+    expect(card()).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Convite para o beta' })).toBeNull();
+    expect(localStorage.getItem('termhub:city-beta-collapsed')).toBe('1');
+  });
+
   it('works without storage: open on arrival, still collapses and reopens', async () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('storage disabled');
