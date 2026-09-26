@@ -116,8 +116,17 @@ it('refuses a missing token, a bad proof, a replayed jti (401) and a user withou
   expect(vi.mocked(canAccess)).toHaveBeenLastCalledWith(expect.anything(), user, 'chat', 'read');
 });
 
-it('refuses any Origin header with 403, even with valid credentials', async () => {
-  expect(await open(await headers({ origin: 'https://termhub.dev' })).status).toBe(403);
+it("accepts the Origin React Native sends on its own: the public URL's", async () => {
+  // SocketRocket (iOS) and OkHttp (Android) set `Origin` to the socket URL's own origin; the app cannot drop it.
+  const c = open(await headers({ origin: 'https://termhub.dev' }));
+  await c.opened;
+  await waitFor(() => c.frames.length === 1);
+  expect(c.frames[0]).toMatchObject({ type: 'hello' });
+});
+
+it('refuses any other Origin header with 403, even with valid credentials', async () => {
+  expect(await open(await headers({ origin: 'https://evil.example' })).status).toBe(403);
+  expect(await open(await headers({ origin: 'http://termhub.dev' })).status).toBe(403);
 });
 
 it('closes a wrong or missing protocol version with 4400 after the upgrade', async () => {

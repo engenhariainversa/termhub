@@ -29,11 +29,14 @@ export interface MobileChatWsDeps {
 export function registerMobileChatWs(router: ReturnType<typeof createUpgradeRouter>, deps: MobileChatWsDeps): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
   const log = deps.log.child({ mod: 'mobile-chat-ws' });
+  const ownOrigin = new URL(deps.publicUrl).origin;
 
   router.addPublic(/^\/ws\/m\/chat\/?$/, async ({ req, socket, head, url }) => {
-    // The app is not a browser and sends no Origin; one that does is a browser page trying to ride
-    // on credentials it should not have, whatever they are.
-    if (req.headers.origin) return rejectUpgrade(socket, 403, 'Forbidden');
+    // React Native's WebSocket (SocketRocket on iOS, OkHttp on Android) always sends the socket
+    // URL's own origin, and the app cannot drop it. Any other Origin is a page elsewhere trying
+    // its luck; it could not send the bearer token and proof anyway, so refuse it outright.
+    const origin = req.headers.origin;
+    if (origin && origin !== ownOrigin) return rejectUpgrade(socket, 403, 'Forbidden');
     const raw = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
     if (!MOBILE_TOKEN_RE.test(raw)) return rejectUpgrade(socket, 401, 'Unauthorized');
     const found = await deps.repos.deviceSessions.findValidToken(hashToken(raw), new Date());
