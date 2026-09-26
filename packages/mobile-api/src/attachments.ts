@@ -67,3 +67,33 @@ export const chatAttachment = z.object({
   created_at: z.string(),
 });
 export type ChatAttachment = z.infer<typeof chatAttachment>;
+
+// --- pt-BR copy both clients show (the web keeps its own copy in `apps/web/src/lib/attachments.ts`) ---
+
+/** `512 B`, `1,2 KB`, `10 MB` — a decimal comma, as the product speaks. */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i += 1;
+  }
+  const text = value >= 100 || Number.isInteger(value) ? String(Math.round(value)) : value.toFixed(1).replace('.', ',');
+  return `${text} ${units[i]}`;
+}
+
+/** Why an extraction gave up, by the server's error code (`ExtractError`). */
+export const ATTACHMENT_FAILURE_REASON: Record<string, string> = {
+  ATTACHMENT_INVALID: 'arquivo inválido',
+  TRANSCRIPTION_UNAVAILABLE: 'transcrição indisponível',
+  TRANSCRIPTION_FAILED: 'transcrição falhou',
+};
+
+/** The line under a chip or a bubble's attachment while the server works on it, or after it gave up. */
+export function attachmentStatusText(a: Pick<ChatAttachment, 'kind' | 'status' | 'error_code'>): string | null {
+  if (a.status === 'pending') return a.kind === 'audio' || a.kind === 'video' ? 'transcrevendo…' : 'processando…';
+  if (a.status === 'failed') return `falhou: ${(a.error_code && ATTACHMENT_FAILURE_REASON[a.error_code]) || 'erro'}`;
+  return null;
+}

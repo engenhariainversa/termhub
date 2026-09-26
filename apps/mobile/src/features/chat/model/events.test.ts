@@ -151,3 +151,23 @@ it('tab suggestion events upsert the card by id', () => {
   const sent = { ...s, status: 'answered', answer: { text: 'commit it' } } as TabSuggestion;
   expect(applyEvent(opened, { type: 'tab_suggestion_closed', ...base, suggestion: sent }).tabSuggestions).toEqual([sent]);
 });
+
+describe('attachment_status', () => {
+  const attachment = { id: 'att1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf' as const, bytes: 10, status: 'pending' as const, error_code: null, meta: null, created_at: at };
+  const user = row('m1', { role: 'user', attachments: [attachment] });
+  const other = row('m0', { role: 'user', text: 'oi', attachments: undefined });
+  const slice: EventSlice = { ...empty, messages: [other, user] };
+
+  it('patches the attachment inside its message, keeps the other rows and the fold', () => {
+    const next = applyEvent(slice, { type: 'attachment_status', ...base, attachment: { ...attachment, status: 'ready', meta: { pages: 3 } } });
+    expect(next).not.toBe(slice);
+    expect(next.messages[0]).toBe(other);
+    expect(next.messages[1]!.attachments).toEqual([{ ...attachment, status: 'ready', meta: { pages: 3 } }]);
+    expect(next.live).toBe(slice.live);
+  });
+
+  it('is a no-op for an unknown id or an unchanged status', () => {
+    expect(applyEvent(slice, { type: 'attachment_status', ...base, attachment: { ...attachment, id: 'zz' } })).toBe(slice);
+    expect(applyEvent(slice, { type: 'attachment_status', ...base, attachment })).toBe(slice);
+  });
+});

@@ -1,6 +1,7 @@
 // How one live event of the open conversation changes its thread (design spec §6): pure reducers
 // over the slice the chat store keeps — the thread's messages and actions and the `live` fold of the
 // answer being written. The store decides which events reach here (`belongsTo`) and does the I/O.
+import type { TChatAttachment } from '@/services/api/contract';
 import { applyLive, type LiveFold } from './live';
 import { upsertTabSuggestion } from './tab-suggestion-text';
 import type { ChatAction, ChatEvent, ChatGrant, ChatMessage, TabQuestion, TabSuggestion } from './types';
@@ -43,6 +44,25 @@ export function mergeThread(current: ChatMessage[], server: ChatMessage[]): Chat
   const newest = server.reduce((max, m) => (m.created_at > max ? m.created_at : max), '');
   const kept = current.filter((m) => ids.has(m.id) || m.local !== undefined || m.created_at > newest);
   return server.reduce(mergeMessage, kept.length === current.length ? current : kept);
+}
+
+/**
+ * The messages with `attachment` replaced by id inside whichever message carries it (the web's
+ * `patchMessageAttachment`); the same array, and the same message objects, when nothing changed.
+ */
+export function patchMessageAttachment(messages: ChatMessage[], attachment: TChatAttachment): ChatMessage[] {
+  let changed = false;
+  const next = messages.map((m) => {
+    const list = m.attachments;
+    if (!list) return m;
+    const i = list.findIndex((a) => a.id === attachment.id);
+    if (i < 0) return m;
+    const current = list[i]!;
+    if (current.status === attachment.status && current.error_code === attachment.error_code && JSON.stringify(current.meta) === JSON.stringify(attachment.meta)) return m;
+    changed = true;
+    return { ...m, attachments: list.map((a, j) => (j === i ? attachment : a)) };
+  });
+  return changed ? next : messages;
 }
 
 /** Settles the pending action `id` as approved or denied. A card that has moved on already — a
@@ -107,6 +127,10 @@ export function applyEvent(slice: EventSlice, e: ChatEvent): EventSlice {
     case 'tab_suggestion':
     case 'tab_suggestion_closed':
       return { ...slice, tabSuggestions: upsertTabSuggestion(slice.tabSuggestions, e.suggestion) };
+    case 'attachment_status': {
+      const messages = patchMessageAttachment(slice.messages, e.attachment);
+      return messages === slice.messages ? slice : { ...slice, messages };
+    }
     case 'delta':
     case 'action':
     case 'reset': {

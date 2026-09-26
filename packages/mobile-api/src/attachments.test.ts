@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, TEXT_EXTENSIONS, chatAttachment, hasTextExtension, kindFromNameAndMime } from './attachments.js';
+import { ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, TEXT_EXTENSIONS, attachmentStatusText, chatAttachment, formatBytes, hasTextExtension, kindFromNameAndMime } from './attachments.js';
 
 describe('limits table', () => {
   it('is the spec table (§5.2), in bytes', () => {
@@ -41,4 +41,23 @@ it('chatAttachment parses the wire shape and refuses an unknown kind or status',
   expect(chatAttachment.safeParse({ ...a, meta: null, status: 'failed', error_code: 'ATTACHMENT_INVALID' }).success).toBe(true);
   expect(chatAttachment.safeParse({ ...a, kind: 'exe' }).success).toBe(false);
   expect(chatAttachment.safeParse({ ...a, status: 'done' }).success).toBe(false);
+});
+
+describe('pt-BR copy', () => {
+  it('formats sizes with a decimal comma', () => {
+    expect(formatBytes(512)).toBe('512 B');
+    expect(formatBytes(1234)).toBe('1,2 KB');
+    expect(formatBytes(10_485_760)).toBe('10 MB');
+    expect(formatBytes(150 * 1024 * 1024)).toBe('150 MB');
+  });
+
+  it('says what the server is doing with a file, or why it gave up', () => {
+    expect(attachmentStatusText({ kind: 'pdf', status: 'pending', error_code: null })).toBe('processando…');
+    expect(attachmentStatusText({ kind: 'audio', status: 'pending', error_code: null })).toBe('transcrevendo…');
+    expect(attachmentStatusText({ kind: 'video', status: 'pending', error_code: null })).toBe('transcrevendo…');
+    expect(attachmentStatusText({ kind: 'pdf', status: 'failed', error_code: 'ATTACHMENT_INVALID' })).toBe('falhou: arquivo inválido');
+    expect(attachmentStatusText({ kind: 'audio', status: 'failed', error_code: 'TRANSCRIPTION_FAILED' })).toBe('falhou: transcrição falhou');
+    expect(attachmentStatusText({ kind: 'pdf', status: 'failed', error_code: null })).toBe('falhou: erro');
+    expect(attachmentStatusText({ kind: 'pdf', status: 'ready', error_code: null })).toBeNull();
+  });
 });
