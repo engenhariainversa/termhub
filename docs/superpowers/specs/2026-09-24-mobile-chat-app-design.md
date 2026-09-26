@@ -167,7 +167,11 @@ All under `/api/m/v1`. Errors keep the wire shape `{ error, code }` with pt-BR `
 | `GET chat/projects` | token | `chat:read` | `[{ id, name, key, busy, pending_confirmations, last_message_at }]` |
 | `GET chat/host/options` | token | `chat:read` | the user's agent machines with `online`, `agent_version`, and each one's Claude accounts — one call instead of the web's two |
 | `POST chat/host` | token | `chat:update` | same body as the web |
-| `POST chat/messages` | token | `chat:create` | **`202 { conversation_id, user_message_id, assistant_message_id }`**; host errors and `CHAT_BUSY` stay synchronous 409s; run failures become the assistant message's `error_code` and the final `message` event, as today |
+| `POST chat/messages` | token | `chat:create` | **`202 { conversation_id, user_message_id, assistant_message_id }`**; host errors and `CHAT_BUSY` stay synchronous 409s; run failures become the assistant message's `error_code` and the final `message` event, as today; the body also takes `attachment_ids` (at most 5; `text` may be empty with one) |
+| `POST chat/attachments?name=&project_id=` | token | `chat:create` | raw file body, 64 MB, 30 per 10 min per device; `201 { attachment }` (spec 2026-09-26 §5.3) |
+| `GET chat/attachments/:id` | token | `chat:read` | download (images inline, the rest as an attachment) |
+| `GET chat/attachments/:id/status` | token | `chat:read` | `{ attachment }` |
+| `DELETE chat/attachments/:id` | token | `chat:create` | only while unsent; 409 afterwards |
 | `POST chat/reset` | token | `chat:update` | same as the web |
 | `POST chat/actions/:id/decision` | token (+ pin proof for approve) | `chat:create` | same `decide`, same `decision` event to every client; answers `{ action, queued: true, note }` at once for approve and deny, and the resumed run's text, actions and `run_finished` arrive over `/ws/m/chat` |
 | `GET transcriptions/config` | token | `terminals:read` | `{ enabled }` |
@@ -178,7 +182,7 @@ All under `/api/m/v1`. Errors keep the wire shape `{ error, code }` with pt-BR `
 
 ### 6.1 `/ws/m/chat?v=1`
 
-Server → client only, exactly the `ChatEvent` union of `/ws/chat` (`message`, `delta`, `action`, `action_result`, `reset`, `confirmation`, `decision`, `run_finished`), filtered by user on the server and by conversation in the app. On open the server sends `{ type: 'hello', protocol: 1, server_time }`. No replay: every (re)connect re-reads `GET chat`, like the web. Ping every 30 s. Close codes with meaning: `4400` unknown protocol version ("atualize o app"), `4401` device revoked. An access token expiring does not close an open socket; revocation does. iOS kills the socket in the background; the app reconnects and re-reads on foreground, and push covers the gap.
+Server → client only, exactly the `ChatEvent` union of `/ws/chat` (`message`, `delta`, `action`, `action_result`, `reset`, `confirmation`, `decision`, `run_finished`, `attachment_status`), filtered by user on the server and by conversation in the app. On open the server sends `{ type: 'hello', protocol: 1, server_time }`. No replay: every (re)connect re-reads `GET chat`, like the web. Ping every 30 s. Close codes with meaning: `4400` unknown protocol version ("atualize o app"), `4401` device revoked. An access token expiring does not close an open socket; revocation does. iOS kills the socket in the background; the app reconnects and re-reads on foreground, and push covers the gap.
 
 An upgrade that carries an `Origin` header is refused (`403`): browsers never use this route.
 
@@ -290,6 +294,8 @@ Início ("Continuar com e-mail") → Aguardando aprovação (the verification co
 
 The conversation screen: thread, action cards (Autorizar → decision, PIN/biometrics first for an irreversible card; Recusar → decision), composer with the microphone button (record → upload → poll → text in the composer), host state lines ("máquina offline", "escolha a máquina", "agente antigo") and the host picker sheet on the account-wide chat, with the fresh-session warning the web shows. Assistant text is rendered as markdown; user text as plain text.
 
+Attachments (spec 2026-09-26, TER-98): the composer's 📎 opens a sheet with "Foto ou vídeo" (`expo-image-picker`, `quality: 0.8`), "Arquivo" (`expo-document-picker`) and "Gravar áudio" (the dictation recorder, kept as an audio file). Each pick becomes a chip that uploads at once through `expo-file-system`'s upload task (bearer and DPoP headers), with progress and ✕; the message can only leave once every chip has landed, and may be attachments alone. A sent message shows its images as thumbnails that open full screen, and other files as name, size and status ("processando…", "transcrevendo…", "falhou: …"), kept live by `attachment_status`. Opening a non-image file on the phone is out of scope. The two pickers are native modules: shipping them needs a new EAS build, after the server deploy.
+
 The chat logic the web already has as pure TypeScript (timeline merge, delta fold, per-conversation filter, host and failure copy) moves to `packages/mobile-api` and is imported by both; the rendering is written for React Native.
 
 ## 12. Deployment notes (manual steps)
@@ -342,7 +348,7 @@ The house pattern: a Fastify app per test file with fake `repos`, database tests
 
 ## 15. Out of scope
 
-Terminal, tasks, notes, office; self-hosted or configurable servers; account creation or social login in the app; approving a device from the app itself; the notification history on the web; passkeys on the web; attachments in the chat; a second language.
+Terminal, tasks, notes, office; self-hosted or configurable servers; account creation or social login in the app; approving a device from the app itself; the notification history on the web; passkeys on the web; opening non-image attachments on the phone; a second language.
 
 ## 16. Delivery order
 
