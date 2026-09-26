@@ -305,6 +305,47 @@ it('a message event merges by id without a refetch, and the streamed text stays 
   expect(chatMock).toHaveBeenCalledTimes(1);
 });
 
+it('a streamed delta re-renders only its own row: a card in the thread is not rendered again', async () => {
+  // `summary` is read by ChatActionCard's render and by nothing else in the panel, so counting its
+  // reads counts the card's renders — without mocking the card away.
+  let reads = 0;
+  const base = action({ id: 'a1', created_at: '2026-09-21T00:00:01.000Z' });
+  const counted = {
+    ...base,
+    get summary() {
+      reads += 1;
+      return base.summary;
+    },
+  } as ChatAction;
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { connected: true };
+  });
+  chatMock.mockResolvedValue({
+    conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
+    messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm2', role: 'assistant', text: '', created_at: '2026-09-21T00:00:02.000Z' })],
+    actions: [counted],
+    host: READY,
+    grants: [],
+  });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await screen.findByText(base.summary);
+  const before = reads;
+  expect(before).toBeGreaterThan(0);
+
+  act(() => onEvent({ type: 'delta', conversation_id: 'c_p1', message_id: 'm2', delta: 'um' }));
+  expect(await screen.findByText('um')).toBeInTheDocument();
+  act(() => onEvent({ type: 'delta', conversation_id: 'c_p1', message_id: 'm2', delta: 'a' }));
+  expect(await screen.findByText('uma')).toBeInTheDocument();
+
+  expect(reads).toBe(before);
+});
+
 it('"Permitir sempre nesta aba" on a pending card records the grant, shows it on the card and counts it in the header', async () => {
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' })], host: READY, grants: [] });
   decideMock.mockResolvedValue({ action: { id: 'a1', status: 'approved' }, grant: grant({ id: 'g1' }) });

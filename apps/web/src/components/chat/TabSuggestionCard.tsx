@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import type { TabSuggestion } from '../../lib/types';
 import { CONTEXT_PREVIEW_MAX, lastParagraph, suggestionStatusLabel, suggestionTitle } from './tab-suggestion-text';
 
@@ -17,7 +17,7 @@ export interface TabSuggestionCardProps {
  * the agent's message it answers (spec 2026-09-26 §6.4): the text editable, Enviar / Dispensar. Presentational:
  * the requests live in `ChatPanel`. Plain text only.
  */
-export function TabSuggestionCard({ suggestion, busy, error, onSend, onDismiss }: TabSuggestionCardProps) {
+export const TabSuggestionCard = memo(function TabSuggestionCard({ suggestion, busy, error, onSend, onDismiss }: TabSuggestionCardProps) {
   const [text, setText] = useState(suggestion.payload.text);
   const open = suggestion.status === 'open';
   const trimmed = text.trim();
@@ -50,7 +50,7 @@ export function TabSuggestionCard({ suggestion, busy, error, onSend, onDismiss }
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </li>
   );
-}
+});
 
 /** The agent's message, plain text in a quote: its last paragraph, the whole of it on demand. */
 function SuggestionContext({ text }: { text: string }) {

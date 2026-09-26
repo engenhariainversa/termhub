@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChatActionCard } from './ChatActionCard';
 import { ChatActionGroup, type BatchDecision } from './ChatActionGroup';
 import { ChatComposer } from './ChatComposer';
 import { ChatHost } from './ChatHost';
+import { ChatThread } from './ChatThread';
 import { ChatTurn } from './ChatTurn';
 import { TabQuestionCard } from './TabQuestionCard';
 import { TabSuggestionCard } from './TabSuggestionCard';
@@ -13,7 +14,6 @@ import { useChatStream } from '../../lib/chat';
 import { useChatLive } from '../../lib/chat-live';
 import { mergeMessage } from '../../lib/chat-merge';
 import { chatTimeline, groupPendingActions } from '../../lib/chat-timeline';
-import { isNearBottom } from '../../lib/chat-scroll';
 import { trustedTabsLabel } from './grant-list-text';
 import { isGrantActive } from './grant-time';
 import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
@@ -43,6 +43,30 @@ const EARLY_EVENTS_CAP = 500;
 
 /** A Claude account of one of the user's machines, as the host picker needs it. */
 type HostAccountRow = Pick<AiAccount, 'id' | 'label' | 'machine_id'>;
+
+/**
+ * `TabSuggestionCard` takes `onSend(text)` and `onDismiss()` with no id (its body belongs to TER-96 and
+ * is not changed here), so this wrapper makes the per-card closures once per id and hands the card
+ * stable props: the panel passes the same two id-taking callbacks to every row.
+ */
+const TabSuggestionRow = memo(function TabSuggestionRow({
+  suggestion,
+  busy,
+  error,
+  onSend,
+  onDismiss,
+}: {
+  suggestion: TabSuggestion;
+  busy: boolean;
+  error?: string;
+  onSend: (id: string, text: string) => void;
+  onDismiss: (id: string) => void;
+}) {
+  const id = suggestion.id;
+  const send = useCallback((text: string) => onSend(id, text), [id, onSend]);
+  const dismiss = useCallback(() => onDismiss(id), [id, onDismiss]);
+  return <TabSuggestionCard suggestion={suggestion} busy={busy} error={error} onSend={send} onDismiss={dismiss} />;
+});
 
 /**
  * The concierge chat: streamed live over /ws/chat and persisted over REST. `projectId === null` is the
@@ -226,7 +250,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   );
   const { connected } = useChatStream(load, onEvent);
 
-  const decide = async (id: string, decision: 'approve' | 'deny' | 'approve_tab') => {
+  const decide = useCallback(async (id: string, decision: 'approve' | 'deny' | 'approve_tab') => {
     setDecidingId(id);
     setActionError(null);
     try {
@@ -254,10 +278,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     } finally {
       setDecidingId(null);
     }
-  };
+  }, [load]);
 
-  /** A grouped confirmation: one request, one injected sentence (spec 2026-09-26 §7). */
-  const decideBatch = async (decisions: BatchDecision[]) => {
+  /** A grouped confirmation: one request, one injected sentence (spec 2026-09-26 §7). Stable, like `decide`. */
+  const decideBatch = useCallback(async (decisions: BatchDecision[]) => {
     setBatchDeciding(true);
     setActionError(null);
     try {
@@ -279,10 +303,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     } finally {
       setBatchDeciding(false);
     }
-  };
+  }, [load]);
 
-  /** "Revogar", from the card that granted it. */
-  const revoke = async (grantId: string) => {
+  /** "Revogar", from the card that granted it. Stable: every card gets this same one. */
+  const revoke = useCallback(async (grantId: string) => {
     setRevokingId(grantId);
     setActionError(null);
     try {
@@ -296,10 +320,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     } finally {
       setRevokingId(null);
     }
-  };
+  }, []);
 
   /** A click on a tab question's card is the answer: no confirmation, no model turn. */
-  const answerQuestion = async (id: string, body: TabQuestionAnswer) => {
+  const answerQuestion = useCallback(async (id: string, body: TabQuestionAnswer) => {
     setAnsweringQuestionId(id);
     setQuestionErrors(({ [id]: _dropped, ...rest }) => rest);
     try {
@@ -311,12 +335,12 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     } finally {
       setAnsweringQuestionId(null);
     }
-  };
+  }, []);
   /** Stable, so the permission card's effect runs once per question. */
   const loadTabQuestionScreen = useCallback(async (id: string) => (await api.tabQuestionScreen(id)).text, []);
 
   /** Enviar / Dispensar on a suggestion card: one click, no confirmation, no model turn. */
-  const actOnSuggestion = async (id: string, act: () => Promise<{ tab_suggestion: TabSuggestion }>, fallback: string) => {
+  const actOnSuggestion = useCallback(async (id: string, act: () => Promise<{ tab_suggestion: TabSuggestion }>, fallback: string) => {
     setBusySuggestionId(id);
     setSuggestionErrors(({ [id]: _dropped, ...rest }) => rest);
     try {
@@ -328,7 +352,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     } finally {
       setBusySuggestionId(null);
     }
-  };
+  }, []);
+  const sendSuggestion = useCallback((id: string, text: string) => void actOnSuggestion(id, () => api.sendTabSuggestion(id, text), 'Não foi possível enviar'), [actOnSuggestion]);
+  const dismissSuggestion = useCallback((id: string) => void actOnSuggestion(id, () => api.dismissTabSuggestion(id), 'Não foi possível dispensar'), [actOnSuggestion]);
 
   /**
    * Opens the change picker and reads the two halves of the pair, once, on demand: they are only needed
@@ -415,40 +441,26 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    */
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
 
-  const listRef = useRef<HTMLOListElement>(null);
   /**
-   * Whether the thread should keep following new content. Starts `true` (a page just opened is at
-   * its own bottom) and is written only from the list's `onScroll` handler below and from `send`
-   * — never recomputed from the list's live geometry inside the effect that follows it: jsdom lays
-   * nothing out, so a never-scrolled list would read as "far from the bottom" and this would stop
-   * following new messages in every test, and in any real browser the moment the content is
-   * shorter than the viewport.
+   * The active grant each gate card created, by the card's id: built once per `grants` change instead
+   * of a `find` over the list inside every card of every render. (Expiry is re-read when `grants` next
+   * changes, which is what the old per-render `find` did too whenever nothing re-rendered.) A grant
+   * with no source action (`null`) was never a card's, so it is left out.
+   */
+  const grantByAction = useMemo(() => {
+    const map = new Map<string, ChatGrant>();
+    for (const g of grants) if (g.source_action_id !== null && isGrantActive(g)) map.set(g.source_action_id, g);
+    return map;
+  }, [grants]);
+
+  /** What the thread's pin follows: a new row or card (the timeline) or a streamed delta (the fold). */
+  const followKey = useMemo(() => ({ timeline, version }), [timeline, version]);
+  /**
+   * Whether the thread follows new content. `ChatThread` owns the reading of it (its `onScroll` and its
+   * pill write it); it lives here so `send` can set it — sending is the reader's own way of saying
+   * "take me to the bottom".
    */
   const stick = useRef(true);
-  // Keep the newest content in view, but only while the reader hasn't scrolled away to read back
-  // through history: past one viewport they would otherwise send a message, or watch an answer
-  // stream in, and see the page yank itself out from under them. Runs on every new message and on
-  // every streamed delta.
-  // Keyed on the timeline, not on `messages`: a card is a row of this thread too, so a change to
-  // `actions` alone — a `decide()` response, a queued note — must be able to move the scroll.
-  useEffect(() => {
-    const list = listRef.current;
-    if (list && stick.current) list.scrollTop = list.scrollHeight;
-  }, [timeline, version]);
-
-  // The keyboard opening is a layout change the thread has to follow: the shell gets shorter
-  // (ChatLayout sizes itself to the visual viewport) under the same `scrollTop`, so the newest
-  // message would slide out of sight exactly when the person is about to answer it.
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const follow = () => {
-      const list = listRef.current;
-      if (list && stick.current) list.scrollTop = list.scrollHeight;
-    };
-    viewport.addEventListener('resize', follow);
-    return () => viewport.removeEventListener('resize', follow);
-  }, []);
 
   const send = async () => {
     const value = text.trim();
@@ -549,7 +561,6 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         onCancel={() => setConfirmReset(false)}
         onConfirm={() => void reset()}
       />
-      {!connected && <p className="pt-2 text-xs text-warn">Reconectando…</p>}
       {/* Where this conversation runs, above the thread, before anything is typed — and, when it cannot
           run, the one thing to do about it. Presentational: every decision it renders is decided here.
           Only the account-wide chat offers the picker: a project's chat always runs on that same host,
@@ -594,25 +605,22 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           )}
         </div>
       )}
-      {/* A new conversation is otherwise a header, an empty thread and a box: one line saying what
-       * this screen is for. Deliberately just the one — no example prompts, no tour. */}
-      {/* …and only while the conversation can actually run: with no machine (or one that is asleep) the
-       * host card above already says what this screen is and what to do, and inviting a message that
-       * cannot be sent would contradict it. */}
-      {loaded && messages.length === 0 && (host === null || host.kind === 'ready') && (
-        <p className="pt-6 text-center text-sm text-fg-dim">
-          {projectId === null ? 'Peça algo às suas máquinas: o concierge lê os terminais e pede sua autorização antes de qualquer alteração.' : 'Pergunte sobre este projeto: o concierge lê os terminais dele e pede sua autorização antes de qualquer alteração.'}
-        </p>
-      )}
-      {/* Named, because a rendered answer can contain Markdown lists of its own: this is how the
-       * thread is told apart from them — by screen readers, and by the tests. */}
-      <ol
-        ref={listRef}
-        aria-label="Conversa"
-        className="min-h-0 min-w-0 flex-1 space-y-5 overflow-y-auto overscroll-contain py-4"
-        onScroll={(e) => {
-          stick.current = isNearBottom(e.currentTarget);
-        }}
+      {/* The thread, its scroll and its pill (`ChatThread`); "Reconectando…" is its overlay badge. The
+       * empty state is one line saying what this screen is for — deliberately just the one, no example
+       * prompts, no tour — and only while the conversation can actually run: with no machine (or one
+       * that is asleep) the host card above already says what to do, and inviting a message that cannot
+       * be sent would contradict it. */}
+      <ChatThread
+        reconnecting={!connected}
+        followKey={followKey}
+        stickRef={stick}
+        empty={
+          loaded && messages.length === 0 && (host === null || host.kind === 'ready') ? (
+            <p className="pt-6 text-center text-sm text-fg-dim">
+              {projectId === null ? 'Peça algo às suas máquinas: o concierge lê os terminais e pede sua autorização antes de qualquer alteração.' : 'Pergunte sobre este projeto: o concierge lê os terminais dele e pede sua autorização antes de qualquer alteração.'}
+            </p>
+          ) : undefined
+        }
       >
         {entries.map((entry) => {
           if (entry.kind === 'action_group') {
@@ -620,37 +628,15 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           }
           if (entry.kind === 'tab_suggestion') {
             const s = entry.suggestion;
-            return (
-              <TabSuggestionCard
-                key={`s:${s.id}`}
-                suggestion={s}
-                busy={busySuggestionId === s.id}
-                error={suggestionErrors[s.id]}
-                onSend={(text) => void actOnSuggestion(s.id, () => api.sendTabSuggestion(s.id, text), 'Não foi possível enviar')}
-                onDismiss={() => void actOnSuggestion(s.id, () => api.dismissTabSuggestion(s.id), 'Não foi possível dispensar')}
-              />
-            );
+            return <TabSuggestionRow key={`s:${s.id}`} suggestion={s} busy={busySuggestionId === s.id} error={suggestionErrors[s.id]} onSend={sendSuggestion} onDismiss={dismissSuggestion} />;
           }
           if (entry.kind === 'tab_question') {
             const q = entry.question;
-            return <TabQuestionCard key={`q:${q.id}`} question={q} answering={answeringQuestionId === q.id} error={questionErrors[q.id]} onAnswer={(body) => void answerQuestion(q.id, body)} loadScreen={loadTabQuestionScreen} />;
+            return <TabQuestionCard key={`q:${q.id}`} question={q} answering={answeringQuestionId === q.id} error={questionErrors[q.id]} onAnswer={answerQuestion} loadScreen={loadTabQuestionScreen} />;
           }
           if (entry.kind === 'action') {
-            const g = grants.find((cand) => cand.source_action_id === entry.action.id && isGrantActive(cand));
-            return (
-              <ChatActionCard
-                key={entry.action.id}
-                action={entry.action}
-                deciding={decidingId === entry.action.id}
-                note={queuedNotes[entry.action.id]}
-                grant={g}
-                revoking={g !== undefined && revokingId === g.id}
-                onRevoke={() => {
-                  if (g) void revoke(g.id);
-                }}
-                onDecide={(decision) => void decide(entry.action.id, decision)}
-              />
-            );
+            const g = grantByAction.get(entry.action.id);
+            return <ChatActionCard key={entry.action.id} action={entry.action} deciding={decidingId === entry.action.id} note={queuedNotes[entry.action.id]} grant={g} revoking={g !== undefined && revokingId === g.id} onRevoke={revoke} onDecide={decide} />;
           }
           const m = entry.message;
           const row = fold.get(m.id);
@@ -664,7 +650,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           const waiting = empty && (row?.started === true || (sending && m.id === lastMessageId));
           return <ChatTurn key={m.id} message={m} streaming={streaming} tools={row?.tools} waiting={waiting} failed={Boolean(m.error_code) || (empty && !waiting)} />;
         })}
-      </ol>
+      </ChatThread>
       {actionError && <p className="mb-2 text-sm text-danger">{actionError}</p>}
       {error && <p className="mb-2 text-sm text-danger">{error}</p>}
       {/* A host that cannot run the message is why the box refuses, and the box says so. */}

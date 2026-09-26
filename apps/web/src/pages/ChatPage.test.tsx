@@ -93,6 +93,11 @@ function mockPointer(coarse: boolean): () => void {
   };
 }
 
+/** The element that scrolls is the list's parent (`ChatThread`); the list itself keeps the `Conversa` name. */
+const findScroller = async () => (await screen.findByRole('list', { name: 'Conversa' })).parentElement as HTMLElement;
+/** Lets a programmatic pin settle (`ChatThread` clears its flag on the next frame) before a scroll is faked as the reader's. */
+const nextFrame = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 40)));
+
 it('shows the stored conversation', async () => {
   render(<ChatPage />);
   expect(await screen.findByText('oi')).toBeTruthy();
@@ -216,7 +221,7 @@ it('scrolls the list to the newest message when one arrives', async () => {
     .mockResolvedValue({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm2', role: 'assistant', text: 'pronto' })] });
 
   render(<ChatPage />);
-  const list = await screen.findByRole('list');
+  const list = await findScroller();
   // jsdom lays nothing out, so the scrollable height is stubbed; what is asserted is that the page
   // pins the list to its bottom on new content.
   Object.defineProperty(list, 'scrollHeight', { value: 480, configurable: true });
@@ -264,12 +269,13 @@ it('leaves the scroll position alone once the reader has scrolled away from the 
     .mockResolvedValue({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm2', role: 'assistant', text: 'pronto' })] });
 
   render(<ChatPage />);
-  const list = await screen.findByRole('list');
+  const list = await findScroller();
   // Far from the bottom by isNearBottom's own rule (100 + 200 < 1000 - 48). The scroll event is
   // the only thing that can tell the page the reader moved: nothing here reads live geometry.
   Object.defineProperty(list, 'scrollHeight', { value: 1000, configurable: true });
   Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
   Object.defineProperty(list, 'scrollTop', { value: 100, configurable: true, writable: true });
+  await nextFrame();
   fireEvent.scroll(list);
 
   deliver({ type: 'message', message: msg({ id: 'm2', role: 'assistant', text: 'pronto' }) });
@@ -288,7 +294,7 @@ it('pins the thread to the bottom when a card lands, not only when a message doe
   chatMock.mockResolvedValue({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })], actions: [] });
 
   render(<ChatPage />);
-  const list = await screen.findByRole('list', { name: 'Conversa' });
+  const list = await findScroller();
   Object.defineProperty(list, 'scrollHeight', { value: 480, configurable: true });
   expect(list.scrollTop).toBe(0);
 
@@ -335,10 +341,11 @@ it('returns to the bottom on send, even if the reader had scrolled away', async 
     .mockResolvedValueOnce({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })] })
     .mockResolvedValue({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm3', role: 'assistant', text: 'pronto' })] });
   render(<ChatPage />);
-  const list = await screen.findByRole('list');
+  const list = await findScroller();
   Object.defineProperty(list, 'scrollHeight', { value: 480, configurable: true });
   Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
   Object.defineProperty(list, 'scrollTop', { value: 50, configurable: true, writable: true });
+  await nextFrame();
   fireEvent.scroll(list); // reader scrolled up: the page stops following
 
   const box = (await screen.findByPlaceholderText(/pergunte/i)) as HTMLTextAreaElement;
@@ -630,8 +637,8 @@ it('does not hand its scroll to the document when the thread reaches its end', a
   // for ever under the one you are reading. jsdom does not scroll, so the class is what can be
   // pinned; the behaviour itself only shows on a device.
   render(<ChatPage />);
-  const thread = await screen.findByRole('list', { name: 'Conversa' });
-  expect(thread.className).toContain('overscroll-contain');
+  const scroller = await findScroller();
+  expect(scroller.className).toContain('overscroll-contain');
 });
 
 it('cannot be widened past the viewport by an unbreakable token in an answer', async () => {

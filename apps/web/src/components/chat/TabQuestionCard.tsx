@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { memo, useEffect, useState, type KeyboardEvent } from 'react';
 import type { TabQuestion, TabQuestionAnswer, TabQuestionChoice, TabQuestionPermission } from '../../lib/types';
 import { answerSummary, statusLabel, tabLabel } from './tab-question-text';
 
@@ -8,7 +8,8 @@ export interface TabQuestionCardProps {
   answering: boolean;
   /** Why the last answer did not go through (pt-BR). */
   error?: string | null;
-  onAnswer: (body: TabQuestionAnswer) => void;
+  /** Takes the question's id, so the panel can pass one stable callback to every card. */
+  onAnswer: (id: string, body: TabQuestionAnswer) => void;
   /** The tab's live excerpt, for a permission card while it is open. Stable across renders. */
   loadScreen?: (id: string) => Promise<string>;
 }
@@ -17,7 +18,7 @@ export interface TabQuestionCardProps {
  * A question an agent in a tab asked, inline in the thread (spec 2026-09-25 §6.2). Presentational:
  * the request and the error handling live in `ChatPanel`. Everything shown is plain text — never HTML.
  */
-export function TabQuestionCard(props: TabQuestionCardProps) {
+export const TabQuestionCard = memo(function TabQuestionCard(props: TabQuestionCardProps) {
   const { question, error } = props;
   return (
     <li className="rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
@@ -26,7 +27,7 @@ export function TabQuestionCard(props: TabQuestionCardProps) {
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </li>
   );
-}
+});
 
 function ChoiceBody({ question, answering, onAnswer }: TabQuestionCardProps & { question: TabQuestionChoice }) {
   const items = question.payload.questions;
@@ -123,7 +124,7 @@ function ChoiceBody({ question, answering, onAnswer }: TabQuestionCardProps & { 
           />
         </label>
       </fieldset>
-      <button type="button" className="btn-primary mt-2" disabled={answering || !complete} onClick={() => onAnswer({ answers })}>
+      <button type="button" className="btn-primary mt-2" disabled={answering || !complete} onClick={() => onAnswer(question.id, { answers })}>
         Responder
       </button>
     </>
@@ -161,10 +162,10 @@ function PermissionBody({ question, answering, onAnswer, loadScreen }: TabQuesti
       {open ? (
         <>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" className="btn-primary" disabled={answering} onClick={() => onAnswer({ allow: true })}>
+            <button type="button" className="btn-primary" disabled={answering} onClick={() => onAnswer(question.id, { allow: true })}>
               Permitir
             </button>
-            <button type="button" className="btn-danger" disabled={answering} onClick={() => onAnswer({ allow: false })}>
+            <button type="button" className="btn-danger" disabled={answering} onClick={() => onAnswer(question.id, { allow: false })}>
               Negar
             </button>
             <button type="button" className="btn-ghost" disabled={answering} onClick={() => setDenying(true)}>
@@ -174,7 +175,7 @@ function PermissionBody({ question, answering, onAnswer, loadScreen }: TabQuesti
           {denying && (
             <div className="mt-2 flex gap-2">
               <input aria-label="O que dizer à aba" className="input" maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} />
-              <button type="button" className="btn-danger" disabled={answering || !text.trim()} onClick={() => onAnswer({ allow: false, text: text.trim() })}>
+              <button type="button" className="btn-danger" disabled={answering || !text.trim()} onClick={() => onAnswer(question.id, { allow: false, text: text.trim() })}>
                 Enviar
               </button>
             </div>
