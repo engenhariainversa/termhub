@@ -340,6 +340,15 @@ describe('POST /chat/messages', () => {
     expect(res.json().code).toBe('CHAT_BUSY');
     expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '  ' } })).statusCode).toBe(400);
   });
+
+  it('passes attachment_ids to start and allows an empty text with them', async () => {
+    const { app, start } = build();
+    const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '', attachment_ids: ['a1'] } });
+    expect(res.statusCode).toBe(202);
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), '', { projectId: null, attachmentIds: ['a1'] });
+    expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '', attachment_ids: [] } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { attachment_ids: [] } })).statusCode).toBe(400);
+  });
 });
 
 describe('POST /chat/actions/:id/decision', () => {

@@ -629,3 +629,20 @@ it('GET /chat/grants: 400 without a valid state, with a bad cursor or a limit ou
   }
   expect(listForUser).not.toHaveBeenCalled();
 });
+
+it('POST /messages passes attachment_ids to the service and allows an empty text with them', async () => {
+  const { app, send } = build();
+  const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '', attachment_ids: ['a1', 'a2'] } });
+  expect(res.statusCode).toBe(201);
+  expect(send).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), '', { projectId: null, attachmentIds: ['a1', 'a2'] });
+  expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '', attachment_ids: [] } })).statusCode).toBe(400);
+  expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { attachment_ids: [] } })).statusCode).toBe(400);
+  expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', attachment_ids: ['1', '2', '3', '4', '5', '6'] } })).statusCode).toBe(400);
+});
+
+it('POST /messages answers 409 ATTACHMENT_UNAVAILABLE as the service throws it', async () => {
+  const { app } = build({ send: vi.fn(async () => { throw new HttpError(409, 'Um dos anexos não está disponível: envie de novo', 'ATTACHMENT_UNAVAILABLE'); }) });
+  const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', attachment_ids: ['gone'] } });
+  expect(res.statusCode).toBe(409);
+  expect(res.json()).toEqual({ error: 'Um dos anexos não está disponível: envie de novo', code: 'ATTACHMENT_UNAVAILABLE' });
+});

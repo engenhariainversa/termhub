@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { chatGrantListQuery } from '@termhub/mobile-api';
+import { chatGrantListQuery, MAX_ATTACHMENTS_PER_MESSAGE } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
@@ -13,10 +13,18 @@ import { activeGrants, assertGrantableAction, grantTab, listGrants, revokeGrant 
 import { decideMany } from '../chat/decisions.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
 
-/** `wait: false` (what the web sends): answer 202 as soon as the message is stored, like the phone's
+/** The same rule as the mobile contract's `mobileMessageBody` (spec 2026-09-26 §5.5): words, files, or both — never neither.
+ *  `wait: false` (what the web sends): answer 202 as soon as the message is stored, like the phone's
  *  route, instead of holding the request open for the whole answer — an edge that cuts a long request
  *  would otherwise make the page give the text back and invite a duplicate send. */
-const messageBody = z.object({ text: z.string().trim().min(1).max(8000), project_id: z.string().min(1).max(64).nullish(), wait: z.boolean().optional() });
+const messageBody = z
+  .object({
+    text: z.string().trim().max(8000).default(''),
+    project_id: z.string().min(1).max(64).nullish(),
+    attachment_ids: z.array(z.string().min(1).max(64)).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
+    wait: z.boolean().optional(),
+  })
+  .refine((b) => b.text.length > 0 || (b.attachment_ids?.length ?? 0) > 0, { message: 'Escreva uma mensagem ou anexe um arquivo', path: ['text'] });
 const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
 const actionIdParam = z.object({ id: z.string().min(1).max(64) });
@@ -104,15 +112,18 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
   });
 
   app.post('/messages', { config: { action: 'create' } }, async (request, reply) => {
-    const { text, project_id, wait } = messageBody.parse(request.body);
+    const { text, project_id, attachment_ids, wait } = messageBody.parse(request.body);
+    // `attachmentIds` only when the body carried ids, so a plain message calls the service exactly as before.
+    const opts = { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}) };
     if (wait === false) {
-      // A refusal (host problem, archived conversation, busy decision) rejects `start` itself and keeps
-      // its status. The answer streams over `/ws/chat`; a failure after this point is logged by label.
-      const started = await deps.service.start(request.scope.user, text, { projectId: project_id ?? null });
+      // A refusal (host problem, archived conversation, busy decision, an attachment that is not this
+      // user's) rejects `start` itself and keeps its status. The answer streams over `/ws/chat`; a
+      // failure after this point is logged by label.
+      const started = await deps.service.start(request.scope.user, text, opts);
       started.done.catch((err) => request.log.warn({ code: failureLabel(err), conversationId: started.conversation_id }, 'chat run failed after start'));
       return reply.code(202).send({ conversation_id: started.conversation_id, user_message_id: started.user_message_id, assistant_message_id: started.assistant_message_id });
     }
-    const message = await deps.service.send(request.scope.user, text, { projectId: project_id ?? null });
+    const message = await deps.service.send(request.scope.user, text, opts);
     return reply.code(201).send({ message });
   });
 

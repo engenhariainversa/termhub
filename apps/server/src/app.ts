@@ -38,6 +38,7 @@ import { chatRoutes } from './routes/chat.js';
 import { chatAttachmentRoutes, type ChatAttachmentDeps } from './routes/chat-attachments.js';
 import { chatBus } from './chat/bus.js';
 import { diskStore } from './chat/attachments/store.js';
+import { sweepAttachments } from './chat/attachments/sweep.js';
 import { extract } from './chat/attachments/extract.js';
 import { createExtractionQueue, requeuePending } from './chat/attachments/queue.js';
 import { toPublicAttachment } from './db/repositories/chat-attachments.js';
@@ -257,6 +258,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   const purge = setInterval(() => {
     void authService.purgeExpired().catch(() => {});
     void purgeExpiredActions(repos).catch(() => {});
+    // Attachments nobody sent within a day, and files on the volume that lost their row (spec 2026-09-26 §5.1)
+    void sweepAttachments({ repo: repos.chatAttachments, store: attachmentStore, log: fastify.log }).catch(() => {});
     // Mobile: stale enrolment requests expire, then device sessions, requests, trail and push history age out
     if (mobile) void purgeMobile(repos, mobile.enrolment).catch(() => {});
     // Cards whose tab vanished without a lifecycle event (the other color removed it, a crash): spec 2026-09-26 §4.7.

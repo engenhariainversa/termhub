@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_CLAUDE_SYSTEM_PROMPT } from '@termhub/agent-protocol';
+import type { ChatAttachment } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ChatConversation, ChatMessage } from '../db/repositories/chat.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
+import { isAttachable, toPublicAttachment, type AttachmentRow } from '../db/repositories/chat-attachments.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions } from '../db/repositories/tab-questions-view.js';
 import type { User } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
+import { attachmentContext } from './attachments/context.js';
 import { chatBus } from './bus.js';
 import { streamedSystemPrompt } from './concierge-prompt.js';
 import { hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
@@ -32,6 +35,21 @@ export interface RunnerInput {
   /** A streamed run (spec 2026-09-26): text is the first input lines, newline-terminated, and the
    *  channel stays open for more. */
   stream_input?: boolean;
+}
+/** What a message may come with (spec 2026-09-26 §5.5): ids of this user's unsent uploads, at most five. */
+export interface SendOptions {
+  projectId?: string | null;
+  attachmentIds?: string[];
+}
+/** What `startIn` takes besides the text: a decision's marking hook, and the attachment ids of a typed message. */
+interface StartOptions {
+  beforeRun?: () => Promise<void>;
+  attachmentIds?: string[];
+}
+/** The attachment rows a message checked before storing anything (`attachableRows`): the ids to bind and the rows themselves. */
+interface Attachable {
+  ids: string[];
+  rows: AttachmentRow[];
 }
 /** A run that has started: both messages are stored and published; `done` settles when it ends. */
 export interface StartedRun {
@@ -96,10 +114,12 @@ const isSetupFailure = (e: unknown): e is HttpError =>
   e instanceof HttpError && (e.code === 'CONCIERGE_DISABLED' || e.code === 'CONCIERGE_FAILED');
 
 /** A message stored while its conversation's process could not take it; it runs when the lock frees.
- *  `runText` is set when its tab-question context was already read (and stamped) for it. */
+ *  `runText` is set when its tab-question context was already read (and stamped) for it; until then
+ *  `attachments` (the rows bound to `question`) are what its attachment block is built from. */
 interface QueuedTurn {
   text: string;
   runText?: string;
+  attachments: AttachmentRow[];
   question: ChatMessage;
   answer: ChatMessage;
   settle: LiveTurn['settle'];
@@ -112,6 +132,9 @@ function deferred(): { promise: Promise<ChatMessage>; settle: LiveTurn['settle']
   const promise = new Promise<ChatMessage>((res, rej) => ((resolve = res), (reject = rej)));
   return { promise, settle: { resolve, reject } };
 }
+
+/** An id that does not name one of this user's unsent uploads in this conversation (spec 2026-09-26 §5.5). */
+const attachmentUnavailable = () => new HttpError(409, 'Um dos anexos não está disponível: envie de novo', 'ATTACHMENT_UNAVAILABLE');
 
 /** What the action targets, in the one line the model needs to tell this proposal apart from any
  * other it may have made — the tool name and the target ids the model's own original call carried
@@ -422,7 +445,7 @@ export class ChatService {
 
   /** A message the user typed, in the account-wide chat or in one of their projects' (`projectId`).
    * Awaits the whole run: what the web's `POST /api/chat/messages` answers with. */
-  async send(user: User, text: string, opts: { projectId?: string | null } = {}): Promise<ChatMessage> {
+  async send(user: User, text: string, opts: SendOptions = {}): Promise<ChatMessage> {
     return (await this.start(user, text, opts)).done;
   }
 
@@ -434,8 +457,8 @@ export class ChatService {
    * would have thrown (a setup failure). A caller that does not await `done` must attach its own
    * `catch`: this never swallows it, since `send` relies on that rejection.
    */
-  async start(user: User, text: string, opts: { projectId?: string | null } = {}): Promise<StartedRun> {
-    return this.startIn(user, await this.conversationFor(user, opts.projectId ?? null), text);
+  async start(user: User, text: string, opts: SendOptions = {}): Promise<StartedRun> {
+    return this.startIn(user, await this.conversationFor(user, opts.projectId ?? null), text, { attachmentIds: opts.attachmentIds });
   }
 
   /** The project's focus text for this run, or null for the account-wide chat. Owner-scoped reads, so a
@@ -473,9 +496,11 @@ export class ChatService {
     return this.deps.agents.capabilities(machineId)?.includes(CAPABILITY_CLAUDE_STREAM_INPUT) ?? false;
   }
 
-  /** Stores the question and its empty answer and tells every open screen. */
-  private async storeTurn(user: User, conversationId: string, text: string): Promise<{ question: ChatMessage; answer: ChatMessage }> {
-    const question = await this.deps.repos.chat.addMessage({ conversation_id: conversationId, role: 'user', text });
+  /** Stores the question (with its attachments bound to it, see `bindAttachments`) and its empty answer,
+   *  and tells every open screen. The published question carries its attachments. */
+  private async storeTurn(user: User, conversationId: string, text: string, attachable: Attachable): Promise<{ question: ChatMessage; answer: ChatMessage }> {
+    const stored = await this.deps.repos.chat.addMessage({ conversation_id: conversationId, role: 'user', text });
+    const question = await this.bindAttachments(stored, attachable.ids, user, conversationId);
     chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversationId, message: question });
     const answer = await this.deps.repos.chat.addMessage({ conversation_id: conversationId, role: 'assistant', text: '' });
     chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversationId, message: answer });
@@ -484,15 +509,17 @@ export class ChatService {
 
   /**
    * The text written to the CLI for a message: any tab-question context the model was not told yet,
-   * then the message.
+   * then the message's attachment block, then the message.
    *
    * What the chat answered in the project's tabs since the model last heard (spec 2026-09-25 §5.5):
    * prepended to this run's input only — the stored message stays the person's own words. Read and
    * stamped under the lock, before the message is written: at most once, like a decision's injection.
+   * The attachment block goes next to it (spec 2026-09-26 §5.5): ids and names for `read_attachment`,
+   * never the extracted text. A message of files alone has an empty `text`.
    */
-  private async runTextFor(user: User, conversationId: string, text: string): Promise<string> {
+  private async runTextFor(user: User, conversationId: string, text: string, attachments: AttachmentRow[]): Promise<string> {
     const context = await this.tabQuestionContextFor(user, conversationId);
-    return context ? `${context}\n\n${text}` : text;
+    return [context, attachmentContext(attachments), text].filter((part): part is string => typeof part === 'string' && part.length > 0).join('\n\n');
   }
 
   private enqueue(conversationId: string, turn: QueuedTurn): void {
@@ -507,14 +534,18 @@ export class ChatService {
    * and answered by the next process. A decision (`beforeRun`) is never queued here: it keeps its own
    * durable path (409 → queued note → `drainNextDecision`).
    */
-  private async startWhileBusy(user: User, conversation: ChatConversation, text: string, opts?: { beforeRun?: () => Promise<void> }): Promise<StartedRun> {
+  private async startWhileBusy(user: User, conversation: ChatConversation, text: string, opts?: StartOptions): Promise<StartedRun> {
     // "Nova conversa" is archiving this thread: nothing typed now belongs in it.
     if (this.resetting.has(conversation.id)) throw new HttpError(409, 'O concierge ainda está respondendo a mensagem anterior', 'CHAT_BUSY');
     const live = this.live.get(conversation.id);
     if (!live?.accepting && opts?.beforeRun) throw new HttpError(409, 'O concierge ainda está respondendo a mensagem anterior', 'CHAT_BUSY');
+    // The attachments this message names, checked with reads only (spec 2026-09-26 §5.5), as in
+    // `startIn`: a bad id is a message never sent — 409, nothing stored, no decision marked, no tab
+    // context stamped — whether the message is injected or queued.
+    const attachable = await this.attachableRows(user, conversation.id, opts?.attachmentIds ?? []);
     if (live?.accepting && opts?.beforeRun) await opts.beforeRun();
-    let runText = live?.accepting ? await this.runTextFor(user, conversation.id, text) : undefined;
-    const { question, answer } = await this.storeTurn(user, conversation.id, text);
+    let runText = live?.accepting ? await this.runTextFor(user, conversation.id, text, attachable.rows) : undefined;
+    const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable);
     const d = deferred();
     const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id, done: d.promise };
     // Re-read after the awaits above: the process may have ended its input in between, and a newer one
@@ -522,13 +553,45 @@ export class ChatService {
     // would leave the message waiting until it ends.
     const now = this.live.get(conversation.id);
     if (now?.accepting) {
-      runText ??= await this.runTextFor(user, conversation.id, text);
+      runText ??= await this.runTextFor(user, conversation.id, text, attachable.rows);
       if (this.live.get(conversation.id) === now && now.add({ uuid: randomUUID(), text: runText, question, answer, settle: d.settle })) return started;
     }
-    this.enqueue(conversation.id, { text, runText, question, answer, settle: d.settle });
+    this.enqueue(conversation.id, { text, runText, attachments: attachable.rows, question, answer, settle: d.settle });
     // The process may already be gone, with the lock released during the awaits above.
     if (!this.running.has(conversation.id)) void this.launchQueued(user, conversation.id);
     return started;
+  }
+
+  /**
+   * The rows a message may carry, read before anything is written (spec 2026-09-26 §5.5): each id must
+   * be this user's, this conversation's, unsent and not an invalid file — the same rule `attach` applies
+   * in SQL. Anything else is a message never sent: 409, nothing stored, nothing stamped. Ids are
+   * deduplicated so a repeated id cannot make the later `attach` count look short.
+   */
+  private async attachableRows(user: User, conversationId: string, ids: string[]): Promise<Attachable> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return { ids: unique, rows: [] };
+    const found = await Promise.all(unique.map((id) => this.deps.repos.chatAttachments.findForUser(id, user.id)));
+    const rows = found.filter((r): r is AttachmentRow => r !== null && isAttachable(r, conversationId));
+    if (rows.length < unique.length) throw attachmentUnavailable();
+    return { ids: unique, rows };
+  }
+
+  /**
+   * Binds the checked ids to the stored user row and answers that row with its attachments. `attach`
+   * is conditional in SQL, so a row taken by a concurrent send or deleted since the pre-check binds
+   * nothing: then the user row just inserted is removed again and the send is the same 409 — nothing
+   * of a refused message is ever stored.
+   */
+  private async bindAttachments(question: ChatMessage, ids: string[], user: User, conversationId: string): Promise<ChatMessage> {
+    if (ids.length === 0) return question;
+    const bound = await this.deps.repos.chatAttachments.attach(ids, question.id, user.id, conversationId);
+    if (bound < ids.length) {
+      await this.deps.repos.chat.deleteMessage(question.id);
+      throw attachmentUnavailable();
+    }
+    const attachments: ChatAttachment[] = (await this.deps.repos.chatAttachments.listForMessages([question.id])).map(toPublicAttachment);
+    return { ...question, attachments };
   }
 
   /** One whole run in a given conversation — what a decision's re-injection and the drain await. */
@@ -540,7 +603,7 @@ export class ChatService {
    * checks, the lock and the two stored messages. The rest is `finishRun`'s, started here and handed
    * back as `done`. The conversation's own id is the lock, so a project chat and the account-wide chat
    * run side by side. */
-  private async startIn(user: User, conversation: ChatConversation, text: string, opts?: { beforeRun?: () => Promise<void> }): Promise<StartedRun> {
+  private async startIn(user: User, conversation: ChatConversation, text: string, opts?: StartOptions): Promise<StartedRun> {
     // Which machine and which account, before the lock is taken and before a single row is written: a
     // host that cannot run is not a failed answer, it is a message that was never sent. Storing the
     // question and an empty assistant bubble for it would leave the screen waiting on an answer nobody
@@ -566,6 +629,11 @@ export class ChatService {
       const live = await this.deps.repos.chat.findByIdForUser(conversation.id, user.id);
       if (!live || live.archived_at !== null) throw new HttpError(409, 'Esta conversa foi encerrada; envie de novo para começar a nova conversa', 'CHAT_ARCHIVED');
 
+      // The attachments this message names, checked with reads only (spec 2026-09-26 §5.5): a bad id is
+      // a message never sent, so this comes before the host is pinned, before a decision is marked
+      // injected and before the tab context is stamped.
+      const attachable = await this.attachableRows(user, conversation.id, opts?.attachmentIds ?? []);
+
       // The host this run uses is the host this conversation has, and from here on it says so: a
       // conversation whose machine was auto-picked (one candidate, nothing stored) is otherwise
       // indistinguishable from one whose stored host was unenrolled out from under a live session, and
@@ -581,8 +649,8 @@ export class ChatService {
       // mark a decision injected that it never actually sent (fix round 2).
       if (opts?.beforeRun) await opts.beforeRun();
 
-      const runText = await this.runTextFor(user, conversation.id, text);
-      const { question, answer } = await this.storeTurn(user, conversation.id, text);
+      const runText = await this.runTextFor(user, conversation.id, text, attachable.rows);
+      const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable);
       const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id };
 
       // Not awaited: this call resolves now, and the lock passes to the run, whose own `finally`
@@ -838,7 +906,7 @@ export class ChatService {
       const streamed = this.streams(host.machine.id);
       taken = streamed ? queue.splice(0) : queue.splice(0, 1);
       const turns: LiveTurn[] = [];
-      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? (await this.runTextFor(user, conversationId, q.text)), question: q.question, answer: q.answer, settle: q.settle });
+      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? (await this.runTextFor(user, conversationId, q.text, q.attachments)), question: q.question, answer: q.answer, settle: q.settle });
       // From here the run owns the lock and releases it itself, and settles the turns.
       locked = false;
       taken = [];
