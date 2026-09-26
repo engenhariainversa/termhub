@@ -664,6 +664,7 @@ it('sendTabSuggestion sends over the mock and the card reads as sent; a second s
   await jest.advanceTimersByTimeAsync(5000);
   const s = slot(chat, 'p-termhub').tabSuggestions.find((x) => x.status === 'open')!;
   expect(s).toMatchObject({ kind: 'suggestion', tab_name: 'api', payload: { text: 'commit it' } });
+  expect(s.payload.context).toBe('Criei o arquivo notes.txt com a linha hello.\n\nQuer que eu faça o commit?');
 
   await chat.getState().sendTabSuggestion(s.id, 'commit it and push');
   await jest.advanceTimersByTimeAsync(0);

@@ -179,8 +179,15 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.markSeen /
       expect(tab.state_text).toBe('dois');
     });
 
-    it('a continuation that brings its own text still replaces it (Claude idle_prompt)', async () => {
+    it("a continuation keeps the wait's text when it has one: Claude's idle_prompt no longer replaces the Stop's message (spec 2026-09-26 §6.1)", async () => {
       await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Posso seguir?' });
+      const { tab, event } = await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Claude is waiting for your input', continuesWait: true });
+      expect(tab.state_text).toBe('Posso seguir?');
+      expect(event.text).toBe('Claude is waiting for your input'); // the event row keeps what the event said
+    });
+
+    it('a continuation brings its own text when the wait has none (a Claude Code older than 2.1.47 sends no message on Stop)', async () => {
+      await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: null });
       const { tab } = await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Claude is waiting for your input', continuesWait: true });
       expect(tab.state_text).toBe('Claude is waiting for your input');
     });

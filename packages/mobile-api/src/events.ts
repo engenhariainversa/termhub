@@ -106,7 +106,9 @@ export const tabSuggestionSchema = z.object({
   tab_id: z.string(),
   tab_name: z.string().nullable(),
   kind: z.literal('suggestion'),
-  payload: z.object({ text: z.string() }),
+  // `context`: the agent's message the suggestion answers (spec 2026-09-26 §6.3). Optional: a server before
+  // TER-96 sends none; an app before it strips it (a plain z.object).
+  payload: z.object({ text: z.string(), context: z.string().nullable().optional() }),
   status: tabSuggestionStatus,
   answer: z.object({ text: z.string() }).nullable(),
   error_code: z.string().nullable(),

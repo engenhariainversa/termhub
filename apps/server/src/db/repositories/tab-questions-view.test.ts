@@ -11,3 +11,10 @@ it('never puts the permission queue mark on the wire; a failure code still trave
   expect(toTabQuestionView(row({ error_code: 'QUEUED' }), 'api').error_code).toBeNull();
   expect(toTabQuestionView(row({ status: 'failed', error_code: 'MACHINE_OFFLINE' }), 'api').error_code).toBe('MACHINE_OFFLINE');
 });
+
+it('a suggestion always carries context on the wire: null for a row stored before TER-96', () => {
+  const s = row({ kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', closed_at: null });
+  expect(toTabQuestionView(s, 'api').payload).toEqual({ text: 'commit it', context: null });
+  expect(toTabQuestionView({ ...s, payload: { text: 'commit it', context: 'Quer que eu faça o commit?' } }, 'api').payload).toEqual({ text: 'commit it', context: 'Quer que eu faça o commit?' });
+  expect(toTabQuestionView(row(), 'api').payload).toEqual({ tool_name: 'Bash' }); // questions untouched
+});

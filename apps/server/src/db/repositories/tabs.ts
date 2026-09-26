@@ -135,8 +135,10 @@ export class TabsRepository {
       const currentlySeen = !!current?.stateSeenAt && !!current.stateAt && current.stateSeenAt >= current.stateAt;
       const continuing = !!event.continuesWait && current?.state === 'waiting_input' && event.kind === 'waiting_input';
       const carrySeen = continuing && currentlySeen;
-      // a continuation with nothing to say (Cursor's stop after its answer) must not wipe the question
-      const text = continuing && event.text === null ? (current?.stateText ?? null) : event.text;
+      // A continuation keeps the text of the wait it continues when that wait has one, and brings its own
+      // only when it has none (spec 2026-09-26 §6.1): Claude's idle_prompt ("Claude is waiting for your
+      // input") no longer replaces the Stop's last_assistant_message, and Cursor's stop keeps its answer.
+      const text = continuing ? (current?.stateText ?? event.text) : event.text;
       const ev = await tx.tabEvent.create({ data: { id: newId(), tabId, kind: event.kind, tool: event.tool, text: event.text, meta: (event.meta ?? {}) as object, createdAt: at } });
       const updated = await tx.tab.update({
         where: { id: tabId },

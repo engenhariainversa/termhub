@@ -159,7 +159,7 @@ function tabSuggestionView(s: MockTabSuggestion): TTabSuggestion {
 
 /** The canned suggestion a `sugest…` message makes the tab `api` show. */
 function createTabSuggestion(state: MockState, now: number, conversationId: string): MockTabSuggestion {
-  const suggestion: MockTabSuggestion = { id: randomId(10), conversation_id: conversationId, tab_id: 't-api', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: new Date(now).toISOString(), answered_at: null, closed_at: null };
+  const suggestion: MockTabSuggestion = { id: randomId(10), conversation_id: conversationId, tab_id: 't-api', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it', context: 'Criei o arquivo notes.txt com a linha hello.\n\nQuer que eu faça o commit?' }, status: 'open', answer: null, error_code: null, created_at: new Date(now).toISOString(), answered_at: null, closed_at: null };
   state.tabSuggestions.push(suggestion);
   return suggestion;
 }

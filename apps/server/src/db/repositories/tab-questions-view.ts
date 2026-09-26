@@ -1,4 +1,4 @@
-import type { TabRowKind } from '../../chat/tab-question-payload.js';
+import type { SuggestionPayload, TabRowKind } from '../../chat/tab-question-payload.js';
 import type { Repositories } from './index.js';
 import { PERMISSION_QUEUED, type TabQuestion, type TabQuestionStatus, type TabRowAnswer, type TabRowPayload } from './tab-questions.js';
 
@@ -33,7 +33,8 @@ export function toTabQuestionView(r: TabQuestion, tabName: string | null): TabQu
     tab_id: r.tab_id,
     tab_name: tabName,
     kind: r.kind,
-    payload: r.payload,
+    // A suggestion always carries `context` on the wire (null for a row stored before TER-96).
+    payload: r.kind === 'suggestion' ? { text: (r.payload as SuggestionPayload).text, context: (r.payload as SuggestionPayload).context ?? null } : r.payload,
     status: r.status,
     answer: r.answer,
     // `QUEUED` is the server's own bookkeeping for the permission queue: clients read `error_code` only for

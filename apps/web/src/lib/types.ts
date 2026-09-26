@@ -864,7 +864,8 @@ export interface TabSuggestion {
   /** The tab's name at read time; null once the tab is gone. */
   tab_name: string | null;
   kind: 'suggestion';
-  payload: { text: string };
+  /** `context`: the agent's message the suggestion answers (TER-96); null or absent when there is none. */
+  payload: { text: string; context?: string | null };
   status: TabSuggestionStatus;
   answer: { text: string } | null;
   error_code: string | null;

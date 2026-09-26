@@ -41,9 +41,14 @@ export interface ChoicePayload {
 export interface PermissionPayload {
   tool_name: string;
 }
-/** Claude Code's dimmed next prompt, read off the tab's screen (spec 2026-09-25 tab suggestions §6.1). */
+/**
+ * Claude Code's dimmed next prompt, read off the tab's screen (spec 2026-09-25 tab suggestions §6.1), and the
+ * agent's last message it answers — the tab's `state_text` at the check, cleaned (spec 2026-09-26 §6.2).
+ * `context` is absent on rows stored before it existed; the view always sends it (null then).
+ */
 export interface SuggestionPayload {
   text: string;
+  context?: string | null;
 }
 /** What the person sent for it, as edited. */
 export interface SuggestionAnswer {
