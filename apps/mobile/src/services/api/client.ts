@@ -60,6 +60,10 @@ export type CreateHttpMobileApiOptions = {
    * (P§6.1). The singleton passes `socketWake` (`wake.ts`), which `_layout.tsx` emits on AppState
    * `active` — `services/api` must not import `react-native` itself. */
   foreground?: { subscribe(fn: () => void): () => void };
+  /** Whether the access token is missing or about to expire (the session store's `tokenStale`). A
+   * refused socket renews only then; a refusal with a fresh token is not a token problem and only
+   * backs off (TER-93: the Origin refusal used to renew every 1–30 s). Defaults to always stale. */
+  tokenStale?: () => boolean;
 };
 
 type CallOptions = {
@@ -230,12 +234,18 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     events: (a, handlers) => {
       const current = typeof a === 'function' ? a : () => a;
       // A refused upgrade (the server's HTTP 401 before switching protocols, seen as a close that
-      // never opened) or a `1008` close is the server refusing the token (expired) or the proof:
-      // the next attempt first runs the same single-flighted renewal as an HTTP `TOKEN_EXPIRED`
-      // — once per attempt, so a failed renewal backs off with the socket. When it yields
-      // nothing (locked), the attempt goes on with whatever `current()` gives — or throws, which
-      // the socket treats as a dropped connection — and keeps backing off; never final.
+      // never opened) or a `1008` close means the server refused the token or the proof, or
+      // refused the upgrade for an unrelated reason (TER-93: a bad Origin) — renewing on every
+      // such refusal renewed a perfectly fresh token every 1–30 s. So the next attempt only runs
+      // the same single-flighted renewal as an HTTP `TOKEN_EXPIRED` when the token is actually
+      // stale (`o.tokenStale`, defaulting to always stale) — once per attempt, so a failed
+      // renewal backs off with the socket. When it yields nothing (locked), the attempt goes on
+      // with whatever `current()` gives — or throws, which the socket treats as a dropped
+      // connection — and keeps backing off; never final.
       let renewBeforeNext = false;
+      const refusedByServer = () => {
+        if (o.tokenStale?.() ?? true) renewBeforeNext = true;
+      };
       const headers = async () => {
         let fresh: string | null = null;
         if (renewBeforeNext) {
@@ -251,11 +261,9 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
         headers,
         onEvent: handlers.onEvent,
         onReconnect: handlers.onReconnect,
-        onRefused: () => {
-          renewBeforeNext = true;
-        },
+        onRefused: refusedByServer,
         onClose: (code, final) => {
-          if (code === 1008) renewBeforeNext = true;
+          if (code === 1008) refusedByServer();
           handlers.onClose(code, final);
         },
         onServerTime: learnFrom,

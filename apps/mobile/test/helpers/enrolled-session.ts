@@ -28,6 +28,7 @@ export function setupSession(start = START, mode: 'mock' | 'http' = 'mock') {
     onTokenExpired: () => store!.getState().renewToken(),
     now,
     mode,
+    tokenStale: () => store!.getState().tokenStale(),
   });
   const localAuth = { available: jest.fn(async () => true), authenticate: jest.fn(async () => true) };
   const make = () => createSessionStore({ api, key, vault, now, mockControls: transport.controls, localAuth });
