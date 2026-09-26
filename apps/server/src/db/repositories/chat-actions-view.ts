@@ -47,6 +47,13 @@ const taskIdOf = (action: ChatAction): string => asString((action.args as Record
 /** A task as the sentence names it: its ref, then its title — `TER-12 "Corrigir o build"`. */
 const named = (task: Task) => `${task.ref} "${task.title}"`;
 
+/** The only tools whose row carries both a project_id and a machine_id where the machine is the key
+ * fact being approved (which machine is being linked/re-pointed/unlinked) — for these three alone,
+ * `describeActions` resolves and names both, rather than letting the project_id branch win the way it
+ * does for every other project-scoped tool (open_tab, create_task, start_agent), where a project has
+ * no single machine and naming one would be misleading. */
+const MACHINE_LINK_TOOLS = new Set(['link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine']);
+
 function verbPhrase(action: ChatAction, task: Task | undefined): string {
   const args = (action.args ?? {}) as Record<string, unknown>;
   switch (action.tool) {
@@ -60,6 +67,12 @@ function verbPhrase(action: ChatAction, task: Task | undefined): string {
       return 'abrir uma aba nova';
     case 'close_tab':
       return 'fechar a aba';
+    case 'link_project_machine':
+      return `vincular a pasta \`${asString(args.cwd)}\`${args.create_dir === true ? ' (criando a pasta)' : ''}`;
+    case 'set_project_machine_cwd':
+      return `trocar a pasta para \`${asString(args.cwd)}\`${args.create_dir === true ? ' (criando a pasta)' : ''}`;
+    case 'unlink_project_machine':
+      return args.confirm === true ? 'desvincular a máquina (fechando as abas do projeto nela, se houver)' : 'desvincular a máquina';
     case 'start_agent':
       return `iniciar um agente com o prompt "${asString(args.prompt)}"`;
     case 'create_task':
@@ -182,11 +195,11 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
 
     // Exactly one of these is ever populated for a real gated call (see the tool schemas): a tab_id
     // for terminal tools, a task_id for the four task tools, a project_id for open_tab/create_task/
-    // start_agent, a machine_id for none today (kept for a future tool that might carry one). Each
-    // is the *primary* reference this specific action names, and its own resolution decides the
-    // whole "where" — a project derived from a resolved tab or task (and a machine, only from a
-    // resolved tab — a project has no single machine any more) is a secondary, best-effort addition,
-    // never itself a reason to say something is missing.
+    // start_agent (and, for the three MACHINE_LINK_TOOLS below, alongside a machine_id too). Each is
+    // the *primary* reference this specific action names, and its own resolution decides the whole
+    // "where" — a project derived from a resolved tab or task (and a machine, only from a resolved
+    // tab — a project has no single machine any more) is a secondary, best-effort addition, never
+    // itself a reason to say something is missing.
     let loc: Location;
     if (action.tab_id) {
       const tab = tabById.get(action.tab_id);
@@ -202,6 +215,17 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
       else {
         const project = projectById.get(task.project_id);
         loc = { project: project?.name };
+      }
+    } else if (action.project_id && action.machine_id && MACHINE_LINK_TOOLS.has(action.tool)) {
+      // Link/re-point/unlink: unlike open_tab/create_task/start_agent, the machine here is the key
+      // fact the user is approving, not an incidental detail — name both, through the same
+      // owner-scoped batched lookups every other branch uses (machineById already holds every
+      // action's machine_id, so this is no extra query).
+      const project = projectById.get(action.project_id);
+      if (!project) loc = { missing: 'project' };
+      else {
+        const machine = machineById.get(action.machine_id);
+        loc = machine ? { project: project.name, machine: machine.name } : { missing: 'machine' };
       }
     } else if (action.project_id) {
       const project = projectById.get(action.project_id);

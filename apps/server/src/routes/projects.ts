@@ -10,16 +10,13 @@ import { scoped } from '../auth/scope.js';
 import { requireSimCapable } from '../agent/errors.js';
 import { killTmuxSession, listTmuxSessions } from '../terminal/machine-exec.js';
 import type { SimulatorSessionManager } from '../simulator/session-manager.js';
-import { ensureDirectory } from '../terminal/machine-fs.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabsRemoved } from '../monitor/tab-events.js';
+import { announceLinked, PROJECT_CWD, removeProjectMachineLink, resolveLinkCwd } from '../control/project-links.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const linkParams = z.object({ id: z.string().min(1).max(64), machineId: z.string().min(1).max(64) });
 
-const cwdSchema = z.string().trim().min(1).max(1024).refine((p) => p.startsWith('/') || /^[A-Za-z]:\\/.test(p) || p.startsWith('~'), {
-  message: 'cwd deve ser um caminho absoluto',
-});
 const keySchema = z.string().trim().regex(PROJECT_KEY_RE, 'Chave inválida: 2 a 10 letras maiúsculas ou dígitos, começando com letra');
 const statusSchema = z.enum(['active', 'paused', 'archived']);
 
@@ -31,7 +28,7 @@ const createBody = z
     description: z.string().trim().max(2000).optional().nullable(),
     /** optional first machine link (both or neither) */
     machine_id: z.string().min(1).max(64).optional(),
-    cwd: cwdSchema.optional(),
+    cwd: PROJECT_CWD.optional(),
     /** creates the folder on the machine (mkdir -p) when it does not exist */
     create_dir: z.boolean().optional(),
   })
@@ -49,8 +46,8 @@ const patchBody = z
   })
   .strict();
 
-const linkBody = z.object({ machine_id: z.string().min(1).max(64), cwd: cwdSchema, create_dir: z.boolean().optional() }).strict();
-const linkPatchBody = z.object({ cwd: cwdSchema, create_dir: z.boolean().optional() }).strict();
+const linkBody = z.object({ machine_id: z.string().min(1).max(64), cwd: PROJECT_CWD, create_dir: z.boolean().optional() }).strict();
+const linkPatchBody = z.object({ cwd: PROJECT_CWD, create_dir: z.boolean().optional() }).strict();
 
 const tabBody = z.object({
   name: z.string().trim().min(1).max(60).optional(),
@@ -59,15 +56,6 @@ const tabBody = z.object({
   /** required when the project is linked to more than one machine */
   machine_id: z.string().min(1).max(64).optional(),
 });
-
-/** Windows paths (C:\...) do not go through sh: they are stored unchecked. */
-const isPosixPath = (p: string) => p.startsWith('/') || p.startsWith('~');
-
-/** Checks the folder on the machine (creates it when asked) and returns the resolved absolute path. */
-async function resolveCwd(machine: Machine, cwd: string, createDir: boolean | undefined): Promise<string> {
-  if (!isPosixPath(cwd)) return cwd;
-  return (await ensureDirectory(machine, cwd, createDir ?? false)).path;
-}
 
 /** Repository rule errors become 409 (conflicts) or 400 with their pt-BR message, keeping the rule's own code. */
 async function rule<T>(work: () => Promise<T>): Promise<T> {
@@ -111,7 +99,7 @@ export async function projectRoutes(app: FastifyInstance, repos: Repositories, d
       machine = await scoped(repos, request).machine(machine_id).catch(() => {
         throw badRequest('Máquina inexistente');
       });
-      resolvedCwd = await resolveCwd(machine, cwd, create_dir);
+      resolvedCwd = (await resolveLinkCwd(machine, cwd, create_dir)).path;
     }
     const project = await rule(() => repos.projects.create({ owner_id: request.scope.createAs, key: body.key, name: body.name, description: body.description, status: body.status }));
     const machines =
@@ -195,10 +183,10 @@ export async function projectRoutes(app: FastifyInstance, repos: Repositories, d
     const machine = await scoped(repos, request).machine(machine_id).catch(() => {
       throw badRequest('Máquina inexistente');
     });
-    const resolved = await resolveCwd(machine, cwd, create_dir);
+    const resolved = (await resolveLinkCwd(machine, cwd, create_dir)).path;
     const link = await rule(() => repos.projectMachines.link({ project_id: id, machine_id: machine.id, cwd: resolved }));
     // a published project on a new machine may bring its robots there onto the street: the next public read must see them
-    if (project.is_public) publicBus.publish({ project_id: id, is_public: true });
+    announceLinked(project);
     return reply.code(201).send({ link: linkView(link) });
   });
 
@@ -206,7 +194,7 @@ export async function projectRoutes(app: FastifyInstance, repos: Repositories, d
     const { id, machineId } = linkParams.parse(request.params);
     const { machine } = await scoped(repos, request).projectMachine(id, machineId);
     const { cwd, create_dir } = linkPatchBody.parse(request.body);
-    const link = await repos.projectMachines.updateCwd(id, machineId, await resolveCwd(machine, cwd, create_dir));
+    const link = await repos.projectMachines.updateCwd(id, machineId, (await resolveLinkCwd(machine, cwd, create_dir)).path);
     return { link: link ? linkView(link) : undefined };
   });
 
@@ -215,13 +203,8 @@ export async function projectRoutes(app: FastifyInstance, repos: Repositories, d
     const { id, machineId } = linkParams.parse(request.params);
     const { machine } = await scoped(repos, request).projectMachine(id, machineId);
     const tabs = await repos.tabs.listByProjectMachine(id, machineId);
-    await Promise.allSettled(tabs.filter((t) => t.tmux_session).map((t) => killTmuxSession(machine, t.tmux_session!)));
-    for (const t of tabs) await repos.tabs.delete(t.id);
-    await publishTabsRemoved(repos, tabs, [machine]);
-    await repos.projectMachines.unlink(id, machineId);
-    // that project's robots on this machine leave the street at once (the building stays)
-    publicBus.publishRobotsGone({ machine_id: machineId, project_id: id });
-    return { ok: true, closed_tabs: tabs.length };
+    const closed_tabs = await removeProjectMachineLink(repos, id, machine, tabs);
+    return { ok: true, closed_tabs };
   });
 
   // --- Tabs ---

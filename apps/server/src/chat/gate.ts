@@ -24,6 +24,8 @@ const writeTools = new Set([
   'add_subtasks',
   'update_task',
   'move_task',
+  'link_project_machine',
+  'set_project_machine_cwd',
 ]);
 
 const irreversibleTools = new Set(['close_tab', 'delete_task']);
@@ -53,6 +55,12 @@ export function actionClass(tool: string, args: unknown): ActionClass {
   if (tool === 'send_key') {
     const key = (args as { key?: string } | undefined)?.key;
     return typeof key === 'string' && interruptingKeys.has(key) ? 'irreversible' : 'write';
+  }
+
+  // unlink_project_machine only closes tabs (irreversible) when confirm: true; otherwise it either
+  // unlinks a machine with no tabs on it, or refuses and asks the caller to confirm — both reversible
+  if (tool === 'unlink_project_machine') {
+    return (args as { confirm?: unknown } | undefined)?.confirm === true ? 'irreversible' : 'write';
   }
 
   // Unknown tools default to irreversible: a tool added later must not silently

@@ -6,6 +6,7 @@ import type { ControlContext } from '../control/context.js';
 import { find, listAiAccounts, listMachines, listProjects, listTabs } from '../control/inventory.js';
 import { readScreen, SCREEN_MAX_LINES, WAIT_MAX_SECONDS, waitForState } from '../control/screen.js';
 import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendInput, sendKey } from '../control/terminals.js';
+import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
 import { addSubtasks, createTask, deleteTask, listTasks, moveTask, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
 import { PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
@@ -133,6 +134,30 @@ export const TOOLS: ToolDef[] = [
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: { tab_id: id, force: z.boolean().optional() },
     run: (ctx, a) => closeTab(ctx, a as { tab_id: string; force?: boolean }),
+  },
+  {
+    name: 'link_project_machine',
+    description:
+      'Link a project to one more of your machines, with the working directory its terminals open in there (cwd: absolute path, ~ allowed). The directory is checked on the machine (create_dir: true creates it empty) and the resolved path is stored; git_repo says whether it holds a .git folder. Fails if the machine is already linked (use set_project_machine_cwd). list_projects shows the link at once.',
+    scope: 'terminals', resource: 'projects', action: 'create',
+    input: { project_id: id, machine_id: id, cwd: PROJECT_CWD, create_dir: z.boolean().optional() },
+    run: (ctx, a) => linkProjectMachine(ctx, a as { project_id: string; machine_id: string; cwd: string; create_dir?: boolean }),
+  },
+  {
+    name: 'set_project_machine_cwd',
+    description:
+      "Change the working directory of an existing project ↔ machine link (same checks as link_project_machine). Tabs already running keep their directory; a tab started or restarted after this opens in the new one.",
+    scope: 'terminals', resource: 'projects', action: 'update',
+    input: { project_id: id, machine_id: id, cwd: PROJECT_CWD, create_dir: z.boolean().optional() },
+    run: (ctx, a) => setProjectMachineCwd(ctx, a as { project_id: string; machine_id: string; cwd: string; create_dir?: boolean }),
+  },
+  {
+    name: 'unlink_project_machine',
+    description:
+      "Remove a machine from a project. If the project has tabs open on that machine they are closed (tmux sessions killed), which needs confirm: true; without it the answer says which tabs would close and nothing happens.",
+    scope: 'terminals', resource: 'projects', action: 'delete',
+    input: { project_id: id, machine_id: id, confirm: z.boolean().optional() },
+    run: (ctx, a) => unlinkProjectMachine(ctx, a as { project_id: string; machine_id: string; confirm?: boolean }),
   },
   {
     name: 'start_agent',
