@@ -109,14 +109,18 @@ not into its prompt.
 - **Server:**
   - `interpretClaude` puts `subagent: true` in `meta` when `ev.subagent === true` or `ev.agent_id` is a
     non-empty string.
-  - `closesOpenQuestion` returns `false` for such an event (final rule: `closingScope`, see §10).
+  - `closesOpenQuestion` returns `false` for such an event. This is the final rule (see §10): a scoped
+    close (`closingScope` / `payload.subagent`) was tried and reverted — `meta.subagent` is a boolean, so
+    it cannot tell one subagent from another in a run with several running at once.
   - The tab state still updates (`working`), as today.
   - A subagent's `PermissionRequest` or `AskUserQuestion` still opens a card: the dialog is real and
     shown in the tab.
-- **Consequence (final rule, see §10):** a subagent's event never closes a main-thread card. A card a
-  subagent opened is flagged (`payload.subagent`, server-only) and closes on that subagent's next closing
-  event, which also clears the queue mark on subagent rows only; so the next subagent permission opens a
-  card instead of being held as a queue. An answer from a stale card still fails the live check (409).
+- **Consequence (final rule, see §10):** a subagent's event never closes a card, its own included. After
+  the person answers a subagent's permission in the tab, that card stays open — and counts as a pending
+  confirmation — until the main thread's next closing event; a later permission from the same run (or
+  another subagent of it) is answered in the terminal with no card, effectively queued behind the stale
+  one. This is the accepted, safe-side limitation: an answer from the stale card still fails the live
+  check (409 `TAB_PROMPT_CHANGED`) and closes it.
 - **Rollout:**
   - A new `@termhub/agent` patch version bundles the script. `heal()` rewrites the script on reconnect.
   - SSH machines get it on "Reinstalar hooks".
@@ -357,12 +361,19 @@ The copy is pt-BR (product language):
 - §7 E2E (2026-09-26): the placeholder gave no card and `state_text` kept the agent's message after
   `idle_prompt`; the live "suggestion card with context" step could not run because Claude Code 2.1.283
   drew no suggestion during the test window. That path is covered by unit tests only.
-- §4.5 (final review): `closesOpenQuestion` became `closingScope` → `'tab' | 'subagent' | null`. A card
-  opened by a subagent event stores `payload.subagent: true` (JSON, no migration; `toTabQuestionView`
-  strips it). A subagent's closing event runs `closeSubagentForTab` under the tab lock: only those rows
-  close (`answered_in_tab`) and only their `QUEUED` mark clears; main-thread cards and queues stay.
-  Without this, the stale first subagent card left the tab "queued" and no later subagent permission
-  got a card until the main thread's next closing event.
+- §4.5 (final review, reverted): a scoped close was tried — `closesOpenQuestion` became `closingScope` →
+  `'tab' | 'subagent' | null`, a card opened by a subagent event stored `payload.subagent: true`, and a
+  subagent's closing event ran `closeSubagentForTab` to close only those rows. It was reverted:
+  `meta.subagent` is a boolean, not an id, so it cannot tell one subagent from another in a run with
+  several going at once. With two subagents running, B's closing event closed A's still-open card (both
+  are just "a subagent's row"), and B's next permission card could then approve A's dialog — the live
+  check only compares "Do you want" plus the footer, which is the same across a run's own tools, so it did
+  not catch the mismatch. §4.5's original rule stands: a subagent's event never closes a card, its own
+  included. Accepted, safe-side limitation: a stale card from an answered subagent permission stays open
+  (and pending) until the main thread's next closing event, and later permissions of the same run are
+  answered in the terminal with no card until then. Follow-up: forward the hook's `agent_id` (already read
+  for the boolean flag, see §4.5) as a value instead of collapsing it to `subagent: true`, and close or
+  queue per `agent_id` rather than per tab.
 - §4.7: a card also expires when its tab leaves the person's scope (machine unlinked from the project,
   project owner changed): the 404 path covers scope loss, not only removed tabs. Only a 404 does — a
   transient error loading the tab propagates (`scoped.tab` maps only an `HttpError` from the
