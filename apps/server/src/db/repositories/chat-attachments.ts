@@ -65,9 +65,15 @@ export const mapAttachment = (a: PrismaAttachment): AttachmentRow => ({
   created_at: a.createdAt.toISOString(),
 });
 
-/** What a client sees: never the owner, the hash or the extracted text. */
+/** What a client sees: never the owner, the hash, the extracted text or the queue's attempt counter (`markAttempt`). */
 export function toPublicAttachment(row: AttachmentRow): ChatAttachment {
-  return { id: row.id, name: row.name, mime: row.mime, kind: row.kind, bytes: row.bytes, status: row.status, error_code: row.error_code, meta: row.meta, created_at: row.created_at };
+  return { id: row.id, name: row.name, mime: row.mime, kind: row.kind, bytes: row.bytes, status: row.status, error_code: row.error_code, meta: publicMeta(row.meta), created_at: row.created_at };
+}
+
+function publicMeta(meta: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (meta === null || !('attempts' in meta)) return meta;
+  const { attempts: _attempts, ...rest } = meta;
+  return rest;
 }
 
 /** The rule `attach` enforces in SQL, for the service's read-only pre-check (spec 2026-09-26 §5.5). */

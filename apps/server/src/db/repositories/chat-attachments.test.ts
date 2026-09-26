@@ -24,6 +24,13 @@ it('toPublicAttachment drops the owner, the hash and the text', () => {
   expect(JSON.stringify(pub)).not.toMatch(/SEGREDO|abc|u1|c1/);
 });
 
+it('toPublicAttachment strips the queue\'s attempt counter from meta', () => {
+  expect(toPublicAttachment(row({ status: 'failed', error_code: 'ATTACHMENT_INVALID', meta: { attempts: 2 } })).meta).toEqual({});
+  expect(toPublicAttachment(row({ meta: { width: 3, attempts: 1 } })).meta).toEqual({ width: 3 });
+  expect(toPublicAttachment(row({ meta: null })).meta).toBeNull();
+  expect(toPublicAttachment(row({ meta: { pages: 2 } })).meta).toEqual({ pages: 2 });
+});
+
 it('mapAttachment turns the Prisma row into snake_case with an ISO date', () => {
   const mapped = mapAttachment({
     id: 'at1', userId: 'u1', conversationId: 'c1', messageId: 'm1', name: 'a.txt', mime: 'text/plain; charset=utf-8', kind: 'text', bytes: 3, sha256: 'h',
