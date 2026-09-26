@@ -162,6 +162,40 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect((await openPermission('tn2', 'Bash')).question).toMatchObject({ kind: 'permission', status: 'open' });
   });
 
+  const openSubagentPermission = (tabId: string, tool: string) => repo.open({ tab_id: tid(tabId), project_id: projectId, conversation_id: conversationId, kind: 'permission', payload: { tool_name: tool }, tool_use_id: null, subagent: true });
+
+  it("a subagent's closing event closes its own card: the subagent's next permission opens one (spec 2026-09-26 §4.5)", async () => {
+    const a = (await openSubagentPermission('tsa1', 'Bash')).question!;
+    expect(a.payload).toEqual({ tool_name: 'Bash', subagent: true });
+    // The person answered A in the tab; the subagent's next PreToolUse closes A.
+    expect((await repo.closeSubagentForTab('tsa1')).map((q) => [q.id, q.status])).toEqual([[a.id, 'answered_in_tab']]);
+    const b = await openSubagentPermission('tsa1', 'Edit');
+    expect(b).toEqual({ question: expect.objectContaining({ kind: 'permission', status: 'open', payload: { tool_name: 'Edit', subagent: true } }), closed: [] });
+  });
+
+  it("a subagent's closing event clears a queue mark only on the subagent's rows", async () => {
+    await openSubagentPermission('tsa2', 'Bash');
+    await openSubagentPermission('tsa2', 'Edit'); // queued behind the first
+    expect(await db.tabQuestion.count({ where: { tabId: 'tsa2', errorCode: 'QUEUED' } })).toBe(1);
+    expect(await repo.closeSubagentForTab('tsa2')).toEqual([]);
+    expect(await db.tabQuestion.count({ where: { tabId: 'tsa2', errorCode: 'QUEUED' } })).toBe(0);
+    expect((await openSubagentPermission('tsa2', 'Write')).question).toMatchObject({ status: 'open' });
+    // A main-thread queue stays: only the main thread's closing event ends it.
+    await openPermission('tsa3', 'Bash');
+    await openPermission('tsa3', 'Edit'); // queued
+    expect(await repo.closeSubagentForTab('tsa3')).toEqual([]);
+    expect(await db.tabQuestion.count({ where: { tabId: 'tsa3', errorCode: 'QUEUED' } })).toBe(1);
+  });
+
+  it("a subagent's closing event never closes a main-thread card", async () => {
+    const m = (await openPermission('tsa4', 'Bash')).question!;
+    const c = (await open('tsa5')).question;
+    expect(await repo.closeSubagentForTab('tsa4')).toEqual([]);
+    expect(await repo.closeSubagentForTab('tsa5')).toEqual([]);
+    expect((await repo.findOpenForTab('tsa4'))?.id).toBe(m.id);
+    expect((await repo.findOpenForTab('tsa5'))?.id).toBe(c.id);
+  });
+
   it('closeForTab takes the tab lock: it waits for another event of the tab holding it, then closes', async () => {
     const tabId = tid('tq1');
     const { question } = await open('tq1');

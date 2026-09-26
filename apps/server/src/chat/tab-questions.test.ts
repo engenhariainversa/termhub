@@ -5,7 +5,7 @@ import type { Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import type { Interpreted } from '../monitor/state.js';
 import { chatBus, type ChatEvent } from './bus.js';
-import { closesOpenQuestion, expireOrphanTabQuestions, noteHookEvent, openTabQuestion, publishTabQuestions, startTabQuestionExpiry } from './tab-questions.js';
+import { closingScope, expireOrphanTabQuestions, noteHookEvent, openTabQuestion, publishTabQuestions, startTabQuestionExpiry, type ClosingScope } from './tab-questions.js';
 
 const tab = { id: 't1', project_id: 'p1', machine_id: 'm1', name: 'api' } as Tab;
 const payload = { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: '', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] };
@@ -39,19 +39,21 @@ beforeEach(() => {
 });
 afterEach(() => unsubscribe());
 
-describe('closesOpenQuestion', () => {
+describe('closingScope', () => {
   it.each([
-    ['a tool call', { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Edit' } }, true],
-    ['a finished turn', { kind: 'waiting_input', text: null, meta: { event: 'Stop' } }, true],
-    ['a new prompt', { kind: 'working', text: null, meta: { event: 'UserPromptSubmit' } }, true],
-    ['the permission_prompt notification', { kind: 'waiting_permission', text: 'x', meta: { event: 'Notification', type: 'permission_prompt' } }, false],
-    ['an idle reminder', { kind: 'waiting_input', text: 'x', meta: { event: 'Notification', type: 'idle_prompt' } }, false],
-    ['AskUserQuestion\'s own PermissionRequest', { kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'AskUserQuestion' } }, false],
-    ['an event that opens a question', choice, false],
-    ["a subagent's tool call", { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash', subagent: true } }, false],
-    ["a subagent's permission prompt that opens no card (ExitPlanMode)", { kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'ExitPlanMode', subagent: true } }, false],
-  ] as [string, Interpreted, boolean][])('%s → %s', (_l, next, closes) => {
-    expect(closesOpenQuestion(next)).toBe(closes);
+    ['a tool call', { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Edit' } }, 'tab'],
+    ['a finished turn', { kind: 'waiting_input', text: null, meta: { event: 'Stop' } }, 'tab'],
+    ['a new prompt', { kind: 'working', text: null, meta: { event: 'UserPromptSubmit' } }, 'tab'],
+    ['the permission_prompt notification', { kind: 'waiting_permission', text: 'x', meta: { event: 'Notification', type: 'permission_prompt' } }, null],
+    ['an idle reminder', { kind: 'waiting_input', text: 'x', meta: { event: 'Notification', type: 'idle_prompt' } }, null],
+    ['AskUserQuestion\'s own PermissionRequest', { kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'AskUserQuestion' } }, null],
+    ['an event that opens a question', choice, null],
+    ["a subagent's tool call", { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash', subagent: true } }, 'subagent'],
+    ["a subagent's permission prompt that opens no card (ExitPlanMode)", { kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'ExitPlanMode', subagent: true } }, 'subagent'],
+    ["a subagent's AskUserQuestion PermissionRequest", { kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'AskUserQuestion', subagent: true } }, null],
+    ["a subagent's question", { ...choice, meta: { ...choice.meta, subagent: true } }, null],
+  ] as [string, Interpreted, ClosingScope][])('%s → %s', (_l, next, scope) => {
+    expect(closingScope(next)).toBe(scope);
   });
 });
 
@@ -106,11 +108,34 @@ describe('noteHookEvent', () => {
     expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'answered_in_tab'); // a closing event: ends a permission queue
   });
 
-  it("a subagent's event updates nothing on the card: no close", async () => {
+  it("a subagent's closing event closes only the subagent's cards, and announces them", async () => {
     const repos = fakeRepos();
+    const own = row({ id: 'qa', kind: 'permission', payload: { tool_name: 'Bash', subagent: true } as never, status: 'answered_in_tab' });
+    (repos.tabQuestions as Record<string, unknown>).closeSubagentForTab = vi.fn(async () => [own]);
     await noteHookEvent(asRepos(repos), log(), tab, { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash', subagent: true } });
     expect(repos.tabQuestions.closeForTab).not.toHaveBeenCalled();
     expect(repos.tabQuestions.open).not.toHaveBeenCalled();
+    expect((repos.tabQuestions as Record<string, unknown>).closeSubagentForTab).toHaveBeenCalledWith('t1');
+    expect(events.map((e) => [e.type, 'question' in e ? e.question.id : null])).toEqual([['tab_question_closed', 'qa']]);
+    // The flag is the server's own bookkeeping: the wire payload keeps its shape.
+    expect(events[0]).toMatchObject({ question: { payload: { tool_name: 'Bash' } } });
+    expect((events[0] as { question: { payload: object } }).question.payload).not.toHaveProperty('subagent');
+  });
+
+  it("a subagent's notification closes nothing", async () => {
+    const repos = fakeRepos();
+    (repos.tabQuestions as Record<string, unknown>).closeSubagentForTab = vi.fn(async () => []);
+    await noteHookEvent(asRepos(repos), log(), tab, { kind: 'waiting_permission', text: 'x', meta: { event: 'Notification', type: 'permission_prompt', subagent: true } });
+    expect(repos.tabQuestions.closeForTab).not.toHaveBeenCalled();
+    expect((repos.tabQuestions as Record<string, unknown>).closeSubagentForTab).not.toHaveBeenCalled();
+  });
+
+  it("a subagent's question opens a row flagged as the subagent's; a main-thread one is not flagged", async () => {
+    const repos = fakeRepos();
+    await noteHookEvent(asRepos(repos), log(), tab, { kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'Bash', subagent: true }, question: { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null } });
+    expect(repos.tabQuestions.open).toHaveBeenLastCalledWith({ tab_id: 't1', project_id: 'p1', conversation_id: 'c1', kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null, subagent: true });
+    await noteHookEvent(asRepos(repos), log(), tab, choice);
+    expect(repos.tabQuestions.open).toHaveBeenLastCalledWith({ tab_id: 't1', project_id: 'p1', conversation_id: 'c1', kind: 'choice', payload, tool_use_id: 'toolu_1' });
   });
 
   it('never throws, and logs the failure by code and ids only', async () => {

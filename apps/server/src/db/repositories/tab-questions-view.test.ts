@@ -18,3 +18,10 @@ it('a suggestion always carries context on the wire: null for a row stored befor
   expect(toTabQuestionView({ ...s, payload: { text: 'commit it', context: 'Quer que eu faça o commit?' } }, 'api').payload).toEqual({ text: 'commit it', context: 'Quer que eu faça o commit?' });
   expect(toTabQuestionView(row(), 'api').payload).toEqual({ tool_name: 'Bash' }); // questions untouched
 });
+
+it("never puts the subagent flag on the wire: a subagent's card has the same payload shape (spec 2026-09-26 §4.5)", () => {
+  const p = row({ payload: { tool_name: 'Bash', subagent: true } as never, status: 'open', closed_at: null });
+  expect(toTabQuestionView(p, 'api').payload).toEqual({ tool_name: 'Bash' });
+  const payload = { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [] }] };
+  expect(toTabQuestionView(row({ kind: 'choice', payload: { ...payload, subagent: true } as never }), 'api').payload).toEqual(payload);
+});
