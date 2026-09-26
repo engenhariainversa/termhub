@@ -1,7 +1,17 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
+
+const mockVoice = { state: 'idle' as import('../viewmodel/use-voice').VoiceState, seconds: 0, error: null as string | null, notice: null as string | null, start: jest.fn(), stop: jest.fn(), cancel: jest.fn() };
+let mockOnText: ((text: string) => void) | null = null;
+jest.mock('@/features/chat/viewmodel/use-voice', () => ({
+  useVoice: (onText: (text: string) => void) => {
+    mockOnText = onText;
+    return mockVoice;
+  },
+}));
 
 let mockId = 'p-termhub';
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
@@ -26,6 +36,9 @@ const SEEDED_ASSISTANT = 'A aba api está esperando sua confirmação pra rodar 
 function assistantRow(id: string, extra: Partial<TChatMessage> = {}): TChatMessage {
   return { id, conversation_id: 'c-termhub', role: 'assistant', text: '', usage: null, error_code: null, created_at: new Date().toISOString(), ...extra };
 }
+
+/** A `created_at` `n` seconds after the seeded thread: rows added in a test sort after it, in this order. */
+const at = (n: number) => new Date(Date.now() + n * 1000).toISOString();
 
 function delta(messageId: string, text: string): TChatEvent {
   return { type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: messageId, delta: text };
@@ -82,6 +95,10 @@ beforeEach(() => {
   conversationsBefore = useChatStore.getState().conversations;
   for (const fn of Object.values(mockRouter)) fn.mockClear();
   mockRouter.canGoBack.mockReturnValue(true);
+  mockVoice.state = 'idle';
+  mockVoice.seconds = 0;
+  mockVoice.error = null;
+  mockVoice.notice = null;
   // The screens are under test here, not the socket (the store's own tests cover it): no events.
   jest.spyOn(stores.api, 'events').mockReturnValue(() => undefined);
 });
@@ -90,6 +107,7 @@ afterEach(() => {
   jest.restoreAllMocks();
   useChatStore.setState({
     error: null,
+    sending: false,
     live: emptyFold(),
     conversations: conversationsBefore,
     decide: realActions.decide,
@@ -125,10 +143,11 @@ describe('Conversa', () => {
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
 
-    const thinking = assistantRow('m-think');
+    // A started row waits wherever it is: several answers can be pending at once (spec 2026-09-26).
+    const thinking = assistantRow('m-think', { created_at: at(3) });
     await act(() =>
       addRows(
-        [assistantRow('m-stream'), thinking, assistantRow('m-failed', { error_code: 'HOST_GONE' })],
+        [assistantRow('m-stream', { created_at: at(1) }), assistantRow('m-failed', { error_code: 'HOST_GONE', created_at: at(2) }), thinking],
         [delta('m-stream', 'Rodei `npm'), delta('m-stream', ' test` no jarvis'), { type: 'message', user_id: 'u1', conversation_id: 'c-termhub', message: thinking }],
       ),
     );
@@ -257,21 +276,72 @@ describe('Conversa', () => {
     expect(screen.queryByRole('button', { name: 'Permitir sempre nesta aba' })).toBeNull();
   });
 
-  it('the composer sends on the button and clears; the mic is disabled with "em breve"', async () => {
+  it('an empty box offers Ditar; typing turns it into Enviar, which sends and empties the box at once', async () => {
     const sent = jest.spyOn(stores.api, 'sendMessage').mockResolvedValue({ conversation_id: 'c-termhub', user_message_id: 'u', assistant_message_id: 'a' });
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
 
-    const send = screen.getByRole('button', { name: 'Enviar' });
-    expect(send.props.accessibilityState.disabled).toBe(true);
-    const mic = screen.getByRole('button', { name: /em breve/ });
-    expect(mic.props.accessibilityState.disabled).toBe(true);
-    expect(within(mic).getByText('em breve')).toBeTruthy();
+    const dictate = screen.getByRole('button', { name: 'Ditar' });
+    expect(dictate.props.accessibilityState.disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Enviar' })).toBeNull();
 
     await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'como está o deploy?');
+    expect(screen.queryByRole('button', { name: 'Ditar' })).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     expect(sent).toHaveBeenCalledWith(expect.anything(), { text: 'como está o deploy?', project_id: 'p-termhub' });
     expect(screen.getByLabelText('Mensagem').props.value).toBe('');
+  });
+
+  it('Ditar starts a recording; while recording the button reads Parar, and the transcription lands in the box', async () => {
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await fireEvent.press(screen.getByRole('button', { name: 'Ditar' }));
+    expect(mockVoice.start).toHaveBeenCalledTimes(1);
+
+    mockVoice.state = 'recording';
+    mockVoice.seconds = 65;
+    await act(() => mockOnText!('roda os testes')); // a re-render: the hook's state is read again
+    expect(screen.getByLabelText('Mensagem').props.value).toBe('roda os testes');
+    expect(screen.getByText('1:05')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Parar' }));
+    expect(mockVoice.stop).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancelar gravação' }));
+    expect(mockVoice.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('while the clip is being transcribed the button waits and the status line says so; an error shows under the box', async () => {
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    mockVoice.state = 'transcribing';
+    mockVoice.error = 'Falha ao transcrever o áudio';
+    // A store change the composer's props follow, so it renders again and reads the hook's new state
+    // (a transcription of '' would leave the text as it is, and React would skip the render).
+    await act(() => useChatStore.setState({ sending: true }));
+    expect(screen.getByText('transcrevendo…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ditar' }).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText('Falha ao transcrever o áudio')).toBeTruthy();
+  });
+
+  it('the box grows with its content between one and six lines', async () => {
+    await render(<ConversationScreen />);
+    const input = await screen.findByLabelText('Mensagem', undefined, LOAD);
+    // NativeWind hands the host element an array of styles: flatten before reading.
+    const height = () => StyleSheet.flatten(screen.getByLabelText('Mensagem').props.style).height;
+    expect(height()).toBe(22);
+    await fireEvent(input, 'contentSizeChange', { nativeEvent: { contentSize: { width: 300, height: 66 } } });
+    expect(height()).toBe(66);
+    await fireEvent(input, 'contentSizeChange', { nativeEvent: { contentSize: { width: 300, height: 400 } } });
+    expect(height()).toBe(132);
+    await fireEvent(input, 'contentSizeChange', { nativeEvent: { contentSize: { width: 300, height: 10 } } });
+    expect(height()).toBe(22);
+  });
+
+  it('avoids the keyboard with padding on iOS', async () => {
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    // RNTL only sees host views: the `padding` behaviour is the one that pads the bottom by the
+    // keyboard's height (0 while it is down); `height` and no behaviour leave the padding unset.
+    expect(StyleSheet.flatten(screen.getByTestId('conversation-keyboard').props.style).paddingBottom).toBe(0);
   });
 
   it('Nova conversa asks first, then resets', async () => {

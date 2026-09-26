@@ -33,7 +33,10 @@ const entryKey = (entry: ChatEntry) =>
           : `q:${entry.question.id}`;
 
 /** One message row, subscribed to its own streamed text (spec §4.2 "Incremental fold"): a delta
- * re-renders this row and nothing else — `renderItem` and `extraData` do not change for it. */
+ * re-renders this row and nothing else — `renderItem` and `extraData` do not change for it.
+ * Every started row waits, not only the newest: with queued or injected turns several answers can be
+ * pending at once (spec 2026-09-26 concierge always free), and a process that dies closes its open
+ * turns with a reason, so a leftover reads as the failure it is. */
 const MessageRow = memo(function MessageRow({ message }: { message: ChatMessage }) {
   const streamed = useChatStore((s) => s.live.deltas.get(message.id));
   const started = useChatStore((s) => s.live.started.has(message.id));
@@ -160,25 +163,32 @@ export function ConversationScreen() {
 
   return (
     <Screen padded={false}>
-      {/* The avoiding view measures its frame relative to its parent, which already sits below the
-          top safe area: without this offset it lifts the composer short by that inset, behind the keyboard. */}
-      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top}>
-        <View className="flex-row items-center gap-2 border-b border-app-border px-2 py-2">
-          <Button label="Voltar" variant="ghost" onPress={goBack} />
-          <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
-            {title}
-          </AppText>
-          {activeGrantCount > 0 ? <Button label={trustedTabsLabel(activeGrantCount)} variant="ghost" onPress={() => router.push('/chat-grants')} /> : null}
-          <Button label="Nova conversa" variant="ghost" onPress={() => setConfirmingReset(true)} />
-        </View>
-        {/* Only when something stands in the way (offline, no machine, none chosen, an old agent): where a
-            ready chat runs, and switching it, live in Ajustes. */}
-        {slot?.host && slot.host.kind !== 'ready' ? <HostLine host={slot.host} canChange={activeProject === null} /> : null}
-        {shownError ? (
-          <View className="px-4 pt-3">
-            <Banner tone="danger" text={shownError} />
+      {/* `padding` on iOS, `height` on Android (spec §4.2 "Keyboard"): stock behaviour on both, no
+          extra native module. The avoiding view measures its frame relative to its parent, which
+          already sits below the top safe area: without this offset it lifts the composer short by
+          that inset, behind the keyboard. */}
+      <KeyboardAvoidingView testID="conversation-keyboard" className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={insets.top}>
+        {/* The header block — title, host line, error — and the footer block below — grants, composer —
+            are siblings of the list, never rows inside it: a line appearing there changes the list's
+            frame, not its content, and the inverted list keeps its end pinned through that. */}
+        <View>
+          <View className="flex-row items-center gap-2 border-b border-app-border px-2 py-2">
+            <Button label="Voltar" variant="ghost" onPress={goBack} />
+            <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
+              {title}
+            </AppText>
+            {activeGrantCount > 0 ? <Button label={trustedTabsLabel(activeGrantCount)} variant="ghost" onPress={() => router.push('/chat-grants')} /> : null}
+            <Button label="Nova conversa" variant="ghost" onPress={() => setConfirmingReset(true)} />
           </View>
-        ) : null}
+          {/* Only when something stands in the way (offline, no machine, none chosen, an old agent): where a
+              ready chat runs, and switching it, live in Ajustes. */}
+          {slot?.host && slot.host.kind !== 'ready' ? <HostLine host={slot.host} canChange={activeProject === null} /> : null}
+          {shownError ? (
+            <View className="px-4 pt-3">
+              <Banner tone="danger" text={shownError} />
+            </View>
+          ) : null}
+        </View>
         {entries.length === 0 ? (
           slot && !slot.loaded && !slot.error ? (
             <View className="flex-1 items-center justify-center">
@@ -193,7 +203,11 @@ export function ConversationScreen() {
         ) : (
           <FlatList inverted keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled" data={entries} keyExtractor={entryKey} contentContainerClassName="gap-3 px-4 py-4" extraData={extra} renderItem={renderItem} />
         )}
-        <Composer sending={sending} onSend={send} />
+        {/* The footer block, a sibling of the list like the header: its height changes the list's
+            frame, not its content (spec 2026-09-26 §4.2 "Keyboard"). */}
+        <View>
+          <Composer sending={sending} onSend={send} />
+        </View>
       </KeyboardAvoidingView>
       <Sheet open={confirmingReset} onClose={() => setConfirmingReset(false)} title="Começar uma nova conversa?">
         <View className="gap-3">
