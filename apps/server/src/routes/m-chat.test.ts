@@ -389,6 +389,16 @@ describe('POST /chat/actions/:id/decision', () => {
     expect(decide).not.toHaveBeenCalled();
   });
 
+  it('approve: a read card without a proof is 401 PIN_REQUIRED and stays pending, nothing consumed', async () => {
+    const { app, session, decide } = build({ findByIdForUser: vi.fn(async () => ({ ...pendingAction, status: 'pending', class: 'read' })) });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve' } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'Confirme com o PIN para autorizar esta ação.', code: 'PIN_REQUIRED' });
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+  });
+
   it('approve: an irreversible card with a good proof is approved as before', async () => {
     const { app, session, decide } = build({ findByIdForUser: vi.fn(async () => ({ ...pendingAction, status: 'pending', class: 'irreversible' })) });
     const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: approve });

@@ -183,6 +183,29 @@ it('a PIN_REQUIRED answer to a silent approval opens the PIN sheet for the same 
   expect(slot(chat, 'p-termhub').actions[0]!.status).toBe('approved');
 });
 
+it('a VALIDATION answer to a silent approval (old-schema rollback) also opens the PIN sheet', async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  jest.spyOn(api, 'decide').mockRejectedValueOnce(new ApiError(400, 'VALIDATION', 'Dados inválidos'));
+  const deciding = chat.getState().decide('a-termhub-1', 'approve');
+  await jest.advanceTimersByTimeAsync(0);
+  expect(store.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', decision: 'approve' });
+  expect(chat.getState().error).toBeNull();
+  await store.getState().resolvePinPrompt(PIN);
+  await deciding;
+  expect(slot(chat, 'p-termhub').actions[0]!.status).toBe('approved');
+});
+
+it('a PIN_REQUIRED fallback is dropped when the conversation is left before the PIN sheet opens', async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  jest.spyOn(api, 'decide').mockRejectedValueOnce(new ApiError(401, 'PIN_REQUIRED', 'Confirme com o PIN para autorizar esta ação.'));
+  const deciding = chat.getState().decide('a-termhub-1', 'approve');
+  chat.getState().close(); // leaves the conversation before the rejection is handled
+  await deciding;
+  expect(store.getState().pinPrompt).toBeNull();
+});
+
 it("decide(id, 'approve_tab') asks the PIN for approve_tab and, once resolved, the tab is trusted", async () => {
   const { chat, store } = await setup();
   await openAndConnect(chat, 'p-termhub');

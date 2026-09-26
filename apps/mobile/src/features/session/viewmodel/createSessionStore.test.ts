@@ -259,6 +259,26 @@ it('renews the token on its own 60 s before it expires, while unlocked', async (
   expect(ctx.store.getState().tokenStale()).toBe(false);
 });
 
+it('a short expires_in (<= 2 min) still gets a sane delay, not a tight renewal loop', async () => {
+  const ctx = setup();
+  await enrol(ctx);
+  const realToken = ctx.api.token.bind(ctx.api);
+  const token = jest.spyOn(ctx.api, 'token').mockImplementation(async (body) => ({ ...(await realToken(body)), expires_in: 30 }));
+
+  await ctx.store.getState().renewToken();
+  expect(token).toHaveBeenCalledTimes(1);
+  // The old `Math.max(0, expiresInS * 1000 - RENEW_BEFORE_MS)` formula schedules this at 0 ms: a burst.
+  await jest.advanceTimersByTimeAsync(0);
+  expect(token).toHaveBeenCalledTimes(1);
+  ctx.clock.value += 14_000;
+  await jest.advanceTimersByTimeAsync(14_000);
+  expect(token).toHaveBeenCalledTimes(1);
+  // Half the 30 s lifetime (15 s), the floor for a short expires_in.
+  ctx.clock.value += 1_000;
+  await jest.advanceTimersByTimeAsync(1_000);
+  expect(token).toHaveBeenCalledTimes(2);
+});
+
 it('a relock clears the renewal timer: nothing renews behind the lock screen', async () => {
   const ctx = setup();
   await enrol(ctx);

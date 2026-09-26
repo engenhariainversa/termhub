@@ -92,7 +92,9 @@ export function createSessionStore(deps: SessionDeps) {
 
         /** Remembers the new token's expiry and schedules its renewal `RENEW_BEFORE_MS` ahead
          * (TER-93). A timer that fires late (the app was in the background) is harmless: a
-         * `TOKEN_EXPIRED` still renews. */
+         * `TOKEN_EXPIRED` still renews. A lifetime of 2 min or less would make `expiresInS * 1000 -
+         * RENEW_BEFORE_MS` zero or negative — floor the delay at half the lifetime so a short-lived
+         * token does not renew in a tight loop. */
         const tokenIssued = (expiresInS: number) => {
           tokenExpiresAt = now() + expiresInS * 1000;
           clearRenewTimer();
@@ -101,7 +103,7 @@ export function createSessionStore(deps: SessionDeps) {
               renewTimer = null;
               void get().renewToken();
             },
-            Math.max(0, expiresInS * 1000 - RENEW_BEFORE_MS),
+            Math.max(expiresInS * 1000 / 2, expiresInS * 1000 - RENEW_BEFORE_MS),
           );
         };
 

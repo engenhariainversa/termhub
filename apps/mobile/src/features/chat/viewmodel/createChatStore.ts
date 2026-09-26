@@ -341,12 +341,17 @@ export function createChatStore(deps: ChatDeps) {
                 const withPin = () => session().requestPinProof(actionId, (proof) => api.decide(session().auth(), actionId, { decision: word, ...proof }), word);
                 const card = get().conversations[key]?.actions.find((a) => a.id === actionId);
                 // TER-92: a write card approves with the unlocked session; the server is the judge and
-                // answers PIN_REQUIRED when it disagrees, which falls back to the sheet.
+                // answers PIN_REQUIRED when it disagrees, which falls back to the sheet. A server rolled
+                // back to the old schema (no optional proof) answers VALIDATION instead: same fallback,
+                // so a rollback keeps approvals working (with the PIN).
                 if (word === 'approve' && card?.class === 'write') {
                   try {
                     await api.decide(session().auth(), actionId, { decision: 'approve' });
                   } catch (e) {
-                    if (!isApiError(e, 'PIN_REQUIRED')) throw e;
+                    if (!isApiError(e, 'PIN_REQUIRED') && !isApiError(e, 'VALIDATION')) throw e;
+                    // The conversation may have been left (closed/switched) while this rejection was
+                    // in flight: do not pop the PIN sheet for an action nobody is looking at any more.
+                    if (gen !== generation) return;
                     await withPin();
                   }
                 } else {
