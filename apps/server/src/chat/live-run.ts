@@ -49,6 +49,10 @@ export class LiveRun {
   private inputOpen = true;
   private ended = 0;
   private session: string | null;
+  /** Whether the process being read replayed a message yet (see the safety net at `done`). */
+  private replayed = false;
+  /** The newest question this run took: re-published to make screens re-read when a row is dropped. */
+  private lastQuestion: ChatMessage | null = null;
 
   constructor(private deps: LiveRunDeps) {
     this.session = deps.sessionId;
@@ -74,6 +78,7 @@ export class LiveRun {
       this.waiting.pop();
       return false;
     }
+    this.lastQuestion = turn.question;
     return true;
   }
 
@@ -85,6 +90,7 @@ export class LiveRun {
   /** Reads one process to its end. Throws what the stream throws (a setup failure is the caller's). */
   async consume(stream: RunStream): Promise<{ code: ChatErrorCode; missingSession: boolean }> {
     this.stream = stream;
+    this.replayed = false;
     let code: ChatErrorCode = null;
     let missingSession = false;
     try {
@@ -94,6 +100,7 @@ export class LiveRun {
         if (frame.type === 'turn_started') {
           const i = this.waiting.findIndex((t) => t.uuid === frame.uuid);
           if (i === -1) continue;
+          this.replayed = true;
           // A message written while a turn is running can be folded INTO that turn by the CLI (Claude
           // Code 2.1.283: the replay arrives mid tool-use, before any result, and one result then answers
           // both). A person's turn that has said nothing yet is merged into the new one: its empty answer
@@ -125,6 +132,9 @@ export class LiveRun {
             this.current.usage = frame.usage ?? null;
             await this.finish(this.current, null);
           }
+          // A turn ended and this process never replayed a message: the CLI does not echo the uuids,
+          // so no waiting turn can ever be matched. They fail now instead of waiting for the kill.
+          if (!this.replayed && this.waiting.length > 0) await this.failWaiting('RUN_FAILED');
           this.endInputIfIdle();
         } else if (frame.type === 'error') {
           await this.saveSession(frame.session_id);
@@ -219,6 +229,15 @@ export class LiveRun {
 
   private async finish(a: Answering, code: ChatErrorCode): Promise<void> {
     if (this.current === a) this.current = null;
+    // A turn the CLI started on its own that said nothing (a tool call, then the next replay or its
+    // result): an empty "ok" row reads as a failed answer, so it goes. Nobody waits on it.
+    if (a.turn === null && a.collected === '' && code === null) {
+      this.ended += 1;
+      await this.deps.chat.deleteMessage(a.answer.id);
+      // Re-publishing a question makes every open screen re-read and drop the deleted row.
+      if (this.lastQuestion) chatBus.publish({ type: 'message', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message: this.lastQuestion });
+      return;
+    }
     const settles = [...a.merged, ...(a.turn ? [a.turn] : [])].map((t) => t.settle);
     let final: ChatMessage;
     try {
@@ -238,6 +257,21 @@ export class LiveRun {
     if (!sessionId || sessionId === this.session) return;
     this.session = sessionId;
     await this.deps.chat.setCliSession(this.deps.conversationId, sessionId);
+  }
+
+  /** Fails every waiting turn with `code` and closes the input: nothing written here will be answered. */
+  private async failWaiting(code: ChatErrorCode): Promise<void> {
+    this.inputOpen = false;
+    this.stream?.write?.(STREAM_END_INPUT_LINE);
+    let failure: { error: unknown } | null = null;
+    for (const t of this.waiting.splice(0)) {
+      try {
+        await this.finish({ turn: t, answer: t.answer, collected: '', usage: null, merged: [] }, code);
+      } catch (e) {
+        failure ??= { error: e };
+      }
+    }
+    if (failure) throw failure.error;
   }
 
   /** Nothing to answer and nothing in the background: end the input. The CLI still runs whatever it

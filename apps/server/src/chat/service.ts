@@ -513,12 +513,18 @@ export class ChatService {
     const live = this.live.get(conversation.id);
     if (!live?.accepting && opts?.beforeRun) throw new HttpError(409, 'O concierge ainda está respondendo a mensagem anterior', 'CHAT_BUSY');
     if (live?.accepting && opts?.beforeRun) await opts.beforeRun();
-    const runText = live?.accepting ? await this.runTextFor(user, conversation.id, text) : undefined;
+    let runText = live?.accepting ? await this.runTextFor(user, conversation.id, text) : undefined;
     const { question, answer } = await this.storeTurn(user, conversation.id, text);
     const d = deferred();
     const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id, done: d.promise };
-    // Re-checked after the awaits above: the process may have ended its input in between.
-    if (runText !== undefined && live && this.live.get(conversation.id) === live && live.add({ uuid: randomUUID(), text: runText, question, answer, settle: d.settle })) return started;
+    // Re-read after the awaits above: the process may have ended its input in between, and a newer one
+    // (started by the queue once the lock was released) may take input now. Queuing behind that one
+    // would leave the message waiting until it ends.
+    const now = this.live.get(conversation.id);
+    if (now?.accepting) {
+      runText ??= await this.runTextFor(user, conversation.id, text);
+      if (this.live.get(conversation.id) === now && now.add({ uuid: randomUUID(), text: runText, question, answer, settle: d.settle })) return started;
+    }
     this.enqueue(conversation.id, { text, runText, question, answer, settle: d.settle });
     // The process may already be gone, with the lock released during the awaits above.
     if (!this.running.has(conversation.id)) void this.launchQueued(user, conversation.id);
@@ -813,13 +819,15 @@ export class ChatService {
     const queue = this.queued.get(conversationId);
     if (!queue?.length || this.running.has(conversationId)) return;
     let locked = false;
+    /** Turns taken out of the queue and not yet handed to a run: the catch below must settle them too. */
+    let taken: QueuedTurn[] = [];
     try {
       const conversation = await this.deps.repos.chat.findByIdForUser(conversationId, user.id);
       const host = conversation && conversation.archived_at === null ? await this.hostForConversation(user, conversation) : null;
       if (!conversation || !host || host.kind !== 'ready') {
         // No host that can run them (the machine went away, the conversation was archived): each
         // queued message gets its answer row closed with a reason, never a bubble waiting for ever.
-        for (const q of queue.splice(0)) await this.closeQueued(user, conversationId, q, 'HOST_GONE');
+        await this.closeAllQueued(user, conversationId, queue.splice(0), host?.kind === 'agent_too_old' ? 'AGENT_TOO_OLD' : 'HOST_GONE');
         return;
       }
       const appendSystemPrompt = await this.promptFor(user, conversation);
@@ -828,17 +836,30 @@ export class ChatService {
       this.running.add(conversationId);
       locked = true;
       const streamed = this.streams(host.machine.id);
-      const taken = streamed ? queue.splice(0) : queue.splice(0, 1);
+      taken = streamed ? queue.splice(0) : queue.splice(0, 1);
       const turns: LiveTurn[] = [];
       for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? (await this.runTextFor(user, conversationId, q.text)), question: q.question, answer: q.answer, settle: q.settle });
-      // From here the run owns the lock and releases it itself.
+      // From here the run owns the lock and releases it itself, and settles the turns.
       locked = false;
+      taken = [];
       if (streamed) void this.runLive(user, conversation, runner, host.configDir, streamedSystemPrompt(appendSystemPrompt), turns);
       else this.finishRun(user, conversation, turns[0].text, turns[0].question, turns[0].answer, runner, host.configDir, appendSystemPrompt).then(turns[0].settle.resolve, turns[0].settle.reject);
     } catch (err) {
       console.error('chat: queued messages could not be started', { conversation_id: conversationId, error: failureLabel(err) });
-      for (const q of (this.queued.get(conversationId) ?? []).splice(0)) await this.closeQueued(user, conversationId, q, 'RUNNER_FAILED').catch(() => {});
+      await this.closeAllQueued(user, conversationId, [...taken.splice(0), ...(this.queued.get(conversationId) ?? []).splice(0)], 'RUNNER_FAILED');
       if (locked) this.running.delete(conversationId);
+    }
+  }
+
+  /** Closes every one of `turns`, each on its own: one whose row cannot be stored rejects its `done`
+   *  with that failure, and the next ones are still closed. Never throws. */
+  private async closeAllQueued(user: User, conversationId: string, turns: QueuedTurn[], code: ChatErrorCode): Promise<void> {
+    for (const q of turns) {
+      try {
+        await this.closeQueued(user, conversationId, q, code);
+      } catch (e) {
+        q.settle.reject(e);
+      }
     }
   }
 

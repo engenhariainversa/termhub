@@ -164,7 +164,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
   const service = new ChatService({ repos, agents, runnerFor: (machineId) => (hosted.push(machineId), runner) });
   /** Every `RunnerInput` the service handed a runner, in order. */
   const inputs = () => vi.mocked(runner.run).mock.calls.map((c) => c[0]);
-  return { service, chat, chatActions, tabQuestions, actionsStore, runner, hosted, messages, conversation, projectConversation, repos, host, inputs };
+  return { service, chat, chatActions, tabQuestions, actionsStore, runner, hosted, messages, conversation, projectConversation, repos, host, inputs, agents };
 }
 
 const delta = (text: string) => JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text } } });
@@ -1451,6 +1451,84 @@ describe('a chat that never blocks', () => {
     });
     await expect(service.send(user, 'oi')).rejects.toMatchObject({ code: 'CONCIERGE_DISABLED' });
     expect(messages.map((m) => m.role)).toEqual(['user']);
+  });
+
+  it('injects a message into a newer live run that started while the message was being stored', async () => {
+    const { service, runner, chat } = build([], { streaming: true });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+    const first = await service.start(user, 'um');
+    const run = await runAt(lr, 0);
+    run.push(replayOf(run.input.text.trim()));
+    run.push(delta('ok'));
+    run.push(done()); // nothing in the background: the input ends here
+    await first.done;
+    await settled();
+    const queued = await service.start(user, 'dois'); // the process has not exited: queued
+
+    // The third message stalls while its question is being stored...
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let stalled = false;
+    const store = chat.addMessage.getMockImplementation()!;
+    chat.addMessage.mockImplementationOnce(async (m) => {
+      stalled = true;
+      await gate;
+      return store(m);
+    });
+    const third = service.start(user, 'tres');
+    await vi.waitFor(() => expect(stalled).toBe(true));
+    // ...while the first process exits and the queue starts a new one, which takes input.
+    run.end();
+    const next = await runAt(lr, 1);
+    release();
+    const late = await third;
+    await vi.waitFor(() => expect(next.written).toHaveLength(1));
+    expect(JSON.parse(next.written[0]).message.content).toContain('tres');
+    next.push(replayOf(next.input.text.trim()));
+    next.push(delta('segunda'));
+    next.push(done());
+    next.push(replayOf(next.written[0]));
+    next.push(delta('terceira'));
+    next.push(done());
+    expect((await queued.done).text).toBe('segunda');
+    expect((await late.done).text).toBe('terceira');
+    next.end();
+  });
+
+  it('settles a queued message whose answer cannot be closed when its host is gone', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, runner, chat, agents } = build([]);
+    vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { await gate; yield delta('um'); yield done(); })());
+    const first = await service.start(user, 'primeira');
+    const second = await service.start(user, 'segunda'); // queued behind the one-shot run
+    const third = await service.start(user, 'terceira');
+    // The machine goes away, and the database refuses to close the second message's answer.
+    agents.capabilities.mockReturnValue(null);
+    const boom = new Error('db down');
+    const update = chat.updateMessage.getMockImplementation()!;
+    chat.updateMessage.mockImplementation(async (id, patch) => {
+      if (id === second.assistant_message_id) throw boom;
+      return update(id, patch);
+    });
+    release();
+    await first.done;
+    await expect(second.done).rejects.toBe(boom);
+    expect(await third.done).toMatchObject({ error_code: 'HOST_GONE' });
+  });
+
+  it('closes a queued message with AGENT_TOO_OLD when its host can no longer run a chat', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, runner, agents } = build([]);
+    vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { await gate; yield delta('um'); yield done(); })());
+    const first = await service.start(user, 'primeira');
+    const second = await service.start(user, 'segunda');
+    agents.capabilities.mockReturnValue(['pty']); // connected, but no claude channel
+    release();
+    await first.done;
+    expect(await second.done).toMatchObject({ text: '', error_code: 'AGENT_TOO_OLD' });
   });
 
   it('retries a streamed run once on a fresh session when the resumed one is missing', async () => {

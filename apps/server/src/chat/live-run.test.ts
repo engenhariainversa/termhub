@@ -353,3 +353,84 @@ it('abandon rejects a merged turn too', async () => {
   s.end();
   await consumed;
 });
+
+const toolCall = () => JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_n', name: 'mcp__termhub__list_tabs', input: {} }] } });
+
+it('drops a notification turn that said nothing when the next replay arrives, instead of storing it empty', async () => {
+  const a = await h.turn(U1, 'a');
+  const b = await h.turn(U2, 'b');
+  h.live.add(a.t);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  s.push(replay(U1)); s.push(background(1)); s.push(delta('disparei')); s.push(result());
+  await settle();
+  h.live.add(b.t);
+  // The CLI starts a turn on its own (a tool call, no text yet), then replays the person's message.
+  s.push(toolCall());
+  await settle();
+  const notification = h.rows.filter((r) => r.role === 'assistant').at(-1)!;
+  expect(notification.id).not.toBe(b.t.answer.id);
+  s.push(replay(U2)); s.push(delta('resposta B')); s.push(result());
+  await settle();
+  s.end();
+  await consumed;
+  expect(await b.done).toMatchObject({ text: 'resposta B', error_code: null });
+  expect(h.chat.deleteMessage).toHaveBeenCalledWith(notification.id);
+  expect(h.rows.some((r) => r.id === notification.id)).toBe(false);
+  expect(h.chat.updateMessage).not.toHaveBeenCalledWith(notification.id, expect.anything());
+  // Every open screen is told to re-read, and nothing announces the dropped row as a finished run.
+  expect(h.events.filter((e) => e.type === 'run_finished').map((e) => (e as { message_id: string }).message_id)).toEqual([a.t.answer.id, b.t.answer.id]);
+  expect(h.events.filter((e) => e.type === 'message').length).toBeGreaterThan(0);
+});
+
+it('drops a notification turn that ends with no text at all', async () => {
+  const a = await h.turn(U1, 'a');
+  h.live.add(a.t);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  s.push(replay(U1)); s.push(background(1)); s.push(delta('disparei')); s.push(result());
+  await settle();
+  s.push(background(0)); s.push(toolCall()); s.push(result());
+  await settle();
+  s.end();
+  await consumed;
+  expect(h.rows.filter((r) => r.role === 'assistant').map((r) => r.text)).toEqual(['disparei']);
+  expect(h.events.filter((e) => e.type === 'run_finished')).toHaveLength(1);
+});
+
+it('fails the waiting turns and ends the input when a turn ends and the CLI never replayed a message', async () => {
+  const a = await h.turn(U1, 'a');
+  const b = await h.turn(U2, 'b');
+  h.live.add(a.t);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  h.live.add(b.t);
+  // A CLI that does not replay: its answer is not matched to any turn.
+  s.push(delta('sem replay')); s.push(result());
+  await settle();
+  expect(await a.done).toMatchObject({ id: a.t.answer.id, error_code: 'RUN_FAILED' });
+  expect(await b.done).toMatchObject({ id: b.t.answer.id, error_code: 'RUN_FAILED' });
+  expect(h.live.accepting).toBe(false);
+  expect(s.written.at(-1)).toBe(STREAM_END_INPUT_LINE);
+  s.end();
+  await consumed;
+});
+
+it('keeps waiting turns waiting at a result once the CLI has replayed in this process', async () => {
+  const a = await h.turn(U1, 'a');
+  const b = await h.turn(U2, 'b');
+  h.live.add(a.t);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  s.push(replay(U1)); s.push(background(1)); s.push(delta('A')); s.push(result());
+  await settle();
+  expect(h.live.add(b.t)).toBe(true);
+  s.push(background(0)); s.push(delta('notificação')); s.push(result());
+  await settle();
+  expect(h.live.accepting).toBe(true);
+  s.push(replay(U2)); s.push(delta('B')); s.push(result());
+  await settle();
+  s.end();
+  await consumed;
+  expect((await b.done).text).toBe('B');
+});
