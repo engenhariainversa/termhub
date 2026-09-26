@@ -31,6 +31,7 @@ function build(opts: {
   grants?: { id: string; conversation_id: string; tab_id: string; tool: string; source_action_id: string | null; granted_by: string; created_at: string; expires_at: string; revoked_at: string | null; revoked_by: string | null }[];
   revoke?: ReturnType<typeof vi.fn>;
   findGrantByIdForUser?: ReturnType<typeof vi.fn>;
+  listForUser?: ReturnType<typeof vi.fn>;
   tabQuestions?: unknown[];
 } = {}) {
   const send = opts.send ?? vi.fn(async () => ({ id: 'm2', role: 'assistant', text: 'Nada rodando.' }));
@@ -84,6 +85,7 @@ function build(opts: {
       listActive: vi.fn(async () => opts.grants ?? []),
       revoke: opts.revoke ?? vi.fn(async (id: string) => ({ id, conversation_id: 'c1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', granted_by: 'u1', created_at: '', expires_at: '', revoked_at: 'now', revoked_by: 'u1' })),
       findByIdForUser: opts.findGrantByIdForUser ?? vi.fn(async () => undefined),
+      listForUser: opts.listForUser ?? vi.fn(async () => ({ grants: [], next: null })),
     },
   };
   const app = Fastify();
@@ -517,4 +519,28 @@ it('GET / keeps suggestions out of tab_questions and lists them in tab_suggestio
   const res = await app.inject({ method: 'GET', url: '/chat' });
   expect(res.json().tab_questions.map((x: { id: string }) => x.id)).toEqual(['q1']);
   expect(res.json().tab_suggestions).toEqual([{ id: 's1', tab_id: 't1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: '2026-09-25T12:00:00.000Z', answered_at: null, closed_at: null }]);
+});
+
+const listedRow = { id: 'g1', conversation_id: 'c1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', granted_by: 'u1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z', revoked_at: '2026-09-25T12:00:00.000Z', revoked_by: 'u1', conversation_project_id: null, conversation_archived: false };
+
+it('GET /chat/grants lists this user\'s grants, named, with a cursor for the next page', async () => {
+  const listForUser = vi.fn(async () => ({ grants: [listedRow], next: { created_at: listedRow.created_at, id: 'g1' } }));
+  const { app } = build({ listForUser, tabs: [{ id: 't1', project_id: 'p1', name: 'api' }], projects: [{ id: 'p1', owner_id: 'u1', name: 'termhub' }] });
+  const res = await app.inject({ method: 'GET', url: '/chat/grants?state=ended' });
+  expect(res.statusCode).toBe(200);
+  expect(listForUser).toHaveBeenCalledWith('u1', { state: 'ended', cursor: null, limit: 50 }, expect.any(Date));
+  const body = res.json();
+  expect(body.grants[0]).toMatchObject({ id: 'g1', tab_name: 'api', project_name: 'termhub', conversation_project_name: null, state: 'revoked', ended_at: listedRow.revoked_at });
+  expect(typeof body.next_cursor).toBe('string');
+  await app.inject({ method: 'GET', url: `/chat/grants?state=ended&cursor=${body.next_cursor}` });
+  expect(listForUser).toHaveBeenLastCalledWith('u1', { state: 'ended', cursor: { created_at: listedRow.created_at, id: 'g1' }, limit: 50 }, expect.any(Date));
+});
+
+it('GET /chat/grants: 400 without a valid state, with a bad cursor or a limit out of range', async () => {
+  const listForUser = vi.fn(async () => ({ grants: [], next: null }));
+  const { app } = build({ listForUser });
+  for (const url of ['/chat/grants', '/chat/grants?state=all', '/chat/grants?state=ended&cursor=nope', '/chat/grants?state=ended&limit=0', '/chat/grants?state=ended&limit=101']) {
+    expect((await app.inject({ method: 'GET', url })).statusCode).toBe(400);
+  }
+  expect(listForUser).not.toHaveBeenCalled();
 });

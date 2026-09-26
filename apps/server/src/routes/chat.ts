@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { chatGrantListQuery } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
@@ -8,7 +9,7 @@ import { answerTabQuestion, tabQuestionScreen } from '../chat/tab-question-answe
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { chatBus } from '../chat/bus.js';
-import { activeGrants, assertGrantableAction, grantTab, revokeGrant } from '../chat/grants.js';
+import { activeGrants, assertGrantableAction, grantTab, listGrants, revokeGrant } from '../chat/grants.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
 
 const messageBody = z.object({ text: z.string().trim().min(1).max(8000), project_id: z.string().min(1).max(64).nullish() });
@@ -153,6 +154,9 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       throw err;
     }
   });
+
+  /** "Abas confiáveis" (Configurações): every grant of this user, active or a page of the history. */
+  app.get('/grants', async (request) => listGrants(repos, request.scope.user.id, chatGrantListQuery.parse(request.query)));
 
   /** "Revogar". Declared as `create`, the permission deciding a card needs: whoever can grant can revoke. */
   app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {

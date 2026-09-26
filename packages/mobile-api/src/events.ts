@@ -44,6 +44,29 @@ export const chatGrantSchema = z.object({
   tab_name: z.string().nullable(),
 });
 
+/** How a listed grant stands (server `ChatGrantState`). */
+export const chatGrantState = z.enum(['active', 'expired', 'revoked', 'ended']);
+
+/** One row of "Abas confiáveis" (server `ChatGrantListItem`). */
+export const chatGrantListItemSchema = chatGrantSchema.extend({
+  project_id: z.string().nullable(),
+  project_name: z.string().nullable(),
+  conversation_id: z.string(),
+  conversation_project_name: z.string().nullable(),
+  conversation_archived: z.boolean(),
+  state: chatGrantState,
+  ended_at: z.string().nullable(),
+});
+
+export const chatGrantListResponse = z.object({ grants: z.array(chatGrantListItemSchema), next_cursor: z.string().nullable() });
+
+/** `GET chat/grants`, web and phone alike. */
+export const chatGrantListQuery = z.object({
+  state: z.enum(['active', 'ended']),
+  cursor: z.string().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
 /** Mirrors `TabQuestionView` (apps/server/src/db/repositories/tab-questions-view.ts): a question a tab
  * put to the person, with what the chat answered. `recommended` comes out of Claude Code's own label. */
 export const tabQuestionOption = z.object({ label: z.string(), description: z.string(), recommended: z.boolean() });

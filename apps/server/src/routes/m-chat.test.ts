@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
-import { decisionProofMessage } from '@termhub/mobile-api';
+import { chatGrantListResponse, decisionProofMessage } from '@termhub/mobile-api';
 import type { Device } from '../db/repositories/devices.js';
 import { applyErrorHandler, HttpError } from '../lib/errors.js';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
@@ -57,6 +57,7 @@ function build(opts: {
   grants?: { id: string; conversation_id: string; tab_id: string; tool: string; source_action_id: string | null; granted_by: string; created_at: string; expires_at: string; revoked_at: string | null; revoked_by: string | null }[];
   revoke?: ReturnType<typeof vi.fn>;
   findGrantByIdForUser?: ReturnType<typeof vi.fn>;
+  listForUser?: ReturnType<typeof vi.fn>;
   tabQuestions?: unknown[];
 } = {}) {
   const extraProjects = opts.extraProjects ?? [];
@@ -102,6 +103,7 @@ function build(opts: {
       listActive: vi.fn(async () => opts.grants ?? []),
       revoke: opts.revoke ?? vi.fn(async (id: string) => ({ id, conversation_id: 'c1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', granted_by: 'u1', created_at: '', expires_at: '', revoked_at: 'now', revoked_by: 'u1' })),
       findByIdForUser: opts.findGrantByIdForUser ?? vi.fn(async () => undefined),
+      listForUser: opts.listForUser ?? vi.fn(async () => ({ grants: [], next: null })),
     },
     projects: {
       findByIdsForOwner: vi.fn(async () => []),
@@ -667,6 +669,20 @@ describe('grants', () => {
     });
     const res = await app.inject({ method: 'GET', url: '/chat' });
     expect(res.json().grants).toEqual([{ id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', created_at: 'a', expires_at: 'b', tab_name: 'Terminal 1' }]);
+  });
+
+  it('GET /chat/grants answers the shared contract shape for this user', async () => {
+    const row = { id: 'g1', conversation_id: 'c1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', granted_by: 'u1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2099-09-26T10:00:00.000Z', revoked_at: null, revoked_by: null, conversation_project_id: null, conversation_archived: false };
+    const listForUser = vi.fn(async () => ({ grants: [row], next: null }));
+    const { app } = build({ listForUser, tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
+    const res = await app.inject({ method: 'GET', url: '/chat/grants?state=active' });
+    expect(res.statusCode).toBe(200);
+    expect(chatGrantListResponse.safeParse(res.json()).success).toBe(true);
+    expect(res.json()).toMatchObject({ grants: [{ id: 'g1', tab_name: 'Terminal 1', state: 'active', ended_at: null }], next_cursor: null });
+    // `active` is never paged: the route always asks the repository for GRANT_LIST_MAX (100), not the
+    // query's own default of 50, so the default can never silently truncate the active list.
+    expect(listForUser).toHaveBeenCalledWith('u1', { state: 'active', cursor: null, limit: 100 }, expect.any(Date));
+    expect((await app.inject({ method: 'GET', url: '/chat/grants?state=ended&cursor=nope' })).statusCode).toBe(400);
   });
 });
 

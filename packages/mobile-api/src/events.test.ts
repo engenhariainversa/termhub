@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatEventSchema, tabQuestionSchema, tabSuggestionSchema } from './events.js';
+import { chatEventSchema, chatGrantListQuery, chatGrantListResponse, tabQuestionSchema, tabSuggestionSchema } from './events.js';
 
 const base = { user_id: 'u1', conversation_id: 'c1' };
 const grant = { id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'a1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z', tab_name: 'api' };
@@ -39,4 +39,21 @@ it('parses a tab suggestion and its two events; refuses a question on them', () 
 it('a tab question never carries the dismissed status: that value is the suggestions\' own', () => {
   const common = { id: 'q1', tab_id: 't1', tab_name: 'api', error_code: null, created_at: '2026-09-25T12:00:00.000Z', answered_at: null, closed_at: null };
   expect(tabQuestionSchema.safeParse({ ...common, kind: 'permission', payload: { tool_name: 'Bash' }, answer: null, status: 'dismissed' }).success).toBe(false);
+});
+
+describe('chat grant list', () => {
+  const item = {
+    id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: null, created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z',
+    tab_name: null, project_id: null, project_name: null, conversation_id: 'c1', conversation_project_name: null, conversation_archived: false,
+    state: 'expired', ended_at: '2026-09-26T10:00:00.000Z',
+  };
+  it('parses the server list shape', () => {
+    expect(chatGrantListResponse.parse({ grants: [item], next_cursor: null }).grants[0]!.state).toBe('expired');
+    expect(chatGrantListResponse.safeParse({ grants: [{ ...item, state: 'gone' }], next_cursor: null }).success).toBe(false);
+  });
+  it('validates the query: state required, limit 1..100 defaulting to 50', () => {
+    expect(chatGrantListQuery.parse({ state: 'ended' })).toEqual({ state: 'ended', limit: 50 });
+    expect(chatGrantListQuery.parse({ state: 'active', limit: '10', cursor: 'abc' })).toEqual({ state: 'active', limit: 10, cursor: 'abc' });
+    for (const bad of [{}, { state: 'all' }, { state: 'ended', limit: '0' }, { state: 'ended', limit: '101' }, { state: 'ended', cursor: '' }]) expect(chatGrantListQuery.safeParse(bad).success).toBe(false);
+  });
 });

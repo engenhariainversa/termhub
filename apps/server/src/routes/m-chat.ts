@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { chatProjectsResponse, decisionProofMessage, deviceSelf, hostOptionsResponse, mobileDecisionBody, mobileMessageBody, sendAccepted } from '@termhub/mobile-api';
+import { chatGrantListQuery, chatGrantListResponse, chatProjectsResponse, decisionProofMessage, deviceSelf, hostOptionsResponse, mobileDecisionBody, mobileMessageBody, sendAccepted } from '@termhub/mobile-api';
 import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
@@ -12,7 +12,7 @@ import { permissionsOf } from '../auth/permissions.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { chatBus } from '../chat/bus.js';
-import { activeGrants, assertGrantableAction, grantTab, revokeGrant } from '../chat/grants.js';
+import { activeGrants, assertGrantableAction, grantTab, listGrants, revokeGrant } from '../chat/grants.js';
 import { HttpError, conflict, notFound, unauthorized } from '../lib/errors.js';
 import { DeviceLockedError, PinInvalidError, deviceRevoked, type SessionService } from '../mobile/session.js';
 
@@ -230,6 +230,9 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId }, 'mobile decision resume failed'));
     return { action, queued: true, note: DECISION_NOTE, grant };
   });
+
+  /** The phone's "Abas confiáveis": the same list as the web, validated against the shared contract. */
+  app.get('/grants', async (request) => chatGrantListResponse.parse(await listGrants(repos, request.scope.user.id, chatGrantListQuery.parse(request.query))));
 
   /** "Revogar" from the phone. No PIN: it only takes power away. `create`, like deciding a card. */
   app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {

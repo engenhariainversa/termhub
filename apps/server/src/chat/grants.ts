@@ -1,5 +1,8 @@
+import type { z } from 'zod';
+import type { chatGrantListQuery } from '@termhub/mobile-api';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
-import { describeGrants, type ChatGrantView } from '../db/repositories/chat-actions-view.js';
+import { describeGrantList, describeGrants, type ChatGrantListItem, type ChatGrantView } from '../db/repositories/chat-actions-view.js';
+import { GRANT_LIST_MAX, type GrantCursor } from '../db/repositories/chat-grants.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
 import { chatBus } from './bus.js';
@@ -44,4 +47,33 @@ export async function revokeGrant(repos: Repositories, userId: string, grantId: 
 /** The conversation's grants still in force, as `GET /chat` (web and phone) returns them. */
 export async function activeGrants(repos: Repositories, userId: string, conversationId: string): Promise<ChatGrantView[]> {
   return describeGrants(repos, await repos.chatGrants.listActive(conversationId), userId);
+}
+
+const INVALID_CURSOR = () => new HttpError(400, 'Cursor inválido', 'INVALID_CURSOR');
+
+/** Opaque to clients: base64url of `<created_at ISO>|<id>`. */
+export const encodeGrantCursor = (c: GrantCursor): string => Buffer.from(`${c.created_at}|${c.id}`, 'utf8').toString('base64url');
+
+/** The inverse, strictly: anything that is not exactly what `encodeGrantCursor` makes is a 400, never an
+ * unfiltered page. */
+export function decodeGrantCursor(s: string): GrantCursor {
+  const raw = Buffer.from(s, 'base64url').toString('utf8');
+  const sep = raw.indexOf('|');
+  if (sep <= 0) throw INVALID_CURSOR();
+  const created_at = raw.slice(0, sep);
+  const id = raw.slice(sep + 1);
+  const t = Date.parse(created_at);
+  if (!id || id.length > 64 || !Number.isFinite(t) || new Date(t).toISOString() !== created_at) throw INVALID_CURSOR();
+  return { created_at, id };
+}
+
+/** "Abas confiáveis" (spec 2026-09-26 §3.3): one page of this user's grants, web and phone alike.
+ * `active` is never paged — the repository caps it at `GRANT_LIST_MAX` on its own, and this always
+ * asks for that same cap rather than the query's `limit`, so the query's default (50) can never
+ * silently truncate the active list. */
+export async function listGrants(repos: Repositories, userId: string, query: z.infer<typeof chatGrantListQuery>, now = new Date()): Promise<{ grants: ChatGrantListItem[]; next_cursor: string | null }> {
+  const cursor = query.cursor ? decodeGrantCursor(query.cursor) : null;
+  const limit = query.state === 'active' ? GRANT_LIST_MAX : query.limit;
+  const { grants, next } = await repos.chatGrants.listForUser(userId, { state: query.state, cursor, limit }, now);
+  return { grants: await describeGrantList(repos, grants, userId, now), next_cursor: next ? encodeGrantCursor(next) : null };
 }
