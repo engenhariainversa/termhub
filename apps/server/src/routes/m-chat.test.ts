@@ -698,6 +698,65 @@ describe('POST /chat/actions/decisions (batch)', () => {
     expect(decide).toHaveBeenCalledTimes(1);
   });
 
+  it('skips an unknown approval without spending its challenge, and lists it in skipped', async () => {
+    const decide = decideById();
+    const { app, session } = build({ decide, findByIdForUser: rowsOf({ a2: { status: 'pending' } }) });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'deny' },
+    ]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a2', status: 'denied' }], skipped: [{ id: 'a1', reason: 'not_found' }] });
+    expect(res.json().skipped).toHaveLength(1);
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(decide).not.toHaveBeenCalledWith('a1', expect.anything(), expect.anything());
+  });
+
+  it('never approves a row whose proof was not checked, even if a later read sees it pending', async () => {
+    // First read: a1 is not pending (no proof is checked for it). Every later read says pending.
+    const reads = new Map<string, number>();
+    const findByIdForUser = vi.fn(async (id: string) => {
+      const n = (reads.get(id) ?? 0) + 1;
+      reads.set(id, n);
+      if (id === 'a1') return n === 1 ? undefined : { ...pendingAction, id, conversation_id: 'c1', status: 'pending' };
+      if (id === 'a3') return n === 1 ? { ...pendingAction, id, conversation_id: 'c1', status: 'approved' } : { ...pendingAction, id, conversation_id: 'c1', status: 'pending' };
+      return { ...pendingAction, id, conversation_id: 'c1', status: 'pending' };
+    });
+    const decide = decideById();
+    const { app, session } = build({ decide, findByIdForUser });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'approve', challenge: 'ch2', pin_proof: 'pp2' },
+      { id: 'a3', decision: 'approve', challenge: 'ch3', pin_proof: 'pp3' },
+    ]);
+    expect(res.statusCode).toBe(200);
+    expect(session.checkPin).toHaveBeenCalledTimes(1);
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(decide).toHaveBeenCalledWith('a2', 'u1', 'approved');
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a2', status: 'approved' }] });
+    expect(res.json().skipped).toEqual(
+      expect.arrayContaining([
+        { id: 'a1', reason: 'not_found' },
+        { id: 'a3', reason: 'already_decided' },
+      ])
+    );
+    expect(res.json().skipped).toHaveLength(2);
+  });
+
+  it('nothing left to decide is 409, with no challenge spent and nothing decided', async () => {
+    const { app, session, decide, resumeAfterDecision } = build({ findByIdForUser: rowsOf({ a1: { status: 'approved' } }) });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'deny' },
+    ]);
+    expect(res.statusCode).toBe(409);
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+    expect(resumeAfterDecision).not.toHaveBeenCalled();
+  });
+
   it('a deny-only batch never touches the challenge or the PIN', async () => {
     const decide = decideById();
     const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });

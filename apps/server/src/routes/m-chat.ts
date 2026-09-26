@@ -242,14 +242,21 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
   app.post('/actions/decisions', { config: { action: 'create' } }, async (request, reply) => {
     const { decisions } = mobileBatchDecisionBody.parse(request.body);
     const user = request.scope.user;
-    const { pending } = await pendingBatch(repos, user.id, decisions.map((d) => d.id));
+    const { pending, skipped: firstSkipped } = await pendingBatch(repos, user.id, decisions.map((d) => d.id));
     const stillPending = new Set(pending.map((p) => p.id));
     const approvals = decisions.filter((d): d is Extract<typeof d, { decision: 'approve' }> => d.decision === 'approve' && stillPending.has(d.id));
     if (approvals.length > 0) {
       const device = deviceOf(request);
       for (const a of approvals) if (!(await proofOk(deps, request, reply, device, a.id, 'approve', a))) return reply;
     }
-    const { decided, skipped } = await decideMany(repos, user.id, decisions.map((d) => ({ id: d.id, decision: d.decision })));
+    // Only what the first read saw pending reaches `decideMany`: every approval there had its proof
+    // checked above, so "no approval without a proof" holds here, not by two reads agreeing.
+    const toDecide = decisions.filter((d) => stillPending.has(d.id)).map((d) => ({ id: d.id, decision: d.decision }));
+    if (toDecide.length === 0) throw conflict('Estas ações já foram decididas');
+    const result = await decideMany(repos, user.id, toDecide);
+    const decided = result.decided;
+    const skippedIds = new Set(firstSkipped.map((s) => s.id));
+    const skipped = [...firstSkipped, ...result.skipped.filter((s) => !skippedIds.has(s.id))];
     const first = decided[0]!;
     void Promise.resolve()
       .then(() => deps.chat.resumeAfterDecision(user, first))
