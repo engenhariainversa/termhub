@@ -89,45 +89,68 @@ it('falls back to the verb alone when nothing at all can be resolved (no tab, no
 });
 
 // link_project_machine/set_project_machine_cwd/unlink_project_machine carry both a project_id and a
-// machine_id (targetOf copies both from args onto the row), but the project-only branch of
-// `targetPhrase`'s location resolution wins over the machine — same as open_tab/create_task above —
-// so the machine is dropped from the sentence even though it is known. That is acceptable: the
-// sentence still reads and still names the project.
-it('names link_project_machine by the folder it links, in the project — dropping the machine like other project-only actions', async () => {
+// machine_id (targetOf copies both from args onto the row). Unlike open_tab/create_task above, the
+// machine here is the key fact being approved, so `describeActions` names both — a project-scoped
+// tool naming a machine is otherwise never correct (a project can link to 0–N machines), which is why
+// this is limited to exactly these three tools (MACHINE_LINK_TOOLS) rather than a general rule.
+it('names link_project_machine by the folder it links, in the project and on the machine', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(
     repos,
     [action({ tool: 'link_project_machine', args: { project_id: 'p1', machine_id: 'm1', cwd: '~/termhub' }, project_id: 'p1', machine_id: 'm1' })],
     OWNER,
   );
-  expect(card.summary).toBe('vincular a pasta `~/termhub` no projeto reactivando');
+  expect(card.summary).toBe('vincular a pasta `~/termhub` no projeto reactivando, no macbook m3');
 });
 
-it('names set_project_machine_cwd by the new folder, in the project', async () => {
+it('names set_project_machine_cwd by the new folder, in the project and on the machine', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(
     repos,
     [action({ tool: 'set_project_machine_cwd', args: { project_id: 'p1', machine_id: 'm1', cwd: '~/termhub' }, project_id: 'p1', machine_id: 'm1' })],
     OWNER,
   );
-  expect(card.summary).toBe('trocar a pasta para `~/termhub` no projeto reactivando');
+  expect(card.summary).toBe('trocar a pasta para `~/termhub` no projeto reactivando, no macbook m3');
 });
 
-it('names unlink_project_machine plainly without confirm, and says the tabs close with confirm: true', async () => {
+it('names unlink_project_machine plainly without confirm, and says the tabs close with confirm: true — both naming the machine', async () => {
   const repos = fakeRepos();
   const [withoutConfirm] = await describeActions(
     repos,
     [action({ tool: 'unlink_project_machine', args: { project_id: 'p1', machine_id: 'm1' }, project_id: 'p1', machine_id: 'm1' })],
     OWNER,
   );
-  expect(withoutConfirm.summary).toBe('desvincular a máquina no projeto reactivando');
+  expect(withoutConfirm.summary).toBe('desvincular a máquina no projeto reactivando, no macbook m3');
 
   const [withConfirm] = await describeActions(
     repos,
     [action({ tool: 'unlink_project_machine', args: { project_id: 'p1', machine_id: 'm1', confirm: true }, project_id: 'p1', machine_id: 'm1', class: 'irreversible' })],
     OWNER,
   );
-  expect(withConfirm.summary).toBe('desvincular a máquina e fechar as abas do projeto nela no projeto reactivando');
+  expect(withConfirm.summary).toBe('desvincular a máquina e fechar as abas do projeto nela no projeto reactivando, no macbook m3');
+});
+
+it('says the machine does not exist for a link tool whose machine is gone or foreign, rather than a bare id — the project still resolves', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(
+    repos,
+    [action({ tool: 'link_project_machine', args: { project_id: 'p1', machine_id: foreignMachine.id, cwd: '~/termhub' }, project_id: 'p1', machine_id: foreignMachine.id })],
+    OWNER,
+  );
+  expect(card.summary).toBe('vincular a pasta `~/termhub` numa máquina que não existe mais');
+  expect(card.summary).not.toContain(foreignMachine.name);
+  expect(card.summary).not.toContain(foreignMachine.id);
+});
+
+it('says the project does not exist for a link tool whose project is gone or foreign, even when the machine resolves', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(
+    repos,
+    [action({ tool: 'unlink_project_machine', args: { project_id: foreignProject.id, machine_id: 'm1', confirm: true }, project_id: foreignProject.id, machine_id: 'm1', class: 'irreversible' })],
+    OWNER,
+  );
+  expect(card.summary).toBe('desvincular a máquina e fechar as abas do projeto nela num projeto que não existe mais');
+  expect(card.summary).not.toContain(foreignProject.name);
 });
 
 it('names an unrecognised tool inside a sentence rather than showing it bare', async () => {
