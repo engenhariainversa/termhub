@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import type { TabQuestion, TabQuestionAnswer, TabQuestionChoice, TabQuestionPermission } from '../../lib/types';
 import { answerSummary, statusLabel, tabLabel } from './tab-question-text';
 
@@ -52,27 +52,63 @@ function ChoiceBody({ question, answering, onAnswer }: TabQuestionCardProps & { 
   const typing = texts[current]!.trim() !== '';
   const toggle = (option: number) =>
     setSelected((prev) => prev.map((s, j) => (j !== current ? s : item.multi_select ? (s.includes(option) ? s.filter((x) => x !== option) : [...s, option]) : [option])));
+  // WAI-ARIA tabs (spec 2026-09-26 §4.12): each tab names the panel it controls, the panel names its tab,
+  // only the selected tab is in the tab order, and the arrows move between questions (wrapping).
+  const tabs = items.length > 1;
+  const tabId = (i: number) => `${question.id}-tab-${i}`;
+  const panelId = `${question.id}-panel`;
+  const descriptionId = (option: number) => `${question.id}-${current}-option-${option}-description`;
+  const onTabKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (step === 0) return;
+    e.preventDefault();
+    const next = (current + step + items.length) % items.length;
+    setCurrent(next);
+    document.getElementById(tabId(next))?.focus();
+  };
   return (
     <>
       {title}
-      {items.length > 1 && (
-        <div role="tablist" className="mt-2 flex flex-wrap gap-1">
+      {tabs && (
+        <div role="tablist" aria-label="Perguntas" className="mt-2 flex flex-wrap gap-1" onKeyDown={onTabKey}>
           {items.map((it, i) => (
-            <button key={i} type="button" role="tab" aria-selected={i === current} className={i === current ? 'btn-primary' : 'btn-ghost'} onClick={() => setCurrent(i)}>
+            <button
+              key={i}
+              id={tabId(i)}
+              type="button"
+              role="tab"
+              aria-selected={i === current}
+              aria-controls={panelId}
+              tabIndex={i === current ? 0 : -1}
+              className={i === current ? 'btn-primary' : 'btn-ghost'}
+              onClick={() => setCurrent(i)}
+            >
               {it.header || `Pergunta ${i + 1}`}
             </button>
           ))}
         </div>
       )}
-      <fieldset className="mt-2" disabled={answering}>
+      <fieldset id={panelId} className="mt-2" disabled={answering} {...(tabs ? { role: 'tabpanel', 'aria-labelledby': tabId(current) } : {})}>
         <legend className="whitespace-pre-wrap text-fg">{item.question}</legend>
         {item.options.map((o, oi) => (
           <label key={oi} className="mt-1 flex items-start gap-2">
-            <input type={item.multi_select ? 'checkbox' : 'radio'} name={`${question.id}-${current}`} checked={selected[current]!.includes(oi)} disabled={typing} onChange={() => toggle(oi)} />
+            <input
+              type={item.multi_select ? 'checkbox' : 'radio'}
+              name={`${question.id}-${current}`}
+              aria-label={o.recommended ? `${o.label}, recomendada` : o.label}
+              aria-describedby={o.description ? descriptionId(oi) : undefined}
+              checked={selected[current]!.includes(oi)}
+              disabled={typing}
+              onChange={() => toggle(oi)}
+            />
             <span>
               <span className="text-fg">{o.label}</span>
               {o.recommended && <span className="ml-2 rounded bg-accent/20 px-1 text-xs text-fg">Recomendada</span>}
-              {o.description && <span className="block text-xs text-fg-dim">{o.description}</span>}
+              {o.description && (
+                <span id={descriptionId(oi)} className="block text-xs text-fg-dim">
+                  {o.description}
+                </span>
+              )}
             </span>
           </label>
         ))}
