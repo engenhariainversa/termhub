@@ -106,6 +106,10 @@ interface Location {
   project?: string;
   machine?: string;
   missing?: 'tab' | 'project' | 'machine';
+  /** close_tab only: who opened the tab being closed, in parentheses right after its name — set by
+   * `describeActions` from the tab's `created_by_token_id`, never resolved here (see there for why:
+   * it takes an owner-scoped `apiTokens.listByUser` lookup this module has no repos handle for). */
+  tabOrigin?: string;
 }
 
 /** Where the sentence says it happens, from the resolved names — never from raw ids. Reads
@@ -116,7 +120,10 @@ function targetPhrase(loc: Location): string {
   if (loc.missing === 'project') return 'num projeto que não existe mais';
   if (loc.missing === 'machine') return 'numa máquina que não existe mais';
   const parts: string[] = [];
-  if (loc.tab) parts.push(`na aba ${loc.tab}`);
+  // close_tab's own verb already says "fechar a aba" — the tab's own origin (only ever set for
+  // close_tab) is appended right after its bare name, not after another "na aba", or the sentence
+  // would say "aba" twice ("fechar a aba na aba X"). Every other tool keeps "na aba X".
+  if (loc.tab) parts.push(loc.tabOrigin ? `${loc.tab} (${loc.tabOrigin})` : `na aba ${loc.tab}`);
   if (loc.project) parts.push(`${loc.tab ? 'do' : 'no'} projeto ${loc.project}`);
   const place = parts.join(' ');
   if (!loc.machine) return place;
@@ -189,6 +196,20 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
   const machines = machineIds.size ? await repos.machines.findByIdsForOwner([...machineIds], ownerId) : [];
   const machineById = new Map(machines.map((m) => [m.id, m]));
 
+  // close_tab only: who opened the tab decides what the card says (TER-184), so the one confirmation
+  // the gate now asks for (a gated token may close any of the user's tabs after this single "yes") is
+  // informed. This is the only extra lookup in this function, and only when a close_tab card's tab
+  // actually resolved *and* named a token — never for a browser-opened tab (`created_by_token_id`
+  // null needs no lookup to say "aberta por você") and never at all when no close_tab card qualifies,
+  // so every other caller (send_input, run_command, the task tools, ...) never touches `apiTokens`.
+  // Tokens are revoked, never deleted, so an old concierge token still resolves here.
+  const needsTokenLookup = actions.some((a) => a.tool === 'close_tab' && a.tab_id && tabById.get(a.tab_id)?.created_by_token_id != null);
+  let chatTokenIds: Set<string> | undefined;
+  if (needsTokenLookup) {
+    const tokens = await repos.apiTokens.listByUser(ownerId);
+    chatTokenIds = new Set(tokens.filter((t) => t.gated).map((t) => t.id));
+  }
+
   return actions.map((action) => {
     const taskId = taskIdOf(action);
     const task = taskId ? taskById.get(taskId) : undefined;
@@ -207,6 +228,14 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
       else {
         const project = projectById.get(tab.project_id);
         loc = { tab: tab.name, project: project?.name, machine: machineById.get(tab.machine_id)?.name };
+        if (action.tool === 'close_tab') {
+          loc.tabOrigin =
+            tab.created_by_token_id === null
+              ? 'aberta por você, não pelo chat'
+              : chatTokenIds?.has(tab.created_by_token_id)
+                ? 'aberta pelo chat'
+                : 'aberta por um token de API seu, não pelo chat';
+        }
       }
     } else if (taskId) {
       // A missing task is already said in full by `verbPhrase` ("...que não existe mais"); no
