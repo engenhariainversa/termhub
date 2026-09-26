@@ -46,6 +46,8 @@ export interface ClaudeManagerDeps {
   tmpDir?: string;
   timeoutMs?: number;
   promptTimeoutMs?: number;
+  /** The most a streamed run's input may hold without a newline; defaults to `MAX_PENDING_INPUT_BYTES`. */
+  maxPendingInputBytes?: number;
 }
 
 function message(err: unknown): string {
@@ -67,6 +69,9 @@ interface Run {
   inputTail: string;
   /** The end-of-input line arrived: stdin is closed, and anything after it is dropped. */
   inputEnded: boolean;
+  /** A line over the cap was dropped before its newline: what follows, up to that newline, is the
+   *  rest of it and is dropped too, never written to the CLI as a line of its own. */
+  discarding: boolean;
   /** Sends `closed` (once) and removes the run's private directory. `notify: false` for a session
    *  that is already gone, where there is nobody left to ack to. */
   settle(code: number | null, reason?: ClosedReason, notify?: boolean): void;
@@ -255,6 +260,7 @@ export function createClaudeManager(deps: ClaudeManagerDeps): ClaudeManager {
         stream,
         inputTail: '',
         inputEnded: false,
+        discarding: false,
       };
       runs.set(ch, run);
 
@@ -350,7 +356,16 @@ export function createClaudeManager(deps: ClaudeManagerDeps): ClaudeManager {
         deps.log('claude input after its end ignored', { ch, bytes: data.length });
         return true;
       }
-      run.inputTail += data.toString('utf8');
+      let text = data.toString('utf8');
+      if (run.discarding) {
+        const nl = text.indexOf('\n');
+        if (nl === -1) return true;
+        // The size, never the content: the rest of the dropped line ends here.
+        deps.log('claude input line too large, rest dropped', { ch, bytes: Buffer.byteLength(text.slice(0, nl), 'utf8') });
+        run.discarding = false;
+        text = text.slice(nl + 1);
+      }
+      run.inputTail += text;
       for (;;) {
         const nl = run.inputTail.indexOf('\n');
         if (nl === -1) break;
@@ -365,9 +380,10 @@ export function createClaudeManager(deps: ClaudeManagerDeps): ClaudeManager {
         }
         if (line.trim()) run.child.stdin?.write(`${line}\n`);
       }
-      if (Buffer.byteLength(run.inputTail, 'utf8') > MAX_PENDING_INPUT_BYTES) {
+      if (Buffer.byteLength(run.inputTail, 'utf8') > (deps.maxPendingInputBytes ?? MAX_PENDING_INPUT_BYTES)) {
         deps.log('claude input line too large, dropped', { ch, bytes: Buffer.byteLength(run.inputTail, 'utf8') });
         run.inputTail = '';
+        run.discarding = true;
       }
       return true;
     },

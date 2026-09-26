@@ -492,6 +492,24 @@ echo '{"type":"result"}'
     expect(JSON.stringify(log.mock.calls)).not.toContain('late');
   });
 
+  it('drops an input line over the cap to its very end, so its tail never reaches the CLI', async () => {
+    const { bin, out, runs } = fakeCli(RECORDER);
+    const { socket, sendControl } = makeSocket();
+    const log = vi.fn();
+    const claude = createClaudeManager({ log, env: pathEnv(bin), tmpDir: runs, maxPendingInputBytes: 16 });
+
+    await claude.open(1, { ...baseParams, stream_input: true }, socket);
+    claude.write(1, Buffer.from(`{"big":"${'segredo'.repeat(5)}`)); // over the cap, no newline yet
+    claude.write(1, Buffer.from('rabo"}\n{"ok":1}\n'));
+    claude.write(1, Buffer.from(`${STREAM_END_INPUT_LINE}\n`));
+    await waitForClosed(sendControl);
+
+    expect(readFileSync(join(out, 'stdin'), 'utf8')).toBe('{"ok":1}\n');
+    // Sizes only: nothing the line said reaches a log.
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/segredo|rabo/);
+    expect(log.mock.calls.some(([m]) => /too large/.test(m))).toBe(true);
+  });
+
   it('keeps the one-shot run exactly as it was when stream_input is absent', async () => {
     const { bin, out, runs } = fakeCli(RECORDER);
     const { socket, sendControl } = makeSocket();
