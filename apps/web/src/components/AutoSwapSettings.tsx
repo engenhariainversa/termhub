@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ApiError } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { useData } from '../lib/data';
 import type { AiAccount, Machine } from '../lib/types';
 
@@ -31,12 +32,16 @@ function MachineRow({ machine }: { machine: Machine }) {
   );
 }
 
-/** Settings → Contas de IA: one checkbox per machine with 2+ Claude accounts (spec 2026-09-26 account swap). */
+/**
+ * Settings → Contas de IA: one checkbox per machine with 2+ Claude accounts (spec 2026-09-26 account
+ * swap). The setting lives on the machine, so it is shown only to who can update machines.
+ */
 export function AutoSwapSettings({ machines, accounts }: { machines: Machine[]; accounts: AiAccount[] }) {
+  const { can } = useAuth();
   const counts = new Map<string, number>();
   for (const a of accounts) if (a.provider === 'claude') counts.set(a.machine_id, (counts.get(a.machine_id) ?? 0) + 1);
   const eligible = machines.filter((m) => (counts.get(m.id) ?? 0) >= 2);
-  if (eligible.length === 0) return null;
+  if (!can('machines', 'update') || eligible.length === 0) return null;
 
   return (
     <div className="mt-6 border-t border-line pt-4">

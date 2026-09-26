@@ -7,7 +7,10 @@ import type { AiAccount, Machine } from '../lib/types';
 
 const updateMachineMock = vi.fn(async (_id: string, input: Partial<Machine>) => input);
 
+const canMock = vi.fn((_resource: string, _action?: string) => true);
+
 vi.mock('../lib/data', () => ({ useData: () => ({ updateMachine: updateMachineMock }) }));
+vi.mock('../lib/auth', () => ({ useAuth: () => ({ can: canMock }) }));
 
 import { AutoSwapSettings } from './AutoSwapSettings';
 
@@ -45,6 +48,7 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
   updateMachineMock.mockImplementation(async (_id: string, input: Partial<Machine>) => input);
+  canMock.mockImplementation(() => true);
 });
 
 describe('AutoSwapSettings', () => {
@@ -65,6 +69,19 @@ describe('AutoSwapSettings', () => {
     const box = screen.getByLabelText('Trocar de conta sozinho quando o Claude atingir o limite em mac') as HTMLInputElement;
     expect(box.checked).toBe(true);
     expect(screen.queryByLabelText('Trocar de conta sozinho quando o Claude atingir o limite em jarvis')).toBeNull();
+  });
+
+  it('needs machines:update: without it nothing is rendered', () => {
+    canMock.mockImplementation((resource: string, action?: string) => !(resource === 'machines' && action === 'update'));
+    const { container } = render(<AutoSwapSettings machines={[machine('m1', 'mac')]} accounts={[account('a1', 'm1'), account('a2', 'm1')]} />);
+    expect(container).toBeEmptyDOMElement();
+    expect(canMock).toHaveBeenCalledWith('machines', 'update');
+  });
+
+  it('with machines:update the toggle is shown', () => {
+    canMock.mockImplementation((resource: string, action?: string) => resource === 'machines' && action === 'update');
+    render(<AutoSwapSettings machines={[machine('m1', 'mac')]} accounts={[account('a1', 'm1'), account('a2', 'm1')]} />);
+    expect(screen.getByLabelText('Trocar de conta sozinho quando o Claude atingir o limite em mac')).toBeInTheDocument();
   });
 
   it('toggles through updateMachine', async () => {

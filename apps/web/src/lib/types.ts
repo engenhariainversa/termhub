@@ -407,7 +407,7 @@ export interface Tab {
   activity_verb: string | null;
   created_at: string;
   alive: boolean;
-  /** the Claude account this tab's session last ran under; null = the machine's own default login */
+  /** the Claude account this tab's session last ran under; null = unknown (the agent was started by hand, not by termhub) */
   ai_account_id: string | null;
   /** set while its Claude is stuck on a usage limit; null once it resumes */
   rate_limited_at: string | null;
