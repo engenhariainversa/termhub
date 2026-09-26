@@ -15,8 +15,15 @@ interface Cell {
   dim: boolean;
 }
 
-/** CSI (ESC [ params intermediates final), OSC (ESC ] … BEL or ST), or any other two-byte escape. */
-const ESCAPE = /\x1b\[([0-9;:?<=>]*)[ -\/]*([@-~])|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[^[\]]?/g;
+/**
+ * CSI (ESC [ params intermediates final); an unterminated CSI — cut by the end of the capture or by the
+ * next ESC — consumed whole; OSC (ESC ] … BEL or ST); or any other two-byte escape, whose second byte is
+ * never another ESC, so `ESC ESC[2m` still reads as dim (spec 2026-09-26 §5.2).
+ */
+const ESCAPE = /\x1b\[([0-9;:?<=>]*)[ -\/]*([@-~])|\x1b\[[0-?]*[ -\/]*|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[^[\]\x1b]?/g;
+
+/** What a cell can hold: a tab, or anything from space up — minus DEL and the C1 controls (0x9b is an 8-bit CSI). */
+const printable = (ch: string) => ch === '\t' || (ch >= ' ' && ch !== '\x7f' && !(ch >= '\x80' && ch <= '\x9f'));
 
 /** Dim after one SGR sequence: 2 sets it, 0 and 22 clear it (22 also clears bold); colours are skipped whole. */
 function applySgr(params: string, dim: boolean): boolean {
@@ -43,7 +50,7 @@ function parse(ansi: string): Cell[][] {
   const text = (s: string) => {
     for (const ch of s) {
       if (ch === '\n') lines.push([]);
-      else if (ch === '\t' || (ch >= ' ' && ch !== '\x7f')) (lines[lines.length - 1] as Cell[]).push({ ch, dim });
+      else if (printable(ch)) (lines[lines.length - 1] as Cell[]).push({ ch, dim });
     }
   };
   let last = 0;
@@ -94,9 +101,16 @@ export function renderStyled(ansi: string): string {
 }
 
 /**
+ * A new session's empty prompt shows `Try "…"` dimmed, exactly like a suggestion: Claude Code's placeholder,
+ * never a suggestion (spec 2026-09-26 §5.6). Curly quotes too. `renderStyled` still marks it `⟦…⟧`.
+ */
+export const PLACEHOLDER = /^Try ["“].*["”]$/;
+
+/**
  * Claude Code's suggested next prompt, when the input box shows one: the last line whose first
  * non-blank character is `❯`, when everything after it is dim (blanks allowed). Anything non-dim —
- * text the person typed, a dialog's "❯ 1. Yes" — means there is no suggestion to offer.
+ * text the person typed, a dialog's "❯ 1. Yes" — means there is no suggestion to offer, and so does
+ * the new-session placeholder (`PLACEHOLDER`).
  */
 export function promptSuggestion(ansi: string): string | null {
   const lines = parse(ansi);
@@ -110,7 +124,7 @@ export function promptSuggestion(ansi: string): string | null {
       .map((c) => c.ch)
       .join('')
       .trim();
-    return text === '' ? null : text;
+    return text === '' || PLACEHOLDER.test(text) ? null : text;
   }
   return null;
 }
