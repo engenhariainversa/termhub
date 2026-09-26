@@ -5,7 +5,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { Machine } from '../db/repositories/types.js';
 import { promptSuggestion } from '../terminal/ansi.js';
 import { failureLabel } from './service.js';
-import { ANSWER_TEXT_MAX } from './tab-question-payload.js';
+import { ANSWER_TEXT_MAX, CONTROL_CHARS_RE, globalOf, sliceUnits } from './tab-question-payload.js';
 import { publishTabQuestions } from './tab-questions.js';
 
 /**
@@ -19,10 +19,12 @@ export const SUGGESTION_MAX = ANSWER_TEXT_MAX;
 
 type Log = Pick<FastifyBaseLogger, 'info' | 'warn'>;
 
-/** One line of plain text, ≤ 2000 chars, control characters stripped; null when nothing is left. */
+const CONTROL_CHARS = globalOf(CONTROL_CHARS_RE);
+
+/** One line of plain text, ≤ 2000 UTF-16 units (never half a pair), control characters (C0, DEL, C1) stripped; null when nothing is left. */
 export function cleanSuggestion(text: string | null): string | null {
   if (text === null) return null;
-  const clean = text.replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, SUGGESTION_MAX).trim();
+  const clean = sliceUnits(text.replace(CONTROL_CHARS, '').trim(), SUGGESTION_MAX).trim();
   return clean === '' ? null : clean;
 }
 

@@ -124,6 +124,14 @@ describe('sendTabSuggestion', () => {
     expect(sendInput).not.toHaveBeenCalled();
   });
 
+  it('refuses C1 in the text, before any screen read or claim', async () => {
+    const { ctx, tabQuestions } = ctxFor(row());
+    await expect(sendTabSuggestion(ctx, 's1', { text: 'commit\u009bit' }, { log: log() })).rejects.toBeInstanceOf(ZodError);
+    expect(captureStyledScreen).not.toHaveBeenCalled();
+    expect(tabQuestions.claimSuggestion).not.toHaveBeenCalled();
+    expect(sendInput).not.toHaveBeenCalled();
+  });
+
   it('404 when the tab left the scope', async () => {
     const { ctx } = ctxFor(row(), { outOfScope: true });
     await rejects(sendTabSuggestion(ctx, 's1', { text: 'commit it' }, { log: log() }), 404, 'NOT_FOUND');

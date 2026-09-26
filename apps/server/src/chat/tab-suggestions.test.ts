@@ -64,6 +64,11 @@ describe('cleanSuggestion', () => {
     expect(cleanSuggestion('\u0001 ')).toBeNull();
     expect(cleanSuggestion(null)).toBeNull();
   });
+
+  it('strips C1 too, and never splits a surrogate pair at the cap', () => {
+    expect(cleanSuggestion('commit\u009b it\u0085')).toBe('commit it');
+    expect(cleanSuggestion(`${'x'.repeat(1999)}😀`)).toBe('x'.repeat(1999));
+  });
 });
 
 describe('checkTabSuggestion', () => {
