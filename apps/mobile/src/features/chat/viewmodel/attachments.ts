@@ -38,7 +38,13 @@ export type DraftAction =
   | { type: 'remove'; key: string }
   /** The chips a send carried: gone without a server-side delete (the message owns them now). */
   | { type: 'drop'; keys: string[] }
-  | { type: 'clear' };
+  | { type: 'clear' }
+  /** What the socket heard (`attachment_status`), by id: an uploaded chip moves to it (the web's `useAttachmentDrafts`). */
+  | { type: 'statuses'; statuses: Readonly<Record<string, TChatAttachment>> };
+
+/** Whether `heard` says something new about `current`: an extraction ended, or gave up. */
+export const newsFor = (current: TChatAttachment, heard: TChatAttachment | undefined): heard is TChatAttachment =>
+  heard !== undefined && (heard.status !== current.status || heard.error_code !== current.error_code);
 
 /** The refusal before any upload, or the kind it will upload as. An unknown size is let through: the server measures it. */
 export function checkPick(file: PickedFile): { kind: AttachmentKind } | { refused: string } {
@@ -80,15 +86,30 @@ export function draftsReducer(drafts: DraftAttachment[], action: DraftAction): D
       return drafts.some((d) => action.keys.includes(d.key)) ? drafts.filter((d) => !action.keys.includes(d.key)) : drafts;
     case 'clear':
       return drafts.length === 0 ? drafts : [];
+    case 'statuses': {
+      let changed = false;
+      const next = drafts.map((d) => {
+        if (d.phase !== 'uploaded' || !d.attachment) return d;
+        const heard = action.statuses[d.attachment.id];
+        if (!newsFor(d.attachment, heard)) return d;
+        changed = true;
+        return { ...d, attachment: heard };
+      });
+      return changed ? next : drafts;
+    }
   }
 }
 
 export const isUploading = (drafts: DraftAttachment[]): boolean => drafts.some((d) => d.phase === 'uploading');
 export const uploadedAttachments = (drafts: DraftAttachment[]): TChatAttachment[] => drafts.flatMap((d) => (d.phase === 'uploaded' && d.attachment ? [d.attachment] : []));
+/** The uploaded chips the server will refuse to send (`isAttachable`): a file it could not read. A failed transcription is still sendable. */
+export const invalidAttachments = (drafts: DraftAttachment[]): TChatAttachment[] => uploadedAttachments(drafts).filter((a) => a.status === 'failed' && a.error_code === 'ATTACHMENT_INVALID');
 
 export interface AttachmentDeps {
   upload(file: PickedFile, onProgress: (fraction: number) => void): Promise<TChatAttachment>;
   remove(id: string): Promise<void>;
+  /** The statuses the store heard over the socket, by id (`attachmentStatuses`). */
+  statuses?: Readonly<Record<string, TChatAttachment>>;
 }
 
 /**
@@ -116,12 +137,14 @@ export function useAttachmentDrafts(deps: AttachmentDeps) {
 
   const upload = useCallback(async (draft: DraftAttachment) => {
     try {
-      const attachment = await depsRef.current.upload(draft.file, (fraction) => dispatch({ type: 'progress', key: draft.key, fraction }));
+      const stored = await depsRef.current.upload(draft.file, (fraction) => dispatch({ type: 'progress', key: draft.key, fraction }));
       if (dropped.current.delete(draft.key)) {
-        void depsRef.current.remove(attachment.id).catch(() => undefined);
+        void depsRef.current.remove(stored.id).catch(() => undefined);
         return;
       }
-      dispatch({ type: 'uploaded', key: draft.key, attachment });
+      // A small file can be extracted before this answer is read: a status heard meanwhile is the newer word.
+      const heard = depsRef.current.statuses?.[stored.id];
+      dispatch({ type: 'uploaded', key: draft.key, attachment: newsFor(stored, heard) ? heard : stored });
     } catch (e) {
       if (dropped.current.delete(draft.key)) return;
       dispatch({ type: 'failed', key: draft.key, error: e instanceof ApiError ? e.message : CHAT_MSG.attachmentUploadFailed });
@@ -158,6 +181,12 @@ export function useAttachmentDrafts(deps: AttachmentDeps) {
     [upload],
   );
 
+  // The statuses the store hears over the socket, applied to the chips that have landed.
+  const statuses = deps.statuses;
+  useEffect(() => {
+    if (statuses) dispatch({ type: 'statuses', statuses });
+  }, [statuses]);
+
   const clear = useCallback((keys?: string[]) => {
     dispatch(keys ? { type: 'drop', keys } : { type: 'clear' });
     setNotice(null);
@@ -171,5 +200,5 @@ export function useAttachmentDrafts(deps: AttachmentDeps) {
     [],
   );
 
-  return { drafts, notice: noticeRef.current, uploading: isUploading(drafts), uploaded: uploadedAttachments(drafts), add, remove, retry, clear };
+  return { drafts, notice: noticeRef.current, uploading: isUploading(drafts), uploaded: uploadedAttachments(drafts), invalid: invalidAttachments(drafts), add, remove, retry, clear };
 }

@@ -83,6 +83,10 @@ export interface ChatState {
   hostOptions: THostOptionsResponse | null;
   /** The last failed action of the screen on show, in pt-BR. */
   error: string | null;
+  /** The latest `attachment_status` heard for each attachment of the open conversation, by id (the
+   * web's `ChatPanel` map): the thread takes the event into its message; the composer's chips take
+   * it from here, since a chip's file has no message yet. Small rows; starts over with the conversation. */
+  attachmentStatuses: Record<string, TChatAttachment>;
 
   loadProjects(): Promise<void>;
   open(projectId: string | null): Promise<void>;
@@ -151,6 +155,7 @@ const initialData = (): Data => ({
   suggestionErrors: {},
   hostOptions: null,
   error: null,
+  attachmentStatuses: {},
 });
 
 const emptySlot = (): ConversationSlot => ({ conversation: null, messages: [], actions: [], grants: [], tabQuestions: [], tabSuggestions: [], host: null, loaded: false, error: null });
@@ -272,6 +277,7 @@ export function createChatStore(deps: ChatDeps) {
                 : {}),
             }));
           }
+          if (e.type === 'attachment_status') set((s) => ({ attachmentStatuses: { ...s.attachmentStatuses, [e.attachment.id]: e.attachment } }));
           // The answer is complete (or failed): what streamed in is worth an MMKV write now.
           if (e.type === 'run_finished') storage.flush();
         };
@@ -348,8 +354,9 @@ export function createChatStore(deps: ChatDeps) {
             set((s) => ({
               activeProject: projectId,
               error: null,
-              // Another conversation's half-written answer has nothing to do with this one.
+              // Another conversation's half-written answer has nothing to do with this one, nor its uploads' statuses.
               live: s.activeProject === projectId ? s.live : emptyFold(),
+              attachmentStatuses: s.activeProject === projectId ? s.attachmentStatuses : {},
               conversations: s.conversations[key] ? s.conversations : { ...s.conversations, [key]: emptySlot() },
             }));
             // Locked: the persisted thread is all there is until the PIN.
@@ -373,7 +380,7 @@ export function createChatStore(deps: ChatDeps) {
             closeSocket?.();
             closeSocket = null;
             readSeq.clear();
-            set({ connected: false, live: emptyFold(), activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionIds: [], questionErrors: {}, busySuggestionIds: [], suggestionErrors: {} });
+            set({ connected: false, live: emptyFold(), activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionIds: [], questionErrors: {}, busySuggestionIds: [], suggestionErrors: {}, attachmentStatuses: {} });
           },
 
           async send(text, attachments = []) {

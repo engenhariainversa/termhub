@@ -42,6 +42,8 @@ type Props = {
   onSend(text: string, attachments: TChatAttachment[]): Promise<boolean>;
   uploadAttachment(file: PickedFile, onProgress: (fraction: number) => void): Promise<TChatAttachment>;
   deleteAttachment(id: string): Promise<void>;
+  /** The store's `attachmentStatuses`: what the socket heard for each upload, so a chip moves on from "processando…". */
+  attachmentStatuses?: Readonly<Record<string, TChatAttachment>>;
 };
 
 /**
@@ -49,22 +51,25 @@ type Props = {
  * box holding, top to bottom, the attachment chips, a `TextInput` whose height follows its content
  * between one and six lines, and a row with 📎 on the left and the one round button on the right — a
  * microphone with nothing typed and no chips, the send arrow with text or chips, a stop square while
- * recording, the web's rules. Nothing leaves while a chip is still uploading. The text clears as soon
- * as it is sent and comes back if the send fails; the chips only go once the server accepted. The
- * status, error and notice lines are always mounted, so text appearing in them moves nothing.
+ * recording, the web's rules. Nothing leaves while a chip is still uploading, and nothing leaves
+ * with a chip the server could not read (it would answer 409): the line says to remove it. The text
+ * clears as soon as it is sent and comes back if the send fails; the chips only go once the server
+ * accepted. The status, error and notice lines are always mounted, so text appearing in them moves
+ * nothing.
  */
-export function Composer({ sending, onSend, uploadAttachment, deleteAttachment }: Props) {
+export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses }: Props) {
   const [text, setText] = useState('');
   const [height, setHeight] = useState(LINE_HEIGHT * MIN_LINES);
   const [focused, setFocused] = useState(false);
   const [picking, setPicking] = useState(false);
   const voice = useVoice(useCallback((clip: string) => setText((current) => appendDictated(current, clip)), []));
-  const attachments = useAttachmentDrafts({ upload: uploadAttachment, remove: deleteAttachment });
+  const attachments = useAttachmentDrafts({ upload: uploadAttachment, remove: deleteAttachment, statuses: attachmentStatuses });
 
   const hasText = text.trim().length > 0;
   /** A chip that is (or will be) part of the message: uploading or uploaded; a refused one is not. */
   const hasChips = attachments.drafts.some((d) => d.phase !== 'failed');
-  const canSend = (hasText || attachments.uploaded.length > 0) && !attachments.uploading && !sending;
+  const invalid = attachments.invalid.length > 0;
+  const canSend = (hasText || attachments.uploaded.length > 0) && !attachments.uploading && !invalid && !sending;
 
   // The box empties at once (the row is already on screen) and gets its text back if the send
   // fails — unless something new was typed meanwhile, which is the person's to keep. The chips stay
@@ -89,7 +94,15 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment }
   // keeps the (disabled) send button. While `checking` or `starting` it is the microphone, disabled.
   const role: PrimaryRole = voice.state === 'recording' ? 'stop' : hasText || hasChips || voice.state === 'off' ? 'send' : 'dictate';
   const disabled = role === 'stop' ? false : role === 'send' ? !canSend || busy : busy || voice.state === 'checking' || voice.state === 'starting';
-  const statusText = busy ? 'transcrevendo…' : attachments.uploading ? CHAT_MSG.attachmentUploading : sending && role === 'send' ? 'aguarde a resposta terminar' : (attachments.notice ?? '');
+  const statusText = busy
+    ? 'transcrevendo…'
+    : attachments.uploading
+      ? CHAT_MSG.attachmentUploading
+      : invalid
+        ? CHAT_MSG.attachmentInvalid
+        : sending && role === 'send'
+          ? 'aguarde a resposta terminar'
+          : (attachments.notice ?? '');
   const onPrimary = role === 'stop' ? voice.stop : role === 'send' ? () => void submit() : voice.start;
   // No 📎 while dictation holds the microphone or its clip: the sheet's recorder would release the
   // audio session under it (one recorder at a time), and five chips is the message's limit.

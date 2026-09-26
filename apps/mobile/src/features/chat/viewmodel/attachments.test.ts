@@ -1,6 +1,6 @@
 import { ATTACHMENT_LIMITS } from '@termhub/mobile-api';
 import type { TChatAttachment } from '@/services/api/contract';
-import { attachmentStatusText, checkPick, draftsReducer, formatBytes, isUploading, planAdd, uploadedAttachments, type PickedFile } from './attachments';
+import { attachmentStatusText, checkPick, draftsReducer, formatBytes, invalidAttachments, isUploading, planAdd, uploadedAttachments, type PickedFile } from './attachments';
 
 const att = (over: Partial<TChatAttachment> & { id: string }): TChatAttachment => ({
   name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf', bytes: 10, status: 'pending', error_code: null, meta: null, created_at: '2026-09-26T00:00:00.000Z', ...over,
@@ -75,5 +75,25 @@ describe('copy', () => {
     expect(attachmentStatusText(att({ id: 'a' }))).toBe('processando…');
     expect(attachmentStatusText(att({ id: 'a', status: 'failed', error_code: 'ATTACHMENT_INVALID' }))).toBe('falhou: arquivo inválido');
     expect(attachmentStatusText(att({ id: 'a', status: 'ready' }))).toBeNull();
+  });
+});
+
+describe('statuses (what the socket heard, applied to the chips)', () => {
+  it("'statuses' moves an uploaded chip to the status heard for its id; no news, or news for a chip not here, leaves the very same list", () => {
+    const added = draftsReducer([], { type: 'add', drafts: planAdd([], [pdf('a.pdf'), pdf('b.pdf')], nextKey).drafts });
+    const drafts = draftsReducer(added, { type: 'uploaded', key: 'k1', attachment: att({ id: 'att1' }) });
+    expect(draftsReducer(drafts, { type: 'statuses', statuses: {} })).toBe(drafts);
+    expect(draftsReducer(drafts, { type: 'statuses', statuses: { att1: att({ id: 'att1', meta: { pages: 1 } }), zz: att({ id: 'zz', status: 'ready' }) } })).toBe(drafts);
+    const failed = att({ id: 'att1', status: 'failed', error_code: 'ATTACHMENT_INVALID' });
+    const next = draftsReducer(drafts, { type: 'statuses', statuses: { att1: failed } });
+    expect(next).not.toBe(drafts);
+    expect(next[0]).toMatchObject({ phase: 'uploaded', attachment: failed, error: null });
+    expect(next[1]).toBe(drafts[1]);
+    expect(invalidAttachments(next)).toEqual([failed]);
+    expect(invalidAttachments(drafts)).toEqual([]);
+    // A failure the server still accepts (no transcript) is not invalid.
+    const noTranscript = draftsReducer(drafts, { type: 'statuses', statuses: { att1: att({ id: 'att1', status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE' }) } });
+    expect(invalidAttachments(noTranscript)).toEqual([]);
+    expect(uploadedAttachments(noTranscript)).toHaveLength(1);
   });
 });

@@ -14,5 +14,6 @@ export const CHAT_MSG = {
   attachmentTooMany: 'No máximo 5 anexos por mensagem',
   attachmentUploadFailed: 'Não foi possível enviar o arquivo',
   attachmentUploading: 'enviando anexo…',
+  attachmentInvalid: 'Remova o anexo inválido para enviar',
   attachmentGalleryDenied: 'Permissão da galeria negada',
 } as const;

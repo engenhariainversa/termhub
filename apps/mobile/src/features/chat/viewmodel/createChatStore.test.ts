@@ -995,6 +995,25 @@ describe('attachments', () => {
     await expect(chat.getState().deleteAttachment('att1')).rejects.toMatchObject({ status: 500 });
   });
 
+  it('attachment_status of the open conversation is kept by id for the composer chips; another conversation is ignored; open and close start over', async () => {
+    const { chat, handlers } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    expect(chat.getState().attachmentStatuses).toEqual({});
+    const heard = { ...attachment, status: 'failed' as const, error_code: 'ATTACHMENT_INVALID' };
+    handlers().onEvent({ type: 'attachment_status', user_id: 'u1', conversation_id: 'c-termhub', attachment: heard });
+    handlers().onEvent({ type: 'attachment_status', user_id: 'u1', conversation_id: 'c-opapingou', attachment: { ...attachment, id: 'elsewhere' } });
+    expect(chat.getState().attachmentStatuses).toEqual({ att1: heard });
+    handlers().onEvent({ type: 'attachment_status', user_id: 'u1', conversation_id: 'c-termhub', attachment: { ...heard, status: 'ready', error_code: null } });
+    expect(chat.getState().attachmentStatuses.att1).toMatchObject({ status: 'ready' });
+
+    await openAndConnect(chat, 'p-opapingou');
+    expect(chat.getState().attachmentStatuses).toEqual({});
+    handlers().onEvent({ type: 'attachment_status', user_id: 'u1', conversation_id: 'c-opapingou', attachment: heard });
+    expect(chat.getState().attachmentStatuses).toEqual({ att1: heard });
+    chat.getState().close();
+    expect(chat.getState().attachmentStatuses).toEqual({});
+  });
+
   it('attachmentSource signs the download url for the open session', async () => {
     const { chat } = await setup();
     await openAndConnect(chat, 'p-termhub');

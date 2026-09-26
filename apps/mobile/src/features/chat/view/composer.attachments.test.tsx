@@ -123,6 +123,51 @@ describe('Composer attachments', () => {
     expect(screen.getByRole('button', { name: 'Anexar' })).toBeDisabled();
   });
 
+  it('a chip follows the status the store heard: "processando…" becomes "falhou: arquivo inválido", and the send is blocked until it is removed', async () => {
+    const props = await renderComposer({ uploadAttachment: jest.fn(async () => att({ id: 'att1', status: 'pending' })) });
+    await pickFile(asset('relatorio.pdf', 'application/pdf'));
+    expect(await screen.findByText('processando…')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'leia');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
+
+    await screen.rerender(<Composer {...props} attachmentStatuses={{ att1: att({ id: 'att1', status: 'failed', error_code: 'ATTACHMENT_INVALID' }) }} />);
+    expect(await screen.findByText('falhou: arquivo inválido')).toBeTruthy();
+    expect(screen.queryByText('processando…')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled();
+    expect(screen.getByText('Remova o anexo inválido para enviar')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
+    expect(props.onSend).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Remover relatorio.pdf' }));
+    await waitFor(() => expect(props.deleteAttachment).toHaveBeenCalledWith('att1'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
+    expect(screen.queryByText('Remova o anexo inválido para enviar')).toBeNull();
+  });
+
+  it('a chip whose transcription is unavailable says so and still sends (the server accepts it)', async () => {
+    const props = await renderComposer({ uploadAttachment: jest.fn(async () => att({ id: 'clip', name: 'nota.m4a', kind: 'audio', mime: 'audio/mp4', status: 'pending' })) });
+    await pickFile(asset('nota.m4a', 'audio/mp4'));
+    expect(await screen.findByText('transcrevendo…')).toBeTruthy();
+    const heard = att({ id: 'clip', name: 'nota.m4a', kind: 'audio', mime: 'audio/mp4', status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE' });
+    await screen.rerender(<Composer {...props} attachmentStatuses={{ clip: heard }} />);
+    expect(await screen.findByText('falhou: transcrição indisponível')).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
+    await waitFor(() => expect(props.onSend).toHaveBeenCalledWith('', [heard]));
+  });
+
+  it('a status heard before the upload answer landed is the newer word', async () => {
+    let resolveUpload!: (a: TChatAttachment) => void;
+    const props = await renderComposer({ uploadAttachment: jest.fn(() => new Promise<TChatAttachment>((resolve) => (resolveUpload = resolve))) });
+    await pickFile(asset('relatorio.pdf', 'application/pdf'));
+    await screen.rerender(<Composer {...props} attachmentStatuses={{ att1: att({ id: 'att1', status: 'ready' }) }} />);
+    await act(async () => resolveUpload(att({ id: 'att1', status: 'pending' })));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
+    expect(screen.queryByText('processando…')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
+    await waitFor(() => expect(props.onSend).toHaveBeenCalledWith('', [att({ id: 'att1', status: 'ready' })]));
+  });
+
   it('a send clears only the chips it carried: one added while the send was in flight stays', async () => {
     let resolveSend!: (ok: boolean) => void;
     const props = await renderComposer({
