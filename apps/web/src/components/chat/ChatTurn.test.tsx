@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatTurn } from './ChatTurn';
 import type { ChatMessage } from '../../lib/types';
@@ -214,6 +214,25 @@ describe('ChatTurn', () => {
     );
 
     expect(decorateCodeBlocks).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a user message\'s attachments under its text, and a message with attachments only', () => {
+    const attachment = { id: 'a1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf' as const, bytes: 10, status: 'ready' as const, error_code: null, meta: null, created_at: '' };
+    const { rerender } = render(
+      <ol>
+        <ChatTurn message={answer({ role: 'user', text: 'leia', attachments: [attachment] })} waiting={false} failed={false} />
+      </ol>,
+    );
+    expect(screen.getByText('leia')).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Anexos da mensagem' })).toBeTruthy();
+
+    rerender(
+      <ol>
+        <ChatTurn message={answer({ role: 'user', text: '', attachments: [attachment] })} waiting={false} failed={false} />
+      </ol>,
+    );
+    expect(screen.getByRole('link', { name: /relatorio\.pdf/ })).toBeTruthy();
+    expect(renderMarkdown).not.toHaveBeenCalled();
   });
 
   it('never parses the user\'s own words as Markdown', () => {

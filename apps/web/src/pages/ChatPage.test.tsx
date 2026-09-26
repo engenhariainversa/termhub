@@ -585,11 +585,13 @@ it('fetches nothing from an answer: no element in the model text can make the br
   // The whole document for everything this page never draws itself — the error paragraphs today, a
   // streaming preview or a conversation title tomorrow, all outside the thread and all able to fetch.
   // The composer's own hidden file picker is the one `input` that cannot fetch anything.
-  expect(document.querySelectorAll('img, video, input:not([type="file"]), iframe, image')).toHaveLength(0);
-  // `svg` alone is scoped to the thread, which is where the model's text lands: the page's own chrome
-  // legitimately draws inline SVG (the composer's one send/mic glyph), and that is not model markup.
+  expect(document.querySelectorAll('video, input:not([type="file"]), iframe, image')).toHaveLength(0);
+  // `img` and `svg` are scoped to the thread, which is where the model's text lands: the page's own
+  // chrome legitimately draws inline SVG (the composer's send/mic and paperclip glyphs) and an `img`
+  // (an image chip's thumbnail in the composer, a sent image's thumbnail in a user bubble — both the
+  // page's own, same-origin), and none of that is model markup. This conversation sends no image.
   const thread = screen.getByRole('list', { name: 'Conversa' });
-  expect(thread.querySelectorAll('svg')).toHaveLength(0);
+  expect(thread.querySelectorAll('img, svg')).toHaveLength(0);
 });
 
 it('puts a card between the two messages it was proposed between', async () => {

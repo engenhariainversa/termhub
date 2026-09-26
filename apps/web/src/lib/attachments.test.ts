@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, checkFile, formatBytes, kindFromNameAndMime } from './attachments';
-import type { ChatAttachment } from './types';
+import { ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, checkFile, formatBytes, kindFromNameAndMime, patchMessageAttachment } from './attachments';
+import type { ChatAttachment, ChatMessage } from './types';
 
 const att = (over: Partial<ChatAttachment> = {}): ChatAttachment => ({
   id: 'a1', name: 'x.pdf', mime: 'application/pdf', kind: 'pdf', bytes: 10, status: 'ready', error_code: null, meta: null, created_at: '2026-09-26T00:00:00.000Z', ...over,
@@ -70,5 +70,24 @@ describe('attachmentStatusText', () => {
     expect(attachmentStatusText(att({ status: 'failed', error_code: 'TRANSCRIPTION_FAILED' }))).toBe('falhou: transcrição falhou');
     expect(attachmentStatusText(att({ status: 'failed', error_code: null }))).toBe('falhou: erro');
     expect(attachmentStatusText(att({ status: 'ready' }))).toBeNull();
+  });
+});
+
+describe('patchMessageAttachment', () => {
+  const msg = (over: Partial<ChatMessage> & { id: string }): ChatMessage => ({ conversation_id: 'c1', role: 'user', text: '', error_code: null, created_at: '2026-09-26T00:00:00.000Z', ...over });
+
+  it('replaces the attachment inside the message that carries it, keeping every other row', () => {
+    const other = msg({ id: 'm0', text: 'oi' });
+    const list = [other, msg({ id: 'm1', attachments: [att({ id: 'a1', status: 'pending' }), att({ id: 'a2', status: 'pending' })] })];
+    const next = patchMessageAttachment(list, att({ id: 'a2', status: 'ready', meta: { pages: 3 } }));
+    expect(next).not.toBe(list);
+    expect(next[0]).toBe(other);
+    expect(next[1].attachments).toEqual([att({ id: 'a1', status: 'pending' }), att({ id: 'a2', status: 'ready', meta: { pages: 3 } })]);
+  });
+
+  it('returns the same list when the id is unknown or nothing changed', () => {
+    const list = [msg({ id: 'm1', attachments: [att({ id: 'a1', status: 'ready' })] })];
+    expect(patchMessageAttachment(list, att({ id: 'zz', status: 'ready' }))).toBe(list);
+    expect(patchMessageAttachment(list, att({ id: 'a1', status: 'ready' }))).toBe(list);
   });
 });

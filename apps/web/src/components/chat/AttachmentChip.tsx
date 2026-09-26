@@ -54,8 +54,9 @@ function ProgressRing({ fraction }: { fraction: number }) {
   );
 }
 
-/** The dot between the size and what follows it — its own element, so the words next to it stay whole text nodes. */
-function Dot() {
+/** The dot between the size and what follows it — its own element, so the words next to it stay whole
+ * text nodes. Shared with the thread's bubbles, which say the same things after the same size. */
+export function Dot() {
   return <span aria-hidden="true">·</span>;
 }
 

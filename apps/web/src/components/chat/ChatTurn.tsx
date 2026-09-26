@@ -4,6 +4,7 @@ import { decorateCodeBlocks } from '../../lib/code-blocks';
 import { renderMarkdown } from '../../lib/markdown';
 import { splitSettled } from '../../lib/markdown-split';
 import type { ChatErrorCode, ChatMessage } from '../../lib/types';
+import { MessageAttachments } from './MessageAttachments';
 
 const COPY_FEEDBACK_MS = 1500;
 
@@ -149,10 +150,15 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
   const tailHtml = useMemo(() => toHtml(tail), [tail]);
 
   if (message.role === 'user') {
+    const attachments = message.attachments ?? [];
     return (
       <li className="chat-enter flex justify-end">
-        {/* `break-words` so a pasted path or URL wraps instead of widening the column on a phone. */}
-        <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-accent/10 px-4 py-2.5 text-sm leading-relaxed text-fg">{message.text}</div>
+        {/* `break-words` so a pasted path or URL wraps instead of widening the column on a phone. A
+            message may be attachments alone (spec §3): then there is no text line at all. */}
+        <div className="max-w-[85%] break-words rounded-2xl bg-accent/10 px-4 py-2.5 text-sm leading-relaxed text-fg">
+          {message.text && <div className="whitespace-pre-wrap">{message.text}</div>}
+          {attachments.length > 0 && <MessageAttachments attachments={attachments} />}
+        </div>
       </li>
     );
   }
