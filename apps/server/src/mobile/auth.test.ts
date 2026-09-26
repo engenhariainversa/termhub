@@ -150,7 +150,7 @@ describe('buildMobileAuthHook', () => {
     await a.close();
   });
 
-  it('answers DEVICE_REVOKED for a token of a revoked device, TOKEN_INVALID for an unknown one', async () => {
+  it('answers DEVICE_REVOKED for a token of a revoked device, TOKEN_EXPIRED for an expired or unknown one', async () => {
     const revoked = fakeRepos(deviceRow(key.jwk, 'revoked'));
     const a = await buildTestApp(revoked);
     const r = await a.inject({ method: 'GET', url: '/api/m/v1/me', headers: await deviceHeaders('/api/m/v1/me') });
@@ -158,13 +158,22 @@ describe('buildMobileAuthHook', () => {
     expect(r.json()).toEqual({ error: 'Este aparelho foi removido da conta', code: 'DEVICE_REVOKED' });
     await a.close();
 
+    // Expired: the row is still there (findTokenAny sees it), but findValidToken no longer answers.
+    const expired = fakeRepos(deviceRow(key.jwk));
+    expired.deviceSessions.findValidToken.mockResolvedValue(undefined);
+    const e = await buildTestApp(expired);
+    const x = await e.inject({ method: 'GET', url: '/api/m/v1/me', headers: await deviceHeaders('/api/m/v1/me') });
+    expect(x.statusCode).toBe(401);
+    expect(x.json()).toEqual({ error: 'Sessão expirada.', code: 'TOKEN_EXPIRED' });
+    await e.close();
+
     const unknown = `thb_mob_${'B'.repeat(43)}`;
     const u = await app.inject({ method: 'GET', url: '/api/m/v1/me', headers: { authorization: `Bearer ${unknown}`, dpop: await proofFor('/api/m/v1/me', 'GET', { ath: athOf(unknown) }) } });
     expect(u.statusCode).toBe(401);
-    expect(u.json().code).toBe('TOKEN_INVALID');
+    expect(u.json().code).toBe('TOKEN_EXPIRED');
   });
 
-  it('a device revoked through revokeDevice answers DEVICE_REVOKED on its next call, not TOKEN_INVALID', async () => {
+  it('a device revoked through revokeDevice answers DEVICE_REVOKED on its next call, not TOKEN_EXPIRED', async () => {
     // A tiny in-memory store: findValidToken refuses an inactive device, findTokenAny still sees the row.
     const dev = deviceRow(key.jwk);
     const tokens = new Map([[hashToken(TOKEN), 'd1']]);

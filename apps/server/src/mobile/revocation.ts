@@ -91,7 +91,7 @@ const failureLabel = (err: unknown): string => {
  * owner did not ask for — mail the owner. A mail failure never undoes or fails the revoke.
  * The device's access tokens are kept on purpose: `findValidToken` already refuses a token whose
  * device is not active, and keeping the row lets the auth hook answer DEVICE_REVOKED (so the app
- * wipes itself) instead of TOKEN_INVALID. The hourly purge removes them once they expire.
+ * wipes itself) instead of TOKEN_EXPIRED. The hourly purge removes them once they expire.
  */
 export async function revokeDevice(
   deps: { repos: Repositories; sockets: MobileSocketRegistry; mailer: Mailer; log?: FastifyBaseLogger; now?: () => Date },
