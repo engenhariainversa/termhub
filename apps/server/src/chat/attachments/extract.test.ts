@@ -1,0 +1,137 @@
+import ExcelJS from 'exceljs';
+import { describe, expect, it, vi } from 'vitest';
+import { buildZip, minimalDocx, minimalPdf } from '../../../test/zip.js';
+import { ExtractError, TEXT_CAP, XLSX_MAX_COLS, XLSX_MAX_ROWS, extract, imageDimensions, withTimeout } from './extract.js';
+
+const noWhisper = { whisperUrl: null, language: null };
+const code = async (p: Promise<unknown>): Promise<string> => {
+  try {
+    await p;
+    return 'resolved';
+  } catch (err) {
+    return err instanceof ExtractError ? err.code : `other:${String(err)}`;
+  }
+};
+
+describe('imageDimensions reads the header, never the pixels', () => {
+  const be32 = (n: number) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+  it('PNG (IHDR)', () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, ...be32(640), ...be32(480), 8, 6, 0, 0, 0]);
+    expect(imageDimensions(png, 'image/png')).toEqual({ width: 640, height: 480 });
+  });
+  it('GIF (little-endian logical screen)', () => {
+    expect(imageDimensions(Buffer.from([...Buffer.from('GIF89a'), 10, 0, 20, 0, 0, 0, 0]), 'image/gif')).toEqual({ width: 10, height: 20 });
+  });
+  it('JPEG (walks the segments to SOF0)', () => {
+    const app0 = [0xff, 0xe0, 0x00, 0x10, ...Buffer.from('JFIF\0'), 1, 1, 0, 0, 1, 0, 1, 0, 0];
+    const sof0 = [0xff, 0xc0, 0x00, 0x11, 8, 0x00, 0x64, 0x00, 0xc8, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1];
+    expect(imageDimensions(Buffer.from([0xff, 0xd8, ...app0, ...sof0]), 'image/jpeg')).toEqual({ width: 200, height: 100 });
+    expect(imageDimensions(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), 'image/jpeg')).toBeNull();
+  });
+  it('WebP VP8, VP8L and VP8X', () => {
+    // Header, chunk tag, chunk size, then the payload padded to the 30 bytes the reader needs.
+    const riff = (chunk: string, payload: number[]) => Buffer.from([...Buffer.from('RIFF'), 0, 0, 0, 0, ...Buffer.from('WEBP'), ...Buffer.from(chunk), 0, 0, 0, 0, ...payload, ...new Array(Math.max(0, 12 - payload.length)).fill(0)]);
+    // VP8: 3-byte frame tag, start code 9d 01 2a, then 14-bit width and height (little-endian)
+    expect(imageDimensions(riff('VP8 ', [0, 0, 0, 0x9d, 0x01, 0x2a, 0x80, 0x02, 0xe0, 0x01]), 'image/webp')).toEqual({ width: 640, height: 480 });
+    // VP8L: signature 0x2f, then width-1 (14 bits) and height-1 (14 bits) packed little-endian: 639 | 479 << 14
+    const bits = 639 | (479 << 14);
+    expect(imageDimensions(riff('VP8L', [0x2f, bits & 0xff, (bits >>> 8) & 0xff, (bits >>> 16) & 0xff, (bits >>> 24) & 0xff]), 'image/webp')).toEqual({ width: 640, height: 480 });
+    // VP8X: flags, 3 reserved, then 24-bit width-1 and height-1
+    expect(imageDimensions(riff('VP8X', [0, 0, 0, 0, 0x7f, 0x02, 0x00, 0xdf, 0x01, 0x00]), 'image/webp')).toEqual({ width: 640, height: 480 });
+  });
+  it('is null for an unknown mime or a truncated header', () => {
+    expect(imageDimensions(Buffer.from('GIF89a'), 'image/gif')).toBeNull();
+    expect(imageDimensions(Buffer.alloc(40), 'image/bmp')).toBeNull();
+  });
+});
+
+describe('extract: image and text', () => {
+  it('an image yields no text, only its size', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 2, 0, 0, 0, 3, 8, 6, 0, 0, 0]);
+    expect(await extract('image', png, 'image/png', noWhisper)).toEqual({ text: null, meta: { width: 2, height: 3 } });
+  });
+  it('text is decoded as UTF-8 and capped at 200 000 characters, saying so', async () => {
+    expect(await extract('text', Buffer.from('olá\n'), 'text/plain; charset=utf-8', noWhisper)).toEqual({ text: 'olá\n', meta: { truncated: false } });
+    const big = await extract('text', Buffer.from('a'.repeat(TEXT_CAP + 5)), 'text/plain; charset=utf-8', noWhisper);
+    expect(big.text).toHaveLength(TEXT_CAP);
+    expect(big.meta).toEqual({ truncated: true });
+  });
+});
+
+describe('extract: pdf, docx, xlsx', () => {
+  it('pdf: the page text and the page count', async () => {
+    const r = await extract('pdf', minimalPdf('Relatorio anual'), 'application/pdf', noWhisper);
+    expect(r.text).toContain('Relatorio anual');
+    expect(r.meta).toEqual({ pages: 1, truncated: false });
+  });
+  it('pdf: garbage after the magic is an invalid attachment, not a crash', async () => {
+    expect(await code(extract('pdf', Buffer.from('%PDF-1.4 garbage'), 'application/pdf', noWhisper))).toBe('ATTACHMENT_INVALID');
+  });
+  it('docx: markdown with the paragraphs', async () => {
+    const r = await extract('docx', minimalDocx(['Olá mundo', 'Segundo parágrafo']), 'application/x', noWhisper);
+    expect(r.text).toBe('Olá mundo\n\nSegundo parágrafo');
+    expect(r.meta).toEqual({ truncated: false });
+  });
+  it('docx and xlsx: a ZIP that claims more than 200 MB expanded is refused before any parser runs', async () => {
+    const bomb = minimalDocx(['x'], { claimUncompressed: { 'word/document.xml': 300 * 1024 * 1024 } });
+    expect(await code(extract('docx', bomb, 'application/x', noWhisper))).toBe('ATTACHMENT_INVALID');
+    const xlsxBomb = buildZip([['xl/workbook.xml', '<workbook/>']], { claimUncompressed: { 'xl/workbook.xml': 300 * 1024 * 1024 } });
+    expect(await code(extract('xlsx', xlsxBomb, 'application/x', noWhisper))).toBe('ATTACHMENT_INVALID');
+    expect(await code(extract('docx', Buffer.from('not a zip'), 'application/x', noWhisper))).toBe('ATTACHMENT_INVALID');
+  });
+  it('xlsx: one markdown table per sheet, cached results instead of formulas', async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Vendas');
+    ws.addRow(['Item', 'Qtd']);
+    ws.addRow(['Café | leite', 3]);
+    ws.addRow(['Total', { formula: 'B2*2', result: 6 }]);
+    const r = await extract('xlsx', Buffer.from(await wb.xlsx.writeBuffer()), 'application/x', noWhisper);
+    expect(r.text).toBe('## Vendas\n| Item | Qtd |\n| --- | --- |\n| Café \\| leite | 3 |\n| Total | 6 |');
+    expect(r.text).not.toContain('B2*2');
+    expect(r.meta).toEqual({ sheets: [{ name: 'Vendas', rows: 3, cols: 2 }], truncated: false });
+  });
+  it('xlsx: each sheet is capped at 500 rows and 50 columns', async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Big');
+    // Short cells: 500 x 50 of `${r}.${c}` would already pass TEXT_CAP, and this test is about the row/column cap.
+    for (let r = 0; r < XLSX_MAX_ROWS + 20; r++) ws.addRow(Array.from({ length: XLSX_MAX_COLS + 5 }, (_, c) => `${r % 10}.${c}`));
+    const r = await extract('xlsx', Buffer.from(await wb.xlsx.writeBuffer()), 'application/x', noWhisper);
+    expect(r.meta).toEqual({ sheets: [{ name: 'Big', rows: XLSX_MAX_ROWS, cols: XLSX_MAX_COLS }], truncated: false });
+    const lines = r.text!.split('\n');
+    expect(lines).toHaveLength(1 + XLSX_MAX_ROWS + 1); // heading, rows, separator
+    expect(lines[1].split(' | ')).toHaveLength(XLSX_MAX_COLS);
+    expect(r.text).not.toContain(`0.${XLSX_MAX_COLS}`);
+  });
+});
+
+describe('extract: audio and video go to whisper', () => {
+  const ok = (body: unknown, status = 200) => vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+  it('posts the bytes with their MIME and keeps the transcript and duration', async () => {
+    const fetch = ok({ text: ' olá ', language: 'pt', duration: 12.3 });
+    const r = await extract('audio', Buffer.from('clip'), 'audio/ogg', { whisperUrl: 'http://whisper:8000', language: 'pt', fetch: fetch as unknown as typeof globalThis.fetch });
+    expect(r).toEqual({ text: 'olá', meta: { duration_s: 12.3, language: 'pt', truncated: false } });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('http://whisper:8000/transcribe?language=pt');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['content-type']).toBe('audio/ogg');
+    expect(Buffer.from(init.body as Uint8Array).toString()).toBe('clip');
+  });
+  it('video is sent the same way (whisper decodes the audio track)', async () => {
+    const fetch = ok({ text: 'fala', duration: 1 });
+    await extract('video', Buffer.from('mp4'), 'video/mp4', { whisperUrl: 'http://whisper:8000', language: null, fetch: fetch as unknown as typeof globalThis.fetch });
+    expect((fetch.mock.calls[0] as unknown as [string])[0]).toBe('http://whisper:8000/transcribe');
+  });
+  it('no whisper → TRANSCRIPTION_UNAVAILABLE; unreachable or 5xx → UNAVAILABLE; 422 or a bad answer → TRANSCRIPTION_FAILED', async () => {
+    const w = (fetch: unknown) => ({ whisperUrl: 'http://whisper:8000', language: 'pt', fetch: fetch as typeof globalThis.fetch });
+    expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', noWhisper))).toBe('TRANSCRIPTION_UNAVAILABLE');
+    expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', w(vi.fn(async () => { throw new Error('ECONNREFUSED'); }))))).toBe('TRANSCRIPTION_UNAVAILABLE');
+    expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'loading' }, 503))))).toBe('TRANSCRIPTION_UNAVAILABLE');
+    expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'bad audio' }, 422))))).toBe('TRANSCRIPTION_FAILED');
+    expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ nope: 1 }))))).toBe('TRANSCRIPTION_FAILED');
+  });
+});
+
+it('withTimeout turns a parser that never answers into an invalid attachment', async () => {
+  expect(await code(withTimeout(new Promise(() => undefined), 5))).toBe('ATTACHMENT_INVALID');
+  expect(await withTimeout(Promise.resolve(1), 5)).toBe(1);
+});
