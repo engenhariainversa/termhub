@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { needsYou } from '../../monitor/state.js';
+import { AiAccountsRepository } from './ai-accounts.js';
 import { TabsRepository } from './tabs.js';
 
 // Needs a migrated Postgres: TERMHUB_DB_TESTS=1 DATABASE_URL=… (see tasks.db.test.ts / the plan for the local Docker recipe).
@@ -334,6 +335,40 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.markSeen /
       await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, activity: 'terminal' });
       await repo.clearState(tabId);
       expect((await repo.findById(tabId))?.activity).toBeNull();
+    });
+  });
+
+  describe('setAgentFields (spec 2026-09-26 account swap)', () => {
+    let aiAccounts: AiAccountsRepository;
+
+    beforeAll(() => {
+      aiAccounts = new AiAccountsRepository(db);
+    });
+
+    it('setAgentFields stores and clears the agent session, account and limit', async () => {
+      const account = await aiAccounts.create({ provider: 'claude', label: 'conta', machine_id: machineId });
+      const SID = 'a1b2c3d4-0000-4000-8000-000000000000';
+      const at = new Date('2026-09-26T05:00:00Z');
+      const t = await repo.setAgentFields(tabId, {
+        agent_session_id: SID,
+        agent_transcript_path: `/h/.claude/projects/-p/${SID}.jsonl`,
+        ai_account_id: account.id,
+        rate_limited_at: at,
+      });
+      expect(t).toMatchObject({ agent_session_id: SID, ai_account_id: account.id, rate_limited_at: at.toISOString() });
+      const cleared = await repo.setAgentFields(tabId, { rate_limited_at: null });
+      expect(cleared).toMatchObject({ agent_session_id: SID, rate_limited_at: null });
+    });
+
+    it('setAgentFields on a missing tab answers undefined', async () => {
+      expect(await repo.setAgentFields('nope', { rate_limited_at: null })).toBeUndefined();
+    });
+
+    it('deleting the account keeps the tab and forgets the account', async () => {
+      const account = await aiAccounts.create({ provider: 'claude', label: 'conta', machine_id: machineId });
+      await repo.setAgentFields(tabId, { ai_account_id: account.id });
+      await aiAccounts.delete(account.id);
+      expect((await repo.findById(tabId))?.ai_account_id).toBeNull();
     });
   });
 });

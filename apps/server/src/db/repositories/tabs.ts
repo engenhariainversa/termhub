@@ -251,4 +251,23 @@ export class TabsRepository {
   async countOpenByToken(tokenId: string): Promise<number> {
     return this.db.tab.count({ where: { createdByTokenId: tokenId } });
   }
+
+  /**
+   * The tab's agent bookkeeping (spec 2026-09-26 account swap): its Claude session and transcript,
+   * the account termhub started it with, and when it hit a usage limit. Only the given keys change;
+   * a tab that is gone answers undefined.
+   */
+  async setAgentFields(
+    id: string,
+    patch: { agent_session_id?: string | null; agent_transcript_path?: string | null; ai_account_id?: string | null; rate_limited_at?: Date | null },
+  ): Promise<Tab | undefined> {
+    const data = {
+      ...(patch.agent_session_id !== undefined ? { agentSessionId: patch.agent_session_id } : {}),
+      ...(patch.agent_transcript_path !== undefined ? { agentTranscriptPath: patch.agent_transcript_path } : {}),
+      ...(patch.ai_account_id !== undefined ? { aiAccountId: patch.ai_account_id } : {}),
+      ...(patch.rate_limited_at !== undefined ? { rateLimitedAt: patch.rate_limited_at } : {}),
+    };
+    const [t] = await this.db.tab.updateManyAndReturn({ where: { id }, data });
+    return t ? mapTab(t) : undefined;
+  }
 }

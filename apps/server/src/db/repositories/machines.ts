@@ -12,6 +12,7 @@ export interface MachineInput {
   is_local?: boolean;
   owner_id?: string | null;
   agent_auto_update?: boolean;
+  claude_auto_swap?: boolean;
 }
 
 /** Visibility filter: a user id, or null for everything (admin "all" view). */
@@ -102,6 +103,7 @@ export class MachinesRepository {
         sshPort: next.ssh_port ?? 22,
         isLocal: next.is_local,
         agentAutoUpdate: next.agent_auto_update ?? false,
+        claudeAutoSwap: next.claude_auto_swap ?? false,
         ...(patch.owner_id !== undefined ? { ownerId: patch.owner_id } : {}),
       },
       include: withOwner,

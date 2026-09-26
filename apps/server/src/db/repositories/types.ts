@@ -85,6 +85,8 @@ export interface Machine {
   agent_last_seen_at: string | null;
   /** newer agent versions are installed automatically while the machine has no open terminal */
   agent_auto_update: boolean;
+  /** swap a tab's Claude to another account of this machine by itself on a usage limit (opt-in) */
+  claude_auto_swap: boolean;
   /** the user's own computer: the web app shows it only in the browser that added it */
   is_local: boolean;
   /** null = orphan (only visible to admins viewing "all") */
@@ -152,6 +154,15 @@ export interface Tab {
   activity: TabActivity | null;
   /** Claude Code's spinner verb that came with `activity` ("Moonwalking"); cleared with it */
   activity_verb: string | null;
+  /** Claude Code session last reported by a hook of this tab (uuid); used to resume it under
+   *  another account (spec 2026-09-26 account swap). null = never reported. */
+  agent_session_id: string | null;
+  /** the session's transcript on the machine, alongside agent_session_id */
+  agent_transcript_path: string | null;
+  /** the AI account termhub started this tab's agent with (start_agent or a swap); null = unknown */
+  ai_account_id: string | null;
+  /** when the tab's Claude stopped on a usage limit (StopFailure rate_limit); cleared when it runs again */
+  rate_limited_at: string | null;
   created_at: string;
 }
 
@@ -299,6 +310,7 @@ export const mapMachine = (m: PrismaMachine & { owner?: { name: string } | null 
   agent_version: m.agentVersion ?? null,
   agent_last_seen_at: m.agentLastSeenAt?.toISOString() ?? null,
   agent_auto_update: m.agentAutoUpdate,
+  claude_auto_swap: m.claudeAutoSwap,
   is_local: m.isLocal,
   owner_id: m.ownerId,
   owner_name: m.owner?.name ?? null,
@@ -346,6 +358,10 @@ export const mapTab = (t: PrismaTab): Tab => ({
   state_seen_at: iso(t.stateSeenAt),
   activity: t.activity,
   activity_verb: t.activityVerb,
+  agent_session_id: t.agentSessionId,
+  agent_transcript_path: t.agentTranscriptPath,
+  ai_account_id: t.aiAccountId,
+  rate_limited_at: iso(t.rateLimitedAt),
   created_at: t.createdAt.toISOString(),
 });
 
