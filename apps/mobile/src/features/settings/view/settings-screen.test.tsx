@@ -4,6 +4,9 @@ jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionSto
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
 jest.mock('@/features/settings/viewmodel/useSettingsStore', () => ({ useSettingsStore: require('../../../../test/helpers/ui-stores').stores.settings }));
 
+const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
+jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
+
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { useThemeStore } from '@/features/theme/viewmodel/useThemeStore';
@@ -22,6 +25,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   jest.restoreAllMocks();
+  for (const fn of Object.values(mockRouter)) fn.mockClear();
   useSessionStore.setState({
     error: null,
     enableBiometrics: realSessionActions.enableBiometrics,
@@ -89,6 +93,14 @@ describe('Ajustes', () => {
     expect(screen.getByText(new RegExp(host.kind === 'ready' ? host.machine.name : ''))).toBeTruthy();
     expect(screen.getByText('Servidor: mock')).toBeTruthy();
     expect(useChatStore.getState().activeProject).toBe('p-termhub');
+  });
+
+  it('opens Abas confiáveis', async () => {
+    await render(<SettingsScreen />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Abas confiáveis' }, LOAD));
+    expect(mockRouter.push).toHaveBeenCalledWith('/chat-grants');
+    // Waits for this render's own device load, so nothing is left in flight for the next test.
+    await screen.findByText('iPhone de teste', undefined, LOAD);
   });
 
   it('runs the key diagnostic and shows every step ok', async () => {
