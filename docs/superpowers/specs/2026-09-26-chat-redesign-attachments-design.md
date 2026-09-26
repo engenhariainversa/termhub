@@ -488,3 +488,47 @@ each choice. These are those choices:
   carries attachments.
 - **Test database.** A throwaway Postgres of this work, `th-chatatt-db`. It never shares another
   session's database.
+
+### 10.1 Decisions taken while executing (2026-09-26, without review)
+
+Reviews during execution changed or tightened these points:
+
+- **Scroll (web).** The instant pin to the bottom no longer marks its own scroll event as
+  programmatic. Only the pill's smooth scroll is recognised, by its position. Before this, a reader
+  scrolling up during a stream was pulled back on every frame. The pill appears only when content
+  grew at the bottom.
+- **Streaming markdown.** A blank line counts as a cut only when the next non-blank line starts a new
+  block: no leading whitespace and no list marker. Code fences track their marker and its length.
+  Without this, loose lists reflowed when the answer settled. Mobile uses the same algorithm.
+- **Mobile store.**
+  - A re-read merges by id (`mergeThread`); it does not replace the thread.
+  - A reconnect keeps the text that already streamed.
+  - "Pensando…" shows only on the newest assistant row.
+  - Composer chips follow `attachment_status`. An `ATTACHMENT_INVALID` chip blocks the send until it
+    is removed.
+- **Proxy.** `deploy/nginx/termhub.dev.conf.tmpl` gains `location /api/chat/attachments` on the app
+  host and `location /api/m/v1/chat/attachments` on the mobile host. Both set
+  `client_max_body_size 64m`, `proxy_request_buffering off` and `proxy_read_timeout 120s`.
+- **Upload route.** It drops the JSON and text parsers, so any body is sniffed by bytes.
+- **Sweep.** The sweep claims the row (a conditional delete) before removing the file.
+- **Send races.** When a send fails to bind every attachment, the service detaches the rows that did
+  bind before deleting the message.
+- **`read_attachment`.**
+  - The data markers are neutralised inside the page.
+  - A page never splits a surrogate pair.
+  - An image's size is checked before its file is read.
+- **Extraction.**
+  - Office files must fit a real 200 MB inflated budget, measured by inflating every
+    central-directory entry.
+  - xlsx is read with exceljs's streaming `WorkbookReader`.
+  - Every parse is counted in `meta.attempts`. Office and PDF files get at most 2 attempts, so a file
+    that crashes the process is not retried forever. Transcriptions get at most 24.
+  - A whisper 503 leaves the row pending.
+  - The hourly job re-queues pending rows older than 15 minutes.
+- **Mobile images.** They load with a single-use DPoP proof. If loading fails, the app signs a new
+  proof once, then offers "Toque para recarregar".
+
+**Open before merge.** The streaming xlsx reader walks the ZIP's local headers, but the inflated-size
+guard reads the central directory. A local entry that the directory does not list therefore bypasses
+the budget: a 2 MB file took 912 MB of memory. The guard must check that the local headers match the
+central directory exactly, or count the inflated bytes inside the reader's stream.
