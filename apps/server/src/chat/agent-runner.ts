@@ -156,6 +156,13 @@ async function* runOnAgent(
       },
       onExit: (code, reason) => {
         stream.end = { code, reason };
+        // The channel is gone the moment the agent says so — its number may already be handed to a
+        // new terminal or a new run by the time this generator gets around to draining what is left
+        // to yield. `write` must stop reaching it right here, not wait for the outer `finally`: that
+        // one only runs once the consumer has drained the remaining lines, and a write in that
+        // window would land on whatever now holds this channel number.
+        link.ended = true;
+        link.channel = null;
         notify();
       },
     };

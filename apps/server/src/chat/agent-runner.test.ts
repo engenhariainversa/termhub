@@ -336,3 +336,20 @@ it('refuses writes to a run that never opened (machine offline)', async () => {
   await collect(stream).done;
   expect(stream.write?.('{"a":1}')).toBe(false);
 });
+
+it('refuses a write the instant the channel itself ends, before the generator has drained what is left to yield', async () => {
+  // The channel's number is freed for reuse (a new terminal, a new run) the moment the agent reports
+  // it closed — well before this generator gets around to draining its last few lines and running its
+  // own `finally`. A write in that window must not reach whatever now holds that number.
+  const h = fakeHost({ capabilities: ['pty', 'claude', 'claude.stream_input'] });
+  const stream = agentRunner('m1', { host: h.host }).run({ ...input, stream_input: true });
+  const run = collect(stream);
+  await h.opened;
+  h.send('{"a":1}\n');
+  h.exit(0);
+  // Deliberately not awaited yet: the consumer has not drained the lines still sitting in the
+  // channel's `stream.lines` buffer, so the generator's outer `finally` has not run either.
+  expect(stream.write?.('{"b":2}')).toBe(false);
+  await run.done;
+  expect(h.seen.writes.map((b) => b.toString('utf8'))).not.toContain('{"b":2}\n');
+});
