@@ -2,7 +2,7 @@
 // `expo-audio` recorder. A `.tsx` under the `ui` project: `expo-audio` reaches native modules at
 // import time, which the plain-Node `logic` project cannot load.
 import { act, renderHook, waitFor } from '@testing-library/react-native';
-import { requestRecordingPermissionsAsync } from 'expo-audio';
+import { requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import * as SecureStore from 'expo-secure-store';
 import { mmkv } from '@/services/storage';
 import { enrol, setupSession } from '../../../../test/helpers/enrolled-session';
@@ -89,6 +89,68 @@ describe('useRecorder', () => {
     });
     expect(result.current).toMatchObject({ state: 'idle', error: 'Permissão do microfone negada' });
     expect(mockRecorder.record).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('useRecorder audio session', () => {
+  /** Every call that touches the microphone or the audio session, in order. */
+  function trace() {
+    const order: string[] = [];
+    mockRecorder.stop.mockImplementation(async () => {
+      order.push('recorder.stop');
+    });
+    (setAudioModeAsync as jest.Mock).mockImplementation(async (mode: { allowsRecording: boolean }) => {
+      order.push(`session:${mode.allowsRecording}`);
+    });
+    return order;
+  }
+
+  afterEach(() => {
+    mockRecorder.stop.mockImplementation(async () => undefined);
+    (setAudioModeAsync as jest.Mock).mockImplementation(async () => undefined);
+  });
+
+  it('stops the recorder before releasing the audio session, on stop and on cancel', async () => {
+    const order = trace();
+    const { result } = await renderHook(() => useRecorder());
+    await act(async () => {
+      await result.current.start();
+    });
+    await act(async () => {
+      await result.current.stop();
+    });
+    expect(order).toEqual(['session:true', 'recorder.stop', 'session:false']);
+
+    order.length = 0;
+    await act(async () => {
+      await result.current.start();
+    });
+    await act(async () => result.current.cancel());
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(order).toEqual(['session:true', 'recorder.stop', 'session:false']);
+  });
+
+  it('a cancel while the permission sheet is up closes the microphone and releases the session once it opens', async () => {
+    const order = trace();
+    let grantMic!: () => void;
+    (requestRecordingPermissionsAsync as jest.Mock).mockReturnValueOnce(new Promise((resolve) => (grantMic = () => resolve({ granted: true, status: 'granted', canAskAgain: true, expires: 'never' }))));
+    const { result } = await renderHook(() => useRecorder());
+    let started!: Promise<void>;
+    await act(async () => {
+      started = result.current.start();
+    });
+    await act(async () => result.current.cancel());
+    await act(async () => {
+      grantMic();
+      await started;
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.state).toBe('idle');
+    expect(order).toEqual(['session:true', 'recorder.stop', 'session:false']);
   });
 });
 

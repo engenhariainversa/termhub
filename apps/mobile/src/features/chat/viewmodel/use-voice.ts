@@ -34,6 +34,10 @@ const MIC_UNAVAILABLE = 'Não foi possível acessar o microfone';
 
 // --- the microphone -------------------------------------------------------------------------------
 
+/** Hands the audio session back (other apps' playback resumes). Never before `recorder.stop()`
+ * settled: releasing the session under a running recorder cuts the clip short. */
+const releaseSession = () => setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
+
 export interface RecordedClip {
   /** a `file://` URI in the app's cache */
   uri: string;
@@ -85,33 +89,39 @@ export function useRecorder(): Recorder {
     }
   };
 
-  /** Back to idle: clock off, `seconds` at 0 (as documented), the audio session released. */
-  const release = useCallback(() => {
+  /** Back to idle on screen: clock off, `seconds` at 0 (as documented). The audio session is handed
+   * back separately (`releaseSession`), only once the recorder has stopped. */
+  const resetToIdle = useCallback(() => {
     stopClock();
     setSeconds(0);
     setState('idle');
-    void setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
   }, [setState]);
 
   const start = useCallback(async () => {
     if (stateRef.current === 'recording' || opening.current) return;
     setError(null);
     opening.current = true;
+    let sessionOpened = false;
     try {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) throw new Error(MIC_DENIED);
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      sessionOpened = true;
       await recorder.prepareToRecordAsync();
       recorder.record();
     } catch (err) {
       opening.current = false;
+      if (sessionOpened) void releaseSession();
       const message = err instanceof Error && err.message === MIC_DENIED ? MIC_DENIED : MIC_UNAVAILABLE;
       setError(message);
       throw new Error(message);
     }
     if (!opening.current) {
-      // Cancelled while the sheet was up: the mic only opened now, close it.
-      void recorder.stop().catch(() => undefined);
+      // Cancelled while the sheet was up: the mic only opened now, close it and hand the session back.
+      void recorder
+        .stop()
+        .catch(() => undefined)
+        .then(() => releaseSession());
       return;
     }
     opening.current = false;
@@ -125,15 +135,18 @@ export function useRecorder(): Recorder {
   const stop = useCallback(async (): Promise<RecordedClip | null> => {
     if (stateRef.current !== 'recording') return null;
     const clipSeconds = (Date.now() - startedAt.current) / 1000;
-    release();
+    resetToIdle();
+    let stopped = true;
     try {
       await recorder.stop();
     } catch {
-      return null;
+      stopped = false;
     }
+    void releaseSession();
+    if (!stopped) return null;
     const uri = recorder.uri;
     return uri ? { uri, mime: VOICE_MIME, seconds: clipSeconds } : null;
-  }, [recorder, release]);
+  }, [recorder, resetToIdle]);
 
   const cancel = useCallback(() => {
     if (opening.current) {
@@ -141,9 +154,12 @@ export function useRecorder(): Recorder {
       return;
     }
     if (stateRef.current !== 'recording') return;
-    release();
-    void recorder.stop().catch(() => undefined);
-  }, [recorder, release]);
+    resetToIdle();
+    void recorder
+      .stop()
+      .catch(() => undefined)
+      .then(() => releaseSession());
+  }, [recorder, resetToIdle]);
 
   // Unmount mid-recording (the screen closed): stop the clock; `useAudioRecorder` releases the recorder.
   useEffect(() => () => stopClock(), []);
@@ -193,6 +209,14 @@ export function useVoice(onText: (text: string) => void, deps: VoiceDeps = appDe
   depsRef.current = deps;
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
+  /** False once unmounted (the screen closed mid-transcription): the poll loop stops, nobody listens. */
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   const setState = useCallback((s: VoiceState) => {
     stateRef.current = s;
@@ -225,8 +249,11 @@ export function useVoice(onText: (text: string) => void, deps: VoiceDeps = appDe
         while (job.status === 'pending') {
           if (Date.now() > deadline) throw new Error('A transcrição demorou demais');
           await wait(POLL_MS);
+          // Unmounted meanwhile: the server finishes the job on its own; there is no box to put the text in.
+          if (!alive.current) return;
           job = await api.transcription(auth(), job.id);
         }
+        if (!alive.current) return;
         if (job.status === 'error') throw new Error(job.error || 'Falha ao transcrever o áudio');
         // Whisper answers an empty string for a clip it heard nothing in: said, not delivered.
         const text = (job.text ?? '').trim();
