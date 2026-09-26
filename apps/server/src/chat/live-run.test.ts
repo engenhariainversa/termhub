@@ -8,6 +8,7 @@ import { LiveRun, type LiveTurn } from './live-run.js';
 import type { RunStream } from './service.js';
 
 const fixture = readFileSync(join(import.meta.dirname, 'fixtures/stream-background.ndjson'), 'utf8').split('\n').filter(Boolean);
+const midTurn = readFileSync(join(import.meta.dirname, 'fixtures/stream-mid-turn-injection.ndjson'), 'utf8').split('\n').filter(Boolean);
 const U1 = '11111111-1111-4111-8111-111111111111';
 const U2 = '22222222-2222-4222-8222-222222222222';
 
@@ -258,4 +259,97 @@ it('abandon rejects every open turn even when deleting an answer fails', async (
   await expect(a.done).rejects.toBe(err);
   await expect(b.done).rejects.toBe(err);
   expect(h.rows.filter((r) => r.role === 'assistant').map((r) => r.id)).toEqual([a.t.answer.id]);
+});
+
+it('merges a message the CLI folds into the running turn: one answer settles both (real run)', async () => {
+  const M1 = 'f70d2c55-8121-4577-9d43-c91ae068d00a';
+  const M2 = '66ac0883-fcfa-4ca9-9f0d-c8618d23ae42';
+  const one = await h.turn(M1, 'dispara em primeiro plano');
+  const two = await h.turn(M2, 'confirma');
+  h.live.add(one.t);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  expect(h.live.add(two.t)).toBe(true);
+  for (const line of midTurn) s.push(line);
+  await settle();
+  s.end();
+  expect(await consumed).toEqual({ code: null, missingSession: false });
+
+  const first = await one.done;
+  const second = await two.done;
+  expect(first).toEqual(second);
+  expect(first.id).toBe(two.t.answer.id);
+  expect(first.text.startsWith('The hook blocked the foreground Agent call')).toBe(true);
+  expect(h.rows.some((r) => r.id === one.t.answer.id)).toBe(false);
+  expect(h.chat.deleteMessage).toHaveBeenCalledWith(one.t.answer.id);
+  expect(h.rows.filter((r) => r.role === 'assistant')).toHaveLength(1);
+  expect(h.events.filter((e) => e.type === 'run_finished')).toHaveLength(1);
+  expect(h.live.endedTurns).toBe(2);
+});
+
+it('a running turn that already said something keeps its text when the next replay arrives', async () => {
+  const a = await h.turn(U1, 'a');
+  const b = await h.turn(U2, 'b');
+  h.live.add(a.t);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  h.live.add(b.t);
+  s.push(replay(U1)); s.push(delta('parte A'));
+  s.push(replay(U2)); s.push(delta('parte B')); s.push(result());
+  await settle();
+  s.end();
+  await consumed;
+  expect(await a.done).toMatchObject({ id: a.t.answer.id, text: 'parte A', error_code: null });
+  expect(await b.done).toMatchObject({ id: b.t.answer.id, text: 'parte B', error_code: null });
+  expect(h.chat.deleteMessage).not.toHaveBeenCalled();
+});
+
+it('failOpen settles a merged turn with the stored error message', async () => {
+  const a = await h.turn(U1, 'a');
+  const b = await h.turn(U2, 'b');
+  h.live.add(a.t);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  h.live.add(b.t);
+  s.push(replay(U1)); s.push(replay(U2)); s.push(delta('meio'));
+  s.push(JSON.stringify({ type: 'termhub_error', code: null, reason: 'host_gone' }));
+  s.end();
+  const outcome = await consumed;
+  await h.live.failOpen(outcome.code);
+  const first = await a.done;
+  expect(first).toMatchObject({ id: b.t.answer.id, text: 'meio', error_code: 'HOST_GONE' });
+  expect(await b.done).toEqual(first);
+});
+
+it('restart puts a merged turn back in order, with a new answer row', async () => {
+  const a = await h.turn(U1, 'a');
+  const b = await h.turn(U2, 'b');
+  h.live.add(a.t);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  h.live.add(b.t);
+  s.push(replay(U1)); s.push(replay(U2));
+  s.push(JSON.stringify({ type: 'termhub_error', code: 1, reason: 'missing_session' }));
+  s.end();
+  expect((await consumed).missingSession).toBe(true);
+  await h.live.restart();
+  expect(h.live.initialText().trim().split('\n').map((l) => JSON.parse(l).uuid)).toEqual([U1, U2]);
+  expect(h.rows.some((r) => r.id === a.t.answer.id)).toBe(true);
+});
+
+it('abandon rejects a merged turn too', async () => {
+  const a = await h.turn(U1, 'a');
+  const b = await h.turn(U2, 'b');
+  h.live.add(a.t);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  h.live.add(b.t);
+  s.push(replay(U1)); s.push(replay(U2));
+  await settle();
+  const err = new Error('gone');
+  await h.live.abandon(err);
+  await expect(a.done).rejects.toBe(err);
+  await expect(b.done).rejects.toBe(err);
+  s.end();
+  await consumed;
 });

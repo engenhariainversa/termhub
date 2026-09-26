@@ -22,6 +22,9 @@ interface Answering {
   answer: ChatMessage;
   collected: string;
   usage: unknown;
+  /** Turns of the person's the CLI folded into this one before it said anything (see `turn_started`
+   *  in `consume`): their own answers were deleted, and they settle with this turn's final message. */
+  merged: LiveTurn[];
 }
 
 export interface LiveRunDeps {
@@ -91,10 +94,22 @@ export class LiveRun {
         if (frame.type === 'turn_started') {
           const i = this.waiting.findIndex((t) => t.uuid === frame.uuid);
           if (i === -1) continue;
-          // A turn that never saw its result (it should not happen) is stored as it stands.
-          if (this.current) await this.finish(this.current, null);
+          // A message written while a turn is running can be folded INTO that turn by the CLI (Claude
+          // Code 2.1.283: the replay arrives mid tool-use, before any result, and one result then answers
+          // both). A person's turn that has said nothing yet is merged into the new one: its empty answer
+          // goes and it settles with the new turn's message. One that has text keeps it as its answer,
+          // and so does a turn the CLI started on its own.
           const [turn] = this.waiting.splice(i, 1);
-          this.current = { turn, answer: turn.answer, collected: '', usage: null };
+          const prev = this.current;
+          if (prev?.turn && prev.collected === '') {
+            this.current = { turn, answer: turn.answer, collected: '', usage: null, merged: [...prev.merged, prev.turn] };
+            await this.deps.chat.deleteMessage(prev.answer.id);
+            // Re-publishing the question makes every open screen re-read and drop the deleted answer.
+            chatBus.publish({ type: 'message', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message: prev.turn.question });
+          } else {
+            if (prev) await this.finish(prev, null);
+            this.current = { turn, answer: turn.answer, collected: '', usage: null, merged: [] };
+          }
         } else if (frame.type === 'text') {
           const a = await this.answering();
           a.collected += frame.delta;
@@ -134,8 +149,16 @@ export class LiveRun {
 
   /** A fresh session after `missing_session`: every open turn waits again, its partial text dropped. */
   async restart(): Promise<void> {
-    if (this.current?.turn) this.waiting.unshift(this.current.turn);
+    const cur = this.current;
     this.current = null;
+    if (cur) {
+      // A merged turn's answer row was deleted: it waits again with a new, empty one.
+      for (const t of cur.merged) {
+        t.answer = await this.deps.chat.addMessage({ conversation_id: this.deps.conversationId, role: 'assistant', text: '' });
+        chatBus.publish({ type: 'message', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message: t.answer });
+      }
+      this.waiting.unshift(...cur.merged, ...(cur.turn ? [cur.turn] : []));
+    }
     for (const t of this.waiting) chatBus.publish({ type: 'reset', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message_id: t.answer.id });
     this.background = 0;
     this.inputOpen = true;
@@ -146,7 +169,7 @@ export class LiveRun {
   /** The process is over: every turn still open is stored with `code`. */
   async failOpen(code: ChatErrorCode): Promise<void> {
     this.inputOpen = false;
-    const open: Answering[] = [...(this.current ? [this.current] : []), ...this.waiting.splice(0).map((t) => ({ turn: t, answer: t.answer, collected: '', usage: null }))];
+    const open: Answering[] = [...(this.current ? [this.current] : []), ...this.waiting.splice(0).map((t) => ({ turn: t, answer: t.answer, collected: '', usage: null, merged: [] }))];
     // Every turn is settled even when storing one fails (`finish` rejects that one); the first failure
     // is rethrown once all of them are done, so no web request is left waiting forever.
     let failure: { error: unknown } | null = null;
@@ -163,8 +186,11 @@ export class LiveRun {
   /** Nothing ran and nothing will (a setup failure): the answers go, every open turn rejects. */
   async abandon(err: unknown): Promise<void> {
     this.inputOpen = false;
+    // Merged turns have no answer row left: they only reject.
+    const merged = this.current?.merged ?? [];
     const open = [...(this.current?.turn ? [this.current.turn] : []), ...this.waiting.splice(0)];
     this.current = null;
+    for (const t of merged) t.settle.reject(err);
     let failure: { error: unknown } | null = null;
     for (const t of open) {
       try {
@@ -187,24 +213,25 @@ export class LiveRun {
     if (this.current) return this.current;
     const answer = await this.deps.chat.addMessage({ conversation_id: this.deps.conversationId, role: 'assistant', text: '' });
     chatBus.publish({ type: 'message', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message: answer });
-    this.current = { turn: null, answer, collected: '', usage: null };
+    this.current = { turn: null, answer, collected: '', usage: null, merged: [] };
     return this.current;
   }
 
   private async finish(a: Answering, code: ChatErrorCode): Promise<void> {
     if (this.current === a) this.current = null;
+    const settles = [...a.merged, ...(a.turn ? [a.turn] : [])].map((t) => t.settle);
     let final: ChatMessage;
     try {
       final = await this.deps.chat.updateMessage(a.answer.id, { text: a.collected, usage: a.usage, error_code: code });
-      this.ended += 1;
+      this.ended += 1 + a.merged.length;
       chatBus.publish({ type: 'message', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message: final });
       chatBus.publish({ type: 'run_finished', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message_id: final.id, ok: code === null, error_code: code });
     } catch (e) {
       // The turn is already out of `current` and `waiting`: nothing else could ever settle it.
-      a.turn?.settle.reject(e);
+      for (const st of settles) st.reject(e);
       throw e;
     }
-    a.turn?.settle.resolve(final);
+    for (const st of settles) st.resolve(final);
   }
 
   private async saveSession(sessionId: string | undefined): Promise<void> {
