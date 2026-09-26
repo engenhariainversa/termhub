@@ -27,6 +27,9 @@ export interface RunnerInput {
   token: string;
   /** Project chats only: the server-composed focus text (spec §4.3). Absent for the account-wide chat. */
   append_system_prompt?: string | null;
+  /** A streamed run (spec 2026-09-26): text is the first input lines, newline-terminated, and the
+   *  channel stays open for more. */
+  stream_input?: boolean;
 }
 /** A run that has started: both messages are stored and published; `done` settles when it ends. */
 export interface StartedRun {
@@ -35,8 +38,14 @@ export interface StartedRun {
   assistant_message_id: string;
   done: Promise<ChatMessage>;
 }
+/** What a runner yields: the CLI's stdout, a line at a time — and, for a streamed run, a way to write
+ *  more input. `write` takes one line (no newline), answers false once the run can take no more, and
+ *  buffers lines written before the channel is open. A one-shot runner does not have it. */
+export interface RunStream extends AsyncIterable<string> {
+  write?(line: string): boolean;
+}
 export interface RunnerClient {
-  run(input: RunnerInput): AsyncIterable<string>;
+  run(input: RunnerInput): RunStream;
 }
 
 /** How long a proposed action waits for the user's decision before it is nobody's question anymore —
