@@ -422,6 +422,7 @@ export const ModelName = {
   ApiTokenEvent: 'ApiTokenEvent',
   ChatConversation: 'ChatConversation',
   ChatMessage: 'ChatMessage',
+  ChatAttachment: 'ChatAttachment',
   ChatAction: 'ChatAction',
   ChatGrant: 'ChatGrant',
   TabQuestion: 'TabQuestion',
@@ -449,7 +450,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "machineHook" | "ticket" | "taskColumn" | "task" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAction" | "chatGrant" | "tabQuestion" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "machineHook" | "ticket" | "taskColumn" | "task" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatGrant" | "tabQuestion" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2303,6 +2304,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ChatAttachment: {
+      payload: Prisma.$ChatAttachmentPayload<ExtArgs>
+      fields: Prisma.ChatAttachmentFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ChatAttachmentFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ChatAttachmentFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload>
+        }
+        findFirst: {
+          args: Prisma.ChatAttachmentFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ChatAttachmentFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload>
+        }
+        findMany: {
+          args: Prisma.ChatAttachmentFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload>[]
+        }
+        create: {
+          args: Prisma.ChatAttachmentCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload>
+        }
+        createMany: {
+          args: Prisma.ChatAttachmentCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ChatAttachmentCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload>[]
+        }
+        delete: {
+          args: Prisma.ChatAttachmentDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload>
+        }
+        update: {
+          args: Prisma.ChatAttachmentUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload>
+        }
+        deleteMany: {
+          args: Prisma.ChatAttachmentDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ChatAttachmentUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ChatAttachmentUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload>[]
+        }
+        upsert: {
+          args: Prisma.ChatAttachmentUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatAttachmentPayload>
+        }
+        aggregate: {
+          args: Prisma.ChatAttachmentAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateChatAttachment>
+        }
+        groupBy: {
+          args: Prisma.ChatAttachmentGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ChatAttachmentGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ChatAttachmentCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ChatAttachmentCountAggregateOutputType> | number
+        }
+      }
+    }
     ChatAction: {
       payload: Prisma.$ChatActionPayload<ExtArgs>
       fields: Prisma.ChatActionFieldRefs
@@ -3615,6 +3690,26 @@ export const ChatMessageScalarFieldEnum = {
 export type ChatMessageScalarFieldEnum = (typeof ChatMessageScalarFieldEnum)[keyof typeof ChatMessageScalarFieldEnum]
 
 
+export const ChatAttachmentScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  conversationId: 'conversationId',
+  messageId: 'messageId',
+  name: 'name',
+  mime: 'mime',
+  kind: 'kind',
+  bytes: 'bytes',
+  sha256: 'sha256',
+  status: 'status',
+  errorCode: 'errorCode',
+  extractedText: 'extractedText',
+  meta: 'meta',
+  createdAt: 'createdAt'
+} as const
+
+export type ChatAttachmentScalarFieldEnum = (typeof ChatAttachmentScalarFieldEnum)[keyof typeof ChatAttachmentScalarFieldEnum]
+
+
 export const ChatActionScalarFieldEnum = {
   id: 'id',
   conversationId: 'conversationId',
@@ -4261,6 +4356,7 @@ export type GlobalOmitConfig = {
   apiTokenEvent?: Prisma.ApiTokenEventOmit
   chatConversation?: Prisma.ChatConversationOmit
   chatMessage?: Prisma.ChatMessageOmit
+  chatAttachment?: Prisma.ChatAttachmentOmit
   chatAction?: Prisma.ChatActionOmit
   chatGrant?: Prisma.ChatGrantOmit
   tabQuestion?: Prisma.TabQuestionOmit
