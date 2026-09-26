@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
-import type { TChatAction, TChatConversation, TChatGrant, TChatMessage, TDeviceInfo, TNotificationRow, TTabQuestion, TTabSuggestion } from '../contract';
+import type { TChatAction, TChatAttachment, TChatConversation, TChatGrant, TChatMessage, TDeviceInfo, TNotificationRow, TTabQuestion, TTabSuggestion } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
  * `transport.ts`. `error` is pt-BR text; `extra` carries `attempts_left` / `retry_after`, spread
@@ -124,6 +124,13 @@ export type MockTabQuestion = TTabQuestion & { conversation_id: string };
 /** A tab's suggestion (spec 2026-09-25 tab suggestions): the wire shape plus the conversation it was pushed into. */
 export type MockTabSuggestion = TTabSuggestion & { conversation_id: string };
 
+/** An uploaded file (spec 2026-09-26): the wire shape plus what the server keeps beside it. */
+export interface MockAttachment extends TChatAttachment {
+  conversation_id: string;
+  /** Set by the send that carried it; a sent attachment can neither be deleted nor sent again. */
+  message_id: string | null;
+}
+
 /** A voice clip accepted by `POST transcriptions`: "transcribed" on its second poll. */
 export interface MockTranscription {
   id: string;
@@ -152,6 +159,7 @@ export interface MockState {
   tabQuestions: MockTabQuestion[];
   /** Oldest first; closed rows stay (a second send is a 409, as on the server). */
   tabSuggestions: MockTabSuggestion[];
+  attachments: Map<string, MockAttachment>;
   transcriptions: Map<string, MockTranscription>;
   /** Oldest first (push order); routes read it newest-first by reversing. */
   notifications: MockNotification[];
@@ -177,6 +185,7 @@ export function createMockState(): MockState {
     grants: [],
     tabQuestions: [],
     tabSuggestions: [],
+    attachments: new Map(),
     transcriptions: new Map(),
     notifications: [],
     activeConversation: new Map(),

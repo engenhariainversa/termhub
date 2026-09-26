@@ -583,3 +583,42 @@ it('listGrants lists active and ended grants, newest first, paging the history',
   expect(ended.grants).toEqual([expect.objectContaining({ id: active!.id, state: 'revoked' })]);
   expect(ended.next_cursor).toBeNull();
 });
+
+it('uploads an attachment, reports its extraction over the socket, and echoes it on the sent message', async () => {
+  const clock = { value: START };
+  const { api, auth } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+
+  const uploaded = await api.uploadAttachment(auth, { uri: 'file:///tmp/relatorio.pdf', name: 'relatorio.pdf', mime: 'application/pdf' }, 'p-termhub');
+  expect(uploaded).toMatchObject({ name: 'relatorio.pdf', kind: 'pdf', status: 'pending' });
+
+  await jest.advanceTimersByTimeAsync(2000);
+  const status = collected.events.find((e): e is Extract<TChatEvent, { type: 'attachment_status' }> => e.type === 'attachment_status');
+  expect(status).toMatchObject({ conversation_id: 'c-termhub', attachment: { id: uploaded.id, status: 'ready' } });
+
+  await api.sendMessage(auth, { text: '', project_id: 'p-termhub', attachment_ids: [uploaded.id] });
+  await jest.advanceTimersByTimeAsync(5000);
+  const userMessage = collected.events.find((e): e is Extract<TChatEvent, { type: 'message' }> => e.type === 'message' && e.message.role === 'user')!;
+  expect(userMessage.message.text).toBe('');
+  expect(userMessage.message.attachments).toEqual([expect.objectContaining({ id: uploaded.id, status: 'ready' })]);
+
+  // Sent: it can no longer be deleted (409, as the server answers), and cannot be sent twice.
+  await expect(api.deleteAttachment(auth, uploaded.id)).rejects.toMatchObject({ status: 409 });
+  await expect(api.sendMessage(auth, { text: 'de novo', project_id: 'p-termhub', attachment_ids: [uploaded.id] })).rejects.toMatchObject({ status: 409, code: 'ATTACHMENT_UNAVAILABLE' });
+
+  collected.close();
+});
+
+it('refuses an unknown type, deletes an unsent attachment, and refuses an id of another conversation at send', async () => {
+  const clock = { value: START };
+  const { api, auth } = await enrol(clock);
+
+  await expect(api.uploadAttachment(auth, { uri: 'file:///x', name: 'setup.exe', mime: 'application/octet-stream' }, null)).rejects.toMatchObject({ status: 415, code: 'ATTACHMENT_TYPE' });
+
+  const general = await api.uploadAttachment(auth, { uri: 'file:///x', name: 'notas.txt', mime: 'text/plain' }, null);
+  await expect(api.sendMessage(auth, { text: 'oi', project_id: 'p-termhub', attachment_ids: [general.id] })).rejects.toMatchObject({ status: 409, code: 'ATTACHMENT_UNAVAILABLE' });
+
+  await api.deleteAttachment(auth, general.id);
+  await expect(api.deleteAttachment(auth, general.id)).rejects.toMatchObject({ status: 404 });
+});
