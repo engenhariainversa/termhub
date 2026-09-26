@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChatActionCard } from './ChatActionCard';
 import { ChatActionGroup, type BatchDecision } from './ChatActionGroup';
@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../Modal';
 import { api, ApiError } from '../../lib/api';
 import { useChatStream } from '../../lib/chat';
 import { useChatLive } from '../../lib/chat-live';
+import { mergeMessage } from '../../lib/chat-merge';
 import { chatTimeline, groupPendingActions } from '../../lib/chat-timeline';
 import { isNearBottom } from '../../lib/chat-scroll';
 import { trustedTabsLabel } from './grant-list-text';
@@ -178,18 +179,22 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    * Live events tagged with a conversation id that arrived before this panel knew its own. Held, not
    * dropped: `load()` re-reads everything a REST read can give back, but the deltas and tool calls of
    * an answer already under way exist nowhere else. Replayed into the fold (and only the fold) the
-   * moment `conversationId` is known — the ones of another conversation are dropped then.
+   * moment `conversationId` is known — the ones of another conversation are dropped then. A layout
+   * effect, not a passive one: `onEvent` below stops holding as soon as the id is in state, so a delta
+   * arriving between that commit and a passive effect's flush would be folded in ahead of the held ones.
    */
   const early = useRef<ChatEvent[]>([]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (conversationId === null) return;
     const held = early.current;
     early.current = [];
     for (const e of held) if (e.conversation_id === conversationId) push(e);
   }, [conversationId, push]);
 
-  // A `message` event means the answer was persisted: re-read it over REST to get the final
-  // text. Delivered once per event by the hook.
+  // A `message` event carries the stored row (the user's message, the announced empty answer, or the
+  // final text): it is merged in place by id — no refetch, so no row gets a new object for nothing and
+  // the streamed text is never swapped out for a moment. A reconnect and a finished `send()` still
+  // re-read the whole conversation over REST, as before.
   const onEvent = useCallback(
     (e: ChatEvent) => {
       if (conversationId === null && e.conversation_id !== undefined) {
@@ -199,7 +204,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       if (!mine(e)) return;
       // The fold takes what is its business (deltas, tool calls, resets, announcements) and ignores the rest.
       push(e);
-      if (e.type === 'message') void load();
+      if (e.type === 'message') setMessages((prev) => mergeMessage(prev, e.message));
       else if (e.type === 'confirmation') {
         // Enriched server-side exactly like GET /api/chat's trail (same summary, same ids): no name
         // is resolved and no sentence is built here.
@@ -217,7 +222,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       else if (e.type === 'tab_question' || e.type === 'tab_question_answered' || e.type === 'tab_question_closed') setTabQuestions((prev) => upsertTabQuestion(prev, e.question));
       else if (e.type === 'tab_suggestion' || e.type === 'tab_suggestion_closed') setTabSuggestions((prev) => upsertTabSuggestion(prev, e.suggestion));
     },
-    [conversationId, load, mine, push],
+    [conversationId, mine, push],
   );
   const { connected } = useChatStream(load, onEvent);
 

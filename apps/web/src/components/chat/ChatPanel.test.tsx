@@ -115,7 +115,7 @@ beforeEach(() => {
   auth.state = { user: { id: 'u1' }, viewAs: null };
   chatMock.mockResolvedValue({ conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })], actions: [] });
   sendMock.mockResolvedValue({ message: msg({ id: 'm3', role: 'assistant', text: 'pronto' }) });
-  streamMock.mockReturnValue({ events: [], connected: true });
+  streamMock.mockReturnValue({ connected: true });
 });
 
 afterEach(() => cleanup());
@@ -272,6 +272,39 @@ it('no link without an active grant', async () => {
   expect(screen.queryByRole('link', { name: /aba(s)? confiáve/ })).toBeNull();
 });
 
+it('a message event merges by id without a refetch, and the streamed text stays until the stored one lands', async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { connected: true };
+  });
+  chatMock.mockResolvedValue({
+    conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
+    messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm2', role: 'assistant', text: '', created_at: '2026-09-21T00:00:01.000Z' })],
+    actions: [],
+    host: READY,
+  });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await screen.findByText('oi');
+  act(() => onEvent({ type: 'delta', conversation_id: 'c_p1', message_id: 'm2', delta: 'par' }));
+  expect(await screen.findByText('par')).toBeInTheDocument();
+
+  // The stored row: same id, final text. Applied in place — no GET /chat.
+  act(() => onEvent({ type: 'message', conversation_id: 'c_p1', message: msg({ id: 'm2', role: 'assistant', text: 'parcial', created_at: '2026-09-21T00:00:01.000Z' }) }));
+  expect(await screen.findByText('parcial')).toBeInTheDocument();
+  expect(screen.queryByText('par')).toBeNull();
+  expect(chatMock).toHaveBeenCalledTimes(1);
+
+  // A row this panel has never seen is appended, again without a refetch.
+  act(() => onEvent({ type: 'message', conversation_id: 'c_p1', message: msg({ id: 'm3', role: 'user', text: 'e agora?', created_at: '2026-09-21T00:00:02.000Z' }) }));
+  expect(await screen.findByText('e agora?')).toBeInTheDocument();
+  expect(chatMock).toHaveBeenCalledTimes(1);
+});
+
 it('"Permitir sempre nesta aba" on a pending card records the grant, shows it on the card and counts it in the header', async () => {
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' })], host: READY, grants: [] });
   decideMock.mockResolvedValue({ action: { id: 'a1', status: 'approved' }, grant: grant({ id: 'g1' }) });
@@ -320,7 +353,7 @@ it('a grant event adds to the header count, a grant_revoked removes it, a grante
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [] });
   render(
@@ -377,7 +410,7 @@ it('tab question events add and update the card; another conversation\'s are ign
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [] });
   render(
@@ -434,7 +467,7 @@ it("tab suggestion events add and update the card; another conversation's are ig
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [] });
   render(

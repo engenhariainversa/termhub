@@ -56,6 +56,22 @@ describe('createLiveFold', () => {
     // Announced again (a reconnect, a second tab): nothing changes.
     expect(fold.apply(announce('m1'))).toBe(false);
   });
+
+  it('a stored message (text or an error) drops what streamed for that id', () => {
+    const fold = createLiveFold();
+    fold.apply(delta('m1', 'parcial'));
+    fold.apply(action('m1', 'Bash'));
+    const stored: ChatEvent = { type: 'message', conversation_id: 'c1', message: { id: 'm1', conversation_id: 'c1', role: 'assistant', text: 'parcial e completa', error_code: null, created_at: '' } };
+    expect(fold.apply(stored)).toBe(true);
+    expect(fold.get('m1')).toBeUndefined();
+
+    fold.apply(delta('m2', 'meia'));
+    const failed: ChatEvent = { type: 'message', conversation_id: 'c1', message: { id: 'm2', conversation_id: 'c1', role: 'assistant', text: '', error_code: 'RUN_FAILED', created_at: '' } };
+    expect(fold.apply(failed)).toBe(true);
+    expect(fold.get('m2')).toBeUndefined();
+    // A user message never had an entry: nothing to drop, nothing changed.
+    expect(fold.apply({ type: 'message', conversation_id: 'c1', message: { id: 'u1', conversation_id: 'c1', role: 'user', text: 'oi', error_code: null, created_at: '' } })).toBe(false);
+  });
 });
 
 describe('useChatLive', () => {

@@ -70,6 +70,10 @@ export function createLiveFold(): LiveFold {
               rows.set(m.id, { ...row, started: true });
               changed = true;
             }
+          } else {
+            // The stored row (text, or the error it ended in): the panel merges it into `messages` in
+            // the same event, so what streamed for it is no longer needed and is let go of here.
+            changed = rows.delete(m.id);
           }
           break;
         }
