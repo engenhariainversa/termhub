@@ -326,3 +326,21 @@ The copy is pt-BR (product language):
 - Remembering decisions (TER-57), batched confirmations (TER-94), grant list (TER-67).
 - Showing a live screen excerpt on suggestion cards.
 - Gating hooks on the Claude Code version (§4.6).
+
+## 9. Adjustments found while planning
+
+- §4.13: the mobile store tracks busy cards as id lists (`answeringQuestionIds`, `busySuggestionIds`),
+  since a single id cannot let two different cards act at once.
+- §4.9: the mobile chat list re-reads on focus and pull-to-refresh, not on socket events; the new count
+  reaches it from the server, and only the app's mock changes.
+- §4.1: with no conversation, a permission that is not queued leaves no row, so a prompt queued behind
+  it cannot be recognised if a conversation appears in between. Accepted: it fails safe (the card's
+  live check refuses a stale answer). A no-conversation choice clears the `QUEUED` marks, as a choice
+  row would.
+- §4.7: dead cards close through a new `expireOne` (while `closed_at` is null; an `answered` row keeps
+  its status), not `closeOne`, which only matches `open` rows.
+- §6.2: the context is only taken when the tab's `state_tool` is `claude`; a tab character becomes a
+  space; rows stored before TER-96 have no `context` (optional in the type, `null` in the view).
+- §5.6: the placeholder rule also accepts curly quotes (`/^Try ["“].*["”]$/`).
+- §4.12: the web tab list gets ←/→ keys and `aria-label="Perguntas"` (WAI-ARIA tabs pattern).
+- `@termhub/agent` goes 0.5.2 → 0.5.3 (it bundles `HOOK_SCRIPT`); CI publishes it on merge.
