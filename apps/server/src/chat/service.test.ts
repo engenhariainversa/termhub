@@ -132,6 +132,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
     markInjected: vi.fn(async (ids: string[]) => {
       for (const id of ids) toInject.splice(toInject.findIndex((q) => q.id === id), 1);
     }),
+    countOpenByConversation: vi.fn(async (_ids: string[]) => new Map<string, number>()),
   };
   const repos = {
     chat,
@@ -1054,6 +1055,13 @@ it('projectStatuses reports a project chat that is answering as busy', async () 
   expect(await service.projectStatuses(user)).toEqual([{ project_id: 'p1', busy: true, pending_confirmations: 2 }]);
   release();
   await running;
+});
+
+it('projectStatuses counts open tab questions as pending too (spec 2026-09-26 §4.9)', async () => {
+  const { service, tabQuestions } = build([]);
+  tabQuestions.countOpenByConversation.mockResolvedValueOnce(new Map([['c_p1', 3]]));
+  expect(await service.projectStatuses(user)).toEqual([{ project_id: 'p1', busy: false, pending_confirmations: 5 }]);
+  expect(tabQuestions.countOpenByConversation).toHaveBeenCalledWith(['c_p1']);
 });
 
 describe('purgeExpiredActions', () => {

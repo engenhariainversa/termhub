@@ -64,6 +64,16 @@ it('loadProjects fills the three projects', async () => {
   expect(loadingProjects).toBe(false);
 });
 
+it('an open tab question counts as pending in the projects list, as on the server (spec 2026-09-26 §4.9)', async () => {
+  const { chat } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await chat.getState().send('tem alguma pergunta?');
+  await jest.advanceTimersByTimeAsync(5000);
+  await chat.getState().loadProjects();
+  // The seeded pending action, plus the question the tab just asked.
+  expect(chat.getState().projects.find((p) => p.id === 'p-termhub')!.pending_confirmations).toBe(2);
+});
+
 it("open('p-termhub') loads the thread and subscribes once for the whole app", async () => {
   const { chat, events } = await setup();
   await openAndConnect(chat, 'p-termhub');

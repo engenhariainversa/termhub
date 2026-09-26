@@ -307,6 +307,19 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect(listed.map((r) => r.id)).toEqual([q.id, ...sugg.slice(10).map((r) => r.id)]);
   });
 
+  it('countOpenByConversation: open questions per conversation — never a suggestion, never a closed one', async () => {
+    // The previous test left its own active conversation for (userId, projectId) around (never
+    // archived — it had no reason to): archive it first so this one can become the active one under
+    // the partial unique index (`chat_conversations_one_active`).
+    const stray = await db.chatConversation.findFirst({ where: { userId, projectId, tabId: null, archivedAt: null } });
+    if (stray) await chat.archive(stray.id);
+    const conv = await db.chatConversation.create({ data: { id: newId(), userId, projectId } });
+    const mk = (kind: string, status: string) => ({ id: newId(), tabId: 'tc1', projectId, conversationId: conv.id, kind, payload: kind === 'suggestion' ? { text: 'x' } : { tool_name: 'Bash' }, status });
+    await db.tabQuestion.createMany({ data: [mk('choice', 'open'), mk('permission', 'open'), mk('permission', 'answered'), mk('suggestion', 'open'), mk('choice', 'expired')] });
+    expect(await repo.countOpenByConversation([conv.id, 'nope'])).toEqual(new Map([[conv.id, 2]]));
+    expect(await repo.countOpenByConversation([])).toEqual(new Map());
+  });
+
   it('expireOne: a dead card closes as expired once; one answered from the chat keeps its status and gets closed_at', async () => {
     const { question: a } = await open('td1');
     const e = await repo.expireOne(a.id);

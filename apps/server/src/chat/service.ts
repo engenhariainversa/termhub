@@ -238,13 +238,14 @@ export class ChatService {
     return fresh;
   }
 
-  /** What the sidebar's 💬 shows per project: answering right now, and questions waiting on the user.
-   * `busy` is this process's own lock, the same one `send` refuses on — the only truth there is about a
-   * run in flight. */
+  /** What the sidebar's 💬 shows per project: answering right now, and what waits on the user — pending
+   * actions and open tab questions (spec 2026-09-26 §4.9; suggestions are not counted). `busy` is this
+   * process's own lock, the same one `send` refuses on — the only truth there is about a run in flight. */
   async projectStatuses(user: User): Promise<{ project_id: string; busy: boolean; pending_confirmations: number }[]> {
     const rows = await this.deps.repos.chat.listActiveProjectConversations(user.id);
-    const pending = await this.deps.repos.chatActions.countPendingByConversation(rows.map((r) => r.id));
-    return rows.map((r) => ({ project_id: r.project_id, busy: this.running.has(r.id), pending_confirmations: pending.get(r.id) ?? 0 }));
+    const ids = rows.map((r) => r.id);
+    const [actions, questions] = await Promise.all([this.deps.repos.chatActions.countPendingByConversation(ids), this.deps.repos.tabQuestions.countOpenByConversation(ids)]);
+    return rows.map((r) => ({ project_id: r.project_id, busy: this.running.has(r.id), pending_confirmations: (actions.get(r.id) ?? 0) + (questions.get(r.id) ?? 0) }));
   }
 
   /**

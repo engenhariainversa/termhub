@@ -392,7 +392,10 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const projects = [...state.projects.values()].map((project) => {
       const conversationId = state.activeConversation.get(project.id);
       const conversation = conversationId ? state.conversations.get(conversationId) : undefined;
-      const pending = conversation ? actionsFor(state, conversation.id).filter((a) => a.status === 'pending').length : 0;
+      // Open tab questions wait on the person too, as on the server (spec 2026-09-26 §4.9); suggestions do not.
+      const pending = conversation
+        ? actionsFor(state, conversation.id).filter((a) => a.status === 'pending').length + state.tabQuestions.filter((q) => q.conversation_id === conversation.id && q.status === 'open').length
+        : 0;
       return {
         id: project.id,
         name: project.name,

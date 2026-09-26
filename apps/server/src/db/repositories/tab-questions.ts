@@ -310,4 +310,11 @@ export class TabQuestionsRepository {
     if (ids.length === 0) return;
     await this.db.tabQuestion.updateMany({ where: { id: { in: ids }, injectedAt: null }, data: { injectedAt: now } });
   }
+
+  /** Open questions (not suggestions) per conversation: they wait on the person like a pending action (spec 2026-09-26 §4.9). */
+  async countOpenByConversation(ids: string[]): Promise<Map<string, number>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.db.tabQuestion.groupBy({ by: ['conversationId'], where: { conversationId: { in: ids }, status: 'open', kind: { not: 'suggestion' } }, _count: { _all: true } });
+    return new Map(rows.map((r) => [r.conversationId, r._count._all]));
+  }
 }

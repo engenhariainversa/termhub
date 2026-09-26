@@ -53,6 +53,23 @@ it('reads statuses on load and re-reads them on chat events', async () => {
   await waitFor(() => expect(screen.getByTestId('p1').textContent).toBe('{"busy":true,"pending":0}'));
 });
 
+it.each(['tab_question', 'tab_question_answered', 'tab_question_closed'])('re-reads statuses on %s: an open question counts as pending', async (type) => {
+  projectsMock.mockResolvedValueOnce({ projects: [{ project_id: 'p1', busy: false, pending_confirmations: 0 }] }).mockResolvedValue({ projects: [{ project_id: 'p1', busy: false, pending_confirmations: 1 }] });
+  render(<ProjectChatProvider><Probe /></ProjectChatProvider>);
+  await waitFor(() => expect(screen.getByTestId('p1').textContent).toBe('{"busy":false,"pending":0}'));
+  act(() => emit({ type, conversation_id: 'c_p1', question: {} }));
+  await waitFor(() => expect(screen.getByTestId('p1').textContent).toBe('{"busy":false,"pending":1}'));
+});
+
+it('does not re-read on a suggestion event: suggestions are not counted', async () => {
+  projectsMock.mockResolvedValue({ projects: [] });
+  render(<ProjectChatProvider><Probe /></ProjectChatProvider>);
+  await waitFor(() => expect(projectsMock).toHaveBeenCalledTimes(1));
+  act(() => emit({ type: 'tab_suggestion', conversation_id: 'c_p1', suggestion: {} }));
+  await new Promise((r) => setTimeout(r, 20));
+  expect(projectsMock).toHaveBeenCalledTimes(1);
+});
+
 it('works without a provider (the sidebar in isolation): closed, no status', () => {
   render(<Probe />);
   expect(screen.getByTestId('open').textContent).toBe('none');
