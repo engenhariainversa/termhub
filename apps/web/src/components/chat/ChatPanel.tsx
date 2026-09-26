@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChatActionCard } from './ChatActionCard';
 import { ChatComposer } from './ChatComposer';
-import { ChatGrantStrip } from './ChatGrantStrip';
 import { ChatHost } from './ChatHost';
 import { ChatTurn } from './ChatTurn';
 import { TabQuestionCard } from './TabQuestionCard';
@@ -12,6 +11,7 @@ import { api, ApiError } from '../../lib/api';
 import { useChatStream } from '../../lib/chat';
 import { chatTimeline } from '../../lib/chat-timeline';
 import { isNearBottom } from '../../lib/chat-scroll';
+import { trustedTabsLabel } from './grant-list-text';
 import { isGrantActive } from './grant-time';
 import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
 import { SUGGESTION_CHANGED_TEXT, upsertTabSuggestion } from './tab-suggestion-text';
@@ -219,7 +219,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   };
 
-  /** "Revogar", from the card or from the strip. */
+  /** "Revogar", from the card that granted it. */
   const revoke = async (grantId: string) => {
     setRevokingId(grantId);
     setActionError(null);
@@ -227,7 +227,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       await api.revokeChatGrant(grantId);
       setGrants((prev) => prev.filter((g) => g.id !== grantId));
     } catch (e) {
-      // 409: it was already revoked (another tab, or it expired and a reset ended it) — the strip is
+      // 409: it was already revoked (another tab, or it expired and a reset ended it) — the list is
       // stale, not wrong.
       if (e instanceof ApiError && e.status === 409) setGrants((prev) => prev.filter((g) => g.id !== grantId));
       else setActionError(e instanceof ApiError ? e.message : 'Não foi possível revogar a permissão');
@@ -473,6 +473,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   };
 
+  const activeGrantCount = grants.filter((g) => isGrantActive(g)).length;
+
   return (
     // Height and overflow belong to ChatLayout; this page owns the reading column: centred, capped
     // at a comfortable measure and padded so a long answer survives a phone. The bottom safe area
@@ -489,7 +491,14 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-4">
       {/* "Começar do zero" without losing the transcript: it stays server-side, just off this screen.
        *  Disabled while an answer is being written (the server would 409) or with nothing yet to reset. */}
-      <div className="flex items-center justify-end pt-2">
+      {/* The conversation's trusted tabs used to be a strip above the box; now one link, only while any is
+       *  in force, to the list in Configurações (spec 2026-09-26 §4.1). */}
+      <div className="flex items-center justify-end gap-1 pt-2">
+        {activeGrantCount > 0 && (
+          <Link to="/settings/chat-grants" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg">
+            {trustedTabsLabel(activeGrantCount)}
+          </Link>
+        )}
         <button type="button" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50" disabled={answering || resetting || messages.length === 0} onClick={() => setConfirmReset(true)}>
           Nova conversa
         </button>
@@ -614,7 +623,6 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       </ol>
       {actionError && <p className="mb-2 text-sm text-danger">{actionError}</p>}
       {error && <p className="mb-2 text-sm text-danger">{error}</p>}
-      <ChatGrantStrip grants={grants} revokingId={revokingId} onRevoke={(id) => void revoke(id)} />
       {/* A host that cannot run the message is why the box refuses, and the box says so. */}
       <ChatComposer value={text} onChange={setText} onSend={() => void send()} sending={sending} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} />
     </div>
