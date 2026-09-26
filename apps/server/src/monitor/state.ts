@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isClaudeSessionId, isClaudeTranscriptPath } from '@termhub/machine-ops';
 import { parseAskUserQuestion, parsePermissionTool, toolUseIdOf, type TabQuestionInput } from '../chat/tab-question-payload.js';
 import type { Tab, TabActivity, TabState } from '../db/repositories/types.js';
 import { activityOf } from './activity.js';
@@ -54,6 +55,33 @@ const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 const cap = (v: string | null): string | null => (v && v.length > STATE_TEXT_MAX ? `${v.slice(0, STATE_TEXT_MAX - 1)}…` : v);
 
+export const RATE_LIMIT_TEXT = 'Limite de uso da conta atingido';
+/** Claude Code's StopFailure matcher values (hooks docs); anything else is reported as "unknown". */
+const CLAUDE_API_ERRORS = new Set([
+  'rate_limit',
+  'overloaded',
+  'authentication_failed',
+  'oauth_org_not_allowed',
+  'account_on_hold',
+  'verification_required',
+  'billing_error',
+  'invalid_request',
+  'model_not_found',
+  'server_error',
+  'max_output_tokens',
+  'cloud_credential_error',
+  'unknown',
+]);
+
+export const isRateLimit = (i: Interpreted | null): boolean => !!i && i.meta.event === 'StopFailure' && i.meta.error === 'rate_limit';
+
+/** The Claude session a hook payload belongs to, when both ids are well-formed (never stored otherwise). */
+export function claudeSessionOf(ev: unknown): { session_id: string; transcript_path: string } | null {
+  if (!isObj(ev) || !isClaudeSessionId(ev.session_id)) return null;
+  const sid = ev.session_id;
+  return isClaudeTranscriptPath(ev.transcript_path, sid) ? { session_id: sid, transcript_path: ev.transcript_path } : null;
+}
+
 /** Claude Code hook payloads (stdin JSON): https://docs.claude.com/en/docs/claude-code/hooks */
 function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
   const name = str(ev.hook_event_name);
@@ -99,6 +127,17 @@ function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
       // A finished turn is the tool waiting for the person (same as Codex); the idle_prompt
       // notification only comes about a minute later. The last answer, when sent, is the question.
       return { kind: 'waiting_input', text: cap(str(ev.last_assistant_message)), meta: { event: name } };
+    case 'StopFailure': {
+      // An API error ended the turn (spec 2026-09-26 account swap). On a usage limit Claude Code does
+      // not exit: it waits for the reset, so the tab waits for the person (or the automatic swap).
+      const raw = str(ev.error);
+      const error = raw && CLAUDE_API_ERRORS.has(raw) ? raw : 'unknown';
+      if (error === 'rate_limit') {
+        const line = str(ev.last_assistant_message);
+        return { kind: 'waiting_input', text: cap(line ? `${RATE_LIMIT_TEXT} — ${line}` : RATE_LIMIT_TEXT), meta: { event: name, error } };
+      }
+      return { kind: 'error', text: `Erro da API do Claude (${error})`, meta: { event: name, error } };
+    }
     case 'SessionEnd':
       return { kind: 'idle', text: null, meta: { event: name, reason: str(ev.reason) } };
     default:
