@@ -70,8 +70,8 @@ it('an open tab question counts as pending in the projects list, as on the serve
   await chat.getState().send('tem alguma pergunta?');
   await jest.advanceTimersByTimeAsync(5000);
   await chat.getState().loadProjects();
-  // The seeded pending action, plus the question the tab just asked.
-  expect(chat.getState().projects.find((p) => p.id === 'p-termhub')!.pending_confirmations).toBe(2);
+  // The two seeded pending actions (the grouped-confirmation fixture), plus the question the tab just asked.
+  expect(chat.getState().projects.find((p) => p.id === 'p-termhub')!.pending_confirmations).toBe(3);
 });
 
 it("open('p-termhub') loads the thread and subscribes once for the whole app", async () => {
