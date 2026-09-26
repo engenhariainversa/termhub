@@ -1,8 +1,16 @@
-import type { ChatMessage } from './types';
+import type { ChatAttachment, ChatMessage } from './types';
+
+const NONE: readonly ChatAttachment[] = [];
+
+/** What a stored attachment can change after the panel first saw it (an extraction ended, or gave up). */
+function sameAttachments(a: readonly ChatAttachment[] = NONE, b: readonly ChatAttachment[] = NONE): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((x, i) => x.id === b[i].id && x.status === b[i].status && x.error_code === b[i].error_code);
+}
 
 /** The fields a stored row can change after the panel first saw it. */
 function same(a: ChatMessage, b: ChatMessage): boolean {
-  return a.text === b.text && a.error_code === b.error_code && a.role === b.role && a.created_at === b.created_at;
+  return a.text === b.text && a.error_code === b.error_code && a.role === b.role && a.created_at === b.created_at && sameAttachments(a.attachments, b.attachments);
 }
 
 /**
