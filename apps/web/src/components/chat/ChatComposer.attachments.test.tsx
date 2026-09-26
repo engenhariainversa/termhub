@@ -76,7 +76,7 @@ describe('ChatComposer attachments', () => {
     let resolveUpload!: (v: { attachment: ChatAttachment }) => void;
     uploadMock.mockImplementation(() => new Promise((resolve) => (resolveUpload = resolve)));
     const onSend = vi.fn(async () => true);
-    render(<ChatComposer onSend={onSend} sending={false} blockedReason={null} projectId="p1" />);
+    render(<ChatComposer onSend={onSend} blockedReason={null} projectId="p1" />);
 
     addFiles([pdf()]);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'leia isso' } });
@@ -110,7 +110,7 @@ describe('ChatComposer attachments', () => {
   it('sends with an uploaded chip and no text at all', async () => {
     uploadMock.mockResolvedValue({ attachment: att({ id: 'att1', status: 'ready' }) });
     const onSend = vi.fn(async () => true);
-    render(<ChatComposer onSend={onSend} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={onSend} blockedReason={null} />);
 
     addFiles([pdf()]);
     await waitFor(() => expect(sendButton().disabled).toBe(false));
@@ -121,7 +121,7 @@ describe('ChatComposer attachments', () => {
   it('keeps the chips and the text when onSend answers false', async () => {
     uploadMock.mockResolvedValue({ attachment: att({ id: 'att1', status: 'ready' }) });
     const onSend = vi.fn(async () => false);
-    render(<ChatComposer onSend={onSend} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={onSend} blockedReason={null} />);
 
     addFiles([pdf()]);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'oi' } });
@@ -134,7 +134,7 @@ describe('ChatComposer attachments', () => {
 
   it('refuses an unsupported type and an oversized file in the box, without uploading', async () => {
     const onSend = vi.fn(async () => true);
-    render(<ChatComposer onSend={onSend} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={onSend} blockedReason={null} />);
 
     const big = new File([new Uint8Array(1)], 'foto.png', { type: 'image/png' });
     Object.defineProperty(big, 'size', { value: 10 * 1024 * 1024 + 1 });
@@ -151,7 +151,7 @@ describe('ChatComposer attachments', () => {
 
   it('caps the message at five files and says so in the status line', async () => {
     uploadMock.mockResolvedValue({ attachment: att({ id: 'x', status: 'ready' }) });
-    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={async () => true} blockedReason={null} />);
 
     addFiles([1, 2, 3, 4, 5, 6].map((n) => pdf(`a${n}.pdf`)));
     await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(5));
@@ -167,7 +167,7 @@ describe('ChatComposer attachments', () => {
       return new Promise(() => {});
     });
     uploadMock.mockResolvedValueOnce({ attachment: att({ id: 'att2', name: 'b.pdf', status: 'ready' }) });
-    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={async () => true} blockedReason={null} />);
 
     addFiles([pdf('a.pdf'), pdf('b.pdf')]);
     await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(2));
@@ -186,7 +186,7 @@ describe('ChatComposer attachments', () => {
     const { ApiError } = await import('../../lib/api');
     uploadMock.mockRejectedValueOnce(new ApiError(0, 'Sem conexão com o servidor', 'NETWORK'));
     uploadMock.mockResolvedValueOnce({ attachment: att({ id: 'att1', status: 'ready' }) });
-    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={async () => true} blockedReason={null} />);
 
     addFiles([pdf()]);
     expect(await screen.findByText('Sem conexão com o servidor')).toBeTruthy();
@@ -197,7 +197,7 @@ describe('ChatComposer attachments', () => {
 
   it('attaches files pasted into the box and dropped onto it', async () => {
     uploadMock.mockResolvedValue({ attachment: att({ id: 'att1', status: 'ready' }) });
-    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={async () => true} blockedReason={null} />);
 
     fireEvent.paste(screen.getByRole('textbox'), { clipboardData: { files: [pdf('colado.pdf')], getData: () => '' } });
     expect(await screen.findByText('colado.pdf')).toBeTruthy();
@@ -209,7 +209,7 @@ describe('ChatComposer attachments', () => {
 
   it('shows an image chip as a thumbnail', async () => {
     uploadMock.mockResolvedValue({ attachment: att({ id: 'att1', kind: 'image', name: 'foto.png', status: 'ready' }) });
-    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={async () => true} blockedReason={null} />);
 
     addFiles([new File([new Uint8Array(10)], 'foto.png', { type: 'image/png' })]);
     const img = (await screen.findByAltText('foto.png')) as HTMLImageElement;
@@ -218,7 +218,7 @@ describe('ChatComposer attachments', () => {
 
   it('names and sizes an uploaded chip after what the server stored, since an image goes up downscaled', async () => {
     uploadMock.mockResolvedValue({ attachment: att({ id: 'att1', kind: 'image', name: 'foto.jpg', bytes: 3, status: 'ready' }) });
-    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={async () => true} blockedReason={null} />);
 
     addFiles([new File([new Uint8Array(10)], 'foto.png', { type: 'image/png' })]);
     expect(await screen.findByText('foto.jpg')).toBeTruthy();
@@ -230,7 +230,7 @@ describe('ChatComposer attachments', () => {
   it('revokes the thumbnail object URL when the chip is removed, and when its message is sent', async () => {
     uploadMock.mockResolvedValue({ attachment: att({ id: 'att1', kind: 'image', name: 'foto.png', status: 'ready' }) });
     const revoke = URL.revokeObjectURL as unknown as ReturnType<typeof vi.fn>;
-    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={async () => true} blockedReason={null} />);
 
     addFiles([new File([new Uint8Array(10)], 'foto.png', { type: 'image/png' })]);
     await screen.findByAltText('foto.png');
@@ -250,7 +250,7 @@ describe('ChatComposer attachments', () => {
       signal = s;
       return new Promise(() => {});
     });
-    const { unmount } = render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+    const { unmount } = render(<ChatComposer onSend={async () => true} blockedReason={null} />);
 
     addFiles([pdf()]);
     await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(1));
@@ -262,7 +262,7 @@ describe('ChatComposer attachments', () => {
   it('clears the "no máximo" notice once a chip is removed', async () => {
     // The chip takes the server's name once uploaded, so the stand-in answers with the file's own.
     uploadMock.mockImplementation((_f: Blob, name: string) => Promise.resolve({ attachment: att({ id: `att_${name}`, name, status: 'ready' }) }));
-    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={async () => true} blockedReason={null} />);
 
     addFiles([1, 2, 3, 4, 5, 6].map((n) => pdf(`a${n}.pdf`)));
     expect(await screen.findByText('No máximo 5 anexos por mensagem')).toBeTruthy();
@@ -284,7 +284,7 @@ describe('ChatComposer attachments', () => {
     });
     let refuse!: (ok: boolean) => void;
     const onSend = vi.fn(() => new Promise<boolean>((resolve) => (refuse = resolve)));
-    render(<ChatComposer onSend={onSend} sending={false} blockedReason={null} />);
+    render(<ChatComposer onSend={onSend} blockedReason={null} />);
 
     addFiles([pdf('a.pdf'), pdf('b.pdf')]);
     await waitFor(() => expect(sendButton().disabled).toBe(false));
@@ -306,16 +306,16 @@ describe('ChatComposer attachments', () => {
 
   it('moves an uploaded chip from "processando…" to the status the panel feeds it', async () => {
     uploadMock.mockResolvedValue({ attachment: att({ id: 'att1' }) });
-    const { rerender } = render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} attachmentStatuses={{}} />);
+    const { rerender } = render(<ChatComposer onSend={async () => true} blockedReason={null} attachmentStatuses={{}} />);
 
     addFiles([pdf()]);
     expect(await screen.findByText('processando…')).toBeTruthy();
 
-    rerender(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} attachmentStatuses={{ att1: att({ id: 'att1', status: 'ready' }) }} />);
+    rerender(<ChatComposer onSend={async () => true} blockedReason={null} attachmentStatuses={{ att1: att({ id: 'att1', status: 'ready' }) }} />);
     await waitFor(() => expect(screen.queryByText('processando…')).toBeNull());
     expect(screen.getByText('relatorio.pdf')).toBeTruthy();
 
-    rerender(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} attachmentStatuses={{ att1: att({ id: 'att1', status: 'failed', error_code: 'ATTACHMENT_INVALID' }) }} />);
+    rerender(<ChatComposer onSend={async () => true} blockedReason={null} attachmentStatuses={{ att1: att({ id: 'att1', status: 'failed', error_code: 'ATTACHMENT_INVALID' }) }} />);
     expect(await screen.findByText('falhou: arquivo inválido')).toBeTruthy();
   });
 
@@ -324,11 +324,11 @@ describe('ChatComposer attachments', () => {
     // chip must not settle on the response's "pending" and then wait for an event already gone by.
     let resolveUpload!: (v: { attachment: ChatAttachment }) => void;
     uploadMock.mockImplementation(() => new Promise((resolve) => (resolveUpload = resolve)));
-    const { rerender } = render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} attachmentStatuses={{}} />);
+    const { rerender } = render(<ChatComposer onSend={async () => true} blockedReason={null} attachmentStatuses={{}} />);
 
     addFiles([pdf()]);
     await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(1));
-    rerender(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} attachmentStatuses={{ att1: att({ id: 'att1', status: 'ready' }) }} />);
+    rerender(<ChatComposer onSend={async () => true} blockedReason={null} attachmentStatuses={{ att1: att({ id: 'att1', status: 'ready' }) }} />);
     await act(async () => {
       resolveUpload({ attachment: att({ id: 'att1' }) });
     });

@@ -100,9 +100,7 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
       ? CHAT_MSG.attachmentUploading
       : invalid
         ? CHAT_MSG.attachmentInvalid
-        : sending && role === 'send'
-          ? 'aguarde a resposta terminar'
-          : (attachments.notice ?? '');
+        : (attachments.notice ?? '');
   const onPrimary = role === 'stop' ? voice.stop : role === 'send' ? () => void submit() : voice.start;
   // No 📎 while dictation holds the microphone or its clip: the sheet's recorder would release the
   // audio session under it (one recorder at a time), and five chips is the message's limit.

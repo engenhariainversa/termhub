@@ -318,6 +318,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   }, [load]);
 
+  const onDecideBatch = useCallback((d: BatchDecision[]) => void decideBatch(d), [decideBatch]);
+  const onShowSeparately = useCallback(() => setSeparate(true), []);
+
   /** "Revogar", from the card that granted it. Stable: every card gets this same one. */
   const revoke = useCallback(async (grantId: string) => {
     setRevokingId(grantId);
@@ -647,7 +650,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       >
         {entries.map((entry) => {
           if (entry.kind === 'action_group') {
-            return <ChatActionGroup key={`g:${entry.actions[0]!.id}`} actions={entry.actions} deciding={batchDeciding} onDecide={(d) => void decideBatch(d)} onShowSeparately={() => setSeparate(true)} />;
+            return <ChatActionGroup key={`g:${entry.actions[0]!.id}`} actions={entry.actions} deciding={batchDeciding} onDecide={onDecideBatch} onShowSeparately={onShowSeparately} />;
           }
           if (entry.kind === 'tab_suggestion') {
             const s = entry.suggestion;

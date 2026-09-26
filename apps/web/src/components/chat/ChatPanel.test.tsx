@@ -586,24 +586,28 @@ it('takes a second message while the first is still being answered, and shows bo
 });
 
 it('shows "pensando…" on every answer that has started, not only the newest', async () => {
+  // The announcements (`message` with no text yet) reach the panel's fold through the stream's callback.
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { connected: true };
+  });
   chatMock.mockResolvedValue({
     conversation: { id: 'c1', ai_account_id: null },
     messages: [msg({ id: 'q1', text: 'um' }), msg({ id: 'a1', role: 'assistant' }), msg({ id: 'q2', text: 'dois' }), msg({ id: 'a2', role: 'assistant' })],
     actions: [],
     host: READY,
   });
-  streamMock.mockReturnValue({
-    events: [
-      { type: 'message', conversation_id: 'c1', message: msg({ id: 'a1', role: 'assistant' }) },
-      { type: 'message', conversation_id: 'c1', message: msg({ id: 'a2', role: 'assistant' }) },
-    ],
-    connected: true,
-  });
   render(
     <MemoryRouter>
       <ChatPanel />
     </MemoryRouter>,
   );
+  await screen.findByText('dois');
+  act(() => {
+    onEvent({ type: 'message', conversation_id: 'c1', message: msg({ id: 'a1', role: 'assistant' }) });
+    onEvent({ type: 'message', conversation_id: 'c1', message: msg({ id: 'a2', role: 'assistant' }) });
+  });
   await waitFor(() => expect(screen.getAllByText(/pensando/i)).toHaveLength(2));
 });
 
