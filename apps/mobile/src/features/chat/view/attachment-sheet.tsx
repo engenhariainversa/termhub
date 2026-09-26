@@ -20,8 +20,10 @@ export function AttachmentSheet({ open, room, onClose, onPicked }: { open: boole
   const recorder = useRecorder();
   const [error, setError] = useState<string | null>(null);
 
+  // `cancel()` is a no-op when idle, and while the microphone is still being asked for it stops the
+  // recording from ever starting: a Cancelar or backdrop tap during that wait must not leave one running.
   const close = () => {
-    if (recorder.state === 'recording') recorder.cancel();
+    recorder.cancel();
     setError(null);
     onClose();
   };

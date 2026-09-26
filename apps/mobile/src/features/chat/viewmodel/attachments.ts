@@ -36,6 +36,8 @@ export type DraftAction =
   | { type: 'failed'; key: string; error: string }
   | { type: 'retry'; key: string }
   | { type: 'remove'; key: string }
+  /** The chips a send carried: gone without a server-side delete (the message owns them now). */
+  | { type: 'drop'; keys: string[] }
   | { type: 'clear' };
 
 /** The refusal before any upload, or the kind it will upload as. An unknown size is let through: the server measures it. */
@@ -74,6 +76,8 @@ export function draftsReducer(drafts: DraftAttachment[], action: DraftAction): D
       return patch(action.key, { phase: 'uploading', progress: 0, error: null, attachment: null });
     case 'remove':
       return drafts.some((d) => d.key === action.key) ? drafts.filter((d) => d.key !== action.key) : drafts;
+    case 'drop':
+      return drafts.some((d) => action.keys.includes(d.key)) ? drafts.filter((d) => !action.keys.includes(d.key)) : drafts;
     case 'clear':
       return drafts.length === 0 ? drafts : [];
   }
@@ -89,8 +93,9 @@ export interface AttachmentDeps {
 
 /**
  * The composer's chips: each pick uploads at once; ✕ drops a chip (an upload task cannot be cancelled,
- * so one still on the wire is deleted server-side the moment it lands); `clear` after a send that was
- * accepted. Same rules as the web's `useAttachmentDrafts`.
+ * so one still on the wire is deleted server-side the moment it lands); `clear(keys)` after a send that
+ * was accepted — only the chips it carried, one picked while the send was in flight stays. Same rules
+ * as the web's `useAttachmentDrafts`.
  */
 export function useAttachmentDrafts(deps: AttachmentDeps) {
   const [drafts, dispatch] = useReducer(draftsReducer, []);
@@ -153,8 +158,8 @@ export function useAttachmentDrafts(deps: AttachmentDeps) {
     [upload],
   );
 
-  const clear = useCallback(() => {
-    dispatch({ type: 'clear' });
+  const clear = useCallback((keys?: string[]) => {
+    dispatch(keys ? { type: 'drop', keys } : { type: 'clear' });
     setNotice(null);
   }, []);
 

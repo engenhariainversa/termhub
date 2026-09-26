@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useReducer, useState } from 'react';
 import { Image, Modal, Pressable, Text, View } from 'react-native';
 import type { TChatAttachment } from '@/services/api/contract';
 import { attachmentStatusText, formatBytes } from '../viewmodel/attachments';
@@ -7,26 +7,49 @@ import { KIND_GLYPH } from './attachment-chip';
 
 type Source = { uri: string; headers: Record<string, string> };
 
-/** The signed `<Image source>` for a sent image: the store signs one DPoP proof per load. */
-function useAttachmentSource(id: string): Source | null {
+/** The signed `<Image source>` for a sent image: the store signs one DPoP proof per `attempt`, with the
+ * token it holds then. `null` while a proof is being signed. */
+function useAttachmentSource(id: string, attempt: number): Source | null {
   const attachmentSource = useChatStore((s) => s.attachmentSource);
   const [source, setSource] = useState<Source | null>(null);
   useEffect(() => {
     let live = true;
+    setSource(null);
     attachmentSource(id)
       .then((s) => live && setSource(s))
       .catch(() => undefined);
     return () => {
       live = false;
     };
-  }, [attachmentSource, id]);
+  }, [attachmentSource, id, attempt]);
   return source;
 }
 
+/** How many loads failed, and which signed source is on screen. */
+type LoadState = { attempt: number; errors: number };
+type LoadAction = 'error' | 'reload';
+
+/** A proof is single-use and lives ±60 s: the first failure (an expired token, a stale proof, a blip) is
+ * retried once with a fresh one on its own; a second failure waits for a tap, so a dead link never loops. */
+function loadReducer(s: LoadState, action: LoadAction): LoadState {
+  if (action === 'reload') return { attempt: s.attempt + 1, errors: s.errors };
+  const errors = s.errors + 1;
+  return { attempt: errors === 1 ? s.attempt + 1 : s.attempt, errors };
+}
+
 function AuthImage({ attachment, className, resizeMode }: { attachment: TChatAttachment; className: string; resizeMode: 'cover' | 'contain' }) {
-  const source = useAttachmentSource(attachment.id);
+  const [load, dispatch] = useReducer(loadReducer, { attempt: 0, errors: 0 });
+  const source = useAttachmentSource(attachment.id, load.attempt);
+  const stuck = load.errors >= 2 && load.attempt < load.errors;
+  if (stuck) {
+    return (
+      <Pressable accessibilityRole="button" accessibilityLabel="Toque para recarregar" onPress={() => dispatch('reload')} className={`${className} items-center justify-center bg-app-surface2`}>
+        <Text className="text-xs text-app-muted">Toque para recarregar</Text>
+      </Pressable>
+    );
+  }
   if (!source) return <View className={`${className} bg-app-surface2`} />;
-  return <Image source={source} accessibilityLabel={attachment.name} resizeMode={resizeMode} className={className} />;
+  return <Image source={source} accessibilityLabel={attachment.name} resizeMode={resizeMode} className={className} onError={() => dispatch('error')} />;
 }
 
 /**

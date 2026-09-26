@@ -59,6 +59,11 @@ describe('draftsReducer', () => {
 
   it('returns the same array for an unknown key', () => {
     expect(draftsReducer(base, { type: 'progress', key: 'nope', fraction: 1 })).toBe(base);
+    expect(draftsReducer(base, { type: 'drop', keys: ['nope'] })).toBe(base);
+  });
+
+  it('drops the given keys and keeps the rest (the chips a send carried)', () => {
+    expect(draftsReducer(base, { type: 'drop', keys: ['k1'] }).map((d) => d.key)).toEqual(['k2']);
   });
 });
 

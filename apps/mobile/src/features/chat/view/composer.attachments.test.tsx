@@ -5,9 +5,11 @@ import type { TChatAttachment } from '@/services/api/contract';
 import { Composer } from './composer';
 
 // The recorder is A9's; here the mic never records — the sheet's "Gravar áudio" is tested by state only.
+const mockVoice = { state: 'idle' as import('../viewmodel/use-voice').VoiceState, seconds: 0, error: null as string | null, notice: null as string | null, start: jest.fn(), stop: jest.fn(), cancel: jest.fn() };
+const mockRecorder = { state: 'idle' as const, seconds: 0, error: null, start: jest.fn(async () => undefined), stop: jest.fn(async () => null), cancel: jest.fn() };
 jest.mock('../viewmodel/use-voice', () => ({
-  useVoice: () => ({ state: 'idle', seconds: 0, error: null, notice: null, start: jest.fn(), stop: jest.fn(), cancel: jest.fn() }),
-  useRecorder: () => ({ state: 'idle', seconds: 0, error: null, start: jest.fn(async () => undefined), stop: jest.fn(async () => null), cancel: jest.fn() }),
+  useVoice: () => mockVoice,
+  useRecorder: () => mockRecorder,
 }));
 
 const att = (over: Partial<TChatAttachment> & { id: string }): TChatAttachment => ({
@@ -39,6 +41,8 @@ async function pickFile(...assets: ReturnType<typeof asset>[]) {
 beforeEach(() => {
   documentPicker.getDocumentAsync.mockReset().mockResolvedValue({ canceled: true, assets: null } as never);
   imagePicker.launchImageLibraryAsync.mockReset().mockResolvedValue({ canceled: true, assets: null } as never);
+  mockVoice.state = 'idle';
+  mockRecorder.cancel.mockClear();
 });
 
 describe('Composer attachments', () => {
@@ -104,5 +108,36 @@ describe('Composer attachments', () => {
     await renderComposer();
     await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
     expect(screen.getByRole('button', { name: 'Gravar áudio' })).toBeTruthy();
+  });
+
+  it('closing the sheet cancels a recording that may still be opening the microphone', async () => {
+    await renderComposer();
+    await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(mockRecorder.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['starting', 'recording', 'uploading', 'transcribing'] as const)('📎 is disabled while dictation is %s (one recorder at a time)', async (state) => {
+    mockVoice.state = state;
+    await renderComposer();
+    expect(screen.getByRole('button', { name: 'Anexar' })).toBeDisabled();
+  });
+
+  it('a send clears only the chips it carried: one added while the send was in flight stays', async () => {
+    let resolveSend!: (ok: boolean) => void;
+    const props = await renderComposer({
+      onSend: jest.fn(() => new Promise<boolean>((resolve) => (resolveSend = resolve))),
+      uploadAttachment: jest.fn(async (file: { name: string }) => att({ id: file.name === 'b.pdf' ? 'att2' : 'att1', name: file.name, status: 'ready' })),
+    });
+    await pickFile(asset('relatorio.pdf', 'application/pdf'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
+    await waitFor(() => expect(props.onSend).toHaveBeenCalledWith('', [att({ id: 'att1', status: 'ready' })]));
+
+    await pickFile(asset('b.pdf', 'application/pdf'));
+    expect(await screen.findByText('b.pdf')).toBeTruthy();
+    await act(async () => resolveSend(true));
+    await waitFor(() => expect(screen.queryByText('relatorio.pdf')).toBeNull());
+    expect(screen.getByText('b.pdf')).toBeTruthy();
   });
 });

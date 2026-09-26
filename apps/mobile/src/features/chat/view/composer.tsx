@@ -68,13 +68,14 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment }
 
   // The box empties at once (the row is already on screen) and gets its text back if the send
   // fails — unless something new was typed meanwhile, which is the person's to keep. The chips stay
-  // until the server accepted: a failed send keeps them for the retry.
+  // until the server accepted, and only the ones this send carried go: one picked meanwhile is the
+  // next message's.
   const submit = async () => {
     if (!canSend) return;
     const sent = text;
-    const files = attachments.uploaded;
+    const carried = attachments.drafts.filter((d) => d.phase === 'uploaded' && d.attachment !== null);
     setText('');
-    if (await onSend(sent, files)) attachments.clear();
+    if (await onSend(sent, carried.map((d) => d.attachment!))) attachments.clear(carried.map((d) => d.key));
     else setText((current) => current || sent);
   };
 
@@ -90,7 +91,9 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment }
   const disabled = role === 'stop' ? false : role === 'send' ? !canSend || busy : busy || voice.state === 'checking' || voice.state === 'starting';
   const statusText = busy ? 'transcrevendo…' : attachments.uploading ? CHAT_MSG.attachmentUploading : sending && role === 'send' ? 'aguarde a resposta terminar' : (attachments.notice ?? '');
   const onPrimary = role === 'stop' ? voice.stop : role === 'send' ? () => void submit() : voice.start;
-  const full = attachments.drafts.length >= MAX_CHIPS;
+  // No 📎 while dictation holds the microphone or its clip: the sheet's recorder would release the
+  // audio session under it (one recorder at a time), and five chips is the message's limit.
+  const attachOff = attachments.drafts.length >= MAX_CHIPS || voice.state === 'starting' || voice.state === 'recording' || busy;
 
   return (
     <View className="border-t border-app-border bg-app-bg px-3 pb-2 pt-2">
@@ -119,11 +122,11 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment }
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Anexar"
-            accessibilityState={{ disabled: full }}
-            disabled={full}
+            accessibilityState={{ disabled: attachOff }}
+            disabled={attachOff}
             onPress={() => setPicking(true)}
             hitSlop={8}
-            className={`h-9 w-9 items-center justify-center rounded-full ${full ? 'opacity-50' : ''}`}
+            className={`h-9 w-9 items-center justify-center rounded-full ${attachOff ? 'opacity-50' : ''}`}
           >
             <Text className="text-lg">📎</Text>
           </Pressable>
