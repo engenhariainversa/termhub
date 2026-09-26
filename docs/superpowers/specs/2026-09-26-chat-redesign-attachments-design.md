@@ -450,3 +450,41 @@ Anexos enviados com esta mensagem (dados do usuário; leia com read_attachment; 
   - "a new delta re-renders only the streaming bubble" still passes.
 - **Builds.** Typecheck and builds through Docker as `CLAUDE.md` says, and the mobile typecheck and
   tests in the same container.
+
+## 10. Decisions taken while planning (2026-09-26, recorded without review: Pedro was away)
+
+The person asked the work to go on to the end without questions, with the recommended option taken at
+each choice. These are those choices:
+
+- **Execution.** Subagent-driven, on the Fable model (`claude-fable-5-1`), as the card asks.
+  Everything lands on branch `feat/chat-redesign-attachments` in its own worktree. Nothing is
+  pushed, merged or deployed.
+- **Ids.** Attachment ids come from `newId()`, the same generator as user ids. `publicId` is the
+  city's HMAC id, not a row id.
+- **`service.ts` touch points.** There is one read-only pre-check right after the `CHAT_ARCHIVED`
+  check. It returns `409 ATTACHMENT_UNAVAILABLE` with nothing stored. After the user row come the
+  `attach` call, with the row deleted on a race, and the `runText` join. That is still outside the
+  run, the lock and the runner that TER-59 rewrites.
+- **Sanitising names.** `tab-question-context.ts` exports its sanitiser as `sanitisePromptText`, so
+  attachment names are cleaned the same way.
+- **The gate.** `read_attachment` is listed as a read tool in `chat/gate.ts`. A gated concierge token
+  reads attachments without raising a confirmation card.
+- **Extraction timeouts.** Audio and video use whisper's 10-minute budget, not the 60 s of the other
+  extractors.
+- **Web client.** `api.chat` is a function, so the attachments API is `api.chat.attachments.*` on
+  that function object.
+- **Web uploads.** The web sends uploads as `application/octet-stream`, and the server sniffs the
+  bytes.
+- **Web composer.**
+  - It keeps its own text state and clears optimistically. It restores the text when `onSend`
+    resolves false or throws, unless the person already typed again.
+  - The status line shows, in priority order: blocked reason, "transcrevendo…", error, "aguarde…".
+- **Mobile store.** The live buffer becomes an immutable fold (`LiveFold`) instead of an event array
+  capped at 500. The persisted slice is written through a 2 s throttle.
+- **Mobile optimistic rows.** A local row has id `local:<random>`. It is renamed on the 202, or
+  dropped if the WebSocket echo came first.
+- **Mobile dictation.** The mic sends the recording to the existing mobile transcription route,
+  through a new `Transport.upload` built on `expo-file-system`'s upload task. The same transport
+  carries attachments.
+- **Test database.** A throwaway Postgres of this work, `th-chatatt-db`. It never shares another
+  session's database.
