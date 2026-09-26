@@ -64,4 +64,10 @@ describe('grantable', () => {
     expect(grantable('run_command', { tab_id: 't1', command: 'ls' })).toBe(false);
     expect(grantable('send_key', { tab_id: 't1', key: 'Enter' })).toBe(false);
   });
+
+  it('close_tab stays irreversible and non-grantable: control/terminals.ts skips its ownership check on a gated token because every gated close_tab is asked here (TER-184)', () => {
+    expect(actionClass('close_tab', { tab_id: 't1' })).toBe('irreversible');
+    expect(grantable('close_tab', { tab_id: 't1' })).toBe(false);
+    expect(grantable('close_tab', { tab_id: 't1', force: true })).toBe(false);
+  });
 });

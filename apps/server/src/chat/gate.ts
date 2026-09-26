@@ -28,6 +28,10 @@ const writeTools = new Set([
   'set_project_machine_cwd',
 ]);
 
+// close_tab must stay irreversible and never become grantable (or otherwise auto-approved):
+// control/terminals.ts skips its per-token ownership check for a gated token because every gated
+// close_tab is asked here. Letting it through without a question would let the chat close any of the
+// user's tabs. Revisit control/terminals.ts's `!ctx.token.gated` check first.
 const irreversibleTools = new Set(['close_tab', 'delete_task']);
 
 // Keys that interrupt the running process and cannot be undone

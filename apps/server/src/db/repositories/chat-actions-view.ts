@@ -108,7 +108,8 @@ interface Location {
   missing?: 'tab' | 'project' | 'machine';
   /** close_tab only: who opened the tab being closed, in parentheses right after its name — set by
    * `describeActions` from the tab's `created_by_token_id`, never resolved here (see there for why:
-   * it takes an owner-scoped `apiTokens.listByUser` lookup this module has no repos handle for). */
+   * it takes an owner-scoped `apiTokens.listByUser` lookup that `describeActions` has a repos handle
+   * for and this — `targetPhrase`, building `Location` — does not). */
   tabOrigin?: string;
 }
 
