@@ -8,6 +8,7 @@ const row = (id: string, extra: Partial<ChatMessage> = {}): ChatMessage => ({ id
 const action = (id: string, status: ChatAction['status'] = 'pending'): ChatAction => ({ id, tool: 't', args: {}, class: 'write', status, machine_id: null, project_id: null, tab_id: null, grant_id: null, summary: 's', created_at: at });
 const delta = (messageId: string, text: string): ChatEvent => ({ type: 'delta', ...base, message_id: messageId, delta: text });
 const empty: EventSlice = { messages: [], actions: [], live: emptyFold(), grants: [], tabQuestions: [], tabSuggestions: [] };
+const att = { id: 'att1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf' as const, bytes: 10, status: 'pending' as const, error_code: null, meta: null, created_at: at };
 
 describe('mergeMessage', () => {
   it('appends a new row, replaces a changed one and keeps the other row objects', () => {
@@ -32,6 +33,21 @@ describe('mergeMessage', () => {
     expect(mergeMessage(list, { ...a, error_code: 'HOST_GONE' })).not.toBe(list);
     expect(mergeMessage(list, { ...a, created_at: '2026-09-24T12:00:01.000Z' })).not.toBe(list);
   });
+
+  it('compares attachments the way the web does (length, then id, status and error code per position; undefined is [])', () => {
+    const a = row('a', { role: 'user', attachments: [att] });
+    const list = [a];
+    expect(mergeMessage(list, { ...a, attachments: [{ ...att, meta: { pages: 2 } }] })).toBe(list);
+    expect(mergeMessage(list, { ...a, attachments: [{ ...att, status: 'ready' }] })).not.toBe(list);
+    expect(mergeMessage(list, { ...a, attachments: [{ ...att, status: 'failed', error_code: 'ATTACHMENT_INVALID' }] })).not.toBe(list);
+    expect(mergeMessage(list, { ...a, attachments: [{ ...att, id: 'att2' }] })).not.toBe(list);
+    expect(mergeMessage(list, { ...a, attachments: [] })).not.toBe(list);
+    expect(mergeMessage(list, { ...a, attachments: undefined })).not.toBe(list);
+    const bare = row('b', { role: 'user' });
+    const bareList = [bare];
+    expect(mergeMessage(bareList, { ...bare, attachments: [] })).toBe(bareList);
+    expect(mergeMessage(bareList, { ...bare, attachments: [att] })).not.toBe(bareList);
+  });
 });
 
 describe('mergeThread', () => {
@@ -55,6 +71,15 @@ describe('mergeThread', () => {
     const merged = mergeThread([a, gone, landed, local], [a, row('b', { text: 'new' })]);
     expect(merged.map((m) => m.id)).toEqual(['a', 'c', 'local:1', 'b']);
     expect(merged[0]).toBe(a);
+  });
+
+  it('a re-read corrects an attachment status the phone missed while backgrounded or offline', () => {
+    const sent = row('m1', { role: 'user', attachments: [att] });
+    const current = [sent];
+    const merged = mergeThread(current, [{ ...sent, attachments: [{ ...att, status: 'ready', meta: { pages: 2 } }] }]);
+    expect(merged).not.toBe(current);
+    expect(merged[0]!.attachments).toEqual([{ ...att, status: 'ready', meta: { pages: 2 } }]);
+    expect(mergeThread(merged, [{ ...sent, attachments: [{ ...att, status: 'ready', meta: { pages: 2 } }] }])).toBe(merged);
   });
 
   it('an empty snapshot keeps every current row (nothing is older than it)', () => {

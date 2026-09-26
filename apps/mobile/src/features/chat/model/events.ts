@@ -19,16 +19,26 @@ export interface EventSlice {
   tabSuggestions: TabSuggestion[];
 }
 
+const NO_ATTACHMENTS: readonly TChatAttachment[] = [];
+
+/** The web's `sameAttachments`: what a stored attachment can change after the phone first saw it (an extraction ended, or gave up). */
+function sameAttachments(a: readonly TChatAttachment[] = NO_ATTACHMENTS, b: readonly TChatAttachment[] = NO_ATTACHMENTS): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((x, i) => x.id === b[i]!.id && x.status === b[i]!.status && x.error_code === b[i]!.error_code);
+}
+
 /**
  * The web's `lib/chat-merge.ts` (`mergeMessage`): `msg` into `list` by id — appended when new,
  * replaced when something changed, and the very same `list` (same row objects) when nothing did, so
- * a memoised row keeps its props. `usage` is the server's JSON: compared by value.
+ * a memoised row keeps its props. `usage` is the server's JSON: compared by value. Attachments count
+ * too: a re-read is how a status event the phone missed (backgrounded, offline) gets corrected.
  */
 export function mergeMessage(list: ChatMessage[], msg: ChatMessage): ChatMessage[] {
   const i = list.findIndex((m) => m.id === msg.id);
   if (i < 0) return [...list, msg];
   const old = list[i]!;
-  const same = old.text === msg.text && old.error_code === msg.error_code && old.created_at === msg.created_at && JSON.stringify(old.usage ?? null) === JSON.stringify(msg.usage ?? null);
+  const same =
+    old.text === msg.text && old.error_code === msg.error_code && old.created_at === msg.created_at && JSON.stringify(old.usage ?? null) === JSON.stringify(msg.usage ?? null) && sameAttachments(old.attachments, msg.attachments);
   return same ? list : list.map((m, j) => (j === i ? msg : m));
 }
 
