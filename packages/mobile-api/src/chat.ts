@@ -14,6 +14,21 @@ export const mobileDecisionBody = z
   ])
   .refine((b) => b.decision !== 'approve' || (b.challenge === undefined) === (b.pin_proof === undefined), { message: 'challenge e pin_proof vão juntos' });
 
+/** A grouped confirmation from the phone (spec 2026-09-26 §7): every approval carries its own proof,
+ * bound to that action and the word `approve`, exactly like a single decision. */
+export const mobileBatchDecisionBody = z.object({
+  decisions: z
+    .array(
+      z.discriminatedUnion('decision', [
+        z.object({ id: z.string().min(1).max(64), decision: z.literal('deny') }),
+        z.object({ id: z.string().min(1).max(64), decision: z.literal('approve'), challenge: z.string().min(1).max(128), pin_proof: z.string().min(1).max(128) }),
+      ]),
+    )
+    .min(1)
+    .max(20)
+    .refine((d) => new Set(d.map((x) => x.id)).size === d.length, 'Ações repetidas'),
+});
+
 /** Mirrors the server's `grantable` (apps/server/src/chat/gate.ts), which is the judge: only
  * `send_input` to a tab, never answering a permission. Decides whether the card offers the button. */
 export function isTabGrantable(action: { tool: string; args: unknown; tab_id: string | null }): boolean {

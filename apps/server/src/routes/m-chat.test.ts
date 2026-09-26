@@ -639,6 +639,90 @@ describe('POST /chat/actions/:id/decision', () => {
   });
 });
 
+describe('POST /chat/actions/decisions (batch)', () => {
+  const rowsOf = (rows: Record<string, { status: string; conversation_id?: string }>) =>
+    vi.fn(async (id: string) => (rows[id] ? { ...pendingAction, id, conversation_id: 'c1', ...rows[id] } : undefined));
+  const decideById = () => vi.fn(async (id: string, _userId: string, status: string) => ({ ...pendingAction, id, status }));
+  const post = (app: ReturnType<typeof build>['app'], decisions: unknown[]) => app.inject({ method: 'POST', url: '/chat/actions/decisions', payload: { decisions } });
+
+  it('proves the approval, decides both, resumes once and answers queued', async () => {
+    const decide = decideById();
+    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }, { id: 'a2', decision: 'deny' }]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'denied' }], skipped: [], queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledTimes(1);
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledWith(device, 'ch1', 'a1');
+    expect(session.checkPin).toHaveBeenCalledTimes(1);
+    expect(session.checkPin).toHaveBeenCalledWith(device, decisionProofMessage('ch1', 'a1', 'approve'), 'pp1', expect.objectContaining({ ip: expect.any(String) }));
+    expect(decide).toHaveBeenCalledWith('a1', 'u1', 'approved');
+    expect(decide).toHaveBeenCalledWith('a2', 'u1', 'denied');
+    expect(session.checkPin.mock.invocationCallOrder[0]).toBeLessThan(decide.mock.invocationCallOrder[0]);
+    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('a wrong PIN on the second approval is 401 and decides nothing', async () => {
+    const checkPin = vi.fn().mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false, code: 'PIN_INVALID', failures: 1 });
+    const { app, decide, resumeAfterDecision } = build({ checkPin, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'approve', challenge: 'ch2', pin_proof: 'pp2' },
+    ]);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ code: 'PIN_INVALID', failures: 1 });
+    expect(checkPin).toHaveBeenCalledTimes(2);
+    expect(decide).not.toHaveBeenCalled();
+    expect(resumeAfterDecision).not.toHaveBeenCalled();
+  });
+
+  it('a refused challenge is 400 CHALLENGE_INVALID and decides nothing', async () => {
+    const { app, session, decide } = build({ consumeDecisionChallenge: vi.fn(async () => false), findByIdForUser: rowsOf({ a1: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }]);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'CHALLENGE_INVALID' });
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('skips an approval no longer pending without spending its challenge', async () => {
+    const decide = decideById();
+    const { app, session } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'approved' }, a2: { status: 'pending' } }) });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'approve', challenge: 'ch2', pin_proof: 'pp2' },
+    ]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a2', status: 'approved' }], skipped: [{ id: 'a1', reason: 'already_decided' }] });
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledTimes(1);
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledWith(device, 'ch2', 'a2');
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+
+  it('a deny-only batch never touches the challenge or the PIN', async () => {
+    const decide = decideById();
+    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'deny' }, { id: 'a2', decision: 'deny' }]);
+    expect(res.statusCode).toBe(200);
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).toHaveBeenCalledTimes(2);
+    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('mixed conversations are 400 MIXED_CONVERSATIONS before any challenge is consumed', async () => {
+    const { app, session, decide } = build({ findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending', conversation_id: 'c2' } }) });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'deny' },
+    ]);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'MIXED_CONVERSATIONS' });
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+  });
+});
+
 describe('grants', () => {
   it('DELETE /chat/grants/:id revokes and publishes grant_revoked', async () => {
     const { app, repos } = build();
