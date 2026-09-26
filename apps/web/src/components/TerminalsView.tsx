@@ -321,7 +321,12 @@ export function TerminalsView({ project, visible }: Props) {
             : undefined
         }
       />
-      {focusedLiveTab && <RateLimitBanner tab={focusedLiveTab} canSwap={can('terminals', 'update')} />}
+      {focusedLiveTab && (
+        // Keyed on the tab id + rate_limited_at: a new focused tab, or the same tab hitting the
+        // limit again (a fresh rate_limited_at), must remount the banner — otherwise its local
+        // busy/done/error state survives and shows a stale "Retomando em …" with no button back.
+        <RateLimitBanner key={`${focusedLiveTab.id}:${focusedLiveTab.rate_limited_at ?? ''}`} tab={focusedLiveTab} canSwap={can('terminals', 'update')} />
+      )}
       {projectMachines.length === 0 && (
         <div className="border-b border-warn/30 bg-warn/10 px-3 py-1 text-xs text-warn">
           Este projeto não tem máquina vinculada.{' '}
