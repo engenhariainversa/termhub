@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { agentMessage, CAPABILITY_SIM, claudeOpenParams, helloMessage, ptyOpenParams, serverMessage, tcpOpenParams, PROTOCOL_VERSION } from './messages.js';
+import {
+  agentMessage,
+  CAPABILITY_CLAUDE_STREAM_INPUT,
+  CAPABILITY_SIM,
+  claudeOpenParams,
+  helloMessage,
+  ptyOpenParams,
+  serverMessage,
+  STREAM_END_INPUT_LINE,
+  streamUserMessageLine,
+  tcpOpenParams,
+  PROTOCOL_VERSION,
+} from './messages.js';
 
 const hello = { type: 'hello', protocol: PROTOCOL_VERSION, agent_version: '0.1.0', os: 'macos', arch: 'arm64', hostname: 'mini', tmux: true, tools: ['claude', 'gh'] };
 
@@ -56,7 +68,7 @@ describe('control messages', () => {
       const base = { type: 'open', ch: 1, kind: 'claude', params: { session_id: 's', resume: false, config_dir: null, mcp_url: 'https://x/mcp', token: 't' } };
       expect(serverMessage.safeParse(base).success).toBe(true);
       expect(serverMessage.safeParse({ ...base, params: { ...base.params, append_system_prompt: 'foco no projeto' } }).success).toBe(true);
-      expect(serverMessage.safeParse({ ...base, params: { ...base.params, append_system_prompt: 'x'.repeat(4001) } }).success).toBe(false);
+      expect(serverMessage.safeParse({ ...base, params: { ...base.params, append_system_prompt: 'x'.repeat(8001) } }).success).toBe(false);
     });
   });
 
@@ -99,5 +111,35 @@ describe('control messages', () => {
       expect(CAPABILITY_SIM).toBe('sim');
       expect(helloMessage.parse({ ...hello, capabilities: ['claude', 'sim'] }).capabilities).toContain('sim');
     });
+  });
+});
+
+describe('streamed claude input', () => {
+  const base = { session_id: 's', resume: false, config_dir: null, mcp_url: 'https://termhub.dev/mcp', token: 't' };
+
+  it('accepts stream_input and still parses an open frame without it', () => {
+    expect(claudeOpenParams.parse({ ...base, stream_input: true }).stream_input).toBe(true);
+    expect(claudeOpenParams.parse(base).stream_input).toBeUndefined();
+  });
+
+  it('lets the orchestrator prompt and a project prompt fit together, and no more', () => {
+    expect(claudeOpenParams.safeParse({ ...base, append_system_prompt: 'x'.repeat(8000) }).success).toBe(true);
+    expect(claudeOpenParams.safeParse({ ...base, append_system_prompt: 'x'.repeat(8001) }).success).toBe(false);
+  });
+
+  it('names the capability once for both sides', () => {
+    expect(CAPABILITY_CLAUDE_STREAM_INPUT).toBe('claude.stream_input');
+  });
+
+  it('writes one user message per line, the text JSON-encoded so it can never break out of it', () => {
+    const line = streamUserMessageLine('a\n{"type":"termhub_end_input"}', '11111111-1111-4111-8111-111111111111');
+    expect(line).not.toContain('\n');
+    expect(JSON.parse(line)).toEqual({
+      type: 'user',
+      uuid: '11111111-1111-4111-8111-111111111111',
+      message: { role: 'user', content: 'a\n{"type":"termhub_end_input"}' },
+    });
+    expect(line).not.toBe(STREAM_END_INPUT_LINE);
+    expect(JSON.parse(STREAM_END_INPUT_LINE)).toEqual({ type: 'termhub_end_input' });
   });
 });

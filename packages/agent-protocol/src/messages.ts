@@ -46,6 +46,25 @@ export const CAPABILITY_CLAUDE_SYSTEM_PROMPT = 'claude.system_prompt';
  *  ports (spec 2026-09-24). Advertised on macOS only; the server requires it before any of those. */
 export const CAPABILITY_SIM = 'sim';
 
+/**
+ * The agent runs a `claude` channel with streamed input (spec 2026-09-26): the CLI keeps reading
+ * `stream-json` user messages from stdin while its turns and background subagents run, so the chat
+ * can take a message at any time. Each channel write is one or more complete lines built by
+ * `streamUserMessageLine`, and `STREAM_END_INPUT_LINE` closes stdin. The agent also loads the hook
+ * that keeps subagents in the background. An agent without it runs the one-shot prompt as before.
+ */
+export const CAPABILITY_CLAUDE_STREAM_INPUT = 'claude.stream_input';
+
+/** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
+ *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
+export function streamUserMessageLine(text: string, uuid: string): string {
+  return JSON.stringify({ type: 'user', uuid, message: { role: 'user', content: text } });
+}
+
+/** Ends a streamed run's input: the agent closes the CLI's stdin when it reads this line. The CLI
+ *  still finishes its turns and waits for its background subagents before it exits. */
+export const STREAM_END_INPUT_LINE = '{"type":"termhub_end_input"}';
+
 export const helloMessage = z.object({
   type: z.literal('hello'),
   protocol: z.number().int().min(1),
@@ -94,9 +113,13 @@ export const claudeOpenParams = z.object({
   // belongs at, so there is no separate, later place to hand it over.
   token: z.string(),
   model: z.string().nullable().optional(),
-  // Project chats only: the server-composed focus text forwarded onto the CLI's argv (see
+  // Project chats and streamed runs: the server-composed text forwarded onto the CLI's argv (see
   // `CAPABILITY_CLAUDE_SYSTEM_PROMPT`). Absent for the account-wide chat, whose argv must not change.
-  append_system_prompt: z.string().max(4000).nullable().optional(),
+  // 8000 because a streamed run carries the orchestrator prompt next to a project's (at most 4000
+  // each); only agents that advertise `CAPABILITY_CLAUDE_STREAM_INPUT` are ever sent more than 4000.
+  append_system_prompt: z.string().max(8000).nullable().optional(),
+  // See `CAPABILITY_CLAUDE_STREAM_INPUT`. Absent on every one-shot run, whose open frame must not change.
+  stream_input: z.boolean().optional(),
 });
 
 /** A raw TCP pipe to `127.0.0.1:<port>` on the machine. No host on purpose: loopback only, and only the

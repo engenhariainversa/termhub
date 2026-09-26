@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildClaudeArgs, mcpConfig } from './index.js';
+import { buildClaudeArgs, CONCIERGE_SETTINGS, mcpConfig } from './index.js';
 
 const spec = {
   session_id: '3f1e9b1e-0000-4000-8000-000000000001',
@@ -61,6 +61,20 @@ describe('buildClaudeArgs', () => {
     expect(buildClaudeArgs({ ...spec, append_system_prompt: 'Você é o chat do projeto X.' }).slice(-2)).toEqual(['--append-system-prompt', 'Você é o chat do projeto X.']);
     expect(buildClaudeArgs({ ...spec, append_system_prompt: null })).not.toContain('--append-system-prompt');
     expect(buildClaudeArgs({ ...spec, append_system_prompt: '' })).not.toContain('--append-system-prompt');
+  });
+
+  it('streams input, replays messages and loads the background hook only when asked', () => {
+    const args = buildClaudeArgs({ ...spec, stream_input: true });
+    const i = args.indexOf('--disallowed-tools');
+    expect(args.slice(i + 2, i + 7)).toEqual(['--input-format', 'stream-json', '--replay-user-messages', '--settings', CONCIERGE_SETTINGS]);
+    // The one-shot argv is exactly what it always was.
+    expect(buildClaudeArgs({ ...spec, stream_input: false })).toEqual(buildClaudeArgs(spec));
+    expect(buildClaudeArgs(spec)).not.toContain('--input-format');
+  });
+
+  it('puts the system prompt last in a streamed run too', () => {
+    const args = buildClaudeArgs({ ...spec, stream_input: true, append_system_prompt: 'foco' });
+    expect(args.slice(-2)).toEqual(['--append-system-prompt', 'foco']);
   });
 });
 
