@@ -1074,6 +1074,36 @@ describe('reset', () => {
     await running;
   });
 
+  it('closes a queued message whose launch lost the lock to it, instead of leaving it waiting for ever', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, repos, conversation } = build(() => (async function* () { await gate; yield delta('ok'); yield done(); })());
+    const first = await service.start(user, 'primeira');
+    const queued = await service.start(user, 'segunda'); // queued behind the one-shot run
+    // Park the queue's launch on its conversation read, and `reset` inside its lock.
+    let releaseRead!: () => void;
+    const readHeld = new Promise<void>((r) => (releaseRead = r));
+    vi.mocked(repos.chat.findByIdForUser).mockImplementationOnce(async () => {
+      await readHeld;
+      return conversation as never;
+    });
+    let releaseReset!: () => void;
+    const resetHeld = new Promise<void>((r) => (releaseReset = r));
+    vi.mocked(repos.chatActions.expireOpenForConversation).mockImplementationOnce(async () => {
+      await resetHeld;
+      return 0;
+    });
+    release();
+    await first.done; // its release launched the queue, now parked on the read
+    const resetting = service.reset(user, null);
+    await settled(); // reset holds the lock
+    releaseRead();
+    await settled(); // the launch saw the lock held and stepped back
+    releaseReset();
+    await resetting;
+    expect(await queued.done).toMatchObject({ error_code: 'HOST_GONE' });
+  });
+
   it('refuses a message typed while it archives, instead of queueing it into the old thread', async () => {
     const { service, repos, messages } = build([delta('ok'), done()]);
     let releaseArchive!: () => void;

@@ -256,6 +256,9 @@ export class ChatService {
     } finally {
       this.resetting.delete(current.id);
       this.running.delete(current.id);
+      // A queue launch that found this lock held stepped back, trusting a release to drain it: this is
+      // that release. The thread is archived now, so each queued message is closed with its reason.
+      if (this.queued.get(current.id)?.length) void this.launchQueued(user, current.id);
     }
     const fresh = await this.conversationFor(user, projectId);
     // The account-wide row owns the host (spec §3): a new thread is not a new machine or account, and
