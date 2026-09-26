@@ -7,7 +7,7 @@ import { ChatComposer } from './ChatComposer';
 /** The composer is controlled, and its autosize only runs when the value it is given changes. */
 function Harness({ onSend = () => {} }: { onSend?: () => void } = {}) {
   const [value, setValue] = useState('');
-  return <ChatComposer value={value} onChange={setValue} onSend={onSend} sending={false} />;
+  return <ChatComposer value={value} onChange={setValue} onSend={onSend} />;
 }
 
 afterEach(() => {
@@ -28,7 +28,7 @@ describe('ChatComposer', () => {
     // zoomed page is wider than the screen — which is what "tapping the box blows out the side"
     // was. jsdom neither zooms nor lays out, so the class is what can be pinned here; the effect
     // itself only shows on a device.
-    render(<ChatComposer value="" onChange={() => {}} onSend={() => {}} sending={false} />);
+    render(<ChatComposer value="" onChange={() => {}} onSend={() => {}} />);
     const box = screen.getByPlaceholderText(/pergunte/i);
     expect(box.className).toContain('text-base');
     expect(box.className).not.toContain('text-sm');
@@ -91,7 +91,7 @@ describe('ChatComposer', () => {
 
   it('refuses to send while the host cannot run it, says why, and still lets the message be typed', () => {
     const onSend = vi.fn();
-    render(<ChatComposer value="o que está rodando?" onChange={() => {}} onSend={onSend} sending={false} blockedReason="a máquina do chat está offline" />);
+    render(<ChatComposer value="o que está rodando?" onChange={() => {}} onSend={onSend} blockedReason="a máquina do chat está offline" />);
     const box = screen.getByPlaceholderText(/pergunte/i) as HTMLTextAreaElement;
     const button = screen.getByRole('button', { name: /enviar/i }) as HTMLButtonElement;
 

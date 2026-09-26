@@ -140,6 +140,17 @@ it('send answers at once and the thread grows only through events; deltas fold i
   expect(chat.getState().live).toEqual([]);
 });
 
+it('a second send while the first answer is still being written goes through', async () => {
+  const { chat, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const sent = jest.spyOn(api, 'sendMessage').mockResolvedValue({ conversation_id: 'c1', user_message_id: 'q', assistant_message_id: 'a' } as never);
+  await expect(chat.getState().send('primeira')).resolves.toBe(true);
+  // No run_finished yet: the first answer is still pending, and the box takes the next message.
+  await expect(chat.getState().send('segunda')).resolves.toBe(true);
+  expect(sent).toHaveBeenCalledTimes(2);
+  expect(chat.getState().error).toBeNull();
+});
+
 it('a 409 CHAT_BUSY says the chat is still answering; other errors show their own text', async () => {
   const { chat, api } = await setup();
   await openAndConnect(chat, 'p-termhub');

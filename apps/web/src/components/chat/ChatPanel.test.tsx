@@ -447,3 +447,50 @@ it("tab suggestion events add and update the card; another conversation's are ig
   onEvent({ type: 'tab_suggestion_closed', conversation_id: 'c_p1', suggestion: suggestion({ id: 's1', status: 'answered_in_tab' }) });
   expect(await screen.findByText('Respondida na aba')).toBeInTheDocument();
 });
+
+it('takes a second message while the first is still being answered, and shows both as pending', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c1', ai_account_id: null }, messages: [], actions: [], host: READY });
+  // The POST of a web send only answers when its answer is written: hold the first one open.
+  let finishFirst!: () => void;
+  sendMock.mockImplementationOnce(() => new Promise((r) => (finishFirst = () => r({ message: msg({ id: 'a1', role: 'assistant', text: 'um' }) }))));
+  sendMock.mockResolvedValueOnce({ message: msg({ id: 'a2', role: 'assistant', text: 'dois' }) });
+  render(
+    <MemoryRouter>
+      <ChatPanel />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalled());
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'primeira' } });
+  fireEvent.click(screen.getByRole('button', { name: /enviar/i }));
+  await waitFor(() => expect(sendMock).toHaveBeenCalledTimes(1));
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'segunda' } });
+  const button = screen.getByRole('button', { name: /enviar/i }) as HTMLButtonElement;
+  expect(button.disabled).toBe(false);
+  expect(screen.queryByText('aguarde a resposta terminar')).toBeNull();
+  fireEvent.click(button);
+  await waitFor(() => expect(sendMock).toHaveBeenCalledTimes(2));
+  expect(sendMock).toHaveBeenLastCalledWith('segunda');
+  finishFirst();
+});
+
+it('shows "pensando…" on every answer that has started, not only the newest', async () => {
+  chatMock.mockResolvedValue({
+    conversation: { id: 'c1', ai_account_id: null },
+    messages: [msg({ id: 'q1', text: 'um' }), msg({ id: 'a1', role: 'assistant' }), msg({ id: 'q2', text: 'dois' }), msg({ id: 'a2', role: 'assistant' })],
+    actions: [],
+    host: READY,
+  });
+  streamMock.mockReturnValue({
+    events: [
+      { type: 'message', conversation_id: 'c1', message: msg({ id: 'a1', role: 'assistant' }) },
+      { type: 'message', conversation_id: 'c1', message: msg({ id: 'a2', role: 'assistant' }) },
+    ],
+    connected: true,
+  });
+  render(
+    <MemoryRouter>
+      <ChatPanel />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(screen.getAllByText(/pensando/i)).toHaveLength(2));
+});
