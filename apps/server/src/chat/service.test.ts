@@ -1685,3 +1685,111 @@ describe('attachments on a message (spec 2026-09-26 §5.5)', () => {
     await service.send(user, 'de novo');
   });
 });
+
+describe('attachments on the always-free paths (TER-59)', () => {
+  const attachment = (over: Partial<AttachmentRow> = {}): AttachmentRow => ({
+    id: 'abc123', user_id: 'u1', conversation_id: 'c1', message_id: null, name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf', bytes: 10, sha256: 'h',
+    status: 'ready', error_code: null, extracted_text: 'SEGREDO', meta: { pages: 12 }, created_at: '2026-09-26T12:00:00.000Z', ...over,
+  });
+  const BLOCK = '- id=abc123 «relatorio.pdf» PDF, 12 páginas';
+
+  it('stream first turn', async () => {
+    const { service, runner } = build([], { streaming: true, attachments: [attachment()] });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+    const first = await service.start(user, 'um', { attachmentIds: ['abc123'] });
+    const run = await runAt(lr, 0);
+    expect(run.input.text).toContain(BLOCK);
+    expect(run.input.text).not.toContain('SEGREDO');
+    run.push(replayOf(run.input.text.trim()));
+    run.push(delta('ok'));
+    run.push(done());
+    await first.done;
+    run.end();
+  });
+
+  it('injected turn', async () => {
+    const { service, runner } = build([], { streaming: true, attachments: [attachment()] });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+    const first = await service.start(user, 'um');
+    const run = await runAt(lr, 0);
+    run.push(replayOf(run.input.text.trim()));
+    run.push(JSON.stringify({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 't1' }] }));
+    run.push(delta('a'));
+    run.push(done());
+    await first.done;
+    const second = await service.start(user, 'dois', { attachmentIds: ['abc123'] });
+    expect(lr.runs).toHaveLength(1);
+    const injected = lr.runs[0].written.at(-1)!;
+    expect(JSON.parse(injected).message.content).toContain(BLOCK);
+    expect(injected).not.toContain('SEGREDO');
+    run.push(replayOf(injected));
+    run.push(delta('b'));
+    run.push(done());
+    await second.done;
+    run.end();
+  });
+
+  it('injected turn with a bad id is 409 and nothing is written', async () => {
+    const { service, runner, messages } = build([], { streaming: true, attachments: [attachment({ user_id: 'u2' })] });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+    const first = await service.start(user, 'um');
+    const run = await runAt(lr, 0);
+    run.push(replayOf(run.input.text.trim()));
+    run.push(JSON.stringify({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 't1' }] }));
+    run.push(delta('a'));
+    run.push(done());
+    await first.done;
+    const before = messages.length;
+    const writtenBefore = lr.runs[0].written.length;
+    await expect(service.start(user, 'dois', { attachmentIds: ['abc123'] })).rejects.toMatchObject({ statusCode: 409, code: 'ATTACHMENT_UNAVAILABLE' });
+    expect(messages.length).toBe(before);
+    expect(lr.runs[0].written.length).toBe(writtenBefore);
+    run.end();
+  });
+
+  it('queued turn on a streamed host (input closed)', async () => {
+    const { service, runner } = build([], { streaming: true, attachments: [attachment()] });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+    const first = await service.start(user, 'um');
+    const run = await runAt(lr, 0);
+    run.push(replayOf(run.input.text.trim()));
+    run.push(delta('ok'));
+    run.push(done());
+    await first.done;
+    await settled();
+    const late = await service.start(user, 'dois', { attachmentIds: ['abc123'] });
+    run.end();
+    await vi.waitFor(() => expect(lr.runs).toHaveLength(2));
+    const next = lr.runs[1];
+    expect(next.input.text).toContain(BLOCK);
+    expect(next.input.text).toContain('dois');
+    next.push(replayOf(next.input.text.trim()));
+    next.push(delta('r'));
+    next.push(done());
+    await late.done;
+    next.end();
+  });
+
+  it('queued turn on an old agent (one-shot)', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, runner, messages } = build([], { attachments: [attachment()] });
+    vi.mocked(runner.run)
+      .mockImplementationOnce(() => (async function* () { await gate; yield delta('um'); yield done(); })())
+      .mockImplementationOnce(() => (async function* () { yield delta('dois'); yield done(); })());
+    const first = await service.start(user, 'primeira');
+    const second = await service.start(user, 'segunda', { attachmentIds: ['abc123'] });
+    const q = messages.find((m) => m.text === 'segunda')!;
+    expect(q).toBeTruthy();
+    release();
+    await first.done;
+    await second.done;
+    const text = vi.mocked(runner.run).mock.calls[1][0].text;
+    expect(text).toContain(BLOCK);
+    expect(text.endsWith('segunda')).toBe(true);
+  });
+});
