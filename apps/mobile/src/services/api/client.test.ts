@@ -21,6 +21,9 @@ function scripted(answers: Array<{ status: number; headers?: Record<string, stri
     connect: () => {
       throw new Error('not in this test');
     },
+    upload: () => {
+      throw new Error('not in this test');
+    },
   };
   return { transport, calls };
 }
@@ -38,6 +41,9 @@ function deferredTransport() {
         resolvers.push(resolve);
       }),
     connect: () => {
+      throw new Error('not in this test');
+    },
+    upload: () => {
       throw new Error('not in this test');
     },
   };
@@ -228,6 +234,9 @@ describe('events()', () => {
         connects.push({ url, headers });
         handlers = h;
         return { close };
+      },
+      upload: () => {
+        throw new Error('not in this test');
       },
     };
     return { transport, connects, close, handlers: () => handlers! };
@@ -560,4 +569,57 @@ describe('events()', () => {
       jest.useRealTimers();
     }
   });
+});
+
+it('transcribe uploads the clip as a raw POST with the bearer, a DPoP proof over the bare path and the audio mime; the accepted job comes back', async () => {
+  const uploads: Array<{ url: string; fileUri: string; mime: string; headers: Record<string, string> }> = [];
+  const transport: Transport = {
+    fetch: async () => {
+      throw new Error('not in this test');
+    },
+    connect: () => {
+      throw new Error('not in this test');
+    },
+    upload: async (url, fileUri, mime, headers, onProgress) => {
+      uploads.push({ url, fileUri, mime, headers });
+      onProgress?.(1);
+      return { status: 202, body: JSON.stringify({ transcription: { id: 'job1', status: 'pending' } }) };
+    },
+  };
+  const api = make(transport);
+  const progress: number[] = [];
+  const job = await api.transcribe({ accessToken: 'tok' }, 'file:///cache/clip.m4a', 'audio/m4a', 12.4, (f) => progress.push(f));
+  expect(job).toEqual({ id: 'job1', status: 'pending' });
+  expect(uploads[0]).toMatchObject({ url: 'https://termhub.dev/api/m/v1/transcriptions?seconds=12', fileUri: 'file:///cache/clip.m4a', mime: 'audio/m4a' });
+  expect(uploads[0]!.headers['X-Termhub-App']).toBe('ios/0.1.0+1');
+  expect(uploads[0]!.headers.Authorization).toBe('Bearer tok');
+  expect(dpopPayload(uploads[0]!.headers.DPoP!)).toMatchObject({ htm: 'POST', htu: 'https://termhub.dev/api/m/v1/transcriptions', ath: b64url(sha256(utf8('tok'))) });
+  expect(progress).toEqual([1]);
+});
+
+it('a non-2xx upload answer is an ApiError from its body; a 401 TOKEN_EXPIRED renews once and retries', async () => {
+  const statuses = [400];
+  const bodies: unknown[] = [{ error: 'Formato de áudio não aceito', code: 'BAD_REQUEST' }];
+  const uploads: string[] = [];
+  const transport: Transport = {
+    fetch: async () => {
+      throw new Error('not in this test');
+    },
+    connect: () => {
+      throw new Error('not in this test');
+    },
+    upload: async (_url, _fileUri, _mime, headers) => {
+      uploads.push(headers.Authorization!);
+      return { status: statuses.shift()!, body: JSON.stringify(bodies.shift()) };
+    },
+  };
+  const renew = jest.fn(async () => 'fresh' as string | null);
+  const api = make(transport, renew);
+  await expect(api.transcribe({ accessToken: 'tok' }, 'file:///cache/clip.m4a', 'audio/m4a', 1)).rejects.toMatchObject({ status: 400, code: 'BAD_REQUEST', message: 'Formato de áudio não aceito' });
+
+  statuses.push(401, 202);
+  bodies.push({ error: 'Sessão expirada.', code: 'TOKEN_EXPIRED' }, { transcription: { id: 'job2', status: 'pending' } });
+  await expect(api.transcribe({ accessToken: 'tok' }, 'file:///cache/clip.m4a', 'audio/m4a', 1)).resolves.toEqual({ id: 'job2', status: 'pending' });
+  expect(renew).toHaveBeenCalledTimes(1);
+  expect(uploads).toEqual(['Bearer tok', 'Bearer tok', 'Bearer fresh']);
 });

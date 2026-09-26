@@ -121,6 +121,25 @@ export const errorBody = z.object({
 /** Routes that answer `{}` / `204` (`revokeSelf`, `setPushToken`, `decide`, `markRead`). */
 export const emptyResponse = z.object({}).passthrough();
 
+/** `POST transcriptions` (`202`) and `GET transcriptions/:id`: the server's `TranscriptionView`
+ * (`apps/server/src/terminal/transcription.ts`), the same object the web polls. */
+export const transcriptionSchema = z.object({
+  id: z.string(),
+  status: z.enum(['pending', 'done', 'error']),
+  text: z.string().optional(),
+  /** audio length in seconds */
+  duration: z.number().optional(),
+  error: z.string().optional(),
+  code: z.string().optional(),
+  /** pending only: estimated seconds until the text is ready */
+  eta_seconds: z.number().optional(),
+  /** pending only: 0..1 share of the estimated time already elapsed */
+  progress: z.number().optional(),
+});
+export const transcriptionResponse = z.object({ transcription: transcriptionSchema });
+/** `GET transcriptions/config`: whether the server transcribes audio at all. */
+export const transcriptionConfigResponse = z.object({ enabled: z.boolean() });
+
 // `z.infer` companions for every schema of the contract, prefixed `T` — including the ones of
 // `@termhub/mobile-api`, which exports its schemas but not these app-side type names.
 export type TVerificationCode = z.infer<typeof verificationCodeSchema>;
@@ -171,3 +190,6 @@ export type TSetHostBody = z.infer<typeof setHostBody>;
 export type TResetBody = z.infer<typeof resetBody>;
 export type TErrorBody = z.infer<typeof errorBody>;
 export type TEmptyResponse = z.infer<typeof emptyResponse>;
+export type TTranscription = z.infer<typeof transcriptionSchema>;
+export type TTranscriptionResponse = z.infer<typeof transcriptionResponse>;
+export type TTranscriptionConfigResponse = z.infer<typeof transcriptionConfigResponse>;

@@ -27,6 +27,8 @@ import type {
   TTabSuggestionSendBody,
   TTokenBody,
   TTokenResponse,
+  TTranscription,
+  TTranscriptionConfigResponse,
 } from './contract';
 
 /**
@@ -80,6 +82,16 @@ export interface MobileApi {
   sendTabSuggestion(auth: Auth, suggestionId: string, body: TTabSuggestionSendBody): Promise<void>;
   /** "Dispensar": closes the card, the tab is not touched. Idempotent; 404 unknown. */
   dismissTabSuggestion(auth: Auth, suggestionId: string): Promise<void>;
+
+  // voice (P§6 `/transcriptions`, guarded `terminals`; `routes/m-transcriptions.ts`)
+  /** Whether the server transcribes audio at all (whisper configured). */
+  transcriptionConfig(auth: Auth): Promise<TTranscriptionConfigResponse>;
+  /** Uploads a clip (a `file://` URI, one of the server's accepted audio types) as the raw body;
+   * `seconds` is the recorded length (at most 300). Answers the accepted job, to be polled with
+   * `transcription` until `done` or `error`. 400 for an empty clip or a mime the server refuses,
+   * 429 past 10 uploads per 10 min. */
+  transcribe(auth: Auth, fileUri: string, mime: string, seconds: number, onProgress?: (fraction: number) => void): Promise<TTranscription>;
+  transcription(auth: Auth, id: string): Promise<TTranscription>;
 
   // notifications (P§9)
   notifications(auth: Auth, before?: string): Promise<TNotificationsResponse>;

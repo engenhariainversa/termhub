@@ -22,6 +22,8 @@ import {
   sendAccepted,
   tabQuestionScreenResponse,
   tokenResponse,
+  transcriptionConfigResponse,
+  transcriptionResponse,
   type TChallengeBody,
   type TDeviceActivateBody,
   type TDeviceRequestBody,
@@ -142,6 +144,21 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
   // and pinning T's Input parameter to T too — what `z.ZodType<T>` does — makes inference pick up that
   // narrower Input, so callers below end up with an optional field TypeScript then refuses to hand to
   // `MobileApi`'s (output-typed) return type. Leaving Input as `any` infers T from Output alone.
+  /** A 2xx body: JSON that matches `schema`. Anything else — a captive portal, a Cloudflare
+   * interstitial, a shape this build does not know — is one `BAD_RESPONSE`, never a raw SyntaxError
+   * quoting arbitrary response text. */
+  function decode<T>(text: string, schema: z.ZodType<T, z.ZodTypeDef, any>): T {
+    let json: unknown;
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      throw new ApiError(502, 'BAD_RESPONSE', 'Resposta inesperada do servidor');
+    }
+    const parsed = schema.safeParse(json);
+    if (!parsed.success) throw new ApiError(502, 'BAD_RESPONSE', 'Resposta inesperada do servidor');
+    return parsed.data;
+  }
+
   async function call<T>(htm: string, path: string, schema: z.ZodType<T, z.ZodTypeDef, any>, opts: CallOptions = {}): Promise<T> {
     const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json' };
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
@@ -156,20 +173,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     });
     learn(res.headers);
 
-    if (res.status >= 200 && res.status < 300) {
-      let json: unknown;
-      try {
-        json = res.text ? JSON.parse(res.text) : {};
-      } catch {
-        // A non-JSON 2xx body (a captive portal, a Cloudflare interstitial, ...) is the same
-        // "the server answered something we don't understand" case as a body that parses but
-        // does not match the schema — never a raw SyntaxError quoting arbitrary response text.
-        throw new ApiError(502, 'BAD_RESPONSE', 'Resposta inesperada do servidor');
-      }
-      const parsed = schema.safeParse(json);
-      if (!parsed.success) throw new ApiError(502, 'BAD_RESPONSE', 'Resposta inesperada do servidor');
-      return parsed.data;
-    }
+    if (res.status >= 200 && res.status < 300) return decode(res.text, schema);
 
     const err = ApiError.fromBody(res.status, res.headers, res.text);
     if (err.status === 401 && err.code === 'TOKEN_EXPIRED' && opts.token && opts.retry !== false) {
@@ -182,6 +186,25 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       if (fresh) {
         latestToken = fresh;
         return call(htm, path, schema, { ...opts, token: fresh, retry: false });
+      }
+    }
+    throw err;
+  }
+
+  /** `call` for a raw-body upload through `Transport.upload`: bearer, DPoP over the bare path (the
+   * query is not part of the proof, `canonicalHtu` drops it), the same single retry on a renewed
+   * token. Only ever with a token: nothing is uploaded before enrolment. */
+  async function uploadCall<T>(path: string, fileUri: string, mime: string, schema: z.ZodType<T, z.ZodTypeDef, any>, token: string, onProgress?: (fraction: number) => void, retry = true): Promise<T> {
+    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json', Authorization: `Bearer ${token}`, DPoP: await proofFor('POST', path, token) };
+    const res = await o.transport.upload(o.baseUrl + path, fileUri, mime, headers, onProgress);
+    if (res.status >= 200 && res.status < 300) return decode(res.body, schema);
+
+    const err = ApiError.fromBody(res.status, {}, res.body);
+    if (err.status === 401 && err.code === 'TOKEN_EXPIRED' && retry) {
+      const fresh = latestToken && latestToken !== token ? latestToken : await renewOnce();
+      if (fresh) {
+        latestToken = fresh;
+        return uploadCall(path, fileUri, mime, schema, fresh, onProgress, false);
       }
     }
     throw err;
@@ -229,6 +252,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     sendTabSuggestion: (a: Auth, id: string, body: TTabSuggestionSendBody) =>
       empty('POST', `/api/m/v1/chat/tab-suggestions/${encodeURIComponent(id)}/send`, { token: a.accessToken, body }),
     dismissTabSuggestion: (a: Auth, id: string) => empty('POST', `/api/m/v1/chat/tab-suggestions/${encodeURIComponent(id)}/dismiss`, { token: a.accessToken, body: {} }),
+    transcriptionConfig: (a: Auth) => call('GET', '/api/m/v1/transcriptions/config', transcriptionConfigResponse, { token: a.accessToken }),
+    transcribe: (a: Auth, fileUri, mime, seconds, onProgress) =>
+      uploadCall(`/api/m/v1/transcriptions?seconds=${Math.round(seconds)}`, fileUri, mime, transcriptionResponse, a.accessToken, onProgress).then((r) => r.transcription),
+    transcription: (a: Auth, id) => call('GET', `/api/m/v1/transcriptions/${encodeURIComponent(id)}`, transcriptionResponse, { token: a.accessToken }).then((r) => r.transcription),
 
     notifications: (a: Auth, before?: string) =>
       call('GET', `/api/m/v1/notifications${before ? `?before=${encodeURIComponent(before)}` : ''}`, notificationsResponse, {

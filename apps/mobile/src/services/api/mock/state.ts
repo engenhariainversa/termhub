@@ -124,6 +124,13 @@ export type MockTabQuestion = TTabQuestion & { conversation_id: string };
 /** A tab's suggestion (spec 2026-09-25 tab suggestions): the wire shape plus the conversation it was pushed into. */
 export type MockTabSuggestion = TTabSuggestion & { conversation_id: string };
 
+/** A voice clip accepted by `POST transcriptions`: "transcribed" on its second poll. */
+export interface MockTranscription {
+  id: string;
+  seconds: number;
+  polls: number;
+}
+
 export interface MockState {
   requests: Map<string, MockDeviceRequest>;
   devices: Map<string, MockDevice>;
@@ -145,6 +152,7 @@ export interface MockState {
   tabQuestions: MockTabQuestion[];
   /** Oldest first; closed rows stay (a second send is a 409, as on the server). */
   tabSuggestions: MockTabSuggestion[];
+  transcriptions: Map<string, MockTranscription>;
   /** Oldest first (push order); routes read it newest-first by reversing. */
   notifications: MockNotification[];
   /** The conversation currently "live" for a project (or, keyed by `null`, the account-wide
@@ -169,6 +177,7 @@ export function createMockState(): MockState {
     grants: [],
     tabQuestions: [],
     tabSuggestions: [],
+    transcriptions: new Map(),
     notifications: [],
     activeConversation: new Map(),
     busyProjects: new Set(),
