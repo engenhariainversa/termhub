@@ -215,4 +215,124 @@ describe('ChatComposer attachments', () => {
     const img = (await screen.findByAltText('foto.png')) as HTMLImageElement;
     expect(img.src).toContain('blob:thumb');
   });
+
+  it('names and sizes an uploaded chip after what the server stored, since an image goes up downscaled', async () => {
+    uploadMock.mockResolvedValue({ attachment: att({ id: 'att1', kind: 'image', name: 'foto.jpg', bytes: 3, status: 'ready' }) });
+    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+
+    addFiles([new File([new Uint8Array(10)], 'foto.png', { type: 'image/png' })]);
+    expect(await screen.findByText('foto.jpg')).toBeTruthy();
+    expect(screen.getByText('3 B')).toBeTruthy();
+    expect(screen.queryByText('foto.png')).toBeNull();
+    expect(screen.queryByText('10 B')).toBeNull();
+  });
+
+  it('revokes the thumbnail object URL when the chip is removed, and when its message is sent', async () => {
+    uploadMock.mockResolvedValue({ attachment: att({ id: 'att1', kind: 'image', name: 'foto.png', status: 'ready' }) });
+    const revoke = URL.revokeObjectURL as unknown as ReturnType<typeof vi.fn>;
+    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+
+    addFiles([new File([new Uint8Array(10)], 'foto.png', { type: 'image/png' })]);
+    await screen.findByAltText('foto.png');
+    fireEvent.click(screen.getByRole('button', { name: 'Remover foto.png' }));
+    expect(revoke).toHaveBeenCalledWith('blob:thumb');
+
+    revoke.mockClear();
+    addFiles([new File([new Uint8Array(10)], 'foto.png', { type: 'image/png' })]);
+    await waitFor(() => expect(sendButton().disabled).toBe(false));
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith('blob:thumb'));
+  });
+
+  it('aborts an upload still in flight when the box unmounts', async () => {
+    let signal!: AbortSignal;
+    uploadMock.mockImplementation((_f: Blob, _n: string, _p: unknown, _cb: unknown, s: AbortSignal) => {
+      signal = s;
+      return new Promise(() => {});
+    });
+    const { unmount } = render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+
+    addFiles([pdf()]);
+    await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(1));
+    expect(signal.aborted).toBe(false);
+    unmount();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('clears the "no máximo" notice once a chip is removed', async () => {
+    // The chip takes the server's name once uploaded, so the stand-in answers with the file's own.
+    uploadMock.mockImplementation((_f: Blob, name: string) => Promise.resolve({ attachment: att({ id: `att_${name}`, name, status: 'ready' }) }));
+    render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} />);
+
+    addFiles([1, 2, 3, 4, 5, 6].map((n) => pdf(`a${n}.pdf`)));
+    expect(await screen.findByText('No máximo 5 anexos por mensagem')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remover a1.pdf' }));
+    expect(screen.queryByText('No máximo 5 anexos por mensagem')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Anexar arquivo' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('a refused send puts the chips back in front of what was added meanwhile, and drops the surplus like ✕ would', async () => {
+    // a and b are taken by the send; c..g are added while it is pending. Back in the box the limit
+    // holds: a b c d e stay, f (uploaded) is deleted on the server and g (still on the wire) is aborted.
+    let gSignal!: AbortSignal;
+    uploadMock.mockImplementation((_f: Blob, name: string, _p: unknown, _cb: unknown, s: AbortSignal) => {
+      if (name === 'g.pdf') {
+        gSignal = s;
+        return new Promise(() => {});
+      }
+      return Promise.resolve({ attachment: att({ id: `att_${name}`, name, status: 'ready' }) });
+    });
+    let refuse!: (ok: boolean) => void;
+    const onSend = vi.fn(() => new Promise<boolean>((resolve) => (refuse = resolve)));
+    render(<ChatComposer onSend={onSend} sending={false} blockedReason={null} />);
+
+    addFiles([pdf('a.pdf'), pdf('b.pdf')]);
+    await waitFor(() => expect(sendButton().disabled).toBe(false));
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith('', ['att_a.pdf', 'att_b.pdf']));
+    expect(screen.queryByText('a.pdf')).toBeNull();
+
+    addFiles(['c', 'd', 'e', 'f', 'g'].map((n) => pdf(`${n}.pdf`)));
+    await screen.findByText('f.pdf');
+    await waitFor(() => expect(gSignal).toBeTruthy());
+
+    await act(async () => refuse(false));
+    await screen.findByText('a.pdf');
+    expect(screen.getAllByRole('button', { name: /^Remover / }).map((b) => b.getAttribute('aria-label'))).toEqual(['Remover a.pdf', 'Remover b.pdf', 'Remover c.pdf', 'Remover d.pdf', 'Remover e.pdf']);
+    await waitFor(() => expect(removeMock).toHaveBeenCalledWith('att_f.pdf'));
+    expect(gSignal.aborted).toBe(true);
+    expect(removeMock).not.toHaveBeenCalledWith('att_a.pdf');
+  });
+
+  it('moves an uploaded chip from "processando…" to the status the panel feeds it', async () => {
+    uploadMock.mockResolvedValue({ attachment: att({ id: 'att1' }) });
+    const { rerender } = render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} attachmentStatuses={{}} />);
+
+    addFiles([pdf()]);
+    expect(await screen.findByText('processando…')).toBeTruthy();
+
+    rerender(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} attachmentStatuses={{ att1: att({ id: 'att1', status: 'ready' }) }} />);
+    await waitFor(() => expect(screen.queryByText('processando…')).toBeNull());
+    expect(screen.getByText('relatorio.pdf')).toBeTruthy();
+
+    rerender(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} attachmentStatuses={{ att1: att({ id: 'att1', status: 'failed', error_code: 'ATTACHMENT_INVALID' }) }} />);
+    expect(await screen.findByText('falhou: arquivo inválido')).toBeTruthy();
+  });
+
+  it('takes a status that arrived before the upload itself answered', async () => {
+    // A small text file can be extracted before the client has read the upload's response: the
+    // chip must not settle on the response's "pending" and then wait for an event already gone by.
+    let resolveUpload!: (v: { attachment: ChatAttachment }) => void;
+    uploadMock.mockImplementation(() => new Promise((resolve) => (resolveUpload = resolve)));
+    const { rerender } = render(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} attachmentStatuses={{}} />);
+
+    addFiles([pdf()]);
+    await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(1));
+    rerender(<ChatComposer onSend={async () => true} sending={false} blockedReason={null} attachmentStatuses={{ att1: att({ id: 'att1', status: 'ready' }) }} />);
+    await act(async () => {
+      resolveUpload({ attachment: att({ id: 'att1' }) });
+    });
+    await waitFor(() => expect(sendButton().disabled).toBe(false));
+    expect(screen.queryByText('processando…')).toBeNull();
+  });
 });

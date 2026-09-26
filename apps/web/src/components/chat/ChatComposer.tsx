@@ -28,6 +28,12 @@ export interface ChatComposerProps {
   status?: string | null;
   /** The project whose chat this is; travels with every upload so the file lands in that conversation. */
   projectId?: string | null;
+  /**
+   * The latest `attachment_status` the panel saw for each attachment, by id. A chip whose upload has
+   * landed learns from it that the server finished with the file ("processando…" goes) or gave up
+   * ("falhou: …"); the panel keeps the socket, so it is the panel that hears the event.
+   */
+  attachmentStatuses?: Readonly<Record<string, ChatAttachment>>;
 }
 
 const MIN_ROWS = 1;
@@ -94,17 +100,35 @@ function revokePreview(d: DraftAttachment) {
 }
 
 /**
+ * What ✕ does to a chip, wherever the chip goes for good: its thumbnail is released, an upload on the
+ * wire is aborted, and one already on the server is deleted there too, quietly — the sweep would get
+ * it anyway after 24 h.
+ */
+function discard(d: DraftAttachment) {
+  revokePreview(d);
+  if (d.phase === 'uploading') d.controller?.abort();
+  else if (d.phase === 'uploaded' && d.attachment) void api.chat.attachments.remove(d.attachment.id).catch(() => undefined);
+}
+
+/** Whether a status the panel heard says something this chip's attachment does not already say. */
+function newsFor(current: ChatAttachment, heard: ChatAttachment | undefined): heard is ChatAttachment {
+  return heard !== undefined && (heard.status !== current.status || heard.error_code !== current.error_code);
+}
+
+/**
  * The chips of the box (spec §5.6): each file uploads the moment it is added, with progress; ✕ aborts
  * or deletes; a message can only leave once every chip has landed. Lives here, not in `ChatPanel`, for
  * the same reason the text does: a percentage ticking must not re-render the thread.
  */
-function useAttachmentDrafts(projectId: string | null | undefined) {
+function useAttachmentDrafts(projectId: string | null | undefined, statuses: Readonly<Record<string, ChatAttachment>> | undefined) {
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
-  /** The one line the box has to say about a batch of files ("No máximo 5…"); cleared on the next add. */
+  /** The one line the box has to say about a batch of files ("No máximo 5…"); cleared on the next add or remove. */
   const [notice, setNotice] = useState<string | null>(null);
   const seq = useRef(0);
   const latest = useRef(drafts);
   latest.current = drafts;
+  const heard = useRef(statuses);
+  heard.current = statuses;
 
   const patch = useCallback((key: string, p: Partial<DraftAttachment>) => setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...p } : d))), []);
 
@@ -116,8 +140,12 @@ function useAttachmentDrafts(projectId: string | null | undefined) {
         const body = draft.kind === 'image' ? await downscaleImage(draft.file) : draft.file;
         if (controller.signal.aborted) return;
         const name = body === draft.file ? draft.name : body.name;
-        const { attachment } = await api.chat.attachments.upload(body, name, projectId ?? null, (fraction) => patch(draft.key, { progress: fraction }), controller.signal);
-        patch(draft.key, { phase: 'uploaded', progress: 1, attachment, controller: null });
+        const { attachment: stored } = await api.chat.attachments.upload(body, name, projectId ?? null, (fraction) => patch(draft.key, { progress: fraction }), controller.signal);
+        // A small file can be extracted before this response is read: a status heard meanwhile is
+        // the newer word. The name and size are the server's (an image went up downscaled).
+        const status = heard.current?.[stored.id];
+        const attachment = newsFor(stored, status) ? status : stored;
+        patch(draft.key, { phase: 'uploaded', progress: 1, attachment, name: attachment.name, bytes: attachment.bytes, controller: null });
       } catch (e) {
         // Aborted by ✕: the chip is already gone, nothing to report.
         if (e instanceof ApiError && e.code === 'ABORTED') return;
@@ -126,6 +154,23 @@ function useAttachmentDrafts(projectId: string | null | undefined) {
     },
     [patch, projectId],
   );
+
+  // The statuses the panel hears over the socket, applied to the chips that have landed. The list is
+  // only replaced when some chip has news, so a status for a chip already sent re-renders nothing.
+  useEffect(() => {
+    if (!statuses) return;
+    setDrafts((prev) => {
+      let changed = false;
+      const next = prev.map((d) => {
+        if (d.phase !== 'uploaded' || !d.attachment) return d;
+        const status = statuses[d.attachment.id];
+        if (!newsFor(d.attachment, status)) return d;
+        changed = true;
+        return { ...d, attachment: status };
+      });
+      return changed ? next : prev;
+    });
+  }, [statuses]);
 
   const add = useCallback(
     (files: Iterable<File>) => {
@@ -164,10 +209,9 @@ function useAttachmentDrafts(projectId: string | null | undefined) {
     const draft = latest.current.find((d) => d.key === key);
     if (!draft) return;
     setDrafts((prev) => prev.filter((d) => d.key !== key));
-    revokePreview(draft);
-    if (draft.phase === 'uploading') draft.controller?.abort();
-    // Already on the server: delete it there too, quietly — the sweep would get it anyway.
-    else if (draft.phase === 'uploaded' && draft.attachment) void api.chat.attachments.remove(draft.attachment.id).catch(() => undefined);
+    // The cap's notice was about a box that is one chip lighter now.
+    setNotice(null);
+    discard(draft);
   }, []);
 
   const retry = useCallback(
@@ -181,7 +225,9 @@ function useAttachmentDrafts(projectId: string | null | undefined) {
   /**
    * Takes the chips out of the box the moment the message leaves, the way the text goes (see
    * `onSend`): `commit` lets them go once the message is in, `restore` puts them back in front of
-   * whatever was added meanwhile when it was not — capped at the limit, the surplus dropped.
+   * whatever was added meanwhile when it was not — capped at the limit, the surplus (the newest of
+   * what was added meanwhile) dropped the way ✕ drops a chip: aborted or deleted, never left on the
+   * server as an orphan the sweep has to find.
    */
   const take = useCallback(() => {
     const taken = latest.current;
@@ -192,11 +238,10 @@ function useAttachmentDrafts(projectId: string | null | undefined) {
         for (const d of taken) revokePreview(d);
       },
       restore() {
-        setDrafts((current) => {
-          const merged = [...taken, ...current];
-          for (const d of merged.slice(MAX_ATTACHMENTS_PER_MESSAGE)) revokePreview(d);
-          return merged.slice(0, MAX_ATTACHMENTS_PER_MESSAGE);
-        });
+        // Read outside the updater, whose body must stay pure: aborting and deleting are effects.
+        const merged = [...taken, ...latest.current];
+        for (const d of merged.slice(MAX_ATTACHMENTS_PER_MESSAGE)) discard(d);
+        setDrafts(merged.slice(0, MAX_ATTACHMENTS_PER_MESSAGE));
       },
     };
   }, []);
@@ -230,11 +275,11 @@ function useAttachmentDrafts(projectId: string | null | undefined) {
  * where Enter is how every other line got started); Shift+Enter is always a newline, on either. Either
  * way it can only send what the button itself would send.
  */
-export function ChatComposer({ onSend, blockedReason, status, projectId }: ChatComposerProps) {
+export function ChatComposer({ onSend, blockedReason, status, projectId, attachmentStatuses }: ChatComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
-  const attachments = useAttachmentDrafts(projectId);
+  const attachments = useAttachmentDrafts(projectId, attachmentStatuses);
   const uploading = attachments.drafts.some((d) => d.phase === 'uploading');
   const uploadedIds = useMemo(() => attachments.drafts.flatMap((d) => (d.phase === 'uploaded' && d.attachment ? [d.attachment.id] : [])), [attachments.drafts]);
   /** A chip that is not a refusal counts as content: a box with one is a box about to send. */
