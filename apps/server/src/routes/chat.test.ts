@@ -8,6 +8,7 @@ const pendingAction = { id: 'act1', conversation_id: 'c1', tool: 'send_input', a
 
 function build(opts: {
   send?: ReturnType<typeof vi.fn>;
+  start?: ReturnType<typeof vi.fn>;
   resumeAfterDecision?: ReturnType<typeof vi.fn>;
   reset?: ReturnType<typeof vi.fn>;
   decide?: ReturnType<typeof vi.fn>;
@@ -44,9 +45,11 @@ function build(opts: {
   // `string | null` here, and the `/host` guard's `!== null` check must be exercised against that same
   // shape, not against a fixture that happens to satisfy it by omission.
   const conversationFor = opts.conversationFor ?? vi.fn(async () => ({ id: 'c1', user_id: 'u1', review_mode: false, machine_id: 'm1', ai_account_id: null, cli_session_id: null }));
+  const start = opts.start ?? vi.fn(async () => ({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'ma', done: new Promise(() => {}) }));
   const service = {
     conversationFor,
     send,
+    start,
     resumeAfterDecision,
     reset,
     hostFor: opts.hostFor ?? vi.fn(async () => ({ kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null })),
@@ -95,7 +98,7 @@ function build(opts: {
     (req as unknown as { scope: unknown }).scope = { user: { id: 'u1' }, viewAs: { kind: 'self' }, ownerId: 'u1', createAs: 'u1' };
   });
   app.register((a) => chatRoutes(a, repos as never, { service: service as never }), { prefix: '/chat' });
-  return { app, service, decide, findByIdForUser, listByConversation, resumeAfterDecision, setHost, send, repos };
+  return { app, service, decide, findByIdForUser, listByConversation, resumeAfterDecision, setHost, send, start, repos };
 }
 
 it('returns the conversation with its messages', async () => {
@@ -218,6 +221,56 @@ it('sends a message and answers with the assistant row', async () => {
   expect(res.statusCode).toBe(201);
   expect(res.json().message.text).toBe('Nada rodando.');
   expect(service.send.mock.calls[0][1]).toBe('o que está rodando?');
+});
+
+it('answers 202 with the three ids at once when the page says it will not wait', async () => {
+  let resolve!: (m: unknown) => void;
+  const done = new Promise((r) => (resolve = r));
+  const start = vi.fn(async () => ({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'ma', done }));
+  const { app, send } = build({ start });
+  const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', project_id: 'p1', wait: false } });
+  expect(res.statusCode).toBe(202);
+  expect(res.json()).toEqual({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'ma' });
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'oi', { projectId: 'p1' });
+  expect(send).not.toHaveBeenCalled();
+  resolve({ id: 'ma' });
+});
+
+it('a run that fails after the 202 never becomes an unhandled rejection', async () => {
+  const unhandled = vi.fn();
+  process.on('unhandledRejection', unhandled);
+  try {
+    let reject!: (e: unknown) => void;
+    const done = new Promise((_r, rej) => (reject = rej));
+    const { app } = build({ start: vi.fn(async () => ({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'ma', done })) });
+    const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', wait: false } });
+    expect(res.statusCode).toBe(202);
+    reject(new HttpError(502, 'O concierge não respondeu', 'CONCIERGE_FAILED'));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(unhandled).not.toHaveBeenCalled();
+  } finally {
+    process.off('unhandledRejection', unhandled);
+  }
+});
+
+it('a refusal from start still answers with its own status when the page does not wait', async () => {
+  const { app } = build({ start: vi.fn(async () => { throw new HttpError(409, 'Esta conversa foi encerrada; envie de novo para começar a nova conversa', 'CHAT_ARCHIVED'); }) });
+  const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', wait: false } });
+  expect(res.statusCode).toBe(409);
+  expect(res.json().code).toBe('CHAT_ARCHIVED');
+});
+
+it('without the flag, still waits for the answer and never calls start', async () => {
+  const { app, start } = build();
+  const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi' } });
+  expect(res.statusCode).toBe(201);
+  expect(res.json().message.text).toBe('Nada rodando.');
+  expect(start).not.toHaveBeenCalled();
+});
+
+it('rejects a wait flag that is not a boolean', async () => {
+  const { app } = build();
+  expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', wait: 'no' } })).statusCode).toBe(400);
 });
 
 it('rejects an empty or oversized message', async () => {

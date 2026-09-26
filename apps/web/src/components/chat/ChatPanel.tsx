@@ -460,9 +460,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     stick.current = true;
     setInFlight((n) => n + 1);
     setError(null);
-    // Cleared before the request, not after: the POST only resolves when the whole answer is
-    // written, which can take a minute, and a box that keeps the sent text that long reads as a
-    // chat that swallowed the message. On failure the text comes back below.
+    // Cleared before the request, not after: a box that keeps the sent text until the server answers
+    // reads as a chat that swallowed the message. The POST returns as soon as the message is stored
+    // (the answer streams over the socket); on a refusal the text comes back below.
     setText('');
     try {
       // No project = the account-wide chat: called with no second argument, for the same reason as

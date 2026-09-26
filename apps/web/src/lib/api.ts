@@ -183,10 +183,13 @@ export const api = {
    */
   setChatHost: (machineId: string, aiAccountId?: string | null) =>
     request<{ conversation: ChatConversation; host: ChatHostState }>('POST', '/chat/host', { machine_id: machineId, ai_account_id: aiAccountId ?? null }),
-  /** 400 for empty/over-8000-char text; 409 CHAT_BUSY (its pt-BR message shown as-is) while a previous
-   *  answer is still running; 409 CHAT_NO_MACHINE / CHAT_HOST_NOT_CHOSEN / CHAT_HOST_OFFLINE /
-   *  CHAT_AGENT_TOO_OLD when the host cannot run it (each with its own pt-BR sentence) */
-  sendChatMessage: (text: string, projectId?: string | null) => request<{ message: ChatMessage }>('POST', '/chat/messages', projectId ? { text, project_id: projectId } : { text }),
+  /** 202 with the ids of the stored question and its empty answer, as soon as both are stored
+   *  (`wait: false`): the answer arrives over `/ws/chat`, so an edge that cuts a long request can never
+   *  make the page think the message was not sent. 400 for empty/over-8000-char text; 409
+   *  CHAT_NO_MACHINE / CHAT_HOST_NOT_CHOSEN / CHAT_HOST_OFFLINE / CHAT_AGENT_TOO_OLD when the host cannot
+   *  run it, 409 CHAT_ARCHIVED or CHAT_BUSY while a reset is under way (each with its pt-BR sentence). */
+  sendChatMessage: (text: string, projectId?: string | null) =>
+    request<{ conversation_id: string; user_message_id: string; assistant_message_id: string }>('POST', '/chat/messages', projectId ? { text, project_id: projectId, wait: false } : { text, wait: false }),
   /** "Nova conversa": archives the scope's active conversation (the transcript is kept) and answers the
    *  fresh one. 409 CHAT_BUSY while an answer is being written, 409 CHAT_ARCHIVED if the send that lost
    *  the race already ran against the conversation this call just archived. */
