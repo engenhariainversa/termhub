@@ -13,7 +13,10 @@ import { activeGrants, assertGrantableAction, grantTab, listGrants, revokeGrant 
 import { decideMany } from '../chat/decisions.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
 
-const messageBody = z.object({ text: z.string().trim().min(1).max(8000), project_id: z.string().min(1).max(64).nullish() });
+/** `wait: false` (what the web sends): answer 202 as soon as the message is stored, like the phone's
+ *  route, instead of holding the request open for the whole answer — an edge that cuts a long request
+ *  would otherwise make the page give the text back and invite a duplicate send. */
+const messageBody = z.object({ text: z.string().trim().min(1).max(8000), project_id: z.string().min(1).max(64).nullish(), wait: z.boolean().optional() });
 const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
 const actionIdParam = z.object({ id: z.string().min(1).max(64) });
@@ -101,7 +104,14 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
   });
 
   app.post('/messages', { config: { action: 'create' } }, async (request, reply) => {
-    const { text, project_id } = messageBody.parse(request.body);
+    const { text, project_id, wait } = messageBody.parse(request.body);
+    if (wait === false) {
+      // A refusal (host problem, archived conversation, busy decision) rejects `start` itself and keeps
+      // its status. The answer streams over `/ws/chat`; a failure after this point is logged by label.
+      const started = await deps.service.start(request.scope.user, text, { projectId: project_id ?? null });
+      started.done.catch((err) => request.log.warn({ code: failureLabel(err), conversationId: started.conversation_id }, 'chat run failed after start'));
+      return reply.code(202).send({ conversation_id: started.conversation_id, user_message_id: started.user_message_id, assistant_message_id: started.assistant_message_id });
+    }
     const message = await deps.service.send(request.scope.user, text, { projectId: project_id ?? null });
     return reply.code(201).send({ message });
   });

@@ -85,7 +85,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const [busySuggestionId, setBusySuggestionId] = useState<string | null>(null);
   const [suggestionErrors, setSuggestionErrors] = useState<Record<string, string>>({});
   const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
+  /** Sends whose POST is still open (it answers when that message's answer is written). Several can be
+   *  in flight: the box never waits for an answer (spec 2026-09-26). */
+  const [inFlight, setInFlight] = useState(0);
+  const sending = inFlight > 0;
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -451,15 +454,15 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
 
   const send = async () => {
     const value = text.trim();
-    if (!value || sending) return;
+    if (!value) return;
     // Sending is the reader's own way of saying "take me to the bottom" — the answer will stream
     // in below whatever they typed.
     stick.current = true;
-    setSending(true);
+    setInFlight((n) => n + 1);
     setError(null);
-    // Cleared before the request, not after: the POST only resolves when the whole answer is
-    // written, which can take a minute, and a box that keeps the sent text that long reads as a
-    // chat that swallowed the message. On failure the text comes back below.
+    // Cleared before the request, not after: a box that keeps the sent text until the server answers
+    // reads as a chat that swallowed the message. The POST returns as soon as the message is stored
+    // (the answer streams over the socket); on a refusal the text comes back below.
     setText('');
     try {
       // No project = the account-wide chat: called with no second argument, for the same reason as
@@ -468,8 +471,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       else await api.sendChatMessage(value);
       await load();
     } catch (e) {
-      // a 409 CHAT_BUSY or a 503 CONCIERGE_DISABLED carries its own pt-BR message, shown as-is;
-      // anything else falls back to a generic line
+      // A typed message is no longer answered CHAT_BUSY — several can be in flight at once — but a
+      // 503 CONCIERGE_DISABLED still carries its own pt-BR message, shown as-is, and so does a host
+      // problem (offline, no machine); anything else falls back to a generic line.
       setError(e instanceof ApiError ? e.message : 'Não foi possível enviar a mensagem');
       // Give the text back so nothing is lost — unless something new was typed meanwhile.
       setText((current) => current || value);
@@ -477,7 +481,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       // never started at all), so re-read instead of keeping a bubble that will never fill.
       await load();
     } finally {
-      setSending(false);
+      setInFlight((n) => n - 1);
     }
   };
 
@@ -656,14 +660,14 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           // or a leftover from a run that died with the process. Only the newest row can still be
           // the live one, and only while this page knows its run is under way.
           const empty = m.role === 'assistant' && !m.text && !streaming && !m.error_code;
-          const waiting = empty && m.id === lastMessageId && (sending || live.started.has(m.id));
+          const waiting = empty && (live.started.has(m.id) || (sending && m.id === lastMessageId));
           return <ChatTurn key={m.id} message={m} streaming={streaming} tools={live.actions.get(m.id)} waiting={waiting} failed={Boolean(m.error_code) || (empty && !waiting)} />;
         })}
       </ol>
       {actionError && <p className="mb-2 text-sm text-danger">{actionError}</p>}
       {error && <p className="mb-2 text-sm text-danger">{error}</p>}
       {/* A host that cannot run the message is why the box refuses, and the box says so. */}
-      <ChatComposer value={text} onChange={setText} onSend={() => void send()} sending={sending} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} />
+      <ChatComposer value={text} onChange={setText} onSend={() => void send()} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} />
     </div>
   );
 }

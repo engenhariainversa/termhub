@@ -5,7 +5,8 @@ import type { ChatAction } from '../db/repositories/chat-actions.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { chatBus, type ChatEvent } from './bus.js';
 import { HttpError } from '../lib/errors.js';
-import { ChatService, purgeExpiredActions, type RunnerClient } from './service.js';
+import { ChatService, purgeExpiredActions, type RunnerClient, type RunnerInput } from './service.js';
+import { ORCHESTRATOR_PROMPT } from './concierge-prompt.js';
 
 const user = { id: 'u1', email: 'p@test', role_id: 'role_authenticated' } as unknown as User;
 
@@ -31,7 +32,7 @@ const action = (overrides: Partial<ChatAction> = {}): ChatAction => ({
   ...overrides,
 });
 
-function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActions?: ChatAction[]; tabQuestions?: TabQuestion[]; host?: { machines?: unknown[]; capabilities?: string[] | null; account?: { id: string; provider: string; machine_id: string; config_dir: string | null } } } = {}) {
+function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActions?: ChatAction[]; tabQuestions?: TabQuestion[]; streaming?: boolean; host?: { machines?: unknown[]; capabilities?: string[] | null; account?: { id: string; provider: string; machine_id: string; config_dir: string | null } } } = {}) {
   // The host pair every case but the host-specific ones takes for granted: one agent machine of this
   // user's own, online, with an agent that knows how to run a chat (see host.test.ts for the choice
   // itself). `configDirs` is gone — the account travels as the chosen `ai_account`'s config dir.
@@ -148,18 +149,22 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
     chatGrants: { revokeForConversation: vi.fn(async () => 0), findActiveBySourceAction: vi.fn(async () => undefined) },
   } as unknown as Repositories;
   const agents = {
-    capabilities: vi.fn(() => (opts.host && 'capabilities' in opts.host ? (opts.host.capabilities ?? null) : ['pty', 'claude', 'claude.system_prompt'])),
+    capabilities: vi.fn(() => (opts.host && 'capabilities' in opts.host ? (opts.host.capabilities ?? null) : ['pty', 'claude', 'claude.system_prompt', ...(opts.streaming ? ['claude.stream_input'] : [])])),
     info: vi.fn(() => ({ agent_version: '0.5.0' })),
   };
   const runner: RunnerClient = {
-    run: vi.fn(() => (typeof lines === 'function' ? lines() : (async function* () { for (const l of lines) yield l; })())),
+    // Every run can take more input, like `agentRunner`'s: a one-shot run simply never gets any.
+    run: vi.fn(() => {
+      const source = typeof lines === 'function' ? lines() : (async function* () { for (const l of lines) yield l; })();
+      return { write: () => true, [Symbol.asyncIterator]: () => source[Symbol.asyncIterator]() };
+    }),
   };
   /** Which machine each run was asked for: the service must drive the host, never a machine of its own choosing. */
   const hosted: string[] = [];
   const service = new ChatService({ repos, agents, runnerFor: (machineId) => (hosted.push(machineId), runner) });
   /** Every `RunnerInput` the service handed a runner, in order. */
   const inputs = () => vi.mocked(runner.run).mock.calls.map((c) => c[0]);
-  return { service, chat, chatActions, tabQuestions, actionsStore, runner, hosted, messages, conversation, projectConversation, repos, host, inputs };
+  return { service, chat, chatActions, tabQuestions, actionsStore, runner, hosted, messages, conversation, projectConversation, repos, host, inputs, agents };
 }
 
 const delta = (text: string) => JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text } } });
@@ -171,6 +176,37 @@ const errorFrame = (reason: 'missing_session' | 'run_failed') => JSON.stringify(
 /** One macrotask turn: enough for a drain scheduled from `send`'s `finally` — and for the drain that
  * one would schedule in turn — to have run, so a "nothing more was injected" assertion means it. */
 const settled = () => new Promise((r) => setTimeout(r, 10));
+
+/** A streamed run driven by hand, like the agent's channel: `push` a CLI line, `end()` the process.
+ *  `written` holds every line the service wrote after the first input (which is `input.text`). */
+function liveRunner() {
+  const runs: { input: RunnerInput; written: string[]; push(l: string): void; end(): void }[] = [];
+  const run = vi.fn((input: RunnerInput) => {
+    const queue: string[] = [];
+    const written: string[] = [];
+    let ended = false;
+    let wake: (() => void) | null = null;
+    const poke = () => { const w = wake; wake = null; w?.(); };
+    runs.push({ input, written, push: (l) => (queue.push(l), poke()), end: () => ((ended = true), poke()) });
+    return {
+      write: (line: string) => (ended ? false : (written.push(line), true)),
+      async *[Symbol.asyncIterator]() {
+        for (;;) {
+          while (queue.length) yield queue.shift()!;
+          if (ended) return;
+          await new Promise<void>((r) => (wake = r));
+        }
+      },
+    };
+  });
+  return { run, runs };
+}
+/** The i-th process: runs start after the token is minted, a few awaits after `start` resolves. */
+async function runAt(lr: ReturnType<typeof liveRunner>, i: number) {
+  await vi.waitFor(() => expect(lr.runs.length).toBeGreaterThan(i));
+  return lr.runs[i];
+}
+const replayOf = (line: string) => JSON.stringify({ type: 'user', isReplay: true, uuid: JSON.parse(line).uuid, message: { role: 'user', content: 'x' } });
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -221,15 +257,19 @@ it('resumes the session on the next message', async () => {
   expect(vi.mocked(runner.run).mock.calls[0][0]).toMatchObject({ resume: true, session_id: '3f1e9b1e-0000-4000-8000-000000000001' });
 });
 
-it('refuses a second message while one is still being answered', async () => {
+it('queues a second message while one is still being answered, and answers it after the first', async () => {
   let release: () => void = () => {};
   const gate = new Promise<void>((r) => (release = r));
-  const { service } = build(() => (async function* () { await gate; yield delta('ok'); yield done(); })());
+  const { service, runner, messages } = build(() => (async function* () { await gate; yield delta('ok'); yield done(); })());
 
   const first = service.send(user, 'primeira');
-  await expect(service.send(user, 'segunda')).rejects.toThrow(/ainda está respondendo/i);
+  const second = service.send(user, 'segunda');
+  await vi.waitFor(() => expect(messages).toHaveLength(4));
+  expect(runner.run).toHaveBeenCalledTimes(1);
   release();
-  await first;
+  expect((await first).text).toBe('ok');
+  expect((await second).text).toBe('ok');
+  expect(runner.run).toHaveBeenCalledTimes(2);
 });
 
 it('keeps the partial answer and marks the message when the runner dies', async () => {
@@ -1034,6 +1074,52 @@ describe('reset', () => {
     await running;
   });
 
+  it('closes a queued message whose launch lost the lock to it, instead of leaving it waiting for ever', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, repos, conversation } = build(() => (async function* () { await gate; yield delta('ok'); yield done(); })());
+    const first = await service.start(user, 'primeira');
+    const queued = await service.start(user, 'segunda'); // queued behind the one-shot run
+    // Park the queue's launch on its conversation read, and `reset` inside its lock.
+    let releaseRead!: () => void;
+    const readHeld = new Promise<void>((r) => (releaseRead = r));
+    vi.mocked(repos.chat.findByIdForUser).mockImplementationOnce(async () => {
+      await readHeld;
+      return conversation as never;
+    });
+    let releaseReset!: () => void;
+    const resetHeld = new Promise<void>((r) => (releaseReset = r));
+    vi.mocked(repos.chatActions.expireOpenForConversation).mockImplementationOnce(async () => {
+      await resetHeld;
+      return 0;
+    });
+    release();
+    await first.done; // its release launched the queue, now parked on the read
+    const resetting = service.reset(user, null);
+    await settled(); // reset holds the lock
+    releaseRead();
+    await settled(); // the launch saw the lock held and stepped back
+    releaseReset();
+    await resetting;
+    expect(await queued.done).toMatchObject({ error_code: 'HOST_GONE' });
+  });
+
+  it('refuses a message typed while it archives, instead of queueing it into the old thread', async () => {
+    const { service, repos, messages } = build([delta('ok'), done()]);
+    let releaseArchive!: () => void;
+    const archiveHeld = new Promise<void>((r) => (releaseArchive = r));
+    vi.mocked(repos.chatActions.expireOpenForConversation).mockImplementationOnce(async () => {
+      await archiveHeld;
+      return 0;
+    });
+    const resetting = service.reset(user, null);
+    await settled();
+    await expect(service.start(user, 'oi')).rejects.toMatchObject({ statusCode: 409, code: 'CHAT_BUSY' });
+    expect(messages).toEqual([]);
+    releaseArchive();
+    await resetting;
+  });
+
   it('refuses a project the user does not own', async () => {
     const { service, repos } = build([]);
     await expect(service.reset(user, 'not-mine')).rejects.toMatchObject({ statusCode: 404, code: 'PROJECT_NOT_FOUND' });
@@ -1141,18 +1227,18 @@ describe('start', () => {
     expect(messages).toEqual([]);
   });
 
-  it('rejects start itself when a run is already in flight', async () => {
+  it('queues a message sent while a one-shot run is in flight', async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     const { service, messages } = build(() => (async function* () { await gate; yield delta('ok'); yield done(); })());
     const first = await service.start(user, 'primeira');
-    await expect(service.start(user, 'segunda')).rejects.toMatchObject({ statusCode: 409, code: 'CHAT_BUSY' });
-    expect(messages).toHaveLength(2);
+    await expect(service.start(user, 'segunda')).resolves.toMatchObject({ conversation_id: 'c1' });
+    expect(messages).toHaveLength(4);
     release();
     await first.done;
   });
 
-  it('a start refused as busy neither reads nor marks the answered tab questions (spec 2026-09-26 §4.10)', async () => {
+  it('a message queued behind a busy run neither reads nor marks the answered tab questions (spec 2026-09-26 §4.10)', async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     const { service, tabQuestions } = build(() => (async function* () { await gate; yield delta('ok'); yield done(); })(), { tabQuestions: [answeredQuestion()] });
@@ -1160,11 +1246,14 @@ describe('start', () => {
     // The first run read and marked them, under its lock.
     expect(tabQuestions.listToInject).toHaveBeenCalledTimes(1);
     expect(tabQuestions.markInjected).toHaveBeenCalledTimes(1);
-    await expect(service.start(user, 'segunda')).rejects.toMatchObject({ statusCode: 409, code: 'CHAT_BUSY' });
+    // Concierge always on (TER-59): the second message is queued, not refused — and queuing it reads
+    // and marks nothing; the questions were already told to the run that holds the lock.
+    const second = await service.start(user, 'segunda');
     expect(tabQuestions.listToInject).toHaveBeenCalledTimes(1);
     expect(tabQuestions.markInjected).toHaveBeenCalledTimes(1);
     release();
     await first.done;
+    await second.done;
   });
 
   it('rejects start itself when the conversation was archived before the lock, and releases the lock', async () => {
@@ -1234,5 +1323,232 @@ describe('start', () => {
     await first.done;
     const second = await service.start(user, 'dois');
     expect((await second.done).text).toBe('ok');
+  });
+});
+
+describe('a chat that never blocks', () => {
+  it('injects a message typed while a streamed run is busy, and answers it in the same process', async () => {
+    const { service, runner, messages } = build([], { streaming: true });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+
+    const first = await service.start(user, 'dispara um subagente');
+    const run = await runAt(lr, 0);
+    expect(run.input.stream_input).toBe(true);
+    const firstLine = run.input.text.trim();
+    run.push(replayOf(firstLine));
+    run.push(JSON.stringify({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 't1' }] }));
+    run.push(delta('Disparei.'));
+    run.push(done());
+    expect((await first.done).text).toBe('Disparei.');
+
+    const second = await service.start(user, 'e a capital da França?');
+    expect(lr.runs).toHaveLength(1); // no second process
+    const injected = lr.runs[0].written.at(-1)!;
+    expect(JSON.parse(injected).message.content).toContain('e a capital da França?');
+    run.push(replayOf(injected));
+    run.push(delta('Paris'));
+    run.push(done());
+    expect((await second.done).text).toBe('Paris');
+
+    // The subagent's notification turn becomes a message of its own; then the input ends.
+    run.push(JSON.stringify({ type: 'system', subtype: 'background_tasks_changed', tasks: [] }));
+    run.push(delta('O subagente terminou.'));
+    run.push(done());
+    await settled();
+    expect(run.written.at(-1)).toBe('{"type":"termhub_end_input"}');
+    run.end();
+    await settled();
+    expect(messages.filter((m) => m.role === 'assistant').map((m) => m.text)).toEqual(['Disparei.', 'Paris', 'O subagente terminou.']);
+  });
+
+  it('sends the orchestrator prompt only to a streamed run, in front of the project prompt', async () => {
+    const { service, runner } = build([], { streaming: true });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+    const started = await service.start(user, 'oi', { projectId: 'p1' });
+    await runAt(lr, 0);
+    const prompt = lr.runs[0].input.append_system_prompt!;
+    expect(prompt.startsWith(ORCHESTRATOR_PROMPT)).toBe(true);
+    expect(prompt).toContain('You are the termhub chat for the project');
+    lr.runs[0].push(replayOf(lr.runs[0].input.text.trim()));
+    lr.runs[0].push(done());
+    await started.done;
+    lr.runs[0].end();
+  });
+
+  it('an old agent keeps one-shot runs and queues a second message', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, runner, messages } = build([]);
+    vi.mocked(runner.run)
+      .mockImplementationOnce(() => (async function* () { await gate; yield delta('um'); yield done(); })())
+      .mockImplementationOnce(() => (async function* () { yield delta('dois'); yield done(); })());
+
+    const first = await service.start(user, 'primeira');
+    const second = await service.start(user, 'segunda'); // no 409
+    expect(messages.map((m) => [m.role, m.text])).toEqual([['user', 'primeira'], ['assistant', ''], ['user', 'segunda'], ['assistant', '']]);
+    expect(runner.run).toHaveBeenCalledTimes(1);
+    const input = vi.mocked(runner.run).mock.calls[0][0];
+    expect(input).not.toHaveProperty('stream_input');
+    expect(input.append_system_prompt ?? null).toBeNull();
+
+    release();
+    expect((await first.done).text).toBe('um');
+    expect((await second.done).text).toBe('dois');
+    expect(vi.mocked(runner.run).mock.calls[1][0].text).toBe('segunda');
+  });
+
+  it('a message that finds the input closed is queued and answered by the next process', async () => {
+    const { service, runner } = build([], { streaming: true });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+    const first = await service.start(user, 'um');
+    const run = await runAt(lr, 0);
+    run.push(replayOf(run.input.text.trim()));
+    run.push(delta('ok'));
+    run.push(done()); // nothing in the background: the input ends here
+    await first.done;
+    await settled();
+    expect(run.written.at(-1)).toBe('{"type":"termhub_end_input"}');
+
+    const late = await service.start(user, 'dois'); // the process has not exited yet
+    expect(lr.runs).toHaveLength(1);
+    run.end();
+    await vi.waitFor(() => expect(lr.runs).toHaveLength(2));
+    const next = lr.runs[1];
+    expect(next.input.resume).toBe(true); // the session of the first process
+    next.push(replayOf(next.input.text.trim()));
+    next.push(delta('segunda resposta'));
+    next.push(done());
+    expect((await late.done).text).toBe('segunda resposta');
+    next.end();
+  });
+
+  it('injects an approved decision into a live run', async () => {
+    const { service, runner, chatActions } = build([], { streaming: true });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+    const first = await service.start(user, 'um');
+    const run = await runAt(lr, 0);
+    run.push(replayOf(run.input.text.trim()));
+    run.push(JSON.stringify({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 't1' }] }));
+    run.push(done());
+    await first.done;
+
+    const resumed = service.resumeAfterDecision(user, action());
+    await vi.waitFor(() => expect(run.written.length).toBe(1));
+    expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1']);
+    expect(JSON.parse(run.written[0]).message.content).toMatch(/^O usuário autorizou:/);
+    run.push(replayOf(run.written[0]));
+    run.push(delta('feito'));
+    run.push(done());
+    expect((await resumed).text).toBe('feito');
+    run.end();
+  });
+
+  it('a setup failure rejects the first message and removes its answer, as before', async () => {
+    const { service, runner, messages } = build([], { streaming: true });
+    vi.mocked(runner.run).mockImplementationOnce(() => {
+      throw new HttpError(503, 'O chat não está configurado neste servidor', 'CONCIERGE_DISABLED');
+    });
+    await expect(service.send(user, 'oi')).rejects.toMatchObject({ code: 'CONCIERGE_DISABLED' });
+    expect(messages.map((m) => m.role)).toEqual(['user']);
+  });
+
+  it('injects a message into a newer live run that started while the message was being stored', async () => {
+    const { service, runner, chat } = build([], { streaming: true });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+    const first = await service.start(user, 'um');
+    const run = await runAt(lr, 0);
+    run.push(replayOf(run.input.text.trim()));
+    run.push(delta('ok'));
+    run.push(done()); // nothing in the background: the input ends here
+    await first.done;
+    await settled();
+    const queued = await service.start(user, 'dois'); // the process has not exited: queued
+
+    // The third message stalls while its question is being stored...
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let stalled = false;
+    const store = chat.addMessage.getMockImplementation()!;
+    chat.addMessage.mockImplementationOnce(async (m) => {
+      stalled = true;
+      await gate;
+      return store(m);
+    });
+    const third = service.start(user, 'tres');
+    await vi.waitFor(() => expect(stalled).toBe(true));
+    // ...while the first process exits and the queue starts a new one, which takes input.
+    run.end();
+    const next = await runAt(lr, 1);
+    release();
+    const late = await third;
+    await vi.waitFor(() => expect(next.written).toHaveLength(1));
+    expect(JSON.parse(next.written[0]).message.content).toContain('tres');
+    next.push(replayOf(next.input.text.trim()));
+    next.push(delta('segunda'));
+    next.push(done());
+    next.push(replayOf(next.written[0]));
+    next.push(delta('terceira'));
+    next.push(done());
+    expect((await queued.done).text).toBe('segunda');
+    expect((await late.done).text).toBe('terceira');
+    next.end();
+  });
+
+  it('settles a queued message whose answer cannot be closed when its host is gone', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, runner, chat, agents } = build([]);
+    vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { await gate; yield delta('um'); yield done(); })());
+    const first = await service.start(user, 'primeira');
+    const second = await service.start(user, 'segunda'); // queued behind the one-shot run
+    const third = await service.start(user, 'terceira');
+    // The machine goes away, and the database refuses to close the second message's answer.
+    agents.capabilities.mockReturnValue(null);
+    const boom = new Error('db down');
+    const update = chat.updateMessage.getMockImplementation()!;
+    chat.updateMessage.mockImplementation(async (id, patch) => {
+      if (id === second.assistant_message_id) throw boom;
+      return update(id, patch);
+    });
+    release();
+    await first.done;
+    await expect(second.done).rejects.toBe(boom);
+    expect(await third.done).toMatchObject({ error_code: 'HOST_GONE' });
+  });
+
+  it('closes a queued message with AGENT_TOO_OLD when its host can no longer run a chat', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, runner, agents } = build([]);
+    vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { await gate; yield delta('um'); yield done(); })());
+    const first = await service.start(user, 'primeira');
+    const second = await service.start(user, 'segunda');
+    agents.capabilities.mockReturnValue(['pty']); // connected, but no claude channel
+    release();
+    await first.done;
+    expect(await second.done).toMatchObject({ text: '', error_code: 'AGENT_TOO_OLD' });
+  });
+
+  it('retries a streamed run once on a fresh session when the resumed one is missing', async () => {
+    const { service, runner, conversation } = build([], { streaming: true });
+    conversation.cli_session_id = '3f1e9b1e-0000-4000-8000-000000000009';
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+    const started = await service.start(user, 'oi');
+    await runAt(lr, 0);
+    lr.runs[0].push(JSON.stringify({ type: 'termhub_error', code: 1, reason: 'missing_session' }));
+    lr.runs[0].end();
+    await vi.waitFor(() => expect(lr.runs).toHaveLength(2));
+    expect(lr.runs[1].input.resume).toBe(false);
+    lr.runs[1].push(replayOf(lr.runs[1].input.text.trim()));
+    lr.runs[1].push(delta('novo'));
+    lr.runs[1].push(done());
+    expect((await started.done).text).toBe('novo');
+    lr.runs[1].end();
   });
 });

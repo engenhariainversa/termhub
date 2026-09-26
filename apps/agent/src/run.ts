@@ -1,6 +1,6 @@
 import os from 'node:os';
 import type { HelloMessage } from '@termhub/agent-protocol';
-import { CAPABILITY_CLAUDE, CAPABILITY_CLAUDE_SYSTEM_PROMPT, CAPABILITY_SIM, CLOSE } from '@termhub/agent-protocol';
+import { CAPABILITY_CLAUDE, CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_CLAUDE_SYSTEM_PROMPT, CAPABILITY_SIM, CLOSE } from '@termhub/agent-protocol';
 import { connectOnce, runForever, RevokedError, ProtocolMismatchError, UpgradeRejectedError } from './client.js';
 import { heal } from './rpc/hooks.js';
 import type { AgentConfig } from './config.js';
@@ -29,7 +29,7 @@ export type HelloFields = Omit<HelloMessage, 'type' | 'protocol'>;
  * and only opens a `claude` channel on a machine that claims it — an agent too old to know the
  * kind sends no `capabilities` at all, which reads as `[]` (see the protocol's `helloMessage`).
  */
-export const CAPABILITIES = [CAPABILITY_CLAUDE, CAPABILITY_CLAUDE_SYSTEM_PROMPT];
+export const CAPABILITIES = [CAPABILITY_CLAUDE, CAPABILITY_CLAUDE_SYSTEM_PROMPT, CAPABILITY_CLAUDE_STREAM_INPUT];
 
 /** What this agent understands beyond a terminal. The simulator (`sim`) needs Xcode's simctl and the WDA
  *  runner, which only exist on macOS, so a Linux agent never claims it. */

@@ -26,7 +26,6 @@ import { ChatComposer } from './ChatComposer';
 interface ComposerOpts {
   state?: DictationState;
   value?: string;
-  sending?: boolean;
   seconds?: number;
   error?: string | null;
   notice?: string | null;
@@ -34,7 +33,7 @@ interface ComposerOpts {
 
 function renderComposer(opts: ComposerOpts = {}) {
   dictation = { state: opts.state ?? 'idle', seconds: opts.seconds ?? 0, error: opts.error ?? null, notice: opts.notice ?? null, start, stop, cancel };
-  return render(<ChatComposer value={opts.value ?? ''} onChange={onChange} onSend={onSend} sending={opts.sending ?? false} />);
+  return render(<ChatComposer value={opts.value ?? ''} onChange={onChange} onSend={onSend} />);
 }
 
 /** The composer's three live regions, in document order: the action row's status, the error, the notice. */
@@ -177,7 +176,7 @@ describe('ChatComposer dictation', () => {
     // A rerender, not a fresh render: what this pins is node identity — the very same elements now
     // carry the text. A region a browser inserts together with its content is the case that is not
     // reliably announced, and it is the one this rules out.
-    rerender(<ChatComposer value="" onChange={onChange} onSend={onSend} sending={false} />);
+    rerender(<ChatComposer value="" onChange={onChange} onSend={onSend} />);
     const after = liveRegions();
 
     after.forEach((node, i) => expect(node).toBe(before[i]));
@@ -210,21 +209,6 @@ describe('ChatComposer dictation', () => {
       expect(button.textContent).toBe('');
       cleanup();
     }
-  });
-
-  it('says why the send button is disabled while the answer is still streaming', () => {
-    renderComposer({ state: 'idle', value: 'oi', sending: true });
-
-    // Dictation keeps inviting text into a box whose button cannot be pressed; without a word about it
-    // the person is left tapping a dead arrow.
-    expect(primary(/enviar/i).disabled).toBe(true);
-    expect(liveRegions().map((r) => r.textContent)).toContain('aguarde a resposta terminar');
-    cleanup();
-
-    // Not said for a button that is not refusing anything: an empty box is still a microphone while
-    // the answer streams, and dictation is allowed there on purpose.
-    renderComposer({ state: 'idle', value: '', sending: true });
-    expect(liveRegions().map((r) => r.textContent)).toEqual(['', '', '']);
   });
 
   it('lets Enter send only what the button would send: never while recording, never while transcribing', () => {

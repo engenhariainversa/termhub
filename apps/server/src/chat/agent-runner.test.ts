@@ -306,3 +306,50 @@ it('refuses with 503 CONCIERGE_DISABLED when the server has no public MCP endpoi
     expect.objectContaining({ statusCode: 503, code: 'CONCIERGE_DISABLED' }),
   );
 });
+
+it('streams: writes before the open are buffered, then framed in order, and refused once the channel ended', async () => {
+  const h = fakeHost({ capabilities: ['pty', 'claude', 'claude.stream_input'] });
+  const stream = agentRunner('m1', { host: h.host }).run({ ...input, text: '{"a":1}\n', stream_input: true });
+  expect(stream.write?.('{"b":2}')).toBe(true);
+  const run = collect(stream);
+  await h.opened;
+  expect(stream.write?.('{"c":3}')).toBe(true);
+  expect(h.seen.writes.map((b) => b.toString('utf8'))).toEqual(['{"a":1}\n', '{"b":2}\n', '{"c":3}\n']);
+  expect(h.seen.params[0]).toMatchObject({ stream_input: true });
+  h.exit(0);
+  await run.done;
+  expect(stream.write?.('{"d":4}')).toBe(false);
+});
+
+it('leaves the open frame of a one-shot run exactly as it was', async () => {
+  const h = fakeHost();
+  const run = collect(agentRunner('m1', { host: h.host }).run(input));
+  await h.opened;
+  expect(h.seen.params[0]).not.toHaveProperty('stream_input');
+  h.exit(0);
+  await run.done;
+});
+
+it('refuses writes to a run that never opened (machine offline)', async () => {
+  const h = fakeHost({ capabilities: null });
+  const stream = agentRunner('m1', { host: h.host }).run({ ...input, stream_input: true });
+  await collect(stream).done;
+  expect(stream.write?.('{"a":1}')).toBe(false);
+});
+
+it('refuses a write the instant the channel itself ends, before the generator has drained what is left to yield', async () => {
+  // The channel's number is freed for reuse (a new terminal, a new run) the moment the agent reports
+  // it closed — well before this generator gets around to draining its last few lines and running its
+  // own `finally`. A write in that window must not reach whatever now holds that number.
+  const h = fakeHost({ capabilities: ['pty', 'claude', 'claude.stream_input'] });
+  const stream = agentRunner('m1', { host: h.host }).run({ ...input, stream_input: true });
+  const run = collect(stream);
+  await h.opened;
+  h.send('{"a":1}\n');
+  h.exit(0);
+  // Deliberately not awaited yet: the consumer has not drained the lines still sitting in the
+  // channel's `stream.lines` buffer, so the generator's outer `finally` has not run either.
+  expect(stream.write?.('{"b":2}')).toBe(false);
+  await run.done;
+  expect(h.seen.writes.map((b) => b.toString('utf8'))).not.toContain('{"b":2}\n');
+});

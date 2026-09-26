@@ -14,11 +14,41 @@ export interface ClaudeRunSpec {
   mcp_config_path: string;
   model?: string | null;
   append_system_prompt?: string | null;
+  /**
+   * The chat that never blocks (spec 2026-09-26): the CLI reads `stream-json` user messages from stdin
+   * for as long as it stays open, replays each one when its turn starts (that is how the server knows
+   * which message an answer belongs to), and loads `CONCIERGE_SETTINGS`, the hook that keeps every
+   * subagent in the background.
+   */
+  stream_input?: boolean;
 }
 
 /** Tools the concierge must never have: with any of them it could reach a machine outside the MCP,
- * where the permission gate lives (spec §4.1). */
+ * where the permission gate lives (spec §4.1). The CLI applies this list to the whole session, so the
+ * subagents the concierge launches do not have them either. */
 export const DISALLOWED_TOOLS = 'Bash,Read,Write,Edit,WebFetch,WebSearch';
+
+/**
+ * The `PreToolUse` hook that refuses a foreground subagent. A subagent in the foreground holds the
+ * concierge's turn until it ends, and a turn in progress is what used to keep the person out of their
+ * own chat. In the background it runs on its own, and the CLI notifies the concierge when it is done.
+ * Exit code 2 blocks the call and hands stderr to the model, which then repeats the call the right way.
+ *
+ * POSIX `sh` and `grep` only: it runs on the person's own machine (macOS or Linux), where neither `jq`
+ * nor a particular Node can be assumed. A call made from inside a subagent (`agent_id` in the payload)
+ * is left alone, since that subagent is already off the concierge's turn. The pattern only matches
+ * the payload's own key: inside a JSON string the quotes are escaped and never match.
+ */
+export const BACKGROUND_AGENT_HOOK =
+  `input=$(cat); case "$input" in *'"agent_id"'*) exit 0;; esac; ` +
+  `printf '%s' "$input" | grep -Eq '"run_in_background"[[:space:]]*:[[:space:]]*true' && exit 0; ` +
+  `echo 'No chat do termhub todo subagente roda em segundo plano: repita esta chamada do Agent com run_in_background: true.' >&2; exit 2`;
+
+/** The settings a streamed chat run loads with `--settings`: the hook above, on the subagent tool
+ *  under both of its names (`Task` on older CLIs). The CLI merges them with the account's own. */
+export const CONCIERGE_SETTINGS = JSON.stringify({
+  hooks: { PreToolUse: [{ matcher: 'Agent|Task', hooks: [{ type: 'command', command: BACKGROUND_AGENT_HOOK }] }] },
+});
 
 /** Every flag the concierge must run with, in a fixed order. */
 export function buildClaudeArgs(spec: ClaudeRunSpec): string[] {
@@ -39,6 +69,7 @@ export function buildClaudeArgs(spec: ClaudeRunSpec): string[] {
     '--strict-mcp-config',
     '--allowed-tools', 'mcp__termhub__*',
     '--disallowed-tools', DISALLOWED_TOOLS,
+    ...(spec.stream_input ? ['--input-format', 'stream-json', '--replay-user-messages', '--settings', CONCIERGE_SETTINGS] : []),
     ...(spec.model ? ['--model', spec.model] : []),
     // Last, and only when set: the account-wide chat's argv stays exactly what it was. It is our own
     // server-composed text (a project's name, key and paths), never the user's prompt, which still

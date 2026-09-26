@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { CAPABILITY_CLAUDE_SYSTEM_PROMPT } from '@termhub/agent-protocol';
+import { CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_CLAUDE_SYSTEM_PROMPT } from '@termhub/agent-protocol';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ChatConversation, ChatMessage } from '../db/repositories/chat.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
@@ -8,24 +8,15 @@ import { describeTabQuestions } from '../db/repositories/tab-questions-view.js';
 import type { User } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { chatBus } from './bus.js';
+import { streamedSystemPrompt } from './concierge-prompt.js';
 import { hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
+import { LiveRun, type LiveTurn } from './live-run.js';
 import { projectSystemPrompt } from './project-prompt.js';
-import { parseFrame, type ChatFailureReason } from './stream.js';
+import { codeForReason, parseFrame, type ChatErrorCode, type ChatFailureReason } from './stream.js';
 import { tabQuestionContext } from './tab-question-context.js';
 import { mintConciergeToken } from './token.js';
 
-/**
- * What a stored failure says. Every label a runner can end a run with becomes a code of its own —
- * `Uppercase<ChatFailureReason>`, derived from the one list in `stream.ts`, so a new reason reaches
- * the row (and the screen) without anyone remembering to extend a mapping here. CLI_REJECTED is our
- * own flags being refused, MISSING_SESSION a session the account no longer has, CLI_MISSING a machine
- * with no `claude` installed, HOST_GONE the machine going away mid-run. The two that are not a
- * runner's label: TOKEN_FAILED (the server could not even mint a credential) and RUNNER_FAILED (the
- * stream ended with nothing said about why).
- */
-export type ChatErrorCode = 'TOKEN_FAILED' | 'RUNNER_FAILED' | Uppercase<ChatFailureReason> | null;
-
-const codeForReason = (reason?: ChatFailureReason): ChatErrorCode => (reason ? (reason.toUpperCase() as Uppercase<ChatFailureReason>) : 'RUNNER_FAILED');
+export type { ChatErrorCode } from './stream.js';
 
 export interface RunnerInput {
   session_id: string;
@@ -38,6 +29,9 @@ export interface RunnerInput {
   token: string;
   /** Project chats only: the server-composed focus text (spec §4.3). Absent for the account-wide chat. */
   append_system_prompt?: string | null;
+  /** A streamed run (spec 2026-09-26): text is the first input lines, newline-terminated, and the
+   *  channel stays open for more. */
+  stream_input?: boolean;
 }
 /** A run that has started: both messages are stored and published; `done` settles when it ends. */
 export interface StartedRun {
@@ -46,8 +40,14 @@ export interface StartedRun {
   assistant_message_id: string;
   done: Promise<ChatMessage>;
 }
+/** What a runner yields: the CLI's stdout, a line at a time — and, for a streamed run, a way to write
+ *  more input. `write` takes one line (no newline), answers false once the run can take no more, and
+ *  buffers lines written before the channel is open. A one-shot runner does not have it. */
+export interface RunStream extends AsyncIterable<string> {
+  write?(line: string): boolean;
+}
 export interface RunnerClient {
-  run(input: RunnerInput): AsyncIterable<string>;
+  run(input: RunnerInput): RunStream;
 }
 
 /** How long a proposed action waits for the user's decision before it is nobody's question anymore —
@@ -94,6 +94,24 @@ export const failureLabel = (err: unknown): string => {
  */
 const isSetupFailure = (e: unknown): e is HttpError =>
   e instanceof HttpError && (e.code === 'CONCIERGE_DISABLED' || e.code === 'CONCIERGE_FAILED');
+
+/** A message stored while its conversation's process could not take it; it runs when the lock frees.
+ *  `runText` is set when its tab-question context was already read (and stamped) for it. */
+interface QueuedTurn {
+  text: string;
+  runText?: string;
+  question: ChatMessage;
+  answer: ChatMessage;
+  settle: LiveTurn['settle'];
+}
+
+/** A `done` promise and the handles that settle it. */
+function deferred(): { promise: Promise<ChatMessage>; settle: LiveTurn['settle'] } {
+  let resolve!: (m: ChatMessage) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<ChatMessage>((res, rej) => ((resolve = res), (reject = rej)));
+  return { promise, settle: { resolve, reject } };
+}
 
 /** What the action targets, in the one line the model needs to tell this proposal apart from any
  * other it may have made — the tool name and the target ids the model's own original call carried
@@ -163,8 +181,17 @@ const batchInjectionText = (actions: ChatAction[], freshSession: boolean, summar
 const ALREADY_INJECTED = 'ALREADY_INJECTED';
 
 export class ChatService {
-  /** One run per conversation: two `claude -p` processes on the same --session-id would race. */
+  /** One process per conversation: two claude processes on the same session would race. A message that
+   *  finds it held is injected into the live process or queued, never refused (spec 2026-09-26); only a
+   *  decision can still answer CHAT_BUSY. */
   private running = new Set<string>();
+  /** The live streamed process of a conversation, while it runs (spec 2026-09-26). */
+  private live = new Map<string, LiveRun>();
+  /** Messages typed while a process could not take them, answered by the next one. */
+  private queued = new Map<string, QueuedTurn[]>();
+  /** Conversations whose lock `reset` holds: a message there is not queued (it would land in the thread
+   *  being archived), it is refused as before. */
+  private resetting = new Set<string>();
   /** Decisions whose `markInjectedMany` failed in this process — see `drainNextDecision`. In memory on
    * purpose: the row itself is untouched, so a restart tries it again with a healthy database. */
   private unmarkable = new Set<string>();
@@ -220,13 +247,18 @@ export class ChatService {
     const current = await this.conversationFor(user, projectId);
     if (this.running.has(current.id)) throw new HttpError(409, 'O concierge ainda está respondendo a mensagem anterior', 'CHAT_BUSY');
     this.running.add(current.id);
+    this.resetting.add(current.id);
     try {
       await this.deps.repos.chatActions.expireOpenForConversation(current.id);
       await this.deps.repos.chatGrants.revokeForConversation(current.id);
       await this.deps.repos.apiTokens.revokeForConversation(current.id);
       await this.deps.repos.chat.archive(current.id);
     } finally {
+      this.resetting.delete(current.id);
       this.running.delete(current.id);
+      // A queue launch that found this lock held stepped back, trusting a release to drain it: this is
+      // that release. The thread is archived now, so each queued message is closed with its reason.
+      if (this.queued.get(current.id)?.length) void this.launchQueued(user, current.id);
     }
     const fresh = await this.conversationFor(user, projectId);
     // The account-wide row owns the host (spec §3): a new thread is not a new machine or account, and
@@ -240,7 +272,8 @@ export class ChatService {
 
   /** What the sidebar's 💬 shows per project: answering right now, and what waits on the user — pending
    * actions and open tab questions (spec 2026-09-26 §4.9; suggestions are not counted). `busy` is this
-   * process's own lock, the same one `send` refuses on — the only truth there is about a run in flight. */
+   * process's own lock, the one a message is injected or queued behind — the only truth there is about
+   * a run in flight. */
   async projectStatuses(user: User): Promise<{ project_id: string; busy: boolean; pending_confirmations: number }[]> {
     const rows = await this.deps.repos.chat.listActiveProjectConversations(user.id);
     const ids = rows.map((r) => r.id);
@@ -267,14 +300,15 @@ export class ChatService {
    * injected sentence is just another user turn, so the busy lock, the fresh-session fallback and the
    * bus events all behave exactly as they do for anything the user types.
    *
-   * If another run already holds the conversation's lock, `sendIn` throws `HttpError(409, CHAT_BUSY)`
-   * before `beforeRun` ever gets to mark the rows injected — every decision of the batch stays
-   * `approved`/`denied` with `injected_at` still null, exactly the state `findNextToInject` looks for.
-   * The route (fix round 2) turns that specific 409 into a 200: the decision is already durably
-   * recorded, so telling the client "conflict" would be a lie. `drainNextDecision` picks the rows up
-   * once the busy run's own `send` call releases the lock, so the two paths — inject now, or inject
-   * once the lock frees up — both go through the same `markInjectedMany` marking in `beforeRun`, and
-   * cannot diverge (fix round 2, point 4).
+   * A live streamed run that still takes input gets the decisions injected (spec 2026-09-26, concierge
+   * always on). Otherwise, if another run already holds the conversation's lock, `sendIn` throws
+   * `HttpError(409, CHAT_BUSY)` before `beforeRun` ever gets to mark the rows injected — every decision
+   * of the batch stays `approved`/`denied` with `injected_at` still null, exactly the state
+   * `findNextToInject` looks for. The route (fix round 2) turns that specific 409 into a 200: the
+   * decision is already durably recorded, so telling the client "conflict" would be a lie.
+   * `drainNextDecision` picks the rows up once the busy run's own `send` call releases the lock, so the
+   * paths — inject into the live run, inject now, or inject once the lock frees up — all go through the
+   * same `markInjectedMany` marking in `beforeRun`, and cannot diverge (fix round 2, point 4).
    */
   async resumeAfterDecision(user: User, action: ChatAction): Promise<ChatMessage | undefined> {
     const conversation = await this.deps.repos.chat.findByIdForUser(action.conversation_id, user.id);
@@ -395,7 +429,7 @@ export class ChatService {
   /**
    * The same message as `send`, but resolved as soon as the question and the empty answer are stored
    * and published — for a client that cannot hold a request open for the whole run (the phone app).
-   * Everything that refuses the message outright (no host, busy, archived) still rejects this call
+   * Everything that refuses the message outright (no host, archived) still rejects this call
    * itself, with nothing stored; what happens afterwards is `done`'s, which rejects exactly when `send`
    * would have thrown (a setup failure). A caller that does not await `done` must attach its own
    * `catch`: this never swallows it, since `send` relies on that rejection.
@@ -434,6 +468,69 @@ export class ChatService {
     }
   }
 
+  /** Whether this host's agent runs a claude channel with streamed input. */
+  private streams(machineId: string): boolean {
+    return this.deps.agents.capabilities(machineId)?.includes(CAPABILITY_CLAUDE_STREAM_INPUT) ?? false;
+  }
+
+  /** Stores the question and its empty answer and tells every open screen. */
+  private async storeTurn(user: User, conversationId: string, text: string): Promise<{ question: ChatMessage; answer: ChatMessage }> {
+    const question = await this.deps.repos.chat.addMessage({ conversation_id: conversationId, role: 'user', text });
+    chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversationId, message: question });
+    const answer = await this.deps.repos.chat.addMessage({ conversation_id: conversationId, role: 'assistant', text: '' });
+    chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversationId, message: answer });
+    return { question, answer };
+  }
+
+  /**
+   * The text written to the CLI for a message: any tab-question context the model was not told yet,
+   * then the message.
+   *
+   * What the chat answered in the project's tabs since the model last heard (spec 2026-09-25 §5.5):
+   * prepended to this run's input only — the stored message stays the person's own words. Read and
+   * stamped under the lock, before the message is written: at most once, like a decision's injection.
+   */
+  private async runTextFor(user: User, conversationId: string, text: string): Promise<string> {
+    const context = await this.tabQuestionContextFor(user, conversationId);
+    return context ? `${context}\n\n${text}` : text;
+  }
+
+  private enqueue(conversationId: string, turn: QueuedTurn): void {
+    const list = this.queued.get(conversationId) ?? [];
+    list.push(turn);
+    this.queued.set(conversationId, list);
+  }
+
+  /**
+   * A message for a conversation whose process is running. Injected when that process still takes input,
+   * so it is answered at once, even with subagents at work. Otherwise it is queued, shown right away,
+   * and answered by the next process. A decision (`beforeRun`) is never queued here: it keeps its own
+   * durable path (409 → queued note → `drainNextDecision`).
+   */
+  private async startWhileBusy(user: User, conversation: ChatConversation, text: string, opts?: { beforeRun?: () => Promise<void> }): Promise<StartedRun> {
+    // "Nova conversa" is archiving this thread: nothing typed now belongs in it.
+    if (this.resetting.has(conversation.id)) throw new HttpError(409, 'O concierge ainda está respondendo a mensagem anterior', 'CHAT_BUSY');
+    const live = this.live.get(conversation.id);
+    if (!live?.accepting && opts?.beforeRun) throw new HttpError(409, 'O concierge ainda está respondendo a mensagem anterior', 'CHAT_BUSY');
+    if (live?.accepting && opts?.beforeRun) await opts.beforeRun();
+    let runText = live?.accepting ? await this.runTextFor(user, conversation.id, text) : undefined;
+    const { question, answer } = await this.storeTurn(user, conversation.id, text);
+    const d = deferred();
+    const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id, done: d.promise };
+    // Re-read after the awaits above: the process may have ended its input in between, and a newer one
+    // (started by the queue once the lock was released) may take input now. Queuing behind that one
+    // would leave the message waiting until it ends.
+    const now = this.live.get(conversation.id);
+    if (now?.accepting) {
+      runText ??= await this.runTextFor(user, conversation.id, text);
+      if (this.live.get(conversation.id) === now && now.add({ uuid: randomUUID(), text: runText, question, answer, settle: d.settle })) return started;
+    }
+    this.enqueue(conversation.id, { text, runText, question, answer, settle: d.settle });
+    // The process may already be gone, with the lock released during the awaits above.
+    if (!this.running.has(conversation.id)) void this.launchQueued(user, conversation.id);
+    return started;
+  }
+
   /** One whole run in a given conversation — what a decision's re-injection and the drain await. */
   private async sendIn(user: User, conversation: ChatConversation, text: string, opts?: { beforeRun?: () => Promise<void> }): Promise<ChatMessage> {
     return (await this.startIn(user, conversation, text, opts)).done;
@@ -457,7 +554,7 @@ export class ChatService {
     // Read with the host, before the lock and before any row: a read that fails here is a message never
     // sent, not an empty assistant bubble left behind by an error thrown mid-run.
     const appendSystemPrompt = await this.promptFor(user, conversation);
-    if (this.running.has(conversation.id)) throw new HttpError(409, 'O concierge ainda está respondendo a mensagem anterior', 'CHAT_BUSY');
+    if (this.running.has(conversation.id)) return this.startWhileBusy(user, conversation, text, opts);
     const runner = this.deps.runnerFor(host.machine.id);
     this.running.add(conversation.id);
     let handedOff = false;
@@ -484,23 +581,21 @@ export class ChatService {
       // mark a decision injected that it never actually sent (fix round 2).
       if (opts?.beforeRun) await opts.beforeRun();
 
-      // What the chat answered in the project's tabs since the model last heard (spec 2026-09-25
-      // §5.5): prepended to this run's input only — the stored message stays the person's own words.
-      // Read and stamped under the lock, before the run: at most once, like a decision's injection.
-      const context = await this.tabQuestionContextFor(user, conversation.id);
-      const runText = context ? `${context}\n\n${text}` : text;
+      const runText = await this.runTextFor(user, conversation.id, text);
+      const { question, answer } = await this.storeTurn(user, conversation.id, text);
+      const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id };
 
-      const question = await this.deps.repos.chat.addMessage({ conversation_id: conversation.id, role: 'user', text });
-      chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversation.id, message: question });
-
-      const answer = await this.deps.repos.chat.addMessage({ conversation_id: conversation.id, role: 'assistant', text: '' });
-      chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversation.id, message: answer });
-
-      // Not awaited: this call resolves now, and the lock passes to `finishRun`, whose own `finally`
+      // Not awaited: this call resolves now, and the lock passes to the run, whose own `finally`
       // releases it whether or not anybody ever awaits `done`.
+      if (this.streams(host.machine.id)) {
+        const d = deferred();
+        void this.runLive(user, conversation, runner, host.configDir, streamedSystemPrompt(appendSystemPrompt), [{ uuid: randomUUID(), text: runText, question, answer, settle: d.settle }]);
+        handedOff = true;
+        return { ...started, done: d.promise };
+      }
       const done = this.finishRun(user, conversation, runText, question, answer, runner, host.configDir, appendSystemPrompt);
       handedOff = true;
-      return { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id, done };
+      return { ...started, done };
     } finally {
       // Anything thrown before the hand-off (an archived conversation, `beforeRun`, a failed insert)
       // never reaches `finishRun`, so the lock is released here instead, exactly as it always was.
@@ -655,14 +750,141 @@ export class ChatService {
     }
   }
 
+  /**
+   * A streamed run (spec 2026-09-26): one process that takes every message of the conversation while
+   * it lives. Holds the lock `startIn` or `launchQueued` took and releases it in every path. One
+   * retry on a fresh session when the resumed one is missing, exactly as `finishRun` does.
+   */
+  private async runLive(user: User, conversation: ChatConversation, runner: RunnerClient, configDir: string | null, appendSystemPrompt: string, turns: LiveTurn[]): Promise<void> {
+    const live = new LiveRun({ userId: user.id, conversationId: conversation.id, sessionId: conversation.cli_session_id, chat: this.deps.repos.chat });
+    for (const t of turns) live.add(t);
+    this.live.set(conversation.id, live);
+    try {
+      let token: string;
+      try {
+        // Wide scopes are safe here only because mintConciergeToken always pairs them with
+        // `gated: true` — every write this token can attempt still stops at the chat's gate.
+        token = await mintConciergeToken(this.deps.repos, user.id, conversation.id, ['read', 'tasks', 'terminals'], { accountWide: conversation.project_id === null });
+      } catch {
+        await live.failOpen('TOKEN_FAILED');
+        return;
+      }
+      for (let attempt = 0; ; attempt++) {
+        const resume = live.sessionId !== null;
+        const input: RunnerInput = {
+          session_id: live.sessionId ?? randomUUID(),
+          resume,
+          text: live.initialText(),
+          config_dir: configDir,
+          model: conversation.model,
+          token,
+          append_system_prompt: appendSystemPrompt,
+          stream_input: true,
+        };
+        let outcome: { code: ChatErrorCode; missingSession: boolean };
+        try {
+          outcome = await live.consume(runner.run(input));
+        } catch (e) {
+          if (isSetupFailure(e) && live.endedTurns === 0) {
+            await live.abandon(e);
+            this.publishSetupFailure(user, conversation.id);
+            return;
+          }
+          outcome = { code: 'RUNNER_FAILED', missingSession: false };
+        }
+        if (resume && outcome.missingSession && live.endedTurns === 0 && attempt === 0) {
+          await live.restart();
+          continue;
+        }
+        await live.failOpen(outcome.code ?? 'RUNNER_FAILED');
+        return;
+      }
+    } catch (err) {
+      // A database failure mid-run must not leave `done` hanging for ever, nor escape as an unhandled
+      // rejection: the open turns are failed as a runner failure, and only the label is logged.
+      console.error('chat: live run failed', { conversation_id: conversation.id, error: failureLabel(err) });
+      await live.failOpen('RUNNER_FAILED').catch(() => {});
+    } finally {
+      this.live.delete(conversation.id);
+      this.releaseLock(user, conversation.id);
+    }
+  }
+
+  /**
+   * Runs what was queued while the conversation's process could not take it: every queued message on
+   * a streamed host, the first one on an old agent (the rest wait for that run's own release). Never
+   * throws: it is scheduled from a `finally`, like the decision drain.
+   */
+  private async launchQueued(user: User, conversationId: string): Promise<void> {
+    const queue = this.queued.get(conversationId);
+    if (!queue?.length || this.running.has(conversationId)) return;
+    let locked = false;
+    /** Turns taken out of the queue and not yet handed to a run: the catch below must settle them too. */
+    let taken: QueuedTurn[] = [];
+    try {
+      const conversation = await this.deps.repos.chat.findByIdForUser(conversationId, user.id);
+      const host = conversation && conversation.archived_at === null ? await this.hostForConversation(user, conversation) : null;
+      if (!conversation || !host || host.kind !== 'ready') {
+        // No host that can run them (the machine went away, the conversation was archived): each
+        // queued message gets its answer row closed with a reason, never a bubble waiting for ever.
+        await this.closeAllQueued(user, conversationId, queue.splice(0), host?.kind === 'agent_too_old' ? 'AGENT_TOO_OLD' : 'HOST_GONE');
+        return;
+      }
+      const appendSystemPrompt = await this.promptFor(user, conversation);
+      if (this.running.has(conversationId)) return; // someone else took the lock; their release drains
+      const runner = this.deps.runnerFor(host.machine.id);
+      this.running.add(conversationId);
+      locked = true;
+      const streamed = this.streams(host.machine.id);
+      taken = streamed ? queue.splice(0) : queue.splice(0, 1);
+      const turns: LiveTurn[] = [];
+      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? (await this.runTextFor(user, conversationId, q.text)), question: q.question, answer: q.answer, settle: q.settle });
+      // From here the run owns the lock and releases it itself, and settles the turns.
+      locked = false;
+      taken = [];
+      if (streamed) void this.runLive(user, conversation, runner, host.configDir, streamedSystemPrompt(appendSystemPrompt), turns);
+      else this.finishRun(user, conversation, turns[0].text, turns[0].question, turns[0].answer, runner, host.configDir, appendSystemPrompt).then(turns[0].settle.resolve, turns[0].settle.reject);
+    } catch (err) {
+      console.error('chat: queued messages could not be started', { conversation_id: conversationId, error: failureLabel(err) });
+      await this.closeAllQueued(user, conversationId, [...taken.splice(0), ...(this.queued.get(conversationId) ?? []).splice(0)], 'RUNNER_FAILED');
+      if (locked) this.running.delete(conversationId);
+    }
+  }
+
+  /** Closes every one of `turns`, each on its own: one whose row cannot be stored rejects its `done`
+   *  with that failure, and the next ones are still closed. Never throws. */
+  private async closeAllQueued(user: User, conversationId: string, turns: QueuedTurn[], code: ChatErrorCode): Promise<void> {
+    for (const q of turns) {
+      try {
+        await this.closeQueued(user, conversationId, q, code);
+      } catch (e) {
+        q.settle.reject(e);
+      }
+    }
+  }
+
+  /** Closes a queued message that will not run: its answer row says why, and its `done` resolves. */
+  private async closeQueued(user: User, conversationId: string, q: QueuedTurn, code: ChatErrorCode): Promise<void> {
+    const final = await this.deps.repos.chat.updateMessage(q.answer.id, { text: '', usage: null, error_code: code });
+    chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversationId, message: final });
+    chatBus.publish({ type: 'run_finished', user_id: user.id, conversation_id: conversationId, message_id: final.id, ok: false, error_code: code });
+    q.settle.resolve(final);
+  }
+
   /** A run that could not even be attempted (`isSetupFailure`): its assistant row is already gone. */
   private publishSetupFailure(user: User, conversationId: string): void {
     chatBus.publish({ type: 'run_finished', user_id: user.id, conversation_id: conversationId, message_id: null, ok: false, error_code: 'SETUP_FAILED' });
   }
 
-  /** Frees a conversation's run lock and hands the conversation to the decision drain. */
+  /** Frees a conversation's run lock and hands the conversation to its queue, or else the decision drain. */
   private releaseLock(user: User, conversationId: string): void {
     this.running.delete(conversationId);
+    // Messages typed while the process could not take them come first: the person is waiting on
+    // them. The decision drain runs once nothing is queued (its own comment below still applies).
+    if (this.queued.get(conversationId)?.length) {
+      void this.launchQueued(user, conversationId).catch(() => {});
+      return;
+    }
     // The lock is free: if a decision was recorded while it was held (fix round 2) and could not
     // be injected immediately, this is where it finally gets its turn. Scheduled, never awaited:
     // the drain starts a CLI run of its own, whose completion schedules another — awaiting it would
