@@ -72,12 +72,15 @@ web disables the box, so the person cannot talk to the concierge at all.
   (a call made inside a subagent), it exits 0. If the payload has `"run_in_background": true`, it
   exits 0. Otherwise it writes a pt-BR sentence to stderr and exits 2.
 - `CONCIERGE_SETTINGS`: `{"hooks":{"PreToolUse":[{"matcher":"Agent|Task","hooks":[{"type":"command","command":…}]}]}}`.
-- `userMessageLine(text, uuid)`: `{"type":"user","uuid":…,"message":{"role":"user","content":text}}`.
-- `END_INPUT_LINE = '{"type":"termhub_end_input"}'`.
 
 ### 5.2 `@termhub/agent-protocol`
 
 - `CAPABILITY_CLAUDE_STREAM_INPUT = 'claude.stream_input'`.
+- `streamUserMessageLine(text, uuid)`: `{"type":"user","uuid":…,"message":{"role":"user","content":text}}`,
+  and `STREAM_END_INPUT_LINE = '{"type":"termhub_end_input"}'`. These are wire format between the
+  server and the agent, so they live here and not in `@termhub/claude-cli`. The server already loads
+  this package at runtime, and the Docker image does not ship `claude-cli` (decided while planning,
+  2026-09-26).
 - `claudeOpenParams.stream_input: z.boolean().optional()`.
 - `append_system_prompt` cap goes from 4000 to 8000. It only reaches agents that advertise the new
   capability, whose schema already allows it. `projectSystemPrompt` keeps its own 4000 cap, so what
