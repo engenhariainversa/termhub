@@ -47,6 +47,11 @@ describe('interpretHookEvent — claude', () => {
     expect(interpretHookEvent('claude', { hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Allow?' })?.continuesWait).toBeUndefined();
   });
 
+  it("only idle_prompt keepsWaitText: its own message is a generic reminder, never the turn's answer (spec 2026-09-26 §6.1)", () => {
+    expect(interpretHookEvent('claude', { hook_event_name: 'Notification', notification_type: 'idle_prompt', message: 'Claude is waiting for your input' })?.keepsWaitText).toBe(true);
+    expect(interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Posso seguir?' })?.keepsWaitText).toBeUndefined();
+  });
+
   it('maps PreToolUse to working with the tool\'s activity, keeping nothing of the tool input', () => {
     const withInput = interpretHookEvent('claude', { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: '/secret', new_string: 'x' } });
     const without = interpretHookEvent('claude', { hook_event_name: 'PreToolUse', tool_name: 'Edit' });
@@ -200,6 +205,11 @@ describe('interpretHookEvent — cursor', () => {
       expect(interpretHookEvent('cursor', { ...base, hook_event_name: 'stop', status })?.continuesWait).toBe(true);
     }
     expect(interpretHookEvent('cursor', { ...base, hook_event_name: 'afterAgentResponse', text: 'um' })?.continuesWait).toBe(true);
+  });
+
+  it("afterAgentResponse never keepsWaitText: its own text is the fresh answer, and must replace a stale one (spec 2026-09-26 §6.1)", () => {
+    expect(interpretHookEvent('cursor', { ...base, hook_event_name: 'afterAgentResponse', text: 'dois' })?.keepsWaitText).toBeUndefined();
+    expect(interpretHookEvent('cursor', { ...base, hook_event_name: 'stop', status: 'completed', loop_count: 0 })?.keepsWaitText).toBeUndefined();
   });
 
   it('marks the tab idle when the session ends', () => {

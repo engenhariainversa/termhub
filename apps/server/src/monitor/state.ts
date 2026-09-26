@@ -26,6 +26,13 @@ export interface Interpreted {
    */
   continuesWait?: true;
   /**
+   * Only for an event that `continuesWait`: this one's own text is not the answer, it is the same
+   * generic reminder every time (Claude's idle_prompt) — so the wait's current text (the Stop's
+   * `last_assistant_message`) is kept over it. Absent (or false) for a continuation that brings a
+   * fresh answer of its own (Cursor's `afterAgentResponse`), which must replace a stale one.
+   */
+  keepsWaitText?: true;
+  /**
    * A question the tab put to the person (spec 2026-09-25 §4.2): an `AskUserQuestion` card or a
    * permission prompt. For the tab-question service only — never stored on the tab nor its events.
    */
@@ -82,8 +89,9 @@ function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
       const type = str(ev.notification_type);
       const message = cap(str(ev.message));
       if (type === 'permission_prompt') return { kind: 'waiting_permission', text: message, meta: { event: name, type } };
-      // idle_prompt comes ~1 min after the Stop of the same turn: the same wait, still unanswered
-      if (type === 'idle_prompt') return { kind: 'waiting_input', text: message, meta: { event: name, type }, continuesWait: true };
+      // idle_prompt comes ~1 min after the Stop of the same turn: the same wait, still unanswered.
+      // Its own message is a generic reminder, not an answer, so the wait's text is kept over it.
+      if (type === 'idle_prompt') return { kind: 'waiting_input', text: message, meta: { event: name, type }, continuesWait: true, keepsWaitText: true };
       if (type === 'elicitation_dialog') return { kind: 'waiting_input', text: message, meta: { event: name, type } };
       return null; // auth_success and friends: nothing the user has to act on
     }

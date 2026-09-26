@@ -121,13 +121,26 @@ export class TabsRepository {
    * now newer than it) — except for an event that `continuesWait`: Claude's hooks send `Stop` and,
    * ~1 min later, `Notification idle_prompt` for one turn, both mapped to `waiting_input`; if the
    * person already saw the tab for that wait, the idle_prompt must not re-open it, so the seen mark
-   * is carried forward to the new `stateAt` instead; a continuation that brings no text keeps the
-   * wait's own. Two `waiting_input` in a row are not enough to tell: Codex sends only that, once
-   * per turn, so its next turn is a new wait that must re-arm.
+   * is carried forward to the new `stateAt` instead. A continuation with no text of its own keeps
+   * the wait's text (Cursor's `stop` after its answer), and so does one whose own text is never the
+   * answer — only a generic reminder (`keepsWaitText`, spec 2026-09-26 §6.1: Claude's idle_prompt
+   * over the Stop's `last_assistant_message`); any other continuation's text replaces the wait's own
+   * (Cursor's `afterAgentResponse` over a stale or missing answer). Two `waiting_input` in a row are
+   * not enough to tell: Codex sends only that, once per turn, so its next turn is a new wait that
+   * must re-arm.
    */
   async recordEvent(
     tabId: string,
-    event: { kind: TabState; tool: string; text: string | null; meta?: Record<string, unknown>; activity?: TabActivity; activityVerb?: string | null; continuesWait?: boolean },
+    event: {
+      kind: TabState;
+      tool: string;
+      text: string | null;
+      meta?: Record<string, unknown>;
+      activity?: TabActivity;
+      activityVerb?: string | null;
+      continuesWait?: boolean;
+      keepsWaitText?: boolean;
+    },
   ): Promise<{ tab: Tab; event: TabEvent }> {
     const at = new Date();
     const [e, t] = await this.db.$transaction(async (tx) => {
@@ -135,10 +148,11 @@ export class TabsRepository {
       const currentlySeen = !!current?.stateSeenAt && !!current.stateAt && current.stateSeenAt >= current.stateAt;
       const continuing = !!event.continuesWait && current?.state === 'waiting_input' && event.kind === 'waiting_input';
       const carrySeen = continuing && currentlySeen;
-      // A continuation keeps the text of the wait it continues when that wait has one, and brings its own
-      // only when it has none (spec 2026-09-26 §6.1): Claude's idle_prompt ("Claude is waiting for your
-      // input") no longer replaces the Stop's last_assistant_message, and Cursor's stop keeps its answer.
-      const text = continuing ? (current?.stateText ?? event.text) : event.text;
+      // A continuation keeps the wait's own text when it has none of its own, or when its own text is
+      // never the answer (`keepsWaitText`: Claude's idle_prompt, "Claude is waiting for your input", which
+      // must not replace the Stop's last_assistant_message). Any other continuation's text — Cursor's
+      // afterAgentResponse — replaces the wait's own, including a stale one from an earlier turn.
+      const text = continuing && (event.text === null || event.keepsWaitText) ? (current?.stateText ?? event.text) : event.text;
       const ev = await tx.tabEvent.create({ data: { id: newId(), tabId, kind: event.kind, tool: event.tool, text: event.text, meta: (event.meta ?? {}) as object, createdAt: at } });
       const updated = await tx.tab.update({
         where: { id: tabId },
