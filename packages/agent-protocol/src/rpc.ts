@@ -73,6 +73,16 @@ export const RPC = {
     z.object({ stdout: z.string() }),
   ),
   'ai.credential': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), z.object({ stdout: z.string() }), 10_000),
+  /** Symlinks a Claude Code transcript into another account's config dir so `claude --resume` finds it there (since agent 0.6.0). */
+  'claude.linkSession': def(
+    z.object({
+      transcript_path: machinePath,
+      session_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+      config_dir: machinePath.nullable(),
+    }),
+    z.object({ status: z.enum(['linked', 'same_account', 'no_transcript', 'no_config_dir', 'conflict']) }),
+    10_000,
+  ),
   'file.paste': def(z.object({ name: pasteName, data_b64: z.string().min(1).max(28 * 1024 * 1024) }), z.object({ path: z.string() }), 60_000),
   /** Monitor hooks (see @termhub/machine-ops hooks.ts): the agent writes the script, env and config entries under its own $HOME. */
   /** `claude_dirs`: Claude config dirs besides ~/.claude (accounts with CLAUDE_CONFIG_DIR), hooked when they exist; since agent 0.1.5. */
