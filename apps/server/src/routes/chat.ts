@@ -10,6 +10,7 @@ import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { chatBus } from '../chat/bus.js';
 import { activeGrants, assertGrantableAction, grantTab, listGrants, revokeGrant } from '../chat/grants.js';
+import { decideMany } from '../chat/decisions.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
 
 const messageBody = z.object({ text: z.string().trim().min(1).max(8000), project_id: z.string().min(1).max(64).nullish() });
@@ -17,6 +18,13 @@ const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
 const actionIdParam = z.object({ id: z.string().min(1).max(64) });
 const decisionBody = z.object({ decision: z.enum(['approve', 'deny', 'approve_tab']) });
+const batchBody = z.object({
+  decisions: z
+    .array(z.object({ id: z.string().min(1).max(64), decision: z.enum(['approve', 'deny']) }))
+    .min(1)
+    .max(20)
+    .refine((d) => new Set(d.map((x) => x.id)).size === d.length, 'Ações repetidas'),
+});
 const grantIdParam = z.object({ id: z.string().min(1).max(64) });
 const tabQuestionIdParam = z.object({ id: z.string().min(1).max(64) });
 /** The host pair the user picks: the machine, and optionally which of its Claude accounts. No account
@@ -151,6 +159,20 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       // successful decision into a 409. The row stays approved/denied with no injection yet; the run
       // holding the lock will pick it up and inject it through `drainNextDecision` once it finishes.
       if (err instanceof HttpError && err.code === 'CHAT_BUSY') return { action, queued: true, note: QUEUED_NOTE, grant };
+      throw err;
+    }
+  });
+
+  /** A grouped confirmation (spec 2026-09-26 §7): the batch decided at once and injected as one sentence. */
+  app.post('/actions/decisions', { config: { action: 'create' } }, async (request) => {
+    const { decisions } = batchBody.parse(request.body);
+    const user = request.scope.user;
+    const { decided, skipped } = await decideMany(repos, user.id, decisions);
+    try {
+      const message = await deps.service.resumeAfterDecision(user, decided[0]!);
+      return { actions: decided, skipped, message };
+    } catch (err) {
+      if (err instanceof HttpError && err.code === 'CHAT_BUSY') return { actions: decided, skipped, queued: true, note: QUEUED_NOTE };
       throw err;
     }
   });

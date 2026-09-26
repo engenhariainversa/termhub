@@ -423,6 +423,38 @@ it('a double click on the same decision still answers 409 the second time, havin
   expect(resumeAfterDecision).toHaveBeenCalledTimes(1); // injected once — the second click never reaches it
 });
 
+it('POST /chat/actions/decisions decides the batch and resumes the conversation once', async () => {
+  const rows: Record<string, typeof pendingAction & { status: string }> = { a1: { ...pendingAction, id: 'a1', status: 'pending' }, a2: { ...pendingAction, id: 'a2', status: 'pending' } };
+  const findByIdForUser = vi.fn(async (id: string) => rows[id]);
+  const decide = vi.fn(async (id: string, _u: string, status: string) => ({ ...rows[id], status }));
+  const { app, resumeAfterDecision } = build({ findByIdForUser, decide });
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/decisions', payload: { decisions: [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'deny' }] } });
+  expect(res.statusCode).toBe(200);
+  expect(decide).toHaveBeenCalledWith('a1', 'u1', 'approved');
+  expect(decide).toHaveBeenCalledWith('a2', 'u1', 'denied');
+  expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+  expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'denied' }], skipped: [] });
+});
+
+it('POST /chat/actions/decisions validates the body', async () => {
+  const { app, decide } = build();
+  for (const payload of [{}, { decisions: [] }, { decisions: [{ id: 'a1', decision: 'approve_tab' }] }, { decisions: [{ id: 'a1', decision: 'approve' }, { id: 'a1', decision: 'deny' }] }, { decisions: Array.from({ length: 21 }, (_, i) => ({ id: `a${i}`, decision: 'deny' })) }]) {
+    expect((await app.inject({ method: 'POST', url: '/chat/actions/decisions', payload })).statusCode).toBe(400);
+  }
+  expect(decide).not.toHaveBeenCalled();
+});
+
+it('POST /chat/actions/decisions answers queued when a run holds the conversation', async () => {
+  const findByIdForUser = vi.fn(async (id: string) => ({ ...pendingAction, id, status: 'pending' }));
+  const resumeAfterDecision = vi.fn(async () => {
+    throw new HttpError(409, 'ocupado', 'CHAT_BUSY');
+  });
+  const { app } = build({ findByIdForUser, resumeAfterDecision });
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/decisions', payload: { decisions: [{ id: 'a1', decision: 'approve' }] } });
+  expect(res.statusCode).toBe(200);
+  expect(res.json()).toMatchObject({ queued: true });
+});
+
 it('approve_tab on an eligible send_input approves it, trusts the tab and says so live', async () => {
   const events: ChatEvent[] = [];
   const off = chatBus.subscribe((e) => events.push(e));
