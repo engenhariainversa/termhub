@@ -1,5 +1,8 @@
 // Test-only builders (outside src: tsc never compiles this; vitest imports it). A ZIP with stored
-// entries (method 0), CRC-32 and a central directory — enough for mammoth, exceljs and our own reader.
+// (method 0) or deflated (method 8) entries, CRC-32 and a central directory — enough for mammoth,
+// exceljs and our own reader.
+import { deflateRawSync } from 'node:zlib';
+
 const TABLE = new Int32Array(256);
 for (let n = 0; n < 256; n++) {
   let c = n;
@@ -15,6 +18,8 @@ const crc32 = (buf: Buffer): number => {
 export interface BuildZipOptions {
   /** Lie about an entry's uncompressed size in the central directory (a zip bomb's signature). */
   claimUncompressed?: Record<string, number>;
+  /** Deflate the entries (method 8), the way every real .docx/.xlsx is written. */
+  deflate?: boolean;
 }
 
 export function buildZip(entries: [string, string | Buffer][], opts: BuildZipOptions = {}): Buffer {
@@ -23,13 +28,16 @@ export function buildZip(entries: [string, string | Buffer][], opts: BuildZipOpt
   let offset = 0;
   for (const [name, content] of entries) {
     const data = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8');
+    const stored = opts.deflate ? deflateRawSync(data) : data;
+    const method = opts.deflate ? 8 : 0;
     const nameBuf = Buffer.from(name, 'utf8');
     const crc = crc32(data);
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(method, 8);
     local.writeUInt32LE(crc, 14);
-    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(stored.length, 18);
     local.writeUInt32LE(data.length, 22);
     local.writeUInt16LE(nameBuf.length, 26);
     const claimed = opts.claimUncompressed?.[name] ?? data.length;
@@ -37,14 +45,15 @@ export function buildZip(entries: [string, string | Buffer][], opts: BuildZipOpt
     central.writeUInt32LE(0x02014b50, 0);
     central.writeUInt16LE(20, 4);
     central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(method, 10);
     central.writeUInt32LE(crc, 16);
-    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(stored.length, 20);
     central.writeUInt32LE(claimed, 24);
     central.writeUInt16LE(nameBuf.length, 28);
     central.writeUInt32LE(offset, 42);
-    locals.push(local, nameBuf, data);
+    locals.push(local, nameBuf, stored);
     centrals.push(central, nameBuf);
-    offset += local.length + nameBuf.length + data.length;
+    offset += local.length + nameBuf.length + stored.length;
   }
   const cd = Buffer.concat(centrals);
   const end = Buffer.alloc(22);

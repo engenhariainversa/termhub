@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import mammoth from 'mammoth';
 import { extractText as pdfExtractText } from 'unpdf';
 import type { AttachmentKind } from '@termhub/mobile-api';
-import { readZipDirectory, zipExpandedBytes } from './zip.js';
+import { inflatedBytes, readZipDirectory, zipExpandedBytes } from './zip.js';
 
 /**
  * What the concierge will be able to read of a file (spec 2026-09-26 §5.4). Every parser treats
@@ -37,6 +37,8 @@ export interface ExtractDeps {
   fetch?: typeof fetch;
   /** Tests only; production uses the two constants above. */
   timeoutMs?: number;
+  /** Tests only; production uses `ZIP_EXPANDED_MAX_BYTES`. */
+  zipExpandedMaxBytes?: number;
 }
 
 /** mammoth's typings stopped declaring convertToMarkdown; the runtime (1.12.x) still has it. */
@@ -99,10 +101,18 @@ export function imageDimensions(b: Uint8Array, mime: string): { width: number; h
   return null;
 }
 
-function guardZip(file: Buffer): void {
+/**
+ * The directory's claim is checked first (free), then every entry is really inflated and counted
+ * against the same budget (`inflatedBytes`): a docx/xlsx whose directory under-declares a highly
+ * compressible entry would otherwise be inflated whole by JSZip inside mammoth/exceljs — ~1000× the
+ * upload, on a host shared with production.
+ */
+async function guardZip(file: Buffer, budget: number): Promise<void> {
   const entries = readZipDirectory(file);
   if (!entries) throw new ExtractError('ATTACHMENT_INVALID', 'not a zip');
-  if (zipExpandedBytes(entries) > ZIP_EXPANDED_MAX_BYTES) throw new ExtractError('ATTACHMENT_INVALID', 'zip too large when expanded');
+  if (zipExpandedBytes(entries) > budget) throw new ExtractError('ATTACHMENT_INVALID', 'zip too large when expanded');
+  const measured = await inflatedBytes(file, entries, budget);
+  if (!measured.ok) throw new ExtractError('ATTACHMENT_INVALID', `zip refused: ${measured.reason}`);
 }
 
 async function fromPdf(file: Buffer): Promise<Extracted> {
@@ -112,8 +122,8 @@ async function fromPdf(file: Buffer): Promise<Extracted> {
   return { text: c.text, meta: { pages: r.totalPages, truncated: c.truncated } };
 }
 
-async function fromDocx(file: Buffer): Promise<Extracted> {
-  guardZip(file);
+async function fromDocx(file: Buffer, zipBudget: number): Promise<Extracted> {
+  await guardZip(file, zipBudget);
   const r = await convertToMarkdown({ buffer: file }, { convertImage: NO_IMAGES, externalFileAccess: false });
   const c = capText(r.value.replace(/!\[[^\]]*\]\(\)/g, '').trim());
   return { text: c.text, meta: { truncated: c.truncated } };
@@ -135,8 +145,8 @@ function cellText(value: ExcelJS.CellValue): string {
 }
 const escapeCell = (s: string): string => s.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
-async function fromXlsx(file: Buffer): Promise<Extracted> {
-  guardZip(file);
+async function fromXlsx(file: Buffer, zipBudget: number): Promise<Extracted> {
+  await guardZip(file, zipBudget);
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(file as unknown as XlsxInput);
   const sheets: { name: string; rows: number; cols: number }[] = [];
@@ -189,6 +199,7 @@ async function parsed(work: () => Promise<Extracted>, timeoutMs: number): Promis
 
 export async function extract(kind: AttachmentKind, file: Buffer, mime: string, deps: ExtractDeps): Promise<Extracted> {
   const timeoutMs = deps.timeoutMs ?? EXTRACT_TIMEOUT_MS;
+  const zipBudget = deps.zipExpandedMaxBytes ?? ZIP_EXPANDED_MAX_BYTES;
   switch (kind) {
     case 'image': {
       const dims = imageDimensions(file, mime);
@@ -202,9 +213,9 @@ export async function extract(kind: AttachmentKind, file: Buffer, mime: string, 
     case 'pdf':
       return parsed(() => fromPdf(file), timeoutMs);
     case 'docx':
-      return parsed(() => fromDocx(file), timeoutMs);
+      return parsed(() => fromDocx(file, zipBudget), timeoutMs);
     case 'xlsx':
-      return parsed(() => fromXlsx(file), timeoutMs);
+      return parsed(() => fromXlsx(file, zipBudget), timeoutMs);
     case 'audio':
     case 'video':
       return transcribe(file, mime, deps);

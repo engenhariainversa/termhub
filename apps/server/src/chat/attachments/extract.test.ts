@@ -72,6 +72,29 @@ describe('extract: pdf, docx, xlsx', () => {
     expect(r.text).toBe('Olá mundo\n\nSegundo parágrafo');
     expect(r.meta).toEqual({ truncated: false });
   });
+  it('docx: a deflated document (the way Word writes one) extracts like a stored one', async () => {
+    const r = await extract('docx', minimalDocx(['Olá mundo', 'Segundo parágrafo'], { deflate: true }), 'application/x', noWhisper);
+    expect(r.text).toBe('Olá mundo\n\nSegundo parágrafo');
+  });
+  it('docx and xlsx: the guard measures the bytes an entry really inflates to, never what the directory claims', async () => {
+    // A paragraph of 4 MB deflates to a few KB, and mammoth would extract it (capped) if the guard let it through.
+    const big = 'a'.repeat(4 * 1024 * 1024);
+    const budget = 1024 * 1024;
+    const withBudget = { ...noWhisper, zipExpandedMaxBytes: budget };
+    expect(await code(extract('docx', minimalDocx([big], { deflate: true }), 'application/x', withBudget))).toBe('ATTACHMENT_INVALID');
+    // The directory says 100 bytes; the entry inflates to 4 MB. A generous budget does not save it: the claim is a lie.
+    const lying = minimalDocx([big], { deflate: true, claimUncompressed: { 'word/document.xml': 100 } });
+    expect(await code(extract('docx', lying, 'application/x', noWhisper))).toBe('ATTACHMENT_INVALID');
+    // Under the budget and truthful: extracted, capped by TEXT_CAP.
+    const fine = await extract('docx', minimalDocx([big], { deflate: true }), 'application/x', { ...noWhisper, zipExpandedMaxBytes: 8 * 1024 * 1024 });
+    expect(fine.text).toHaveLength(TEXT_CAP);
+    // xlsx goes through the same guard.
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet('S').addRow(['x'.repeat(2 * 1024 * 1024)]);
+    const xlsx = Buffer.from(await wb.xlsx.writeBuffer());
+    expect(await code(extract('xlsx', xlsx, 'application/x', withBudget))).toBe('ATTACHMENT_INVALID');
+    expect((await extract('xlsx', xlsx, 'application/x', { ...noWhisper, zipExpandedMaxBytes: 8 * 1024 * 1024 })).meta).toMatchObject({ sheets: [{ name: 'S', rows: 1, cols: 1 }] });
+  });
   it('docx and xlsx: a ZIP that claims more than 200 MB expanded is refused before any parser runs', async () => {
     const bomb = minimalDocx(['x'], { claimUncompressed: { 'word/document.xml': 300 * 1024 * 1024 } });
     expect(await code(extract('docx', bomb, 'application/x', noWhisper))).toBe('ATTACHMENT_INVALID');
