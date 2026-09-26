@@ -22,12 +22,14 @@ import type { Project, Tab, TabKind } from '../lib/types';
 import { TabBar } from './TabBar';
 import { TerminalView } from './Terminal';
 import { SimulatorView } from './SimulatorView';
+import { RateLimitBanner } from './RateLimitBanner';
 import { PaneLayer, PANE_HEADER_HEIGHT } from './PaneLayer';
 import { FloatingWindow, FLOATING_TITLE_HEIGHT } from './FloatingWindow';
 import { ConfirmDialog } from './Modal';
 import { MachinePicker } from './MachinePicker';
+import { useAuth } from '../lib/auth';
 import { useData } from '../lib/data';
-import { useMarkSeenOnFocus } from '../lib/monitor';
+import { useMarkSeenOnFocus, useMonitor } from '../lib/monitor';
 import { setTabsOnScreen } from '../lib/visible-tabs';
 import { writeLastMachine } from '../lib/last-machine';
 
@@ -38,6 +40,8 @@ interface Props {
 
 export function TerminalsView({ project, visible }: Props) {
   const { machines, machinesOf, missingTmux } = useData();
+  const { can } = useAuth();
+  const { items: monitorItems } = useMonitor();
   // `machinesOf` itself is not stable: it lives on `useData()`'s value, whose memo also depends on
   // `statuses` (updated on every status poll), so its identity changes far more often than the
   // machine list. Key on the actual inputs instead so this doesn't re-run `newTab`'s effects on
@@ -137,6 +141,10 @@ export function TerminalsView({ project, visible }: Props) {
 
   // Clears the focused tab's "needs you" dot as soon as the person actually looks at it.
   useMarkSeenOnFocus(focusedTabId, visible);
+
+  // The focused tab's live state (rate_limited_at, state) comes from the monitor push; the REST row
+  // (loaded below) is the fallback until a snapshot/push for it arrives.
+  const focusedLiveTab = monitorItems.find((i) => i.tab.id === focusedTabId)?.tab ?? (tabs ?? []).find((t) => t.id === focusedTabId);
 
   // --- Data -----------------------------------------------------------------
   const load = useCallback(async () => {
@@ -313,6 +321,7 @@ export function TerminalsView({ project, visible }: Props) {
             : undefined
         }
       />
+      {focusedLiveTab && <RateLimitBanner tab={focusedLiveTab} canSwap={can('terminals', 'update')} />}
       {projectMachines.length === 0 && (
         <div className="border-b border-warn/30 bg-warn/10 px-3 py-1 text-xs text-warn">
           Este projeto não tem máquina vinculada.{' '}

@@ -63,6 +63,8 @@ export function harnessCity(o: HarnessOptions): OfficeCity {
         activity_verb: o.verb && activity ? o.verb : null,
         created_at: o.at,
         alive: i % 9 !== 4,
+        ai_account_id: null,
+        rate_limited_at: null,
         progress,
       };
     });

@@ -16,6 +16,7 @@ function agentMachine(overrides: Partial<Machine> = {}): Machine {
     agent_version: '0.1.0',
     agent_last_seen_at: new Date(Date.now() - 3 * 60_000).toISOString(),
     agent_auto_update: false,
+    claude_auto_swap: false,
     is_local: false,
     owner_id: 'u1',
     owner_name: null,

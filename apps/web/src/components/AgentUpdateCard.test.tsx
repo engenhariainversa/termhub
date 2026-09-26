@@ -26,7 +26,7 @@ import { AgentUpdateCard, POLL_MS } from './AgentUpdateCard';
 
 const machine: Machine = {
   id: 'm1', name: 'mini', host: null, ssh_user: null, ssh_port: 22, type: 'agent', os: 'macos', capabilities: ['tmux'], checked_at: null,
-  agent_version: '0.2.1', agent_last_seen_at: null, agent_auto_update: false, is_local: false, owner_id: 'u1', owner_name: null, created_at: '',
+  agent_version: '0.2.1', agent_last_seen_at: null, agent_auto_update: false, claude_auto_swap: false, is_local: false, owner_id: 'u1', owner_name: null, created_at: '',
 };
 const status = (agent_version: string, latest = '0.2.5', online = true) => ({ id: 'm1', online, tmux: true, os: 'macos', capabilities: [], agent_version, latest_agent_version: latest, update_available: online && agent_version !== latest });
 

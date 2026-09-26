@@ -83,6 +83,8 @@ export interface Machine {
   agent_last_seen_at: string | null;
   /** newer agent versions are installed automatically while the machine has no open terminal */
   agent_auto_update: boolean;
+  /** a tab whose Claude hits a usage limit resumes on another Claude account of this machine, on its own */
+  claude_auto_swap: boolean;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */
@@ -405,6 +407,10 @@ export interface Tab {
   activity_verb: string | null;
   created_at: string;
   alive: boolean;
+  /** the Claude account this tab's session last ran under; null = the machine's own default login */
+  ai_account_id: string | null;
+  /** set while its Claude is stuck on a usage limit; null once it resumes */
+  rate_limited_at: string | null;
 }
 
 export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error';
