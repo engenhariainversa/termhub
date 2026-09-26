@@ -72,8 +72,14 @@ beforeAll(async () => {
   await stores.chat.getState().loadProjects();
 });
 
+/** The slots as the test found them, restored after it: rows a test put in (`addRows`, a send over a
+ * mocked 202) would otherwise stay — a re-read merges by id and keeps rows newer than its snapshot,
+ * so the next test's open would not wash them out. */
+let conversationsBefore: ReturnType<typeof useChatStore.getState>['conversations'];
+
 beforeEach(() => {
   mockId = 'p-termhub';
+  conversationsBefore = useChatStore.getState().conversations;
   for (const fn of Object.values(mockRouter)) fn.mockClear();
   mockRouter.canGoBack.mockReturnValue(true);
   // The screens are under test here, not the socket (the store's own tests cover it): no events.
@@ -85,6 +91,7 @@ afterEach(() => {
   useChatStore.setState({
     error: null,
     live: emptyFold(),
+    conversations: conversationsBefore,
     decide: realActions.decide,
     decideMany: realActions.decideMany,
     reset: realActions.reset,

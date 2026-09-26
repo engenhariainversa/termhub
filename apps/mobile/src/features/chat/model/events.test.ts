@@ -1,4 +1,4 @@
-import { applyEvent, mergeMessage, type EventSlice } from './events';
+import { applyEvent, mergeMessage, mergeThread, type EventSlice } from './events';
 import { emptyFold, foldLive } from './live';
 import type { ChatAction, ChatEvent, ChatMessage, TabQuestion, TabSuggestion } from './types';
 
@@ -31,6 +31,35 @@ describe('mergeMessage', () => {
     expect(mergeMessage(list, { ...a, usage: { input: 2 } })).not.toBe(list);
     expect(mergeMessage(list, { ...a, error_code: 'HOST_GONE' })).not.toBe(list);
     expect(mergeMessage(list, { ...a, created_at: '2026-09-24T12:00:01.000Z' })).not.toBe(list);
+  });
+});
+
+describe('mergeThread', () => {
+  const later = '2026-09-24T12:00:05.000Z';
+
+  it('merges the snapshot by id: server rows win, untouched rows keep their objects, and the same list comes back when nothing changed', () => {
+    const a = row('a', { text: 'x' });
+    const b = row('b', { text: 'y' });
+    const current = [a, b];
+    expect(mergeThread(current, [row('a', { text: 'x' }), row('b', { text: 'y' })])).toBe(current);
+    const merged = mergeThread(current, [row('a', { text: 'x' }), row('b', { text: 'y', usage: { output: 3 } })]);
+    expect(merged[0]).toBe(a);
+    expect(merged[1]).toEqual(row('b', { text: 'y', usage: { output: 3 } }));
+  });
+
+  it("keeps a row the snapshot lacks when it is newer than the snapshot (a message event that landed meanwhile) or this device's own, and drops the rest", () => {
+    const a = row('a', { text: 'x' });
+    const landed = row('c', { text: 'oi', created_at: later });
+    const local = row('local:1', { role: 'user', text: 'oi', local: 'sending' });
+    const gone = row('old', { text: 'z', created_at: '2026-09-24T11:00:00.000Z' });
+    const merged = mergeThread([a, gone, landed, local], [a, row('b', { text: 'new' })]);
+    expect(merged.map((m) => m.id)).toEqual(['a', 'c', 'local:1', 'b']);
+    expect(merged[0]).toBe(a);
+  });
+
+  it('an empty snapshot keeps every current row (nothing is older than it)', () => {
+    const current = [row('a', { text: 'x' })];
+    expect(mergeThread(current, [])).toBe(current);
   });
 });
 

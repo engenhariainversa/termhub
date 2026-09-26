@@ -1,7 +1,7 @@
 // The chat store (design spec §6) over the real `HttpMobileApi`, the in-memory `MockTransport`
 // and its fake socket, with an enrolled, unlocked session store built over the same mock.
 import * as SecureStore from 'expo-secure-store';
-import type { TChatEvent } from '@/services/api/contract';
+import type { TChatEvent, TChatMessage } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { mmkv } from '@/services/storage';
 import { appBackgrounded } from '@/features/shared/signals';
@@ -96,7 +96,7 @@ it("open('p-termhub') loads the thread and subscribes once for the whole app", a
   expect(events).toHaveBeenCalledTimes(1);
 });
 
-it('a reconnect re-reads the conversation and empties live', async () => {
+it('a reconnect re-reads the conversation and keeps what streamed for a row the re-read does not show finished', async () => {
   const { chat, api, controls, handlers } = await setup();
   await openAndConnect(chat, 'p-termhub');
   handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', delta: 'meio' });
@@ -109,7 +109,83 @@ it('a reconnect re-reads the conversation and empties live', async () => {
   await jest.advanceTimersByTimeAsync(2000); // the socket's first backoff step (1 s), then its connect tick
   expect(chat.getState().connected).toBe(true);
   expect(read).toHaveBeenCalledWith(expect.anything(), 'p-termhub');
+  expect(chat.getState().live.deltas.get('m-x')).toBe('meio');
+});
+
+it('a mid-stream reconnect keeps the streamed text of a row the re-read still shows unanswered, and drops it once the row has its text (Review Focus #5)', async () => {
+  const { chat, api, controls, handlers } = await setup();
+  const rows = () => slot(chat, 'p-termhub').messages;
+  let openRow: TChatMessage = { id: 'm-open', conversation_id: 'c-termhub', role: 'assistant', text: '', usage: null, error_code: null, created_at: new Date().toISOString() };
+  const real = api.chat.bind(api);
+  jest.spyOn(api, 'chat').mockImplementation(async (auth, projectId) => {
+    const res = await real(auth, projectId);
+    return projectId === 'p-termhub' ? { ...res, messages: [...res.messages, openRow] } : res;
+  });
+  await openAndConnect(chat, 'p-termhub');
+  handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-open', delta: 'meio da' });
+
+  controls.dropSocket();
+  await jest.advanceTimersByTimeAsync(2000);
+  expect(chat.getState().connected).toBe(true);
+  expect(rows().find((m) => m.id === 'm-open')?.text).toBe('');
+  expect(chat.getState().live.deltas.get('m-open')).toBe('meio da');
+  expect(chat.getState().live.started.has('m-open')).toBe(true);
+
+  // The next re-read has the row's final text: the row carries it now, the fold lets go.
+  openRow = { ...openRow, text: 'meio da resposta' };
+  controls.dropSocket();
+  await jest.advanceTimersByTimeAsync(2000);
+  expect(chat.getState().connected).toBe(true);
+  expect(rows().find((m) => m.id === 'm-open')?.text).toBe('meio da resposta');
   expect(chat.getState().live).toEqual(emptyFold());
+});
+
+it('a re-read in flight never drops a row that a message event merged meanwhile; untouched rows keep their objects', async () => {
+  const { chat, api, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const rows = () => slot(chat, 'p-termhub').messages;
+  const before = rows();
+  const real = api.chat.bind(api);
+  let release!: () => void;
+  jest.spyOn(api, 'chat').mockImplementation(async (auth, projectId) => {
+    const res = await real(auth, projectId);
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return res;
+  });
+
+  const refreshing = chat.getState().refresh('p-termhub');
+  await flush(); // the GET's snapshot is taken; its answer is held back
+  const fresh: TChatMessage = { id: 'm-new', conversation_id: 'c-termhub', role: 'assistant', text: 'oi', usage: null, error_code: null, created_at: new Date().toISOString() };
+  handlers().onEvent({ type: 'message', user_id: 'u1', conversation_id: 'c-termhub', message: fresh });
+  expect(rows().at(-1)).toEqual(fresh);
+
+  release();
+  await refreshing;
+  expect(slot(chat, 'p-termhub').loaded).toBe(true);
+  const after = rows();
+  expect(after).toHaveLength(5);
+  expect(after.find((m) => m.id === 'm-new')).toEqual(fresh);
+  expect(after[0]).toBe(before[0]);
+  expect(after[3]).toBe(before[3]);
+});
+
+it('retrySend refuses while another send is in flight and keeps the failed row', async () => {
+  const { chat, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const rows = () => slot(chat, 'p-termhub').messages;
+  const sent = jest.spyOn(api, 'sendMessage').mockRejectedValueOnce(new ApiError(409, 'HOST_OFFLINE', 'A máquina do chat está offline.'));
+  await chat.getState().send('oi');
+  const failed = rows().at(-1)!;
+  expect(failed.local).toBe('failed');
+
+  sent.mockImplementationOnce(() => new Promise(() => undefined)); // a send that never answers
+  void chat.getState().send('outra');
+  expect(chat.getState().sending).toBe(true);
+  await expect(chat.getState().retrySend(failed.id)).resolves.toBe(false);
+  expect(rows()).toContain(failed);
+  expect(sent).toHaveBeenCalledTimes(2);
 });
 
 it('send shows the row at once, renamed on accept; the thread then grows through events merged by id, with no re-read', async () => {

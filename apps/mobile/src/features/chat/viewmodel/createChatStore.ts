@@ -20,10 +20,10 @@ import { ApiError } from '@/services/api/errors';
 import { randomId } from '@/services/crypto/random';
 import type { MobileApi } from '@/services/api/types';
 import { mmkvStateStorage } from '@/services/storage';
-import { applyEvent, settlePending } from '../model/events';
+import { applyEvent, mergeThread, settlePending } from '../model/events';
 import { belongsTo } from '../model/filter';
 import { CHAT_MSG } from '../model/messages';
-import { emptyFold, type LiveFold } from '../model/live';
+import { emptyFold, pruneLive, type LiveFold } from '../model/live';
 import { createThrottledStorage } from './throttled-storage';
 import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, TabQuestion, TabSuggestion } from '../model/types';
 
@@ -212,10 +212,14 @@ export function createChatStore(deps: ChatDeps) {
           try {
             const res = await api.chat(session().auth(), projectOf(key));
             if (stale()) return;
+            // The same conversation: the snapshot merges into the thread by id, so a row a `message`
+            // event brought while the GET was in flight (a final answer, the person's row renamed on
+            // its 202) survives the older snapshot. Another conversation (a reset, here or elsewhere)
+            // replaces the thread. This device's own unsent rows stay either way.
+            const same = get().conversations[key]?.conversation?.id === res.conversation.id;
             patchSlot(key, (slot) => ({
               conversation: res.conversation,
-              // A row this device is still sending, or failed to, is not on the server yet: keep it.
-              messages: [...res.messages, ...slot.messages.filter((m) => m.local !== undefined)],
+              messages: same ? mergeThread(slot.messages, res.messages) : [...res.messages, ...slot.messages.filter((m) => m.local !== undefined)],
               actions: res.actions,
               grants: res.grants,
               tabQuestions: res.tab_questions,
@@ -224,6 +228,12 @@ export function createChatStore(deps: ChatDeps) {
               loaded: true,
               error: null,
             }));
+            // The fold is the open conversation's: a row the snapshot shows answered carries its text
+            // now, so what streamed for it goes; one still empty keeps its streamed prefix on screen.
+            if (key === activeKey()) {
+              const live = same ? pruneLive(get().live, res.messages) : emptyFold();
+              if (live !== get().live) set({ live });
+            }
           } catch (e) {
             if (stale() || isLocked(e) || session().handleApiError(e)) return;
             patchSlot(key, () => ({ error: isApiError(e) ? e.message : CHAT_MSG.network }));
@@ -272,7 +282,9 @@ export function createChatStore(deps: ChatDeps) {
             },
             onReconnect: () => {
               if (gen !== generation) return;
-              set({ connected: true, live: emptyFold() });
+              // `live` stays: what streamed before the drop is still the best view of a row the
+              // re-read shows unanswered. The re-read prunes what it shows finished (`pruneLive`).
+              set({ connected: true });
               const key = activeKey();
               if (key !== null) void reread(key);
             },
@@ -405,7 +417,8 @@ export function createChatStore(deps: ChatDeps) {
 
           async retrySend(messageId) {
             const projectId = get().activeProject;
-            if (projectId === undefined) return false;
+            // `send` refuses while another send is in flight: the failed row must not go before then.
+            if (projectId === undefined || get().sending) return false;
             const key = keyOf(projectId);
             const row = get().conversations[key]?.messages.find((m) => m.id === messageId && m.local === 'failed');
             if (!row) return false;

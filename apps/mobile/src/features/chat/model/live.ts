@@ -3,7 +3,7 @@
 // `applyLive` costs O(1) per event and hands back the very same fold when the event changes nothing,
 // replacing only the map it touched otherwise — so a selector on one row's text changes only when
 // that row's text does. `foldLive` is the batch form over a list of events.
-import type { ChatEvent } from './types';
+import type { ChatEvent, ChatMessage } from './types';
 
 export interface LiveFold {
   deltas: Map<string, string>;
@@ -75,6 +75,17 @@ export function applyLive(fold: LiveFold, e: ChatEvent): LiveFold {
     default:
       return fold;
   }
+}
+
+/**
+ * The fold after a re-read of the thread (a reconnect, most often): a row the thread shows finished
+ * — text or an error — carries its answer now, so what streamed for it goes, as its final `message`
+ * event would have done; a row still empty keeps its streamed prefix on screen, and an id the thread
+ * does not have is left alone (its events may still be on their way). The very same fold back when
+ * nothing was finished.
+ */
+export function pruneLive(fold: LiveFold, messages: readonly ChatMessage[]): LiveFold {
+  return messages.reduce((f, m) => (m.role === 'assistant' && (m.text || m.error_code) ? drop(f, m.id, false) : f), fold);
 }
 
 /** The fold of a whole list of events, from nothing — the batch form, for tests and re-folds. */

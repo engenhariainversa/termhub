@@ -31,6 +31,20 @@ export function mergeMessage(list: ChatMessage[], msg: ChatMessage): ChatMessage
   return same ? list : list.map((m, j) => (j === i ? msg : m));
 }
 
+/**
+ * A re-read's snapshot into the thread it refreshes (same conversation): every server row merges by
+ * id (`mergeMessage`: the server's version wins, untouched rows keep their objects); a row the
+ * snapshot lacks stays when it is this device's own (`local`) or newer than the snapshot's newest
+ * row — a `message` event that landed while the GET was in flight — and goes otherwise (the server
+ * no longer has it). The very same `current` back when nothing changed.
+ */
+export function mergeThread(current: ChatMessage[], server: ChatMessage[]): ChatMessage[] {
+  const ids = new Set(server.map((m) => m.id));
+  const newest = server.reduce((max, m) => (m.created_at > max ? m.created_at : max), '');
+  const kept = current.filter((m) => ids.has(m.id) || m.local !== undefined || m.created_at > newest);
+  return server.reduce(mergeMessage, kept.length === current.length ? current : kept);
+}
+
 /** Settles the pending action `id` as approved or denied. A card that has moved on already — a
  * re-read that says it ran, failed or expired — is never moved back; the same array when nothing
  * changes (idempotent). */
