@@ -60,6 +60,12 @@ function verbPhrase(action: ChatAction, task: Task | undefined): string {
       return 'abrir uma aba nova';
     case 'close_tab':
       return 'fechar a aba';
+    case 'link_project_machine':
+      return `vincular a pasta \`${asString(args.cwd)}\``;
+    case 'set_project_machine_cwd':
+      return `trocar a pasta para \`${asString(args.cwd)}\``;
+    case 'unlink_project_machine':
+      return args.confirm === true ? 'desvincular a máquina e fechar as abas do projeto nela' : 'desvincular a máquina';
     case 'start_agent':
       return `iniciar um agente com o prompt "${asString(args.prompt)}"`;
     case 'create_task':

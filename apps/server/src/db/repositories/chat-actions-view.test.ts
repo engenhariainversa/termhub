@@ -88,6 +88,48 @@ it('falls back to the verb alone when nothing at all can be resolved (no tab, no
   expect(card.summary).toBe('criar a tarefa "Nova tarefa"');
 });
 
+// link_project_machine/set_project_machine_cwd/unlink_project_machine carry both a project_id and a
+// machine_id (targetOf copies both from args onto the row), but the project-only branch of
+// `targetPhrase`'s location resolution wins over the machine — same as open_tab/create_task above —
+// so the machine is dropped from the sentence even though it is known. That is acceptable: the
+// sentence still reads and still names the project.
+it('names link_project_machine by the folder it links, in the project — dropping the machine like other project-only actions', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(
+    repos,
+    [action({ tool: 'link_project_machine', args: { project_id: 'p1', machine_id: 'm1', cwd: '~/termhub' }, project_id: 'p1', machine_id: 'm1' })],
+    OWNER,
+  );
+  expect(card.summary).toBe('vincular a pasta `~/termhub` no projeto reactivando');
+});
+
+it('names set_project_machine_cwd by the new folder, in the project', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(
+    repos,
+    [action({ tool: 'set_project_machine_cwd', args: { project_id: 'p1', machine_id: 'm1', cwd: '~/termhub' }, project_id: 'p1', machine_id: 'm1' })],
+    OWNER,
+  );
+  expect(card.summary).toBe('trocar a pasta para `~/termhub` no projeto reactivando');
+});
+
+it('names unlink_project_machine plainly without confirm, and says the tabs close with confirm: true', async () => {
+  const repos = fakeRepos();
+  const [withoutConfirm] = await describeActions(
+    repos,
+    [action({ tool: 'unlink_project_machine', args: { project_id: 'p1', machine_id: 'm1' }, project_id: 'p1', machine_id: 'm1' })],
+    OWNER,
+  );
+  expect(withoutConfirm.summary).toBe('desvincular a máquina no projeto reactivando');
+
+  const [withConfirm] = await describeActions(
+    repos,
+    [action({ tool: 'unlink_project_machine', args: { project_id: 'p1', machine_id: 'm1', confirm: true }, project_id: 'p1', machine_id: 'm1', class: 'irreversible' })],
+    OWNER,
+  );
+  expect(withConfirm.summary).toBe('desvincular a máquina e fechar as abas do projeto nela no projeto reactivando');
+});
+
 it('names an unrecognised tool inside a sentence rather than showing it bare', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(repos, [action({ tool: 'do_something_new', args: {} })], OWNER);

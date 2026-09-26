@@ -12,6 +12,14 @@ it('classifies every tool the MCP exposes, and defaults an unknown one to irreve
   expect(actionClass('drop_everything', {})).toBe('irreversible');
 });
 
+it('classifies link_project_machine and set_project_machine_cwd as write, and unlink_project_machine as write or irreversible depending on confirm', () => {
+  expect(actionClass('link_project_machine', { project_id: 'p1', machine_id: 'm1', cwd: '~/termhub' })).toBe('write');
+  expect(actionClass('set_project_machine_cwd', { project_id: 'p1', machine_id: 'm1', cwd: '~/termhub' })).toBe('write');
+  expect(actionClass('unlink_project_machine', { project_id: 'p1', machine_id: 'm1' })).toBe('write');
+  expect(actionClass('unlink_project_machine', { project_id: 'p1', machine_id: 'm1', confirm: true })).toBe('irreversible');
+  expect(actionClass('unlink_project_machine', { project_id: 'p1', machine_id: 'm1', confirm: false })).toBe('write');
+});
+
 it('treats an interrupting key as irreversible and an ordinary one as a write', () => {
   expect(actionClass('send_key', { tab_id: 't1', key: 'C-c' })).toBe('irreversible');
   expect(actionClass('send_key', { tab_id: 't1', key: 'Escape' })).toBe('irreversible');
