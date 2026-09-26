@@ -4,6 +4,7 @@ import { actionClass, gateDecision, grantable, idempotencyKeyFor } from './gate.
 it('classifies every tool the MCP exposes, and defaults an unknown one to irreversible', () => {
   expect(actionClass('list_machines', {})).toBe('read');
   expect(actionClass('read_screen', { tab_id: 't1' })).toBe('read');
+  expect(actionClass('read_attachment', { id: 'abc123' })).toBe('read');
   expect(actionClass('send_input', { tab_id: 't1', text: 'oi' })).toBe('write');
   expect(actionClass('start_agent', {})).toBe('write');
   expect(actionClass('close_tab', { tab_id: 't1' })).toBe('irreversible');

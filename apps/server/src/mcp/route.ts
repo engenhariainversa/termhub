@@ -4,6 +4,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ApiToken } from '../db/repositories/api-tokens.js';
+import { isToolContent, type ToolContent } from '../chat/attachments/read-tool.js';
+import type { AttachmentStore } from '../chat/attachments/store.js';
 import { applyGate } from '../chat/gate-runtime.js';
 import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
 import { HttpError } from '../lib/errors.js';
@@ -22,7 +24,7 @@ declare module 'fastify' {
 
 const UNAUTHORIZED = { error: 'Não autenticado', code: 'UNAUTHORIZED' } as const;
 
-type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
+type ToolResult = { content: ToolContent[]; isError?: boolean };
 const text = (t: string, isError = false): ToolResult => ({ content: [{ type: 'text', text: t }], ...(isError ? { isError: true } : {}) });
 /** An id worth auditing: refused calls carry raw, unvalidated arguments, so anything else is dropped. */
 const auditId = (v: unknown) => (typeof v === 'string' && v.length >= 1 && v.length <= 64 ? v : null);
@@ -48,14 +50,14 @@ function withDefaultArguments(body: unknown): unknown {
  * a personal API token authenticates each request, and the token's user is the data scope. Stateless:
  * a fresh McpServer per request, so a revoked token stops working on the next call.
  */
-export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositories; version: string; limiter?: TokenRateLimiter }) {
+export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositories; version: string; limiter?: TokenRateLimiter; attachments?: AttachmentStore }) {
   const { repos } = deps;
   const limiter = deps.limiter ?? new TokenRateLimiter();
 
   const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = await authenticateToken(repos, request.headers.authorization);
     if (!auth) return reply.code(401).send(UNAUTHORIZED);
-    request.mcp = { token: auth.token, ctx: controlContextFor(repos, auth.user, { id: auth.token.id, scopes: auth.token.scopes, gated: auth.token.gated }) };
+    request.mcp = { token: auth.token, ctx: { ...controlContextFor(repos, auth.user, { id: auth.token.id, scopes: auth.token.scopes, gated: auth.token.gated }), attachments: deps.attachments } };
     void repos.apiTokens.touchLastUsed(auth.token.id).catch((err) => request.log.warn({ err }, 'mcp: touchLastUsed failed'));
   };
 
@@ -114,7 +116,8 @@ export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositorie
             // and this request does not wait for the user (spec §5.2). One audit row either way.
             const gated = await applyGate(ctx, { token, tool: tool.name, args, run: () => tool.run(ctx, args, extra.signal) });
             if (gated.ok) {
-              out = text(JSON.stringify(gated.value, null, 2));
+              // A tool that already answers MCP content (read_attachment's image or paged text) is passed through as it is.
+              out = isToolContent(gated.value) ? { content: gated.value.content } : text(JSON.stringify(gated.value, null, 2));
             } else {
               errorCode = gated.code;
               out = text(gated.message, true);

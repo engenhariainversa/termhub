@@ -240,7 +240,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   );
 
   // --- MCP endpoint for the global terminal (public route: a personal API token authenticates each call) ---
-  await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION }));
+  await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION, attachments: attachmentStore }));
 
   // --- Mobile app API (/api/m/v1): outside /api, so only its device-token + DPoP hook runs on it ---
   if (config.mobile && mobile) await registerMobileApi(fastify, mobile, mobileDeps);
