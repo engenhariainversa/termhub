@@ -24,8 +24,11 @@ export async function sweepAttachments(deps: SweepDeps, now = new Date()): Promi
   let stale = 0;
   for (const row of await deps.repo.listStaleUnsent(new Date(now.getTime() - UNSENT_MAX_AGE_MS))) {
     try {
+      // The conditional row delete is the claim: a send that bound the row since the listing wins, and
+      // its file stays. Only a row this sweep removed loses its file; a file removal that fails here
+      // leaves an orphan the next pass picks up.
+      if (!(await deps.repo.deleteUnsent(row.id, row.user_id))) continue;
       await deps.store.remove(row.user_id, row.id);
-      await deps.repo.deleteUnsent(row.id, row.user_id);
       stale++;
     } catch (err) {
       deps.log.warn({ attachmentId: row.id, err: label(err) }, 'attachment sweep: could not remove');

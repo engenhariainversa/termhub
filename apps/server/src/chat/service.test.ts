@@ -151,6 +151,11 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
       return count;
     }),
     listForMessages: vi.fn(async (ids: string[]) => attachmentRows.filter((a) => a.message_id !== null && ids.includes(a.message_id))),
+    detach: vi.fn(async (messageId: string) => {
+      let count = 0;
+      for (const a of attachmentRows) if (a.message_id === messageId) (a.message_id = null), count++;
+      return count;
+    }),
   };
   const repos = {
     chat,
@@ -1644,11 +1649,39 @@ describe('attachments on a message (spec 2026-09-26 §5.5)', () => {
     expect(chatAttachments.attach).toHaveBeenCalledWith(['abc123'], expect.any(String), 'u1', 'c1');
   });
 
-  it('when attach binds fewer rows than checked (a race), the user row is removed again and the send is 409', async () => {
-    const { service, messages, chatAttachments, chat } = build([delta('ok'), done()], { attachments: [attachment()] });
-    chatAttachments.attach.mockResolvedValueOnce(0);
-    await expect(service.send(user, 'oi', { attachmentIds: ['abc123'] })).rejects.toMatchObject({ statusCode: 409, code: 'ATTACHMENT_UNAVAILABLE' });
+  it('when attach binds fewer rows than checked (a race), the bound rows are unbound, the user row is removed again and the send is 409', async () => {
+    const { service, messages, chatAttachments, chat } = build([delta('ok'), done()], { attachments: [attachment(), attachment({ id: 'def456' })] });
+    // `abc123` binds; `def456` was taken meanwhile (the mock binds one, the count says so).
+    chatAttachments.attach.mockImplementationOnce(async (_ids: string[], messageId: string) => {
+      (await chatAttachments.findForUser('abc123', 'u1'))!.message_id = messageId;
+      return 1;
+    });
+    await expect(service.send(user, 'oi', { attachmentIds: ['abc123', 'def456'] })).rejects.toMatchObject({ statusCode: 409, code: 'ATTACHMENT_UNAVAILABLE' });
+    // The row that did bind is unbound before the message goes, so the FK cascade cannot take it with the message.
+    expect(chatAttachments.detach).toHaveBeenCalledWith('m1');
+    expect(chatAttachments.detach.mock.invocationCallOrder[0]!).toBeLessThan(chat.deleteMessage.mock.invocationCallOrder[0]!);
     expect(chat.deleteMessage).toHaveBeenCalledTimes(1);
     expect(messages).toEqual([]);
+    expect((await chatAttachments.findForUser('abc123', 'u1'))?.message_id).toBeNull();
+  });
+
+  it('a failing clean-up on the race path is logged by message id only, and the send is still 409', async () => {
+    const { service, chatAttachments, chat } = build([delta('ok'), done()], { attachments: [attachment()] });
+    chatAttachments.attach.mockResolvedValueOnce(0);
+    chatAttachments.detach.mockRejectedValueOnce(Object.assign(new Error('relatorio.pdf SEGREDO'), { code: 'P1001' }));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await expect(service.send(user, 'oi', { attachmentIds: ['abc123'] })).rejects.toMatchObject({ statusCode: 409, code: 'ATTACHMENT_UNAVAILABLE' });
+      expect(errors).toHaveBeenCalledTimes(1);
+      const logged = JSON.stringify(errors.mock.calls[0]);
+      expect(logged).toContain('m1');
+      expect(logged).toContain('P1001');
+      expect(logged).not.toMatch(/SEGREDO|relatorio/);
+    } finally {
+      errors.mockRestore();
+    }
+    expect(chat.deleteMessage).not.toHaveBeenCalled();
+    // The lock was released: the next message goes through.
+    await service.send(user, 'de novo');
   });
 });

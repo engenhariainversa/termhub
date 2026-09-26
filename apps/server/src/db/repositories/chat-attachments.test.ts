@@ -41,3 +41,10 @@ it('attach binds only this user, this conversation, unsent, not-invalid rows, in
     data: { messageId: 'm1' },
   });
 });
+
+it('detach unbinds every attachment of one message, answering how many', async () => {
+  const updateMany = vi.fn(async () => ({ count: 2 }));
+  const repo = new ChatAttachmentsRepository({ chatAttachment: { updateMany } } as unknown as PrismaClient);
+  expect(await repo.detach('m1')).toBe(2);
+  expect(updateMany).toHaveBeenCalledWith({ where: { messageId: 'm1' }, data: { messageId: null } });
+});

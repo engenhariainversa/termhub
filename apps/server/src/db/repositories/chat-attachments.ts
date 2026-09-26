@@ -31,6 +31,10 @@ export interface ChatAttachmentsRepo {
   listForMessages(messageIds: string[]): Promise<AttachmentRow[]>;
   /** Binds the ids that are this user's, this conversation's, unsent and not an invalid file. Answers how many it bound. */
   attach(ids: string[], messageId: string, userId: string, conversationId: string): Promise<number>;
+  /** Unbinds every attachment of one message (back to unsent), for the send that is about to delete that
+   *  message on a race: `message_id` cascades on delete, and an upload the composer still shows must not
+   *  go with it. Answers how many it unbound. */
+  detach(messageId: string): Promise<number>;
   /** Null when the row is gone (deleted while its file was being parsed). */
   setExtracted(id: string, text: string | null, meta: Record<string, unknown> | null): Promise<AttachmentRow | null>;
   setFailed(id: string, code: string): Promise<AttachmentRow | null>;
@@ -102,6 +106,11 @@ export class ChatAttachmentsRepository implements ChatAttachmentsRepo {
       where: { id: { in: ids }, userId, conversationId, messageId: null, OR: [{ status: { not: 'failed' } }, { errorCode: null }, { errorCode: { not: 'ATTACHMENT_INVALID' } }] },
       data: { messageId },
     });
+    return r.count;
+  }
+
+  async detach(messageId: string): Promise<number> {
+    const r = await this.db.chatAttachment.updateMany({ where: { messageId }, data: { messageId: null } });
     return r.count;
   }
 

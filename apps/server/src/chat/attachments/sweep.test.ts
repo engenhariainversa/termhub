@@ -35,6 +35,14 @@ describe('sweepAttachments', () => {
     expect(repo.deleteUnsent).toHaveBeenCalledWith('old', 'u1');
   });
 
+  it('claims the row first: one bound by a send meanwhile keeps its file and is not counted', async () => {
+    const { repo, store, log } = build({ existing: [], stale: [row({ id: 'taken' }), row({ id: 'old' })], files: [] });
+    vi.mocked(repo.deleteUnsent).mockImplementation(async (id: string) => id !== 'taken');
+    expect(await sweepAttachments({ repo, store, log }, NOW)).toEqual({ stale: 1, orphans: 0 });
+    expect(vi.mocked(store.remove).mock.calls).toEqual([['u1', 'old']]);
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
   it('removes a file with no row only once it is older than an hour, and a stale temp file', async () => {
     const files: StoredFile[] = [
       { userId: 'u1', id: 'kept', modifiedAt: ago(5 * ORPHAN_MIN_AGE_MS), temp: false },

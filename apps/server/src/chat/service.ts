@@ -581,13 +581,21 @@ export class ChatService {
    * Binds the checked ids to the stored user row and answers that row with its attachments. `attach`
    * is conditional in SQL, so a row taken by a concurrent send or deleted since the pre-check binds
    * nothing: then the user row just inserted is removed again and the send is the same 409 — nothing
-   * of a refused message is ever stored.
+   * of a refused message is ever stored. The rows that *did* bind are unbound first: `message_id`
+   * cascades on delete, and an upload the composer still shows must survive the refused message. A
+   * clean-up that fails is logged by message id (never a name or the text) and the answer is still
+   * the 409 — the person's next send is what matters, not the leftover row.
    */
   private async bindAttachments(question: ChatMessage, ids: string[], user: User, conversationId: string): Promise<ChatMessage> {
     if (ids.length === 0) return question;
     const bound = await this.deps.repos.chatAttachments.attach(ids, question.id, user.id, conversationId);
     if (bound < ids.length) {
-      await this.deps.repos.chat.deleteMessage(question.id);
+      try {
+        await this.deps.repos.chatAttachments.detach(question.id);
+        await this.deps.repos.chat.deleteMessage(question.id);
+      } catch (err) {
+        console.error('chat: a refused message could not be cleaned up', { message_id: question.id, error: failureLabel(err) });
+      }
       throw attachmentUnavailable();
     }
     const attachments: ChatAttachment[] = (await this.deps.repos.chatAttachments.listForMessages([question.id])).map(toPublicAttachment);
