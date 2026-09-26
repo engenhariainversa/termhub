@@ -16,6 +16,7 @@ import type {
   TDeviceSelf,
   THostOptionsResponse,
   TMeResponse,
+  TMobileBatchDecisionBody,
   TMobileDecisionBody,
   TMobileMessageBody,
   TNotificationsResponse,
@@ -63,6 +64,9 @@ export interface MobileApi {
   sendMessage(auth: Auth, body: TMobileMessageBody): Promise<TSendAccepted>;
   reset(auth: Auth, projectId: string | null): Promise<void>;
   decide(auth: Auth, actionId: string, body: TMobileDecisionBody): Promise<void>;
+  /** A grouped confirmation: every approval carries its own proof, all checked before anything is
+   * decided (a wrong PIN is a 401 and leaves the whole batch pending). */
+  decideMany(auth: Auth, body: TMobileBatchDecisionBody): Promise<void>;
   /** "Revogar" a trusted tab (no PIN: it only takes power away). 404 unknown, 409 already revoked. */
   revokeGrant(auth: Auth, grantId: string): Promise<void>;
   /** "Abas confiáveis": active grants (no paging) or the ended/expired/revoked history (paged, newest first). */

@@ -49,8 +49,9 @@ export interface SessionState {
   notice: string | null;
   mockControls: MockControls | null;
   /** The approval the PIN sheet is asking for: `decision` is the word the proof signs, and picks
-   * the sheet's title ("Autorizar esta ação" / "Permitir sempre nesta aba"). */
-  pinPrompt: { actionId: string; decision: PinDecision } | null;
+   * the sheet's title ("Autorizar esta ação" / "Permitir sempre nesta aba"). `actionId` is the
+   * (first) action; `actionIds` is set only for a batch, whose title counts them ("Autorizar 2 ações"). */
+  pinPrompt: { actionId: string; actionIds?: string[]; decision: PinDecision } | null;
 
   /** Routes an API error that ends or locks the session (chat and notification stores call it
    * too): `DEVICE_REVOKED` wipes, `DEVICE_LOCKED` locks with the countdown, `PIN_INVALID` shows
@@ -76,6 +77,9 @@ export interface SessionState {
    * other error closes it and rejects with that error. A cancel rejects `CANCELLED`. The proof
    * signs `decision` (default `approve`): a proof for one decision is refused for the other. */
   requestPinProof(actionId: string, perform: (proof: { challenge: string; pin_proof: string }) => Promise<void>, decision?: PinDecision): Promise<void>;
+  /** `requestPinProof` for a batch: one PIN entry, then one decision challenge and one proof per
+   * action id, and `perform(proofs)` (keyed by action id) with the sheet still open. Same outcomes. */
+  requestPinProofs(actionIds: string[], perform: (proofs: Record<string, { challenge: string; pin_proof: string }>) => Promise<void>, decision?: PinDecision): Promise<void>;
   resolvePinPrompt(pin: string | 'biometrics'): Promise<void>;
   cancelPinPrompt(): void;
   /** The lock's countdown reached zero: clears `lockedUntil`, `error` and `attemptsLeft` so the

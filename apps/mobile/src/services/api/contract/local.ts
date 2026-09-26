@@ -24,6 +24,7 @@ import {
   devicePollResponse,
   deviceSelf,
   hostOptionsResponse,
+  mobileBatchDecisionBody,
   mobileDecisionBody,
   mobileMessageBody,
   notificationRow,
@@ -141,6 +142,7 @@ export type TPushTokenBody = z.infer<typeof pushTokenBody>;
 export type TMobileMessageBody = z.infer<typeof mobileMessageBody>;
 export type TSendAccepted = z.infer<typeof sendAccepted>;
 export type TMobileDecisionBody = z.infer<typeof mobileDecisionBody>;
+export type TMobileBatchDecisionBody = z.infer<typeof mobileBatchDecisionBody>;
 export type TChatProjectItem = z.infer<typeof chatProjectItem>;
 export type TChatProjectsResponse = z.infer<typeof chatProjectsResponse>;
 export type THostOptionsResponse = z.infer<typeof hostOptionsResponse>;

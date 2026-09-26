@@ -53,7 +53,7 @@ const initialData = (mockControls: SessionDeps['mockControls']): Data => ({
 const isApiError = (e: unknown, code: string): e is ApiError => e instanceof ApiError && e.code === code;
 
 type PinProof = { challenge: string; pin_proof: string };
-type Prompt = { perform(proof: PinProof): Promise<void>; decision: PinDecision; resolve(): void; reject(e: unknown): void };
+type Prompt = { actionIds: string[]; perform(proofs: Record<string, PinProof>): Promise<void>; decision: PinDecision; resolve(): void; reject(e: unknown): void };
 
 export function createSessionStore(deps: SessionDeps) {
   const { api, key, vault, mockControls } = deps;
@@ -365,38 +365,45 @@ export function createSessionStore(deps: SessionDeps) {
           },
 
           requestPinProof(actionId, perform, decision = 'approve') {
+            return get().requestPinProofs([actionId], (proofs) => perform(proofs[actionId]!), decision);
+          },
+
+          requestPinProofs(actionIds, perform, decision = 'approve') {
             dropPrompt();
             return new Promise<void>((resolve, reject) => {
-              prompt = { perform, decision, resolve, reject };
-              set({ pinPrompt: { actionId, decision }, error: null, attemptsLeft: null });
+              prompt = { actionIds, perform, decision, resolve, reject };
+              const pinPrompt = actionIds.length > 1 ? { actionId: actionIds[0]!, actionIds, decision } : { actionId: actionIds[0]!, decision };
+              set({ pinPrompt, error: null, attemptsLeft: null });
             });
           },
 
           async resolvePinPrompt(pin) {
             if (get().busy) return;
             const waiting = prompt;
-            const actionId = get().pinPrompt?.actionId;
-            if (!waiting || !actionId) return;
+            if (!waiting || !get().pinPrompt) return;
             if (pin !== 'biometrics' && !PIN_RE.test(pin)) return patch({ error: MSG.pinFormat });
             const gen = generation;
-            // A newer `requestPinProof` replaced this prompt: this answer belongs to no one.
+            // A newer `requestPinProofs` replaced this prompt: this answer belongs to no one.
             const superseded = () => gen !== generation || prompt !== waiting;
             set({ busy: true, error: null });
-            let proof: PinProof;
+            const proofs: Record<string, PinProof> = {};
             try {
               const secret = pin === 'biometrics' ? await readBiometricSecret(vault) : await unwrapWithPin(vault, pin, get().deviceId);
               if (superseded()) return patch({ busy: false });
               if (!secret) return patch({ busy: false, error: MSG.usePin });
-              const { challenge } = await api.challenge({ device_id: get().deviceId!, purpose: 'decision', action_id: actionId });
-              if (superseded()) return patch({ busy: false });
-              proof = { challenge, pin_proof: decisionProof(secret, challenge, actionId, waiting.decision) };
+              // One PIN entry, one challenge per action: each is bound to its own action id.
+              for (const actionId of waiting.actionIds) {
+                const { challenge } = await api.challenge({ device_id: get().deviceId!, purpose: 'decision', action_id: actionId });
+                if (superseded()) return patch({ busy: false });
+                proofs[actionId] = { challenge, pin_proof: decisionProof(secret, challenge, actionId, waiting.decision) };
+              }
             } catch (e) {
               return fail(gen, e);
             }
             // The server checks the proof while the sheet stays open and busy: a wrong PIN is
             // answered inside it, and only an outcome that ends the prompt closes it.
             try {
-              await waiting.perform(proof);
+              await waiting.perform(proofs);
             } catch (e) {
               if (superseded()) return patch({ busy: false });
               if (isApiError(e, 'PIN_INVALID')) {

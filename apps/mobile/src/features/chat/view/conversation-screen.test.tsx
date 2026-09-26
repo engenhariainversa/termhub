@@ -45,12 +45,15 @@ function stubAction<K extends 'decide' | 'reset' | 'setHost' | 'revokeGrant' | '
 }
 
 /** Serves the open project's `GET chat` with its actions and grants changed — the screen re-reads
- * on open, so a slot seeded straight into the store would be overwritten by the mock's answer. */
-function serveChat(patch: (res: TChatResponse) => Pick<TChatResponse, 'actions' | 'grants'>) {
+ * on open, so a slot seeded straight into the store would be overwritten by the mock's answer.
+ * These tests look at one pending card: the seed's second one (`a-termhub-2`) is always left out. */
+function serveChat(patch: (res: TChatResponse) => Pick<TChatResponse, 'actions' | 'grants'> = (res) => res) {
   const real = stores.api.chat.bind(stores.api);
   jest.spyOn(stores.api, 'chat').mockImplementation(async (auth, projectId) => {
     const res = await real(auth, projectId);
-    return projectId === 'p-termhub' ? { ...res, ...patch(res) } : res;
+    if (projectId !== 'p-termhub') return res;
+    const one = { ...res, actions: res.actions.filter((a) => a.id !== 'a-termhub-2') };
+    return { ...one, ...patch(one) };
   });
 }
 
@@ -131,6 +134,7 @@ describe('Conversa', () => {
   });
 
   it('renders the pending action card; Autorizar calls decide(id, approve)', async () => {
+    serveChat();
     const decide = stubAction('decide');
     await render(<ConversationScreen />);
     expect(await screen.findByText('digitar `npm test` na aba api do projeto termhub, no jarvis', undefined, LOAD)).toBeTruthy();

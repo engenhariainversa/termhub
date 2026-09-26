@@ -6,6 +6,7 @@ import { randomId } from '../../../crypto/random';
 import {
   chatGrantListQuery,
   isTabGrantable,
+  mobileBatchDecisionBody,
   mobileDecisionBody,
   mobileMessageBody,
   resetBody,
@@ -20,7 +21,7 @@ import {
   type TTabSuggestion,
 } from '../../contract';
 import type { MockRouter } from '../router';
-import { broadcast, countPinFailure, type MockAction, type MockConversation, type MockGrant, type MockMessage, type MockState, type MockTabQuestion, type MockTabSuggestion, verifyAuth, WireError } from '../state';
+import { broadcast, countPinFailure, type MockAction, type MockConversation, type MockDevice, type MockGrant, type MockMessage, type MockState, type MockTabQuestion, type MockTabSuggestion, verifyAuth, WireError } from '../state';
 import { pushConfirmationNotification, pushReplyNotification } from './notifications';
 
 const USER_ID = 'u1';
@@ -354,6 +355,35 @@ function grantListItem(state: MockState, g: MockGrant, now: number): TChatGrantL
 
 // --- routes ---------------------------------------------------------------------------------
 
+/** An approval's PIN check, shared by the single and the batch decision routes. It submits a PIN
+ * guess exactly like `session/token` does, so a device already locked out is blocked the same way,
+ * without this attempt counting again. The challenge must be a `decision` one bound to this action,
+ * and is spent either way; the proof signs the decision word, so one made for `approve` is refused
+ * for `approve_tab`. A bad proof counts a PIN failure and throws `PIN_INVALID`. */
+function checkDecisionProof(
+  state: MockState,
+  device: MockDevice,
+  actionId: string,
+  decision: 'approve' | 'approve_tab',
+  body: { challenge: string; pin_proof: string },
+  now: number,
+): void {
+  if (device.lockedUntil !== undefined && device.lockedUntil > now) {
+    const retryAfter = Math.ceil((device.lockedUntil - now) / 1000);
+    throw new WireError(423, 'DEVICE_LOCKED', 'Aparelho bloqueado por tentativas de PIN.', { retry_after: retryAfter });
+  }
+
+  const chal = state.challenges.get(body.challenge);
+  const bound = !!chal && !chal.used && now <= chal.expiresAt && chal.deviceId === device.id && chal.purpose === 'decision' && chal.actionId === actionId;
+  if (bound) chal!.used = true;
+
+  const expectedProof = bound ? decisionProof(device.pinSecret, body.challenge, actionId, decision) : null;
+  if (!bound || body.pin_proof !== expectedProof) {
+    const attemptsLeft = countPinFailure(state, device, now);
+    throw new WireError(401, 'PIN_INVALID', 'PIN incorreto.', { attempts_left: attemptsLeft });
+  }
+}
+
 export function registerChatRoutes(router: MockRouter, state: MockState, opts: { maxLatency: number }): void {
   const stepMs = Math.max(0, opts.maxLatency) / 2;
 
@@ -512,24 +542,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
       throw new WireError(400, 'GRANT_NOT_ALLOWED', 'Só dá para permitir sempre o envio de texto para uma aba');
     }
 
-    // `approve` / `approve_tab` submit a PIN guess exactly like `session/token` does, so a device
-    // already locked out is blocked the same way, without this attempt counting again.
-    if (device.lockedUntil !== undefined && device.lockedUntil > now) {
-      const retryAfter = Math.ceil((device.lockedUntil - now) / 1000);
-      throw new WireError(423, 'DEVICE_LOCKED', 'Aparelho bloqueado por tentativas de PIN.', { retry_after: retryAfter });
-    }
-
-    const chal = state.challenges.get(body.challenge!);
-    const bound = !!chal && !chal.used && now <= chal.expiresAt && chal.deviceId === device.id && chal.purpose === 'decision' && chal.actionId === action.id;
-    if (bound) chal!.used = true;
-
-    // The proof signs the decision word: one made for `approve` is refused for `approve_tab`.
-    const expectedProof = bound ? decisionProof(device.pinSecret, body.challenge!, action.id, body.decision) : null;
-    if (!bound || body.pin_proof !== expectedProof) {
-      const attemptsLeft = countPinFailure(state, device, now);
-      throw new WireError(401, 'PIN_INVALID', 'PIN incorreto.', { attempts_left: attemptsLeft });
-    }
-
+    checkDecisionProof(state, device, action.id, body.decision, { challenge: body.challenge!, pin_proof: body.pin_proof! }, now);
     device.pinFailures = 0;
     action.status = 'approved';
     broadcast(state, { type: 'decision', user_id: USER_ID, conversation_id: action.conversation_id, action_id: action.id, status: 'approved' });
@@ -538,6 +551,43 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const grant = grantView(grantTab(state, action, now));
     broadcast(state, { type: 'grant', user_id: USER_ID, conversation_id: action.conversation_id, grant });
     return { status: 200, body: { grant } };
+  });
+
+  /** A grouped confirmation, like the server: ids of two conversations are a 400; every approval
+   * still pending is proven before anything is decided (a wrong PIN leaves the whole batch pending);
+   * then each row is decided with its own `decision` event. Nothing decided at all is a 409. */
+  router.route('POST', '/api/m/v1/chat/actions/decisions', (ctx) => {
+    const { device } = verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const { decisions } = mobileBatchDecisionBody.parse(ctx.body);
+    const rows = decisions.map((d) => state.actions.get(d.id));
+    const found = rows.filter((r): r is MockAction => r !== undefined);
+    if (new Set(found.map((r) => r.conversation_id)).size > 1) throw new WireError(400, 'MIXED_CONVERSATIONS', 'As ações precisam ser da mesma conversa');
+
+    const now = ctx.now();
+    const skipped: Array<{ id: string; reason: 'not_found' | 'already_decided' }> = [];
+    const pending: Array<{ action: MockAction; decision: 'approve' | 'deny' }> = [];
+    decisions.forEach((d, i) => {
+      const action = rows[i];
+      if (!action) skipped.push({ id: d.id, reason: 'not_found' });
+      else if (action.status !== 'pending') skipped.push({ id: d.id, reason: 'already_decided' });
+      else pending.push({ action, decision: d.decision });
+    });
+
+    let proven = false;
+    for (const d of decisions) {
+      if (d.decision !== 'approve' || !pending.some((p) => p.action.id === d.id)) continue;
+      checkDecisionProof(state, device, d.id, 'approve', d, now);
+      proven = true;
+    }
+    if (proven) device.pinFailures = 0;
+
+    if (pending.length === 0) throw new WireError(409, 'ALREADY_DECIDED', 'Estas ações já foram decididas');
+    const actions = pending.map(({ action, decision }) => {
+      action.status = decision === 'deny' ? 'denied' : 'approved';
+      broadcast(state, { type: 'decision', user_id: USER_ID, conversation_id: action.conversation_id, action_id: action.id, status: action.status });
+      return { ...action };
+    });
+    return { status: 200, body: { actions, skipped, queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' } };
   });
 
   /** "Abas confiáveis": the server's paging (newest first, cursor = the last id of the page). */
