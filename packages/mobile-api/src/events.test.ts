@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { chatEventSchema, chatGrantListQuery, chatGrantListResponse, tabQuestionSchema, tabSuggestionSchema } from './events.js';
 
 const base = { user_id: 'u1', conversation_id: 'c1' };
@@ -56,4 +57,14 @@ describe('chat grant list', () => {
     expect(chatGrantListQuery.parse({ state: 'active', limit: '10', cursor: 'abc' })).toEqual({ state: 'active', limit: 10, cursor: 'abc' });
     for (const bad of [{}, { state: 'all' }, { state: 'ended', limit: '0' }, { state: 'ended', limit: '101' }, { state: 'ended', cursor: '' }]) expect(chatGrantListQuery.safeParse(bad).success).toBe(false);
   });
+});
+
+it('a suggestion may carry the message it answers; an app and a server that predate it both still parse (spec 2026-09-26 §6.3)', () => {
+  const s = { id: 's1', tab_id: 't1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: '2026-09-26T12:00:00.000Z', answered_at: null, closed_at: null };
+  expect(tabSuggestionSchema.parse({ ...s, payload: { text: 'commit it', context: 'Quer que eu faça o commit?' } }).payload.context).toBe('Quer que eu faça o commit?');
+  expect(tabSuggestionSchema.safeParse({ ...s, payload: { text: 'commit it', context: null } }).success).toBe(true);
+  expect(tabSuggestionSchema.parse(s).payload.context).toBeUndefined(); // a server before TER-96
+  // The schema an app before TER-96 shipped: a plain z.object strips the new field instead of refusing it.
+  const before = tabSuggestionSchema.extend({ payload: z.object({ text: z.string() }) });
+  expect(before.parse({ ...s, payload: { text: 'commit it', context: 'x' } }).payload).toEqual({ text: 'commit it' });
 });

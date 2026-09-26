@@ -50,6 +50,8 @@ export function ProjectChatProvider({ children }: { children: ReactNode }) {
   );
 }
 
+const REREAD_ON: ReadonlySet<ChatEvent['type']> = new Set(['message', 'confirmation', 'decision', 'tab_question', 'tab_question_answered', 'tab_question_closed']);
+
 /** The part of the provider that talks to the server: the initial `/chat/projects` read and the
  * `/ws/chat` subscription that keeps it current. Split out so the hooks it needs (the websocket
  * above all) mount only for a user who is allowed to use them — see the gate above. */
@@ -64,10 +66,12 @@ function ProjectChatStatusFeed({ onStatuses }: { onStatuses: (statuses: Map<stri
   }, [onStatuses]);
   useEffect(() => void refresh(), [refresh]);
 
-  // A run starts and ends with a `message` event; a question appears with `confirmation` and goes
-  // away with `decision`. Those are the only moments a dot can change, so they are the only re-reads.
+  // A run starts and ends with a `message` event; something that waits on the person appears with
+  // `confirmation` or `tab_question` and goes away with `decision`, `tab_question_answered` or
+  // `tab_question_closed` (spec 2026-09-26 §4.9). Those are the only moments a dot can change, so they are
+  // the only re-reads. A suggestion is not counted.
   const onEvent = useCallback((e: ChatEvent) => {
-    if (e.type === 'message' || e.type === 'confirmation' || e.type === 'decision') void refresh();
+    if (REREAD_ON.has(e.type)) void refresh();
   }, [refresh]);
   useChatStream(refresh, onEvent);
 

@@ -179,10 +179,23 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.markSeen /
       expect(tab.state_text).toBe('dois');
     });
 
-    it('a continuation that brings its own text still replaces it (Claude idle_prompt)', async () => {
+    it("a continuation that keepsWaitText keeps the wait's text when it has one: Claude's idle_prompt no longer replaces the Stop's message (spec 2026-09-26 §6.1)", async () => {
       await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Posso seguir?' });
-      const { tab } = await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Claude is waiting for your input', continuesWait: true });
+      const { tab, event } = await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Claude is waiting for your input', continuesWait: true, keepsWaitText: true });
+      expect(tab.state_text).toBe('Posso seguir?');
+      expect(event.text).toBe('Claude is waiting for your input'); // the event row keeps what the event said
+    });
+
+    it('a continuation that keepsWaitText brings its own text when the wait has none (a Claude Code older than 2.1.47 sends no message on Stop)', async () => {
+      await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: null });
+      const { tab } = await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Claude is waiting for your input', continuesWait: true, keepsWaitText: true });
       expect(tab.state_text).toBe('Claude is waiting for your input');
+    });
+
+    it("a continuation that does not keepsWaitText replaces a stale wait text with its own fresh answer (Cursor's afterAgentResponse, spec 2026-09-26 §6.1 fix)", async () => {
+      await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'cursor', text: 'um' });
+      const { tab } = await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'cursor', text: 'dois', continuesWait: true });
+      expect(tab.state_text).toBe('dois');
     });
 
     it('Esc mid-turn: the first stop opens the wait, the second one does not alert again once seen', async () => {

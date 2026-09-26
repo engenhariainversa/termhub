@@ -64,6 +64,16 @@ it('loadProjects fills the three projects', async () => {
   expect(loadingProjects).toBe(false);
 });
 
+it('an open tab question counts as pending in the projects list, as on the server (spec 2026-09-26 §4.9)', async () => {
+  const { chat } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await chat.getState().send('tem alguma pergunta?');
+  await jest.advanceTimersByTimeAsync(5000);
+  await chat.getState().loadProjects();
+  // The two seeded pending actions (the grouped-confirmation fixture), plus the question the tab just asked.
+  expect(chat.getState().projects.find((p) => p.id === 'p-termhub')!.pending_confirmations).toBe(3);
+});
+
 it("open('p-termhub') loads the thread and subscribes once for the whole app", async () => {
   const { chat, events } = await setup();
   await openAndConnect(chat, 'p-termhub');
@@ -621,10 +631,12 @@ it('answerTabQuestion answers over the mock and the card turns answered; a secon
   await jest.advanceTimersByTimeAsync(0);
   await flush();
   expect(slot(chat, 'p-termhub').tabQuestions.find((x) => x.id === q.id)?.status).toBe('answered');
-  expect(chat.getState().answeringQuestionId).toBeNull();
+  expect(chat.getState().answeringQuestionIds).toEqual([]);
 
   await chat.getState().answerTabQuestion(q.id, { answers: [{ selected: [0] }] });
-  expect(chat.getState().error).toBe('A pergunta mudou na aba');
+  // A stale card says so in the card, not in the screen's banner (spec 2026-09-26 §4.13).
+  expect(chat.getState().questionErrors[q.id]).toBe('A pergunta mudou na aba');
+  expect(chat.getState().error).toBeNull();
 });
 
 it('loadTabQuestionScreen answers the excerpt while open, null once it is not', async () => {
@@ -654,15 +666,17 @@ it('sendTabSuggestion sends over the mock and the card reads as sent; a second s
   await jest.advanceTimersByTimeAsync(5000);
   const s = slot(chat, 'p-termhub').tabSuggestions.find((x) => x.status === 'open')!;
   expect(s).toMatchObject({ kind: 'suggestion', tab_name: 'api', payload: { text: 'commit it' } });
+  expect(s.payload.context).toBe('Criei o arquivo notes.txt com a linha hello.\n\nQuer que eu faça o commit?');
 
   await chat.getState().sendTabSuggestion(s.id, 'commit it and push');
   await jest.advanceTimersByTimeAsync(0);
   await flush();
   expect(slot(chat, 'p-termhub').tabSuggestions.find((x) => x.id === s.id)).toMatchObject({ status: 'answered', answer: { text: 'commit it and push' } });
-  expect(chat.getState().busySuggestionId).toBeNull();
+  expect(chat.getState().busySuggestionIds).toEqual([]);
 
   await chat.getState().sendTabSuggestion(s.id, 'commit it');
-  expect(chat.getState().error).toBe('A sugestão mudou na aba');
+  expect(chat.getState().suggestionErrors[s.id]).toBe('A sugestão mudou na aba');
+  expect(chat.getState().error).toBeNull();
 });
 
 it('dismissTabSuggestion closes the card as dismissed', async () => {
@@ -675,4 +689,53 @@ it('dismissTabSuggestion closes the card as dismissed', async () => {
   await jest.advanceTimersByTimeAsync(0);
   await flush();
   expect(slot(chat, 'p-termhub').tabSuggestions.find((x) => x.id === s.id)?.status).toBe('dismissed');
+});
+
+it('a failed answer is that card\'s error, never the banner; trying again clears it (spec 2026-09-26 §4.13)', async () => {
+  const { chat, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const call = jest.spyOn(api, 'answerTabQuestion').mockRejectedValueOnce(new ApiError(409, 'TAB_PROMPT_CHANGED', 'A pergunta mudou na aba'));
+  await chat.getState().answerTabQuestion('q1', { allow: true });
+  call.mockRejectedValueOnce(new ApiError(502, 'MACHINE_OFFLINE', 'Não foi possível responder na aba'));
+  await chat.getState().answerTabQuestion('q2', { allow: true });
+  expect(chat.getState().questionErrors).toEqual({ q1: 'A pergunta mudou na aba', q2: 'Não foi possível responder na aba' });
+  expect(chat.getState().error).toBeNull();
+  call.mockResolvedValueOnce(undefined);
+  await chat.getState().answerTabQuestion('q1', { allow: true });
+  expect(chat.getState().questionErrors).toEqual({ q2: 'Não foi possível responder na aba' });
+});
+
+it('two different cards can be answered at once; the same card is never sent twice', async () => {
+  const { chat, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const call = jest.spyOn(api, 'answerTabQuestion').mockImplementation(() => gate);
+  const a = chat.getState().answerTabQuestion('q1', { allow: true });
+  const b = chat.getState().answerTabQuestion('q2', { allow: true });
+  const again = chat.getState().answerTabQuestion('q1', { allow: false });
+  expect(chat.getState().answeringQuestionIds).toEqual(['q1', 'q2']);
+  expect(call).toHaveBeenCalledTimes(2);
+  release();
+  await Promise.all([a, b, again]);
+  expect(chat.getState().answeringQuestionIds).toEqual([]);
+});
+
+it('suggestions too: per card busy, per card error', async () => {
+  const { chat, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const send = jest.spyOn(api, 'sendTabSuggestion').mockImplementation(() => gate);
+  jest.spyOn(api, 'dismissTabSuggestion').mockRejectedValueOnce(new ApiError(409, 'TAB_PROMPT_CHANGED', 'A sugestão mudou na aba'));
+  const sending = chat.getState().sendTabSuggestion('s1', 'commit it');
+  expect(chat.getState().busySuggestionIds).toEqual(['s1']);
+  await chat.getState().sendTabSuggestion('s1', 'commit it'); // the same card: ignored
+  expect(send).toHaveBeenCalledTimes(1);
+  await chat.getState().dismissTabSuggestion('s2'); // another card: goes through
+  expect(chat.getState().suggestionErrors).toEqual({ s2: 'A sugestão mudou na aba' });
+  release();
+  await sending;
+  expect(chat.getState().busySuggestionIds).toEqual([]);
+  expect(chat.getState().error).toBeNull();
 });

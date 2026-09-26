@@ -37,7 +37,7 @@ import { registerMonitorWs } from './monitor/ws.js';
 import { chatRoutes } from './routes/chat.js';
 import { ChatService, purgeExpiredActions } from './chat/service.js';
 import { agentRunner } from './chat/runner.js';
-import { startTabQuestionExpiry } from './chat/tab-questions.js';
+import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
 import { stopTabSuggestions } from './chat/tab-suggestions.js';
 import { registerChatWs } from './chat/ws.js';
 import { roleRoutes } from './routes/roles.js';
@@ -237,10 +237,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void purgeExpiredActions(repos).catch(() => {});
     // Mobile: stale enrolment requests expire, then device sessions, requests, trail and push history age out
     if (mobile) void purgeMobile(repos, mobile.enrolment).catch(() => {});
+    // Cards whose tab vanished without a lifecycle event (the other color removed it, a crash): spec 2026-09-26 §4.7.
+    void expireOrphanTabQuestions(repos, fastify.log);
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
   const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);
   const stopTabQuestionExpiry = startTabQuestionExpiry(repos, fastify.log);
+  void expireOrphanTabQuestions(repos, fastify.log);
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     stopSync();

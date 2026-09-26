@@ -49,10 +49,12 @@ export function ConversationScreen() {
   const decideMany = useChatStore((s) => s.decideMany);
   const revokingId = useChatStore((s) => s.revokingId);
   const revokeGrant = useChatStore((s) => s.revokeGrant);
-  const answeringQuestionId = useChatStore((s) => s.answeringQuestionId);
+  const answeringQuestionIds = useChatStore((s) => s.answeringQuestionIds);
+  const questionErrors = useChatStore((s) => s.questionErrors);
   const answerTabQuestion = useChatStore((s) => s.answerTabQuestion);
   const loadTabQuestionScreen = useChatStore((s) => s.loadTabQuestionScreen);
-  const busySuggestionId = useChatStore((s) => s.busySuggestionId);
+  const busySuggestionIds = useChatStore((s) => s.busySuggestionIds);
+  const suggestionErrors = useChatStore((s) => s.suggestionErrors);
   const sendTabSuggestion = useChatStore((s) => s.sendTabSuggestion);
   const dismissTabSuggestion = useChatStore((s) => s.dismissTabSuggestion);
   const reset = useChatStore((s) => s.reset);
@@ -73,8 +75,8 @@ export function ConversationScreen() {
   const tabQuestions = slot?.tabQuestions;
   const tabSuggestions = slot?.tabSuggestions;
   const extra = useMemo(
-    () => ({ fold, decidingId, grants, revokingId, answeringQuestionId, busySuggestionId }),
-    [fold, decidingId, grants, revokingId, answeringQuestionId, busySuggestionId],
+    () => ({ fold, decidingId, grants, revokingId, answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors }),
+    [fold, decidingId, grants, revokingId, answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors],
   );
   // A deep link followed after unlock replaces `/unlock` with this screen: nothing behind it.
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
@@ -146,9 +148,21 @@ export function ConversationScreen() {
             extraData={extra}
             renderItem={({ item }) =>
               item.kind === 'tab_suggestion' ? (
-                <TabSuggestionCard suggestion={item.suggestion} busy={busySuggestionId !== null} onSend={onSendSuggestion} onDismiss={onDismissSuggestion} />
+                <TabSuggestionCard
+                  suggestion={item.suggestion}
+                  busy={busySuggestionIds.includes(item.suggestion.id)}
+                  error={suggestionErrors[item.suggestion.id] ?? null}
+                  onSend={onSendSuggestion}
+                  onDismiss={onDismissSuggestion}
+                />
               ) : item.kind === 'tab_question' ? (
-                <TabQuestionCard question={item.question} busy={answeringQuestionId !== null} onAnswer={onAnswer} loadScreen={loadTabQuestionScreen} />
+                <TabQuestionCard
+                  question={item.question}
+                  busy={answeringQuestionIds.includes(item.question.id)}
+                  error={questionErrors[item.question.id] ?? null}
+                  onAnswer={onAnswer}
+                  loadScreen={loadTabQuestionScreen}
+                />
               ) : item.kind === 'message' ? (
                 <MessageBubble message={item.message} streamed={fold.deltas.get(item.message.id)} started={fold.started.has(item.message.id)} />
               ) : item.kind === 'action_group' ? (

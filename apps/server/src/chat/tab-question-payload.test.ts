@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { checkChoiceAnswer, choiceAnswerBody, normaliseLabel, parseAskUserQuestion, parsePermissionTool, permissionAnswerBody, toolUseIdOf } from './tab-question-payload.js';
+import { CONTROL_CHARS_RE, answerText, checkChoiceAnswer, choiceAnswerBody, normaliseLabel, parseAskUserQuestion, parsePermissionTool, permissionAnswerBody, sliceUnits, toolUseIdOf, typedText } from './tab-question-payload.js';
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/tab-questions', name), 'utf8')) as Record<string, unknown>;
 const two = fixture('pretooluse-ask-two-questions.json');
@@ -119,5 +119,44 @@ describe('answer bodies', () => {
     expect(permissionAnswerBody.safeParse({ allow: false, text: '  /clear' }).success).toBe(false);
     expect(permissionAnswerBody.safeParse({ allow: false, text: 'use a/b instead' }).success).toBe(true);
     expect(permissionAnswerBody.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('text rules (spec 2026-09-26 §4.4, §5.1, §5.3)', () => {
+  it('CONTROL_CHARS_RE is C0, DEL and C1 — nothing printable', () => {
+    for (const c of ['\x00', '\n', '\x1b', '\x1f', '\x7f', '\x80', '\x85', '\x9b', '\x9f']) expect(CONTROL_CHARS_RE.test(c)).toBe(true);
+    for (const c of [' ', 'a', '\xa0', 'é', '❯', '😀']) expect(CONTROL_CHARS_RE.test(c)).toBe(false);
+  });
+
+  it('answer text refuses C1 exactly like C0', () => {
+    expect(answerText.safeParse('ok\x9b31m').success).toBe(false);
+    expect(answerText.safeParse('ok\x85').success).toBe(false);
+    expect(answerText.safeParse('ação ✓ 😀').success).toBe(true);
+  });
+
+  it('typedText refuses a leading ! or / after the trim, and allows them anywhere else', () => {
+    for (const bad of ['!ls', '  !ls', '/exit', ' /clear']) expect(typedText.safeParse(bad).success).toBe(false);
+    for (const ok of ['use a/b', 'yes!', 'rode `!ls`?']) expect(typedText.safeParse(ok).success).toBe(true);
+    expect(typedText.parse('  pode seguir ')).toBe('pode seguir');
+  });
+
+  it("a choice's free text follows typedText (it is typed into Claude Code's dialog field)", () => {
+    expect(choiceAnswerBody.safeParse({ answers: [{ selected: [], text: '!rm -rf /' }] }).success).toBe(false);
+    expect(choiceAnswerBody.safeParse({ answers: [{ selected: [], text: ' /exit' }] }).success).toBe(false);
+    expect(choiceAnswerBody.safeParse({ answers: [{ selected: [], text: 'Roxo\x9b' }] }).success).toBe(false);
+    expect(choiceAnswerBody.safeParse({ answers: [{ selected: [], text: 'use a/b' }] }).success).toBe(true);
+  });
+
+  it('a permission deny text keeps its path on the error', () => {
+    const r = permissionAnswerBody.safeParse({ allow: false, text: '/exit' });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0]?.path).toEqual(['text']);
+  });
+
+  it('sliceUnits never ends on the first half of a surrogate pair', () => {
+    expect(sliceUnits('ab😀c', 3)).toBe('ab');
+    expect(sliceUnits('ab😀c', 4)).toBe('ab😀');
+    expect(sliceUnits('abc', 10)).toBe('abc');
+    expect(sliceUnits('', 3)).toBe('');
   });
 });

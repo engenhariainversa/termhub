@@ -5,7 +5,7 @@ import type { Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import type { Interpreted } from '../monitor/state.js';
 import { chatBus, type ChatEvent } from './bus.js';
-import { closesOpenQuestion, noteHookEvent, openTabQuestion, publishTabQuestions, startTabQuestionExpiry } from './tab-questions.js';
+import { closesOpenQuestion, expireOrphanTabQuestions, noteHookEvent, openTabQuestion, publishTabQuestions, startTabQuestionExpiry } from './tab-questions.js';
 
 const tab = { id: 't1', project_id: 'p1', machine_id: 'm1', name: 'api' } as Tab;
 const payload = { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: '', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] };
@@ -48,6 +48,8 @@ describe('closesOpenQuestion', () => {
     ['an idle reminder', { kind: 'waiting_input', text: 'x', meta: { event: 'Notification', type: 'idle_prompt' } }, false],
     ['AskUserQuestion\'s own PermissionRequest', { kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'AskUserQuestion' } }, false],
     ['an event that opens a question', choice, false],
+    ["a subagent's tool call", { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash', subagent: true } }, false],
+    ["a subagent's permission prompt that opens no card (ExitPlanMode)", { kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'ExitPlanMode', subagent: true } }, false],
   ] as [string, Interpreted, boolean][])('%s → %s', (_l, next, closes) => {
     expect(closesOpenQuestion(next)).toBe(closes);
   });
@@ -69,21 +71,21 @@ describe('openTabQuestion', () => {
     expect(events[1]).toMatchObject({ user_id: 'u1', conversation_id: 'c1', question: { tab_name: 'api', status: 'open', payload } });
   });
 
-  it('a project with no conversation gets nothing, but the tab\'s old question still closes', async () => {
-    const repos = fakeRepos({ conversation: null, closed: [row({ id: 'q0', status: 'answered_in_tab' })] });
+  it('a project with no conversation gets no card, but the queue rules still run: the old question closes', async () => {
+    const repos = fakeRepos({ conversation: null, opened: null, closed: [row({ id: 'q0', status: 'answered_in_tab' })] });
     expect(await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null })).toBeNull();
-    expect(repos.tabQuestions.open).not.toHaveBeenCalled();
-    // A question event is not a closing event: it closes what is open but never ends a permission queue.
-    expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'answered_in_tab', undefined, { endsQueue: false });
+    // Through `open` with no conversation: under the tab's lock, the queue marking included (spec 2026-09-26 §4.1).
+    expect(repos.tabQuestions.open).toHaveBeenCalledWith({ tab_id: 't1', project_id: 'p1', conversation_id: null, kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null });
+    expect(repos.tabQuestions.closeForTab).not.toHaveBeenCalled();
     expect(events.map((e) => e.type)).toEqual(['tab_question_closed']);
   });
 
-  it('a project with no owner has no chat to show it in: nothing opens, the old question still closes', async () => {
-    const repos = fakeRepos({ owner: null, closed: [row({ id: 'q0', status: 'answered_in_tab' })] });
+  it('a project with no owner has no chat to show it in: the same path, no conversation looked up', async () => {
+    const repos = fakeRepos({ owner: null, opened: null, closed: [row({ id: 'q0', status: 'answered_in_tab' })] });
     expect(await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' })).toBeNull();
     expect(repos.chat.findLatestActiveForProject).not.toHaveBeenCalled();
-    expect(repos.tabQuestions.open).not.toHaveBeenCalled();
-    expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'answered_in_tab', undefined, { endsQueue: false });
+    expect(repos.tabQuestions.open).toHaveBeenCalledWith(expect.objectContaining({ conversation_id: null, kind: 'choice' }));
+    expect(repos.tabQuestions.closeForTab).not.toHaveBeenCalled();
   });
 
   it('a permission queued behind an open one (the repo opens nothing): the old card closes, no new card', async () => {
@@ -101,7 +103,14 @@ describe('noteHookEvent', () => {
     await noteHookEvent(asRepos(repos), log(), tab, { kind: 'waiting_permission', text: 'x', meta: { event: 'Notification', type: 'permission_prompt' } });
     expect(repos.tabQuestions.closeForTab).not.toHaveBeenCalled();
     await noteHookEvent(asRepos(repos), log(), tab, { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash' } });
-    expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'answered_in_tab', undefined, undefined); // a closing event: ends a permission queue
+    expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'answered_in_tab'); // a closing event: ends a permission queue
+  });
+
+  it("a subagent's event updates nothing on the card: no close", async () => {
+    const repos = fakeRepos();
+    await noteHookEvent(asRepos(repos), log(), tab, { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash', subagent: true } });
+    expect(repos.tabQuestions.closeForTab).not.toHaveBeenCalled();
+    expect(repos.tabQuestions.open).not.toHaveBeenCalled();
   });
 
   it('never throws, and logs the failure by code and ids only', async () => {
@@ -118,6 +127,24 @@ describe('noteHookEvent', () => {
     expect(l.info).toHaveBeenCalledWith({ tabId: 't1', tabQuestionId: 'q1', kind: 'choice', questions: 1 }, 'tab question opened');
     expect(JSON.stringify(l.info.mock.calls)).not.toContain('Qual cor');
   });
+
+  it('never throws on the closing path either', async () => {
+    const repos = fakeRepos();
+    repos.tabQuestions.closeForTab.mockRejectedValue(Object.assign(new Error('Qual cor? secret'), { code: 'P1001' }));
+    const l = log();
+    await expect(noteHookEvent(asRepos(repos), l, tab, { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash' } })).resolves.toBeUndefined();
+    expect(l.warn).toHaveBeenCalledWith({ tabId: 't1', code: 'P1001' }, 'tab question bookkeeping failed');
+    expect(JSON.stringify(l.warn.mock.calls)).not.toContain('secret');
+  });
+
+  it('never throws on the no-conversation path either', async () => {
+    const repos = fakeRepos({ conversation: null });
+    repos.tabQuestions.open.mockRejectedValue(Object.assign(new Error('Qual cor? secret'), { code: 'P2034' }));
+    const l = log();
+    await expect(noteHookEvent(asRepos(repos), l, tab, choice)).resolves.toBeUndefined();
+    expect(repos.tabQuestions.open).toHaveBeenCalledWith(expect.objectContaining({ conversation_id: null }));
+    expect(l.warn).toHaveBeenCalledWith({ tabId: 't1', code: 'P2034' }, 'tab question bookkeeping failed');
+  });
 });
 
 describe('startTabQuestionExpiry', () => {
@@ -126,11 +153,10 @@ describe('startTabQuestionExpiry', () => {
     const stop = startTabQuestionExpiry(asRepos(repos), log());
     monitorBus.publishLifecycle({ kind: 'upsert', tab, project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
     monitorBus.publishLifecycle({ kind: 'removed', tab_id: 't1', project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => expect(events.map((e) => e.type)).toEqual(['tab_question_closed']));
     stop();
     expect(repos.tabQuestions.closeForTab).toHaveBeenCalledTimes(1);
-    expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'expired', undefined, undefined);
-    expect(events.map((e) => e.type)).toEqual(['tab_question_closed']);
+    expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'expired');
   });
 });
 
@@ -143,5 +169,30 @@ describe('publishTabQuestions', () => {
     await publishTabQuestions(asRepos(repos), 'tab_question_closed', [{ ...s, status: 'dismissed' }]);
     expect(events.map((e) => e.type)).toEqual(['tab_suggestion', 'tab_suggestion_closed', 'tab_suggestion_closed']);
     expect(events[0]).toMatchObject({ user_id: 'u1', conversation_id: 'c1', suggestion: { id: 's1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' } } });
+  });
+});
+
+describe('expireOrphanTabQuestions', () => {
+  it('closes and announces every card whose tab is gone; logs the count only', async () => {
+    const repos = fakeRepos();
+    const gone = row({ status: 'expired', closed_at: '2026-09-26T12:00:00.000Z' });
+    (repos.tabQuestions as Record<string, unknown>).expireOrphans = vi.fn(async () => [gone]);
+    const l = log();
+    expect(await expireOrphanTabQuestions(asRepos(repos), l)).toBe(1);
+    expect(events).toEqual([expect.objectContaining({ type: 'tab_question_closed', question: expect.objectContaining({ id: 'q1', status: 'expired' }) })]);
+    expect(l.info).toHaveBeenCalledWith({ count: 1 }, 'orphan tab questions expired');
+  });
+
+  it('says nothing when there is nothing to sweep, and never throws', async () => {
+    const repos = fakeRepos();
+    (repos.tabQuestions as Record<string, unknown>).expireOrphans = vi.fn(async () => []);
+    const l = log();
+    expect(await expireOrphanTabQuestions(asRepos(repos), l)).toBe(0);
+    expect(l.info).not.toHaveBeenCalled();
+    (repos.tabQuestions as Record<string, unknown>).expireOrphans = vi.fn(async () => {
+      throw Object.assign(new Error('x'), { code: 'P1001' });
+    });
+    expect(await expireOrphanTabQuestions(asRepos(repos), l)).toBe(0);
+    expect(l.warn).toHaveBeenCalledWith({ code: 'P1001' }, 'orphan tab question sweep failed');
   });
 });

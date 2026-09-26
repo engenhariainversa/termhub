@@ -17,7 +17,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
   let conversationId: string;
   const machineId = newId();
   /** Real tab rows (the suggestion rule reads the tab), keyed by the short names the tests use. */
-  const tabIds: Record<string, string> = Object.fromEntries(['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'ts9'].map((k) => [k, newId()]));
+  const tabIds: Record<string, string> = Object.fromEntries(['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'ts9', 'tq1'].map((k) => [k, newId()]));
   const tid = (k: string) => tabIds[k] ?? k;
 
   beforeAll(async () => {
@@ -33,7 +33,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     conversationId = (await chat.getOrCreateForProject(userId, projectId)).id;
     // A suggestion opens only on a real tab that waits for input: these are the tabs the suggestion tests use.
     await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId: userId } });
-    await db.tab.createMany({ data: ['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8'].map((id) => ({ id: tabIds[id]!, projectId, machineId, name: id, state: 'waiting_input' as const })) });
+    await db.tab.createMany({ data: ['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'tq1'].map((id) => ({ id: tabIds[id]!, projectId, machineId, name: id, state: 'waiting_input' as const })) });
     await db.tab.create({ data: { id: tabIds.ts9!, projectId, machineId, name: 'ts9', state: 'working' } });
   });
 
@@ -122,9 +122,9 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect(await repo.closeForTab('t12', 'answered_in_tab')).toEqual([]);
     const p4 = await openPermission('t12', 'Bash');
     expect(p4.question).toMatchObject({ kind: 'permission', status: 'open' });
-    // A closing path that does not end the queue (a question event with no chat) keeps it.
+    // A question event with no chat (`open` with no conversation) keeps the queue.
     await openPermission('t12', 'Edit'); // queues again
-    await repo.closeForTab('t12', 'answered_in_tab', new Date(), { endsQueue: false });
+    expect(await repo.open({ tab_id: 't12', project_id: projectId, conversation_id: null, kind: 'permission', payload: { tool_name: 'Write' }, tool_use_id: null })).toEqual({ question: null, closed: [] });
     expect((await openPermission('t12', 'Bash')).question).toBeNull();
   });
 
@@ -135,6 +135,68 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect(choice.question).toMatchObject({ kind: 'choice', status: 'open' });
     // The newest row is now the choice: a permission after it opens normally.
     expect((await openPermission('t13', 'Bash')).question).toMatchObject({ kind: 'permission', status: 'open' });
+  });
+
+  const openNoChat = (tabId: string, kind: 'choice' | 'permission') =>
+    repo.open(
+      kind === 'choice'
+        ? { tab_id: tid(tabId), project_id: projectId, conversation_id: null, kind, payload, tool_use_id: 'toolu_1' }
+        : { tab_id: tid(tabId), project_id: projectId, conversation_id: null, kind, payload: { tool_name: 'Edit' }, tool_use_id: null },
+    );
+
+  it('no conversation: a permission behind an open one marks it QUEUED and inserts nothing — a conversation created mid-queue opens no card for the third prompt', async () => {
+    const p1 = (await openPermission('tn1', 'Bash')).question!;
+    expect(await openNoChat('tn1', 'permission')).toEqual({ question: null, closed: [expect.objectContaining({ id: p1.id, status: 'answered_in_tab' })] });
+    const rows = await db.tabQuestion.findMany({ where: { tabId: 'tn1' } });
+    expect(rows.map((r) => [r.id, r.errorCode])).toEqual([[p1.id, 'QUEUED']]);
+    // The conversation is back: the tab still shows P1's dialog, so the third prompt opens nothing.
+    expect((await openPermission('tn1', 'Write')).question).toBeNull();
+  });
+
+  it('no conversation: a choice closes what is open and ends a permission queue, inserting nothing', async () => {
+    await openPermission('tn2', 'Bash');
+    await openPermission('tn2', 'Edit'); // queued
+    expect(await openNoChat('tn2', 'choice')).toEqual({ question: null, closed: [] });
+    expect(await db.tabQuestion.count({ where: { tabId: 'tn2', errorCode: 'QUEUED' } })).toBe(0);
+    expect(await db.tabQuestion.count({ where: { tabId: 'tn2' } })).toBe(1);
+    expect((await openPermission('tn2', 'Bash')).question).toMatchObject({ kind: 'permission', status: 'open' });
+  });
+
+  it('closeForTab takes the tab lock: it waits for another event of the tab holding it, then closes', async () => {
+    const tabId = tid('tq1');
+    const { question } = await open('tq1');
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const isLocked = new Promise<void>((r) => (locked = r));
+    const order: string[] = [];
+    const holder = db.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "tabs" WHERE id = ${tabId} FOR UPDATE`;
+        locked();
+        await held;
+        order.push('holder');
+      },
+      { timeout: 10_000 },
+    );
+    await isLocked;
+    const closing = repo.closeForTab(tabId, 'answered_in_tab').then((closed) => {
+      order.push('close');
+      return closed;
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(order).toEqual([]); // blocked on the tab's row
+    release();
+    await holder;
+    expect((await closing).map((q) => q.id)).toEqual([question.id]);
+    expect(order).toEqual(['holder', 'close']);
+  });
+
+  it('the migration added both indexes (spec 2026-09-26 §4.3)', async () => {
+    const idx = await db.$queryRaw<{ indexname: string; indexdef: string }[]>`SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'tab_questions'`;
+    const byName = new Map(idx.map((i) => [i.indexname, i.indexdef]));
+    expect(byName.get('tab_questions_tab_id_created_at_idx')).toContain('(tab_id, created_at)');
+    expect(byName.get('tab_questions_queued_tab_id_idx')).toMatch(/\(tab_id\) WHERE \(error_code = 'QUEUED'::text\)/);
   });
 
   it('closeOne: only that row, only while open', async () => {
@@ -243,5 +305,48 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     await db.tabQuestion.createMany({ data: [q, ...sugg] });
     const listed = await repo.listByConversation(conv.id);
     expect(listed.map((r) => r.id)).toEqual([q.id, ...sugg.slice(10).map((r) => r.id)]);
+  });
+
+  it('countOpenByConversation: open questions per conversation — never a suggestion, never a closed one', async () => {
+    // The previous test left its own active conversation for (userId, projectId) around (never
+    // archived — it had no reason to): archive it first so this one can become the active one under
+    // the partial unique index (`chat_conversations_one_active`).
+    const stray = await db.chatConversation.findFirst({ where: { userId, projectId, tabId: null, archivedAt: null } });
+    if (stray) await chat.archive(stray.id);
+    const conv = await db.chatConversation.create({ data: { id: newId(), userId, projectId } });
+    const mk = (kind: string, status: string) => ({ id: newId(), tabId: 'tc1', projectId, conversationId: conv.id, kind, payload: kind === 'suggestion' ? { text: 'x' } : { tool_name: 'Bash' }, status });
+    await db.tabQuestion.createMany({ data: [mk('choice', 'open'), mk('permission', 'open'), mk('permission', 'answered'), mk('suggestion', 'open'), mk('choice', 'expired')] });
+    expect(await repo.countOpenByConversation([conv.id, 'nope'])).toEqual(new Map([[conv.id, 2]]));
+    expect(await repo.countOpenByConversation([])).toEqual(new Map());
+  });
+
+  it('expireOne: a dead card closes as expired once; one answered from the chat keeps its status and gets closed_at', async () => {
+    const { question: a } = await open('td1');
+    const e = await repo.expireOne(a.id);
+    expect(e).toMatchObject({ id: a.id, status: 'expired', user_id: userId });
+    expect(e?.closed_at).not.toBeNull();
+    expect(await repo.expireOne(a.id)).toBeUndefined();
+    const { question: b } = await open('td2');
+    await repo.claim(b.id, userId, { answers: [{ selected: [0] }] });
+    expect(await repo.expireOne(b.id)).toMatchObject({ id: b.id, status: 'answered' });
+  });
+
+  // Last on purpose: the sweep closes every orphan row of the database.
+  it('expireOrphans: every card still on screen whose tab is gone closes (open → expired) in one statement; live tabs are untouched', async () => {
+    const at = new Date('2026-09-26T12:00:00.000Z');
+    const earlier = new Date('2026-09-26T11:00:00.000Z');
+    const mk = (id: string, tabId: string, status: string, closedAt: Date | null = null) => ({ id, tabId, projectId, conversationId, kind: 'permission', payload: { tool_name: 'Bash' }, status, closedAt });
+    const [gone1, gone2, closedGone, live] = [newId(), newId(), newId(), newId()];
+    await db.tabQuestion.createMany({ data: [mk(gone1, 'gone-a', 'open'), mk(gone2, 'gone-b', 'answered'), mk(closedGone, 'gone-c', 'answered_in_tab', earlier), mk(live, tid('ts1'), 'open')] });
+    const swept = await repo.expireOrphans(at);
+    const mine = swept.filter((q) => [gone1, gone2, closedGone, live].includes(q.id)).sort((x, y) => (x.id < y.id ? -1 : 1));
+    const want = [
+      { id: gone1, status: 'expired', closed_at: at.toISOString(), user_id: userId },
+      { id: gone2, status: 'answered', closed_at: at.toISOString(), user_id: userId },
+    ].sort((x, y) => (x.id < y.id ? -1 : 1));
+    expect(mine.map(({ id, status, closed_at, user_id }) => ({ id, status, closed_at, user_id }))).toEqual(want);
+    expect(await db.tabQuestion.findUnique({ where: { id: live } })).toMatchObject({ status: 'open', closedAt: null });
+    expect((await db.tabQuestion.findUnique({ where: { id: closedGone } }))?.closedAt?.toISOString()).toBe(earlier.toISOString());
+    expect((await repo.expireOrphans(at)).filter((q) => [gone1, gone2].includes(q.id))).toEqual([]);
   });
 });

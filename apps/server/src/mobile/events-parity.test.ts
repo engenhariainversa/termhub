@@ -25,7 +25,7 @@ const suggestion = {
   tab_id: 't1',
   tab_name: 'api',
   kind: 'suggestion' as const,
-  payload: { text: 'commit it' },
+  payload: { text: 'commit it', context: 'Quer que eu faça o commit?' },
   status: 'open' as const,
   answer: null,
   error_code: null,

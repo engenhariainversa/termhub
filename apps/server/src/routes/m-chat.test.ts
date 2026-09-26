@@ -182,7 +182,7 @@ describe('GET /chat', () => {
     const { app } = build({ tabs: [{ id: 't1', project_id: 'p1', name: 'api' }], tabQuestions: [{ ...common, id: 'q1', kind: 'permission', payload: { tool_name: 'Bash' } }, { ...common, id: 's1', kind: 'suggestion', payload: { text: 'commit it' } }] });
     const res = await app.inject({ method: 'GET', url: '/chat' });
     expect(res.json().tab_questions).toEqual([expect.objectContaining({ id: 'q1' })]);
-    expect(res.json().tab_suggestions).toEqual([expect.objectContaining({ id: 's1', kind: 'suggestion', payload: { text: 'commit it' } })]);
+    expect(res.json().tab_suggestions).toEqual([expect.objectContaining({ id: 's1', kind: 'suggestion', payload: { text: 'commit it', context: null } })]);
   });
 
   it('?project= reads that project conversation and its host', async () => {

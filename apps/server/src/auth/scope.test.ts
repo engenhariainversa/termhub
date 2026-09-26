@@ -124,6 +124,19 @@ describe('Scoped', () => {
     await expect(as('alice').tab('t2')).rejects.toMatchObject({ statusCode: 404 }); // alice's project, bob's machine
   });
 
+  it("tab: a scope miss is the tab's own 404; any other failure loading it propagates unchanged", async () => {
+    // An unlinked machine (an HttpError from the project–machine check) reads as the tab's 404.
+    await expect(as('alice').tab('t2')).rejects.toMatchObject({ statusCode: 404, message: 'Tab não encontrada' });
+    // A transient DB error is not a 404: a caller that expires a card on 404 must not see one.
+    const dbError = Object.assign(new Error('connection reset'), { code: 'P1001' });
+    const flaky = { ...repos, projectMachines: { ...repos.projectMachines, find: async () => Promise.reject(dbError) } } as unknown as Repositories;
+    const s = new Scoped(flaky, { user: alice, viewAs: { kind: 'self' }, ownerId: 'alice', createAs: 'alice' });
+    await expect(s.tab('t1')).rejects.toBe(dbError);
+    // Nor does a failure reading the machine turn into "not linked".
+    const flakyMachine = { ...repos, machines: { findById: async () => Promise.reject(dbError) } } as unknown as Repositories;
+    await expect(new Scoped(flakyMachine, { user: alice, viewAs: { kind: 'self' }, ownerId: 'alice', createAs: 'alice' }).tab('t1')).rejects.toBe(dbError);
+  });
+
   it('sees everything with a null owner filter (admin "all")', async () => {
     const s = as(null);
     expect((await s.machine('m1')).id).toBe('m1');

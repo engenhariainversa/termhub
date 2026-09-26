@@ -76,3 +76,14 @@ it("a suggestion's text, or what was sent, cannot break out of the quotes either
   expect(text.match(/«/g)).toHaveLength(3);
   expect(text.match(/»/g)).toHaveLength(3);
 });
+
+it('drops C1, bidi and invisible format controls, and line separators, from what it quotes (spec 2026-09-26 §4.11)', () => {
+  const q: TabQuestionView = {
+    ...base,
+    id: 'q1',
+    kind: 'permission',
+    payload: { tool_name: 'Bash' },
+    answer: { allow: false, text: 'use\u0085pnpm‮ evil​⁦x⁩﻿؜ end' },
+  };
+  expect(tabQuestionContext([q])).toBe('Enquanto isso:\n- a aba «api» pediu permissão para usar «Bash»; o usuário negou e disse «use pnpm evil x end».');
+});

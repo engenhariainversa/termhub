@@ -132,6 +132,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
     markInjected: vi.fn(async (ids: string[]) => {
       for (const id of ids) toInject.splice(toInject.findIndex((q) => q.id === id), 1);
     }),
+    countOpenByConversation: vi.fn(async (_ids: string[]) => new Map<string, number>()),
   };
   const repos = {
     chat,
@@ -1056,6 +1057,13 @@ it('projectStatuses reports a project chat that is answering as busy', async () 
   await running;
 });
 
+it('projectStatuses counts open tab questions as pending too (spec 2026-09-26 §4.9)', async () => {
+  const { service, tabQuestions } = build([]);
+  tabQuestions.countOpenByConversation.mockResolvedValueOnce(new Map([['c_p1', 3]]));
+  expect(await service.projectStatuses(user)).toEqual([{ project_id: 'p1', busy: false, pending_confirmations: 5 }]);
+  expect(tabQuestions.countOpenByConversation).toHaveBeenCalledWith(['c_p1']);
+});
+
 describe('purgeExpiredActions', () => {
   // A unit test of the function itself (ruling R3): this must be pinned without booting the app, so
   // it calls the exported function directly against a stubbed repository, the same way app.ts's
@@ -1140,6 +1148,21 @@ describe('start', () => {
     const first = await service.start(user, 'primeira');
     await expect(service.start(user, 'segunda')).rejects.toMatchObject({ statusCode: 409, code: 'CHAT_BUSY' });
     expect(messages).toHaveLength(2);
+    release();
+    await first.done;
+  });
+
+  it('a start refused as busy neither reads nor marks the answered tab questions (spec 2026-09-26 §4.10)', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, tabQuestions } = build(() => (async function* () { await gate; yield delta('ok'); yield done(); })(), { tabQuestions: [answeredQuestion()] });
+    const first = await service.start(user, 'primeira');
+    // The first run read and marked them, under its lock.
+    expect(tabQuestions.listToInject).toHaveBeenCalledTimes(1);
+    expect(tabQuestions.markInjected).toHaveBeenCalledTimes(1);
+    await expect(service.start(user, 'segunda')).rejects.toMatchObject({ statusCode: 409, code: 'CHAT_BUSY' });
+    expect(tabQuestions.listToInject).toHaveBeenCalledTimes(1);
+    expect(tabQuestions.markInjected).toHaveBeenCalledTimes(1);
     release();
     await first.done;
   });

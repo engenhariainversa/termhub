@@ -1,6 +1,6 @@
-import type { TabRowKind } from '../../chat/tab-question-payload.js';
+import type { SuggestionPayload, TabRowKind } from '../../chat/tab-question-payload.js';
 import type { Repositories } from './index.js';
-import type { TabQuestion, TabQuestionStatus, TabRowAnswer, TabRowPayload } from './tab-questions.js';
+import { PERMISSION_QUEUED, type TabQuestion, type TabQuestionStatus, type TabRowAnswer, type TabRowPayload } from './tab-questions.js';
 
 /** A tab's question as both clients render it (`GET /chat`, the bus, the phone): the row minus what
  * only the server needs, plus the tab's name at read time (null once the tab is gone). */
@@ -33,10 +33,13 @@ export function toTabQuestionView(r: TabQuestion, tabName: string | null): TabQu
     tab_id: r.tab_id,
     tab_name: tabName,
     kind: r.kind,
-    payload: r.payload,
+    // A suggestion always carries `context` on the wire (null for a row stored before TER-96).
+    payload: r.kind === 'suggestion' ? { text: (r.payload as SuggestionPayload).text, context: (r.payload as SuggestionPayload).context ?? null } : r.payload,
     status: r.status,
     answer: r.answer,
-    error_code: r.error_code,
+    // `QUEUED` is the server's own bookkeeping for the permission queue: clients read `error_code` only for
+    // `failed`, and the wire never carries the mark (spec 2026-09-26 §4.2).
+    error_code: r.error_code === PERMISSION_QUEUED ? null : r.error_code,
     created_at: r.created_at,
     answered_at: r.answered_at,
     closed_at: r.closed_at,

@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { promptSuggestion, renderStyled } from './ansi.js';
+import { PLACEHOLDER, promptSuggestion, renderStyled } from './ansi.js';
 
 const fx = (name: string) => readFileSync(join(import.meta.dirname, '../chat/fixtures/tab-suggestions', name), 'utf8');
 const suggestion = { ansi: fx('screen-suggestion.ansi'), txt: fx('screen-suggestion.txt') };
 const typed = { ansi: fx('screen-typed.ansi'), txt: fx('screen-typed.txt') };
+const placeholder = { ansi: fx('screen-placeholder.ansi'), txt: fx('screen-placeholder.txt') };
 /** tmux trims trailing blanks only in a plain capture: compare line by line without them. */
 const lines = (s: string) => s.split('\n').map((l) => l.trimEnd());
 const NBSP = ' ';
@@ -65,5 +66,36 @@ describe('promptSuggestion', () => {
 
   it("a dialog's selection marker is not a suggestion", () => {
     expect(promptSuggestion(' Do you want to proceed?\n ❯ 1. Yes\n   2. No\n')).toBeNull();
+  });
+});
+
+describe('broken escapes (spec 2026-09-26 §5.2)', () => {
+  it.each([
+    ['a CSI truncated at the end of the capture is dropped whole', 'ok\x1b[31', 'ok'],
+    ['a double ESC keeps the second escape, so dim is still seen', 'a\x1b\x1b[2mhint\x1b[0m', 'a⟦hint⟧'],
+    ['a CSI interrupted by another CSI', '\x1b[31\x1b[2mhint\x1b[0m', '⟦hint⟧'],
+    ['C1 controls are never printed (0x9b is the 8-bit CSI)', 'a\x9bb\x85c', 'abc'],
+  ])('%s', (_label, input, expected) => {
+    expect(renderStyled(input)).toBe(expected);
+  });
+});
+
+describe("a new session's placeholder (spec 2026-09-26 §5.6)", () => {
+  it('is never a suggestion, but read_screen still marks it dim', () => {
+    expect(promptSuggestion(placeholder.ansi)).toBeNull();
+    expect(renderStyled(placeholder.ansi)).toContain(`❯${NBSP}⟦Try "create a util logging.py that..."⟧`);
+    expect(lines(renderStyled(placeholder.ansi).replace(/[⟦⟧]/g, ''))).toEqual(lines(placeholder.txt));
+  });
+
+  it.each([
+    ['straight quotes and an ellipsis', 'Try "fix lint errors…"'],
+    ['curly quotes', 'Try “refactor the parser”'],
+  ])('%s: no suggestion', (_label, dim) => {
+    expect(PLACEHOLDER.test(dim)).toBe(true);
+    expect(promptSuggestion(`\x1b[39m❯${NBSP}\x1b[2m${dim}\x1b[0m`)).toBeNull();
+  });
+
+  it('a real suggestion that merely starts with "Try" is still one', () => {
+    expect(promptSuggestion(`\x1b[39m❯${NBSP}\x1b[2mTry the tests again\x1b[0m`)).toBe('Try the tests again');
   });
 });

@@ -159,7 +159,7 @@ function tabSuggestionView(s: MockTabSuggestion): TTabSuggestion {
 
 /** The canned suggestion a `sugest…` message makes the tab `api` show. */
 function createTabSuggestion(state: MockState, now: number, conversationId: string): MockTabSuggestion {
-  const suggestion: MockTabSuggestion = { id: randomId(10), conversation_id: conversationId, tab_id: 't-api', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: new Date(now).toISOString(), answered_at: null, closed_at: null };
+  const suggestion: MockTabSuggestion = { id: randomId(10), conversation_id: conversationId, tab_id: 't-api', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it', context: 'Criei o arquivo notes.txt com a linha hello.\n\nQuer que eu faça o commit?' }, status: 'open', answer: null, error_code: null, created_at: new Date(now).toISOString(), answered_at: null, closed_at: null };
   state.tabSuggestions.push(suggestion);
   return suggestion;
 }
@@ -392,7 +392,10 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const projects = [...state.projects.values()].map((project) => {
       const conversationId = state.activeConversation.get(project.id);
       const conversation = conversationId ? state.conversations.get(conversationId) : undefined;
-      const pending = conversation ? actionsFor(state, conversation.id).filter((a) => a.status === 'pending').length : 0;
+      // Open tab questions wait on the person too, as on the server (spec 2026-09-26 §4.9); suggestions do not.
+      const pending = conversation
+        ? actionsFor(state, conversation.id).filter((a) => a.status === 'pending').length + state.tabQuestions.filter((q) => q.conversation_id === conversation.id && q.status === 'open').length
+        : 0;
       return {
         id: project.id,
         name: project.name,

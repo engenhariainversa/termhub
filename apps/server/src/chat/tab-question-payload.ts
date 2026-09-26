@@ -41,9 +41,14 @@ export interface ChoicePayload {
 export interface PermissionPayload {
   tool_name: string;
 }
-/** Claude Code's dimmed next prompt, read off the tab's screen (spec 2026-09-25 tab suggestions §6.1). */
+/**
+ * Claude Code's dimmed next prompt, read off the tab's screen (spec 2026-09-25 tab suggestions §6.1), and the
+ * agent's last message it answers — the tab's `state_text` at the check, cleaned (spec 2026-09-26 §6.2).
+ * `context` is absent on rows stored before it existed; the view always sends it (null then).
+ */
 export interface SuggestionPayload {
   text: string;
+  context?: string | null;
 }
 /** What the person sent for it, as edited. */
 export interface SuggestionAnswer {
@@ -94,27 +99,60 @@ export function toolUseIdOf(v: unknown): string | null {
 }
 
 /**
- * Text typed into the tab as an answer: one line, no control characters. A newline would be read as
- * Enter halfway through the answer, and any other control byte is a key, not text (the same reasoning
- * as `CONTROL_CHARS` in control/agents.ts, stricter: not even a newline).
+ * C0 controls, DEL and C1 controls (spec 2026-09-26 §5.1). Typed into a tab, each is a key, not text
+ * (0x9b is an 8-bit CSI); shown, each can move the cursor or recolour what follows. Refused in what the
+ * chat types (`answerText`) and stripped from what it shows, wherever the rule is the same. Not global:
+ * `test` on it keeps no state — use `globalOf` for a `replace`.
  */
-export const answerText = z.string().trim().min(1).max(ANSWER_TEXT_MAX).regex(/^[^\x00-\x1f\x7f]*$/, 'sem caracteres de controle nem quebras de linha');
+export const CONTROL_CHARS_RE = /[\x00-\x1f\x7f-\x9f]/;
+/**
+ * Bidi and invisible format controls: ALM (U+061C), ZWSP…RLM (U+200B–U+200F), LRE…RLO (U+202A–U+202E),
+ * WJ…PDI (U+2060–U+2069) and the BOM (U+FEFF). They reorder or hide text without showing themselves.
+ */
+export const FORMAT_CHARS_RE = /[؜​-‏‪-‮⁠-⁩﻿]/;
+/** The same character class, matching every occurrence (for `replace`). */
+export const globalOf = (re: RegExp): RegExp => new RegExp(re.source, 'g');
+
+/** The first `max` UTF-16 units of `text`, never ending on the first half of a surrogate pair (spec §5.3). */
+export function sliceUnits(text: string, max: number): string {
+  const cut = text.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
+/**
+ * Text typed into the tab as an answer: one line, no control characters (C0, DEL or C1). A newline
+ * would be read as Enter halfway through the answer, and any other control byte is a key, not text (the
+ * same reasoning as `CONTROL_CHARS` in control/agents.ts, stricter: not even a newline).
+ */
+export const answerText = z
+  .string()
+  .trim()
+  .min(1)
+  .max(ANSWER_TEXT_MAX)
+  .refine((t) => !CONTROL_CHARS_RE.test(t), 'sem caracteres de controle nem quebras de linha');
+
+/**
+ * `answerText` that may land at Claude Code's prompt, where a leading "!" runs the rest in bash and a
+ * leading "/" runs a slash command (`/exit`, `/clear`…): a permission's deny text (Claude is back at its
+ * prompt after a rejection), a suggestion's text, and — defence in depth, since it is typed into the
+ * dialog's own field — a choice's free text (spec 2026-09-26 §4.4). Checked after the trim.
+ */
+export const typedText = answerText
+  .refine((t) => !t.startsWith('!'), 'o texto não pode começar com "!"')
+  .refine((t) => !t.startsWith('/'), 'o texto não pode começar com "/"');
 
 export const choiceAnswerBody = z.object({
   answers: z
-    .array(z.object({ selected: z.array(z.number().int().min(0).max(3)).max(4).default([]), text: answerText.optional() }))
+    .array(z.object({ selected: z.array(z.number().int().min(0).max(3)).max(4).default([]), text: typedText.optional() }))
     .min(1)
     .max(4),
 });
 export type ChoiceAnswer = z.infer<typeof choiceAnswerBody>;
 
 export const permissionAnswerBody = z
-  .object({ allow: z.boolean(), text: answerText.optional() })
-  .refine((a) => !(a.allow && a.text !== undefined), { message: 'texto só acompanha uma negação', path: ['text'] })
-  // After a rejection Claude Code is back at its prompt, where a leading "!" runs the rest in bash
-  // and a leading "/" runs a slash command (`/exit`, `/clear`…).
-  .refine((a) => !a.text?.startsWith('!'), { message: 'o texto não pode começar com "!"', path: ['text'] })
-  .refine((a) => !a.text?.startsWith('/'), { message: 'o texto não pode começar com "/"', path: ['text'] });
+  .object({ allow: z.boolean(), text: typedText.optional() })
+  .refine((a) => !(a.allow && a.text !== undefined), { message: 'texto só acompanha uma negação', path: ['text'] });
 export type PermissionAnswer = z.infer<typeof permissionAnswerBody>;
 
 export type ChoiceAnswerProblem = 'ANSWER_COUNT' | 'ANSWER_OPTION' | 'ANSWER_SHAPE';

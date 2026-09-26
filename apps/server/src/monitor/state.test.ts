@@ -47,6 +47,11 @@ describe('interpretHookEvent — claude', () => {
     expect(interpretHookEvent('claude', { hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Allow?' })?.continuesWait).toBeUndefined();
   });
 
+  it("only idle_prompt keepsWaitText: its own message is a generic reminder, never the turn's answer (spec 2026-09-26 §6.1)", () => {
+    expect(interpretHookEvent('claude', { hook_event_name: 'Notification', notification_type: 'idle_prompt', message: 'Claude is waiting for your input' })?.keepsWaitText).toBe(true);
+    expect(interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Posso seguir?' })?.keepsWaitText).toBeUndefined();
+  });
+
   it('maps PreToolUse to working with the tool\'s activity, keeping nothing of the tool input', () => {
     const withInput = interpretHookEvent('claude', { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: '/secret', new_string: 'x' } });
     const without = interpretHookEvent('claude', { hook_event_name: 'PreToolUse', tool_name: 'Edit' });
@@ -73,6 +78,32 @@ describe('interpretHookEvent — claude', () => {
     expect(interpretHookEvent('claude', { hook_event_name: 'Stop' })?.activity).toBeUndefined();
     expect(interpretHookEvent('codex', { type: 'agent-turn-complete' })?.activity).toBeUndefined();
     expect(interpretHookEvent('claude', { hook_event_name: 'UserPromptSubmit', verb: 'Brewing' })?.verb).toBeUndefined();
+  });
+});
+
+describe('interpretHookEvent — claude subagents (spec 2026-09-26 §4.5)', () => {
+  it('flags an event the script marked, or one that carries its own agent_id', () => {
+    expect(interpretHookEvent('claude', { hook_event_name: 'PreToolUse', tool_name: 'Bash', subagent: true })).toEqual({
+      kind: 'working', text: null, activity: 'terminal', verb: null, meta: { event: 'PreToolUse', tool: 'Bash', subagent: true },
+    });
+    expect(interpretHookEvent('claude', { hook_event_name: 'PermissionRequest', tool_name: 'Bash', subagent: true })).toMatchObject({ kind: 'waiting_permission', meta: { subagent: true }, question: { kind: 'permission' } });
+    // An AskUserQuestion travels whole, keys in Claude Code's order: its agent_id says it.
+    const ask = {
+      session_id: 's1', transcript_path: '/x.jsonl', cwd: '/w', prompt_id: 'p1', permission_mode: 'default', agent_id: 'a1b2c3', agent_type: 'general-purpose',
+      hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Qual cor?', header: 'Cor', options: [{ label: 'Azul' }, { label: 'Verde' }], multiSelect: false }] }, tool_use_id: 'toolu_9',
+    };
+    expect(interpretHookEvent('claude', ask)).toMatchObject({ meta: { subagent: true }, question: { kind: 'choice' } });
+  });
+
+  it.each([
+    ['no flag (an old script, or the main thread)', { hook_event_name: 'PreToolUse', tool_name: 'Bash' }],
+    ['a flag that is not the boolean true', { hook_event_name: 'PreToolUse', tool_name: 'Bash', subagent: 'true' }],
+    ['an empty agent_id', { hook_event_name: 'PreToolUse', tool_name: 'Bash', agent_id: '' }],
+    ['a blank agent_id', { hook_event_name: 'PreToolUse', tool_name: 'Bash', agent_id: '  ' }],
+    ['a non-string agent_id', { hook_event_name: 'PreToolUse', tool_name: 'Bash', agent_id: 7 }],
+    ['a Stop (subagents end with SubagentStop, which we ignore)', { hook_event_name: 'Stop', last_assistant_message: 'ok' }],
+  ])('does not flag %s', (_label, ev) => {
+    expect(interpretHookEvent('claude', ev)?.meta).not.toHaveProperty('subagent');
   });
 });
 
@@ -174,6 +205,11 @@ describe('interpretHookEvent — cursor', () => {
       expect(interpretHookEvent('cursor', { ...base, hook_event_name: 'stop', status })?.continuesWait).toBe(true);
     }
     expect(interpretHookEvent('cursor', { ...base, hook_event_name: 'afterAgentResponse', text: 'um' })?.continuesWait).toBe(true);
+  });
+
+  it("afterAgentResponse never keepsWaitText: its own text is the fresh answer, and must replace a stale one (spec 2026-09-26 §6.1)", () => {
+    expect(interpretHookEvent('cursor', { ...base, hook_event_name: 'afterAgentResponse', text: 'dois' })?.keepsWaitText).toBeUndefined();
+    expect(interpretHookEvent('cursor', { ...base, hook_event_name: 'stop', status: 'completed', loop_count: 0 })?.keepsWaitText).toBeUndefined();
   });
 
   it('marks the tab idle when the session ends', () => {

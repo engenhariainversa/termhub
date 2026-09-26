@@ -9,12 +9,13 @@ import { chatBus, type ChatEvent } from './bus.js';
 const captureStyledScreen = vi.fn();
 vi.mock('../agent/screen.js', async (orig) => ({ ...(await orig<typeof import('../agent/screen.js')>()), captureStyledScreen: (...a: unknown[]) => captureStyledScreen(...a) }));
 
-const { SUGGESTION_DELAY_MS, cancelTabSuggestion, checkTabSuggestion, cleanSuggestion, scheduleTabSuggestion, stopTabSuggestions } = await import('./tab-suggestions.js');
+const { CLAUDE_IDLE_MESSAGE, SUGGESTION_DELAY_MS, cancelTabSuggestion, checkTabSuggestion, cleanContext, cleanSuggestion, scheduleTabSuggestion, stopTabSuggestions } = await import('./tab-suggestions.js');
 
 const fx = (name: string) => readFileSync(join(import.meta.dirname, 'fixtures/tab-suggestions', name), 'utf8');
 const screens = { suggestion: fx('screen-suggestion.ansi'), typed: fx('screen-typed.ansi') };
 
-const tab = { id: 't1', project_id: 'p1', machine_id: 'm1', name: 'api', kind: 'terminal', tmux_session: 'th-t1', state: 'waiting_input' };
+const CONTEXT = 'Criei o notes.txt.\n\nQuer que eu faça o commit?';
+const tab = { id: 't1', project_id: 'p1', machine_id: 'm1', name: 'api', kind: 'terminal', tmux_session: 'th-t1', state: 'waiting_input', state_tool: 'claude', state_text: CONTEXT };
 const machine = { id: 'm1', type: 'agent', owner_id: 'u1' };
 const opened = (over: Partial<TabQuestion> = {}): TabQuestion => ({
   id: 's1', tab_id: 't1', project_id: 'p1', conversation_id: 'c1', user_id: 'u1', kind: 'suggestion', payload: { text: 'commit it' }, tool_use_id: null,
@@ -64,6 +65,11 @@ describe('cleanSuggestion', () => {
     expect(cleanSuggestion('\u0001 ')).toBeNull();
     expect(cleanSuggestion(null)).toBeNull();
   });
+
+  it('strips C1 too, and never splits a surrogate pair at the cap', () => {
+    expect(cleanSuggestion('commit\u009b it\u0085')).toBe('commit it');
+    expect(cleanSuggestion(`${'x'.repeat(1999)}😀`)).toBe('x'.repeat(1999));
+  });
 });
 
 describe('checkTabSuggestion', () => {
@@ -73,10 +79,11 @@ describe('checkTabSuggestion', () => {
     await checkTabSuggestion(asRepos(repos), l, 't1');
     expect(captureStyledScreen).toHaveBeenCalledWith(machine, 'th-t1', 15);
     expect(repos.chat.findLatestActiveForProject).toHaveBeenCalledWith('p1', 'u1');
-    expect(repos.tabQuestions.open).toHaveBeenCalledWith({ tab_id: 't1', project_id: 'p1', conversation_id: 'c1', kind: 'suggestion', payload: { text: 'commit it' }, tool_use_id: null });
+    expect(repos.tabQuestions.open).toHaveBeenCalledWith({ tab_id: 't1', project_id: 'p1', conversation_id: 'c1', kind: 'suggestion', payload: { text: 'commit it', context: CONTEXT }, tool_use_id: null });
     expect(events).toEqual([expect.objectContaining({ type: 'tab_suggestion', user_id: 'u1', conversation_id: 'c1', suggestion: expect.objectContaining({ id: 's1', tab_name: 'api', kind: 'suggestion' }) })]);
-    expect(l.info).toHaveBeenCalledWith({ tabId: 't1', tabQuestionId: 's1', kind: 'suggestion', chars: 9 }, 'tab suggestion opened');
+    expect(l.info).toHaveBeenCalledWith({ tabId: 't1', tabQuestionId: 's1', kind: 'suggestion', chars: 9, contextChars: CONTEXT.length }, 'tab suggestion opened');
     expect(JSON.stringify(l.info.mock.calls)).not.toContain('commit');
+    expect(JSON.stringify(l.info.mock.calls)).not.toContain('notes');
   });
 
   it.each([
@@ -172,5 +179,64 @@ describe('scheduleTabSuggestion', () => {
     release({ text: screens.suggestion, styled: true });
     await settle();
     expect(repos.tabQuestions.open).not.toHaveBeenCalled();
+  });
+
+  it('stopTabSuggestions: a scheduled check never runs after it', async () => {
+    fakeTimers();
+    const repos = fakeRepos();
+    scheduleTabSuggestion(asRepos(repos), log(), 't1');
+    scheduleTabSuggestion(asRepos(repos), log(), 't2');
+    stopTabSuggestions();
+    await vi.advanceTimersByTimeAsync(SUGGESTION_DELAY_MS * 2);
+    await settle();
+    expect(repos.tabs.findById).not.toHaveBeenCalled();
+    expect(captureStyledScreen).not.toHaveBeenCalled();
+  });
+});
+
+describe('cleanContext (spec 2026-09-26 §6.2)', () => {
+  it('keeps the message as written: newlines kept, other controls and bidi removed, long blank runs collapsed', () => {
+    expect(cleanContext('Feito.\r\n\r\n\r\n\r\n‮Quer\tque eu\u0085 faça o commit?​')).toBe('Feito.\n\n\nQuer que eu faça o commit?');
+    expect(cleanContext('a\n\n\nb')).toBe('a\n\n\nb'); // two blank lines stay
+  });
+
+  it('caps at STATE_TEXT_MAX without splitting a pair', () => {
+    expect(cleanContext('x'.repeat(2500))).toHaveLength(2000);
+    expect(cleanContext(`${'x'.repeat(1999)}😀tail`)).toBe('x'.repeat(1999));
+  });
+
+  it("is null for no text, blank text, or Claude's generic idle message", () => {
+    expect(cleanContext(null)).toBeNull();
+    expect(cleanContext(' \n​ ')).toBeNull();
+    expect(cleanContext(CLAUDE_IDLE_MESSAGE)).toBeNull();
+    expect(CLAUDE_IDLE_MESSAGE).toBe('Claude is waiting for your input');
+  });
+});
+
+describe('checkTabSuggestion — context and old agents', () => {
+  it.each([
+    ["the wait is another tool's (Codex)", { ...tab, state_tool: 'codex' }],
+    ["the text is Claude's idle reminder", { ...tab, state_text: 'Claude is waiting for your input' }],
+    ['there is no text (Claude Code older than 2.1.47)', { ...tab, state_text: null }],
+  ])('stores no context when %s', async (_label, t) => {
+    const repos = fakeRepos({ tab: t });
+    await checkTabSuggestion(asRepos(repos), log(), 't1');
+    expect(repos.tabQuestions.open).toHaveBeenCalledWith(expect.objectContaining({ payload: { text: 'commit it', context: null } }));
+  });
+
+  it.each([
+    ['older than 0.5.2: no capture at all', '0.5.1', 0],
+    ['0.5.2: captures', '0.5.2', 1],
+    ['newer: captures', '0.5.3', 1],
+  ])('an agent %s', async (_label, version, captures) => {
+    vi.spyOn(agents, 'info').mockReturnValue({ agent_version: version, os: 'linux', tools: [], connected_at: '2026-09-26T00:00:00.000Z' });
+    await checkTabSuggestion(asRepos(fakeRepos()), log(), 't1');
+    expect(captureStyledScreen).toHaveBeenCalledTimes(captures);
+  });
+
+  it('an agent whose version is unknown still tries (its plain answer opens nothing)', async () => {
+    vi.spyOn(agents, 'info').mockReturnValue(null);
+    await checkTabSuggestion(asRepos(fakeRepos()), log(), 't1');
+    expect(captureStyledScreen).toHaveBeenCalledTimes(1);
   });
 });

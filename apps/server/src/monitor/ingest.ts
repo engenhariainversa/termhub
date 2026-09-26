@@ -65,6 +65,7 @@ export async function applyState(repos: Repositories, log: FastifyBaseLogger, ta
     activity: next.activity,
     activityVerb: next.verb,
     ...(next.continuesWait ? { continuesWait: true } : {}),
+    ...(next.keepsWaitText ? { keepsWaitText: true } : {}),
   });
   const machine = await repos.machines.findById(tab.machine_id);
   log.info({ tabId: tab.id, machineId: machine?.id, tool, kind: next.kind, textLen: next.text?.length ?? 0 }, 'monitor: tab state');

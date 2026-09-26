@@ -79,3 +79,33 @@ it('shows the error it is given', () => {
   render(<TabQuestionCard question={permission()} answering={false} onAnswer={vi.fn()} error="A pergunta mudou na aba" />);
   expect(screen.getByText('A pergunta mudou na aba')).toBeInTheDocument();
 });
+
+it('the question tabs are a real tab list: ids, aria-controls, a labelled panel, only the selected tab in the tab order, arrows move (spec 2026-09-26 §4.12)', () => {
+  render(<TabQuestionCard question={choice()} answering={false} onAnswer={vi.fn()} />);
+  const [color, fruitsTab] = screen.getAllByRole('tab');
+  expect(color).toHaveAttribute('id', 'q1-tab-0');
+  expect(color).toHaveAttribute('aria-controls', 'q1-panel');
+  expect(color).toHaveAttribute('tabindex', '0');
+  expect(fruitsTab).toHaveAttribute('tabindex', '-1');
+  const panel = screen.getByRole('tabpanel');
+  expect(panel).toHaveAttribute('id', 'q1-panel');
+  expect(panel).toHaveAttribute('aria-labelledby', 'q1-tab-0');
+  fireEvent.keyDown(color!, { key: 'ArrowRight' });
+  expect(screen.getByRole('tab', { name: 'Fruits' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: 'Fruits' })).toHaveFocus();
+  expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'q1-tab-1');
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Fruits' }), { key: 'ArrowRight' });
+  expect(screen.getByRole('tab', { name: 'Color' })).toHaveAttribute('aria-selected', 'true'); // wraps
+});
+
+it('each option names itself, the recommended one says so, and points at its description', () => {
+  render(<TabQuestionCard question={choice()} answering={false} onAnswer={vi.fn()} />);
+  expect(screen.getByRole('radio', { name: 'Blue, recomendada' })).toHaveAccessibleDescription('Calm and classic.');
+  expect(screen.getByRole('radio', { name: 'Green' })).toHaveAccessibleDescription('Fresh and natural.');
+});
+
+it('one question: no tab list and no tab panel role', () => {
+  render(<TabQuestionCard question={choice({ payload: { questions: [colors] } } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+  expect(screen.queryByRole('tablist')).toBeNull();
+  expect(screen.queryByRole('tabpanel')).toBeNull();
+});

@@ -200,7 +200,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
   /** The live excerpt a permission card shows (spec §6.1): read now, never stored nor logged. */
   app.get('/tab-questions/:id/screen', async (request) => {
     const { id } = tabQuestionIdParam.parse(request.params);
-    return tabQuestionScreen(controlContextFor(repos, request.scope.user), id);
+    return tabQuestionScreen(controlContextFor(repos, request.scope.user), id, { log: request.log });
   });
 
   /**

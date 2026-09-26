@@ -6,8 +6,8 @@ import { assertTerminal, offline } from '../control/screen.js';
 import { sendInput } from '../control/terminals.js';
 import { describeTabQuestions, toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import { forbidden, HttpError, notFound } from '../lib/errors.js';
-import { asHttp, codeOf } from './tab-question-answer.js';
-import { answerText, type SuggestionPayload } from './tab-question-payload.js';
+import { asHttp, codeOf, scopedTabOfRow } from './tab-question-answer.js';
+import { typedText, type SuggestionPayload } from './tab-question-payload.js';
 import { publishTabQuestions } from './tab-questions.js';
 import { readSuggestion } from './tab-suggestions.js';
 
@@ -16,15 +16,10 @@ type Log = Pick<FastifyBaseLogger, 'info' | 'warn'>;
 export const suggestionChanged = () => new HttpError(409, 'A sugestão mudou na aba', 'TAB_PROMPT_CHANGED');
 
 /**
- * What "Enviar" types (spec 2026-09-25 tab suggestions §6.2): TER-56's answer text — one line, no control
- * characters, ≤ 2000 — which lands at Claude Code's prompt, where a leading "!" runs bash and a leading
- * "/" a slash command: both refused, as for a permission's deny text.
+ * What "Enviar" types (spec 2026-09-25 tab suggestions §6.2): `typedText` — one line, no control characters
+ * (C0, DEL, C1), ≤ 2000, no leading "!" nor "/" (it lands at Claude Code's prompt).
  */
-export const suggestionSendBody = z.object({
-  text: answerText
-    .refine((t) => !t.startsWith('!'), 'o texto não pode começar com "!"')
-    .refine((t) => !t.startsWith('/'), 'o texto não pode começar com "/"'),
-});
+export const suggestionSendBody = z.object({ text: typedText });
 
 const suggestionRow = async (ctx: ControlContext, id: string) => {
   const row = await ctx.repos.tabQuestions.findByIdForUser(id, ctx.scope.user.id);
@@ -46,7 +41,7 @@ export async function sendTabSuggestion(ctx: ControlContext, id: string, raw: un
   const row = await suggestionRow(ctx, id);
   const { text } = suggestionSendBody.parse(raw);
   const suggested = (row.payload as SuggestionPayload).text;
-  const { tab, machine } = await ctx.scoped.tab(row.tab_id);
+  const { tab, machine } = await scopedTabOfRow(ctx, row, deps.log);
   if (row.status !== 'open') throw suggestionChanged();
   const latest = await ctx.repos.tabQuestions.findOpenForTab(tab.id);
   if (latest?.id !== row.id) throw suggestionChanged();
