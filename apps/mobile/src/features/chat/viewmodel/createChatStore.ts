@@ -65,10 +65,15 @@ export interface ChatState {
   decidingId: string | null;
   /** The grant whose "Revogar" is in flight. */
   revokingId: string | null;
-  /** The tab question whose answer is in flight. */
-  answeringQuestionId: string | null;
-  /** The tab suggestion whose send or dismiss is in flight. */
-  busySuggestionId: string | null;
+  /** The tab questions whose answer is in flight (spec 2026-09-26 §4.13): two different cards may be
+   * answered at once, one card never twice. */
+  answeringQuestionIds: string[];
+  /** Why the last answer of each card failed (pt-BR), by question id: shown in that card, never in the banner. */
+  questionErrors: Record<string, string>;
+  /** The tab suggestions whose send or dismiss is in flight, one entry per card. */
+  busySuggestionIds: string[];
+  /** Why the last send or dismiss of each suggestion failed (pt-BR), by id. */
+  suggestionErrors: Record<string, string>;
   hostOptions: THostOptionsResponse | null;
   /** The last failed action of the screen on show, in pt-BR. */
   error: string | null;
@@ -87,11 +92,11 @@ export interface ChatState {
   /** "Revogar" a trusted tab of the open conversation. A grant already revoked elsewhere (409) is
    * dropped quietly: it is gone either way. */
   revokeGrant(grantId: string): Promise<void>;
-  /** Answers a tab's question from its card — no PIN. A question the tab moved past (409) says so and re-reads. */
+  /** Answers a tab's question from its card — no PIN. A question the tab moved past (409) says so in its card and re-reads. */
   answerTabQuestion(questionId: string, body: TTabQuestionAnswerBody): Promise<void>;
   /** The tab's live excerpt for a permission card; null when it cannot be read (closed, offline). */
   loadTabQuestionScreen(questionId: string): Promise<string | null>;
-  /** Sends a tab's suggestion, as edited — no PIN. A suggestion the tab moved past (409) says so and re-reads. */
+  /** Sends a tab's suggestion, as edited — no PIN. A suggestion the tab moved past (409) says so in its card and re-reads. */
   sendTabSuggestion(suggestionId: string, text: string): Promise<void>;
   /** "Dispensar": the card closes; the tab is not touched. */
   dismissTabSuggestion(suggestionId: string): Promise<void>;
@@ -126,8 +131,10 @@ const initialData = (): Data => ({
   sending: false,
   decidingId: null,
   revokingId: null,
-  answeringQuestionId: null,
-  busySuggestionId: null,
+  answeringQuestionIds: [],
+  questionErrors: {},
+  busySuggestionIds: [],
+  suggestionErrors: {},
   hostOptions: null,
   error: null,
 });
@@ -139,6 +146,11 @@ const projectOf = (key: string): string | null => (key === '' ? null : key);
 const isApiError = (e: unknown, code?: string): e is ApiError => e instanceof ApiError && (code === undefined || e.code === code);
 const isLocked = (e: unknown) => e instanceof Error && e.message === 'LOCKED';
 const isCancelled = (e: unknown) => e instanceof Error && e.message === 'CANCELLED';
+/** `record` without `id`'s entry. */
+const without = (record: Record<string, string>, id: string): Record<string, string> => {
+  const { [id]: _dropped, ...rest } = record;
+  return rest;
+};
 
 export function createChatStore(deps: ChatDeps) {
   const { api, session } = deps;
@@ -171,6 +183,15 @@ export function createChatStore(deps: ChatDeps) {
           if (gen !== generation || isLocked(e)) return;
           if (session().handleApiError(e)) return;
           set({ error: isApiError(e) ? e.message : CHAT_MSG.network });
+        };
+
+        /** What a card's failed action says in that card (pt-BR), or null when nothing should: a stale
+         * generation, a locked session (the unlock screen is up) or a session-ending error (the session
+         * store has it). */
+        const cardFailure = (gen: number, e: unknown, changed: string): string | null => {
+          if (gen !== generation || isLocked(e) || session().handleApiError(e)) return null;
+          if (isApiError(e, 'TAB_PROMPT_CHANGED')) return changed;
+          return isApiError(e) ? e.message : CHAT_MSG.network;
         };
 
         const reread = async (key: string): Promise<void> => {
@@ -238,27 +259,25 @@ export function createChatStore(deps: ChatDeps) {
           });
         };
 
-        /** Enviar / Dispensar share one flow: one at a time, the event brings the card, a 409 re-reads. */
+        /** Enviar / Dispensar share one flow, per card (spec 2026-09-26 §4.13): two cards may act at once, one
+         * card never twice; the event brings the card; a failure is that card's error, and a 409 re-reads. */
         const actOnSuggestion = async (suggestionId: string, call: () => Promise<void>): Promise<void> => {
           const projectId = get().activeProject;
-          if (projectId === undefined || get().busySuggestionId !== null) return;
+          if (projectId === undefined || get().busySuggestionIds.includes(suggestionId)) return;
           const key = keyOf(projectId);
           const gen = generation;
-          set({ busySuggestionId: suggestionId, error: null });
+          set((s) => ({ busySuggestionIds: [...s.busySuggestionIds, suggestionId], suggestionErrors: without(s.suggestionErrors, suggestionId) }));
           try {
             await call();
             // The `tab_suggestion_closed` event brings the card; the re-read covers a socket that is down.
             if (gen === generation) void reread(key);
           } catch (e) {
-            if (gen !== generation) return;
-            if (isApiError(e, 'TAB_PROMPT_CHANGED')) {
-              set({ error: CHAT_MSG.tabSuggestionChanged });
-              void reread(key); // show how it ended
-            } else {
-              fail(gen, e);
-            }
+            const text = cardFailure(gen, e, CHAT_MSG.tabSuggestionChanged);
+            if (text === null) return;
+            set((s) => ({ suggestionErrors: { ...s.suggestionErrors, [suggestionId]: text } }));
+            if (isApiError(e, 'TAB_PROMPT_CHANGED')) void reread(key); // show how it ended
           } finally {
-            if (gen === generation) set({ busySuggestionId: null });
+            if (gen === generation) set((s) => ({ busySuggestionIds: s.busySuggestionIds.filter((id) => id !== suggestionId) }));
           }
         };
 
@@ -308,7 +327,7 @@ export function createChatStore(deps: ChatDeps) {
             closeSocket?.();
             closeSocket = null;
             readSeq.clear();
-            set({ connected: false, live: [], activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionId: null, busySuggestionId: null });
+            set({ connected: false, live: [], activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionIds: [], questionErrors: {}, busySuggestionIds: [], suggestionErrors: {} });
           },
 
           async send(text) {
@@ -453,24 +472,21 @@ export function createChatStore(deps: ChatDeps) {
 
           async answerTabQuestion(questionId, body) {
             const projectId = get().activeProject;
-            if (projectId === undefined || get().answeringQuestionId !== null) return;
+            if (projectId === undefined || get().answeringQuestionIds.includes(questionId)) return;
             const key = keyOf(projectId);
             const gen = generation;
-            set({ answeringQuestionId: questionId, error: null });
+            set((s) => ({ answeringQuestionIds: [...s.answeringQuestionIds, questionId], questionErrors: without(s.questionErrors, questionId) }));
             try {
               await api.answerTabQuestion(session().auth(), questionId, body);
               // The `tab_question_answered` event brings the card; the re-read covers a socket that is down.
               if (gen === generation) void reread(key);
             } catch (e) {
-              if (gen !== generation) return;
-              if (isApiError(e, 'TAB_PROMPT_CHANGED')) {
-                set({ error: CHAT_MSG.tabPromptChanged });
-                void reread(key); // show how it ended
-              } else {
-                fail(gen, e);
-              }
+              const text = cardFailure(gen, e, CHAT_MSG.tabPromptChanged);
+              if (text === null) return;
+              set((s) => ({ questionErrors: { ...s.questionErrors, [questionId]: text } }));
+              if (isApiError(e, 'TAB_PROMPT_CHANGED')) void reread(key); // show how it ended
             } finally {
-              if (gen === generation) set({ answeringQuestionId: null });
+              if (gen === generation) set((s) => ({ answeringQuestionIds: s.answeringQuestionIds.filter((id) => id !== questionId) }));
             }
           },
 

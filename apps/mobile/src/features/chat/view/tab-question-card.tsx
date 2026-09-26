@@ -7,8 +7,10 @@ import type { TabQuestion } from '../model/types';
 
 type Props = {
   question: TabQuestion;
-  /** An answer (this one or another card's) is in flight. */
+  /** This card's answer is in flight. */
   busy: boolean;
+  /** Why this card's last answer did not go through (pt-BR). */
+  error?: string | null;
   onAnswer(questionId: string, body: TTabQuestionAnswerBody): void;
   loadScreen(questionId: string): Promise<string | null>;
 };
@@ -28,6 +30,7 @@ export const TabQuestionCard = memo(function TabQuestionCard(props: Props) {
     <View testID={`tab-question-${question.id}`} className="gap-3 rounded-2xl border border-app-accent bg-app-surface2 p-4">
       {question.kind === 'choice' ? <ChoiceBody {...props} question={question} /> : <PermissionBody {...props} question={question} />}
       {question.status !== 'open' ? <AppText variant="muted">{statusLabel(question)}</AppText> : null}
+      {props.error ? <AppText className="text-app-danger">{props.error}</AppText> : null}
     </View>
   );
 });
@@ -58,10 +61,23 @@ function ChoiceBody({ question, busy, onAnswer }: Props & { question: Choice }) 
     <View className="gap-2">
       {title}
       {items.length > 1 ? (
-        <View className="flex-row flex-wrap gap-2">
-          {items.map((it, i) => (
-            <Button key={i} label={it.header || `Pergunta ${i + 1}`} variant={i === current ? 'primary' : 'secondary'} onPress={() => setCurrent(i)} />
-          ))}
+        <View accessibilityRole="tablist" className="flex-row flex-wrap gap-2">
+          {items.map((it, i) => {
+            const label = it.header || `Pergunta ${i + 1}`;
+            const selectedTab = i === current;
+            return (
+              <Pressable
+                key={i}
+                accessibilityRole="tab"
+                accessibilityLabel={label}
+                accessibilityState={{ selected: selectedTab }}
+                onPress={() => setCurrent(i)}
+                className={`rounded-xl px-4 py-3 ${selectedTab ? 'bg-app-accent' : 'border border-app-border bg-app-surface2'}`}
+              >
+                <AppText className={`font-semibold ${selectedTab ? 'text-white' : 'text-app-text'}`}>{label}</AppText>
+              </Pressable>
+            );
+          })}
         </View>
       ) : null}
       <AppText>{item.question}</AppText>
@@ -71,7 +87,8 @@ function ChoiceBody({ question, busy, onAnswer }: Props & { question: Choice }) 
           <Pressable
             key={oi}
             accessibilityRole={item.multi_select ? 'checkbox' : 'radio'}
-            accessibilityLabel={o.label}
+            accessibilityLabel={o.recommended ? `${o.label}, recomendada` : o.label}
+            accessibilityHint={o.description || undefined}
             accessibilityState={{ checked, disabled: busy || typing }}
             disabled={busy || typing}
             onPress={() => toggle(oi)}

@@ -90,6 +90,10 @@ afterEach(() => {
     answerTabQuestion: realActions.answerTabQuestion,
     sendTabSuggestion: realActions.sendTabSuggestion,
     dismissTabSuggestion: realActions.dismissTabSuggestion,
+    questionErrors: {},
+    suggestionErrors: {},
+    answeringQuestionIds: [],
+    busySuggestionIds: [],
   });
 });
 
@@ -314,6 +318,19 @@ describe('Conversa', () => {
   const QUESTION_BASE = { tab_id: 't-api', tab_name: 'api', error_code: null, created_at: new Date().toISOString(), answered_at: null, closed_at: null };
   const OPEN_CHOICE = { ...QUESTION_BASE, id: 'q1', kind: 'choice', status: 'open', answer: null, payload: { questions: [{ question: 'Qual banco usamos nos testes?', header: 'Banco', multi_select: false, options: [{ label: 'Postgres', description: 'O mesmo da produção.', recommended: true }, { label: 'SQLite', description: '', recommended: false }] }] } } as TTabQuestion;
   const OPEN_PERMISSION = { ...QUESTION_BASE, id: 'q2', kind: 'permission', status: 'open', answer: null, payload: { tool_name: 'Bash' } } as TTabQuestion;
+  const TWO_QUESTIONS = {
+    ...QUESTION_BASE,
+    id: 'q3',
+    kind: 'choice',
+    status: 'open',
+    answer: null,
+    payload: {
+      questions: [
+        { question: 'Qual banco usamos nos testes?', header: 'Banco', multi_select: false, options: [{ label: 'Postgres', description: 'O mesmo da produção.', recommended: true }, { label: 'SQLite', description: '', recommended: false }] },
+        { question: 'Qual runner?', header: 'Runner', multi_select: false, options: [{ label: 'Vitest', description: '', recommended: false }, { label: 'Jest', description: '', recommended: false }] },
+      ],
+    },
+  } as TTabQuestion;
 
   /** Serves the open project's `GET chat` with these tab questions. */
   function serveQuestions(questions: TTabQuestion[]) {
@@ -331,7 +348,7 @@ describe('Conversa', () => {
     expect(await screen.findByText('Qual banco usamos nos testes?', undefined, LOAD)).toBeTruthy();
     expect(screen.getByText('A aba «api» perguntou')).toBeTruthy();
     expect(screen.getByText('Recomendada')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('radio', { name: 'Postgres' }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Postgres, recomendada' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Responder' }));
     expect(answer).toHaveBeenCalledWith('q1', { answers: [{ selected: [0] }] });
   });
@@ -397,8 +414,8 @@ describe('Conversa', () => {
     const sendSuggestion = stubAction('sendTabSuggestion');
     const dismissSuggestion = stubAction('dismissTabSuggestion');
     await render(<ConversationScreen />);
-    expect(await screen.findByText('«api» sugere:', undefined, LOAD)).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('Texto da sugestão'), '  commit it and push ');
+    expect(await screen.findByText('«api» está esperando sua resposta', undefined, LOAD)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Sugestão do Claude Code (opcional — edite ou dispense)'), '  commit it and push ');
     // Scoped to the card: the composer has its own "Enviar" button on screen at the same time.
     await fireEvent.press(within(screen.getByTestId('tab-suggestion-s1')).getByRole('button', { name: 'Enviar' }));
     expect(sendSuggestion).toHaveBeenCalledWith('s1', 'commit it and push');
@@ -414,7 +431,43 @@ describe('Conversa', () => {
     serveSuggestions([s]);
     await render(<ConversationScreen />);
     for (const t of texts) expect(await screen.findByText(t, undefined, LOAD)).toBeTruthy();
-    expect(screen.queryByLabelText('Texto da sugestão')).toBeNull();
+    expect(screen.queryByLabelText('Sugestão do Claude Code (opcional — edite ou dispense)')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Dispensar' })).toBeNull();
+  });
+
+  it('a11y: question tabs say which is selected; options name the recommended one and read their description as a hint (spec 2026-09-26 §4.12)', async () => {
+    serveQuestions([TWO_QUESTIONS]);
+    await render(<ConversationScreen />);
+    expect(await screen.findByRole('tab', { name: 'Banco', selected: true }, LOAD)).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Runner', selected: false })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Postgres, recomendada' }).props.accessibilityHint).toBe('O mesmo da produção.');
+    expect(screen.getByRole('radio', { name: 'SQLite' }).props.accessibilityHint).toBeUndefined();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Runner' }));
+    expect(screen.getByRole('tab', { name: 'Runner', selected: true })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Vitest' })).toBeTruthy();
+  });
+
+  it('each question card shows its own error, and only the card in flight is busy (spec 2026-09-26 §4.13)', async () => {
+    serveQuestions([OPEN_CHOICE, OPEN_PERMISSION]);
+    await render(<ConversationScreen />);
+    await screen.findByText('Qual banco usamos nos testes?', undefined, LOAD);
+    await act(async () => useChatStore.setState({ questionErrors: { q2: 'A pergunta mudou na aba' }, answeringQuestionIds: ['q1'] }));
+    expect(within(screen.getByTestId('tab-question-q2')).getByText('A pergunta mudou na aba')).toBeTruthy();
+    expect(within(screen.getByTestId('tab-question-q1')).queryByText('A pergunta mudou na aba')).toBeNull();
+    expect(within(screen.getByTestId('tab-question-q1')).getByRole('radio', { name: 'SQLite', disabled: true })).toBeTruthy();
+    expect(within(screen.getByTestId('tab-question-q2')).getByRole('button', { name: 'Permitir', disabled: false })).toBeTruthy();
+  });
+
+  it('a suggestion card shows the message it answers, collapsed to its last paragraph, and its own error', async () => {
+    serveSuggestions([{ ...OPEN_SUGGESTION, payload: { text: 'C, pode seguir', context: 'Criei o arquivo notes.txt.\n\nQuer que eu faça o commit?' } } as TTabSuggestion]);
+    await render(<ConversationScreen />);
+    expect(await screen.findByText('Quer que eu faça o commit?', undefined, LOAD)).toBeTruthy();
+    expect(screen.queryByText(/Criei o arquivo/)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver mensagem inteira' }));
+    expect(screen.getByText(/Criei o arquivo notes\.txt\./)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Recolher' }));
+    expect(screen.queryByText(/Criei o arquivo/)).toBeNull();
+    await act(async () => useChatStore.setState({ suggestionErrors: { s1: 'A sugestão mudou na aba' } }));
+    expect(within(screen.getByTestId('tab-suggestion-s1')).getByText('A sugestão mudou na aba')).toBeTruthy();
   });
 });
