@@ -344,3 +344,16 @@ The copy is pt-BR (product language):
 - §5.6: the placeholder rule also accepts curly quotes (`/^Try ["“].*["”]$/`).
 - §4.12: the web tab list gets ←/→ keys and `aria-label="Perguntas"` (WAI-ARIA tabs pattern).
 - `@termhub/agent` goes 0.5.2 → 0.5.3 (it bundles `HOOK_SCRIPT`); CI publishes it on merge.
+
+## 10. Adjustments found while implementing
+
+- §4.1: `closeForTab` keeps its pre-check outside the transaction (as specified), so a close for a tab
+  with nothing committed yet does not wait on the lock. If an `open()` of that tab is in flight, the new
+  card stays until the tab's next closing event. Accepted: the card's live check refuses a stale answer.
+- §6.1: the continuation rule is narrower than written above: a continuation keeps the wait's text only
+  when it brings no text, or when it is Claude's `idle_prompt` (interpreter flag `keepsWaitText`). Cursor's
+  `afterAgentResponse` is also a continuation but carries the fresh answer, which must replace a stale
+  text.
+- §7 E2E (2026-09-26): the placeholder gave no card and `state_text` kept the agent's message after
+  `idle_prompt`; the live "suggestion card with context" step could not run because Claude Code 2.1.283
+  drew no suggestion during the test window. That path is covered by unit tests only.
