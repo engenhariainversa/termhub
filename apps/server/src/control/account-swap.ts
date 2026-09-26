@@ -122,8 +122,19 @@ export async function swapAccount(
         to = candidate;
         break;
       }
+      // the transcript is the same for every candidate: no point trying the next one
+      if (status === 'no_transcript') throw new ControlError('NO_TRANSCRIPT', 'O arquivo da sessão do Claude desta aba não foi encontrado na máquina');
     }
-    if (!to) throw new ControlError('NO_CANDIDATE', 'Nenhuma outra conta do Claude desta máquina tem limite disponível');
+    if (!to) {
+      throw new ControlError(
+        'NO_CANDIDATE',
+        ranked.length === 0
+          ? 'Nenhuma outra conta do Claude desta máquina tem limite disponível'
+          : 'Nenhuma outra conta do Claude desta máquina pôde assumir a sessão (mesma conta, pasta ausente ou conflito)',
+      );
+    }
+    // built before the tab is touched: every check that can fail runs first (spec §5)
+    const line = resumeLine(to.config_dir, sessionId, RESUME_PROMPT);
 
     // Claude waits for the reset on a usage limit (it does not exit): cancel that wait and leave.
     // Already idle means it ended on its own: the tab is at the shell and must not get these keys.
@@ -139,7 +150,7 @@ export async function swapAccount(
         }
       }
     }
-    await sendTextToSession(machine, session, resumeLine(to.config_dir, sessionId, RESUME_PROMPT), true);
+    await sendTextToSession(machine, session, line, true);
 
     const updated = (await repos.tabs.setAgentFields(tab.id, { ai_account_id: to.id, rate_limited_at: null })) ?? tab;
     const text = `${opts.auto ? 'Conta trocada automaticamente' : 'Conta trocada'}: ${from?.label ?? 'conta desconhecida'} → ${to.label}`;

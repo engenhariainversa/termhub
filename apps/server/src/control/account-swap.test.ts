@@ -173,7 +173,10 @@ describe('swapAccount', () => {
   it('NO_CANDIDATE when nothing links, and nothing was typed', async () => {
     const { repos, r } = makeRepos();
     linkClaudeSession.mockResolvedValue('same_account');
-    await expect(swapAccount(r, log, baseTab(), machine(), { auto: false })).rejects.toMatchObject({ code: 'NO_CANDIDATE' });
+    await expect(swapAccount(r, log, baseTab(), machine(), { auto: false })).rejects.toMatchObject({
+      code: 'NO_CANDIDATE',
+      message: 'Nenhuma outra conta do Claude desta máquina pôde assumir a sessão (mesma conta, pasta ausente ou conflito)',
+    });
     expect(linkClaudeSession).toHaveBeenCalledTimes(2);
     expect(sendKeyToSession).not.toHaveBeenCalled();
     expect(sendTextToSession).not.toHaveBeenCalled();
@@ -184,8 +187,30 @@ describe('swapAccount', () => {
   it('NO_CANDIDATE when every other account is at the limit', async () => {
     const { r } = makeRepos();
     getAccountUsage.mockImplementation(async (a: AiAccount) => usage(a.id, [95]));
-    await expect(swapAccount(r, log, baseTab(), machine(), { auto: true })).rejects.toMatchObject({ code: 'NO_CANDIDATE' });
+    await expect(swapAccount(r, log, baseTab(), machine(), { auto: true })).rejects.toMatchObject({
+      code: 'NO_CANDIDATE',
+      message: 'Nenhuma outra conta do Claude desta máquina tem limite disponível',
+    });
     expect(linkClaudeSession).not.toHaveBeenCalled();
+  });
+
+  it('NO_TRANSCRIPT stops at the first candidate, nothing typed', async () => {
+    const { repos, r } = makeRepos();
+    linkClaudeSession.mockResolvedValue('no_transcript');
+    await expect(swapAccount(r, log, baseTab(), machine(), { auto: false })).rejects.toMatchObject({
+      code: 'NO_TRANSCRIPT',
+      message: 'O arquivo da sessão do Claude desta aba não foi encontrado na máquina',
+    });
+    expect(linkClaudeSession).toHaveBeenCalledTimes(1);
+    expect(sendKeyToSession).not.toHaveBeenCalled();
+    expect(sendTextToSession).not.toHaveBeenCalled();
+    expect(repos.tabs.setAgentFields).not.toHaveBeenCalled();
+  });
+
+  it('no_config_dir moves on to the next candidate', async () => {
+    const { r } = makeRepos();
+    linkClaudeSession.mockImplementation(async (_m, input: { configDir: string | null }) => (input.configDir === null ? 'no_config_dir' : 'linked'));
+    await expect(swapAccount(r, log, baseTab(), machine(), { auto: false })).resolves.toMatchObject({ to: { id: 'a2' } });
   });
 
   it('does not type into the shell when the Claude already exited (idle)', async () => {
