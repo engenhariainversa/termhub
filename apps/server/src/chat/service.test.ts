@@ -103,11 +103,16 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
         (a) => a.conversation_id === conversationId && (a.status === 'approved' || a.status === 'denied') && a.injected_at === null && a.grant_id === null && !excludeIds.includes(a.id),
       )
       .sort((a, b) => Date.parse(a.decided_at ?? a.created_at) - Date.parse(b.decided_at ?? b.created_at));
+  // Like the repository: only rows still uninjected count, and a short count marks nothing (all or
+  // none). A row the store was not seeded with stands for one just decided, so it counts.
   const markRows = (ids: string[]) => {
-    for (const row of actionsStore) if (ids.includes(row.id)) row.injected_at = new Date().toISOString();
+    const fresh = ids.filter((id) => (actionsStore.find((r) => r.id === id)?.injected_at ?? null) === null);
+    if (fresh.length === ids.length) for (const row of actionsStore) if (ids.includes(row.id)) row.injected_at = new Date().toISOString();
+    return fresh.length;
   };
   const chatActions = {
     markInjectedMany: vi.fn(async (ids: string[]) => markRows(ids)),
+    findByIdForUser: vi.fn(async (id: string, userId: string) => (userId === user.id ? actionsStore.find((r) => r.id === id) : undefined)),
     findNextToInject: vi.fn(async (conversationId: string, excludeIds: string[] = []) => toInjectOf(conversationId, excludeIds)[0]),
     listToInject: vi.fn(async (conversationId: string, excludeIds: string[] = [], limit = 20) => toInjectOf(conversationId, excludeIds).slice(0, limit)),
     expireOpenForConversation: vi.fn(async () => 0),
@@ -697,6 +702,69 @@ it('never retries any decision of a batch whose marking failed', async () => {
     expect(chatActions.markInjectedMany).toHaveBeenCalledTimes(1);
     expect(chatActions.findNextToInject).toHaveBeenLastCalledWith('c1', ['a1', 'a2']);
     expect(runner.run).toHaveBeenCalledTimes(2); // the two typed messages, never an injected run
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+it('resumeAfterDecision starts no run when the marking comes back short: nothing is sent', async () => {
+  // Another run carried one of these decisions between the read and the marking: at most once wins.
+  const { service, runner, messages, chatActions } = build([delta('feito'), done()]);
+  chatActions.markInjectedMany.mockResolvedValueOnce(0);
+
+  const result = await service.resumeAfterDecision(user, action());
+  await settled();
+
+  expect(result).toBeUndefined();
+  expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1']);
+  expect(runner.run).not.toHaveBeenCalled();
+  expect(messages).toEqual([]);
+});
+
+it('resumeAfterDecision of an action already injected, with nothing else waiting, starts no run', async () => {
+  // The row as the route decided it says not injected; the re-read says a drain already carried it.
+  const { service, runner, messages, chatActions } = build([delta('feito'), done()], { chatActions: [action({ injected_at: '2026-09-21T12:00:01.000Z' })] });
+
+  const result = await service.resumeAfterDecision(user, action());
+  await settled();
+
+  expect(result).toBeUndefined();
+  expect(chatActions.markInjectedMany).not.toHaveBeenCalled();
+  expect(runner.run).not.toHaveBeenCalled();
+  expect(messages).toEqual([]);
+});
+
+it('resumeAfterDecision of an action already injected carries only the others still waiting', async () => {
+  const other = action({ id: 'a2', status: 'denied', tool: 'close_tab', tab_id: 't2', args: { tab_id: 't2' } });
+  const { service, conversation, messages, chatActions } = build([delta('ok'), done()], { chatActions: [action({ injected_at: '2026-09-21T12:00:01.000Z' }), other] });
+  conversation.cli_session_id = '3f1e9b1e-0000-4000-8000-000000000001';
+
+  await service.resumeAfterDecision(user, action());
+
+  expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a2']);
+  expect(messages[0].text).toMatch(/^O usuário recusou:/);
+  expect(messages[0].text).toContain('close_tab');
+});
+
+it('a drain whose marking comes back short starts no run and does not blacklist the batch', async () => {
+  const logged: unknown[][] = [];
+  const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => void logged.push(args));
+  try {
+    const { service, runner, messages, chatActions } = build([], { chatActions: [action({ id: 'a1' })] });
+    vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { yield delta('r0'); yield done(); })());
+    vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { yield delta('r1'); yield done(); })());
+    chatActions.markInjectedMany.mockResolvedValueOnce(0);
+
+    await service.send(user, 'mensagem original');
+    // The short drain sent nothing; the drain its released lock schedules finds a1 still uninjected
+    // (nothing was marked) and carries it — so it was never remembered as unmarkable.
+    await vi.waitFor(() => expect(runner.run).toHaveBeenCalledTimes(2));
+    await settled();
+
+    expect(chatActions.markInjectedMany).toHaveBeenCalledTimes(2);
+    expect(chatActions.findNextToInject).not.toHaveBeenCalledWith('c1', ['a1']);
+    expect(messages.filter((m) => m.role === 'user')).toHaveLength(2);
+    expect(logged).toEqual([]);
   } finally {
     spy.mockRestore();
   }

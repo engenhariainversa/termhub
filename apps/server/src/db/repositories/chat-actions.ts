@@ -274,9 +274,24 @@ export class ChatActionsRepository {
     await this.db.chatAction.updateMany({ where: { id }, data: { injectedAt: new Date() } });
   }
 
-  /** `markInjected` for every decision one run carries, in one statement: all or none. */
-  async markInjectedMany(ids: string[]): Promise<void> {
-    await this.db.chatAction.updateMany({ where: { id: { in: ids } }, data: { injectedAt: new Date() } });
+  /**
+   * `markInjected` for every decision one run carries, all or none, and never a row twice: only rows
+   * still uninjected are marked, and the answer is how many there were. Anything short of `ids.length`
+   * means another run already carried one of them — the transaction is rolled back, so nothing is
+   * marked and the caller must not start its run; the rest stay for the next drain.
+   */
+  async markInjectedMany(ids: string[]): Promise<number> {
+    const short = Symbol('short');
+    let count = 0;
+    try {
+      await this.db.$transaction(async (tx) => {
+        ({ count } = await tx.chatAction.updateMany({ where: { id: { in: ids }, injectedAt: null }, data: { injectedAt: new Date() } }));
+        if (count !== ids.length) throw short;
+      });
+    } catch (err) {
+      if (err !== short) throw err;
+    }
+    return count;
   }
 
   async listByConversation(conversationId: string, limit = 200): Promise<ChatAction[]> {

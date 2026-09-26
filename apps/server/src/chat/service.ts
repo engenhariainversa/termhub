@@ -159,6 +159,9 @@ const batchInjectionText = (actions: ChatAction[], freshSession: boolean, summar
   return `O usuário decidiu ${actions.length} ações pendentes de uma vez.${sessionNote}\n${lines.join('\n')}\nSiga com as autorizadas, refazendo cada chamada com os mesmos argumentos; não faça as recusadas e explique ao usuário o que ficou sem fazer.`;
 };
 
+/** A run's decisions were (partly) carried by another run first: the run does not start. */
+const ALREADY_INJECTED = 'ALREADY_INJECTED';
+
 export class ChatService {
   /** One run per conversation: two `claude -p` processes on the same --session-id would race. */
   private running = new Set<string>();
@@ -272,16 +275,34 @@ export class ChatService {
    * once the lock frees up — both go through the same `markInjectedMany` marking in `beforeRun`, and
    * cannot diverge (fix round 2, point 4).
    */
-  async resumeAfterDecision(user: User, action: ChatAction): Promise<ChatMessage> {
+  async resumeAfterDecision(user: User, action: ChatAction): Promise<ChatMessage | undefined> {
     const conversation = await this.deps.repos.chat.findByIdForUser(action.conversation_id, user.id);
     // `decide` already proved the row is this user's; a conversation archived since then has nobody
     // reading it, and `reset` expired its open rows — nothing to inject.
     if (!conversation || conversation.archived_at !== null) throw new HttpError(409, 'Esta conversa foi encerrada', 'CHAT_ARCHIVED');
+    // Re-read: the phone resumes in the background, and a drain may have carried this decision since
+    // `decide` returned it. Injected once is injected for good — then only the others go, if any.
+    const current = (await this.deps.repos.chatActions.findByIdForUser(action.id, user.id)) ?? action;
     const rest = await this.deps.repos.chatActions.listToInject(conversation.id, [action.id]);
-    const batch = [action, ...rest];
-    return this.sendIn(user, conversation, await this.injectionFor(user, batch, conversation.cli_session_id === null), {
-      beforeRun: () => this.deps.repos.chatActions.markInjectedMany(batch.map((a) => a.id)),
-    });
+    const batch = current.injected_at === null ? [action, ...rest] : rest;
+    if (batch.length === 0) return undefined;
+    try {
+      return await this.sendIn(user, conversation, await this.injectionFor(user, batch, conversation.cli_session_id === null), {
+        beforeRun: () => this.markBatchInjected(batch),
+      });
+    } catch (err) {
+      // Another run carried part of the batch first: nothing was marked nor sent, and the drain the
+      // released lock schedules picks up whatever is still waiting.
+      if (err instanceof HttpError && err.code === ALREADY_INJECTED) return undefined;
+      throw err;
+    }
+  }
+
+  /** Marks a run's decisions injected (all or none), or throws `ALREADY_INJECTED` — before the run
+   * starts, so a decision another run already carried is never sent twice. */
+  private async markBatchInjected(batch: ChatAction[]): Promise<void> {
+    const marked = await this.deps.repos.chatActions.markInjectedMany(batch.map((a) => a.id));
+    if (marked !== batch.length) throw new HttpError(409, 'Estas decisões já foram enviadas ao chat', ALREADY_INJECTED);
   }
 
   /**
@@ -347,16 +368,19 @@ export class ChatService {
         // as long as the database keeps refusing. Remembering every id of the batch here is what stops
         // that; the rows are not lost, the next process (or `GET /api/chat`'s trail) still shows the
         // decisions the user gave.
+        // A short count is not a failed write: another run carried part of the batch, nothing was
+        // marked, and the next drain finds the rest — so those ids are not remembered as unmarkable.
         beforeRun: async () => {
           try {
-            await this.deps.repos.chatActions.markInjectedMany(batch.map((a) => a.id));
+            await this.markBatchInjected(batch);
           } catch (err) {
-            for (const a of batch) this.unmarkable.add(a.id);
+            if (!(err instanceof HttpError && err.code === ALREADY_INJECTED)) for (const a of batch) this.unmarkable.add(a.id);
             throw err;
           }
         },
       });
     } catch (err) {
+      if (err instanceof HttpError && err.code === ALREADY_INJECTED) return;
       console.error('chat: a decided action could not be re-injected', { conversation_id: conversationId, action_id: actionId, error: failureLabel(err) });
     }
   }

@@ -189,8 +189,34 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatActionsRepository (Po
       expect((await repo.listToInject(otherConversationId, [a.id])).map((r) => r.id)).toEqual([c.id]);
       expect((await repo.listToInject(otherConversationId, [], 1)).map((r) => r.id)).toEqual([a.id]);
 
-      await repo.markInjectedMany([a.id, c.id]);
+      expect(await repo.markInjectedMany([a.id, c.id])).toBe(2);
       expect(await repo.listToInject(otherConversationId)).toEqual([]);
+    } finally {
+      await db.user.delete({ where: { id: otherUserId } });
+    }
+  });
+
+  it('markInjectedMany never marks a row twice: a batch holding an already-injected row marks nothing and says so', async () => {
+    const otherUserId = newId();
+    await db.user.create({ data: { id: otherUserId, email: `${otherUserId}@test.local`, name: 'test' } });
+    const otherConversationId = (await new ChatRepository(db).getOrCreateForUser(otherUserId)).id;
+    try {
+      const mk = async (key: string) => {
+        const row = await repo.insertPending({ conversation_id: otherConversationId, tool: 'send_input', args: { tab_id: 't1', text: 'npm test' }, idempotency_key: key, class: 'write' });
+        await repo.decide(row.id, otherUserId, 'approved');
+        return row;
+      };
+      const a = await mk('once-a');
+      const b = await mk('once-b');
+      expect(await repo.markInjectedMany([b.id])).toBe(1);
+      const bAt = (await repo.findByIdForUser(b.id, otherUserId))!.injected_at;
+
+      // One of the two was already carried: the count is short, and the other one stays uninjected so
+      // the next run still carries it — all or none.
+      expect(await repo.markInjectedMany([a.id, b.id])).toBe(1);
+      expect((await repo.findByIdForUser(a.id, otherUserId))!.injected_at).toBeNull();
+      expect((await repo.findByIdForUser(b.id, otherUserId))!.injected_at).toBe(bAt);
+      expect((await repo.listToInject(otherConversationId)).map((r) => r.id)).toEqual([a.id]);
     } finally {
       await db.user.delete({ where: { id: otherUserId } });
     }
