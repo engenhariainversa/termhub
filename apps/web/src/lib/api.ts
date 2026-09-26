@@ -1,4 +1,4 @@
-import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatConversation, ChatGrant, ChatGrantListItem, ChatHostState, ChatMessage, CityLink, CreatedApiToken, InviteResult, ViewAs, OfficeCity, PermissionAction, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ProjectSetup, ProjectSetupData, Simulator, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary } from './types';
+import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatGrant, ChatGrantListItem, ChatHostState, ChatMessage, CityLink, CreatedApiToken, InviteResult, ViewAs, OfficeCity, PermissionAction, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ProjectSetup, ProjectSetupData, Simulator, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -49,11 +49,17 @@ function errorFrom(status: number, data: unknown): ApiError {
 }
 
 /**
- * POST of a binary body with upload progress (fetch has none): used for dictation clips, whose upload
- * on a slow uplink is long enough to deserve a percentage. Same cookies/CSRF/error shape as request().
+ * POST of a binary body with upload progress (fetch has none): used for dictation clips and chat
+ * attachments, whose upload on a slow uplink is long enough to deserve a percentage. Same
+ * cookies/CSRF/error shape as request(). `signal` aborts the request (the chip's ✕): the promise then
+ * rejects with `ABORTED`, and an already-aborted signal never opens a request at all.
  */
-function upload<T>(path: string, body: Blob, onProgress?: (fraction: number) => void): Promise<T> {
+function upload<T>(path: string, body: Blob, onProgress?: (fraction: number) => void, signal?: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new ApiError(0, 'Envio cancelado', 'ABORTED'));
+      return;
+    }
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `/api${path}`);
     xhr.withCredentials = true;
@@ -77,6 +83,7 @@ function upload<T>(path: string, body: Blob, onProgress?: (fraction: number) => 
       if (xhr.status >= 200 && xhr.status < 300) resolve(data as T);
       else reject(errorFrom(xhr.status, data));
     };
+    signal?.addEventListener('abort', () => xhr.abort(), { once: true });
     xhr.send(body);
   });
 }
@@ -167,8 +174,32 @@ export const api = {
    * that project's own chat (404 when it is not the signed-in user's). `actions` is the trail as it
    * truly is server-side (survives a reload); live socket events only update it, they are never its
    * source of truth. `grants` is optional: an older server that predates trusted tabs has none. */
-  chat: (projectId?: string | null) =>
-    request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[]; tab_questions?: TabQuestion[]; tab_suggestions?: TabSuggestion[] }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
+  chat: Object.assign(
+    (projectId?: string | null) =>
+      request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[]; tab_questions?: TabQuestion[]; tab_suggestions?: TabSuggestion[] }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
+    {
+      /** Files attached to a message before it is sent (spec §5.3). */
+      attachments: {
+        /**
+         * The raw file as the body (the server sniffs its type; the name only travels in the query).
+         * 415 ATTACHMENT_TYPE, 413 ATTACHMENT_TOO_LARGE / ATTACHMENT_QUOTA, each with its own pt-BR
+         * message, shown on the chip as-is. `signal` aborts (the chip's ✕ mid-upload).
+         */
+        upload: (file: Blob, name: string, projectId: string | null, onProgress?: (fraction: number) => void, signal?: AbortSignal) =>
+          upload<{ attachment: ChatAttachment }>(
+            `/chat/attachments?name=${encodeURIComponent(name)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ''}`,
+            new Blob([file], { type: 'application/octet-stream' }),
+            onProgress,
+            signal,
+          ),
+        /** Only while the attachment is not yet sent (409 once it belongs to a message, 404 for another user's). */
+        remove: (id: string) => request<{ ok: true }>('DELETE', `/chat/attachments/${encodeURIComponent(id)}`),
+        status: (id: string) => request<{ attachment: ChatAttachment }>('GET', `/chat/attachments/${encodeURIComponent(id)}/status`),
+        /** The download (images are served inline, everything else as an attachment). */
+        url: (id: string) => `/api/chat/attachments/${encodeURIComponent(id)}`,
+      },
+    },
+  ),
   /**
    * Chooses the machine that runs the conversation, and which of its Claude accounts (no account =
    * that machine's own default login). Both halves of the pair travel here, in one call: the chat's
