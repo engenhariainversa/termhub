@@ -1,5 +1,5 @@
 import type { AgentMessage, ClaudeOpenParams } from '@termhub/agent-protocol';
-import { HEADER_BYTES, MAX_FRAME } from '@termhub/agent-protocol';
+import { HEADER_BYTES, MAX_FRAME, STREAM_END_INPUT_LINE } from '@termhub/agent-protocol';
 import { buildClaudeArgs, classifyFailure, mcpConfig } from '@termhub/claude-cli';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,6 +12,10 @@ import { agentEnv } from '../exec.js';
 /** Same deadline the container runs with (`apps/concierge/src/run.ts`): a run that overstays it is
  *  killed, so a CLI that hangs cannot keep running on someone's laptop for the rest of the day. */
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+/** A streamed run hosts the chat's background subagents, which can take far longer than one answer. */
+const STREAM_TIMEOUT_MS = 60 * 60 * 1000;
+/** Input not yet framed into a line: a server that never sends a newline cannot grow this for ever. */
+const MAX_PENDING_INPUT_BYTES = 256 * 1024;
 /** How long a killed run gets to exit on SIGTERM before it is taken out with SIGKILL. */
 const KILL_GRACE_MS = 2_000;
 /** How long a run waits for the prompt the server sends right after `opened`. Seconds, because it
@@ -57,6 +61,12 @@ interface Run {
   kill(hard?: boolean): void;
   /** Cancels the wait for the prompt; called once it arrives. */
   promptArrived(): void;
+  /** Streamed input (`stream_input`): stdin stays open and takes one line per message. */
+  stream: boolean;
+  /** Bytes after the last newline of a streamed run's input. */
+  inputTail: string;
+  /** The end-of-input line arrived: stdin is closed, and anything after it is dropped. */
+  inputEnded: boolean;
   /** Sends `closed` (once) and removes the run's private directory. `notify: false` for a session
    *  that is already gone, where there is nobody left to ack to. */
   settle(code: number | null, reason?: ClosedReason, notify?: boolean): void;
@@ -103,7 +113,8 @@ export function createClaudeManager(deps: ClaudeManagerDeps): ClaudeManager {
       // (`cli_missing`) that only `closed` can carry — answering `open_error` instead would settle
       // the open as a generic rejection and throw that reason away.
       socket.sendControl({ type: 'opened', ch });
-      deps.log('claude run starting', { ch, resume: params.resume, model: params.model ?? null });
+      const stream = params.stream_input === true;
+      deps.log('claude run starting', { ch, resume: params.resume, model: params.model ?? null, stream });
 
       const env = { ...(deps.env ?? agentEnv()) };
       // `null` means "the account this machine uses by default", which is not the account the agent
@@ -117,6 +128,7 @@ export function createClaudeManager(deps: ClaudeManagerDeps): ClaudeManager {
         mcp_config_path: mcpConfigPath,
         model: params.model ?? null,
         append_system_prompt: params.append_system_prompt ?? null,
+        stream_input: stream,
       });
 
       let child: ChildProcess;
@@ -220,10 +232,11 @@ export function createClaudeManager(deps: ClaudeManagerDeps): ClaudeManager {
         }
       }
 
+      const timeoutMs = deps.timeoutMs ?? (stream ? STREAM_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
       const timer = setTimeout(() => {
-        deps.log('claude run timed out', { ch, timeoutMs: deps.timeoutMs ?? DEFAULT_TIMEOUT_MS });
+        deps.log('claude run timed out', { ch, timeoutMs });
         killRun();
-      }, deps.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+      }, timeoutMs);
       timer.unref();
 
       const promptTimer = setTimeout(() => {
@@ -239,6 +252,9 @@ export function createClaudeManager(deps: ClaudeManagerDeps): ClaudeManager {
         kill: killRun,
         promptArrived: () => clearTimeout(promptTimer),
         settle,
+        stream,
+        inputTail: '',
+        inputEnded: false,
       };
       runs.set(ch, run);
 
@@ -312,17 +328,47 @@ export function createClaudeManager(deps: ClaudeManagerDeps): ClaudeManager {
     write(ch: number, data: Buffer): boolean {
       const run = runs.get(ch);
       if (!run) return false; // not one of ours: the caller routes the frame to the pty manager
-      if (run.promptSent) {
-        // The size, never the content: this is the prompt.
-        deps.log('extra data on a claude channel ignored', { ch, bytes: data.length });
+      if (!run.stream) {
+        if (run.promptSent) {
+          // The size, never the content: this is the prompt.
+          deps.log('extra data on a claude channel ignored', { ch, bytes: data.length });
+          return true;
+        }
+        run.promptSent = true;
+        run.promptArrived();
+        // The prompt goes in on stdin and nowhere else: argv is visible to every process on this
+        // machine, and a prompt beginning with `-` would be read as a flag there. It arrives as one
+        // frame and is the CLI's whole input, so stdin closes with it — `claude -p` waits for EOF.
+        run.child.stdin?.end(data);
         return true;
       }
+      // Streamed input: every complete line is one message for the CLI, written as it arrives; the
+      // end-of-input line closes stdin. The CLI then finishes its turns and background subagents.
       run.promptSent = true;
       run.promptArrived();
-      // The prompt goes in on stdin and nowhere else: argv is visible to every process on this
-      // machine, and a prompt beginning with `-` would be read as a flag there. It arrives as one
-      // frame and is the CLI's whole input, so stdin closes with it — `claude -p` waits for EOF.
-      run.child.stdin?.end(data);
+      if (run.inputEnded) {
+        deps.log('claude input after its end ignored', { ch, bytes: data.length });
+        return true;
+      }
+      run.inputTail += data.toString('utf8');
+      for (;;) {
+        const nl = run.inputTail.indexOf('\n');
+        if (nl === -1) break;
+        const line = run.inputTail.slice(0, nl);
+        run.inputTail = run.inputTail.slice(nl + 1);
+        if (line === STREAM_END_INPUT_LINE) {
+          run.inputEnded = true;
+          if (run.inputTail.length > 0) deps.log('claude input after its end ignored', { ch, bytes: Buffer.byteLength(run.inputTail, 'utf8') });
+          run.inputTail = '';
+          run.child.stdin?.end();
+          return true;
+        }
+        if (line.trim()) run.child.stdin?.write(`${line}\n`);
+      }
+      if (Buffer.byteLength(run.inputTail, 'utf8') > MAX_PENDING_INPUT_BYTES) {
+        deps.log('claude input line too large, dropped', { ch, bytes: Buffer.byteLength(run.inputTail, 'utf8') });
+        run.inputTail = '';
+      }
       return true;
     },
 

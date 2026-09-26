@@ -24,8 +24,9 @@ export interface PtyManager {
  */
 export interface ClaudeManager {
   open(ch: number, params: ClaudeOpenParams, socket: AgentSocket): Promise<void>;
-  /** The prompt, as channel data. `false` when `ch` is not one of its channels, so the caller can
-   *  route the frame to the PTY manager instead. */
+  /** The prompt (a one-shot run) or the next lines of input (a streamed run), as channel data.
+   *  `false` when `ch` is not one of its channels, so the caller can route the frame to the PTY
+   *  manager instead. */
   write(ch: number, data: Buffer): boolean;
   close(ch: number): void;
   closeAll(): void;

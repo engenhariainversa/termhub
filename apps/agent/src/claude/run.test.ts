@@ -1,5 +1,5 @@
 import type { AgentMessage, ClaudeOpenParams } from '@termhub/agent-protocol';
-import { CAPABILITY_CLAUDE_SYSTEM_PROMPT, HEADER_BYTES, MAX_FRAME } from '@termhub/agent-protocol';
+import { CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_CLAUDE_SYSTEM_PROMPT, HEADER_BYTES, MAX_FRAME, STREAM_END_INPUT_LINE } from '@termhub/agent-protocol';
 import { buildClaudeArgs, mcpConfig } from '@termhub/claude-cli';
 import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -448,4 +448,59 @@ echo '{"type":"result"}'
     await waitFor('the CLI process to die', () => dead(pid));
     expect(readdirSync(runs)).toEqual([]);
   }, 10_000);
+
+  it('declares the streamed-input capability', () => {
+    expect(CAPABILITIES).toContain(CAPABILITY_CLAUDE_STREAM_INPUT);
+  });
+
+  it('in a streamed run keeps stdin open across writes, line by line, until the end-of-input line', async () => {
+    const { bin, out, runs } = fakeCli(RECORDER);
+    const { socket, sendControl } = makeSocket();
+    const log = vi.fn();
+    const claude = createClaudeManager({ log, env: pathEnv(bin), tmpDir: runs });
+
+    await claude.open(1, { ...baseParams, stream_input: true }, socket);
+    // The first message, then a second one split across two frames, then the end.
+    claude.write(1, Buffer.from('{"type":"user","n":1}\n'));
+    claude.write(1, Buffer.from('{"type":"user",'));
+    claude.write(1, Buffer.from('"n":2}\n'));
+    await sleep(100);
+    // stdin is still open: the recorder is still in `cat`, so it has not printed its result.
+    expect(controlOf(sendControl, 'closed')).toBeUndefined();
+    claude.write(1, Buffer.from(`${STREAM_END_INPUT_LINE}\n`));
+    await waitForClosed(sendControl);
+
+    expect(readFileSync(join(out, 'stdin'), 'utf8')).toBe('{"type":"user","n":1}\n{"type":"user","n":2}\n');
+    const argv = argvOf(out);
+    expect(argv).toEqual(buildClaudeArgs({ session_id: baseParams.session_id, resume: false, mcp_config_path: argv[argv.indexOf('--mcp-config') + 1], model: null, stream_input: true }));
+    // Nothing of what the lines said reaches a log.
+    expect(JSON.stringify(log.mock.calls)).not.toContain('"n":2');
+  });
+
+  it('drops what arrives after the end-of-input line, logging only its size', async () => {
+    const { bin, out, runs } = fakeCli(RECORDER);
+    const { socket, sendControl } = makeSocket();
+    const log = vi.fn();
+    const claude = createClaudeManager({ log, env: pathEnv(bin), tmpDir: runs });
+
+    await claude.open(1, { ...baseParams, stream_input: true }, socket);
+    claude.write(1, Buffer.from(`{"a":1}\n${STREAM_END_INPUT_LINE}\n{"late":true}\n`));
+    expect(claude.write(1, Buffer.from('{"later":true}\n'))).toBe(true);
+    await waitForClosed(sendControl);
+
+    expect(readFileSync(join(out, 'stdin'), 'utf8')).toBe('{"a":1}\n');
+    expect(JSON.stringify(log.mock.calls)).not.toContain('late');
+  });
+
+  it('keeps the one-shot run exactly as it was when stream_input is absent', async () => {
+    const { bin, out, runs } = fakeCli(RECORDER);
+    const { socket, sendControl } = makeSocket();
+    const claude = createClaudeManager({ log: vi.fn(), env: pathEnv(bin), tmpDir: runs });
+
+    await claude.open(1, baseParams, socket);
+    claude.write(1, Buffer.from('linha sem quebra'));
+    await waitForClosed(sendControl);
+    expect(readFileSync(join(out, 'stdin'), 'utf8')).toBe('linha sem quebra');
+    expect(argvOf(out)).not.toContain('--input-format');
+  });
 });
