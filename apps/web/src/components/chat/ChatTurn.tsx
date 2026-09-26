@@ -102,7 +102,7 @@ function flashCopy(button: HTMLElement, outcome: (typeof COPY_OUTCOME)[keyof typ
 
 export interface ChatTurnProps {
   message: ChatMessage;
-  /** What has streamed for this row so far, if anything (`live.deltas` in `ChatPage`). */
+  /** What has streamed for this row so far, if anything (`fold.get(id).text` in `ChatPanel`). */
   streaming?: string;
   /** The tool calls seen for this row while it is being written (`fold.get(id).tools` in `ChatPanel`). */
   tools?: readonly { tool: string }[];

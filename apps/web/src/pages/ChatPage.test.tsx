@@ -78,7 +78,7 @@ beforeEach(() => {
   auth.state = { user: { id: 'u1' }, viewAs: null };
   chatMock.mockResolvedValue({ conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })], actions: [] });
   sendMock.mockResolvedValue({ message: msg({ id: 'm3', role: 'assistant', text: 'pronto' }) });
-  streamMock.mockReturnValue({ events: [], connected: true });
+  streamMock.mockReturnValue({ connected: true });
 });
 
 afterEach(() => cleanup());
@@ -136,7 +136,7 @@ it('re-reads the conversation whenever the socket (re)connects', async () => {
   // Review Focus 5: /ws/chat carries no history, so a reconnect mid-answer must refetch.
   streamMock.mockImplementation((onReconnect: () => void) => {
     onReconnect();
-    return { events: [], connected: true };
+    return { connected: true };
   });
   render(<ChatPage />);
   await waitFor(() => expect(chatMock.mock.calls.length).toBeGreaterThanOrEqual(2));
@@ -209,7 +209,7 @@ it('scrolls the list to the newest message when one arrives', async () => {
   let deliver: (e: unknown) => void = () => {};
   streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
     deliver = onEvent;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock
     .mockResolvedValueOnce({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })] })
@@ -257,7 +257,7 @@ it('leaves the scroll position alone once the reader has scrolled away from the 
   let deliver: (e: unknown) => void = () => {};
   streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
     deliver = onEvent;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock
     .mockResolvedValueOnce({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })] })
@@ -484,7 +484,7 @@ it('a confirmation event on the socket adds the question as a card without a ref
   let deliver: (e: unknown) => void = () => {};
   streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
     deliver = onEvent;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   render(<ChatPage />);
   await waitFor(() => expect(chatMock).toHaveBeenCalledTimes(1));
@@ -511,7 +511,7 @@ it('a decision event on the socket updates the card by its action id, for a deci
   let deliver: (e: unknown) => void = () => {};
   streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
     deliver = onEvent;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({
     conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
