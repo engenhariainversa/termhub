@@ -26,12 +26,6 @@ export async function describeTabQuestions(repos: Pick<Repositories, 'tabs'>, ro
   return rows.map((r) => toTabQuestionView(r, nameOf.get(r.tab_id) ?? null));
 }
 
-function withoutSubagentFlag(payload: TabRowPayload): TabRowPayload {
-  if (!('subagent' in payload)) return payload;
-  const { subagent: _flag, ...rest } = payload as TabRowPayload & { subagent?: unknown };
-  return rest as TabRowPayload;
-}
-
 /** One row as a view, with the tab's name already resolved by the caller. */
 export function toTabQuestionView(r: TabQuestion, tabName: string | null): TabQuestionView {
   return {
@@ -39,9 +33,8 @@ export function toTabQuestionView(r: TabQuestion, tabName: string | null): TabQu
     tab_id: r.tab_id,
     tab_name: tabName,
     kind: r.kind,
-    // A suggestion always carries `context` on the wire (null for a row stored before TER-96); a question
-    // never carries the server's `subagent` flag (spec 2026-09-26 §4.5), so its shape stays the same.
-    payload: r.kind === 'suggestion' ? { text: (r.payload as SuggestionPayload).text, context: (r.payload as SuggestionPayload).context ?? null } : withoutSubagentFlag(r.payload),
+    // A suggestion always carries `context` on the wire (null for a row stored before TER-96).
+    payload: r.kind === 'suggestion' ? { text: (r.payload as SuggestionPayload).text, context: (r.payload as SuggestionPayload).context ?? null } : r.payload,
     status: r.status,
     answer: r.answer,
     // `QUEUED` is the server's own bookkeeping for the permission queue: clients read `error_code` only for

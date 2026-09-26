@@ -41,15 +41,7 @@ export interface OpenTabQuestionInput {
   kind: TabRowKind;
   payload: TabRowPayload;
   tool_use_id: string | null;
-  /**
-   * Asked by a subagent (spec 2026-09-26 §4.5): stored as `payload.subagent: true` (the server's own
-   * bookkeeping, never on the wire), so the subagent's next closing event closes it (`closeSubagentForTab`).
-   */
-  subagent?: boolean;
 }
-
-/** Rows a subagent event opened: `payload.subagent` is true. */
-const SUBAGENT_ROW = { payload: { path: ['subagent'], equals: true } } satisfies Prisma.TabQuestionWhereInput;
 
 const withOwner = { conversation: { select: { userId: true } } } as const;
 
@@ -86,14 +78,13 @@ const mapQuestion = (q: Row): TabQuestion => ({
 });
 
 /**
- * Closes whatever of this tab is still on its screen (or, with `only`, the part of it that matches): an
- * `open` question becomes `status`, and one the chat already answered keeps `answered` and only gets its
- * `closed_at` (spec §5.2, "Mirror"). The
+ * Closes whatever of this tab is still on its screen: an `open` question becomes `status`, and one
+ * the chat already answered keeps `answered` and only gets its `closed_at` (spec §5.2, "Mirror"). The
  * status filter sits in the UPDATE itself, so a claim racing this close either lands first (the row
  * stays `answered`) or finds the row closed and loses.
  */
-async function closeIn(tx: Prisma.TransactionClient, tabId: string, status: TabQuestionCloseStatus, now: Date, only: Prisma.TabQuestionWhereInput = {}): Promise<TabQuestion[]> {
-  const rows = await tx.tabQuestion.findMany({ where: { ...only, tabId, closedAt: null, status: { in: ['open', 'answered'] } }, select: { id: true } });
+async function closeIn(tx: Prisma.TransactionClient, tabId: string, status: TabQuestionCloseStatus, now: Date): Promise<TabQuestion[]> {
+  const rows = await tx.tabQuestion.findMany({ where: { tabId, closedAt: null, status: { in: ['open', 'answered'] } }, select: { id: true } });
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
   await tx.tabQuestion.updateMany({ where: { id: { in: ids }, status: 'open' }, data: { status, closedAt: now } });
@@ -169,7 +160,7 @@ export class TabQuestionsRepository {
           projectId: input.project_id,
           conversationId,
           kind: input.kind,
-          payload: (input.subagent ? { ...input.payload, subagent: true } : input.payload) as never,
+          payload: input.payload as never,
           toolUseId: input.tool_use_id,
           status: 'open',
           createdAt: now,
@@ -197,23 +188,6 @@ export class TabQuestionsRepository {
       await lockTab(tx, tabId);
       const closed = await closeIn(tx, tabId, status, now);
       await tx.tabQuestion.updateMany({ where: { tabId, errorCode: PERMISSION_QUEUED }, data: { errorCode: null } });
-      return closed;
-    });
-  }
-
-  /**
-   * A subagent's closing event (spec 2026-09-26 §4.5): `closeForTab` restricted to the rows a subagent
-   * opened — they close as `answered_in_tab`, and only their queue mark is cleared. A main-thread card and a
-   * main-thread queue are never touched: the main thread's dialog may still be on screen. Same lock and the
-   * same lock-free pre-check as `closeForTab`.
-   */
-  async closeSubagentForTab(tabId: string, now = new Date()): Promise<TabQuestion[]> {
-    const any = await this.db.tabQuestion.findFirst({ where: { ...SUBAGENT_ROW, tabId, OR: [{ closedAt: null, status: { in: ['open', 'answered'] } }, { errorCode: PERMISSION_QUEUED }] }, select: { id: true } });
-    if (!any) return [];
-    return this.db.$transaction(async (tx) => {
-      await lockTab(tx, tabId);
-      const closed = await closeIn(tx, tabId, 'answered_in_tab', now, SUBAGENT_ROW);
-      await tx.tabQuestion.updateMany({ where: { ...SUBAGENT_ROW, tabId, errorCode: PERMISSION_QUEUED }, data: { errorCode: null } });
       return closed;
     });
   }
