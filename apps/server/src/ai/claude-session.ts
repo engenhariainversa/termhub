@@ -5,7 +5,7 @@ import type { Machine } from '../db/repositories/types.js';
 import { runOnMachine } from '../terminal/machine-exec.js';
 
 /** The agent release that answers claude.linkSession. */
-export const CLAUDE_LINK_MIN_AGENT_VERSION = '0.6.0';
+export const CLAUDE_LINK_MIN_AGENT_VERSION = '0.7.0';
 
 /**
  * Makes a Claude session resumable under another account of the machine (see machine-ops

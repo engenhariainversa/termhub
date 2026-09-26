@@ -16,12 +16,12 @@ const input = { transcriptPath: PATH, sessionId: SID, configDir: '~/.claude_b' }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  info.mockReturnValue({ agent_version: '0.6.0' });
+  info.mockReturnValue({ agent_version: '0.7.0' });
 });
 
 describe('linkClaudeSession', () => {
-  it('needs agent 0.6.0', () => {
-    expect(CLAUDE_LINK_MIN_AGENT_VERSION).toBe('0.6.0');
+  it('needs agent 0.7.0', () => {
+    expect(CLAUDE_LINK_MIN_AGENT_VERSION).toBe('0.7.0');
   });
 
   it('asks the agent through claude.linkSession and returns its status', async () => {
@@ -31,7 +31,7 @@ describe('linkClaudeSession', () => {
     expect(runOnMachine).not.toHaveBeenCalled();
   });
 
-  it('refuses an agent older than 0.6.0 without calling it', async () => {
+  it('refuses an agent older than 0.7.0 without calling it', async () => {
     info.mockReturnValue({ agent_version: '0.5.2' });
     await expect(linkClaudeSession(machine('agent'), input)).rejects.toMatchObject({ statusCode: 409, code: 'AGENT_OUTDATED' });
     expect(rpc).not.toHaveBeenCalled();

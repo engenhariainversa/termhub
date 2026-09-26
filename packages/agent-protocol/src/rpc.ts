@@ -73,7 +73,7 @@ export const RPC = {
     z.object({ stdout: z.string() }),
   ),
   'ai.credential': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), z.object({ stdout: z.string() }), 10_000),
-  /** Symlinks a Claude Code transcript into another account's config dir so `claude --resume` finds it there (since agent 0.6.0). */
+  /** Symlinks a Claude Code transcript into another account's config dir so `claude --resume` finds it there (since agent 0.7.0). */
   'claude.linkSession': def(
     z.object({
       transcript_path: machinePath,
