@@ -109,14 +109,14 @@ not into its prompt.
 - **Server:**
   - `interpretClaude` puts `subagent: true` in `meta` when `ev.subagent === true` or `ev.agent_id` is a
     non-empty string.
-  - `closesOpenQuestion` returns `false` for such an event.
+  - `closesOpenQuestion` returns `false` for such an event (final rule: `closingScope`, see §10).
   - The tab state still updates (`working`), as today.
   - A subagent's `PermissionRequest` or `AskUserQuestion` still opens a card: the dialog is real and
     shown in the tab.
-- **Consequence:** after the person answers a subagent's permission in the tab, that card stays open
-  until the main thread's next closing event (`Stop`, its own `PreToolUse`…). An answer from the stale
-  card fails the live check (the dialog is gone), answers `409 TAB_PROMPT_CHANGED` and closes the card
-  (TER-56 final review). This is the safe side.
+- **Consequence (final rule, see §10):** a subagent's event never closes a main-thread card. A card a
+  subagent opened is flagged (`payload.subagent`, server-only) and closes on that subagent's next closing
+  event, which also clears the queue mark on subagent rows only; so the next subagent permission opens a
+  card instead of being held as a queue. An answer from a stale card still fails the live check (409).
 - **Rollout:**
   - A new `@termhub/agent` patch version bundles the script. `heal()` rewrites the script on reconnect.
   - SSH machines get it on "Reinstalar hooks".
@@ -357,3 +357,13 @@ The copy is pt-BR (product language):
 - §7 E2E (2026-09-26): the placeholder gave no card and `state_text` kept the agent's message after
   `idle_prompt`; the live "suggestion card with context" step could not run because Claude Code 2.1.283
   drew no suggestion during the test window. That path is covered by unit tests only.
+- §4.5 (final review): `closesOpenQuestion` became `closingScope` → `'tab' | 'subagent' | null`. A card
+  opened by a subagent event stores `payload.subagent: true` (JSON, no migration; `toTabQuestionView`
+  strips it). A subagent's closing event runs `closeSubagentForTab` under the tab lock: only those rows
+  close (`answered_in_tab`) and only their `QUEUED` mark clears; main-thread cards and queues stay.
+  Without this, the stale first subagent card left the tab "queued" and no later subagent permission
+  got a card until the main thread's next closing event.
+- §4.7: a card also expires when its tab leaves the person's scope (machine unlinked from the project,
+  project owner changed): the 404 path covers scope loss, not only removed tabs. Only a 404 does — a
+  transient error loading the tab propagates (`scoped.tab` maps only an `HttpError` from the
+  project–machine check to 404), so a DB blip never expires a live card.
