@@ -162,9 +162,36 @@ export async function swapAccount(
   }
 }
 
+export const AUTO_SWAP_COOLDOWN_MS = 10 * 60_000;
+/** Claude Code draws its "waiting for the reset" prompt right after the hook: let it settle first. */
+export const AUTO_SWAP_DELAY_MS = 3_000;
+const lastAuto = new Map<string, number>();
+
 /**
- * Moves a tab's Claude to another account of the same machine after a usage limit (spec 2026-09-26
- * account swap). Still a no-op: monitor/ingest.ts calls this on every `rate_limit` StopFailure, and
- * the automatic trigger (machine opt-in, then `swapAccount`) lands in Task 6.
+ * A tab hit a usage limit: when its machine opted in, swap it by itself — at most once per tab per
+ * AUTO_SWAP_COOLDOWN_MS, so two exhausted accounts never ping-pong. Fire-and-forget; a failure is
+ * written on the tab (the person still sees the limit) and never thrown.
  */
-export function autoSwapOnLimit(_repos: Repositories, _log: FastifyBaseLogger, _tab: Tab): void {}
+export function autoSwapOnLimit(repos: Repositories, log: FastifyBaseLogger, tab: Tab): void {
+  void (async () => {
+    const machine = await repos.machines.findById(tab.machine_id);
+    if (!machine?.claude_auto_swap) return;
+    const now = Date.now();
+    const last = lastAuto.get(tab.id);
+    if (last !== undefined && now - last < AUTO_SWAP_COOLDOWN_MS) {
+      log.info({ tabId: tab.id, machineId: machine.id }, 'account swap: auto skipped (cooldown)');
+      return;
+    }
+    lastAuto.set(tab.id, now);
+    await new Promise((r) => setTimeout(r, AUTO_SWAP_DELAY_MS));
+    try {
+      await swapAccount(repos, log, tab, machine, { auto: true });
+    } catch (e) {
+      const code = e instanceof ControlError ? e.code : 'INTERNAL';
+      const message = e instanceof Error ? e.message : 'erro desconhecido';
+      log.warn({ tabId: tab.id, machineId: machine.id, code }, 'account swap: auto failed');
+      const current = (await repos.tabs.findById(tab.id)) ?? tab;
+      await applyState(repos, log, current, 'claude', { kind: 'waiting_input', text: `Troca automática falhou: ${message}`, meta: { event: 'AccountSwapFailed', error: code } });
+    }
+  })().catch((e) => log.error({ tabId: tab.id, err: e instanceof Error ? e.message : 'unknown' }, 'account swap: auto crashed'));
+}

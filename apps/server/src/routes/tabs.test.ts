@@ -2,11 +2,19 @@ import Fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, Tab } from '../db/repositories/types.js';
-import { applyErrorHandler } from '../lib/errors.js';
+import { applyErrorHandler, forbidden } from '../lib/errors.js';
+import { actionForMethod } from '../auth/permissions.js';
 import { monitorBus, type TabLifecycle } from '../monitor/bus.js';
+import { ControlError } from '../control/context.js';
 
-const { sendKeysToSession } = vi.hoisted(() => ({ sendKeysToSession: vi.fn() }));
+const { sendKeysToSession, swapAccount, canAccess } = vi.hoisted(() => ({
+  sendKeysToSession: vi.fn(),
+  swapAccount: vi.fn(),
+  canAccess: vi.fn(),
+}));
 vi.mock('../monitor/send-keys.js', () => ({ INPUT_MAX_CHARS: 4000, sendKeysToSession }));
+vi.mock('../control/account-swap.js', () => ({ swapAccount }));
+vi.mock('../auth/permissions.js', async (orig) => ({ ...(await orig<typeof import('../auth/permissions.js')>()), canAccess }));
 
 import { tabRoutes } from './tabs.js';
 
@@ -31,9 +39,20 @@ const tab = (over: Partial<Tab> & { id: string; project_id?: string }): Tab => (
 function buildApp(tabs: Record<string, Tab>, ownerId: string | null = null, machine: Partial<Machine> & { id: string } = { id: 'm1', type: 'local' as Machine['type'] }) {
   const app = Fastify();
   applyErrorHandler(app);
+  // Mirrors guarded()'s onRoute hook in app.ts (route.config.resource/action) plus the auth hook's
+  // grant check, just enough to exercise 403 without wiring the whole app.
+  app.addHook('onRoute', (route) => {
+    const cfg = (route.config ?? {}) as { public?: boolean; resource?: string; action?: string };
+    if (cfg.public) return;
+    route.config = { ...cfg, resource: cfg.resource ?? 'terminals', action: cfg.action ?? actionForMethod(String(route.method)) };
+  });
   app.addHook('preHandler', async (request) => {
     request.scope = { user: { id: 'u1' } as never, viewAs: { kind: 'self' }, ownerId, createAs: 'u1' };
     request.user = { id: 'u1' } as never;
+    const cfg = (request.routeOptions?.config ?? {}) as { resource?: string; action?: string };
+    if (cfg.resource && !(await canAccess({} as never, request.user, cfg.resource, cfg.action))) {
+      throw forbidden(`Sem permissão: ${cfg.resource}:${cfg.action}`);
+    }
   });
 
   const markSeen = vi.fn(async (id: string) => {
@@ -58,8 +77,13 @@ function buildApp(tabs: Record<string, Tab>, ownerId: string | null = null, mach
   } as unknown as Repositories;
   const deps = { simulators: {} as never, closeSimulatorTab: vi.fn() };
   app.register((a) => tabRoutes(a, repos, deps), { prefix: '/tabs' });
-  return { app, markSeen };
+  return { app, markSeen, repos };
 }
+
+beforeEach(() => {
+  canAccess.mockReset().mockResolvedValue(true);
+  swapAccount.mockReset();
+});
 
 describe('POST /tabs/:id/seen', () => {
   let store: Record<string, Tab>;
@@ -181,5 +205,66 @@ describe('tab lifecycle on the monitor bus', () => {
       await app.inject({ method: 'DELETE', url: '/tabs/t1' });
     });
     expect(events).toEqual([]);
+  });
+});
+
+describe('POST /tabs/:id/account-swap', () => {
+  let store: Record<string, Tab>;
+  beforeEach(() => {
+    store = { t1: tab({ id: 't1' }) };
+  });
+
+  it('calls swapAccount with the tab and machine and answers its result', async () => {
+    const result = { from: { id: 'a1', label: 'a1' }, to: { id: 'a2', label: 'a2' } };
+    swapAccount.mockResolvedValue(result);
+    const { app, repos } = buildApp(store);
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/account-swap', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(result);
+    expect(swapAccount).toHaveBeenCalledWith(
+      repos,
+      expect.anything(),
+      expect.objectContaining({ id: 't1' }),
+      expect.objectContaining({ id: 'm1' }),
+      { accountId: undefined, auto: false },
+    );
+  });
+
+  it('passes the chosen account_id through', async () => {
+    swapAccount.mockResolvedValue({ from: null, to: { id: 'a2', label: 'a2' } });
+    const { app } = buildApp(store);
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/account-swap', payload: { account_id: 'a2' } });
+    expect(res.statusCode).toBe(200);
+    expect(swapAccount).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), expect.anything(), { accountId: 'a2', auto: false });
+  });
+
+  it('400s on a non-string account_id', async () => {
+    const { app } = buildApp(store);
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/account-swap', payload: { account_id: 42 } });
+    expect(res.statusCode).toBe(400);
+    expect(swapAccount).not.toHaveBeenCalled();
+  });
+
+  it('404s for a tab outside the scope, without calling swapAccount', async () => {
+    const { app } = buildApp(store, 'someone-else');
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/account-swap', payload: {} });
+    expect(res.statusCode).toBe(404);
+    expect(swapAccount).not.toHaveBeenCalled();
+  });
+
+  it('409s with the ControlError message when swapAccount rejects', async () => {
+    swapAccount.mockRejectedValue(new ControlError('NO_CANDIDATE', 'msg'));
+    const { app } = buildApp(store);
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/account-swap', payload: {} });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('msg');
+  });
+
+  it('403s for a role without terminals:update', async () => {
+    canAccess.mockResolvedValue(false);
+    const { app } = buildApp(store);
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/account-swap', payload: {} });
+    expect(res.statusCode).toBe(403);
+    expect(swapAccount).not.toHaveBeenCalled();
   });
 });

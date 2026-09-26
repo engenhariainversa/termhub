@@ -20,7 +20,17 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { RESUME_PROMPT, resumeLine } from './agents.js';
-import { EXIT_FORCE_WAIT_MS, EXIT_WAIT_MS, rankCandidates, peakUtilization, swapAccount, SWAP_MAX_UTILIZATION } from './account-swap.js';
+import {
+  AUTO_SWAP_COOLDOWN_MS,
+  AUTO_SWAP_DELAY_MS,
+  EXIT_FORCE_WAIT_MS,
+  EXIT_WAIT_MS,
+  autoSwapOnLimit,
+  rankCandidates,
+  peakUtilization,
+  swapAccount,
+  SWAP_MAX_UTILIZATION,
+} from './account-swap.js';
 
 const SID = '6d127d73-4bd0-42d6-b4a6-d96899507e62';
 const TRANSCRIPT = `/home/p/.claude_a/projects/-src-app/${SID}.jsonl`;
@@ -318,5 +328,71 @@ describe('swapAccount', () => {
     const result = await swapAccount(r, log, baseTab({ ai_account_id: null }), machine(), { auto: false });
     expect(result.from).toBeNull();
     expect(applyState).toHaveBeenCalledWith(r, log, expect.anything(), 'claude', expect.objectContaining({ meta: { event: 'AccountSwap', from: null, to: 'a3', auto: false } }));
+  });
+});
+
+describe('autoSwapOnLimit', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it('does nothing when the machine has not opted in', async () => {
+    const { repos, r } = makeRepos();
+    repos.machines.findById.mockResolvedValue(machine({ claude_auto_swap: false }));
+    autoSwapOnLimit(r, log, baseTab({ id: 'auto1', state: 'idle' }));
+    await vi.advanceTimersByTimeAsync(AUTO_SWAP_DELAY_MS);
+    expect(repos.machines.findById).toHaveBeenCalledWith('m1');
+    expect(linkClaudeSession).not.toHaveBeenCalled();
+  });
+
+  it('swaps with auto: true after AUTO_SWAP_DELAY_MS when the machine opted in', async () => {
+    const { repos, r } = makeRepos();
+    repos.machines.findById.mockResolvedValue(machine({ claude_auto_swap: true }));
+    stored = baseTab({ id: 'auto2', state: 'idle' });
+    autoSwapOnLimit(r, log, stored);
+
+    await vi.advanceTimersByTimeAsync(AUTO_SWAP_DELAY_MS - 1);
+    expect(linkClaudeSession).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(linkClaudeSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a second call for the same tab inside AUTO_SWAP_COOLDOWN_MS, then swaps again after it', async () => {
+    const { repos, r } = makeRepos();
+    repos.machines.findById.mockResolvedValue(machine({ claude_auto_swap: true }));
+    const tab = baseTab({ id: 'auto3', state: 'idle' });
+    stored = tab;
+
+    autoSwapOnLimit(r, log, tab);
+    await vi.advanceTimersByTimeAsync(AUTO_SWAP_DELAY_MS);
+    expect(linkClaudeSession).toHaveBeenCalledTimes(1);
+
+    // a second hit on the same tab, still well inside the cooldown: no new swap
+    stored = baseTab({ id: 'auto3', state: 'idle' });
+    autoSwapOnLimit(r, log, tab);
+    await vi.advanceTimersByTimeAsync(AUTO_SWAP_DELAY_MS);
+    expect(linkClaudeSession).toHaveBeenCalledTimes(1);
+
+    // once the cooldown (counted from the first call) has passed, it swaps again
+    await vi.advanceTimersByTimeAsync(AUTO_SWAP_COOLDOWN_MS);
+    autoSwapOnLimit(r, log, tab);
+    await vi.advanceTimersByTimeAsync(AUTO_SWAP_DELAY_MS);
+    expect(linkClaudeSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('records a failed automatic swap on the tab and never throws', async () => {
+    const { repos, r } = makeRepos();
+    repos.machines.findById.mockResolvedValue(machine({ claude_auto_swap: true }));
+    stored = baseTab({ id: 'auto4', state: 'idle' });
+    getAccountUsage.mockImplementation(async (a: AiAccount) => usage(a.id, [95]));
+
+    autoSwapOnLimit(r, log, stored);
+    await vi.advanceTimersByTimeAsync(AUTO_SWAP_DELAY_MS);
+
+    expect(applyState).toHaveBeenCalledWith(r, log, expect.objectContaining({ id: 'auto4' }), 'claude', {
+      kind: 'waiting_input',
+      text: 'Troca automática falhou: Nenhuma outra conta do Claude desta máquina tem limite disponível',
+      meta: { event: 'AccountSwapFailed', error: 'NO_CANDIDATE' },
+    });
   });
 });
