@@ -173,10 +173,13 @@ export async function runCommand(
   return { tab_id: tab.id, state, timed_out: timedOut, lines, text: await captureScreen(machine, session, lines) };
 }
 
-/** Kills the tab's session and removes it. Only tabs this token opened, unless `force`. */
+/** Kills the tab's session and removes it. A person's own token closes only the tabs it opened,
+ * unless `force`. A gated (chat) token skips that check: the chat gate asked the user for this very
+ * call, and its card says whose tab it is (TER-184) — the concierge's token rotates every run, so
+ * "opened by this token" would never hold for a tab from an earlier run. */
 export async function closeTab(ctx: ControlContext, input: { tab_id: string; force?: boolean }): Promise<{ tab_id: string; killed: boolean }> {
   const { tab, machine } = await ctx.scoped.tab(input.tab_id);
-  if (!input.force && ctx.token && tab.created_by_token_id !== ctx.token.id) {
+  if (!input.force && ctx.token && !ctx.token.gated && tab.created_by_token_id !== ctx.token.id) {
     throw new ControlError('NOT_YOURS', 'Esta aba não foi aberta por este token: repita com force: true se quer fechá-la mesmo assim');
   }
   let killed = false;
