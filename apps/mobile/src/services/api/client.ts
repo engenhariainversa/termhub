@@ -8,6 +8,7 @@ import type { DeviceKey } from '../key/types';
 import {
   canonicalHtu,
   challengeResponse,
+  chatAttachmentResponse,
   chatGrantListResponse,
   chatProjectsResponse,
   chatResponse,
@@ -252,6 +253,18 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     sendTabSuggestion: (a: Auth, id: string, body: TTabSuggestionSendBody) =>
       empty('POST', `/api/m/v1/chat/tab-suggestions/${encodeURIComponent(id)}/send`, { token: a.accessToken, body }),
     dismissTabSuggestion: (a: Auth, id: string) => empty('POST', `/api/m/v1/chat/tab-suggestions/${encodeURIComponent(id)}/dismiss`, { token: a.accessToken, body: {} }),
+    // The name and project ride in the query (the body is the file itself); `uploadCall` signs the proof
+    // over the bare path, as the server checks it.
+    uploadAttachment: (a: Auth, file, projectId, onProgress) =>
+      uploadCall(`/api/m/v1/chat/attachments?name=${encodeURIComponent(file.name)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ''}`, file.uri, file.mime, chatAttachmentResponse, a.accessToken, onProgress).then((r) => r.attachment),
+    deleteAttachment: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/attachments/${encodeURIComponent(id)}`, { token: a.accessToken }),
+    attachmentSource: async (a: Auth, id: string) => {
+      const path = `/api/m/v1/chat/attachments/${encodeURIComponent(id)}`;
+      return {
+        uri: o.baseUrl + path,
+        headers: { 'X-Termhub-App': o.app, Authorization: `Bearer ${a.accessToken}`, DPoP: await proofFor('GET', path, a.accessToken) },
+      };
+    },
     transcriptionConfig: (a: Auth) => call('GET', '/api/m/v1/transcriptions/config', transcriptionConfigResponse, { token: a.accessToken }),
     transcribe: (a: Auth, fileUri, mime, seconds, onProgress) =>
       uploadCall(`/api/m/v1/transcriptions?seconds=${Math.round(seconds)}`, fileUri, mime, transcriptionResponse, a.accessToken, onProgress).then((r) => r.transcription),

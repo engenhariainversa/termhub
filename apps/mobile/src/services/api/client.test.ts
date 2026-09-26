@@ -623,3 +623,71 @@ it('a non-2xx upload answer is an ApiError from its body; a 401 TOKEN_EXPIRED re
   expect(renew).toHaveBeenCalledTimes(1);
   expect(uploads).toEqual(['Bearer tok', 'Bearer tok', 'Bearer fresh']);
 });
+
+describe('attachments', () => {
+  const attachment = { id: 'att1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf', bytes: 10, status: 'pending', error_code: null, meta: null, created_at: '2026-09-26T00:00:00.000Z' };
+
+  function uploadTransport(answers: Array<{ status: number; body: unknown }>) {
+    const uploads: Array<{ url: string; fileUri: string; mime: string; headers: Record<string, string> }> = [];
+    const transport: Transport = {
+      fetch: async () => {
+        throw new Error('not in this test');
+      },
+      connect: () => {
+        throw new Error('not in this test');
+      },
+      upload: async (url, fileUri, mime, headers, onProgress) => {
+        uploads.push({ url, fileUri, mime, headers });
+        onProgress?.(0.5);
+        const a = answers.shift()!;
+        return { status: a.status, body: JSON.stringify(a.body) };
+      },
+    };
+    return { transport, uploads };
+  }
+
+  it('uploads through the transport with the bearer, a DPoP proof for the bare path, and the name and project in the query', async () => {
+    const { transport, uploads } = uploadTransport([{ status: 201, body: { attachment } }]);
+    const progress: number[] = [];
+    const api = make(transport);
+    const result = await api.uploadAttachment({ accessToken: 'tok' }, { uri: 'file:///tmp/relatorio.pdf', name: 'relatório.pdf', mime: 'application/pdf' }, 'p-termhub', (f) => progress.push(f));
+    expect(result).toEqual(attachment);
+    expect(progress).toEqual([0.5]);
+    expect(uploads[0]!.url).toBe('https://termhub.dev/api/m/v1/chat/attachments?name=relat%C3%B3rio.pdf&project_id=p-termhub');
+    expect(uploads[0]!.fileUri).toBe('file:///tmp/relatorio.pdf');
+    expect(uploads[0]!.mime).toBe('application/pdf');
+    expect(uploads[0]!.headers['X-Termhub-App']).toBe('ios/0.1.0+1');
+    expect(uploads[0]!.headers.Authorization).toBe('Bearer tok');
+    expect(dpopPayload(uploads[0]!.headers.DPoP!)).toMatchObject({ htm: 'POST', htu: 'https://termhub.dev/api/m/v1/chat/attachments', ath: b64url(sha256(utf8('tok'))) });
+  });
+
+  it('surfaces a refusal as an ApiError and renews once on TOKEN_EXPIRED', async () => {
+    const refused = uploadTransport([{ status: 415, body: { error: 'Tipo de arquivo não suportado', code: 'ATTACHMENT_TYPE' } }]);
+    await expect(make(refused.transport).uploadAttachment({ accessToken: 'tok' }, { uri: 'file:///x', name: 'x.exe', mime: 'application/octet-stream' }, null)).rejects.toMatchObject({ status: 415, code: 'ATTACHMENT_TYPE' });
+
+    const expired = uploadTransport([
+      { status: 401, body: { error: 'x', code: 'TOKEN_EXPIRED' } },
+      { status: 201, body: { attachment } },
+    ]);
+    const renew = jest.fn(async () => 'tok2');
+    await make(expired.transport, renew).uploadAttachment({ accessToken: 'tok' }, { uri: 'file:///x', name: 'a.pdf', mime: 'application/pdf' }, null);
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(expired.uploads[1]!.headers.Authorization).toBe('Bearer tok2');
+    expect(expired.uploads[1]!.url).toBe('https://termhub.dev/api/m/v1/chat/attachments?name=a.pdf');
+  });
+
+  it('builds an image source with the download url and signed headers', async () => {
+    const { transport } = uploadTransport([]);
+    const source = await make(transport).attachmentSource({ accessToken: 'tok' }, 'att1');
+    expect(source.uri).toBe('https://termhub.dev/api/m/v1/chat/attachments/att1');
+    expect(source.headers.Authorization).toBe('Bearer tok');
+    expect(dpopPayload(source.headers.DPoP!)).toMatchObject({ htm: 'GET', htu: 'https://termhub.dev/api/m/v1/chat/attachments/att1' });
+  });
+
+  it('deletes an unsent attachment', async () => {
+    const { transport, calls } = scripted([{ status: 200, body: { ok: true } }]);
+    await make(transport).deleteAttachment({ accessToken: 'tok' }, 'att1');
+    expect(calls[0]!.method).toBe('DELETE');
+    expect(calls[0]!.url).toBe('https://termhub.dev/api/m/v1/chat/attachments/att1');
+  });
+});

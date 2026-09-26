@@ -4,6 +4,7 @@
 import type {
   TChallengeBody,
   TChallengeResponse,
+  TChatAttachment,
   TChatEvent,
   TChatGrantListResponse,
   TChatProjectsResponse,
@@ -37,6 +38,9 @@ import type {
  * DPoP proof internally, so callers only ever hand it a token.
  */
 export type Auth = { accessToken: string };
+
+/** A file on the phone, as the pickers hand it over: the upload task streams it from `uri`. */
+export type UploadFile = { uri: string; name: string; mime: string };
 
 export interface MobileApi {
   readonly mode: 'mock' | 'http';
@@ -82,6 +86,14 @@ export interface MobileApi {
   sendTabSuggestion(auth: Auth, suggestionId: string, body: TTabSuggestionSendBody): Promise<void>;
   /** "Dispensar": closes the card, the tab is not touched. Idempotent; 404 unknown. */
   dismissTabSuggestion(auth: Auth, suggestionId: string): Promise<void>;
+
+  // attachments (spec 2026-09-26 §5.3, §5.6)
+  /** Streams the file as the raw body; `onProgress` is 0..1. 415 ATTACHMENT_TYPE, 413 ATTACHMENT_TOO_LARGE / ATTACHMENT_QUOTA. */
+  uploadAttachment(auth: Auth, file: UploadFile, projectId: string | null, onProgress?: (fraction: number) => void): Promise<TChatAttachment>;
+  /** Only while unsent: 404 unknown, 409 once it was sent with a message. */
+  deleteAttachment(auth: Auth, id: string): Promise<void>;
+  /** The download url plus the headers a `<Image source>` needs to fetch it (bearer and a fresh DPoP proof). */
+  attachmentSource(auth: Auth, id: string): Promise<{ uri: string; headers: Record<string, string> }>;
 
   // voice (P§6 `/transcriptions`, guarded `terminals`; `routes/m-transcriptions.ts`)
   /** Whether the server transcribes audio at all (whisper configured). */

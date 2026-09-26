@@ -9,6 +9,7 @@ import {
   challengeResponse,
   chatActionClass,
   chatActionSchema,
+  chatAttachment,
   chatEventSchema,
   chatGrantListItemSchema,
   chatGrantListResponse,
@@ -140,6 +141,9 @@ export const transcriptionResponse = z.object({ transcription: transcriptionSche
 /** `GET transcriptions/config`: whether the server transcribes audio at all. */
 export const transcriptionConfigResponse = z.object({ enabled: z.boolean() });
 
+/** `POST chat/attachments`' answer (spec 2026-09-26 §5.3), and `GET chat/attachments/:id/status`. */
+export const chatAttachmentResponse = z.object({ attachment: chatAttachment });
+
 // `z.infer` companions for every schema of the contract, prefixed `T` — including the ones of
 // `@termhub/mobile-api`, which exports its schemas but not these app-side type names.
 export type TVerificationCode = z.infer<typeof verificationCodeSchema>;
@@ -193,3 +197,5 @@ export type TEmptyResponse = z.infer<typeof emptyResponse>;
 export type TTranscription = z.infer<typeof transcriptionSchema>;
 export type TTranscriptionResponse = z.infer<typeof transcriptionResponse>;
 export type TTranscriptionConfigResponse = z.infer<typeof transcriptionConfigResponse>;
+export type TChatAttachment = z.infer<typeof chatAttachment>;
+export type TChatAttachmentResponse = z.infer<typeof chatAttachmentResponse>;
