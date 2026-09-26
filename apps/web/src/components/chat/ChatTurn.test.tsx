@@ -122,6 +122,44 @@ describe('ChatTurn', () => {
     expect(renderMarkdown.mock.calls.map((c) => c[0])).toEqual(['par', 'parcial']);
   });
 
+  it('re-parses only the tail of a streaming answer: the settled paragraphs are parsed once', () => {
+    const message = answer({ text: '' });
+    const { rerender } = render(
+      <ol>
+        <ChatTurn message={message} streaming={'primeiro\n\nseg'} waiting={false} failed={false} />
+      </ol>,
+    );
+    rerender(
+      <ol>
+        <ChatTurn message={message} streaming={'primeiro\n\nsegundo'} waiting={false} failed={false} />
+      </ol>,
+    );
+    rerender(
+      <ol>
+        <ChatTurn message={message} streaming={'primeiro\n\nsegundo\n\nterc'} waiting={false} failed={false} />
+      </ol>,
+    );
+
+    // The first paragraph is parsed once, when it settles; every delta after that parses the tail only.
+    expect(renderMarkdown.mock.calls.map((c) => c[0])).toEqual(['primeiro\n\n', 'seg', 'segundo', 'primeiro\n\nsegundo\n\n', 'terc']);
+  });
+
+  it('renders the whole body once when the answer settles', () => {
+    const { rerender } = render(
+      <ol>
+        <ChatTurn message={answer({ text: '' })} streaming={'primeiro\n\nsegundo'} waiting={false} failed={false} />
+      </ol>,
+    );
+    renderMarkdown.mockClear();
+    rerender(
+      <ol>
+        <ChatTurn message={answer({ text: 'primeiro\n\nsegundo' })} waiting={false} failed={false} />
+      </ol>,
+    );
+
+    expect(renderMarkdown.mock.calls.map((c) => c[0])).toEqual(['primeiro\n\nsegundo']);
+  });
+
   it('keeps a wide or unbreakable answer from scrolling the whole thread sideways', () => {
     const { container } = render(
       <ol>
