@@ -7,10 +7,11 @@ import type { TTabQuestionAnswerBody } from '@/services/api/contract';
 import { AppText, Banner, Button, EmptyState, Screen, Sheet } from '@/ui';
 import { isGrantActive } from '../model/grant-time';
 import { foldLive } from '../model/live';
-import { chatTimeline, type ChatEntry } from '../model/timeline';
+import { chatTimeline, groupPendingActions, type ChatEntry } from '../model/timeline';
 import type { ChatDecision } from '../viewmodel/createChatStore';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ActionCard } from './action-card';
+import { ActionGroupCard } from './action-group-card';
 import { Composer } from './composer';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
@@ -18,7 +19,15 @@ import { TabQuestionCard } from './tab-question-card';
 import { TabSuggestionCard } from './tab-suggestion-card';
 
 const entryKey = (entry: ChatEntry) =>
-  entry.kind === 'message' ? `m:${entry.message.id}` : entry.kind === 'action' ? `a:${entry.action.id}` : entry.kind === 'tab_suggestion' ? `s:${entry.suggestion.id}` : `q:${entry.question.id}`;
+  entry.kind === 'message'
+    ? `m:${entry.message.id}`
+    : entry.kind === 'action'
+      ? `a:${entry.action.id}`
+      : entry.kind === 'action_group'
+        ? `g:${entry.actions[0]!.id}`
+        : entry.kind === 'tab_suggestion'
+          ? `s:${entry.suggestion.id}`
+          : `q:${entry.question.id}`;
 
 /** The conversation (spec §11.2): thread, action cards, the host line when the host needs attention,
  * the trusted tabs and composer.
@@ -37,6 +46,7 @@ export function ConversationScreen() {
   const decidingId = useChatStore((s) => s.decidingId);
   const send = useChatStore((s) => s.send);
   const decide = useChatStore((s) => s.decide);
+  const decideMany = useChatStore((s) => s.decideMany);
   const revokingId = useChatStore((s) => s.revokingId);
   const revokeGrant = useChatStore((s) => s.revokeGrant);
   const answeringQuestionId = useChatStore((s) => s.answeringQuestionId);
@@ -47,6 +57,8 @@ export function ConversationScreen() {
   const dismissTabSuggestion = useChatStore((s) => s.dismissTabSuggestion);
   const reset = useChatStore((s) => s.reset);
   const [confirmingReset, setConfirmingReset] = useState(false);
+  /** "Ver separadas" holds only for the cards it was clicked on: a new or decided card groups again. */
+  const [separate, setSeparate] = useState(false);
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -67,15 +79,19 @@ export function ConversationScreen() {
   // A deep link followed after unlock replaces `/unlock` with this screen: nothing behind it.
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const onDecide = useCallback((actionId: string, decision: ChatDecision) => void decide(actionId, decision), [decide]);
+  const onDecideMany = useCallback((d: { id: string; decision: 'approve' | 'deny' }[]) => void decideMany(d), [decideMany]);
   const onRevoke = useCallback((grantId: string) => void revokeGrant(grantId), [revokeGrant]);
   const onAnswer = useCallback((id: string, body: TTabQuestionAnswerBody) => void answerTabQuestion(id, body), [answerTabQuestion]);
   const onSendSuggestion = useCallback((id: string, text: string) => void sendTabSuggestion(id, text), [sendTabSuggestion]);
   const onDismissSuggestion = useCallback((id: string) => void dismissTabSuggestion(id), [dismissTabSuggestion]);
+  const timeline = useMemo(() => chatTimeline(messages ?? [], actions ?? [], tabQuestions ?? [], tabSuggestions ?? []), [messages, actions, tabQuestions, tabSuggestions]);
+  const pendingKey = (actions ?? [])
+    .filter((a) => a.status === 'pending')
+    .map((a) => a.id)
+    .join(',');
+  useEffect(() => setSeparate(false), [pendingKey]);
   // Newest first, for the inverted list that keeps the thread pinned to its end.
-  const entries = useMemo(
-    () => chatTimeline(messages ?? [], actions ?? [], tabQuestions ?? [], tabSuggestions ?? []).reverse(),
-    [messages, actions, tabQuestions, tabSuggestions],
-  );
+  const entries = useMemo(() => (separate ? timeline : groupPendingActions(timeline)).slice().reverse(), [separate, timeline]);
 
   const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? 'Conversa') : 'Chat geral';
   const shownError = error ?? slot?.error ?? null;
@@ -135,6 +151,8 @@ export function ConversationScreen() {
                 <TabQuestionCard question={item.question} busy={answeringQuestionId !== null} onAnswer={onAnswer} loadScreen={loadTabQuestionScreen} />
               ) : item.kind === 'message' ? (
                 <MessageBubble message={item.message} streamed={fold.deltas.get(item.message.id)} started={fold.started.has(item.message.id)} />
+              ) : item.kind === 'action_group' ? (
+                <ActionGroupCard actions={item.actions} busy={decidingId !== null} onDecide={onDecideMany} onShowSeparately={() => setSeparate(true)} />
               ) : (
                 <ActionCard
                   action={item.action}

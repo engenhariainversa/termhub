@@ -2,7 +2,7 @@
 // import (jest supplies the same globals) and the `message()` fixture (`usage` is a required field
 // of the contract's `ChatMessage`, unlike the web's own) were adapted.
 import type { ChatAction, ChatMessage, TabQuestion, TabSuggestion } from './types';
-import { chatTimeline } from './timeline';
+import { chatTimeline, groupPendingActions } from './timeline';
 
 const T0 = '2026-01-01T00:00:00.000Z';
 const T1 = '2026-01-01T00:01:00.000Z';
@@ -44,7 +44,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.suggestion.id))).toEqual(['m1', 'a1', 'm2']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'a1', 'm2']);
   });
 
   it('breaks a tie by putting the message before the action, regardless of the arrays\' own order', () => {
@@ -76,7 +76,7 @@ describe('chatTimeline', () => {
     const shuffledActions = [actions[1]!, actions[0]!];
     const backward = chatTimeline(shuffledMessages, shuffledActions);
 
-    const idsOf = (entries: typeof forward) => entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.suggestion.id));
+    const idsOf = (entries: typeof forward) => entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.actions.map((a) => a.id).join(',')));
     expect(idsOf(backward)).toEqual(idsOf(forward));
     expect(idsOf(forward)).toEqual(['m1', 'a1', 'm2', 'a2']);
   });
@@ -104,7 +104,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.suggestion.id))).toEqual(['m1']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.actions.map((a) => a.id).join(',')))).toEqual(['m1']);
   });
 
   it('keeps an action newer than the oldest message, including one tied with it', () => {
@@ -113,7 +113,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.suggestion.id))).toEqual(['m1', 'a-tied', 'm2', 'a-newer']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'a-tied', 'm2', 'a-newer']);
   });
 
   it('measures the cutoff from the oldest message, not from the array\'s first element', () => {
@@ -124,7 +124,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.suggestion.id))).toEqual(['m1', 'a1', 'm2']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'a1', 'm2']);
   });
 
   it('keeps every action when there are no messages at all: there is nothing to compare against', () => {
@@ -132,7 +132,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline([], actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.suggestion.id))).toEqual(['a1', 'a2']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.actions.map((a) => a.id).join(',')))).toEqual(['a1', 'a2']);
   });
 
   it('carries the row\'s own created_at as the entry\'s at', () => {
@@ -148,12 +148,37 @@ describe('chatTimeline', () => {
   it('places a tab question by its time, after a message of the same instant, inside the message window', () => {
     const q = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'permission', payload: { tool_name: 'Bash' }, answer: null, status: 'open', error_code: null, created_at: T1, answered_at: null, closed_at: null } as TabQuestion;
     const entries = chatTimeline([message({ id: 'm1', created_at: T0 }), message({ id: 'm2', created_at: T1 })], [], [q, { ...q, id: 'q0', created_at: '2025-12-31T23:59:00.000Z' } as TabQuestion]);
-    expect(entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.suggestion.id))).toEqual(['m1', 'm2', 'q1']);
+    expect(entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'm2', 'q1']);
   });
 
   it('places a tab suggestion by created_at, after the message of the same instant, inside the message window', () => {
     const s = { id: 's1', tab_id: 't1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: T1, answered_at: null, closed_at: null } as TabSuggestion;
     const entries = chatTimeline([message({ id: 'm1', created_at: T0 }), message({ id: 'm2', created_at: T1 })], [], [], [s, { ...s, id: 's0', created_at: '2025-12-31T23:59:00.000Z' } as TabSuggestion]);
     expect(entries.map((e) => (e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind))).toEqual(['message', 'message', 's1']);
+  });
+});
+
+describe('groupPendingActions', () => {
+  it('leaves a single pending card alone', () => {
+    const entries = chatTimeline([message({ id: 'm1', created_at: T0 })], [action({ id: 'a1', created_at: T1 }), action({ id: 'a2', created_at: T2, status: 'approved' })]);
+    expect(groupPendingActions(entries)).toEqual(entries);
+  });
+
+  it('replaces two or more pending cards with one group at the oldest one\'s place, keeping decided cards', () => {
+    const T3 = '2026-01-01T00:03:00.000Z';
+    const T4 = '2026-01-01T00:04:00.000Z';
+    const entries = chatTimeline(
+      [message({ id: 'm1', created_at: T0 }), message({ id: 'm2', created_at: T3 })],
+      [action({ id: 'a1', created_at: T1 }), action({ id: 'a2', created_at: T2, status: 'denied' }), action({ id: 'a3', created_at: T4 })],
+    );
+
+    const result = groupPendingActions(entries);
+
+    expect(result.map((e) => e.kind)).toEqual(['message', 'action_group', 'action', 'message']);
+    const group = result[1]!;
+    expect(group.kind === 'action_group' && group.actions.map((a) => a.id)).toEqual(['a1', 'a3']);
+    expect(group.at).toBe(T1);
+    const decided = result[2]!;
+    expect(decided.kind === 'action' && decided.action.id).toBe('a2');
   });
 });
