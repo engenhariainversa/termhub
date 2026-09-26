@@ -107,16 +107,18 @@ export function imageDimensions(b: Uint8Array, mime: string): { width: number; h
 }
 
 /**
- * The directory's claim is checked first (free), then every entry is really inflated and counted
- * against the same budget (`inflatedBytes`): a docx/xlsx whose directory under-declares a highly
- * compressible entry would otherwise be inflated whole by JSZip inside mammoth/exceljs — ~1000× the
- * upload, on a host shared with production.
+ * The directory's claim is checked first (free), then the local headers are walked the way exceljs's
+ * streaming reader walks them — they must be exactly the directory's entries — and every entry is
+ * really inflated and counted against the same budget (`inflatedBytes`). Otherwise a docx/xlsx whose
+ * directory under-declares a highly compressible entry, or leaves an entry out of the directory
+ * altogether, would be inflated whole by JSZip (mammoth) or unzipper (exceljs) — ~1000× the upload,
+ * on a host shared with production.
  */
 async function guardZip(file: Buffer, budget: number): Promise<void> {
   const entries = readZipDirectory(file);
   if (!entries) throw new ExtractError('ATTACHMENT_INVALID', 'not a zip');
   if (zipExpandedBytes(entries) > budget) throw new ExtractError('ATTACHMENT_INVALID', 'zip too large when expanded');
-  const measured = await inflatedBytes(file, entries, budget);
+  const measured = await inflatedBytes(file, budget);
   if (!measured.ok) throw new ExtractError('ATTACHMENT_INVALID', `zip refused: ${measured.reason}`);
 }
 

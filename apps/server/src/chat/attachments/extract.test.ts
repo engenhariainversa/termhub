@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { describe, expect, it, vi } from 'vitest';
-import { buildZip, minimalDocx, minimalPdf } from '../../../test/zip.js';
+import { PassThrough } from 'node:stream';
+import { buildZip, minimalDocx, minimalPdf, withUnlistedEntry } from '../../../test/zip.js';
 import { ExtractError, TEXT_CAP, XLSX_MAX_COLS, XLSX_MAX_ROWS, extract, imageDimensions, withTimeout } from './extract.js';
 
 const noWhisper = { whisperUrl: null, language: null };
@@ -94,6 +95,49 @@ describe('extract: pdf, docx, xlsx', () => {
     const xlsx = Buffer.from(await wb.xlsx.writeBuffer());
     expect(await code(extract('xlsx', xlsx, 'application/x', withBudget))).toBe('ATTACHMENT_INVALID');
     expect((await extract('xlsx', xlsx, 'application/x', { ...noWhisper, zipExpandedMaxBytes: 8 * 1024 * 1024 })).meta).toMatchObject({ sheets: [{ name: 'S', rows: 1, cols: 1 }] });
+  });
+  it('xlsx: a local entry the directory does not list is refused before the streaming reader (which walks local headers) sees it', async () => {
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet('S').addRow(['x']);
+    const genuine = Buffer.from(await wb.xlsx.writeBuffer());
+    // 1 MB of shared strings deflates to a few KB, listed nowhere in the directory, so the directory-based guard counts nothing.
+    const strings = `<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${'<si><t>aaaaaaaaaaaaaaaa</t></si>'.repeat(40_000)}</sst>`;
+    const hidden = withUnlistedEntry(genuine, 'xl/sharedStrings.xml', strings);
+    expect(hidden.length).toBeLessThan(genuine.length + 16 * 1024);
+    const parse = vi.spyOn(ExcelJS.stream.xlsx.WorkbookReader.prototype, 'parse');
+    try {
+      expect(await code(extract('xlsx', hidden, 'application/x', { ...noWhisper, zipExpandedMaxBytes: 256 * 1024 }))).toBe('ATTACHMENT_INVALID');
+      expect(parse).not.toHaveBeenCalled();
+      // The same file without the extra entry is fine under that budget.
+      expect((await extract('xlsx', genuine, 'application/x', { ...noWhisper, zipExpandedMaxBytes: 256 * 1024 })).meta).toMatchObject({ sheets: [{ name: 'S', rows: 1, cols: 1 }] });
+    } finally {
+      parse.mockRestore();
+    }
+  });
+  it('docx and xlsx: an unlisted entry or bytes the directory does not account for are an invalid attachment', async () => {
+    const docx = minimalDocx(['Olá'], { deflate: true });
+    expect(await code(extract('docx', withUnlistedEntry(docx, 'word/extra.xml', 'x'.repeat(100)), 'application/x', noWhisper))).toBe('ATTACHMENT_INVALID');
+    expect(await code(extract('docx', minimalDocx(['Olá'], { deflate: true, gapBeforeDirectory: 16 }), 'application/x', noWhisper))).toBe('ATTACHMENT_INVALID');
+    expect(await code(extract('docx', Buffer.concat([docx, Buffer.from('trailing')]), 'application/x', noWhisper))).toBe('ATTACHMENT_INVALID');
+    const xlsx = buildZip([['xl/workbook.xml', '<workbook/>'], ['xl/other.xml', 'x']], { deflate: true, unlisted: ['xl/other.xml'] });
+    expect(await code(extract('xlsx', xlsx, 'application/x', noWhisper))).toBe('ATTACHMENT_INVALID');
+  });
+  it('docx and xlsx: entries written with data descriptors (streaming writers) still extract', async () => {
+    const r = await extract('docx', minimalDocx(['Olá mundo'], { deflate: true, dataDescriptor: true }), 'application/x', noWhisper);
+    expect(r.text).toBe('Olá mundo');
+    // exceljs's own streaming writer goes through archiver, which writes every deflated entry with a data descriptor.
+    const sink = new PassThrough();
+    const chunks: Buffer[] = [];
+    sink.on('data', (c: Buffer) => chunks.push(c));
+    const writer = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: sink });
+    const ws = writer.addWorksheet('Fluxo');
+    ws.addRow(['Item', 'Qtd']).commit();
+    ws.addRow(['Café', 2]).commit();
+    await writer.commit();
+    const streamed = Buffer.concat(chunks);
+    expect(streamed.readUInt16LE(6) & 8).toBe(8);
+    const x = await extract('xlsx', streamed, 'application/x', noWhisper);
+    expect(x.text).toBe('## Fluxo\n| Item | Qtd |\n| --- | --- |\n| Café | 2 |');
   });
   it('docx and xlsx: a ZIP that claims more than 200 MB expanded is refused before any parser runs', async () => {
     const bomb = minimalDocx(['x'], { claimUncompressed: { 'word/document.xml': 300 * 1024 * 1024 } });

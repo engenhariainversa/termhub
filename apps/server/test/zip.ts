@@ -16,10 +16,16 @@ const crc32 = (buf: Buffer): number => {
 };
 
 export interface BuildZipOptions {
-  /** Lie about an entry's uncompressed size in the central directory (a zip bomb's signature). */
+  /** Lie about an entry's uncompressed size, consistently, in the local header, the data descriptor and the central directory (a zip bomb's signature). */
   claimUncompressed?: Record<string, number>;
   /** Deflate the entries (method 8), the way every real .docx/.xlsx is written. */
   deflate?: boolean;
+  /** Bit 3: the local header carries zero sizes and a 16-byte data descriptor follows the data (streaming writers: archiver, Java's ZipOutputStream). */
+  dataDescriptor?: boolean;
+  /** Names written as local entries but left out of the central directory. */
+  unlisted?: string[];
+  /** Zero bytes between the last local entry and the central directory. */
+  gapBeforeDirectory?: number;
 }
 
 export function buildZip(entries: [string, string | Buffer][], opts: BuildZipOptions = {}): Buffer {
@@ -32,37 +38,82 @@ export function buildZip(entries: [string, string | Buffer][], opts: BuildZipOpt
     const method = opts.deflate ? 8 : 0;
     const nameBuf = Buffer.from(name, 'utf8');
     const crc = crc32(data);
+    const claimed = opts.claimUncompressed?.[name] ?? data.length;
+    const flags = opts.dataDescriptor ? 8 : 0;
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(flags, 6);
     local.writeUInt16LE(method, 8);
-    local.writeUInt32LE(crc, 14);
-    local.writeUInt32LE(stored.length, 18);
-    local.writeUInt32LE(data.length, 22);
+    if (!opts.dataDescriptor) {
+      local.writeUInt32LE(crc, 14);
+      local.writeUInt32LE(stored.length, 18);
+      local.writeUInt32LE(claimed, 22);
+    }
     local.writeUInt16LE(nameBuf.length, 26);
-    const claimed = opts.claimUncompressed?.[name] ?? data.length;
+    const descriptor = Buffer.alloc(opts.dataDescriptor ? 16 : 0);
+    if (opts.dataDescriptor) {
+      descriptor.writeUInt32LE(0x08074b50, 0);
+      descriptor.writeUInt32LE(crc, 4);
+      descriptor.writeUInt32LE(stored.length, 8);
+      descriptor.writeUInt32LE(claimed, 12);
+    }
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0);
     central.writeUInt16LE(20, 4);
     central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(flags, 8);
     central.writeUInt16LE(method, 10);
     central.writeUInt32LE(crc, 16);
     central.writeUInt32LE(stored.length, 20);
     central.writeUInt32LE(claimed, 24);
     central.writeUInt16LE(nameBuf.length, 28);
     central.writeUInt32LE(offset, 42);
-    locals.push(local, nameBuf, stored);
-    centrals.push(central, nameBuf);
-    offset += local.length + nameBuf.length + stored.length;
+    locals.push(local, nameBuf, stored, descriptor);
+    if (!opts.unlisted?.includes(name)) centrals.push(central, nameBuf);
+    offset += local.length + nameBuf.length + stored.length + descriptor.length;
   }
+  const gap = Buffer.alloc(opts.gapBeforeDirectory ?? 0);
   const cd = Buffer.concat(centrals);
+  const listed = entries.length - (opts.unlisted?.length ?? 0);
   const end = Buffer.alloc(22);
   end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(entries.length, 8);
-  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt16LE(listed, 8);
+  end.writeUInt16LE(listed, 10);
   end.writeUInt32LE(cd.length, 12);
-  end.writeUInt32LE(offset, 16);
-  return Buffer.concat([...locals, cd, end]);
+  end.writeUInt32LE(offset + gap.length, 16);
+  return Buffer.concat([...locals, gap, cd, end]);
+}
+
+/**
+ * The same ZIP with one more local entry at offset 0 that its central directory does not list: what a
+ * sequential reader (unzipper, behind exceljs's WorkbookReader) meets first, and what a directory-based
+ * one (JSZip) never sees. Every listed offset moves by the entry's length.
+ */
+export function withUnlistedEntry(zip: Buffer, name: string, content: string | Buffer): Buffer {
+  const data = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8');
+  const stored = deflateRawSync(data);
+  const nameBuf = Buffer.from(name, 'utf8');
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt16LE(8, 8);
+  local.writeUInt32LE(crc32(data), 14);
+  local.writeUInt32LE(stored.length, 18);
+  local.writeUInt32LE(data.length, 22);
+  local.writeUInt16LE(nameBuf.length, 26);
+  const shift = local.length + nameBuf.length + stored.length;
+  const out = Buffer.concat([local, nameBuf, stored, zip]);
+  const end = out.length - 22;
+  const count = out.readUInt16LE(end + 10);
+  const cdOffset = out.readUInt32LE(end + 16) + shift;
+  out.writeUInt32LE(cdOffset, end + 16);
+  let p = cdOffset;
+  for (let i = 0; i < count; i++) {
+    out.writeUInt32LE(out.readUInt32LE(p + 42) + shift, p + 42);
+    p += 46 + out.readUInt16LE(p + 28) + out.readUInt16LE(p + 30) + out.readUInt16LE(p + 32);
+  }
+  return out;
 }
 
 const CONTENT_TYPES =
