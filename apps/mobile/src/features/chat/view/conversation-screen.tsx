@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { trustedTabsLabel } from '@/features/chat-grants/model/labels';
 import type { TTabQuestionAnswerBody } from '@/services/api/contract';
 import { AppText, Banner, Button, EmptyState, Screen, Sheet } from '@/ui';
 import { isGrantActive } from '../model/grant-time';
@@ -11,7 +12,6 @@ import type { ChatDecision } from '../viewmodel/createChatStore';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ActionCard } from './action-card';
 import { Composer } from './composer';
-import { GrantsStrip } from './grants-strip';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
 import { TabQuestionCard } from './tab-question-card';
@@ -57,6 +57,7 @@ export function ConversationScreen() {
   const messages = slot?.messages;
   const actions = slot?.actions;
   const grants = useMemo(() => slot?.grants ?? [], [slot?.grants]);
+  const activeGrantCount = useMemo(() => grants.filter((g) => isGrantActive(g)).length, [grants]);
   const tabQuestions = slot?.tabQuestions;
   const tabSuggestions = slot?.tabSuggestions;
   const extra = useMemo(
@@ -94,6 +95,7 @@ export function ConversationScreen() {
           <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
             {title}
           </AppText>
+          {activeGrantCount > 0 ? <Button label={trustedTabsLabel(activeGrantCount)} variant="ghost" onPress={() => router.push('/chat-grants')} /> : null}
           <Button label="Nova conversa" variant="ghost" onPress={() => setConfirmingReset(true)} />
         </View>
         {/* Only when something stands in the way (offline, no machine, none chosen, an old agent): where a
@@ -146,7 +148,6 @@ export function ConversationScreen() {
             }
           />
         )}
-        <GrantsStrip grants={grants} revokingId={revokingId} onRevoke={onRevoke} />
         <Composer sending={sending} onSend={send} />
       </KeyboardAvoidingView>
       <Sheet open={confirmingReset} onClose={() => setConfirmingReset(false)} title="Começar uma nova conversa?">

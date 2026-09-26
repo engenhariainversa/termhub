@@ -167,16 +167,25 @@ describe('Conversa', () => {
     expect(decide).toHaveBeenCalledWith('a-termhub-1', 'approve_tab');
   });
 
-  it('shows the active grant above the composer and on the card that granted it; Revogar calls revokeGrant', async () => {
+  it('counts the active grant in the header, opens Abas confiáveis, and keeps the card\'s Revogar', async () => {
     serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT] }));
     const revokeGrant = stubAction('revokeGrant');
     await render(<ConversationScreen />);
-    expect(await screen.findByText(/^Enviando direto para a aba api até/, undefined, LOAD)).toBeTruthy();
-    expect(screen.getByText(/^Permitido até/)).toBeTruthy();
+    const link = await screen.findByRole('button', { name: '1 aba confiável' }, LOAD);
+    expect(screen.queryByText(/^Enviando direto para/)).toBeNull();
+    await fireEvent.press(link);
+    expect(mockRouter.push).toHaveBeenCalledWith('/chat-grants');
     const revoke = screen.getAllByRole('button', { name: 'Revogar' });
-    expect(revoke).toHaveLength(2);
+    expect(revoke).toHaveLength(1);
     await fireEvent.press(revoke[0]!);
     expect(revokeGrant).toHaveBeenCalledWith('g1');
+  });
+
+  it('shows no header button without an active grant', async () => {
+    serveChat((res) => ({ actions: res.actions, grants: [] }));
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    expect(screen.queryByRole('button', { name: /aba(s)? confiáve/ })).toBeNull();
   });
 
   it('a card run under a grant reads "executada · aba confiada"', async () => {
