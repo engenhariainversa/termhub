@@ -4,6 +4,7 @@
 import { decisionProof } from '../../../crypto/pin';
 import { randomId } from '../../../crypto/random';
 import {
+  chatGrantListQuery,
   isTabGrantable,
   mobileDecisionBody,
   mobileMessageBody,
@@ -13,6 +14,7 @@ import {
   tabSuggestionSendBody,
   type TChatEvent,
   type TChatGrant,
+  type TChatGrantListItem,
   type TChatHostState,
   type TTabQuestion,
   type TTabSuggestion,
@@ -83,7 +85,11 @@ function activeGrantsFor(state: MockState, conversationId: string, now: number):
  * is revoked first — at most one per tab, as the server's partial unique index keeps it. */
 function grantTab(state: MockState, action: MockAction, now: number): MockGrant {
   for (const g of state.grants) {
-    if (g.conversation_id === action.conversation_id && g.tab_id === action.tab_id && !g.revoked) g.revoked = true;
+    if (g.conversation_id === action.conversation_id && g.tab_id === action.tab_id && !g.revoked) {
+      g.revoked = true;
+      g.revoked_at = new Date(now).toISOString();
+      g.revoked_by_user = true;
+    }
   }
   const grant: MockGrant = {
     id: randomId(10),
@@ -95,6 +101,8 @@ function grantTab(state: MockState, action: MockAction, now: number): MockGrant 
     expires_at: new Date(now + GRANT_TTL_MS).toISOString(),
     tab_name: TAB_NAMES[action.tab_id!] ?? null,
     revoked: false,
+    revoked_at: null,
+    revoked_by_user: false,
   };
   state.grants.push(grant);
   return grant;
@@ -325,6 +333,25 @@ function scheduleStream(o: StreamOptions): void {
   });
 }
 
+/** The mock's `ChatGrantListItem`: same state rule as the server's `grantState`. */
+function grantListItem(state: MockState, g: MockGrant, now: number): TChatGrantListItem {
+  const expiresAt = Date.parse(g.expires_at);
+  const revokedFirst = g.revoked && g.revoked_at !== null && Date.parse(g.revoked_at) < expiresAt;
+  const s = revokedFirst ? (g.revoked_by_user ? 'revoked' : 'ended') : !g.revoked && expiresAt > now ? 'active' : 'expired';
+  const conversation = state.conversations.get(g.conversation_id);
+  const project = conversation?.project_id ? state.projects.get(conversation.project_id) : undefined;
+  return {
+    ...grantView(g),
+    project_id: project?.id ?? null,
+    project_name: project?.name ?? null,
+    conversation_id: g.conversation_id,
+    conversation_project_name: project?.name ?? null,
+    conversation_archived: conversation?.archived_at != null,
+    state: s,
+    ended_at: s === 'active' ? null : s === 'expired' ? g.expires_at : g.revoked_at,
+  };
+}
+
 // --- routes ---------------------------------------------------------------------------------
 
 export function registerChatRoutes(router: MockRouter, state: MockState, opts: { maxLatency: number }): void {
@@ -430,7 +457,13 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const previous = conversationFor(state, projectId);
     previous.archived_at = new Date(ctx.now()).toISOString();
     // A reset ends the old conversation's trusted tabs too (the server's `revokeForConversation`).
-    for (const g of state.grants) if (g.conversation_id === previous.id) g.revoked = true;
+    for (const g of state.grants) {
+      if (g.conversation_id === previous.id && !g.revoked) {
+        g.revoked = true;
+        g.revoked_at = new Date(ctx.now()).toISOString();
+        g.revoked_by_user = false;
+      }
+    }
 
     const conversation: MockConversation = {
       id: randomId(10),
@@ -507,6 +540,18 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     return { status: 200, body: { grant } };
   });
 
+  /** "Abas confiáveis": the server's paging (newest first, cursor = the last id of the page). */
+  router.route('GET', '/api/m/v1/chat/grants', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
+    const q = chatGrantListQuery.parse(ctx.query);
+    const now = ctx.now();
+    const rows = [...state.grants].reverse().map((g) => grantListItem(state, g, now)).filter((g) => (q.state === 'active' ? g.state === 'active' : g.state !== 'active'));
+    const start = q.state === 'ended' && q.cursor ? rows.findIndex((g) => g.id === q.cursor) + 1 : 0;
+    const page = rows.slice(start, start + q.limit);
+    const more = q.state === 'ended' && start + q.limit < rows.length;
+    return { status: 200, body: { grants: page, next_cursor: more ? page[page.length - 1]!.id : null } };
+  });
+
   /** "Revogar" (no PIN: it only takes power away): 404 unknown, 409 already revoked. */
   router.route('DELETE', '/api/m/v1/chat/grants/:id', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'DELETE', htu: ctx.htu, now: ctx.now() });
@@ -514,6 +559,8 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     if (!grant) throw new WireError(404, 'NOT_FOUND', 'Permissão não encontrada');
     if (grant.revoked) throw new WireError(409, 'CONFLICT', 'Esta permissão já foi revogada');
     grant.revoked = true;
+    grant.revoked_at = new Date(ctx.now()).toISOString();
+    grant.revoked_by_user = true;
     broadcast(state, { type: 'grant_revoked', user_id: USER_ID, conversation_id: grant.conversation_id, grant_id: grant.id });
     return { status: 200, body: { grant: grantView(grant) } };
   });

@@ -5,6 +5,7 @@ import type {
   TChallengeBody,
   TChallengeResponse,
   TChatEvent,
+  TChatGrantListResponse,
   TChatProjectsResponse,
   TChatResponse,
   TDeviceActivateBody,
@@ -64,6 +65,8 @@ export interface MobileApi {
   decide(auth: Auth, actionId: string, body: TMobileDecisionBody): Promise<void>;
   /** "Revogar" a trusted tab (no PIN: it only takes power away). 404 unknown, 409 already revoked. */
   revokeGrant(auth: Auth, grantId: string): Promise<void>;
+  /** "Abas confiáveis": active grants (no paging) or the ended/expired/revoked history (paged, newest first). */
+  listGrants(auth: Auth, q: { state: 'active' | 'ended'; cursor?: string | null }): Promise<TChatGrantListResponse>;
   /** Answers a tab's question from its card — no PIN (spec 2026-09-25 §2). 409 `TAB_PROMPT_CHANGED`
    * when the tab moved on, 404 unknown. */
   answerTabQuestion(auth: Auth, questionId: string, body: TTabQuestionAnswerBody): Promise<void>;

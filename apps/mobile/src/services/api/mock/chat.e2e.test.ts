@@ -508,3 +508,20 @@ it('a message containing sugestão raises a tab suggestion; sending it once work
   await expect(api.dismissTabSuggestion(auth, 'nope')).rejects.toMatchObject({ status: 404 });
   collected.close();
 });
+
+it('listGrants lists active and ended grants, newest first, paging the history', async () => {
+  const clock = { value: START };
+  const { api, auth, deviceId, secret } = await enrol(clock);
+  expect(await api.listGrants(auth, { state: 'active' })).toEqual({ grants: [], next_cursor: null });
+
+  const chal = await api.challenge({ device_id: deviceId, purpose: 'decision', action_id: 'a-termhub-1' });
+  await api.decide(auth, 'a-termhub-1', { decision: 'approve_tab', challenge: chal.challenge, pin_proof: decisionProof(secret, chal.challenge, 'a-termhub-1', 'approve_tab') });
+  const [active] = (await api.listGrants(auth, { state: 'active' })).grants;
+  expect(active).toMatchObject({ tab_name: 'api', state: 'active', ended_at: null, conversation_project_name: 'termhub', conversation_archived: false });
+
+  await api.revokeGrant(auth, active!.id);
+  expect((await api.listGrants(auth, { state: 'active' })).grants).toEqual([]);
+  const ended = await api.listGrants(auth, { state: 'ended' });
+  expect(ended.grants).toEqual([expect.objectContaining({ id: active!.id, state: 'revoked' })]);
+  expect(ended.next_cursor).toBeNull();
+});

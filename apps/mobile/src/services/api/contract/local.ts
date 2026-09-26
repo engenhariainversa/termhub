@@ -10,6 +10,8 @@ import {
   chatActionClass,
   chatActionSchema,
   chatEventSchema,
+  chatGrantListItemSchema,
+  chatGrantListResponse,
   chatGrantSchema,
   chatMessage,
   chatProjectItem,
@@ -153,6 +155,8 @@ export type TNotificationsResponse = z.infer<typeof notificationsResponse>;
 export type TChatHostState = z.infer<typeof chatHostStateSchema>;
 export type TChatAction = z.infer<typeof chatActionSchema>;
 export type TChatGrant = z.infer<typeof chatGrantSchema>;
+export type TChatGrantListItem = z.infer<typeof chatGrantListItemSchema>;
+export type TChatGrantListResponse = z.infer<typeof chatGrantListResponse>;
 export type TTabQuestion = z.infer<typeof tabQuestionSchema>;
 export type TTabQuestionAnswerBody = z.infer<typeof tabQuestionAnswerBody>;
 export type TTabQuestionScreenResponse = z.infer<typeof tabQuestionScreenResponse>;

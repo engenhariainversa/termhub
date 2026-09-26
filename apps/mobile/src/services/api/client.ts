@@ -8,6 +8,7 @@ import type { DeviceKey } from '../key/types';
 import {
   canonicalHtu,
   challengeResponse,
+  chatGrantListResponse,
   chatProjectsResponse,
   chatResponse,
   deviceActivateResponse,
@@ -217,6 +218,8 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     decide: (a: Auth, actionId: string, body: TMobileDecisionBody) =>
       empty('POST', `/api/m/v1/chat/actions/${actionId}/decision`, { token: a.accessToken, body }),
     revokeGrant: (a: Auth, grantId: string) => empty('DELETE', `/api/m/v1/chat/grants/${encodeURIComponent(grantId)}`, { token: a.accessToken }),
+    listGrants: (a: Auth, q: { state: 'active' | 'ended'; cursor?: string | null }) =>
+      call('GET', `/api/m/v1/chat/grants?state=${q.state}${q.cursor ? `&cursor=${encodeURIComponent(q.cursor)}` : ''}`, chatGrantListResponse, { token: a.accessToken }),
     answerTabQuestion: (a: Auth, id: string, body: TTabQuestionAnswerBody) =>
       empty('POST', `/api/m/v1/chat/tab-questions/${encodeURIComponent(id)}/answer`, { token: a.accessToken, body }),
     tabQuestionScreen: (a: Auth, id: string) =>
