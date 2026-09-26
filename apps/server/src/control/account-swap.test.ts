@@ -23,8 +23,10 @@ import { RESUME_PROMPT, resumeLine } from './agents.js';
 import {
   AUTO_SWAP_COOLDOWN_MS,
   AUTO_SWAP_DELAY_MS,
+  ESCAPE_PAUSE_MS,
   EXIT_FORCE_WAIT_MS,
   EXIT_WAIT_MS,
+  RESUME_SETTLE_MS,
   autoSwapOnLimit,
   rankCandidates,
   peakUtilization,
@@ -129,8 +131,19 @@ describe('rankCandidates', () => {
   });
 });
 
+/** Runs every pending timer (the swap's pauses and waits) and then the swap's outcome. */
+async function drive<T>(p: Promise<T>): Promise<T> {
+  p.catch(() => undefined);
+  await vi.runAllTimersAsync();
+  return p;
+}
+
 describe('swapAccount', () => {
-  it('swaps to the best account: link, Escape, /exit, wait idle, resume, record', async () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it('swaps to the best account: link, Escape, /exit, wait idle, record, waiting state, resume', async () => {
     const { repos, r } = makeRepos();
     const order: string[] = [];
     linkClaudeSession.mockImplementation(async (_m, input: { configDir: string | null }) => {
@@ -143,9 +156,18 @@ describe('swapAccount', () => {
       order.push(`text:${text}`);
       return typed(m, s, text, enter);
     });
+    const record = repos.tabs.setAgentFields.getMockImplementation()!;
+    repos.tabs.setAgentFields.mockImplementation(async (id: string, patch: Partial<Tab>) => {
+      order.push('record');
+      return record(id, patch);
+    });
+    applyState.mockImplementation(async (_r, _l, tab: Tab) => {
+      order.push('state');
+      return tab;
+    });
 
     const m = machine();
-    const result = await swapAccount(r, log, baseTab(), m, { auto: false });
+    const result = await drive(swapAccount(r, log, baseTab(), m, { auto: false }));
 
     expect(result).toEqual({ from: { id: 'a1', label: 'a1' }, to: { id: 'a3', label: 'a3' } });
     // only the other Claude accounts of m1 were read, with a fresh reading
@@ -153,23 +175,61 @@ describe('swapAccount', () => {
     expect(linkClaudeSession).toHaveBeenCalledTimes(1);
     expect(linkClaudeSession).toHaveBeenCalledWith(m, { transcriptPath: TRANSCRIPT, sessionId: SID, configDir: null });
     const line = resumeLine(null, SID, RESUME_PROMPT);
-    expect(order).toEqual(['link:null', 'key:Escape', 'text:/exit', `text:${line}`]);
+    expect(order).toEqual(['link:null', 'key:Escape', 'text:/exit', 'record', 'state', `text:${line}`]);
     expect(sendKeyToSession).toHaveBeenCalledWith(m, 'th-t1', 'Escape');
     expect(sendTextToSession).toHaveBeenCalledWith(m, 'th-t1', '/exit', true);
     expect(sendTextToSession).toHaveBeenCalledWith(m, 'th-t1', line, true);
     expect(repos.tabs.setAgentFields).toHaveBeenCalledWith('t1', { ai_account_id: 'a3', rate_limited_at: null });
     expect(applyState).toHaveBeenCalledWith(r, log, expect.objectContaining({ id: 't1', ai_account_id: 'a3', rate_limited_at: null }), 'claude', {
-      kind: 'working',
-      text: 'Conta trocada: a1 → a3',
+      kind: 'waiting_input',
+      text: 'Conta trocada: a1 → a3. Se o Claude pedir para confiar na pasta, confirme na aba.',
       meta: { event: 'AccountSwap', from: 'a1', to: 'a3', auto: false },
     });
     expect(monitorBus.listenerCount()).toBe(0);
   });
 
+  it('pauses after Escape before /exit, and lets the shell settle after idle before the resume line', async () => {
+    const { repos, r } = makeRepos();
+    const line = resumeLine(null, SID, RESUME_PROMPT);
+    const texts = () => sendTextToSession.mock.calls.map((c) => c[2]);
+    const p = swapAccount(r, log, baseTab(), machine(), { auto: false });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sendKeyToSession).toHaveBeenCalledWith(expect.anything(), 'th-t1', 'Escape');
+    expect(texts()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(ESCAPE_PAUSE_MS - 1);
+    expect(texts()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(texts()).toEqual(['/exit']);
+
+    // the SessionEnd lands 5 ms later: the tab is idle, but the line waits for RESUME_SETTLE_MS
+    await vi.advanceTimersByTimeAsync(5);
+    expect(stored.state).toBe('idle');
+    await vi.advanceTimersByTimeAsync(RESUME_SETTLE_MS - 1);
+    expect(texts()).toEqual(['/exit']);
+    expect(repos.tabs.setAgentFields).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(p).resolves.toMatchObject({ to: { id: 'a3' } });
+    expect(texts()).toEqual(['/exit', line]);
+    expect(repos.tabs.setAgentFields.mock.invocationCallOrder[0]).toBeLessThan(applyState.mock.invocationCallOrder[0]);
+    expect(applyState.mock.invocationCallOrder[0]).toBeLessThan(sendTextToSession.mock.invocationCallOrder[1]);
+  });
+
+  it('a failure typing the resume line is rethrown, with the tab already on the new account and the lock released', async () => {
+    const { repos, r } = makeRepos();
+    stored = baseTab({ state: 'idle' });
+    sendTextToSession.mockRejectedValueOnce(new Error('tmux gone'));
+    await expect(drive(swapAccount(r, log, baseTab(), machine(), { auto: false }))).rejects.toThrow('tmux gone');
+    expect(repos.tabs.setAgentFields).toHaveBeenCalledWith('t1', { ai_account_id: 'a3', rate_limited_at: null });
+    expect(applyState).toHaveBeenCalledWith(r, log, expect.anything(), 'claude', expect.objectContaining({ kind: 'waiting_input' }));
+    stored = baseTab({ state: 'idle' });
+    await expect(drive(swapAccount(r, log, baseTab(), machine(), { auto: false }))).resolves.toMatchObject({ to: { id: 'a3' } });
+  });
+
   it('same_account or conflict moves on to the next candidate', async () => {
     const { r } = makeRepos();
     linkClaudeSession.mockImplementation(async (_m, input: { configDir: string | null }) => (input.configDir === null ? 'same_account' : 'linked'));
-    const result = await swapAccount(r, log, baseTab(), machine(), { auto: false });
+    const result = await drive(swapAccount(r, log, baseTab(), machine(), { auto: false }));
     expect(linkClaudeSession.mock.calls.map((c) => c[1].configDir)).toEqual([null, '~/.claude_b']);
     expect(result.to).toEqual({ id: 'a2', label: 'a2' });
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', resumeLine('~/.claude_b', SID, RESUME_PROMPT), true);
@@ -177,7 +237,7 @@ describe('swapAccount', () => {
     linkClaudeSession.mockReset();
     linkClaudeSession.mockImplementation(async (_m, input: { configDir: string | null }) => (input.configDir === null ? 'conflict' : 'linked'));
     stored = baseTab();
-    await expect(swapAccount(r, log, baseTab(), machine(), { auto: false })).resolves.toMatchObject({ to: { id: 'a2' } });
+    await expect(drive(swapAccount(r, log, baseTab(), machine(), { auto: false }))).resolves.toMatchObject({ to: { id: 'a2' } });
   });
 
   it('NO_CANDIDATE when nothing links, and nothing was typed', async () => {
@@ -220,13 +280,16 @@ describe('swapAccount', () => {
   it('no_config_dir moves on to the next candidate', async () => {
     const { r } = makeRepos();
     linkClaudeSession.mockImplementation(async (_m, input: { configDir: string | null }) => (input.configDir === null ? 'no_config_dir' : 'linked'));
-    await expect(swapAccount(r, log, baseTab(), machine(), { auto: false })).resolves.toMatchObject({ to: { id: 'a2' } });
+    await expect(drive(swapAccount(r, log, baseTab(), machine(), { auto: false }))).resolves.toMatchObject({ to: { id: 'a2' } });
   });
 
   it('does not type into the shell when the Claude already exited (idle)', async () => {
     const { r } = makeRepos();
     stored = baseTab({ state: 'idle' });
-    await swapAccount(r, log, baseTab(), machine(), { auto: false });
+    const p = swapAccount(r, log, baseTab(), machine(), { auto: false });
+    // Claude had exited earlier: no settle pause, the line is typed right away
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(p).resolves.toMatchObject({ to: { id: 'a3' } });
     expect(sendKeyToSession).not.toHaveBeenCalled();
     expect(sendTextToSession).toHaveBeenCalledTimes(1);
     expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), 'th-t1', resumeLine(null, SID, RESUME_PROMPT), true);
@@ -237,17 +300,17 @@ describe('swapAccount', () => {
     sendTextToSession.mockImplementation(async (_m, _s, text: string) => {
       if (text === '/exit') stored = { ...stored, state: 'idle' } as Tab;
     });
-    await expect(swapAccount(r, log, baseTab(), machine(), { auto: false })).resolves.toMatchObject({ to: { id: 'a3' } });
+    await expect(drive(swapAccount(r, log, baseTab(), machine(), { auto: false }))).resolves.toMatchObject({ to: { id: 'a3' } });
     expect(sendKeyToSession).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'C-c');
   });
 
   it('forces with C-c twice after EXIT_WAIT_MS, EXIT_TIMEOUT after EXIT_FORCE_WAIT_MS', async () => {
-    vi.useFakeTimers();
     const { repos, r } = makeRepos();
     sendTextToSession.mockResolvedValue(undefined); // Claude never exits
     const p = swapAccount(r, log, baseTab(), machine(), { auto: false });
     const settled = expect(p).rejects.toMatchObject({ code: 'EXIT_TIMEOUT' });
 
+    await vi.advanceTimersByTimeAsync(ESCAPE_PAUSE_MS);
     await vi.advanceTimersByTimeAsync(EXIT_WAIT_MS - 1);
     expect(sendKeyToSession).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'C-c');
     await vi.advanceTimersByTimeAsync(1);
@@ -260,8 +323,7 @@ describe('swapAccount', () => {
     expect(monitorBus.listenerCount()).toBe(0);
   });
 
-  it('C-c that ends the Claude lets the swap go on', async () => {
-    vi.useFakeTimers();
+  it('C-c that ends the Claude lets the swap go on, after the settle pause', async () => {
     const { r } = makeRepos();
     sendTextToSession.mockImplementation(async () => undefined);
     // the tab goes idle while the keys are sent, before the second wait subscribes: the re-read catches it
@@ -269,7 +331,9 @@ describe('swapAccount', () => {
       if (key === 'C-c') stored = { ...stored, state: 'idle' } as Tab;
     });
     const p = swapAccount(r, log, baseTab(), machine(), { auto: false });
-    await vi.advanceTimersByTimeAsync(EXIT_WAIT_MS);
+    await vi.advanceTimersByTimeAsync(ESCAPE_PAUSE_MS + EXIT_WAIT_MS);
+    expect(sendTextToSession).toHaveBeenCalledTimes(1); // /exit only: the shell is still settling
+    await vi.advanceTimersByTimeAsync(RESUME_SETTLE_MS);
     await expect(p).resolves.toMatchObject({ to: { id: 'a3' } });
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', resumeLine(null, SID, RESUME_PROMPT), true);
   });
@@ -287,7 +351,7 @@ describe('swapAccount', () => {
   it('an explicit account is used even above the threshold', async () => {
     const { r } = makeRepos();
     getAccountUsage.mockImplementation(async (a: AiAccount) => usage(a.id, [99]));
-    await expect(swapAccount(r, log, baseTab(), machine(), { accountId: 'a2', auto: false })).resolves.toEqual({ from: { id: 'a1', label: 'a1' }, to: { id: 'a2', label: 'a2' } });
+    await expect(drive(swapAccount(r, log, baseTab(), machine(), { accountId: 'a2', auto: false }))).resolves.toEqual({ from: { id: 'a1', label: 'a1' }, to: { id: 'a2', label: 'a2' } });
     expect(linkClaudeSession).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ configDir: '~/.claude_b' }));
   });
 
@@ -305,27 +369,28 @@ describe('swapAccount', () => {
     sendTextToSession.mockResolvedValue(undefined);
     const first = swapAccount(r, log, baseTab(), machine(), { auto: false });
     await expect(swapAccount(r, log, baseTab(), machine(), { auto: false })).rejects.toMatchObject({ code: 'SWAP_IN_PROGRESS' });
-    await vi.waitFor(() => expect(monitorBus.listenerCount()).toBe(1));
+    await vi.advanceTimersByTimeAsync(ESCAPE_PAUSE_MS);
+    expect(monitorBus.listenerCount()).toBe(1);
     monitorBus.publish({ tab: { ...stored, state: 'idle' }, project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
-    await expect(first).resolves.toMatchObject({ to: { id: 'a3' } });
+    await expect(drive(first)).resolves.toMatchObject({ to: { id: 'a3' } });
     // and the lock is released afterwards
     stored = baseTab({ state: 'idle' });
-    await expect(swapAccount(r, log, baseTab(), machine(), { auto: false })).resolves.toMatchObject({ to: { id: 'a3' } });
+    await expect(drive(swapAccount(r, log, baseTab(), machine(), { auto: false }))).resolves.toMatchObject({ to: { id: 'a3' } });
   });
 
   it('auto text says so', async () => {
     const { r } = makeRepos();
-    await swapAccount(r, log, baseTab(), machine(), { auto: true });
+    await drive(swapAccount(r, log, baseTab(), machine(), { auto: true }));
     expect(applyState).toHaveBeenCalledWith(r, log, expect.anything(), 'claude', {
-      kind: 'working',
-      text: 'Conta trocada automaticamente: a1 → a3',
+      kind: 'waiting_input',
+      text: 'Conta trocada automaticamente: a1 → a3. Se o Claude pedir para confiar na pasta, confirme na aba.',
       meta: { event: 'AccountSwap', from: 'a1', to: 'a3', auto: true },
     });
   });
 
   it('from is null when the tab account is unknown', async () => {
     const { r } = makeRepos();
-    const result = await swapAccount(r, log, baseTab({ ai_account_id: null }), machine(), { auto: false });
+    const result = await drive(swapAccount(r, log, baseTab({ ai_account_id: null }), machine(), { auto: false }));
     expect(result.from).toBeNull();
     expect(applyState).toHaveBeenCalledWith(r, log, expect.anything(), 'claude', expect.objectContaining({ meta: { event: 'AccountSwap', from: null, to: 'a3', auto: false } }));
   });
@@ -394,5 +459,46 @@ describe('autoSwapOnLimit', () => {
       text: 'Troca automática falhou: Nenhuma outra conta do Claude desta máquina tem limite disponível',
       meta: { event: 'AccountSwapFailed', error: 'NO_CANDIDATE' },
     });
+  });
+
+  it('does not swap when a manual swap cleared the limit during the delay', async () => {
+    const { repos, r } = makeRepos();
+    repos.machines.findById.mockResolvedValue(machine({ claude_auto_swap: true }));
+    stored = baseTab({ id: 'auto5', state: 'idle' });
+    autoSwapOnLimit(r, log, stored);
+    stored = { ...stored, ai_account_id: 'a3', rate_limited_at: null } as Tab;
+    await vi.advanceTimersByTimeAsync(AUTO_SWAP_DELAY_MS);
+    expect(linkClaudeSession).not.toHaveBeenCalled();
+    expect(sendKeyToSession).not.toHaveBeenCalled();
+    expect(sendTextToSession).not.toHaveBeenCalled();
+    expect(applyState).not.toHaveBeenCalled();
+  });
+
+  it('does not swap when the tab hit a newer limit during the delay (its own call handles it)', async () => {
+    const { repos, r } = makeRepos();
+    repos.machines.findById.mockResolvedValue(machine({ claude_auto_swap: true }));
+    stored = baseTab({ id: 'auto6', state: 'idle' });
+    autoSwapOnLimit(r, log, stored);
+    stored = { ...stored, rate_limited_at: '2026-09-26T10:00:02.000Z' } as Tab;
+    await vi.advanceTimersByTimeAsync(AUTO_SWAP_DELAY_MS);
+    expect(linkClaudeSession).not.toHaveBeenCalled();
+    expect(applyState).not.toHaveBeenCalled();
+  });
+
+  it('a swap already running on the tab is a silent skip, not a recorded failure', async () => {
+    const { repos, r } = makeRepos();
+    repos.machines.findById.mockResolvedValue(machine({ claude_auto_swap: true }));
+    stored = baseTab({ id: 'auto7' });
+    sendTextToSession.mockResolvedValue(undefined); // the manual swap waits for a Claude that has not exited yet
+    const manual = swapAccount(r, log, stored, machine(), { auto: false });
+    manual.catch(() => undefined);
+    autoSwapOnLimit(r, log, stored);
+    await vi.advanceTimersByTimeAsync(AUTO_SWAP_DELAY_MS);
+    expect(linkClaudeSession).toHaveBeenCalledTimes(1); // the manual swap only
+    expect(applyState).not.toHaveBeenCalled();
+    expect(log.info).toHaveBeenCalledWith({ tabId: 'auto7', machineId: 'm1' }, 'account swap: auto skipped (swap in progress)');
+    // let the manual swap finish so its lock and subscription go away
+    monitorBus.publish({ tab: { ...stored, state: 'idle' }, project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
+    await expect(drive(manual)).resolves.toMatchObject({ to: { id: 'a3' } });
   });
 });

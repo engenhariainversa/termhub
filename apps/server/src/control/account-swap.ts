@@ -17,6 +17,15 @@ export const SWAP_MAX_UTILIZATION = 90;
 export const EXIT_WAIT_MS = 15_000;
 /** And after the two `C-c` that follow, before the swap gives up. */
 export const EXIT_FORCE_WAIT_MS = 10_000;
+/**
+ * Between Escape and `/exit`: sent back to back, Claude's input parser can read `\x1b/` as Alt+/ and
+ * then submit "exit" as a prompt.
+ */
+export const ESCAPE_PAUSE_MS = 400;
+/** After SessionEnd turns the tab idle, Claude may still own the tty for a moment: let the shell take it back. */
+export const RESUME_SETTLE_MS = 1_000;
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export interface SwapResult {
   from: { id: string; label: string } | null;
@@ -141,6 +150,7 @@ export async function swapAccount(
     const current = (await repos.tabs.findById(tab.id)) ?? tab;
     if (current.state !== 'idle') {
       await sendKeyToSession(machine, session, 'Escape');
+      await sleep(ESCAPE_PAUSE_MS);
       await sendTextToSession(machine, session, '/exit', true);
       if (!(await waitUntilIdle(repos, tab.id, EXIT_WAIT_MS))) {
         await sendKeyToSession(machine, session, 'C-c');
@@ -149,12 +159,18 @@ export async function swapAccount(
           throw new ControlError('EXIT_TIMEOUT', 'O Claude desta aba não encerrou; veja a tela e tente de novo');
         }
       }
+      await sleep(RESUME_SETTLE_MS);
     }
+    // Recorded before the line is typed, so the resumed session's first hooks (or a fast StopFailure)
+    // land after it and are not overwritten. Workspace trust is stored per account: the resumed Claude
+    // may ask whether to trust the folder, and that answer belongs to the person — so the tab waits on
+    // them until the resumed session's SessionStart (run only once trusted) moves it to working. Should
+    // typing fail, the tab already names the account the linked session will be resumed under.
+    const updated = (await repos.tabs.setAgentFields(tab.id, { ai_account_id: to.id, rate_limited_at: null })) ?? tab;
+    const text = `${opts.auto ? 'Conta trocada automaticamente' : 'Conta trocada'}: ${from?.label ?? 'conta desconhecida'} → ${to.label}. Se o Claude pedir para confiar na pasta, confirme na aba.`;
+    await applyState(repos, log, updated, 'claude', { kind: 'waiting_input', text, meta: { event: 'AccountSwap', from: from?.id ?? null, to: to.id, auto: opts.auto } });
     await sendTextToSession(machine, session, line, true);
 
-    const updated = (await repos.tabs.setAgentFields(tab.id, { ai_account_id: to.id, rate_limited_at: null })) ?? tab;
-    const text = `${opts.auto ? 'Conta trocada automaticamente' : 'Conta trocada'}: ${from?.label ?? 'conta desconhecida'} → ${to.label}`;
-    await applyState(repos, log, updated, 'claude', { kind: 'working', text, meta: { event: 'AccountSwap', from: from?.id ?? null, to: to.id, auto: opts.auto } });
     log.info({ tabId: tab.id, machineId: machine.id, from: from?.id ?? null, to: to.id, auto: opts.auto }, 'account swap: done');
     return { from: from && { id: from.id, label: from.label }, to: { id: to.id, label: to.label } };
   } finally {
@@ -184,13 +200,24 @@ export function autoSwapOnLimit(repos: Repositories, log: FastifyBaseLogger, tab
     }
     lastAuto.set(tab.id, now);
     await new Promise((r) => setTimeout(r, AUTO_SWAP_DELAY_MS));
+    // The snapshot is from the hook: during the delay the person may have swapped by hand (the limit
+    // is cleared) or a newer limit arrived (its own call handles it). Only the same incident goes on.
+    const fresh = await repos.tabs.findById(tab.id);
+    if (!fresh || !fresh.rate_limited_at || fresh.rate_limited_at !== tab.rate_limited_at) {
+      log.info({ tabId: tab.id, machineId: machine.id }, 'account swap: auto skipped (limit no longer current)');
+      return;
+    }
     try {
-      await swapAccount(repos, log, tab, machine, { auto: true });
+      await swapAccount(repos, log, fresh, machine, { auto: true });
     } catch (e) {
       const code = e instanceof ControlError ? e.code : 'INTERNAL';
+      if (code === 'SWAP_IN_PROGRESS') {
+        log.info({ tabId: tab.id, machineId: machine.id }, 'account swap: auto skipped (swap in progress)');
+        return;
+      }
       const message = e instanceof Error ? e.message : 'erro desconhecido';
       log.warn({ tabId: tab.id, machineId: machine.id, code }, 'account swap: auto failed');
-      const current = (await repos.tabs.findById(tab.id)) ?? tab;
+      const current = (await repos.tabs.findById(tab.id)) ?? fresh;
       await applyState(repos, log, current, 'claude', { kind: 'waiting_input', text: `Troca automática falhou: ${message}`, meta: { event: 'AccountSwapFailed', error: code } });
     }
   })().catch((e) => log.error({ tabId: tab.id, err: e instanceof Error ? e.message : 'unknown' }, 'account swap: auto crashed'));
