@@ -306,4 +306,34 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     const listed = await repo.listByConversation(conv.id);
     expect(listed.map((r) => r.id)).toEqual([q.id, ...sugg.slice(10).map((r) => r.id)]);
   });
+
+  it('expireOne: a dead card closes as expired once; one answered from the chat keeps its status and gets closed_at', async () => {
+    const { question: a } = await open('td1');
+    const e = await repo.expireOne(a.id);
+    expect(e).toMatchObject({ id: a.id, status: 'expired', user_id: userId });
+    expect(e?.closed_at).not.toBeNull();
+    expect(await repo.expireOne(a.id)).toBeUndefined();
+    const { question: b } = await open('td2');
+    await repo.claim(b.id, userId, { answers: [{ selected: [0] }] });
+    expect(await repo.expireOne(b.id)).toMatchObject({ id: b.id, status: 'answered' });
+  });
+
+  // Last on purpose: the sweep closes every orphan row of the database.
+  it('expireOrphans: every card still on screen whose tab is gone closes (open → expired) in one statement; live tabs are untouched', async () => {
+    const at = new Date('2026-09-26T12:00:00.000Z');
+    const earlier = new Date('2026-09-26T11:00:00.000Z');
+    const mk = (id: string, tabId: string, status: string, closedAt: Date | null = null) => ({ id, tabId, projectId, conversationId, kind: 'permission', payload: { tool_name: 'Bash' }, status, closedAt });
+    const [gone1, gone2, closedGone, live] = [newId(), newId(), newId(), newId()];
+    await db.tabQuestion.createMany({ data: [mk(gone1, 'gone-a', 'open'), mk(gone2, 'gone-b', 'answered'), mk(closedGone, 'gone-c', 'answered_in_tab', earlier), mk(live, tid('ts1'), 'open')] });
+    const swept = await repo.expireOrphans(at);
+    const mine = swept.filter((q) => [gone1, gone2, closedGone, live].includes(q.id)).sort((x, y) => (x.id < y.id ? -1 : 1));
+    const want = [
+      { id: gone1, status: 'expired', closed_at: at.toISOString(), user_id: userId },
+      { id: gone2, status: 'answered', closed_at: at.toISOString(), user_id: userId },
+    ].sort((x, y) => (x.id < y.id ? -1 : 1));
+    expect(mine.map(({ id, status, closed_at, user_id }) => ({ id, status, closed_at, user_id }))).toEqual(want);
+    expect(await db.tabQuestion.findUnique({ where: { id: live } })).toMatchObject({ status: 'open', closedAt: null });
+    expect((await db.tabQuestion.findUnique({ where: { id: closedGone } }))?.closedAt?.toISOString()).toBe(earlier.toISOString());
+    expect((await repo.expireOrphans(at)).filter((q) => [gone1, gone2].includes(q.id))).toEqual([]);
+  });
 });

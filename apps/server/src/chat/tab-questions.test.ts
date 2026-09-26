@@ -5,7 +5,7 @@ import type { Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import type { Interpreted } from '../monitor/state.js';
 import { chatBus, type ChatEvent } from './bus.js';
-import { closesOpenQuestion, noteHookEvent, openTabQuestion, publishTabQuestions, startTabQuestionExpiry } from './tab-questions.js';
+import { closesOpenQuestion, expireOrphanTabQuestions, noteHookEvent, openTabQuestion, publishTabQuestions, startTabQuestionExpiry } from './tab-questions.js';
 
 const tab = { id: 't1', project_id: 'p1', machine_id: 'm1', name: 'api' } as Tab;
 const payload = { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: '', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] };
@@ -143,5 +143,30 @@ describe('publishTabQuestions', () => {
     await publishTabQuestions(asRepos(repos), 'tab_question_closed', [{ ...s, status: 'dismissed' }]);
     expect(events.map((e) => e.type)).toEqual(['tab_suggestion', 'tab_suggestion_closed', 'tab_suggestion_closed']);
     expect(events[0]).toMatchObject({ user_id: 'u1', conversation_id: 'c1', suggestion: { id: 's1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' } } });
+  });
+});
+
+describe('expireOrphanTabQuestions', () => {
+  it('closes and announces every card whose tab is gone; logs the count only', async () => {
+    const repos = fakeRepos();
+    const gone = row({ status: 'expired', closed_at: '2026-09-26T12:00:00.000Z' });
+    (repos.tabQuestions as Record<string, unknown>).expireOrphans = vi.fn(async () => [gone]);
+    const l = log();
+    expect(await expireOrphanTabQuestions(asRepos(repos), l)).toBe(1);
+    expect(events).toEqual([expect.objectContaining({ type: 'tab_question_closed', question: expect.objectContaining({ id: 'q1', status: 'expired' }) })]);
+    expect(l.info).toHaveBeenCalledWith({ count: 1 }, 'orphan tab questions expired');
+  });
+
+  it('says nothing when there is nothing to sweep, and never throws', async () => {
+    const repos = fakeRepos();
+    (repos.tabQuestions as Record<string, unknown>).expireOrphans = vi.fn(async () => []);
+    const l = log();
+    expect(await expireOrphanTabQuestions(asRepos(repos), l)).toBe(0);
+    expect(l.info).not.toHaveBeenCalled();
+    (repos.tabQuestions as Record<string, unknown>).expireOrphans = vi.fn(async () => {
+      throw Object.assign(new Error('x'), { code: 'P1001' });
+    });
+    expect(await expireOrphanTabQuestions(asRepos(repos), l)).toBe(0);
+    expect(l.warn).toHaveBeenCalledWith({ code: 'P1001' }, 'orphan tab question sweep failed');
   });
 });

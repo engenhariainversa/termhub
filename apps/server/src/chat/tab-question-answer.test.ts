@@ -30,16 +30,18 @@ const row = (over: Partial<TabQuestion> = {}): TabQuestion => ({
 });
 const permission = (over: Partial<TabQuestion> = {}) => row({ id: 'q2', kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null, ...over });
 
-function ctxFor(current: TabQuestion | undefined, opts: { latest?: TabQuestion | undefined; outOfScope?: boolean; claimLoses?: boolean; denied?: string[] } = {}) {
+function ctxFor(current: TabQuestion | undefined, opts: { latest?: TabQuestion | undefined; outOfScope?: boolean; tabFails?: Error; claimLoses?: boolean; denied?: string[] } = {}) {
   const tabQuestions = {
     findByIdForUser: vi.fn(async (_id: string, userId: string) => (userId === 'u1' ? current : undefined)),
     findOpenForTab: vi.fn(async () => ('latest' in opts ? opts.latest : current)),
     claim: vi.fn(async (_id: string, _u: string, answer: unknown) => (opts.claimLoses || !current ? undefined : { ...current, status: 'answered' as const, answer: answer as never, answered_by: 'u1', answered_at: '2026-09-25T12:01:00.000Z' })),
     markFailed: vi.fn(async (_id: string, code: string) => (current ? { ...current, status: 'failed' as const, error_code: code } : undefined)),
     closeOne: vi.fn(async (_id: string, status: 'answered_in_tab' | 'expired') => (current ? { ...current, status, closed_at: '2026-09-25T12:01:00.000Z' } : undefined)),
+    expireOne: vi.fn(async (_id: string) => (current && current.closed_at === null ? { ...current, status: current.status === 'open' ? ('expired' as const) : current.status, closed_at: '2026-09-26T12:02:00.000Z' } : undefined)),
   };
   const scoped = {
     tab: vi.fn(async (id: string) => {
+      if (opts.tabFails) throw opts.tabFails;
       if (opts.outOfScope) throw notFound('Tab não encontrada');
       return { tab: { id, name: 'api', kind: 'terminal', tmux_session: 'th-t1', state: 'waiting_permission' }, machine: { id: 'm1', type: 'agent' }, project: { id: 'p1' }, cwd: '/w' };
     }),
@@ -327,5 +329,40 @@ describe('suggestion rows', () => {
     await rejects(answerTabQuestion(ctx, 's1', { allow: true }, { log: log(), sleep: noSleep }), 404, 'NOT_FOUND');
     await rejects(tabQuestionScreen(ctx, 's1'), 404, 'NOT_FOUND');
     expect(readScreen).not.toHaveBeenCalled();
+  });
+});
+
+describe('a dead card (spec 2026-09-26 §4.7)', () => {
+  const body = { answers: [{ selected: [0] }, { selected: [0] }] };
+
+  it('answer: a 404 from the scope closes the card as expired, says so, and still answers 404', async () => {
+    const { ctx, tabQuestions } = ctxFor(row(), { outOfScope: true });
+    await rejects(answerTabQuestion(ctx, 'q1', body, { log: log() }), 404, 'NOT_FOUND');
+    expect(tabQuestions.expireOne).toHaveBeenCalledWith('q1');
+    expect(events).toEqual([expect.objectContaining({ type: 'tab_question_closed', user_id: 'u1', question: expect.objectContaining({ id: 'q1', status: 'expired' }) })]);
+    expect(tabQuestions.claim).not.toHaveBeenCalled();
+    expect(sendKey).not.toHaveBeenCalled();
+  });
+
+  it('screen: the same', async () => {
+    const { ctx, tabQuestions } = ctxFor(permission(), { outOfScope: true });
+    await rejects(tabQuestionScreen(ctx, 'q2', { log: log() }), 404, 'NOT_FOUND');
+    expect(tabQuestions.expireOne).toHaveBeenCalledWith('q2');
+    expect(events.map((e) => e.type)).toEqual(['tab_question_closed']);
+  });
+
+  it('any other failure of the scope leaves the card alone', async () => {
+    const { ctx, tabQuestions } = ctxFor(row(), { tabFails: new HttpError(503, 'Máquina offline', 'MACHINE_OFFLINE') });
+    await rejects(answerTabQuestion(ctx, 'q1', body, { log: log() }), 503, 'MACHINE_OFFLINE');
+    expect(tabQuestions.expireOne).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
+  it('closing it is best effort: a failed close still answers 404, and logs the code only', async () => {
+    const { ctx, tabQuestions } = ctxFor(row(), { outOfScope: true });
+    tabQuestions.expireOne.mockRejectedValueOnce(Object.assign(new Error('Qual cor?'), { code: 'P1001' }));
+    const l = log();
+    await rejects(answerTabQuestion(ctx, 'q1', body, { log: l }), 404, 'NOT_FOUND');
+    expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', tabId: 't1', code: 'CLOSE_FAILED' }, 'dead tab question not closed');
   });
 });

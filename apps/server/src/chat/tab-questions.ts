@@ -92,3 +92,20 @@ export function startTabQuestionExpiry(repos: Repositories, log: Pick<FastifyBas
     void closeTabQuestions(repos, event.tab_id, 'expired').catch((err) => log.warn({ tabId: event.tab_id, code: failureLabel(err) }, 'tab question expiry failed'));
   });
 }
+
+/**
+ * Closes, as `expired`, every card whose tab is gone without a lifecycle event saying so — the other color
+ * removed it during a blue/green switch, or this process was down (spec 2026-09-26 §4.7). At boot and in the
+ * hourly purge. Never throws; logs the count and codes only.
+ */
+export async function expireOrphanTabQuestions(repos: Repositories, log: Pick<FastifyBaseLogger, 'info' | 'warn'>): Promise<number> {
+  try {
+    const closed = await repos.tabQuestions.expireOrphans();
+    await publishTabQuestions(repos, 'tab_question_closed', closed);
+    if (closed.length > 0) log.info({ count: closed.length }, 'orphan tab questions expired');
+    return closed.length;
+  } catch (err) {
+    log.warn({ code: failureLabel(err) }, 'orphan tab question sweep failed');
+    return 0;
+  }
+}

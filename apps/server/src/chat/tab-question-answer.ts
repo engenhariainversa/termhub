@@ -86,6 +86,30 @@ export const asHttp = (err: unknown): unknown => (err instanceof ControlError ? 
 export const codeOf = (err: unknown, fallback = 'SEND_FAILED'): string => (err instanceof ControlError || err instanceof HttpError ? (err.code ?? fallback) : fallback);
 const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+type Log = Pick<FastifyBaseLogger, 'info' | 'warn'>;
+
+/**
+ * The row's tab through the scope (spec 2026-09-26 §4.7). A 404 means the card is dead — its tab was
+ * removed by another process (the other color, a crash) or left the person's scope: the row closes as
+ * `expired` (only while still on screen) and every screen hears it, then the 404 answers as before.
+ * Closing is best effort: the 404 is the answer either way. Any other failure leaves the row alone.
+ */
+export async function scopedTabOfRow(ctx: ControlContext, row: TabQuestion, log?: Log): Promise<Awaited<ReturnType<ControlContext['scoped']['tab']>>> {
+  try {
+    return await ctx.scoped.tab(row.tab_id);
+  } catch (err) {
+    if (err instanceof HttpError && err.statusCode === 404) {
+      try {
+        const expired = await ctx.repos.tabQuestions.expireOne(row.id);
+        if (expired) await publishTabQuestions(ctx.repos, 'tab_question_closed', [expired]);
+      } catch (closeErr) {
+        log?.warn({ tabQuestionId: row.id, tabId: row.tab_id, code: codeOf(closeErr, 'CLOSE_FAILED') }, 'dead tab question not closed');
+      }
+    }
+    throw err;
+  }
+}
+
 async function runKeyPlan(ctx: ControlContext, tabId: string, steps: KeyStep[], sleep: (ms: number) => Promise<void>): Promise<void> {
   for (const [i, step] of steps.entries()) {
     if (i > 0) await sleep(KEY_STEP_PAUSE_MS);
@@ -96,7 +120,7 @@ async function runKeyPlan(ctx: ControlContext, tabId: string, steps: KeyStep[], 
 }
 
 export interface AnswerDeps {
-  log: Pick<FastifyBaseLogger, 'info' | 'warn'>;
+  log: Log;
   /** Test seam for the pause between keys. */
   sleep?: (ms: number) => Promise<void>;
   /** The mobile route's PIN hook (`requirePinFor`): runs after every check, before the claim. */
@@ -118,7 +142,7 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
   if (!isQuestionRow(found)) throw notFound('Pergunta não encontrada');
   const row = found;
   const answer = parseAnswer(row, raw);
-  const { tab } = await ctx.scoped.tab(row.tab_id);
+  const { tab } = await scopedTabOfRow(ctx, row, deps.log);
   if (row.status !== 'open') throw promptChanged();
   const latest = await ctx.repos.tabQuestions.findOpenForTab(tab.id);
   if (latest?.id !== row.id) throw promptChanged();
@@ -172,13 +196,13 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
 }
 
 /** The permission card's live excerpt (spec §6.1): read on demand, never stored nor logged. */
-export async function tabQuestionScreen(ctx: ControlContext, id: string): Promise<{ text: string }> {
+export async function tabQuestionScreen(ctx: ControlContext, id: string, deps: { log?: Log } = {}): Promise<{ text: string }> {
   // Terminal content: the same grant as the MCP read_screen tool.
   if (!(await ctx.can('terminals', 'read'))) throw forbidden('Ver a tela da aba precisa da permissão terminals:read na sua role');
   const row = await ctx.repos.tabQuestions.findByIdForUser(id, ctx.scope.user.id);
   if (!isQuestionRow(row)) throw notFound('Pergunta não encontrada');
   if (row.status !== 'open') throw promptChanged();
-  const { tab } = await ctx.scoped.tab(row.tab_id);
+  const { tab } = await scopedTabOfRow(ctx, row, deps.log);
   try {
     const { text } = await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_CHECK_LINES }, { plain: true });
     return { text: lastNonBlankLines(text) };

@@ -31,6 +31,7 @@ function ctxFor(current: TabQuestion | undefined, opts: { latest?: TabQuestion |
     markFailed: vi.fn(async (_id: string, code: string) => (current ? { ...current, status: 'failed' as const, error_code: code } : undefined)),
     closeOne: vi.fn(async (_id: string, status: 'answered_in_tab' | 'expired') => (current ? { ...current, status, closed_at: '2026-09-25T12:01:00.000Z' } : undefined)),
     dismiss: vi.fn(async () => (current?.status === 'open' ? { ...current, status: 'dismissed' as const, closed_at: '2026-09-25T12:01:00.000Z' } : undefined)),
+    expireOne: vi.fn(async (_id: string) => (current && current.closed_at === null ? { ...current, status: current.status === 'open' ? ('expired' as const) : current.status, closed_at: '2026-09-26T12:02:00.000Z' } : undefined)),
   };
   const scoped = {
     tab: vi.fn(async (id: string) => {
@@ -132,9 +133,12 @@ describe('sendTabSuggestion', () => {
     expect(sendInput).not.toHaveBeenCalled();
   });
 
-  it('404 when the tab left the scope', async () => {
-    const { ctx } = ctxFor(row(), { outOfScope: true });
+  it('404 when the tab is gone or left the scope: the card closes as expired, on its own event', async () => {
+    const { ctx, tabQuestions } = ctxFor(row(), { outOfScope: true });
     await rejects(sendTabSuggestion(ctx, 's1', { text: 'commit it' }, { log: log() }), 404, 'NOT_FOUND');
+    expect(tabQuestions.expireOne).toHaveBeenCalledWith('s1');
+    expect(events).toEqual([expect.objectContaining({ type: 'tab_suggestion_closed', suggestion: expect.objectContaining({ id: 's1', status: 'expired' }) })]);
+    expect(captureStyledScreen).not.toHaveBeenCalled();
   });
 
   it('409 without typing: not open, not the tab\'s latest, or the claim lost (a double click)', async () => {

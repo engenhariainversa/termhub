@@ -298,7 +298,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
   /** The live excerpt a permission card shows (spec §6.1): read now, never stored nor logged. */
   app.get('/tab-questions/:id/screen', async (request) => {
     const { id } = tabQuestionIdParam.parse(request.params);
-    return tabQuestionScreen(controlContextFor(repos, request.scope.user), id);
+    return tabQuestionScreen(controlContextFor(repos, request.scope.user), id, { log: request.log });
   });
 
   /** The phone sends a tab's suggestion like the web: no PIN (spec 2026-09-25 tab suggestions §2). */

@@ -173,8 +173,11 @@ export class TabQuestionsRepository {
 
   /**
    * A closing hook event (PreToolUse, Stop…) or a removed tab: closes what the tab still shows and ends a
-   * permission queue. Under the tab's lock (spec 2026-09-26 §4.1), so it lands after an `open` of the same
-   * tab that got there first.
+   * permission queue. Under the tab's lock (spec 2026-09-26 §4.1) — but only when there is something to
+   * close or clear: the pre-check below runs outside the transaction, so a tab with nothing committed
+   * skips the lock and this call never waits for it. So it lands after an `open` that had already
+   * committed, or one working on a tab that already had a row to close or a queue; a card opened
+   * concurrently stays until the tab's next closing event — the live check refuses a stale answer.
    */
   async closeForTab(tabId: string, status: TabQuestionCloseStatus, now = new Date()): Promise<TabQuestion[]> {
     // Called for almost every hook event of every tab: the common case (nothing on screen, no queue)
@@ -239,6 +242,40 @@ export class TabQuestionsRepository {
     if (count === 0) return undefined;
     const row = await this.db.tabQuestion.findUnique({ where: { id }, include: withOwner });
     return row ? mapQuestion(row) : undefined;
+  }
+
+  /**
+   * A dead card — its tab can no longer be loaded (spec 2026-09-26 §4.7): `open → expired`, and a row the
+   * chat already answered keeps `answered` and only gets its `closed_at`. This one row, conditionally
+   * (`closed_at` still null): undefined when something closed it first.
+   */
+  async expireOne(id: string, now = new Date()): Promise<TabQuestion | undefined> {
+    const count = await this.db.$executeRaw`
+      UPDATE "tab_questions"
+         SET "status" = CASE WHEN "status" = 'open' THEN 'expired' ELSE "status" END,
+             "closed_at" = ${now}
+       WHERE "id" = ${id} AND "closed_at" IS NULL`;
+    if (count === 0) return undefined;
+    const row = await this.db.tabQuestion.findUnique({ where: { id }, include: withOwner });
+    return row ? mapQuestion(row) : undefined;
+  }
+
+  /**
+   * Every row still on screen whose tab row is gone — removed by the other color during a blue/green
+   * switch, or while this process was down, so no lifecycle event closed it (spec 2026-09-26 §4.7). One
+   * statement: `open → expired`, `closed_at` set in every case. Oldest first.
+   */
+  async expireOrphans(now = new Date()): Promise<TabQuestion[]> {
+    const swept = await this.db.$queryRaw<{ id: string }[]>`
+      UPDATE "tab_questions" AS q
+         SET "status" = CASE WHEN q."status" = 'open' THEN 'expired' ELSE q."status" END,
+             "closed_at" = ${now}
+       WHERE q."closed_at" IS NULL
+         AND NOT EXISTS (SELECT 1 FROM "tabs" t WHERE t."id" = q."tab_id")
+      RETURNING q."id"`;
+    if (swept.length === 0) return [];
+    const rows = await this.db.tabQuestion.findMany({ where: { id: { in: swept.map((r) => r.id) } }, include: withOwner, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+    return rows.map(mapQuestion);
   }
 
   /** The keys never reached the tab: only a claimed row can fail. */

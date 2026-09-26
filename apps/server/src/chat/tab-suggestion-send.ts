@@ -6,7 +6,7 @@ import { assertTerminal, offline } from '../control/screen.js';
 import { sendInput } from '../control/terminals.js';
 import { describeTabQuestions, toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import { forbidden, HttpError, notFound } from '../lib/errors.js';
-import { asHttp, codeOf } from './tab-question-answer.js';
+import { asHttp, codeOf, scopedTabOfRow } from './tab-question-answer.js';
 import { typedText, type SuggestionPayload } from './tab-question-payload.js';
 import { publishTabQuestions } from './tab-questions.js';
 import { readSuggestion } from './tab-suggestions.js';
@@ -41,7 +41,7 @@ export async function sendTabSuggestion(ctx: ControlContext, id: string, raw: un
   const row = await suggestionRow(ctx, id);
   const { text } = suggestionSendBody.parse(raw);
   const suggested = (row.payload as SuggestionPayload).text;
-  const { tab, machine } = await ctx.scoped.tab(row.tab_id);
+  const { tab, machine } = await scopedTabOfRow(ctx, row, deps.log);
   if (row.status !== 'open') throw suggestionChanged();
   const latest = await ctx.repos.tabQuestions.findOpenForTab(tab.id);
   if (latest?.id !== row.id) throw suggestionChanged();
