@@ -63,13 +63,17 @@ const eventOf = (body: string) => (JSON.parse(body) as { event: Record<string, u
 
 /**
  * The script posts in the background, so "nothing was posted" cannot be waited for. A dropped event is
- * proven instead by a sentinel run after it: the sentinel must be the only body logged.
+ * proven instead by a sentinel run after it: the sentinel must be the only body logged. `bodies(1)`
+ * returns as soon as the sentinel's body shows up, which a dropped event's own (background) POST could
+ * still race and land after — so this also waits out that race and checks the whole log again.
  */
 const SENTINEL = { hook_event_name: 'Stop', last_assistant_message: 'sentinel' };
 async function onlySentinelPosted(): Promise<void> {
   run(SENTINEL);
   const sent = await bodies(1);
   expect(sent.map(eventOf)).toEqual([SENTINEL]);
+  await sleep(200);
+  expect(logged().map(eventOf)).toEqual([SENTINEL]);
 }
 
 beforeEach(() => {

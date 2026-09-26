@@ -1152,6 +1152,21 @@ describe('start', () => {
     await first.done;
   });
 
+  it('a start refused as busy neither reads nor marks the answered tab questions (spec 2026-09-26 §4.10)', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, tabQuestions } = build(() => (async function* () { await gate; yield delta('ok'); yield done(); })(), { tabQuestions: [answeredQuestion()] });
+    const first = await service.start(user, 'primeira');
+    // The first run read and marked them, under its lock.
+    expect(tabQuestions.listToInject).toHaveBeenCalledTimes(1);
+    expect(tabQuestions.markInjected).toHaveBeenCalledTimes(1);
+    await expect(service.start(user, 'segunda')).rejects.toMatchObject({ statusCode: 409, code: 'CHAT_BUSY' });
+    expect(tabQuestions.listToInject).toHaveBeenCalledTimes(1);
+    expect(tabQuestions.markInjected).toHaveBeenCalledTimes(1);
+    release();
+    await first.done;
+  });
+
   it('rejects start itself when the conversation was archived before the lock, and releases the lock', async () => {
     const { service, repos, conversation } = build([delta('ok'), done()]);
     vi.mocked(repos.chat.findByIdForUser).mockImplementationOnce(async () => ({ ...conversation, archived_at: '2026-09-24T00:00:00.000Z' }) as never);

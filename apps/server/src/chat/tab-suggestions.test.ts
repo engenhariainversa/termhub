@@ -178,4 +178,16 @@ describe('scheduleTabSuggestion', () => {
     await settle();
     expect(repos.tabQuestions.open).not.toHaveBeenCalled();
   });
+
+  it('stopTabSuggestions: a scheduled check never runs after it', async () => {
+    fakeTimers();
+    const repos = fakeRepos();
+    scheduleTabSuggestion(asRepos(repos), log(), 't1');
+    scheduleTabSuggestion(asRepos(repos), log(), 't2');
+    stopTabSuggestions();
+    await vi.advanceTimersByTimeAsync(SUGGESTION_DELAY_MS * 2);
+    await settle();
+    expect(repos.tabs.findById).not.toHaveBeenCalled();
+    expect(captureStyledScreen).not.toHaveBeenCalled();
+  });
 });

@@ -127,6 +127,24 @@ describe('noteHookEvent', () => {
     expect(l.info).toHaveBeenCalledWith({ tabId: 't1', tabQuestionId: 'q1', kind: 'choice', questions: 1 }, 'tab question opened');
     expect(JSON.stringify(l.info.mock.calls)).not.toContain('Qual cor');
   });
+
+  it('never throws on the closing path either', async () => {
+    const repos = fakeRepos();
+    repos.tabQuestions.closeForTab.mockRejectedValue(Object.assign(new Error('Qual cor? secret'), { code: 'P1001' }));
+    const l = log();
+    await expect(noteHookEvent(asRepos(repos), l, tab, { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash' } })).resolves.toBeUndefined();
+    expect(l.warn).toHaveBeenCalledWith({ tabId: 't1', code: 'P1001' }, 'tab question bookkeeping failed');
+    expect(JSON.stringify(l.warn.mock.calls)).not.toContain('secret');
+  });
+
+  it('never throws on the no-conversation path either', async () => {
+    const repos = fakeRepos({ conversation: null });
+    repos.tabQuestions.open.mockRejectedValue(Object.assign(new Error('Qual cor? secret'), { code: 'P2034' }));
+    const l = log();
+    await expect(noteHookEvent(asRepos(repos), l, tab, choice)).resolves.toBeUndefined();
+    expect(repos.tabQuestions.open).toHaveBeenCalledWith(expect.objectContaining({ conversation_id: null }));
+    expect(l.warn).toHaveBeenCalledWith({ tabId: 't1', code: 'P2034' }, 'tab question bookkeeping failed');
+  });
 });
 
 describe('startTabQuestionExpiry', () => {
@@ -135,11 +153,10 @@ describe('startTabQuestionExpiry', () => {
     const stop = startTabQuestionExpiry(asRepos(repos), log());
     monitorBus.publishLifecycle({ kind: 'upsert', tab, project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
     monitorBus.publishLifecycle({ kind: 'removed', tab_id: 't1', project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => expect(events.map((e) => e.type)).toEqual(['tab_question_closed']));
     stop();
     expect(repos.tabQuestions.closeForTab).toHaveBeenCalledTimes(1);
     expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'expired');
-    expect(events.map((e) => e.type)).toEqual(['tab_question_closed']);
   });
 });
 
