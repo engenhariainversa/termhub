@@ -15,6 +15,7 @@ import { IntegrationsView } from '../components/IntegrationsView';
 import { AiAccountsView } from '../components/AiAccountsView';
 import { HardwareView } from '../components/HardwareView';
 import { WaitlistView } from '../components/WaitlistView';
+import { ChatGrantsView } from '../components/ChatGrantsView';
 import { PageFrame } from '../components/PageHeader';
 
 /**
@@ -58,6 +59,12 @@ export function SettingsPage() {
       return (
         <PageFrame title={current.label}>
           <WaitlistView />
+        </PageFrame>
+      );
+    case 'chat-grants':
+      return (
+        <PageFrame title={current.label}>
+          <ChatGrantsView />
         </PageFrame>
       );
     case 'permissions':

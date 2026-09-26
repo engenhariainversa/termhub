@@ -1,4 +1,4 @@
-import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatConversation, ChatGrant, ChatHostState, ChatMessage, CityLink, CreatedApiToken, InviteResult, ViewAs, OfficeCity, PermissionAction, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ProjectSetup, ProjectSetupData, Simulator, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary } from './types';
+import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatConversation, ChatGrant, ChatGrantListItem, ChatHostState, ChatMessage, CityLink, CreatedApiToken, InviteResult, ViewAs, OfficeCity, PermissionAction, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ProjectSetup, ProjectSetupData, Simulator, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -205,6 +205,9 @@ export const api = {
     request<{ action: { id: string; status: ChatActionStatus }; message?: ChatMessage; queued?: true; note?: string; grant?: ChatGrant }>('POST', `/chat/actions/${id}/decision`, { decision }),
   /** "Revogar": 404 unknown/not yours, 409 already revoked. */
   revokeChatGrant: (id: string) => request<{ grant: ChatGrant }>('DELETE', `/chat/grants/${encodeURIComponent(id)}`),
+  /** "Abas confiáveis": the grants in force, or the paged history (`state: 'ended'` also covers expired/revoked). */
+  listChatGrants: (q: { state: 'active' | 'ended'; cursor?: string | null }) =>
+    request<{ grants: ChatGrantListItem[]; next_cursor: string | null }>('GET', `/chat/grants?state=${q.state}${q.cursor ? `&cursor=${encodeURIComponent(q.cursor)}` : ''}`),
   /** Answers a tab's question from its card (409 `TAB_PROMPT_CHANGED` when the tab moved on). */
   answerTabQuestion: (id: string, body: TabQuestionAnswer) => request<{ tab_question: TabQuestion }>('POST', `/chat/tab-questions/${encodeURIComponent(id)}/answer`, body),
   /** The last lines of the tab, live, for a permission card; 409 once the question is closed. */

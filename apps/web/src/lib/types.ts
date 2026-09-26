@@ -797,6 +797,21 @@ export interface ChatGrant {
   tab_name: string | null;
 }
 
+/** How a listed grant stands: in force, run out, revoked by someone, or ended by "Nova conversa". */
+export type ChatGrantState = 'active' | 'expired' | 'revoked' | 'ended';
+
+/** A row of "Abas confiáveis" (`GET /api/chat/grants`). */
+export interface ChatGrantListItem extends ChatGrant {
+  project_id: string | null;
+  project_name: string | null;
+  conversation_id: string;
+  /** Null = the account-wide chat. */
+  conversation_project_name: string | null;
+  conversation_archived: boolean;
+  state: ChatGrantState;
+  ended_at: string | null;
+}
+
 /** One option of a tab's question; `recommended` came out of Claude Code's own "(Recommended)". */
 export interface TabQuestionOption {
   label: string;
