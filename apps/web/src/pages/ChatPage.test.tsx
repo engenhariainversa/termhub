@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatPage } from './ChatPage';
@@ -158,15 +158,18 @@ it('drops the delta trail from before a reset, keeping only what streamed after 
     conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
     messages: [msg({ id: 'm2', role: 'assistant', text: '' })],
   });
-  streamMock.mockReturnValue({
-    events: [
-      { type: 'delta', message_id: 'm2', delta: 'resposta abandonada' },
-      { type: 'reset', message_id: 'm2' },
-      { type: 'delta', message_id: 'm2', delta: 'resposta nova' },
-    ],
-    connected: true,
+  let deliver: (e: unknown) => void = () => {};
+  streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
+    deliver = onEvent;
+    return { connected: true };
   });
   render(<ChatPage />);
+  await screen.findByRole('list', { name: 'Conversa' });
+  act(() => {
+    deliver({ type: 'delta', message_id: 'm2', delta: 'resposta abandonada' });
+    deliver({ type: 'reset', message_id: 'm2' });
+    deliver({ type: 'delta', message_id: 'm2', delta: 'resposta nova' });
+  });
   expect(await screen.findByText('resposta nova')).toBeTruthy();
   expect(screen.queryByText(/resposta abandonada/)).toBeNull();
 });
@@ -188,9 +191,15 @@ it('says "pensando…" while the message it is answering is the live one', async
     conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
     messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm2', role: 'assistant', text: '' })],
   });
-  // The run was announced over the socket: this row is being written right now.
-  streamMock.mockReturnValue({ events: [{ type: 'message', message: msg({ id: 'm2', role: 'assistant', text: '' }) }], connected: true });
+  let deliver: (e: unknown) => void = () => {};
+  streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
+    deliver = onEvent;
+    return { connected: true };
+  });
   render(<ChatPage />);
+  await screen.findByRole('list', { name: 'Conversa' });
+  // The run was announced over the socket: this row is being written right now.
+  act(() => deliver({ type: 'message', message: msg({ id: 'm2', role: 'assistant', text: '' }) }));
   expect(await screen.findByText(/pensando/i)).toBeTruthy();
   expect(screen.queryByText(/não terminou/i)).toBeNull();
 });
@@ -270,12 +279,11 @@ it('leaves the scroll position alone once the reader has scrolled away from the 
 
 it('pins the thread to the bottom when a card lands, not only when a message does', async () => {
   let deliver: (e: unknown) => void = () => {};
-  // One stable `events` array across renders, so nothing but the thread's own contents can make the
-  // pin effect run: this is what tells a card apart from a message here.
-  const events: unknown[] = [];
+  // A `confirmation` is nothing to the live fold (its version stays), so nothing but the thread's own
+  // contents can make the pin effect run: this is what tells a card apart from a message here.
   streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
     deliver = onEvent;
-    return { events, connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })], actions: [] });
 
@@ -361,11 +369,14 @@ it('does not call a tool-only phase a dead run', async () => {
     conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
     messages: [msg({ id: 'm1', role: 'user', text: 'o que está rodando?' }), msg({ id: 'm2', role: 'assistant', text: '' })],
   });
-  streamMock.mockReturnValue({
-    events: [{ type: 'action', message_id: 'm2', tool: 'list_tabs', tool_use_id: 'tu_1', args: {} }],
-    connected: true,
+  let deliver: (e: unknown) => void = () => {};
+  streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
+    deliver = onEvent;
+    return { connected: true };
   });
   render(<ChatPage />);
+  await screen.findByRole('list', { name: 'Conversa' });
+  act(() => deliver({ type: 'action', message_id: 'm2', tool: 'list_tabs', tool_use_id: 'tu_1', args: {} }));
 
   expect(await screen.findByText('list_tabs')).toBeTruthy();
   expect(screen.queryByText(/não terminou/i)).toBeNull();
@@ -681,8 +692,14 @@ it('renders a streamed delta as Markdown too, while it is still being written', 
     conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
     messages: [msg({ id: 'm2', role: 'assistant', text: '' })],
   });
-  streamMock.mockReturnValue({ events: [{ type: 'delta', message_id: 'm2', delta: '**parcial**' }], connected: true });
+  let deliver: (e: unknown) => void = () => {};
+  streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
+    deliver = onEvent;
+    return { connected: true };
+  });
   render(<ChatPage />);
+  await screen.findByRole('list', { name: 'Conversa' });
+  act(() => deliver({ type: 'delta', message_id: 'm2', delta: '**parcial**' }));
 
   const el = await screen.findByText('parcial');
   expect(el.tagName).toBe('STRONG');

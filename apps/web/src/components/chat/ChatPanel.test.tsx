@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatPanel } from './ChatPanel';
@@ -139,7 +139,7 @@ it('ignores live events of another conversation', async () => {
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
-    return { events: [{ type: 'delta', conversation_id: 'c_other', message_id: 'm9', delta: 'VAZOU' }], connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({
     conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
@@ -152,9 +152,12 @@ it('ignores live events of another conversation', async () => {
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  await waitFor(() => expect(chatMock).toHaveBeenCalled());
+  // The empty row of this conversation, on screen: the panel knows its own id by now.
+  await screen.findByText('A resposta não terminou — tente de novo.');
+  // A delta for that very row, tagged with another conversation: never folded in.
+  act(() => onEvent({ type: 'delta', conversation_id: 'c_other', message_id: 'm9', delta: 'VAZOU' }));
   expect(screen.queryByText('VAZOU')).toBeNull();
-  onEvent({ type: 'confirmation', conversation_id: 'c_other', action_id: 'a9', tool: 'send_input', args: {}, class: 'write', machine_id: null, project_id: null, tab_id: null, summary: 'NÃO É DAQUI', created_at: '' });
+  act(() => onEvent({ type: 'confirmation', conversation_id: 'c_other', action_id: 'a9', tool: 'send_input', args: {}, class: 'write', machine_id: null, project_id: null, tab_id: null, summary: 'NÃO É DAQUI', created_at: '' }));
   expect(screen.queryByText('NÃO É DAQUI')).toBeNull();
 });
 
@@ -167,16 +170,7 @@ it('drops another conversation\'s events while it does not yet know its own id, 
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
-    // Both deltas sit in the buffer before the load ever resolves — this is what proves the buffered
-    // `events` filter (not just the live `onEvent` gate) re-admits the panel's own conversation once
-    // its id becomes known, instead of having dropped it for good.
-    return {
-      events: [
-        { type: 'delta', conversation_id: 'c_other', message_id: 'm9', delta: 'VAZOU' },
-        { type: 'delta', conversation_id: 'c_p1', message_id: 'm1', delta: 'chegou' },
-      ],
-      connected: true,
-    };
+    return { connected: true };
   });
   render(
     <MemoryRouter>
@@ -184,21 +178,30 @@ it('drops another conversation\'s events while it does not yet know its own id, 
     </MemoryRouter>,
   );
 
-  // A live push of another conversation's confirmation, delivered while conversationId is still null.
-  onEvent({ type: 'confirmation', conversation_id: 'c_other', action_id: 'a9', tool: 'send_input', args: {}, class: 'write', machine_id: null, project_id: null, tab_id: null, summary: 'NÃO É DAQUI', created_at: '' });
+  // Delivered while conversationId is still null: two deltas and a confirmation, none of them admitted
+  // yet. The delta of the panel's own conversation is what proves the held events are replayed into
+  // the fold once its id becomes known, instead of having been dropped for good.
+  act(() => {
+    onEvent({ type: 'delta', conversation_id: 'c_other', message_id: 'm9', delta: 'VAZOU' });
+    onEvent({ type: 'delta', conversation_id: 'c_p1', message_id: 'm1', delta: 'chegou' });
+    onEvent({ type: 'confirmation', conversation_id: 'c_other', action_id: 'a9', tool: 'send_input', args: {}, class: 'write', machine_id: null, project_id: null, tab_id: null, summary: 'NÃO É DAQUI', created_at: '' });
+  });
   expect(screen.queryByText('NÃO É DAQUI')).toBeNull();
   expect(screen.queryByText('VAZOU')).toBeNull();
+  expect(screen.queryByText('chegou')).toBeNull();
 
-  resolveLoad({
-    conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
-    messages: [{ id: 'm1', conversation_id: 'c_p1', role: 'assistant', text: '', error_code: null, created_at: '' }],
-    actions: [],
-    host: READY,
+  await act(async () => {
+    resolveLoad({
+      conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
+      messages: [{ id: 'm1', conversation_id: 'c_p1', role: 'assistant', text: '', error_code: null, created_at: '' }],
+      actions: [],
+      host: READY,
+    });
   });
 
-  // Now that the panel knows its own id, the buffered delta of its own conversation reappears...
+  // Now that the panel knows its own id, the held delta of its own conversation reappears...
   expect(await screen.findByText('chegou')).toBeTruthy();
-  // ...but the foreign one, tagged for c_other, never does — neither live nor from the buffer.
+  // ...but the foreign ones, tagged for c_other, never do.
   expect(screen.queryByText('VAZOU')).toBeNull();
   expect(screen.queryByText('NÃO É DAQUI')).toBeNull();
 });

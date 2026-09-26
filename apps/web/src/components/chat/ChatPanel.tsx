@@ -10,6 +10,7 @@ import { TabSuggestionCard } from './TabSuggestionCard';
 import { ConfirmDialog } from '../Modal';
 import { api, ApiError } from '../../lib/api';
 import { useChatStream } from '../../lib/chat';
+import { useChatLive } from '../../lib/chat-live';
 import { chatTimeline, groupPendingActions } from '../../lib/chat-timeline';
 import { isNearBottom } from '../../lib/chat-scroll';
 import { trustedTabsLabel } from './grant-list-text';
@@ -36,6 +37,8 @@ const COMPOSER_REASON: Record<Exclude<ChatHostState['kind'], 'ready'>, string> =
  * failure of the click — the decision is already durably recorded server-side.
  */
 const HOST_CODES = new Set(['CHAT_NO_MACHINE', 'CHAT_HOST_NOT_CHOSEN', 'CHAT_HOST_OFFLINE', 'CHAT_AGENT_TOO_OLD']);
+/** How many early events (see `early` in the panel) are held while the conversation id is unknown. */
+const EARLY_EVENTS_CAP = 500;
 
 /** A Claude account of one of the user's machines, as the host picker needs it. */
 type HostAccountRow = Pick<AiAccount, 'id' | 'label' | 'machine_id'>;
@@ -165,12 +168,37 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     load().catch((e) => setError(e instanceof ApiError ? e.message : 'Não foi possível abrir a conversa'));
   }, [load]);
 
+  /**
+   * What has streamed for each answer being written (text, tool chips, whether the run showed a sign
+   * of life), folded in one event at a time. `version` moves on every change, which is what re-renders
+   * this panel for a delta; the rows themselves are read through `fold.get` while rendering.
+   */
+  const { fold, version, push } = useChatLive();
+  /**
+   * Live events tagged with a conversation id that arrived before this panel knew its own. Held, not
+   * dropped: `load()` re-reads everything a REST read can give back, but the deltas and tool calls of
+   * an answer already under way exist nowhere else. Replayed into the fold (and only the fold) the
+   * moment `conversationId` is known — the ones of another conversation are dropped then.
+   */
+  const early = useRef<ChatEvent[]>([]);
+  useEffect(() => {
+    if (conversationId === null) return;
+    const held = early.current;
+    early.current = [];
+    for (const e of held) if (e.conversation_id === conversationId) push(e);
+  }, [conversationId, push]);
+
   // A `message` event means the answer was persisted: re-read it over REST to get the final
-  // text. Delivered once per event by the hook, regardless of its own capped buffer, so this
-  // never depends on — or breaks against — that buffer's length.
+  // text. Delivered once per event by the hook.
   const onEvent = useCallback(
     (e: ChatEvent) => {
+      if (conversationId === null && e.conversation_id !== undefined) {
+        early.current = [...early.current.slice(-(EARLY_EVENTS_CAP - 1)), e];
+        return;
+      }
       if (!mine(e)) return;
+      // The fold takes what is its business (deltas, tool calls, resets, announcements) and ignores the rest.
+      push(e);
       if (e.type === 'message') void load();
       else if (e.type === 'confirmation') {
         // Enriched server-side exactly like GET /api/chat's trail (same summary, same ids): no name
@@ -189,12 +217,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       else if (e.type === 'tab_question' || e.type === 'tab_question_answered' || e.type === 'tab_question_closed') setTabQuestions((prev) => upsertTabQuestion(prev, e.question));
       else if (e.type === 'tab_suggestion' || e.type === 'tab_suggestion_closed') setTabSuggestions((prev) => upsertTabSuggestion(prev, e.suggestion));
     },
-    [load, mine],
+    [conversationId, load, mine, push],
   );
-  const { events: allEvents, connected } = useChatStream(load, onEvent);
-  // Same filter as `onEvent`, applied to the buffered stream so a reused row (deltas, tool calls) never
-  // renders anything of another conversation either.
-  const events = useMemo(() => allEvents.filter(mine), [allEvents, mine]);
+  const { connected } = useChatStream(load, onEvent);
 
   const decide = async (id: string, decision: 'approve' | 'deny' | 'approve_tab') => {
     setDecidingId(id);
@@ -368,38 +393,6 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   };
 
-  /**
-   * Deltas and the action trail of the answer being written, keyed by message id. A `reset`
-   * event — the server retrying the run on a fresh CLI session — drops whatever streamed for
-   * that message so far, so the abandoned half-answer never shows glued to the real one.
-   */
-  const live = useMemo(() => {
-    const deltas = new Map<string, string>();
-    const actions = new Map<string, { tool: string }[]>();
-    /**
-     * Assistant rows this page has seen any sign of life from: the `message` event that announces a
-     * run, but also its deltas and its tool calls — a page opened (or reloaded, or a second tab)
-     * after the run began never sees the announcement, and a tool-only phase can run for tens of
-     * seconds with nothing else to show. An empty bubble only deserves a "pensando…" while its run
-     * can still be alive; a row left empty by a process death — which happens on every deploy — is
-     * never mentioned here at all, so it reads as the failure it is instead of waiting for ever.
-     */
-    const started = new Set<string>();
-    for (const e of events) {
-      if (e.type === 'delta') {
-        deltas.set(e.message_id, (deltas.get(e.message_id) ?? '') + e.delta);
-        started.add(e.message_id);
-      } else if (e.type === 'action') {
-        actions.set(e.message_id, [...(actions.get(e.message_id) ?? []), { tool: e.tool }]);
-        started.add(e.message_id);
-      } else if (e.type === 'reset') {
-        deltas.delete(e.message_id);
-        actions.delete(e.message_id);
-      } else if (e.type === 'message' && e.message.role === 'assistant' && !e.message.text && !e.message.error_code) started.add(e.message.id);
-    }
-    return { deltas, actions, started };
-  }, [events]);
-
   /** Messages, gate cards and tab questions as one chronological thread, so a card reads where it was proposed. */
   const timeline = useMemo(() => chatTimeline(messages, actions, tabQuestions, tabSuggestions), [messages, actions, tabQuestions, tabSuggestions]);
   /** "Ver separadas" holds only for the cards it was clicked on: a new or decided card groups again. */
@@ -436,7 +429,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   useEffect(() => {
     const list = listRef.current;
     if (list && stick.current) list.scrollTop = list.scrollHeight;
-  }, [timeline, events]);
+  }, [timeline, version]);
 
   // The keyboard opening is a layout change the thread has to follow: the shell gets shorter
   // (ChatLayout sizes itself to the visual viewport) under the same `scrollTop`, so the newest
@@ -488,7 +481,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);
   /** Whether an answer is being written right now — the only time a reset is refused (409). */
-  const answering = sending || (lastMessageId !== null && live.started.has(lastMessageId) && !messages[messages.length - 1]?.text && !messages[messages.length - 1]?.error_code);
+  const answering = sending || (lastMessageId !== null && fold.get(lastMessageId)?.started === true && !messages[messages.length - 1]?.text && !messages[messages.length - 1]?.error_code);
 
   /** "Nova conversa": archives the current conversation (its transcript is kept, just off this screen)
    *  and swaps in the fresh one `load()` brings back. */
@@ -655,13 +648,16 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
             );
           }
           const m = entry.message;
-          const streaming = live.deltas.get(m.id);
+          const row = fold.get(m.id);
+          const streaming = row?.text || undefined;
           // An assistant row with no text and no error is either the answer being written right now
           // or a leftover from a run that died with the process. Only the newest row can still be
           // the live one, and only while this page knows its run is under way.
           const empty = m.role === 'assistant' && !m.text && !streaming && !m.error_code;
-          const waiting = empty && (live.started.has(m.id) || (sending && m.id === lastMessageId));
-          return <ChatTurn key={m.id} message={m} streaming={streaming} tools={live.actions.get(m.id)} waiting={waiting} failed={Boolean(m.error_code) || (empty && !waiting)} />;
+          // Started rows show "pensando…" wherever they are: with queued or injected turns several
+          // answers can be pending at once (spec 2026-09-26 concierge always free).
+          const waiting = empty && (row?.started === true || (sending && m.id === lastMessageId));
+          return <ChatTurn key={m.id} message={m} streaming={streaming} tools={row?.tools} waiting={waiting} failed={Boolean(m.error_code) || (empty && !waiting)} />;
         })}
       </ol>
       {actionError && <p className="mb-2 text-sm text-danger">{actionError}</p>}

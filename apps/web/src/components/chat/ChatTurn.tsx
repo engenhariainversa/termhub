@@ -104,8 +104,8 @@ export interface ChatTurnProps {
   message: ChatMessage;
   /** What has streamed for this row so far, if anything (`live.deltas` in `ChatPage`). */
   streaming?: string;
-  /** The tool calls seen for this row while it is being written (`live.actions` in `ChatPage`). */
-  tools?: { tool: string }[];
+  /** The tool calls seen for this row while it is being written (`fold.get(id).tools` in `ChatPanel`). */
+  tools?: readonly { tool: string }[];
   /** The page decided this empty row is the answer being written right now: say "pensando…". */
   waiting: boolean;
   /** The page decided nothing will ever fill this row: say so instead of waiting for ever. */
