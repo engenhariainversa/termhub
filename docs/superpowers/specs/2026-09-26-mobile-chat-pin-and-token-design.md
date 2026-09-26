@@ -50,11 +50,11 @@ The `mobile-client` CLI (`apps/server/src/cli/mobile-client.ts`) reacts to `TOKE
 
 ### 5.1 Approvals
 
-`createChatStore.decide`: for `approve` of a card whose class is `write`, call `api.decide(auth, id, { decision: 'approve' })` directly, with the same busy state, settle and 409 handling as today. If the server answers `PIN_REQUIRED` (a card whose class the app got wrong or a server that has not been updated), fall back to the PIN sheet for the same action. `approve_tab` and non-`write` cards keep the PIN sheet.
+`createChatStore.decide`: for `approve` of a card whose class is `write`, call `api.decide(auth, id, { decision: 'approve' })` directly, with the same busy state, settle and 409 handling as today. If the server answers `PIN_REQUIRED` (a card whose class the app got wrong or a server that has not been updated) or `VALIDATION` (a server rolled back to the old schema, which rejects an `approve` with no proof at all), fall back to the PIN sheet for the same action — but only if the conversation is still the one this decision was made for; a conversation switch or reset in between drops the fallback silently. `approve_tab` and non-`write` cards keep the PIN sheet.
 
 ### 5.2 Token lifetime
 
-- **Proactive renewal.** The session store knows `expires_in` from activation and every renewal. While `unlocked`, a timer renews at `expires_in − 60 s`; a relock or wipe clears it. A timer that fires late (the app was in the background) is harmless: the reactive path below still covers it.
+- **Proactive renewal.** The session store knows `expires_in` from activation and every renewal. While `unlocked`, a timer renews at `Math.max(expires_in / 2, expires_in − 60 s)` (so a lifetime of 2 min or less still gets a sane delay, half the lifetime, instead of firing at once); a relock or wipe clears it. A timer that fires late (the app was in the background) is harmless: the reactive path below still covers it.
 - **Reactive renewal** stays as it is: one `401 TOKEN_EXPIRED` → one single-flighted renewal → one retry.
 - **Socket.** A refused upgrade renews before the next attempt only when the token is stale (past `expires_at − 60 s`, or no expiry known). A refusal with a fresh token is not a token problem: the socket only backs off. No renewal loop again from a refusal that has nothing to do with the token.
 - **Clear expiry.** When a renewal cannot happen because the PIN secret is gone, the store relocks with the notice "Sessão expirada. Desbloqueie para continuar." — never "Token inválido".
@@ -67,10 +67,10 @@ The mock transport mirrors the server: `approve` without proof accepted on a `wr
 
 - No migration.
 - Old apps: send the proof on every approval, which the server keeps accepting; they get the TER-93 fix from the server change alone.
-- New app against a server without this change: its `write` approval without proof is refused by schema (400) — acceptable because the server deploys first (CI on merge) and the app ships later through EAS; the `PIN_REQUIRED` fallback does not cover a 400, so the app release must follow the server deploy.
+- New app against a server without this change: its `write` approval without proof is refused by schema, `400 VALIDATION` (`apps/server/src/lib/errors.ts`). The app also falls back to the PIN sheet on that old-schema validation error, so a server rollback keeps approvals working (with the PIN); the server still deploys first (CI on merge) and the app ships later through EAS.
 
 ## 7. Testing
 
 - Server (vitest): decision without proof on a `write` card approves without touching challenge or PIN; on an `irreversible` card and on `approve_tab` answers `PIN_REQUIRED` and leaves the action pending; with proof behaves as today. Auth: expired token → `TOKEN_EXPIRED`; unknown token → `TOKEN_EXPIRED`; revoked → `DEVICE_REVOKED`. Body schema: `approve` with both, neither, or only one field.
-- App (jest): chat store approves a `write` card without opening the PIN sheet and falls back to the sheet on `PIN_REQUIRED`; irreversible and `approve_tab` still open it. Session store schedules a renewal at `expires_in − 60 s`, clears it on relock, and relocks with the "Sessão expirada" notice when there is no secret. Client: a socket refusal with a fresh token does not renew; with a stale token it does.
+- App (jest): chat store approves a `write` card without opening the PIN sheet and falls back to the sheet on `PIN_REQUIRED` and on `VALIDATION` (old-schema rollback), but not once the conversation has moved on. Session store schedules a renewal at `Math.max(expires_in / 2, expires_in − 60 s)`, clears it on relock, and relocks with the "Sessão expirada" notice when there is no secret; a short `expires_in` (≤ 2 min) still gets one renewal, not a burst. Client: a socket refusal with a fresh token does not renew; with a stale token it does.
 - Specs updated: `2026-09-24-mobile-chat-app-design.md` §2 table, §5.6 (when the PIN is asked) and §5.7 (`TOKEN_EXPIRED` instead of `TOKEN_INVALID`).

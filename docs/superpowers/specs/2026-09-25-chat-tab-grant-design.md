@@ -25,7 +25,7 @@ card. The user wants to say once: "for this conversation, you may type into this
 | Safety locks | Unchanged and still binding: `TAB_GONE`, `WAITING_PERMISSION`, `PROMPT_CHANGED`. A grant never turns into a new question when a lock trips: the model gets the lock's error and nothing is typed. |
 | Precedence | An open row for the same call (pending / approved) or a denial still in force (`DENIAL_HOLDS_MS`) decides first, exactly as today. A "no" beats a grant. |
 | Audit | Every call executed under a grant is a `chat_actions` row (status `executed` / `failed`, real `error_code`, `duration_ms`), linked to the grant by `grant_id`. |
-| Clients | Web and mobile app, same behaviour. On the phone, "Permitir sempre nesta aba" needs the PIN like "Autorizar" (its own proof word, §5.1); "Revogar" does not (it only takes power away). |
+| Clients | Web and mobile app, same behaviour. On the phone, "Permitir sempre nesta aba" always needs the PIN (its own proof word, §5.1) — "Autorizar" only for an irreversible card; "Revogar" does not (it only takes power away). |
 
 ## 3. Data model (TER-3)
 
