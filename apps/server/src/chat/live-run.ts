@@ -146,8 +146,18 @@ export class LiveRun {
   /** The process is over: every turn still open is stored with `code`. */
   async failOpen(code: ChatErrorCode): Promise<void> {
     this.inputOpen = false;
-    if (this.current) await this.finish(this.current, code);
-    for (const t of this.waiting.splice(0)) await this.finish({ turn: t, answer: t.answer, collected: '', usage: null }, code);
+    const open: Answering[] = [...(this.current ? [this.current] : []), ...this.waiting.splice(0).map((t) => ({ turn: t, answer: t.answer, collected: '', usage: null }))];
+    // Every turn is settled even when storing one fails (`finish` rejects that one); the first failure
+    // is rethrown once all of them are done, so no web request is left waiting forever.
+    let failure: { error: unknown } | null = null;
+    for (const a of open) {
+      try {
+        await this.finish(a, code);
+      } catch (e) {
+        failure ??= { error: e };
+      }
+    }
+    if (failure) throw failure.error;
   }
 
   /** Nothing ran and nothing will (a setup failure): the answers go, every open turn rejects. */
@@ -155,13 +165,21 @@ export class LiveRun {
     this.inputOpen = false;
     const open = [...(this.current?.turn ? [this.current.turn] : []), ...this.waiting.splice(0)];
     this.current = null;
+    let failure: { error: unknown } | null = null;
     for (const t of open) {
-      await this.deps.chat.deleteMessage(t.answer.id);
-      // Re-publishing the question makes every open screen re-read, which is how they learn the
-      // answer row is gone (the bus has no "removed" event).
-      chatBus.publish({ type: 'message', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message: t.question });
-      t.settle.reject(err);
+      try {
+        await this.deps.chat.deleteMessage(t.answer.id);
+        // Re-publishing the question makes every open screen re-read, which is how they learn the
+        // answer row is gone (the bus has no "removed" event).
+        chatBus.publish({ type: 'message', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message: t.question });
+      } catch (e) {
+        failure ??= { error: e };
+      } finally {
+        // Rejected either way: the turn never ran, and its request must not wait forever.
+        t.settle.reject(err);
+      }
     }
+    if (failure) throw failure.error;
   }
 
   /** The turn frames belong to; a turn the CLI started on its own gets a new assistant message. */
@@ -175,10 +193,17 @@ export class LiveRun {
 
   private async finish(a: Answering, code: ChatErrorCode): Promise<void> {
     if (this.current === a) this.current = null;
-    const final = await this.deps.chat.updateMessage(a.answer.id, { text: a.collected, usage: a.usage, error_code: code });
-    this.ended += 1;
-    chatBus.publish({ type: 'message', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message: final });
-    chatBus.publish({ type: 'run_finished', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message_id: final.id, ok: code === null, error_code: code });
+    let final: ChatMessage;
+    try {
+      final = await this.deps.chat.updateMessage(a.answer.id, { text: a.collected, usage: a.usage, error_code: code });
+      this.ended += 1;
+      chatBus.publish({ type: 'message', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message: final });
+      chatBus.publish({ type: 'run_finished', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message_id: final.id, ok: code === null, error_code: code });
+    } catch (e) {
+      // The turn is already out of `current` and `waiting`: nothing else could ever settle it.
+      a.turn?.settle.reject(e);
+      throw e;
+    }
     a.turn?.settle.resolve(final);
   }
 

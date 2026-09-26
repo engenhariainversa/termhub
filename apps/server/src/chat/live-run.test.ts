@@ -221,3 +221,41 @@ it('abandon deletes every open answer and rejects every open turn', async () => 
   await expect(a.done).rejects.toBe(err);
   expect(h.rows.map((r) => r.role)).toEqual(['user']);
 });
+
+it('a turn whose answer cannot be stored rejects instead of hanging, and failOpen still settles the rest', async () => {
+  const a = await h.turn(U1, 'a');
+  const b = await h.turn(U2, 'b');
+  const c = await h.turn('33333333-3333-4333-8333-333333333333', 'c');
+  h.live.add(a.t);
+  h.live.add(b.t);
+  h.live.add(c.t);
+  const boom = new Error('db down');
+  h.chat.updateMessage.mockRejectedValueOnce(boom);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  s.push(replay(U1)); s.push(delta('x')); s.push(result());
+  s.end();
+  await expect(consumed).rejects.toBe(boom);
+  await expect(a.done).rejects.toBe(boom);
+
+  // failOpen: the first store fails, the next turn is still stored, and the failure comes back.
+  const boom2 = new Error('db down again');
+  h.chat.updateMessage.mockRejectedValueOnce(boom2);
+  await expect(h.live.failOpen('RUNNER_FAILED')).rejects.toBe(boom2);
+  await expect(b.done).rejects.toBe(boom2);
+  expect(await c.done).toMatchObject({ error_code: 'RUNNER_FAILED' });
+});
+
+it('abandon rejects every open turn even when deleting an answer fails', async () => {
+  const a = await h.turn(U1, 'a');
+  const b = await h.turn(U2, 'b');
+  h.live.add(a.t);
+  h.live.add(b.t);
+  const boom = new Error('db down');
+  h.chat.deleteMessage.mockRejectedValueOnce(boom);
+  const err = new Error('setup');
+  await expect(h.live.abandon(err)).rejects.toBe(boom);
+  await expect(a.done).rejects.toBe(err);
+  await expect(b.done).rejects.toBe(err);
+  expect(h.rows.filter((r) => r.role === 'assistant').map((r) => r.id)).toEqual([a.t.answer.id]);
+});
