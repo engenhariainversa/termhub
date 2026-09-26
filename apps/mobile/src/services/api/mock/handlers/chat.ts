@@ -477,12 +477,14 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
       throw new WireError(423, 'DEVICE_LOCKED', 'Aparelho bloqueado por tentativas de PIN.', { retry_after: retryAfter });
     }
 
-    const chal = state.challenges.get(body.challenge);
+    // TODO(TER-92 / Task 3): this mock still demands the proof for every approve; the server now
+    // waives it for a `write` card. `!` below is a stopgap until this handler is rewritten.
+    const chal = state.challenges.get(body.challenge!);
     const bound = !!chal && !chal.used && now <= chal.expiresAt && chal.deviceId === device.id && chal.purpose === 'decision' && chal.actionId === action.id;
     if (bound) chal!.used = true;
 
     // The proof signs the decision word: one made for `approve` is refused for `approve_tab`.
-    const expectedProof = bound ? decisionProof(device.pinSecret, body.challenge, action.id, body.decision) : null;
+    const expectedProof = bound ? decisionProof(device.pinSecret, body.challenge!, action.id, body.decision) : null;
     if (!bound || body.pin_proof !== expectedProof) {
       const attemptsLeft = countPinFailure(state, device, now);
       throw new WireError(401, 'PIN_INVALID', 'PIN incorreto.', { attempts_left: attemptsLeft });
