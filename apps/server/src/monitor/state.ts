@@ -48,7 +48,7 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? 
 const cap = (v: string | null): string | null => (v && v.length > STATE_TEXT_MAX ? `${v.slice(0, STATE_TEXT_MAX - 1)}…` : v);
 
 /** Claude Code hook payloads (stdin JSON): https://docs.claude.com/en/docs/claude-code/hooks */
-function interpretClaude(ev: Record<string, unknown>): Interpreted | null {
+function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
   const name = str(ev.hook_event_name);
   switch (name) {
     case 'SessionStart':
@@ -96,6 +96,18 @@ function interpretClaude(ev: Record<string, unknown>): Interpreted | null {
     default:
       return null;
   }
+}
+
+/**
+ * A subagent's event (spec 2026-09-26 §4.5): the hook script flags the reduced PreToolUse / PermissionRequest
+ * bodies (`subagent: true`), and an AskUserQuestion, which travels whole, carries its own `agent_id`. Only
+ * the boolean true and a non-blank string count: an old script sends neither and keeps today's behaviour.
+ */
+const isSubagent = (ev: Record<string, unknown>): boolean => ev.subagent === true || str(ev.agent_id) !== null;
+
+function interpretClaude(ev: Record<string, unknown>): Interpreted | null {
+  const out = interpretClaudeEvent(ev);
+  return out && isSubagent(ev) ? { ...out, meta: { ...out.meta, subagent: true } } : out;
 }
 
 /** How Codex's own naming prompt begins; the person's request is appended after it. */

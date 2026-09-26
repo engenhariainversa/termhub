@@ -15,11 +15,15 @@ export type TabQuestionEventType = 'tab_question' | 'tab_question_answered' | 't
  * Whether a hook event means the tab moved past its open question (spec 2026-09-25 §5.2). A
  * `Notification` never does: it only ever says the tab is still waiting — the `permission_prompt`
  * that follows every question, or a reminder a minute later. Nor does AskUserQuestion's own
- * `PermissionRequest`, the question's companion. An event that opens a question closes the previous
+ * `PermissionRequest`, the question's companion. Nor does a subagent's event (spec 2026-09-26 §4.5): a
+ * subagent works while the main thread's dialog is still on screen; after the person answers a subagent's
+ * own prompt in the tab, its card waits for the main thread's next closing event, and an answer from it
+ * meanwhile fails the live check (409) and closes it. An event that opens a question closes the previous
  * one itself (`open`).
  */
 export function closesOpenQuestion(next: Interpreted): boolean {
   if (next.question) return false;
+  if (next.meta.subagent === true) return false;
   if (next.meta.event === 'Notification') return false;
   if (next.meta.event === 'PermissionRequest' && next.meta.tool === 'AskUserQuestion') return false;
   return true;

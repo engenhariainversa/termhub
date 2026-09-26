@@ -76,6 +76,32 @@ describe('interpretHookEvent — claude', () => {
   });
 });
 
+describe('interpretHookEvent — claude subagents (spec 2026-09-26 §4.5)', () => {
+  it('flags an event the script marked, or one that carries its own agent_id', () => {
+    expect(interpretHookEvent('claude', { hook_event_name: 'PreToolUse', tool_name: 'Bash', subagent: true })).toEqual({
+      kind: 'working', text: null, activity: 'terminal', verb: null, meta: { event: 'PreToolUse', tool: 'Bash', subagent: true },
+    });
+    expect(interpretHookEvent('claude', { hook_event_name: 'PermissionRequest', tool_name: 'Bash', subagent: true })).toMatchObject({ kind: 'waiting_permission', meta: { subagent: true }, question: { kind: 'permission' } });
+    // An AskUserQuestion travels whole, keys in Claude Code's order: its agent_id says it.
+    const ask = {
+      session_id: 's1', transcript_path: '/x.jsonl', cwd: '/w', prompt_id: 'p1', permission_mode: 'default', agent_id: 'a1b2c3', agent_type: 'general-purpose',
+      hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Qual cor?', header: 'Cor', options: [{ label: 'Azul' }, { label: 'Verde' }], multiSelect: false }] }, tool_use_id: 'toolu_9',
+    };
+    expect(interpretHookEvent('claude', ask)).toMatchObject({ meta: { subagent: true }, question: { kind: 'choice' } });
+  });
+
+  it.each([
+    ['no flag (an old script, or the main thread)', { hook_event_name: 'PreToolUse', tool_name: 'Bash' }],
+    ['a flag that is not the boolean true', { hook_event_name: 'PreToolUse', tool_name: 'Bash', subagent: 'true' }],
+    ['an empty agent_id', { hook_event_name: 'PreToolUse', tool_name: 'Bash', agent_id: '' }],
+    ['a blank agent_id', { hook_event_name: 'PreToolUse', tool_name: 'Bash', agent_id: '  ' }],
+    ['a non-string agent_id', { hook_event_name: 'PreToolUse', tool_name: 'Bash', agent_id: 7 }],
+    ['a Stop (subagents end with SubagentStop, which we ignore)', { hook_event_name: 'Stop', last_assistant_message: 'ok' }],
+  ])('does not flag %s', (_label, ev) => {
+    expect(interpretHookEvent('claude', ev)?.meta).not.toHaveProperty('subagent');
+  });
+});
+
 describe('interpretHookEvent — codex', () => {
   it('maps agent-turn-complete to waiting_input (its only "needs you" signal) with the last assistant message', () => {
     expect(interpretHookEvent('codex', { type: 'agent-turn-complete', 'last-assistant-message': 'Done. Want me to run the tests?', 'input-messages': ['private'] })).toEqual({

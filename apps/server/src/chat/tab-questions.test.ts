@@ -48,6 +48,8 @@ describe('closesOpenQuestion', () => {
     ['an idle reminder', { kind: 'waiting_input', text: 'x', meta: { event: 'Notification', type: 'idle_prompt' } }, false],
     ['AskUserQuestion\'s own PermissionRequest', { kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'AskUserQuestion' } }, false],
     ['an event that opens a question', choice, false],
+    ["a subagent's tool call", { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash', subagent: true } }, false],
+    ["a subagent's permission prompt that opens no card (ExitPlanMode)", { kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'ExitPlanMode', subagent: true } }, false],
   ] as [string, Interpreted, boolean][])('%s → %s', (_l, next, closes) => {
     expect(closesOpenQuestion(next)).toBe(closes);
   });
@@ -102,6 +104,13 @@ describe('noteHookEvent', () => {
     expect(repos.tabQuestions.closeForTab).not.toHaveBeenCalled();
     await noteHookEvent(asRepos(repos), log(), tab, { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash' } });
     expect(repos.tabQuestions.closeForTab).toHaveBeenCalledWith('t1', 'answered_in_tab'); // a closing event: ends a permission queue
+  });
+
+  it("a subagent's event updates nothing on the card: no close", async () => {
+    const repos = fakeRepos();
+    await noteHookEvent(asRepos(repos), log(), tab, { kind: 'working', text: null, meta: { event: 'PreToolUse', tool: 'Bash', subagent: true } });
+    expect(repos.tabQuestions.closeForTab).not.toHaveBeenCalled();
+    expect(repos.tabQuestions.open).not.toHaveBeenCalled();
   });
 
   it('never throws, and logs the failure by code and ids only', async () => {

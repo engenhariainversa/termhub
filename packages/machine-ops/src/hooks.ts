@@ -37,7 +37,12 @@ export function expandHome(dir: string, home: string): string {
 
 /** Claude Code hook events we subscribe to (see the server's monitor/state.ts for what each one means).
  * `PermissionRequest` is taken for its tool name only; the script prints nothing, which Claude Code
- * reads as "no decision" — our hook never allows or denies (hook-script.test.ts keeps stdout empty). */
+ * reads as "no decision" — our hook never allows or denies (hook-script.test.ts keeps stdout empty).
+ * Minimum Claude Code: **2.0.45**, the first release with the `PermissionRequest` hook. An older one may
+ * reject this hooks block, and before 2.1.122 a malformed hooks entry invalidated the whole settings.json.
+ * Deliberately not gated on the version (spec 2026-09-26 §4.6): Claude Code updates itself by default, and
+ * asking every machine and config dir for `claude --version` costs a remote call per install for a case
+ * not seen in the field. */
 export const CLAUDE_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'Notification', 'Stop', 'SessionEnd'] as const;
 
 /** Events Claude Code runs per tool: their entry needs a matcher ('*' = every tool). */
@@ -86,6 +91,15 @@ if [ "$KIND_REST" != "$EVENT" ]; then
 else
   KIND=
 fi
+# A subagent's event (Claude Code 2.1.69+) carries an "agent_id" key before its own "hook_event_name" —
+# the order is session_id, transcript_path, cwd, prompt_id, permission_mode, agent_id, agent_type,
+# hook_event_name, … — and the main thread's never does. Only that prefix is searched, and only for the
+# key form: a value holding the text "agent_id": would have its quotes escaped. The reduced bodies below
+# carry the flag; the server never lets a subagent's event close a card (spec 2026-09-26 §4.5). The
+# dedupe marker ignores it.
+BEFORE_KIND=\${EVENT%%'"hook_event_name"'*}
+SUB=
+case "$BEFORE_KIND" in *'"agent_id":'*) SUB=',"subagent":true' ;; esac
 case "$KIND" in
   PreToolUse)
     # The event's own tool name is the FIRST "tool_name" of the payload (Claude Code serialises it
@@ -135,9 +149,9 @@ case "$KIND" in
       [ "$(cat "$MARK" 2>/dev/null)" = "$KEY" ] && exit 0
       printf '%s' "$KEY" 2>/dev/null > "$MARK"
       if [ -n "$VERB" ]; then
-        EVENT=$(printf '{"hook_event_name":"PreToolUse","tool_name":"%s","verb":"%s"}' "$NAME" "$VERB")
+        EVENT=$(printf '{"hook_event_name":"PreToolUse","tool_name":"%s","verb":"%s"%s}' "$NAME" "$VERB" "$SUB")
       else
-        EVENT=$(printf '{"hook_event_name":"PreToolUse","tool_name":"%s"}' "$NAME")
+        EVENT=$(printf '{"hook_event_name":"PreToolUse","tool_name":"%s"%s}' "$NAME" "$SUB")
       fi
     fi
     ;;
@@ -150,7 +164,7 @@ case "$KIND" in
     REST=\${REST#*'"'}
     NAME=\${REST%%'"'*}
     case "$NAME" in '' | *[!A-Za-z0-9_.-]* | AskUserQuestion) exit 0 ;; esac
-    EVENT=$(printf '{"hook_event_name":"PermissionRequest","tool_name":"%s"}' "$NAME")
+    EVENT=$(printf '{"hook_event_name":"PermissionRequest","tool_name":"%s"%s}' "$NAME" "$SUB")
     ;;
   # A new turn starts fresh, and so does an answered notification: a permission prompt takes the tab
   # out of working, and the tool the person approves is the same one that set the marker, so without

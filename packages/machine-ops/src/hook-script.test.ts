@@ -61,6 +61,17 @@ async function bodies(n: number): Promise<string[]> {
 
 const eventOf = (body: string) => (JSON.parse(body) as { event: Record<string, unknown> }).event;
 
+/**
+ * The script posts in the background, so "nothing was posted" cannot be waited for. A dropped event is
+ * proven instead by a sentinel run after it: the sentinel must be the only body logged.
+ */
+const SENTINEL = { hook_event_name: 'Stop', last_assistant_message: 'sentinel' };
+async function onlySentinelPosted(): Promise<void> {
+  run(SENTINEL);
+  const sent = await bodies(1);
+  expect(sent.map(eventOf)).toEqual([SENTINEL]);
+}
+
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'hook-home-'));
   tmp = mkdtempSync(join(tmpdir(), 'hook-tmp-'));
@@ -137,8 +148,7 @@ describe('termhub-hook script', () => {
     run({ hook_event_name: 'PreToolUse', tool_name: 42 });
     run({ hook_event_name: 'PreToolUse', tool_name: 'Ev"il' });
     run({ hook_event_name: 'PreToolUse', tool_name: 'Ev\\il' });
-    await sleep(300);
-    expect(existsSync(log)).toBe(false);
+    await onlySentinelPosted();
   });
 
   it('still posts the other events whole', async () => {
@@ -221,8 +231,7 @@ describe('termhub-hook script', () => {
         },
       };
       expect(runAs('claude', event)).toBe('');
-      await sleep(300);
-      expect(existsSync(log)).toBe(false);
+      await onlySentinelPosted();
     });
 
     it('reduces a PermissionRequest to the tool name, and prints nothing', async () => {
@@ -237,8 +246,7 @@ describe('termhub-hook script', () => {
       expect(runAs('claude', { hook_event_name: 'PermissionRequest', tool_name: 'AskUserQuestion', tool_input: ask.tool_input })).toBe('');
       run({ hook_event_name: 'PermissionRequest', tool_name: 'Ev"il' });
       run({ hook_event_name: 'PermissionRequest' });
-      await sleep(300);
-      expect(existsSync(log)).toBe(false);
+      await onlySentinelPosted();
     });
   });
 
@@ -380,6 +388,58 @@ describe('termhub-hook script', () => {
       const sent = await bodies(3);
       await sleep(200);
       expect(logged().map((b) => eventOf(b).verb ?? null)).toEqual(['Brewing', 'Musing', null]);
+    });
+  });
+
+  describe('subagents (spec 2026-09-26 §4.5)', () => {
+    /** A subagent's event as Claude Code 2.1.283 writes it: agent_id and agent_type before hook_event_name. */
+    const fromSubagent = (over: Record<string, unknown> = {}) => ({
+      session_id: 's1',
+      transcript_path: '/home/dev/.claude/projects/-w/s1.jsonl',
+      cwd: '/w',
+      prompt_id: 'p1',
+      permission_mode: 'default',
+      agent_id: 'a1b2c3',
+      agent_type: 'general-purpose',
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'ls /secret' },
+      tool_use_id: 'toolu_9',
+      ...over,
+    });
+
+    it("flags a subagent's tool call and permission prompt, and still sends only the tool name", async () => {
+      run(fromSubagent());
+      run(fromSubagent({ hook_event_name: 'PermissionRequest', tool_name: 'Edit' }));
+      const sent = await bodies(2);
+      expect(sent.map(eventOf)).toEqual([
+        { hook_event_name: 'PreToolUse', tool_name: 'Bash', subagent: true },
+        { hook_event_name: 'PermissionRequest', tool_name: 'Edit', subagent: true },
+      ]);
+      for (const body of sent) expect(body).not.toContain('secret');
+    });
+
+    it("leaves the main thread's events alone (no agent_id)", async () => {
+      run({ session_id: 's1', transcript_path: '/home/dev/.claude/projects/-w/s1.jsonl', cwd: '/w', prompt_id: 'p1', permission_mode: 'default', hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' }, tool_use_id: 'toolu_8' });
+      const [body] = await bodies(1);
+      expect(eventOf(body!)).toEqual({ hook_event_name: 'PreToolUse', tool_name: 'Bash' });
+    });
+
+    it('"agent_id" inside a value, or inside tool_input, is not a subagent', async () => {
+      run({ session_id: 's1', cwd: '/w/"agent_id":x', hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { agent_id: 'x', note: '"agent_id":"y"' } });
+      run({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { agent_id: 'x' } });
+      const sent = await bodies(2);
+      expect(sent.map(eventOf)).toEqual([
+        { hook_event_name: 'PreToolUse', tool_name: 'Read' },
+        { hook_event_name: 'PermissionRequest', tool_name: 'Bash' },
+      ]);
+    });
+
+    it("an AskUserQuestion from a subagent still travels whole, its agent_id included", async () => {
+      const ask = fromSubagent({ tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Qual cor?', header: 'Cor', options: [{ label: 'Azul' }, { label: 'Verde' }], multiSelect: false }] } });
+      run(ask);
+      const [body] = await bodies(1);
+      expect(eventOf(body!)).toEqual(ask);
     });
   });
 });
