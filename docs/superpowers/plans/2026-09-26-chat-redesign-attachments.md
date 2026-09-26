@@ -72,8 +72,9 @@ task. Section numbers below (§) refer to it.
 - **Isolation from neighbouring cards (§6).**
   - Do not modify `apps/agent`, `packages/claude-cli`, `apps/server/src/chat/agent-runner.ts`,
     `runner.ts` or `stream.ts`.
-  - In `apps/server/src/chat/service.ts`, change only the `runText` join and add the
-    `attach(...)` call after the user row.
+  - In `apps/server/src/chat/service.ts`, the only touch points are the ones in spec §10: a
+    read-only pre-check after the `CHAT_ARCHIVED` check, the `attach(...)` call after the user row
+    (deleting the row on a race), and the `runText` join.
   - Keep `ChatComposer`'s `sending` and `blockedReason` props.
   - Do not change the body of `TabSuggestionCard`, `ChatGrantStrip` or `grants-strip.tsx`; wrapping
     them in memo is fine.
