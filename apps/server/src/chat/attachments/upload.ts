@@ -30,7 +30,11 @@ export interface UploadInput {
 }
 
 const KIND_LABEL: Record<AttachmentKind, string> = { image: 'imagem', pdf: 'PDF', docx: 'documento Word', xlsx: 'planilha Excel', audio: 'áudio', video: 'vídeo', text: 'texto' };
-const mb = (n: number): string => `${Math.round(n / (1024 * 1024))} MB`;
+/** "10 MB", "2 GB": whole units, GB from 1024 MB up. */
+const mb = (n: number): string => {
+  const inMb = n / (1024 * 1024);
+  return inMb >= 1024 ? `${Math.round(inMb / 1024)} GB` : `${Math.round(inMb)} MB`;
+};
 
 /** The original name, for display only: control characters and path separators become "_". Never part of a path. */
 export function sanitiseFileName(name: string): string {

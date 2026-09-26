@@ -22,12 +22,12 @@ const attachmentNotFound = () => notFound('Anexo não encontrado');
 
 /**
  * Every content type becomes a Buffer, in this plugin only: an upload is bytes, whatever the client
- * labels them. Fastify's built-in `text/plain` parser would otherwise hand a `.txt` upload over as a
- * string, so it is dropped here (plugin-scoped); JSON keeps its parser, and `storeUpload` refuses
- * the object it yields.
+ * labels them. The inherited `text/plain` and JSON parsers are dropped here (plugin-scoped): the
+ * first would hand a `.txt` upload over as a string, the second would JSON.parse up to 64 MB of a
+ * body that is then only sniffed. `storeUpload` still refuses anything that is not a Buffer.
  */
 export function registerRawBody(app: FastifyInstance): void {
-  app.removeContentTypeParser('text/plain');
+  app.removeContentTypeParser(['text/plain', 'application/json']);
   app.addContentTypeParser('*', { parseAs: 'buffer', bodyLimit: UPLOAD_BODY_LIMIT }, (_req, body, done) => done(null, body));
 }
 

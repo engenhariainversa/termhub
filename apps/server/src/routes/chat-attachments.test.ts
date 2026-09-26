@@ -123,6 +123,13 @@ describe('POST /chat/attachments', () => {
     expect(files.size).toBe(0);
   });
 
+  it('the quota message says "2 GB" at the default quota', async () => {
+    const { app } = build({ rows: [row({ id: 'old', bytes: 2_147_483_648 - 10 })] });
+    const res = await upload(app, Buffer.alloc(20, 0x61), 'notas.txt');
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toEqual({ error: 'Espaço de anexos esgotado (limite de 2 GB)', code: 'ATTACHMENT_QUOTA' });
+  });
+
   it('when the row cannot be inserted, the file just written is removed again', async () => {
     const { app, files, store } = build({ createFails: true });
     const res = await upload(app, PNG, 'foto.png');
@@ -131,12 +138,27 @@ describe('POST /chat/attachments', () => {
     expect(files.size).toBe(0);
   });
 
-  it('refuses an empty body, a JSON body, and a name it cannot use', async () => {
+  it('refuses an empty body, a missing name, and a name it cannot use', async () => {
     const { app } = build();
     expect((await upload(app, Buffer.alloc(0), 'a.txt')).statusCode).toBe(400);
-    expect((await app.inject({ method: 'POST', url: '/chat/attachments?name=a.txt', payload: { text: 'x' } })).statusCode).toBe(400);
     expect((await app.inject({ method: 'POST', url: '/chat/attachments', headers: { 'content-type': 'application/octet-stream' }, payload: PNG })).statusCode).toBe(400);
     expect((await upload(app, PNG, 'x'.repeat(201))).statusCode).toBe(400);
+  });
+
+  it('a JSON body is bytes like any other: never parsed, sniffed by name like text', async () => {
+    const { app, chatAttachments } = build();
+    // Named as an image, the bytes do not match: refused, and nothing was JSON.parsed on the way.
+    const asImage = await app.inject({ method: 'POST', url: '/chat/attachments?name=foto.png', payload: { text: 'x' } });
+    expect(asImage.statusCode).toBe(415);
+    expect(asImage.json()).toMatchObject({ code: 'ATTACHMENT_TYPE' });
+    expect(chatAttachments.create).not.toHaveBeenCalled();
+    // Named .json it is a text attachment, stored verbatim.
+    const asText = await app.inject({ method: 'POST', url: '/chat/attachments?name=dados.json', payload: { text: 'x' } });
+    expect(asText.statusCode).toBe(201);
+    expect(asText.json().attachment).toMatchObject({ kind: 'text', bytes: Buffer.byteLength('{"text":"x"}') });
+    // Malformed JSON under the JSON content type is bytes too, not a parser error.
+    const broken = await upload(app, '{not json', 'notas.json', 'application/json');
+    expect(broken.statusCode).toBe(201);
   });
 
   it('keeps the name for display with control characters and separators replaced', async () => {
