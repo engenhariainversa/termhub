@@ -67,7 +67,7 @@ the original account after its reset.
   started with by termhub (`start_agent` or a swap). null = unknown (started by hand).
 - `rate_limited_at timestamptz null` — set when a `StopFailure` with `error = rate_limit` arrives,
   cleared by the next event that means the agent is running again (`SessionStart`,
-  `UserPromptSubmit`, `PreToolUse`).
+  `UserPromptSubmit`, `PreToolUse`, or a normal `Stop`).
 
 `machines`:
 - `claude_auto_swap boolean not null default false`.
@@ -94,7 +94,9 @@ The old container ignores the new columns; nothing is renamed or dropped.
   ending in `/projects/<slug>/<session_id>.jsonl`, no newline or NUL) updates `agent_session_id` /
   `agent_transcript_path` when they changed (a `/clear` starts a new session id). Malformed values
   are ignored, never stored.
-- `SessionStart`, `UserPromptSubmit`, `PreToolUse` clear `rate_limited_at` when it is set.
+- `SessionStart`, `UserPromptSubmit`, `PreToolUse` and a normal `Stop` (a turn that ended proves the
+  account works again; Claude's own auto-continue after the reset may produce only that) clear
+  `rate_limited_at` when it is set.
 - The transcript path is metadata (like a tab id); its content is never read by the server.
 
 ### 4.4 The swap (`apps/server/src/control/account-swap.ts`)
@@ -123,17 +125,26 @@ The old container ignores the new columns; nothing is renamed or dropped.
      `LINK_CONFLICT` and nothing is overwritten.
    The first candidate whose link succeeds is the chosen account; none → `NO_CANDIDATE` (the tab is
    left exactly as it was).
-5. **Stop the waiting Claude.** Send `Escape` (cancels the auto-continue), then type `/exit` + Enter;
+5. **Stop the waiting Claude.** Send `Escape` (cancels the auto-continue), pause 400 ms
+   (`ESCAPE_PAUSE_MS`: sent back to back, `\x1b/` can be read as Alt+/), then type `/exit` + Enter;
    wait until the tab's state becomes `idle` (the `SessionEnd` hook) — up to 15 s; if not, send
-   `C-c` twice and wait 10 s more; still not idle → `EXIT_TIMEOUT` (the link stays, harmless).
-6. **Resume.** Type `resumeLine(configDir, sessionId, RESUME_PROMPT)` =
+   `C-c` twice and wait 10 s more; still not idle → `EXIT_TIMEOUT` (the link stays, harmless). Once
+   idle, pause 1 s (`RESUME_SETTLE_MS`) so the shell takes the tty back. A tab already idle before
+   the swap (Claude had exited) gets no keys and no pause.
+6. **Record.** Before anything is typed: `tabs.ai_account_id = chosen`, `rate_limited_at = null`
+   (so the resumed session's first hooks, or a fast new `StopFailure`, land after this write), then a
+   tab event (state `waiting_input`, text `Conta trocada: <de> → <para>. Se o Claude pedir para
+   confiar na pasta, confirme na aba.` or `Conta trocada automaticamente: …`, meta
+   `{ event: 'AccountSwap', from, to, auto }`), published on the monitor bus like any state change.
+   Workspace trust is stored per account, so the resumed Claude may show its trust dialog; termhub
+   never answers it. The resumed session's own `SessionStart` (Claude runs hooks only once the folder
+   is trusted) moves the tab to `working`, so the "needs you" state only lasts when the person must act.
+   Logs carry ids only.
+7. **Resume.** Type `resumeLine(configDir, sessionId, RESUME_PROMPT)` =
    `CLAUDE_CONFIG_DIR=<dir> claude --resume <id> '<prompt>'` (no env for the default account; no
    permission-bypass flag, ever). `RESUME_PROMPT` =
-   `A conta anterior atingiu o limite de uso. Continue a tarefa de onde parou.`
-7. **Record.** `tabs.ai_account_id = chosen`, `rate_limited_at = null`, and a tab event (state
-   `working`, text `Conta trocada: <de> → <para>` or `Conta trocada automaticamente: …`, meta
-   `{ event: 'AccountSwap', from, to, auto }`), published on the monitor bus like any state change.
-   Logs carry ids only.
+   `A conta anterior atingiu o limite de uso. Continue a tarefa de onde parou.` A failure typing it
+   is returned as an error; the tab already names the new account, where the linked session lives.
 
 Result: `{ from: {id,label}|null, to: {id,label} }`.
 
@@ -148,7 +159,9 @@ Result: `{ from: {id,label}|null, to: {id,label} }`.
   background (never awaited by the hook request; failures are recorded as a tab event with state
   `waiting_input` and text `Troca automática falhou: <motivo>` so the person still sees the limit).
   At most one automatic swap per tab every 10 minutes (in memory), so two exhausted accounts can
-  never ping-pong.
+  never ping-pong. It starts 3 s after the hook, and only if the tab, re-read then, still carries the
+  same `rate_limited_at` (a manual swap in between cleared it; a newer limit has its own call); a
+  swap already running on the tab (`SWAP_IN_PROGRESS`) is skipped silently, not recorded.
 - `start_agent` stores the account it launched with in `tabs.ai_account_id`.
 
 ### 4.6 Web

@@ -261,6 +261,16 @@ describe('ingestHookEvent — claude session and rate limit (spec 2026-09-26 acc
     expect(notLimited.setAgentFields).not.toHaveBeenCalled();
   });
 
+  it('a normal Stop clears rate_limited_at (the account works again); a rate_limit StopFailure still sets it', async () => {
+    const limited = repos(tab({ rate_limited_at: '2026-01-01T00:00:00.000Z' }));
+    await ingestHookEvent(limited.r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: { hook_event_name: 'Stop' } });
+    expect(limited.setAgentFields).toHaveBeenCalledWith('t1', { rate_limited_at: null });
+
+    const again = repos(tab({ rate_limited_at: '2026-01-01T00:00:00.000Z' }));
+    await ingestHookEvent(again.r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: { hook_event_name: 'StopFailure', error: 'rate_limit' } });
+    expect(again.setAgentFields).toHaveBeenCalledWith('t1', { rate_limited_at: expect.any(Date) });
+  });
+
   it('another API error neither sets rate_limited_at nor swaps', async () => {
     autoSwapOnLimit.mockClear();
     const { r, setAgentFields } = repos(tab({ rate_limited_at: null }));

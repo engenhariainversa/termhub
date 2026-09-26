@@ -82,8 +82,12 @@ export function publishTabChange(tab: Tab, projectId: string, machine: { id: str
   monitorBus.publish({ tab, project_id: projectId, machine_id: machine?.id ?? '', owner_id: machine?.owner_id ?? null });
 }
 
-/** Events that mean the tab's Claude is running again: a usage limit it was stuck on is over. */
-const RUNNING_AGAIN = new Set(['SessionStart', 'UserPromptSubmit', 'PreToolUse']);
+/**
+ * Events that mean the tab's Claude is running again: a usage limit it was stuck on is over. A turn
+ * that ended normally (Stop) proves the account works again — Claude's own auto-continue after the
+ * reset may produce nothing else.
+ */
+const RUNNING_AGAIN = new Set(['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop']);
 
 /**
  * The tab's Claude bookkeeping (spec 2026-09-26 account swap): the session it runs (a `/clear` starts a
