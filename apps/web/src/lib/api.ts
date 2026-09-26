@@ -203,6 +203,9 @@ export const api = {
    */
   decideChatAction: (id: string, decision: 'approve' | 'deny' | 'approve_tab') =>
     request<{ action: { id: string; status: ChatActionStatus }; message?: ChatMessage; queued?: true; note?: string; grant?: ChatGrant }>('POST', `/chat/actions/${id}/decision`, { decision }),
+  /** A grouped confirmation: every decision of the batch in one request, injected as one sentence. */
+  decideChatActions: (decisions: { id: string; decision: 'approve' | 'deny' }[]) =>
+    request<{ actions: { id: string; status: ChatActionStatus }[]; skipped: { id: string; reason: string }[]; message?: ChatMessage; queued?: true; note?: string }>('POST', '/chat/actions/decisions', { decisions }),
   /** "Revogar": 404 unknown/not yours, 409 already revoked. */
   revokeChatGrant: (id: string) => request<{ grant: ChatGrant }>('DELETE', `/chat/grants/${encodeURIComponent(id)}`),
   /** "Abas confiáveis": the grants in force, or the paged history (`state: 'ended'` also covers expired/revoked). */

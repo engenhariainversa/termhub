@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatAction, ChatMessage, TabQuestion, TabSuggestion } from './types';
-import { chatTimeline } from './chat-timeline';
+import { chatTimeline, groupPendingActions } from './chat-timeline';
 
 const T0 = '2026-01-01T00:00:00.000Z';
 const T1 = '2026-01-01T00:01:00.000Z';
@@ -172,5 +172,30 @@ describe('tab suggestions', () => {
 
   it('follows the message window like a question card', () => {
     expect(chatTimeline([message('m1', T1)], [], [], [suggestion({ created_at: T0 })])).toHaveLength(1);
+  });
+});
+
+describe('groupPendingActions', () => {
+  it('leaves a single pending card alone', () => {
+    const entries = chatTimeline([message({ id: 'm1', created_at: T0 })], [action({ id: 'a1', created_at: T1 }), action({ id: 'a2', created_at: T2, status: 'approved' })]);
+    expect(groupPendingActions(entries)).toEqual(entries);
+  });
+
+  it('replaces two or more pending cards with one group at the oldest one\'s place, keeping decided cards', () => {
+    const T3 = '2026-01-01T00:03:00.000Z';
+    const T4 = '2026-01-01T00:04:00.000Z';
+    const entries = chatTimeline(
+      [message({ id: 'm1', created_at: T0 }), message({ id: 'm2', created_at: T3 })],
+      [action({ id: 'a1', created_at: T1 }), action({ id: 'a2', created_at: T2, status: 'denied' }), action({ id: 'a3', created_at: T4 })],
+    );
+
+    const result = groupPendingActions(entries);
+
+    expect(result.map((e) => e.kind)).toEqual(['message', 'action_group', 'action', 'message']);
+    const group = result[1];
+    expect(group.kind === 'action_group' && group.actions.map((a) => a.id)).toEqual(['a1', 'a3']);
+    expect(group.at).toBe(T1);
+    const decided = result[2];
+    expect(decided.kind === 'action' && decided.action.id).toBe('a2');
   });
 });

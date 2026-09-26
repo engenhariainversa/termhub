@@ -10,6 +10,7 @@ const chatMock = vi.fn();
 const sendMock = vi.fn();
 const streamMock = vi.fn();
 const decideMock = vi.fn();
+const decideManyMock = vi.fn();
 const setHostMock = vi.fn();
 const machinesMock = vi.fn();
 const accountsMock = vi.fn();
@@ -38,6 +39,7 @@ vi.mock('../../lib/api', () => {
       chat: (...a: unknown[]) => chatMock(...a),
       sendChatMessage: (...a: unknown[]) => sendMock(...a),
       decideChatAction: (...a: unknown[]) => decideMock(...a),
+      decideChatActions: (...a: unknown[]) => decideManyMock(...a),
       setChatHost: (...a: unknown[]) => setHostMock(...a),
       resetChat: (...a: unknown[]) => resetMock(...a),
       revokeChatGrant: (...a: unknown[]) => revokeMock(...a),
@@ -98,6 +100,7 @@ beforeEach(() => {
   sendMock.mockReset();
   streamMock.mockReset();
   decideMock.mockReset();
+  decideManyMock.mockReset();
   setHostMock.mockReset();
   machinesMock.mockReset();
   accountsMock.mockReset();
@@ -278,6 +281,36 @@ it('"Permitir sempre nesta aba" on a pending card records the grant, shows it on
   await waitFor(() => expect(decideMock).toHaveBeenCalledWith('a1', 'approve_tab'));
   expect(await screen.findByRole('link', { name: '1 aba confiável' })).toBeInTheDocument();
   expect(screen.getByText(/^Permitido nesta aba até/)).toBeInTheDocument();
+});
+
+it('two pending cards render as one group; Ver separadas shows the cards', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' }), action({ id: 'a2', summary: 'mover o card TER-1' })], host: READY });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId={null} />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('2 ações aguardando sua confirmação')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Autorizar' })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Ver separadas' }));
+  expect(screen.getAllByRole('button', { name: 'Autorizar' })).toHaveLength(2);
+});
+
+it('Aprovar selecionadas decides the whole group in one call and the cards read as decided', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' }), action({ id: 'a2', summary: 'mover o card TER-1' })], host: READY });
+  decideManyMock.mockResolvedValue({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'approved' }], skipped: [], queued: true, note: 'Sua decisão foi registrada.' });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId={null} />
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Aprovar selecionadas (2)' }));
+  await waitFor(() => expect(decideManyMock).toHaveBeenCalledWith([{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve' }]));
+  expect(await screen.findAllByText('Autorizado')).toHaveLength(2);
+  expect(screen.queryByText('2 ações aguardando sua confirmação')).toBeNull();
+  // The queued note sits under the first decided card only.
+  expect(screen.getAllByText('Sua decisão foi registrada.')).toHaveLength(1);
 });
 
 it('a grant event adds to the header count, a grant_revoked removes it, a granted_action appends a card, and events of another conversation are ignored', async () => {

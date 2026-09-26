@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChatActionCard } from './ChatActionCard';
+import { ChatActionGroup, type BatchDecision } from './ChatActionGroup';
 import { ChatComposer } from './ChatComposer';
 import { ChatHost } from './ChatHost';
 import { ChatTurn } from './ChatTurn';
@@ -9,7 +10,7 @@ import { TabSuggestionCard } from './TabSuggestionCard';
 import { ConfirmDialog } from '../Modal';
 import { api, ApiError } from '../../lib/api';
 import { useChatStream } from '../../lib/chat';
-import { chatTimeline } from '../../lib/chat-timeline';
+import { chatTimeline, groupPendingActions } from '../../lib/chat-timeline';
 import { isNearBottom } from '../../lib/chat-scroll';
 import { trustedTabsLabel } from './grant-list-text';
 import { isGrantActive } from './grant-time';
@@ -68,6 +69,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   /** A `queued: true` decision is not an error: the pt-BR note the server sent, shown under that card
    * until the next reload replaces it with the real, applied state. */
   const [queuedNotes, setQueuedNotes] = useState<Record<string, string>>({});
+  /** "Ver separadas": the pending cards shown one by one instead of grouped, until the pending set changes. */
+  const [separate, setSeparate] = useState(false);
+  const [batchDeciding, setBatchDeciding] = useState(false);
   /** The conversation's trusted-tab grants, sourced the same way as `actions`: `GET /api/chat` on
    *  load/reconnect, kept live by `grant`/`grant_revoked` events. */
   const [grants, setGrants] = useState<ChatGrant[]>([]);
@@ -216,6 +220,31 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       } else setActionError(e instanceof ApiError ? e.message : 'Não foi possível registrar a decisão');
     } finally {
       setDecidingId(null);
+    }
+  };
+
+  /** A grouped confirmation: one request, one injected sentence (spec 2026-09-26 §7). */
+  const decideBatch = async (decisions: BatchDecision[]) => {
+    setBatchDeciding(true);
+    setActionError(null);
+    try {
+      const res = await api.decideChatActions(decisions);
+      const statusOf = new Map(res.actions.map((a) => [a.id, a.status]));
+      setActions((prev) => prev.map((a) => (statusOf.has(a.id) ? { ...a, status: statusOf.get(a.id)! } : a)));
+      // One note for the whole batch, under its first decided card.
+      const first = res.actions[0]?.id;
+      if (res.queued && res.note && first) setQueuedNotes((prev) => ({ ...prev, [first]: res.note! }));
+    } catch (e) {
+      // As in `decide`: a host that cannot run the answer right now still had every decision recorded first.
+      if (e instanceof ApiError && e.code !== undefined && HOST_CODES.has(e.code)) {
+        const statusOf = new Map(decisions.map((d) => [d.id, d.decision === 'deny' ? ('denied' as const) : ('approved' as const)]));
+        setActions((prev) => prev.map((a) => (statusOf.has(a.id) ? { ...a, status: statusOf.get(a.id)! } : a)));
+        const first = decisions[0]?.id;
+        if (first) setQueuedNotes((prev) => ({ ...prev, [first]: `${e.message} A decisão já está registrada e será aplicada quando o chat voltar a rodar.` }));
+        await load();
+      } else setActionError(e instanceof ApiError ? e.message : 'Não foi possível registrar as decisões');
+    } finally {
+      setBatchDeciding(false);
     }
   };
 
@@ -370,6 +399,13 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
 
   /** Messages, gate cards and tab questions as one chronological thread, so a card reads where it was proposed. */
   const timeline = useMemo(() => chatTimeline(messages, actions, tabQuestions, tabSuggestions), [messages, actions, tabQuestions, tabSuggestions]);
+  /** "Ver separadas" holds only for the cards it was clicked on: a new or decided card groups again. */
+  const pendingKey = actions
+    .filter((a) => a.status === 'pending')
+    .map((a) => a.id)
+    .join(',');
+  useEffect(() => setSeparate(false), [pendingKey]);
+  const entries = useMemo(() => (separate ? timeline : groupPendingActions(timeline)), [separate, timeline]);
   /**
    * The row a running answer would be written into: only the newest one can still be the live one.
    * Keyed on the id, not on a position: the loop below walks the merged timeline, where an index
@@ -576,7 +612,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           stick.current = isNearBottom(e.currentTarget);
         }}
       >
-        {timeline.map((entry) => {
+        {entries.map((entry) => {
+          if (entry.kind === 'action_group') {
+            return <ChatActionGroup key={`g:${entry.actions[0]!.id}`} actions={entry.actions} deciding={batchDeciding} onDecide={(d) => void decideBatch(d)} onShowSeparately={() => setSeparate(true)} />;
+          }
           if (entry.kind === 'tab_suggestion') {
             const s = entry.suggestion;
             return (
