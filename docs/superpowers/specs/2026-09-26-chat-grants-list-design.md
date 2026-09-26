@@ -1,9 +1,12 @@
 # Chat: trusted tabs out of the conversation, listed in their own place — design
 
 Card: **TER-67** (epic TER-1 · Chat). Existing subtasks: TER-68 (web: remove the cards, header
-indicator), TER-69 (web: permissions screen), TER-70 (API: list grants), TER-71 (mobile). Also covers
-**TER-97** (the pinned "Enviando direto para a aba…" notice: `ChatGrantStrip` on the web,
-`grants-strip` on the phone).
+indicator), TER-69 (web: permissions screen), TER-70 (API: list grants), TER-71 (mobile) and **TER-94**
+(batched confirmations, §7). Also covers **TER-97** (the pinned "Enviando direto para a aba…" notice:
+`ChatGrantStrip` on the web, `grants-strip` on the phone).
+
+Decisions taken without the user (2026-09-26, asked to decide by recommendation while away) are
+marked *(recommendation)*.
 
 Builds on spec 2026-09-25-chat-tab-grant-design.md (TER-2). Project rule: what the chat does works in
 the mobile app too, in the same delivery.
@@ -102,7 +105,7 @@ Tabs and projects are looked up in one owner-scoped batch each (`tabs.findByIdsF
   Empty: "Nenhuma aba confiável agora."
 - **Histórico**: the same columns plus the state ("Expirou", "Revogada", "Encerrada com a conversa") and
   `ended_at` (date + time). **Carregar mais** while `next_cursor` is set. Empty: "Nada no histórico ainda."
-- Load errors show inline with "Tentar de novo"; a revoke error goes through the existing toast.
+- Load and revoke errors show inline above the lists, with "Tentar de novo" for a failed load.
 - `api.listChatGrants({ state, cursor })` and the `ChatGrantListItem` type in `lib/types.ts`.
 
 ## 5. Mobile app (TER-71) — pt-BR copy
@@ -138,9 +141,77 @@ Tabs and projects are looked up in one owner-scoped batch each (`tabs.findByIdsF
 - Before finishing: server typecheck + web and landing builds through Docker (CLAUDE.md), plus each
   workspace's tests.
 
-## 7. Out of scope
+## 7. Batched confirmations (TER-94)
+
+Reported case: one request ("coloca todos os cards do chat pra trabalhar") produced 8 confirmation
+cards in a row (1 `send_input`, 2 `move_task`, 5 `start_agent`), each approved alone, and each approval
+re-injected as its own concierge run.
+
+### 7.1 Decisions
+
+| Topic | Decision |
+|---|---|
+| Grouping | *(recommendation)* When a conversation has **two or more pending** confirmation cards, the thread shows them as **one grouped card** at the position of the oldest pending one: "N ações aguardando sua confirmação", one line per action (its summary, "irreversível" when so) with a checkbox. `write` lines start checked, `irreversible` lines start unchecked. Buttons: **"Aprovar selecionadas (k)"** (disabled at 0), **"Recusar todas"**, and a toggle **"Ver separadas"** that shows the ordinary cards instead (the way to reach "Permitir sempre nesta aba"). Pending cards are grouped regardless of which answer proposed them: while cards are pending the concierge has stopped, so they are one request's worth. |
+| Unchecked lines | Denied in the same batch (helper text: "As desmarcadas serão recusadas."), so nothing is left pending for the concierge to wait on. |
+| One decision, one run | *(recommendation)* A batch is decided in one request and re-injected as **one** sentence listing every decision. More generally, re-injection now always takes **every** decided-but-uninjected action of the conversation (oldest first, at most 20) instead of one per run, so even single clicks that queue behind a busy run drain in one run. One action keeps today's exact sentence. |
+| Proposing together | *(recommendation)* The gate's "pending" message tells the concierge that, if the same request needs other independent actions, it should propose them now in the same turn (they join the same confirmation) and then stop. This is what makes sibling `start_agent` calls arrive as one batch. |
+| `start_agent` siblings | Covered by grouping + proposing together: approving the batch approves every sibling. No standing grant for `start_agent` (it starts an agent on a machine). |
+| Board trust per project | *(recommendation)* **Deferred to its own card** (TER-111, created with this spec): "Permitir sempre neste projeto" for `create_task` / `add_subtasks` / `update_task` / `move_task` needs a second grant kind (project-scoped), a migration that the previous release must tolerate on rollback, and a list that unions two kinds. Not dropping confirmation for board writes: a prompt injected into a terminal could otherwise rearrange the board unasked. |
+| Phone | Same grouped card. Approving a batch with approvals asks the **PIN once**; the app requests one decision challenge per approved action and signs each with the same unwrapped secret (proofs stay bound to one action and one decision word, as today). "Recusar todas" needs no PIN. |
+| Interaction with TER-92 | TER-92 (parallel branch) makes `write` approvals on the phone PIN-free. When both land, the batch route follows the same rule as the single one: items that need no proof are accepted without one. Until then every approved item carries a proof. |
+
+### 7.2 Server
+
+- `ChatActionsRepository.listToInject(conversationId, excludeIds, limit = 20)`: decided (`approved` /
+  `denied`), `injected_at IS NULL`, `grant_id IS NULL`, ordered `decided_at, id`.
+- `ChatService.resumeAfterDecision(user, action)` and `drainNextDecision` inject `action` plus the rest
+  of `listToInject` in one run; `beforeRun` marks all of them injected. `injectionFor` keeps the single
+  sentence for one action; for several: "O usuário decidiu N ações pendentes de uma vez." + one line per
+  action ("Autorizou: tool em alvo…" / "Recusou: tool em alvo…", with the approved proposal spelled out
+  on a fresh session) + "Siga com as autorizadas, refazendo cada chamada com os mesmos argumentos; não
+  faça as recusadas e explique ao usuário o que ficou sem fazer." + the grant note when one of them
+  granted a tab.
+- `chat/decisions.ts` → `decideMany(repos, userId, items)`: reads every id owner-scoped; ids of more
+  than one conversation → 400 `MIXED_CONVERSATIONS`; unknown ids and rows no longer pending are
+  returned as `skipped` (`not_found` / `already_decided`), the rest decided and each `decision` event
+  published. Nothing decided at all → 409.
+- Web: `POST /api/chat/actions/decisions` `{ decisions: [{ id, decision: 'approve' | 'deny' }] }`
+  (1..20, unique ids; `approve_tab` is not batchable). Resumes like the single route (`queued` on
+  `CHAT_BUSY`). Answer `{ actions, skipped, message? , queued?, note? }`.
+- Mobile: `POST /api/m/v1/chat/actions/decisions` `{ decisions: [{ id, decision: 'deny' } | { id,
+  decision: 'approve', challenge, pin_proof }] }`. Every approved item is checked exactly like the
+  single route (pending, challenge consumed, PIN proof) **before anything is decided**; the first
+  failure answers like the single route (401 `PIN_INVALID` with `failures`, 423, 400
+  `CHALLENGE_INVALID`) and nothing is decided. Then `decideMany`; the run resumes in the background.
+  The proof check is one helper shared with the single route. Schemas in `packages/mobile-api`.
+
+### 7.3 Web
+
+- `chat-timeline.ts`: `groupPendingActions(entries)` replaces the pending action entries with one
+  `{ kind: 'action_group', at, actions }` entry when there are two or more.
+- `ChatActionGroup.tsx` (new): the grouped card (§7.1). `ChatPanel` renders it, keeps "Ver separadas" as
+  local state, and calls `api.decideChatActions(decisions)`; decision events already update each row.
+
+### 7.4 Mobile app
+
+- Session store: `requestPinProofs(actionIds, perform, decision)` — one PIN sheet ("Aprovar N ações"),
+  one challenge + proof per id, `perform(proofs)` while the sheet stays busy, same error handling as
+  today. `requestPinProof` becomes the one-id case.
+- `api.decideMany(auth, body)`; mock route with the same rules; chat store `decideMany(decisions)`.
+- Timeline groups pending actions like the web; `action-group-card.tsx` renders the grouped card.
+
+### 7.5 Tests
+
+- Server: `listToInject` (DB); `injectionFor` for one vs several (text); resume/drain inject all and
+  mark all; `decideMany` (mixed conversations, skipped, events); both batch routes (validation,
+  owner scope, PIN failure decides nothing, `queued`).
+- Web: `groupPendingActions`; `ChatActionGroup` (defaults, counts, unchecked denied, "Ver separadas").
+- App: session `requestPinProofs`; store `decideMany`; mock route; grouped card on the conversation.
+
+## 8. Out of scope
 
 - Granting from the list (grants are still born only on a confirmation card).
 - Filters or search in the history; deleting history rows.
 - Live updates on the list screen.
 - Changing what a grant allows, its 24 h or the PIN for "Permitir sempre nesta aba".
+- Board trust per project (TER-111, §7.1).
