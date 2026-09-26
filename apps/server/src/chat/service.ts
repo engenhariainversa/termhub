@@ -10,22 +10,11 @@ import { HttpError } from '../lib/errors.js';
 import { chatBus } from './bus.js';
 import { hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
 import { projectSystemPrompt } from './project-prompt.js';
-import { parseFrame, type ChatFailureReason } from './stream.js';
+import { codeForReason, parseFrame, type ChatErrorCode, type ChatFailureReason } from './stream.js';
 import { tabQuestionContext } from './tab-question-context.js';
 import { mintConciergeToken } from './token.js';
 
-/**
- * What a stored failure says. Every label a runner can end a run with becomes a code of its own —
- * `Uppercase<ChatFailureReason>`, derived from the one list in `stream.ts`, so a new reason reaches
- * the row (and the screen) without anyone remembering to extend a mapping here. CLI_REJECTED is our
- * own flags being refused, MISSING_SESSION a session the account no longer has, CLI_MISSING a machine
- * with no `claude` installed, HOST_GONE the machine going away mid-run. The two that are not a
- * runner's label: TOKEN_FAILED (the server could not even mint a credential) and RUNNER_FAILED (the
- * stream ended with nothing said about why).
- */
-export type ChatErrorCode = 'TOKEN_FAILED' | 'RUNNER_FAILED' | Uppercase<ChatFailureReason> | null;
-
-const codeForReason = (reason?: ChatFailureReason): ChatErrorCode => (reason ? (reason.toUpperCase() as Uppercase<ChatFailureReason>) : 'RUNNER_FAILED');
+export type { ChatErrorCode } from './stream.js';
 
 export interface RunnerInput {
   session_id: string;

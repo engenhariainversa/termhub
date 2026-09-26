@@ -5,6 +5,7 @@ import { parseFrame } from './stream.js';
 
 const fixture = readFileSync(join(import.meta.dirname, 'fixtures/stream-basic.ndjson'), 'utf8').split('\n').filter(Boolean);
 const toolCallFixture = readFileSync(join(import.meta.dirname, 'fixtures/stream-tool-call.ndjson'), 'utf8').split('\n').filter(Boolean);
+const backgroundFixture = readFileSync(join(import.meta.dirname, 'fixtures/stream-background.ndjson'), 'utf8').split('\n').filter(Boolean);
 
 it('turns a recorded run into text deltas and a final usage', () => {
   const frames = fixture.map(parseFrame).filter((f) => f !== null);
@@ -77,6 +78,7 @@ it('treats a result frame that reports is_error as a failure, not as a clean fin
     message: 'run ended with is_error',
     reason: 'run_failed',
     session_id: real.session_id,
+    turn_ended: true,
   });
 });
 
@@ -97,4 +99,35 @@ it('ignores a malformed line instead of throwing', () => {
   expect(parseFrame(JSON.stringify({ type: 'something_new' }))).toBeNull();
   expect(parseFrame('null')).toBeNull();
   expect(parseFrame('[1,2,3]')).toBeNull();
+});
+
+it('reads a streamed run: turns start on their replay, background tasks are counted, subagent frames are ignored', () => {
+  const frames = backgroundFixture.map(parseFrame).filter((f) => f !== null);
+  expect(frames.filter((f) => f!.type === 'turn_started')).toEqual([
+    { type: 'turn_started', uuid: '11111111-1111-4111-8111-111111111111' },
+    { type: 'turn_started', uuid: '22222222-2222-4222-8222-222222222222' },
+  ]);
+  expect(frames.filter((f) => f!.type === 'background').map((f) => (f as { count: number }).count)).toEqual([1, 0]);
+  expect(frames.filter((f) => f!.type === 'done')).toHaveLength(3);
+  // The concierge's own call to Agent is an action; the subagent's own frames are nobody's.
+  const actions = frames.filter((f) => f!.type === 'action') as { tool: string }[];
+  expect(actions.map((a) => a.tool)).toEqual(['Agent']);
+  const text = frames.filter((f) => f!.type === 'text').map((f) => (f as { delta: string }).delta).join('');
+  expect(text).toContain('Paris');
+  expect(text).not.toMatch(/lighthouse/i);
+});
+
+it('ignores any frame that belongs to a subagent', () => {
+  expect(parseFrame(JSON.stringify({ type: 'assistant', parent_tool_use_id: 'toolu_1', message: { content: [{ type: 'tool_use', id: 'x', name: 'mcp__termhub__list_tabs', input: {} }] } }))).toBeNull();
+  expect(parseFrame(JSON.stringify({ type: 'stream_event', parent_tool_use_id: 'toolu_1', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'oi' } } }))).toBeNull();
+});
+
+it('marks a failed result as the end of one turn, not of the run', () => {
+  expect(parseFrame(JSON.stringify({ type: 'result', is_error: true, session_id: 's1' }))).toEqual({ type: 'error', message: 'run ended with is_error', reason: 'run_failed', session_id: 's1', turn_ended: true });
+  expect(parseFrame(JSON.stringify({ type: 'termhub_error', code: 1, reason: 'missing_session' }))).toMatchObject({ type: 'error', reason: 'missing_session' });
+  expect(parseFrame(JSON.stringify({ type: 'termhub_error', code: 1, reason: 'missing_session' }))).not.toHaveProperty('turn_ended');
+});
+
+it('reads a replay without a uuid as nothing', () => {
+  expect(parseFrame(JSON.stringify({ type: 'user', isReplay: true, message: { role: 'user', content: 'oi' } }))).toBeNull();
 });
