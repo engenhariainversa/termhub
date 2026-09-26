@@ -150,7 +150,7 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
 
   if (message.role === 'user') {
     return (
-      <li className="flex justify-end">
+      <li className="chat-enter flex justify-end">
         {/* `break-words` so a pasted path or URL wraps instead of widening the column on a phone. */}
         <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-accent/10 px-4 py-2.5 text-sm leading-relaxed text-fg">{message.text}</div>
       </li>
@@ -158,7 +158,7 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
   }
 
   return (
-    <li className="text-fg">
+    <li className="chat-enter text-fg">
       {/* The one place in the chat that renders HTML, and only ever `renderMarkdown`'s output: this
        * text comes from an agent that reads real terminal screens, so `markdownOnly` keeps this to
        * the elements Markdown itself produces — nothing here can make the browser fetch a URL.
@@ -172,7 +172,9 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
        * to the thread. `pre` keeps its own horizontal scroll either way. */}
       {body && (
         <div
-          className="prose-termhub overflow-x-auto break-words"
+          // `min-h-10` reserves one line (a paragraph and its margins) under "pensando…", so the first
+          // delta does not change the row's height.
+          className="prose-termhub min-h-10 overflow-x-auto break-words"
           // The one delegated handler for every copy button this row's HTML may contain (there can be
           // several, one per fence) — a per-block React handler is impossible anyway, since the blocks
           // come from an HTML string, not from JSX.

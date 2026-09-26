@@ -112,9 +112,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const [tabSuggestions, setTabSuggestions] = useState<TabSuggestion[]>([]);
   const [busySuggestionId, setBusySuggestionId] = useState<string | null>(null);
   const [suggestionErrors, setSuggestionErrors] = useState<Record<string, string>>({});
-  const [text, setText] = useState('');
-  /** Sends whose POST is still open (it answers when that message's answer is written). Several can be
-   *  in flight: the box never waits for an answer (spec 2026-09-26). */
+  /** Sends whose POST is still open (it answers once the message is stored). Several can be in flight:
+   *  the box never waits for an answer (spec 2026-09-26). */
   const [inFlight, setInFlight] = useState(0);
   const sending = inFlight > 0;
   const [error, setError] = useState<string | null>(null);
@@ -462,38 +461,41 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    */
   const stick = useRef(true);
 
-  const send = async () => {
-    const value = text.trim();
-    if (!value) return;
-    // Sending is the reader's own way of saying "take me to the bottom" — the answer will stream
-    // in below whatever they typed.
-    stick.current = true;
-    setInFlight((n) => n + 1);
-    setError(null);
-    // Cleared before the request, not after: a box that keeps the sent text until the server answers
-    // reads as a chat that swallowed the message. The POST returns as soon as the message is stored
-    // (the answer streams over the socket); on a refusal the text comes back below.
-    setText('');
-    try {
-      // No project = the account-wide chat: called with no second argument, for the same reason as
-      // `load` above.
-      if (projectId) await api.sendChatMessage(value, projectId);
-      else await api.sendChatMessage(value);
-      await load();
-    } catch (e) {
-      // A typed message is no longer answered CHAT_BUSY — several can be in flight at once — but a
-      // 503 CONCIERGE_DISABLED still carries its own pt-BR message, shown as-is, and so does a host
-      // problem (offline, no machine); anything else falls back to a generic line.
-      setError(e instanceof ApiError ? e.message : 'Não foi possível enviar a mensagem');
-      // Give the text back so nothing is lost — unless something new was typed meanwhile.
-      setText((current) => current || value);
-      // The server may have dropped the empty assistant row it had already announced (a run that
-      // never started at all), so re-read instead of keeping a bubble that will never fill.
-      await load();
-    } finally {
-      setInFlight((n) => n - 1);
-    }
-  };
+  /**
+   * The composer's `onSend`: the text is the composer's own (it empties itself when it calls this and
+   * takes the text back on `false`); `attachmentIds` is carried through once the attachment chips land.
+   * Never refused for another send in flight: several can be (spec 2026-09-26). The POST returns as
+   * soon as the message is stored; the answer streams over the socket.
+   */
+  const send = useCallback(
+    async (value: string, _attachmentIds: string[]): Promise<boolean> => {
+      // Sending is the reader's own way of saying "take me to the bottom" — the answer will stream
+      // in below whatever they typed.
+      stick.current = true;
+      setInFlight((n) => n + 1);
+      setError(null);
+      try {
+        // No project = the account-wide chat: called with no second argument, for the same reason as
+        // `load` above.
+        if (projectId) await api.sendChatMessage(value, projectId);
+        else await api.sendChatMessage(value);
+        await load();
+        return true;
+      } catch (e) {
+        // A typed message is no longer answered CHAT_BUSY — several can be in flight at once — but a
+        // 503 CONCIERGE_DISABLED still carries its own pt-BR message, shown as-is, and so does a host
+        // problem (offline, no machine); anything else falls back to a generic line.
+        setError(e instanceof ApiError ? e.message : 'Não foi possível enviar a mensagem');
+        // The server may have dropped the empty assistant row it had already announced (a run that
+        // never started at all), so re-read instead of keeping a bubble that will never fill.
+        await load().catch(() => undefined);
+        return false;
+      } finally {
+        setInFlight((n) => n - 1);
+      }
+    },
+    [projectId, load],
+  );
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -651,10 +653,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           return <ChatTurn key={m.id} message={m} streaming={streaming} tools={row?.tools} waiting={waiting} failed={Boolean(m.error_code) || (empty && !waiting)} />;
         })}
       </ChatThread>
-      {actionError && <p className="mb-2 text-sm text-danger">{actionError}</p>}
-      {error && <p className="mb-2 text-sm text-danger">{error}</p>}
-      {/* A host that cannot run the message is why the box refuses, and the box says so. */}
-      <ChatComposer value={text} onChange={setText} onSend={() => void send()} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} />
+      {/* A host that cannot run the message is why the box refuses, and the box says so. The send and
+       *  decision errors go in its status line too: a line that mounts above the thread shifts it. */}
+      <ChatComposer onSend={send} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} status={error ?? actionError} />
     </div>
   );
 }

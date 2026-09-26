@@ -21,7 +21,7 @@ export interface TabQuestionCardProps {
 export const TabQuestionCard = memo(function TabQuestionCard(props: TabQuestionCardProps) {
   const { question, error } = props;
   return (
-    <li className="rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
+    <li className="chat-enter rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
       {question.kind === 'choice' ? <ChoiceBody {...props} question={question} /> : <PermissionBody {...props} question={question} />}
       {question.status !== 'open' && <p className="mt-1 text-xs text-fg-dim">{statusLabel(question)}</p>}
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}

@@ -160,6 +160,24 @@ describe('ChatTurn', () => {
     expect(renderMarkdown.mock.calls.map((c) => c[0])).toEqual(['primeiro\n\nsegundo']);
   });
 
+  it('mounts every row with the enter motion class and reserves a line under "pensando…"', () => {
+    const { container, rerender } = render(
+      <ol>
+        <ChatTurn message={answer({ text: '' })} waiting failed={false} />
+      </ol>,
+    );
+    expect(container.querySelector('li')?.classList.contains('chat-enter')).toBe(true);
+    // The placeholder's container keeps a minimum height, so the first delta does not change the row's height.
+    expect(container.querySelector('.prose-termhub')?.classList.contains('min-h-10')).toBe(true);
+
+    rerender(
+      <ol>
+        <ChatTurn message={answer({ role: 'user', text: 'oi' })} waiting={false} failed={false} />
+      </ol>,
+    );
+    expect(container.querySelector('li')?.classList.contains('chat-enter')).toBe(true);
+  });
+
   it('keeps a wide or unbreakable answer from scrolling the whole thread sideways', () => {
     const { container } = render(
       <ol>

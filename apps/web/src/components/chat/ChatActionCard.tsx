@@ -40,7 +40,7 @@ export interface ChatActionCardProps {
  */
 export const ChatActionCard = memo(function ChatActionCard({ action, deciding, note, grant, revoking, onRevoke, onDecide }: ChatActionCardProps) {
   return (
-    <li className="rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
+    <li className="chat-enter rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
       {/* Plain text only — never HTML: this sentence can carry a command the model read off a real terminal screen. */}
       <p className="whitespace-pre-wrap text-fg">{action.summary}</p>
       {action.status === 'pending' ? (

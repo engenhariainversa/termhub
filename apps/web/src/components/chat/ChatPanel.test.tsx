@@ -346,6 +346,25 @@ it('a streamed delta re-renders only its own row: a card in the thread is not re
   expect(reads).toBe(before);
 });
 
+it('a failed send shows the server error in the composer\'s status line and gives the text back', async () => {
+  const { ApiError } = await import('../../lib/api');
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY });
+  sendMock.mockRejectedValue(new ApiError(409, 'O chat já está respondendo', 'CHAT_BUSY'));
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalledWith('p1'));
+  const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+  fireEvent.change(box, { target: { value: 'status?' } });
+  fireEvent.click(screen.getByRole('button', { name: /enviar/i }));
+  await waitFor(() => expect(sendMock).toHaveBeenCalledWith('status?', 'p1'));
+  const line = await screen.findByText('O chat já está respondendo');
+  expect(line.getAttribute('role')).toBe('status');
+  await waitFor(() => expect(box.value).toBe('status?'));
+});
+
 it('"Permitir sempre nesta aba" on a pending card records the grant, shows it on the card and counts it in the header', async () => {
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' })], host: READY, grants: [] });
   decideMock.mockResolvedValue({ action: { id: 'a1', status: 'approved' }, grant: grant({ id: 'g1' }) });
