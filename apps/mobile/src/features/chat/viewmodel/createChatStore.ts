@@ -15,7 +15,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SessionState } from '@/features/session/model/session.types';
 import { appBackgrounded, sessionEnded } from '@/features/shared/signals';
-import type { TChatProjectItem, THostOptionsResponse, TTabQuestionAnswerBody } from '@/services/api/contract';
+import type { TChatAttachment, TChatProjectItem, THostOptionsResponse, TTabQuestionAnswerBody } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { randomId } from '@/services/crypto/random';
 import type { MobileApi } from '@/services/api/types';
@@ -24,6 +24,7 @@ import { applyEvent, mergeThread, settlePending } from '../model/events';
 import { belongsTo } from '../model/filter';
 import { CHAT_MSG } from '../model/messages';
 import { emptyFold, pruneLive, type LiveFold } from '../model/live';
+import type { PickedFile } from './attachments';
 import { createThrottledStorage } from './throttled-storage';
 import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, TabQuestion, TabSuggestion } from '../model/types';
 
@@ -88,8 +89,14 @@ export interface ChatState {
   /** The `app/chat/[id]` param: a conversation id (deep links), a project id, or `general`. */
   openByRoute(id: string): Promise<void>;
   close(): void;
-  /** Resolves `true` once the server accepted the message (`202`). */
-  send(text: string): Promise<boolean>;
+  /** Resolves `true` once the server accepted the message (`202`). `text` may be empty with attachments. */
+  send(text: string, attachments?: TChatAttachment[]): Promise<boolean>;
+  /** Uploads one picked file into the open conversation; the composer's chip follows `onProgress`. */
+  uploadAttachment(file: PickedFile, onProgress: (fraction: number) => void): Promise<TChatAttachment>;
+  /** Drops an unsent attachment (a chip's ✕). Already gone (404) or already sent (409): nothing to do. */
+  deleteAttachment(id: string): Promise<void>;
+  /** `<Image source>` for a sent image: the url plus signed headers. */
+  attachmentSource(id: string): Promise<{ uri: string; headers: Record<string, string> }>;
   /** "Tentar de novo" on a row whose send failed: the row goes, and its text is sent again as a new one. */
   retrySend(messageId: string): Promise<boolean>;
   decide(actionId: string, decision: ChatDecision): Promise<void>;
@@ -369,10 +376,10 @@ export function createChatStore(deps: ChatDeps) {
             set({ connected: false, live: emptyFold(), activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionIds: [], questionErrors: {}, busySuggestionIds: [], suggestionErrors: {} });
           },
 
-          async send(text) {
+          async send(text, attachments = []) {
             const body = text.trim();
             const projectId = get().activeProject;
-            if (!body || projectId === undefined || get().sending) return false;
+            if ((!body && attachments.length === 0) || projectId === undefined || get().sending) return false;
             const key = keyOf(projectId);
             const gen = generation;
             // The person's row, at once (spec §4.2 "Optimistic user bubble"): renamed to the server's
@@ -386,12 +393,14 @@ export function createChatStore(deps: ChatDeps) {
               usage: null,
               error_code: null,
               created_at: new Date().toISOString(),
+              ...(attachments.length > 0 ? { attachments } : {}),
               local: 'sending',
             };
             set({ sending: true, error: null });
             patchSlot(key, (slot) => ({ messages: [...slot.messages, row] }));
             try {
-              const accepted = await api.sendMessage(session().auth(), { text: body, project_id: projectId });
+              // A `409 ATTACHMENT_UNAVAILABLE` takes the generic path below: its pt-BR message is the server's.
+              const accepted = await api.sendMessage(session().auth(), { text: body, project_id: projectId, ...(attachments.length > 0 ? { attachment_ids: attachments.map((a) => a.id) } : {}) });
               if (gen !== generation) return false;
               patchSlot(key, (slot) => ({
                 // The socket's echo may have landed first: then the local row simply goes; otherwise
@@ -423,7 +432,7 @@ export function createChatStore(deps: ChatDeps) {
             const row = get().conversations[key]?.messages.find((m) => m.id === messageId && m.local === 'failed');
             if (!row) return false;
             patchSlot(key, (slot) => ({ messages: slot.messages.filter((m) => m.id !== messageId) }));
-            return get().send(row.text);
+            return get().send(row.text, row.attachments);
           },
 
           async decide(actionId, decision) {
@@ -581,6 +590,28 @@ export function createChatStore(deps: ChatDeps) {
 
           dismissTabSuggestion(suggestionId) {
             return actOnSuggestion(suggestionId, () => api.dismissTabSuggestion(session().auth(), suggestionId));
+          },
+
+          uploadAttachment(file, onProgress) {
+            const projectId = get().activeProject;
+            if (projectId === undefined) return Promise.reject(new Error('NO_CONVERSATION'));
+            return api.uploadAttachment(session().auth(), file, projectId, onProgress).catch((e: unknown) => {
+              // A revoked device or an expired session ends here like anywhere else; the chip shows the rest.
+              session().handleApiError(e);
+              throw e;
+            });
+          },
+
+          deleteAttachment(id) {
+            return api.deleteAttachment(session().auth(), id).catch((e: unknown) => {
+              // Already gone, or already sent with a message: the chip goes either way.
+              if (isApiError(e) && (e.status === 404 || e.status === 409)) return;
+              throw e;
+            });
+          },
+
+          attachmentSource(id) {
+            return api.attachmentSource(session().auth(), id);
           },
 
           async reset() {

@@ -950,3 +950,57 @@ it('run_finished and the app going to the background flush the persisted slice a
   appBackgrounded.emit();
   expect(chatWrites()).toHaveLength(2);
 });
+
+describe('attachments', () => {
+  const attachment = { id: 'att1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf' as const, bytes: 10, status: 'ready' as const, error_code: null, meta: null, created_at: '2026-09-26T00:00:00.000Z' };
+
+  it('send posts the attachment ids, lets the text be empty, and shows them on the optimistic row', async () => {
+    const { chat, api } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    // A real upload into the mock: the mock's send refuses an id it does not know (409).
+    const uploaded = await chat.getState().uploadAttachment({ uri: 'file:///tmp/relatorio.pdf', name: 'relatorio.pdf', mime: 'application/pdf', bytes: 10 }, () => undefined);
+    const send = jest.spyOn(api, 'sendMessage');
+    const sending = chat.getState().send('', [uploaded]);
+    expect(slot(chat, 'p-termhub').messages.at(-1)).toMatchObject({ role: 'user', text: '', local: 'sending', attachments: [uploaded] });
+    expect(await sending).toBe(true);
+    expect(send).toHaveBeenCalledWith(expect.anything(), { text: '', project_id: 'p-termhub', attachment_ids: [uploaded.id] });
+    expect(slot(chat, 'p-termhub').messages.at(-1)).toMatchObject({ role: 'user', text: '', attachments: [uploaded] });
+    expect(slot(chat, 'p-termhub').messages.at(-1)!.local).toBeUndefined();
+  });
+
+  it('send refuses a message with neither text nor attachments', async () => {
+    const { chat, api } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const send = jest.spyOn(api, 'sendMessage');
+    expect(await chat.getState().send('   ', [])).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('uploadAttachment and deleteAttachment go to the api for the open conversation; a 404 or 409 on delete is swallowed', async () => {
+    const { chat, api } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const upload = jest.spyOn(api, 'uploadAttachment').mockResolvedValue(attachment);
+    const remove = jest.spyOn(api, 'deleteAttachment').mockResolvedValue(undefined);
+    const progress = jest.fn();
+    await expect(chat.getState().uploadAttachment({ uri: 'file:///x', name: 'relatorio.pdf', mime: 'application/pdf', bytes: 10 }, progress)).resolves.toEqual(attachment);
+    expect(upload).toHaveBeenCalledWith(expect.anything(), { uri: 'file:///x', name: 'relatorio.pdf', mime: 'application/pdf', bytes: 10 }, 'p-termhub', progress);
+    await chat.getState().deleteAttachment('att1');
+    expect(remove).toHaveBeenCalledWith(expect.anything(), 'att1');
+
+    remove.mockRejectedValueOnce(new ApiError(404, 'NOT_FOUND', 'Anexo não encontrado.'));
+    await expect(chat.getState().deleteAttachment('att1')).resolves.toBeUndefined();
+    remove.mockRejectedValueOnce(new ApiError(409, 'CONFLICT', 'Este anexo já foi enviado'));
+    await expect(chat.getState().deleteAttachment('att1')).resolves.toBeUndefined();
+    remove.mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'x'));
+    await expect(chat.getState().deleteAttachment('att1')).rejects.toMatchObject({ status: 500 });
+  });
+
+  it('attachmentSource signs the download url for the open session', async () => {
+    const { chat } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const source = await chat.getState().attachmentSource('att1');
+    expect(source.uri).toBe('https://termhub.dev/api/m/v1/chat/attachments/att1');
+    expect(source.headers.Authorization).toMatch(/^Bearer /);
+    expect(source.headers.DPoP).toBeTruthy();
+  });
+});
