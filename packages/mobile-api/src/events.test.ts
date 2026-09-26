@@ -68,3 +68,11 @@ it('a suggestion may carry the message it answers; an app and a server that pred
   const before = tabSuggestionSchema.extend({ payload: z.object({ text: z.string() }) });
   expect(before.parse({ ...s, payload: { text: 'commit it', context: 'x' } }).payload).toEqual({ text: 'commit it' });
 });
+
+it('parses attachment_status, and a message that carries attachments', () => {
+  const attachment = { id: 'at1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf', bytes: 1234, status: 'ready', error_code: null, meta: { pages: 12 }, created_at: '2026-09-26T12:00:00.000Z' };
+  expect(chatEventSchema.safeParse({ type: 'attachment_status', ...base, attachment }).success).toBe(true);
+  const message = { id: 'm1', conversation_id: 'c1', role: 'user', text: '', usage: null, error_code: null, created_at: '2026-09-26T12:00:00.000Z', attachments: [attachment] };
+  expect(chatEventSchema.safeParse({ type: 'message', ...base, message }).success).toBe(true);
+  expect(chatEventSchema.safeParse({ type: 'attachment_status', ...base, attachment: { ...attachment, kind: 'exe' } }).success).toBe(false);
+});

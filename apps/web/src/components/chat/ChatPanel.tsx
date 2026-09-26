@@ -1,23 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChatActionCard } from './ChatActionCard';
 import { ChatActionGroup, type BatchDecision } from './ChatActionGroup';
 import { ChatComposer } from './ChatComposer';
 import { ChatHost } from './ChatHost';
+import { ChatThread } from './ChatThread';
 import { ChatTurn } from './ChatTurn';
 import { TabQuestionCard } from './TabQuestionCard';
 import { TabSuggestionCard } from './TabSuggestionCard';
 import { ConfirmDialog } from '../Modal';
 import { api, ApiError } from '../../lib/api';
+import { patchMessageAttachment } from '../../lib/attachments';
 import { useChatStream } from '../../lib/chat';
+import { useChatLive } from '../../lib/chat-live';
+import { mergeMessage } from '../../lib/chat-merge';
 import { chatTimeline, groupPendingActions } from '../../lib/chat-timeline';
-import { isNearBottom } from '../../lib/chat-scroll';
 import { trustedTabsLabel } from './grant-list-text';
 import { isGrantActive } from './grant-time';
 import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
 import { SUGGESTION_CHANGED_TEXT, upsertTabSuggestion } from './tab-suggestion-text';
 import { useAuth } from '../../lib/auth';
-import type { AiAccount, ChatAction, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatMessage, TabQuestion, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
+import type { AiAccount, ChatAction, ChatAttachment, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatMessage, TabQuestion, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
 
 /**
  * Why the box refuses, one short line per host state — the long version is the card above the thread
@@ -36,9 +39,35 @@ const COMPOSER_REASON: Record<Exclude<ChatHostState['kind'], 'ready'>, string> =
  * failure of the click — the decision is already durably recorded server-side.
  */
 const HOST_CODES = new Set(['CHAT_NO_MACHINE', 'CHAT_HOST_NOT_CHOSEN', 'CHAT_HOST_OFFLINE', 'CHAT_AGENT_TOO_OLD']);
+/** How many early events (see `early` in the panel) are held while the conversation id is unknown. */
+const EARLY_EVENTS_CAP = 500;
 
 /** A Claude account of one of the user's machines, as the host picker needs it. */
 type HostAccountRow = Pick<AiAccount, 'id' | 'label' | 'machine_id'>;
+
+/**
+ * `TabSuggestionCard` takes `onSend(text)` and `onDismiss()` with no id (its body belongs to TER-96 and
+ * is not changed here), so this wrapper makes the per-card closures once per id and hands the card
+ * stable props: the panel passes the same two id-taking callbacks to every row.
+ */
+const TabSuggestionRow = memo(function TabSuggestionRow({
+  suggestion,
+  busy,
+  error,
+  onSend,
+  onDismiss,
+}: {
+  suggestion: TabSuggestion;
+  busy: boolean;
+  error?: string;
+  onSend: (id: string, text: string) => void;
+  onDismiss: (id: string) => void;
+}) {
+  const id = suggestion.id;
+  const send = useCallback((text: string) => onSend(id, text), [id, onSend]);
+  const dismiss = useCallback(() => onDismiss(id), [id, onDismiss]);
+  return <TabSuggestionCard suggestion={suggestion} busy={busy} error={error} onSend={send} onDismiss={dismiss} />;
+});
 
 /**
  * The concierge chat: streamed live over /ws/chat and persisted over REST. `projectId === null` is the
@@ -84,12 +113,18 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const [tabSuggestions, setTabSuggestions] = useState<TabSuggestion[]>([]);
   const [busySuggestionId, setBusySuggestionId] = useState<string | null>(null);
   const [suggestionErrors, setSuggestionErrors] = useState<Record<string, string>>({});
-  const [text, setText] = useState('');
-  /** Sends whose POST is still open (it answers when that message's answer is written). Several can be
-   *  in flight: the box never waits for an answer (spec 2026-09-26). */
+  /** Sends whose POST is still open (it answers once the message is stored). Several can be in flight:
+   *  the box never waits for an answer (spec 2026-09-26). */
   const [inFlight, setInFlight] = useState(0);
   const sending = inFlight > 0;
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The latest `attachment_status` heard for each attachment of this conversation, by id. The thread
+   * takes the event straight into its message (`patchMessageAttachment`); the composer's chips take it
+   * from here, since a chip's file has no message yet. Small rows, one per attachment of this
+   * session: never pruned, and nothing reads it but the composer.
+   */
+  const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, ChatAttachment>>({});
 
   /**
    * Which machine and which account run this conversation, or why none can — resolved by the server on
@@ -165,13 +200,42 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     load().catch((e) => setError(e instanceof ApiError ? e.message : 'Não foi possível abrir a conversa'));
   }, [load]);
 
-  // A `message` event means the answer was persisted: re-read it over REST to get the final
-  // text. Delivered once per event by the hook, regardless of its own capped buffer, so this
-  // never depends on — or breaks against — that buffer's length.
+  /**
+   * What has streamed for each answer being written (text, tool chips, whether the run showed a sign
+   * of life), folded in one event at a time. `version` moves on every change, which is what re-renders
+   * this panel for a delta; the rows themselves are read through `fold.get` while rendering.
+   */
+  const { fold, version, push } = useChatLive();
+  /**
+   * Live events tagged with a conversation id that arrived before this panel knew its own. Held, not
+   * dropped: `load()` re-reads everything a REST read can give back, but the deltas and tool calls of
+   * an answer already under way exist nowhere else. Replayed into the fold (and only the fold) the
+   * moment `conversationId` is known — the ones of another conversation are dropped then. A layout
+   * effect, not a passive one: `onEvent` below stops holding as soon as the id is in state, so a delta
+   * arriving between that commit and a passive effect's flush would be folded in ahead of the held ones.
+   */
+  const early = useRef<ChatEvent[]>([]);
+  useLayoutEffect(() => {
+    if (conversationId === null) return;
+    const held = early.current;
+    early.current = [];
+    for (const e of held) if (e.conversation_id === conversationId) push(e);
+  }, [conversationId, push]);
+
+  // A `message` event carries the stored row (the user's message, the announced empty answer, or the
+  // final text): it is merged in place by id — no refetch, so no row gets a new object for nothing and
+  // the streamed text is never swapped out for a moment. A reconnect and a finished `send()` still
+  // re-read the whole conversation over REST, as before.
   const onEvent = useCallback(
     (e: ChatEvent) => {
+      if (conversationId === null && e.conversation_id !== undefined) {
+        early.current = [...early.current.slice(-(EARLY_EVENTS_CAP - 1)), e];
+        return;
+      }
       if (!mine(e)) return;
-      if (e.type === 'message') void load();
+      // The fold takes what is its business (deltas, tool calls, resets, announcements) and ignores the rest.
+      push(e);
+      if (e.type === 'message') setMessages((prev) => mergeMessage(prev, e.message));
       else if (e.type === 'confirmation') {
         // Enriched server-side exactly like GET /api/chat's trail (same summary, same ids): no name
         // is resolved and no sentence is built here.
@@ -188,15 +252,18 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       else if (e.type === 'granted_action') setActions((prev) => (prev.some((a) => a.id === e.action.id) ? prev.map((a) => (a.id === e.action.id ? e.action : a)) : [...prev, e.action]));
       else if (e.type === 'tab_question' || e.type === 'tab_question_answered' || e.type === 'tab_question_closed') setTabQuestions((prev) => upsertTabQuestion(prev, e.question));
       else if (e.type === 'tab_suggestion' || e.type === 'tab_suggestion_closed') setTabSuggestions((prev) => upsertTabSuggestion(prev, e.suggestion));
+      else if (e.type === 'attachment_status') {
+        // Into the message that carries it (no refetch: only that row gets a new object) and into the
+        // composer's chips, for a file uploaded but not yet sent.
+        setMessages((prev) => patchMessageAttachment(prev, e.attachment));
+        setAttachmentStatuses((prev) => ({ ...prev, [e.attachment.id]: e.attachment }));
+      }
     },
-    [load, mine],
+    [conversationId, mine, push],
   );
-  const { events: allEvents, connected } = useChatStream(load, onEvent);
-  // Same filter as `onEvent`, applied to the buffered stream so a reused row (deltas, tool calls) never
-  // renders anything of another conversation either.
-  const events = useMemo(() => allEvents.filter(mine), [allEvents, mine]);
+  const { connected } = useChatStream(load, onEvent);
 
-  const decide = async (id: string, decision: 'approve' | 'deny' | 'approve_tab') => {
+  const decide = useCallback(async (id: string, decision: 'approve' | 'deny' | 'approve_tab') => {
     setDecidingId(id);
     setActionError(null);
     try {
@@ -224,10 +291,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     } finally {
       setDecidingId(null);
     }
-  };
+  }, [load]);
 
-  /** A grouped confirmation: one request, one injected sentence (spec 2026-09-26 §7). */
-  const decideBatch = async (decisions: BatchDecision[]) => {
+  /** A grouped confirmation: one request, one injected sentence (spec 2026-09-26 §7). Stable, like `decide`. */
+  const decideBatch = useCallback(async (decisions: BatchDecision[]) => {
     setBatchDeciding(true);
     setActionError(null);
     try {
@@ -249,10 +316,13 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     } finally {
       setBatchDeciding(false);
     }
-  };
+  }, [load]);
 
-  /** "Revogar", from the card that granted it. */
-  const revoke = async (grantId: string) => {
+  const onDecideBatch = useCallback((d: BatchDecision[]) => void decideBatch(d), [decideBatch]);
+  const onShowSeparately = useCallback(() => setSeparate(true), []);
+
+  /** "Revogar", from the card that granted it. Stable: every card gets this same one. */
+  const revoke = useCallback(async (grantId: string) => {
     setRevokingId(grantId);
     setActionError(null);
     try {
@@ -266,10 +336,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     } finally {
       setRevokingId(null);
     }
-  };
+  }, []);
 
   /** A click on a tab question's card is the answer: no confirmation, no model turn. */
-  const answerQuestion = async (id: string, body: TabQuestionAnswer) => {
+  const answerQuestion = useCallback(async (id: string, body: TabQuestionAnswer) => {
     setAnsweringQuestionId(id);
     setQuestionErrors(({ [id]: _dropped, ...rest }) => rest);
     try {
@@ -281,12 +351,12 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     } finally {
       setAnsweringQuestionId(null);
     }
-  };
+  }, []);
   /** Stable, so the permission card's effect runs once per question. */
   const loadTabQuestionScreen = useCallback(async (id: string) => (await api.tabQuestionScreen(id)).text, []);
 
   /** Enviar / Dispensar on a suggestion card: one click, no confirmation, no model turn. */
-  const actOnSuggestion = async (id: string, act: () => Promise<{ tab_suggestion: TabSuggestion }>, fallback: string) => {
+  const actOnSuggestion = useCallback(async (id: string, act: () => Promise<{ tab_suggestion: TabSuggestion }>, fallback: string) => {
     setBusySuggestionId(id);
     setSuggestionErrors(({ [id]: _dropped, ...rest }) => rest);
     try {
@@ -298,7 +368,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     } finally {
       setBusySuggestionId(null);
     }
-  };
+  }, []);
+  const sendSuggestion = useCallback((id: string, text: string) => void actOnSuggestion(id, () => api.sendTabSuggestion(id, text), 'Não foi possível enviar'), [actOnSuggestion]);
+  const dismissSuggestion = useCallback((id: string) => void actOnSuggestion(id, () => api.dismissTabSuggestion(id), 'Não foi possível dispensar'), [actOnSuggestion]);
 
   /**
    * Opens the change picker and reads the two halves of the pair, once, on demand: they are only needed
@@ -368,38 +440,6 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   };
 
-  /**
-   * Deltas and the action trail of the answer being written, keyed by message id. A `reset`
-   * event — the server retrying the run on a fresh CLI session — drops whatever streamed for
-   * that message so far, so the abandoned half-answer never shows glued to the real one.
-   */
-  const live = useMemo(() => {
-    const deltas = new Map<string, string>();
-    const actions = new Map<string, { tool: string }[]>();
-    /**
-     * Assistant rows this page has seen any sign of life from: the `message` event that announces a
-     * run, but also its deltas and its tool calls — a page opened (or reloaded, or a second tab)
-     * after the run began never sees the announcement, and a tool-only phase can run for tens of
-     * seconds with nothing else to show. An empty bubble only deserves a "pensando…" while its run
-     * can still be alive; a row left empty by a process death — which happens on every deploy — is
-     * never mentioned here at all, so it reads as the failure it is instead of waiting for ever.
-     */
-    const started = new Set<string>();
-    for (const e of events) {
-      if (e.type === 'delta') {
-        deltas.set(e.message_id, (deltas.get(e.message_id) ?? '') + e.delta);
-        started.add(e.message_id);
-      } else if (e.type === 'action') {
-        actions.set(e.message_id, [...(actions.get(e.message_id) ?? []), { tool: e.tool }]);
-        started.add(e.message_id);
-      } else if (e.type === 'reset') {
-        deltas.delete(e.message_id);
-        actions.delete(e.message_id);
-      } else if (e.type === 'message' && e.message.role === 'assistant' && !e.message.text && !e.message.error_code) started.add(e.message.id);
-    }
-    return { deltas, actions, started };
-  }, [events]);
-
   /** Messages, gate cards and tab questions as one chronological thread, so a card reads where it was proposed. */
   const timeline = useMemo(() => chatTimeline(messages, actions, tabQuestions, tabSuggestions), [messages, actions, tabQuestions, tabSuggestions]);
   /** "Ver separadas" holds only for the cards it was clicked on: a new or decided card groups again. */
@@ -417,78 +457,70 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    */
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
 
-  const listRef = useRef<HTMLOListElement>(null);
   /**
-   * Whether the thread should keep following new content. Starts `true` (a page just opened is at
-   * its own bottom) and is written only from the list's `onScroll` handler below and from `send`
-   * — never recomputed from the list's live geometry inside the effect that follows it: jsdom lays
-   * nothing out, so a never-scrolled list would read as "far from the bottom" and this would stop
-   * following new messages in every test, and in any real browser the moment the content is
-   * shorter than the viewport.
+   * The active grant each gate card created, by the card's id: built once per `grants` change instead
+   * of a `find` over the list inside every card of every render. (Expiry is re-read when `grants` next
+   * changes, which is what the old per-render `find` did too whenever nothing re-rendered.) A grant
+   * with no source action (`null`) was never a card's, so it is left out.
+   */
+  const grantByAction = useMemo(() => {
+    const map = new Map<string, ChatGrant>();
+    for (const g of grants) if (g.source_action_id !== null && isGrantActive(g)) map.set(g.source_action_id, g);
+    return map;
+  }, [grants]);
+
+  /** What the thread's pin follows: a new row or card (the timeline) or a streamed delta (the fold). */
+  const followKey = useMemo(() => ({ timeline, version }), [timeline, version]);
+  /**
+   * Whether the thread follows new content. `ChatThread` owns the reading of it (its `onScroll` and its
+   * pill write it); it lives here so `send` can set it — sending is the reader's own way of saying
+   * "take me to the bottom".
    */
   const stick = useRef(true);
-  // Keep the newest content in view, but only while the reader hasn't scrolled away to read back
-  // through history: past one viewport they would otherwise send a message, or watch an answer
-  // stream in, and see the page yank itself out from under them. Runs on every new message and on
-  // every streamed delta.
-  // Keyed on the timeline, not on `messages`: a card is a row of this thread too, so a change to
-  // `actions` alone — a `decide()` response, a queued note — must be able to move the scroll.
-  useEffect(() => {
-    const list = listRef.current;
-    if (list && stick.current) list.scrollTop = list.scrollHeight;
-  }, [timeline, events]);
 
-  // The keyboard opening is a layout change the thread has to follow: the shell gets shorter
-  // (ChatLayout sizes itself to the visual viewport) under the same `scrollTop`, so the newest
-  // message would slide out of sight exactly when the person is about to answer it.
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const follow = () => {
-      const list = listRef.current;
-      if (list && stick.current) list.scrollTop = list.scrollHeight;
-    };
-    viewport.addEventListener('resize', follow);
-    return () => viewport.removeEventListener('resize', follow);
-  }, []);
-
-  const send = async () => {
-    const value = text.trim();
-    if (!value) return;
-    // Sending is the reader's own way of saying "take me to the bottom" — the answer will stream
-    // in below whatever they typed.
-    stick.current = true;
-    setInFlight((n) => n + 1);
-    setError(null);
-    // Cleared before the request, not after: a box that keeps the sent text until the server answers
-    // reads as a chat that swallowed the message. The POST returns as soon as the message is stored
-    // (the answer streams over the socket); on a refusal the text comes back below.
-    setText('');
-    try {
-      // No project = the account-wide chat: called with no second argument, for the same reason as
-      // `load` above.
-      if (projectId) await api.sendChatMessage(value, projectId);
-      else await api.sendChatMessage(value);
-      await load();
-    } catch (e) {
-      // A typed message is no longer answered CHAT_BUSY — several can be in flight at once — but a
-      // 503 CONCIERGE_DISABLED still carries its own pt-BR message, shown as-is, and so does a host
-      // problem (offline, no machine); anything else falls back to a generic line.
-      setError(e instanceof ApiError ? e.message : 'Não foi possível enviar a mensagem');
-      // Give the text back so nothing is lost — unless something new was typed meanwhile.
-      setText((current) => current || value);
-      // The server may have dropped the empty assistant row it had already announced (a run that
-      // never started at all), so re-read instead of keeping a bubble that will never fill.
-      await load();
-    } finally {
-      setInFlight((n) => n - 1);
-    }
-  };
+  /**
+   * The composer's `onSend`: the text and the ids of its uploaded chips are the composer's own (it
+   * empties itself when it calls this and takes them back on `false`). A message may be attachments
+   * alone (spec §3); one with neither is refused here as well as by the button. Never refused for
+   * another send in flight: several can be (spec 2026-09-26). The POST returns as soon as the message
+   * is stored; the answer streams over the socket.
+   */
+  const send = useCallback(
+    async (value: string, attachmentIds: string[]): Promise<boolean> => {
+      if (!value && attachmentIds.length === 0) return false;
+      // Sending is the reader's own way of saying "take me to the bottom" — the answer will stream
+      // in below whatever they typed.
+      stick.current = true;
+      setInFlight((n) => n + 1);
+      setError(null);
+      try {
+        // No project = the account-wide chat: called with no second argument, for the same reason as
+        // `load` above. The three-argument form only when there is something to carry in it.
+        if (attachmentIds.length > 0) await api.sendChatMessage(value, projectId, attachmentIds);
+        else if (projectId) await api.sendChatMessage(value, projectId);
+        else await api.sendChatMessage(value);
+        await load();
+        return true;
+      } catch (e) {
+        // A typed message is no longer answered CHAT_BUSY — several can be in flight at once — but a
+        // 503 CONCIERGE_DISABLED still carries its own pt-BR message, shown as-is, and so does a host
+        // problem (offline, no machine); anything else falls back to a generic line.
+        setError(e instanceof ApiError ? e.message : 'Não foi possível enviar a mensagem');
+        // The server may have dropped the empty assistant row it had already announced (a run that
+        // never started at all), so re-read instead of keeping a bubble that will never fill.
+        await load().catch(() => undefined);
+        return false;
+      } finally {
+        setInFlight((n) => n - 1);
+      }
+    },
+    [projectId, load],
+  );
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);
   /** Whether an answer is being written right now — the only time a reset is refused (409). */
-  const answering = sending || (lastMessageId !== null && live.started.has(lastMessageId) && !messages[messages.length - 1]?.text && !messages[messages.length - 1]?.error_code);
+  const answering = sending || (lastMessageId !== null && fold.get(lastMessageId)?.started === true && !messages[messages.length - 1]?.text && !messages[messages.length - 1]?.error_code);
 
   /** "Nova conversa": archives the current conversation (its transcript is kept, just off this screen)
    *  and swaps in the fresh one `load()` brings back. */
@@ -551,7 +583,6 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         onCancel={() => setConfirmReset(false)}
         onConfirm={() => void reset()}
       />
-      {!connected && <p className="pt-2 text-xs text-warn">Reconectando…</p>}
       {/* Where this conversation runs, above the thread, before anything is typed — and, when it cannot
           run, the one thing to do about it. Presentational: every decision it renders is decided here.
           Only the account-wide chat offers the picker: a project's chat always runs on that same host,
@@ -596,78 +627,61 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           )}
         </div>
       )}
-      {/* A new conversation is otherwise a header, an empty thread and a box: one line saying what
-       * this screen is for. Deliberately just the one — no example prompts, no tour. */}
-      {/* …and only while the conversation can actually run: with no machine (or one that is asleep) the
-       * host card above already says what this screen is and what to do, and inviting a message that
-       * cannot be sent would contradict it. */}
-      {loaded && messages.length === 0 && (host === null || host.kind === 'ready') && (
-        <p className="pt-6 text-center text-sm text-fg-dim">
-          {projectId === null ? 'Peça algo às suas máquinas: o concierge lê os terminais e pede sua autorização antes de qualquer alteração.' : 'Pergunte sobre este projeto: o concierge lê os terminais dele e pede sua autorização antes de qualquer alteração.'}
-        </p>
-      )}
-      {/* Named, because a rendered answer can contain Markdown lists of its own: this is how the
-       * thread is told apart from them — by screen readers, and by the tests. */}
-      <ol
-        ref={listRef}
-        aria-label="Conversa"
-        className="min-h-0 min-w-0 flex-1 space-y-5 overflow-y-auto overscroll-contain py-4"
-        onScroll={(e) => {
-          stick.current = isNearBottom(e.currentTarget);
-        }}
+      {/* The thread, its scroll and its pill (`ChatThread`); "Reconectando…" is its overlay badge. The
+       * empty state is one line saying what this screen is for — deliberately just the one, no example
+       * prompts, no tour — and only while the conversation can actually run: with no machine (or one
+       * that is asleep) the host card above already says what to do, and inviting a message that cannot
+       * be sent would contradict it. A conversation that never opened (the read failed) says why in
+       * that same place, and not only in the composer's status line: an empty thread over a small
+       * line at the bottom reads as a conversation with nothing in it. */}
+      <ChatThread
+        reconnecting={!connected}
+        followKey={followKey}
+        stickRef={stick}
+        empty={
+          !loaded && error !== null && messages.length === 0 ? (
+            <p className="pt-6 text-center text-sm text-danger">{error}</p>
+          ) : loaded && messages.length === 0 && (host === null || host.kind === 'ready') ? (
+            <p className="pt-6 text-center text-sm text-fg-dim">
+              {projectId === null ? 'Peça algo às suas máquinas: o concierge lê os terminais e pede sua autorização antes de qualquer alteração.' : 'Pergunte sobre este projeto: o concierge lê os terminais dele e pede sua autorização antes de qualquer alteração.'}
+            </p>
+          ) : undefined
+        }
       >
         {entries.map((entry) => {
           if (entry.kind === 'action_group') {
-            return <ChatActionGroup key={`g:${entry.actions[0]!.id}`} actions={entry.actions} deciding={batchDeciding} onDecide={(d) => void decideBatch(d)} onShowSeparately={() => setSeparate(true)} />;
+            return <ChatActionGroup key={`g:${entry.actions[0]!.id}`} actions={entry.actions} deciding={batchDeciding} onDecide={onDecideBatch} onShowSeparately={onShowSeparately} />;
           }
           if (entry.kind === 'tab_suggestion') {
             const s = entry.suggestion;
-            return (
-              <TabSuggestionCard
-                key={`s:${s.id}`}
-                suggestion={s}
-                busy={busySuggestionId === s.id}
-                error={suggestionErrors[s.id]}
-                onSend={(text) => void actOnSuggestion(s.id, () => api.sendTabSuggestion(s.id, text), 'Não foi possível enviar')}
-                onDismiss={() => void actOnSuggestion(s.id, () => api.dismissTabSuggestion(s.id), 'Não foi possível dispensar')}
-              />
-            );
+            return <TabSuggestionRow key={`s:${s.id}`} suggestion={s} busy={busySuggestionId === s.id} error={suggestionErrors[s.id]} onSend={sendSuggestion} onDismiss={dismissSuggestion} />;
           }
           if (entry.kind === 'tab_question') {
             const q = entry.question;
-            return <TabQuestionCard key={`q:${q.id}`} question={q} answering={answeringQuestionId === q.id} error={questionErrors[q.id]} onAnswer={(body) => void answerQuestion(q.id, body)} loadScreen={loadTabQuestionScreen} />;
+            return <TabQuestionCard key={`q:${q.id}`} question={q} answering={answeringQuestionId === q.id} error={questionErrors[q.id]} onAnswer={answerQuestion} loadScreen={loadTabQuestionScreen} />;
           }
           if (entry.kind === 'action') {
-            const g = grants.find((cand) => cand.source_action_id === entry.action.id && isGrantActive(cand));
-            return (
-              <ChatActionCard
-                key={entry.action.id}
-                action={entry.action}
-                deciding={decidingId === entry.action.id}
-                note={queuedNotes[entry.action.id]}
-                grant={g}
-                revoking={g !== undefined && revokingId === g.id}
-                onRevoke={() => {
-                  if (g) void revoke(g.id);
-                }}
-                onDecide={(decision) => void decide(entry.action.id, decision)}
-              />
-            );
+            const g = grantByAction.get(entry.action.id);
+            return <ChatActionCard key={entry.action.id} action={entry.action} deciding={decidingId === entry.action.id} note={queuedNotes[entry.action.id]} grant={g} revoking={g !== undefined && revokingId === g.id} onRevoke={revoke} onDecide={decide} />;
           }
           const m = entry.message;
-          const streaming = live.deltas.get(m.id);
-          // An assistant row with no text and no error is either the answer being written right now
-          // or a leftover from a run that died with the process. Only the newest row can still be
-          // the live one, and only while this page knows its run is under way.
+          const row = fold.get(m.id);
+          const streaming = row?.text || undefined;
+          // An assistant row with no text and no error is either an answer still being written or a
+          // leftover from a run that died with the process. It counts as live when this page knows
+          // its run has started (`row.started`) or, while a send is in flight, when it is the newest
+          // row; any other empty row is a failed one.
           const empty = m.role === 'assistant' && !m.text && !streaming && !m.error_code;
-          const waiting = empty && (live.started.has(m.id) || (sending && m.id === lastMessageId));
-          return <ChatTurn key={m.id} message={m} streaming={streaming} tools={live.actions.get(m.id)} waiting={waiting} failed={Boolean(m.error_code) || (empty && !waiting)} />;
+          // Started rows show "pensando…" wherever they are: with queued or injected turns several
+          // answers can be pending at once (spec 2026-09-26 concierge always free).
+          const waiting = empty && (row?.started === true || (sending && m.id === lastMessageId));
+          return <ChatTurn key={m.id} message={m} streaming={streaming} tools={row?.tools} waiting={waiting} failed={Boolean(m.error_code) || (empty && !waiting)} />;
         })}
-      </ol>
-      {actionError && <p className="mb-2 text-sm text-danger">{actionError}</p>}
-      {error && <p className="mb-2 text-sm text-danger">{error}</p>}
-      {/* A host that cannot run the message is why the box refuses, and the box says so. */}
-      <ChatComposer value={text} onChange={setText} onSend={() => void send()} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} />
+      </ChatThread>
+      {/* A host that cannot run the message is why the box refuses, and the box says so. The send and
+       *  decision errors go in its status line too: a line that mounts above the thread shifts it.
+       *  `projectId` travels with every upload, so a file lands in this project's conversation. */}
+      <ChatComposer onSend={send} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} status={error ?? actionError} projectId={projectId} attachmentStatuses={attachmentStatuses} />
     </div>
   );
 }

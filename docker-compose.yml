@@ -55,6 +55,8 @@ x-app: &app
     - "host.docker.internal:host-gateway"
   volumes:
     - sshkeys:/home/app/.ssh
+    # chat attachments (spec 2026-09-26 §8): shared by blue and green, so a deploy never loses a file
+    - chat-files:/data/chat-files
   depends_on:
     db:
       condition: service_healthy
@@ -171,6 +173,7 @@ services:
       - ./apps/web/src:/app/apps/web/src
       - ./apps/web/index.html:/app/apps/web/index.html
       - sshkeys-dev:/root/.ssh
+      - chat-files-dev:/data/chat-files
     depends_on:
       db:
         condition: service_healthy
@@ -217,3 +220,5 @@ volumes:
   sshkeys:
   sshkeys-dev:
   whisper-models:
+  chat-files:
+  chat-files-dev:

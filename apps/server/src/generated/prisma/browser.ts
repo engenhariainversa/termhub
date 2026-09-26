@@ -165,6 +165,13 @@ export type ChatConversation = Prisma.ChatConversationModel
  */
 export type ChatMessage = Prisma.ChatMessageModel
 /**
+ * Model ChatAttachment
+ * A file the person attached to a chat message (spec 2026-09-26 §5.1). The bytes live on the
+ * chat-files volume at <CHAT_FILES_DIR>/<user_id>/<id>; this row holds what was learned about them.
+ * `extracted_text` is data the user sent: it never enters a stored message or a system prompt.
+ */
+export type ChatAttachment = Prisma.ChatAttachmentModel
+/**
  * Model ChatAction
  * One action the concierge proposed, and what became of it. `args` holds what it proposed — the
  * command, the prompt, the target — never a tool result's payload (spec §7.1). Also the chat's

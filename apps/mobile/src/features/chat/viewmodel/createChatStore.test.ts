@@ -1,10 +1,12 @@
 // The chat store (design spec §6) over the real `HttpMobileApi`, the in-memory `MockTransport`
 // and its fake socket, with an enrolled, unlocked session store built over the same mock.
 import * as SecureStore from 'expo-secure-store';
-import type { TChatEvent } from '@/services/api/contract';
+import type { TChatEvent, TChatMessage } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { mmkv } from '@/services/storage';
-import { foldLive } from '../model/live';
+import { appBackgrounded } from '@/features/shared/signals';
+import { PERSIST_INTERVAL_MS } from './throttled-storage';
+import { emptyFold } from '../model/live';
 import { createChatStore } from './createChatStore';
 import { enrol, PIN, setupSession } from '../../../../test/helpers/enrolled-session';
 
@@ -50,6 +52,9 @@ beforeEach(() => {
 
 afterEach(() => {
   while (opened.length) opened.pop()!.getState().close();
+  // Stores of earlier tests stay subscribed to the signal: drain what they left pending now, so a
+  // later test's write count is its own (the next beforeEach clears MMKV anyway).
+  appBackgrounded.emit();
   jest.clearAllTimers();
   jest.useRealTimers();
   jest.restoreAllMocks();
@@ -91,11 +96,11 @@ it("open('p-termhub') loads the thread and subscribes once for the whole app", a
   expect(events).toHaveBeenCalledTimes(1);
 });
 
-it('a reconnect re-reads the conversation and empties live', async () => {
+it('a reconnect re-reads the conversation and keeps what streamed for a row the re-read does not show finished', async () => {
   const { chat, api, controls, handlers } = await setup();
   await openAndConnect(chat, 'p-termhub');
   handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', delta: 'meio' });
-  expect(chat.getState().live).toHaveLength(1);
+  expect(chat.getState().live.deltas.get('m-x')).toBe('meio');
 
   const read = jest.spyOn(api, 'chat');
   controls.dropSocket();
@@ -104,10 +109,86 @@ it('a reconnect re-reads the conversation and empties live', async () => {
   await jest.advanceTimersByTimeAsync(2000); // the socket's first backoff step (1 s), then its connect tick
   expect(chat.getState().connected).toBe(true);
   expect(read).toHaveBeenCalledWith(expect.anything(), 'p-termhub');
-  expect(chat.getState().live).toEqual([]);
+  expect(chat.getState().live.deltas.get('m-x')).toBe('meio');
 });
 
-it('send answers at once and the thread grows only through events; deltas fold into foldLive(live)', async () => {
+it('a mid-stream reconnect keeps the streamed text of a row the re-read still shows unanswered, and drops it once the row has its text (Review Focus #5)', async () => {
+  const { chat, api, controls, handlers } = await setup();
+  const rows = () => slot(chat, 'p-termhub').messages;
+  let openRow: TChatMessage = { id: 'm-open', conversation_id: 'c-termhub', role: 'assistant', text: '', usage: null, error_code: null, created_at: new Date().toISOString() };
+  const real = api.chat.bind(api);
+  jest.spyOn(api, 'chat').mockImplementation(async (auth, projectId) => {
+    const res = await real(auth, projectId);
+    return projectId === 'p-termhub' ? { ...res, messages: [...res.messages, openRow] } : res;
+  });
+  await openAndConnect(chat, 'p-termhub');
+  handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-open', delta: 'meio da' });
+
+  controls.dropSocket();
+  await jest.advanceTimersByTimeAsync(2000);
+  expect(chat.getState().connected).toBe(true);
+  expect(rows().find((m) => m.id === 'm-open')?.text).toBe('');
+  expect(chat.getState().live.deltas.get('m-open')).toBe('meio da');
+  expect(chat.getState().live.started.has('m-open')).toBe(true);
+
+  // The next re-read has the row's final text: the row carries it now, the fold lets go.
+  openRow = { ...openRow, text: 'meio da resposta' };
+  controls.dropSocket();
+  await jest.advanceTimersByTimeAsync(2000);
+  expect(chat.getState().connected).toBe(true);
+  expect(rows().find((m) => m.id === 'm-open')?.text).toBe('meio da resposta');
+  expect(chat.getState().live).toEqual(emptyFold());
+});
+
+it('a re-read in flight never drops a row that a message event merged meanwhile; untouched rows keep their objects', async () => {
+  const { chat, api, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const rows = () => slot(chat, 'p-termhub').messages;
+  const before = rows();
+  const real = api.chat.bind(api);
+  let release!: () => void;
+  jest.spyOn(api, 'chat').mockImplementation(async (auth, projectId) => {
+    const res = await real(auth, projectId);
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return res;
+  });
+
+  const refreshing = chat.getState().refresh('p-termhub');
+  await flush(); // the GET's snapshot is taken; its answer is held back
+  const fresh: TChatMessage = { id: 'm-new', conversation_id: 'c-termhub', role: 'assistant', text: 'oi', usage: null, error_code: null, created_at: new Date().toISOString() };
+  handlers().onEvent({ type: 'message', user_id: 'u1', conversation_id: 'c-termhub', message: fresh });
+  expect(rows().at(-1)).toEqual(fresh);
+
+  release();
+  await refreshing;
+  expect(slot(chat, 'p-termhub').loaded).toBe(true);
+  const after = rows();
+  expect(after).toHaveLength(5);
+  expect(after.find((m) => m.id === 'm-new')).toEqual(fresh);
+  expect(after[0]).toBe(before[0]);
+  expect(after[3]).toBe(before[3]);
+});
+
+it('retrySend refuses while another send is in flight and keeps the failed row', async () => {
+  const { chat, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const rows = () => slot(chat, 'p-termhub').messages;
+  const sent = jest.spyOn(api, 'sendMessage').mockRejectedValueOnce(new ApiError(409, 'HOST_OFFLINE', 'A máquina do chat está offline.'));
+  await chat.getState().send('oi');
+  const failed = rows().at(-1)!;
+  expect(failed.local).toBe('failed');
+
+  sent.mockImplementationOnce(() => new Promise(() => undefined)); // a send that never answers
+  void chat.getState().send('outra');
+  expect(chat.getState().sending).toBe(true);
+  await expect(chat.getState().retrySend(failed.id)).resolves.toBe(false);
+  expect(rows()).toContain(failed);
+  expect(sent).toHaveBeenCalledTimes(2);
+});
+
+it('send shows the row at once, renamed on accept; the thread then grows through events merged by id, with no re-read', async () => {
   const { chat, api } = await setup();
   await openAndConnect(chat, 'p-termhub');
   const read = jest.spyOn(api, 'chat');
@@ -116,28 +197,106 @@ it('send answers at once and the thread grows only through events; deltas fold i
   await expect(chat.getState().send('  roda o teste  ')).resolves.toBe(true);
   expect(sent).toHaveBeenCalledWith(expect.anything(), { text: 'roda o teste', project_id: 'p-termhub' });
   expect(chat.getState().sending).toBe(false);
-  expect(slot(chat, 'p-termhub').messages).toHaveLength(4); // nothing appended locally
-  const { assistant_message_id: assistantId } = await sent.mock.results[0]!.value;
+  const { user_message_id: userId, assistant_message_id: assistantId } = await sent.mock.results[0]!.value;
+  const rows = () => slot(chat, 'p-termhub').messages;
+  expect(rows()).toHaveLength(5); // the person's row, already under the server's id
+  expect(rows()[4]).toMatchObject({ id: userId, role: 'user', text: 'roda o teste' });
+  expect(rows()[4]!.local).toBeUndefined();
 
-  await jest.advanceTimersToNextTimerAsync(); // the user's row
-  expect(slot(chat, 'p-termhub').messages).toHaveLength(5);
-  expect(read).toHaveBeenCalledTimes(1); // a `message` event re-reads the thread
+  await jest.advanceTimersToNextTimerAsync(); // the server's echo of that row
+  expect(rows()).toHaveLength(5); // merged by id, not appended
+  expect(read).not.toHaveBeenCalled(); // a `message` event no longer re-reads the thread
 
   await jest.advanceTimersToNextTimerAsync(); // the empty assistant row: "pensando…"
-  expect(slot(chat, 'p-termhub').messages).toHaveLength(6);
-  expect(foldLive(chat.getState().live).started.has(assistantId)).toBe(true);
+  expect(rows()).toHaveLength(6);
+  expect(chat.getState().live.started.has(assistantId)).toBe(true);
 
   await jest.advanceTimersToNextTimerAsync();
   await jest.advanceTimersToNextTimerAsync();
-  const streaming = foldLive(chat.getState().live).deltas.get(assistantId);
+  const streaming = chat.getState().live.deltas.get(assistantId);
   expect(streaming).toBeTruthy();
 
   await jest.advanceTimersByTimeAsync(5000);
-  const final = slot(chat, 'p-termhub').messages.find((m) => m.id === assistantId)!;
+  const final = rows().find((m) => m.id === assistantId)!;
   expect(final.text).toBe('Rodei `npm test` no jarvis: 1066 testes passaram, 137 pulados. Nada quebrou.');
   expect(final.text.startsWith(streaming!)).toBe(true);
-  expect(foldLive(chat.getState().live).deltas.has(assistantId)).toBe(false);
-  expect(chat.getState().live).toEqual([]);
+  expect(chat.getState().live).toEqual(emptyFold());
+  expect(read).not.toHaveBeenCalled();
+});
+
+it('the local row is shown while the 202 is in flight, and dropped without a duplicate when the echo lands first (Review Focus #5)', async () => {
+  const { chat, api, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const rows = () => slot(chat, 'p-termhub').messages;
+  const real = api.sendMessage.bind(api);
+  let seenWhileInFlight: ReturnType<typeof rows> = [];
+  jest.spyOn(api, 'sendMessage').mockImplementation(async (auth, body) => {
+    seenWhileInFlight = rows();
+    const res = await real(auth, body);
+    // The socket's echo of the person's row arrives before the HTTP answer does.
+    handlers().onEvent({
+      type: 'message',
+      user_id: 'u1',
+      conversation_id: 'c-termhub',
+      message: { id: res.user_message_id, conversation_id: 'c-termhub', role: 'user', text: body.text, usage: null, error_code: null, created_at: new Date().toISOString() },
+    });
+    return res;
+  });
+
+  await expect(chat.getState().send('oi')).resolves.toBe(true);
+  expect(seenWhileInFlight.at(-1)).toMatchObject({ role: 'user', text: 'oi', local: 'sending' });
+  expect(seenWhileInFlight.at(-1)!.id.startsWith('local:')).toBe(true);
+
+  const mine = rows().filter((m) => m.role === 'user' && m.text === 'oi');
+  expect(mine).toHaveLength(1);
+  expect(mine[0]!.id.startsWith('local:')).toBe(false);
+  expect(mine[0]!.local).toBeUndefined();
+
+  await jest.advanceTimersByTimeAsync(5000); // the mock's own echo and answer
+  expect(rows().filter((m) => m.role === 'user' && m.text === 'oi')).toHaveLength(1);
+});
+
+it('a failed send keeps the row with its reason; it survives a re-read and is never persisted; retrySend sends its text again', async () => {
+  const { chat, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const rows = () => slot(chat, 'p-termhub').messages;
+  const sent = jest.spyOn(api, 'sendMessage').mockRejectedValueOnce(new ApiError(409, 'HOST_OFFLINE', 'A máquina do chat está offline.'));
+
+  await expect(chat.getState().send('oi')).resolves.toBe(false);
+  const failed = rows().at(-1)!;
+  expect(failed).toMatchObject({ role: 'user', text: 'oi', local: 'failed', local_error: 'A máquina do chat está offline.' });
+  expect(chat.getState().error).toBe('A máquina do chat está offline.');
+
+  await chat.getState().refresh('p-termhub');
+  expect(rows().at(-1)).toBe(failed);
+
+  await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS);
+  const saved = JSON.parse(mmkv.getString('chat')!).state as { conversations: Record<string, { messages: Array<{ id: string }> }> };
+  expect(saved.conversations['p-termhub']!.messages.some((m) => m.id.startsWith('local:'))).toBe(false);
+
+  await expect(chat.getState().retrySend(failed.id)).resolves.toBe(true);
+  expect(sent).toHaveBeenLastCalledWith(expect.anything(), { text: 'oi', project_id: 'p-termhub' });
+  const mine = rows().filter((m) => m.text === 'oi');
+  expect(mine).toHaveLength(1);
+  expect(mine[0]!.local).toBeUndefined();
+});
+
+it('a message event replaces only the row that changed; unchanged rows keep their objects', async () => {
+  const { chat, api, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const read = jest.spyOn(api, 'chat');
+  const before = slot(chat, 'p-termhub').messages;
+
+  handlers().onEvent({ type: 'message', user_id: 'u1', conversation_id: 'c-termhub', message: { ...before[0]! } });
+  expect(slot(chat, 'p-termhub').messages).toBe(before);
+
+  handlers().onEvent({ type: 'message', user_id: 'u1', conversation_id: 'c-termhub', message: { ...before[1]!, text: 'editado' } });
+  const after = slot(chat, 'p-termhub').messages;
+  expect(after).not.toBe(before);
+  expect(after[0]).toBe(before[0]);
+  expect(after[1]!.text).toBe('editado');
+  expect(after[2]).toBe(before[2]);
+  expect(read).not.toHaveBeenCalled();
 });
 
 it('a second send while the first answer is still being written goes through', async () => {
@@ -498,7 +657,7 @@ it('events of another conversation never touch the open one', async () => {
     message: { id: 'm2', conversation_id: 'c-opapingou', role: 'user', text: 'oi', usage: null, error_code: null, created_at: new Date().toISOString() },
   });
 
-  expect(chat.getState().live).toEqual([]);
+  expect(chat.getState().live).toEqual(emptyFold());
   expect(slot(chat, 'p-termhub')).toBe(before);
   expect(read).not.toHaveBeenCalled();
 });
@@ -575,7 +734,8 @@ it('a 4401 close wipes the session, and sessionEnded resets the store and closes
   await jest.advanceTimersByTimeAsync(0);
   await flush();
   expect(store.getState().phase).toBe('new');
-  expect(chat.getState()).toMatchObject({ projects: [], conversations: {}, live: [], connected: false, activeProject: undefined });
+  expect(chat.getState()).toMatchObject({ projects: [], conversations: {}, connected: false, activeProject: undefined });
+  expect(chat.getState().live).toEqual(emptyFold());
 });
 
 it('persists projects and each conversation, never live or transient state', async () => {
@@ -583,6 +743,7 @@ it('persists projects and each conversation, never live or transient state', asy
   await chat.getState().loadProjects();
   await openAndConnect(chat, 'p-termhub');
   handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', delta: 'meio' });
+  await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS); // the throttled write lands
 
   const saved = JSON.parse(mmkv.getString('chat')!).state;
   expect(Object.keys(saved).sort()).toEqual(['conversations', 'projects']);
@@ -594,7 +755,7 @@ it('persists projects and each conversation, never live or transient state', asy
   expect(again.getState().projects).toHaveLength(3);
   expect(slot(again, 'p-termhub')).toMatchObject({ loaded: false, error: null, conversation: { id: 'c-termhub' } });
   expect(slot(again, 'p-termhub').messages).toHaveLength(4);
-  expect(again.getState().live).toEqual([]);
+  expect(again.getState().live).toEqual(emptyFold());
 });
 
 it('subscribeEvents delivers every raw event, of any conversation, ahead of the open one\'s filter; unsubscribe stops it', async () => {
@@ -749,4 +910,116 @@ it('suggestions too: per card busy, per card error', async () => {
   await sending;
   expect(chat.getState().busySuggestionIds).toEqual([]);
   expect(chat.getState().error).toBeNull();
+});
+
+it('a delta is one set and no MMKV write; the persisted slice lands within 2 s, once, without live', async () => {
+  const { chat, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS); // the open's own writes
+  const writes = jest.spyOn(mmkv, 'set');
+  const chatWrites = () => writes.mock.calls.filter(([name]) => name === 'chat');
+  const sets = jest.fn();
+  const unsubscribe = chat.subscribe(sets);
+  const slotBefore = slot(chat, 'p-termhub');
+
+  for (let i = 0; i < 20; i++) handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', delta: `t${i}` });
+  unsubscribe();
+  expect(sets).toHaveBeenCalledTimes(20);
+  expect(chatWrites()).toHaveLength(0);
+  // A delta touches `live` alone: the slot (and every row in it) keeps its reference.
+  expect(slot(chat, 'p-termhub')).toBe(slotBefore);
+
+  await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS);
+  expect(chatWrites()).toHaveLength(1);
+  const saved = JSON.parse(mmkv.getString('chat')!).state;
+  expect(Object.keys(saved).sort()).toEqual(['conversations', 'projects']);
+});
+
+it('run_finished and the app going to the background flush the persisted slice at once', async () => {
+  const { chat, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS);
+  const writes = jest.spyOn(mmkv, 'set');
+  const chatWrites = () => writes.mock.calls.filter(([name]) => name === 'chat');
+
+  handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', delta: 'a' });
+  handlers().onEvent({ type: 'run_finished', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', ok: true, error_code: null });
+  expect(chatWrites()).toHaveLength(1);
+
+  handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-y', delta: 'b' });
+  appBackgrounded.emit();
+  expect(chatWrites()).toHaveLength(2);
+});
+
+describe('attachments', () => {
+  const attachment = { id: 'att1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf' as const, bytes: 10, status: 'ready' as const, error_code: null, meta: null, created_at: '2026-09-26T00:00:00.000Z' };
+
+  it('send posts the attachment ids, lets the text be empty, and shows them on the optimistic row', async () => {
+    const { chat, api } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    // A real upload into the mock: the mock's send refuses an id it does not know (409).
+    const uploaded = await chat.getState().uploadAttachment({ uri: 'file:///tmp/relatorio.pdf', name: 'relatorio.pdf', mime: 'application/pdf', bytes: 10 }, () => undefined);
+    const send = jest.spyOn(api, 'sendMessage');
+    const sending = chat.getState().send('', [uploaded]);
+    expect(slot(chat, 'p-termhub').messages.at(-1)).toMatchObject({ role: 'user', text: '', local: 'sending', attachments: [uploaded] });
+    expect(await sending).toBe(true);
+    expect(send).toHaveBeenCalledWith(expect.anything(), { text: '', project_id: 'p-termhub', attachment_ids: [uploaded.id] });
+    expect(slot(chat, 'p-termhub').messages.at(-1)).toMatchObject({ role: 'user', text: '', attachments: [uploaded] });
+    expect(slot(chat, 'p-termhub').messages.at(-1)!.local).toBeUndefined();
+  });
+
+  it('send refuses a message with neither text nor attachments', async () => {
+    const { chat, api } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const send = jest.spyOn(api, 'sendMessage');
+    expect(await chat.getState().send('   ', [])).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('uploadAttachment and deleteAttachment go to the api for the open conversation; a 404 or 409 on delete is swallowed', async () => {
+    const { chat, api } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const upload = jest.spyOn(api, 'uploadAttachment').mockResolvedValue(attachment);
+    const remove = jest.spyOn(api, 'deleteAttachment').mockResolvedValue(undefined);
+    const progress = jest.fn();
+    await expect(chat.getState().uploadAttachment({ uri: 'file:///x', name: 'relatorio.pdf', mime: 'application/pdf', bytes: 10 }, progress)).resolves.toEqual(attachment);
+    expect(upload).toHaveBeenCalledWith(expect.anything(), { uri: 'file:///x', name: 'relatorio.pdf', mime: 'application/pdf', bytes: 10 }, 'p-termhub', progress);
+    await chat.getState().deleteAttachment('att1');
+    expect(remove).toHaveBeenCalledWith(expect.anything(), 'att1');
+
+    remove.mockRejectedValueOnce(new ApiError(404, 'NOT_FOUND', 'Anexo não encontrado.'));
+    await expect(chat.getState().deleteAttachment('att1')).resolves.toBeUndefined();
+    remove.mockRejectedValueOnce(new ApiError(409, 'CONFLICT', 'Este anexo já foi enviado'));
+    await expect(chat.getState().deleteAttachment('att1')).resolves.toBeUndefined();
+    remove.mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'x'));
+    await expect(chat.getState().deleteAttachment('att1')).rejects.toMatchObject({ status: 500 });
+  });
+
+  it('attachment_status of the open conversation is kept by id for the composer chips; another conversation is ignored; open and close start over', async () => {
+    const { chat, handlers } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    expect(chat.getState().attachmentStatuses).toEqual({});
+    const heard = { ...attachment, status: 'failed' as const, error_code: 'ATTACHMENT_INVALID' };
+    handlers().onEvent({ type: 'attachment_status', user_id: 'u1', conversation_id: 'c-termhub', attachment: heard });
+    handlers().onEvent({ type: 'attachment_status', user_id: 'u1', conversation_id: 'c-opapingou', attachment: { ...attachment, id: 'elsewhere' } });
+    expect(chat.getState().attachmentStatuses).toEqual({ att1: heard });
+    handlers().onEvent({ type: 'attachment_status', user_id: 'u1', conversation_id: 'c-termhub', attachment: { ...heard, status: 'ready', error_code: null } });
+    expect(chat.getState().attachmentStatuses.att1).toMatchObject({ status: 'ready' });
+
+    await openAndConnect(chat, 'p-opapingou');
+    expect(chat.getState().attachmentStatuses).toEqual({});
+    handlers().onEvent({ type: 'attachment_status', user_id: 'u1', conversation_id: 'c-opapingou', attachment: heard });
+    expect(chat.getState().attachmentStatuses).toEqual({ att1: heard });
+    chat.getState().close();
+    expect(chat.getState().attachmentStatuses).toEqual({});
+  });
+
+  it('attachmentSource signs the download url for the open session', async () => {
+    const { chat } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const source = await chat.getState().attachmentSource('att1');
+    expect(source.uri).toBe('https://termhub.dev/api/m/v1/chat/attachments/att1');
+    expect(source.headers.Authorization).toMatch(/^Bearer /);
+    expect(source.headers.DPoP).toBeTruthy();
+  });
 });

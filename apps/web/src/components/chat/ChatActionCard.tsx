@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { ChatAction, ChatGrant } from '../../lib/types';
 import { untilLabel } from './grant-time';
 
@@ -19,37 +20,40 @@ export function isTabGrantable(action: ChatAction): boolean {
 
 export interface ChatActionCardProps {
   action: ChatAction;
-  /** This card's decision is in flight (`decidingId` in `ChatPage`): its buttons are disabled. */
+  /** This card's decision is in flight (`decidingId` in `ChatPanel`): its buttons are disabled. */
   deciding: boolean;
-  /** The server's pt-BR note for a decision queued behind a busy run (`queuedNotes` in `ChatPage`). */
+  /** The server's pt-BR note for a decision queued behind a busy run (`queuedNotes` in `ChatPanel`). */
   note?: string;
   /** The active grant this card created ("Permitir sempre nesta aba"), if it is still in force. */
   grant?: ChatGrant;
   revoking?: boolean;
-  onRevoke?: () => void;
-  onDecide: (decision: 'approve' | 'deny' | 'approve_tab') => void;
+  /** Takes the grant's id, so the panel can pass one stable callback to every card. */
+  onRevoke?: (grantId: string) => void;
+  /** Takes the action's id, for the same reason. */
+  onDecide: (id: string, decision: 'approve' | 'deny' | 'approve_tab') => void;
 }
 
 /**
  * One gate card, inline in the thread where the concierge proposed it. Presentational only: the
- * request, the decision call and the queued note all live in `ChatPage`.
+ * request, the decision call and the queued note all live in `ChatPanel`. Memoised, with callbacks
+ * that take the id: a streamed delta re-renders the panel, and this card must not follow.
  */
-export function ChatActionCard({ action, deciding, note, grant, revoking, onRevoke, onDecide }: ChatActionCardProps) {
+export const ChatActionCard = memo(function ChatActionCard({ action, deciding, note, grant, revoking, onRevoke, onDecide }: ChatActionCardProps) {
   return (
-    <li className="rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
+    <li className="chat-enter rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
       {/* Plain text only — never HTML: this sentence can carry a command the model read off a real terminal screen. */}
       <p className="whitespace-pre-wrap text-fg">{action.summary}</p>
       {action.status === 'pending' ? (
         <div className="mt-2 flex gap-2">
-          <button type="button" className="btn-primary" disabled={deciding} onClick={() => onDecide('approve')}>
+          <button type="button" className="btn-primary" disabled={deciding} onClick={() => onDecide(action.id, 'approve')}>
             Autorizar
           </button>
           {isTabGrantable(action) && (
-            <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide('approve_tab')}>
+            <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_tab')}>
               Permitir sempre nesta aba
             </button>
           )}
-          <button type="button" className="btn-danger" disabled={deciding} onClick={() => onDecide('deny')}>
+          <button type="button" className="btn-danger" disabled={deciding} onClick={() => onDecide(action.id, 'deny')}>
             Recusar
           </button>
         </div>
@@ -62,7 +66,7 @@ export function ChatActionCard({ action, deciding, note, grant, revoking, onRevo
       {grant && (
         <p className="mt-1 flex items-center gap-2 text-xs text-fg-dim">
           <span>Permitido nesta aba {untilLabel(grant.expires_at)}</span>
-          <button type="button" className="underline hover:text-fg" disabled={revoking} onClick={onRevoke}>
+          <button type="button" className="underline hover:text-fg" disabled={revoking} onClick={() => onRevoke?.(grant.id)}>
             Revogar
           </button>
         </p>
@@ -70,4 +74,4 @@ export function ChatActionCard({ action, deciding, note, grant, revoking, onRevo
       {note && <p className="mt-1 text-xs text-fg-dim">{note}</p>}
     </li>
   );
-}
+});

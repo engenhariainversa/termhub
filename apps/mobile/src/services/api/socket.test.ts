@@ -15,6 +15,9 @@ function fakeTransport() {
     fetch: () => {
       throw new Error('socket tests never call fetch');
     },
+    upload: () => {
+      throw new Error('socket tests never call upload');
+    },
     connect: (url, headers, handlers) => {
       const close = jest.fn(() => {
         setTimeout(() => handlers.onClose(1005), 0);

@@ -82,6 +82,7 @@ it('a replayed jti is 401 PROOF_REPLAYED and not a token renewal', async () => {
       return transport.fetch(req);
     },
     connect: transport.connect.bind(transport),
+    upload: transport.upload.bind(transport),
   };
   const key = new SoftwareDeviceKey();
   const api = createHttpMobileApi({

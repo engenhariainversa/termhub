@@ -14,7 +14,7 @@ it('offers "Permitir sempre nesta aba" on a pending send_input to a tab', () => 
   const onDecide = vi.fn();
   render(<ChatActionCard action={base} deciding={false} onDecide={onDecide} />);
   fireEvent.click(screen.getByRole('button', { name: 'Permitir sempre nesta aba' }));
-  expect(onDecide).toHaveBeenCalledWith('approve_tab');
+  expect(onDecide).toHaveBeenCalledWith('a1', 'approve_tab');
 });
 it.each([
   ['answering a permission', { ...base, args: { tab_id: 't1', text: '1', answering_permission: true } }],
@@ -29,7 +29,7 @@ it('the card that granted shows until when and revokes', () => {
   render(<ChatActionCard action={{ ...base, status: 'executed' }} deciding={false} onDecide={vi.fn()} grant={grant} onRevoke={onRevoke} />);
   expect(screen.getByText(/^Permitido nesta aba até/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Revogar' }));
-  expect(onRevoke).toHaveBeenCalled();
+  expect(onRevoke).toHaveBeenCalledWith('g1');
 });
 it('an action run under a grant reads "aba confiada"', () => {
   render(<ChatActionCard action={{ ...base, status: 'executed', grant_id: 'g1' }} deciding={false} onDecide={vi.fn()} />);

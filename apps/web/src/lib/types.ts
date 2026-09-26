@@ -715,6 +715,21 @@ export type ChatErrorCode =
   /** the host machine is up and healthy, with every channel taken: the run could not start */
   | 'HOST_BUSY';
 
+/** Mirrors `chatAttachment` in `packages/mobile-api/src/attachments.ts` (the web has no workspace deps). */
+export type AttachmentKind = 'image' | 'pdf' | 'docx' | 'xlsx' | 'audio' | 'video' | 'text';
+export interface ChatAttachment {
+  id: string;
+  name: string;
+  mime: string;
+  kind: AttachmentKind;
+  bytes: number;
+  status: 'pending' | 'ready' | 'failed';
+  error_code: string | null;
+  /** pages, duration_s, sheets, width, height, truncated */
+  meta: Record<string, unknown> | null;
+  created_at: string;
+}
+
 /** `error_code` set means the answer did not finish, and which of the ten ways it did not. */
 export interface ChatMessage {
   id: string;
@@ -723,6 +738,8 @@ export interface ChatMessage {
   text: string;
   error_code: ChatErrorCode | null;
   created_at: string;
+  /** The files sent with a user message; absent when none. */
+  attachments?: ChatAttachment[];
 }
 
 /** All the chat's host line ever needs of a machine; the payload carries whole `Machine` rows. */
@@ -908,7 +925,9 @@ export type ChatEvent =
   /** A tab asked something, the chat answered it (or failed to), or it left the tab's screen: the whole card each time. */
   | { type: 'tab_question' | 'tab_question_answered' | 'tab_question_closed'; question: TabQuestion; conversation_id?: string }
   /** A tab shows a suggestion, or it was sent, dismissed or left the screen: the whole card each time. */
-  | { type: 'tab_suggestion' | 'tab_suggestion_closed'; suggestion: TabSuggestion; conversation_id?: string };
+  | { type: 'tab_suggestion' | 'tab_suggestion_closed'; suggestion: TabSuggestion; conversation_id?: string }
+  /** An attachment finished extracting or failed: update the chip by its id. */
+  | { type: 'attachment_status'; attachment: ChatAttachment; conversation_id?: string };
 
 /** `GET /chat/projects`: which project chats have anything going on, for a sidebar badge. */
 export interface ProjectChatStatus {

@@ -1,11 +1,13 @@
 // Chat routes (P§6, design spec §4.2 "Chat"/"Controls"): projects, the conversation payload,
 // sending a message (`202` then a reply streamed over the socket), decisions, trusted tabs
 // ("Permitir sempre nesta aba") and reset.
+import { z } from 'zod';
 import { decisionProof } from '../../../crypto/pin';
 import { randomId } from '../../../crypto/random';
 import {
   chatGrantListQuery,
   isTabGrantable,
+  kindFromNameAndMime,
   mobileBatchDecisionBody,
   mobileDecisionBody,
   mobileMessageBody,
@@ -13,6 +15,7 @@ import {
   setHostBody,
   tabQuestionAnswerBody,
   tabSuggestionSendBody,
+  type TChatAttachment,
   type TChatEvent,
   type TChatGrant,
   type TChatGrantListItem,
@@ -21,7 +24,7 @@ import {
   type TTabSuggestion,
 } from '../../contract';
 import type { MockRouter } from '../router';
-import { broadcast, countPinFailure, type MockAction, type MockConversation, type MockDevice, type MockGrant, type MockMessage, type MockState, type MockTabQuestion, type MockTabSuggestion, verifyAuth, WireError } from '../state';
+import { broadcast, countPinFailure, type MockAction, type MockAttachment, type MockConversation, type MockDevice, type MockGrant, type MockMessage, type MockState, type MockTabQuestion, type MockTabSuggestion, verifyAuth, WireError } from '../state';
 import { pushConfirmationNotification, pushReplyNotification } from './notifications';
 
 const USER_ID = 'u1';
@@ -71,6 +74,63 @@ const GRANT_TTL_MS = 24 * 60 * 60_000;
 /** The tabs the fixtures' actions point at, by id -> name (the server joins the tab row for
  * `tab_name`; a tab the mock does not know is one that "no longer exists": `null`). */
 const TAB_NAMES: Record<string, string> = { 't-api': 'api' };
+
+// --- attachments (spec 2026-09-26 §5.3) ------------------------------------------------------------
+
+/** How long the mock "extracts" a file before its `attachment_status` (the real queue takes seconds too). */
+const ATTACHMENT_EXTRACT_MS = 1500;
+
+const attachmentUploadQuery = z.object({ name: z.string().min(1).max(200), project_id: z.string().min(1).max(64).optional() });
+
+/** The wire shape (the server's `toPublicAttachment`): the row minus what only the mock keeps. */
+function attachmentView(a: MockAttachment): TChatAttachment {
+  const { conversation_id: _conversation, message_id: _message, ...view } = a;
+  return view;
+}
+
+function attachmentEvent(a: MockAttachment): TChatEvent {
+  return { type: 'attachment_status', user_id: USER_ID, conversation_id: a.conversation_id, attachment: attachmentView(a) };
+}
+
+/** What the extractors would have found, per kind. */
+function metaFor(kind: TChatAttachment['kind']): Record<string, unknown> {
+  switch (kind) {
+    case 'pdf':
+      return { pages: 12 };
+    case 'image':
+      return { width: 1568, height: 1176 };
+    case 'audio':
+    case 'video':
+      return { duration_s: 42 };
+    case 'xlsx':
+      return { sheets: [{ name: 'Plan1', rows: 20, cols: 4 }] };
+    default:
+      return {};
+  }
+}
+
+/** Ids like the server's `newId()`: lower-case alphanumerics only, since the id is also a file name there. */
+function attachmentId(): string {
+  return randomId(12).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'a0';
+}
+
+/**
+ * Binds `ids` to the message being sent, exactly as the server's `attach`: every id must be this
+ * conversation's, not yet sent, and not invalid — otherwise 409 before anything is stored.
+ */
+function bindAttachments(state: MockState, conversationId: string, ids: string[], messageId: string): MockAttachment[] {
+  const rows = ids.map((id) => state.attachments.get(id));
+  const ok = rows.every((a) => a && a.conversation_id === conversationId && a.message_id === null && !(a.status === 'failed' && a.error_code === 'ATTACHMENT_INVALID'));
+  if (!ok) throw new WireError(409, 'ATTACHMENT_UNAVAILABLE', 'Um dos anexos não está mais disponível.');
+  for (const a of rows as MockAttachment[]) a.message_id = messageId;
+  return rows as MockAttachment[];
+}
+
+function findAttachment(state: MockState, id: string): MockAttachment {
+  const a = state.attachments.get(id);
+  if (!a) throw new WireError(404, 'NOT_FOUND', 'Anexo não encontrado.');
+  return a;
+}
 
 /** The wire shape of a grant (the server's `ChatGrantView`). */
 function grantView(g: MockGrant): TChatGrant {
@@ -248,6 +308,7 @@ interface StreamOptions {
   userMessageId: string;
   assistantMessageId: string;
   userText: string;
+  attachments: MockAttachment[];
 }
 
 /** The `202` reply's follow-up: a `setTimeout` chain so every event is its own macrotask — user
@@ -268,6 +329,7 @@ function scheduleStream(o: StreamOptions): void {
       usage: null,
       error_code: null,
       created_at: new Date(o.now()).toISOString(),
+      attachments: o.attachments.map(attachmentView),
     };
     o.state.messages.get(o.conversationId)?.push(userMessage);
     broadcast(o.state, { type: 'message', user_id: USER_ID, conversation_id: o.conversationId, message: userMessage });
@@ -467,6 +529,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const project = projectId ? state.projects.get(projectId) : undefined;
     const userMessageId = randomId(10);
     const assistantMessageId = randomId(10);
+    const attachments = bindAttachments(state, conversation.id, body.attachment_ids ?? [], userMessageId);
 
     scheduleStream({
       state,
@@ -478,9 +541,59 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
       userMessageId,
       assistantMessageId,
       userText: body.text,
+      attachments,
     });
 
     return { status: 202, body: { conversation_id: conversation.id, user_message_id: userMessageId, assistant_message_id: assistantMessageId } };
+  });
+
+  // --- attachments (spec 2026-09-26 §5.3): the file itself is never kept by the mock, only its row ---
+
+  router.route('POST', '/api/m/v1/chat/attachments', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const query = attachmentUploadQuery.parse(ctx.query);
+    const conversation = conversationFor(state, query.project_id ?? null);
+    const mime = ctx.headers['content-type'] ?? 'application/octet-stream';
+    const kind = kindFromNameAndMime(query.name, mime);
+    if (!kind) throw new WireError(415, 'ATTACHMENT_TYPE', 'Tipo de arquivo não suportado');
+    const attachment: MockAttachment = {
+      id: attachmentId(),
+      conversation_id: conversation.id,
+      message_id: null,
+      name: query.name,
+      mime,
+      kind,
+      bytes: 1024,
+      status: 'pending',
+      error_code: null,
+      meta: null,
+      created_at: new Date(ctx.now()).toISOString(),
+    };
+    state.attachments.set(attachment.id, attachment);
+    setTimeout(() => {
+      if (state.attachments.get(attachment.id) !== attachment) return; // deleted meanwhile
+      attachment.status = 'ready';
+      attachment.meta = metaFor(kind);
+      broadcast(state, attachmentEvent(attachment));
+    }, ATTACHMENT_EXTRACT_MS);
+    return { status: 201, body: { attachment: attachmentView(attachment) } };
+  });
+
+  router.route('GET', '/api/m/v1/chat/attachments/:id/status', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
+    return { status: 200, body: { attachment: attachmentView(findAttachment(state, ctx.params.id!)) } };
+  });
+
+  // The download itself is not mocked: the phone shows images through `<Image>` against the real host and
+  // never fetches a file through `fetch`.
+
+  /** Only while unsent: 404 unknown, 409 once a message carried it (the server's `conflict`). */
+  router.route('DELETE', '/api/m/v1/chat/attachments/:id', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'DELETE', htu: ctx.htu, now: ctx.now() });
+    const a = findAttachment(state, ctx.params.id!);
+    if (a.message_id !== null) throw new WireError(409, 'CONFLICT', 'Este anexo já foi enviado');
+    state.attachments.delete(a.id);
+    return { status: 200, body: { ok: true } };
   });
 
   router.route('POST', '/api/m/v1/chat/reset', (ctx) => {

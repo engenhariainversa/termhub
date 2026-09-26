@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatPanel } from './ChatPanel';
@@ -20,6 +20,8 @@ const answerMock = vi.fn();
 const screenMock = vi.fn();
 const sendSuggestionMock = vi.fn();
 const dismissSuggestionMock = vi.fn();
+const uploadMock = vi.fn();
+const removeAttachmentMock = vi.fn();
 
 vi.mock('../../lib/api', () => {
   // Same signature as the real one: the page shows `message`, so a stand-in that swallows it would
@@ -36,7 +38,13 @@ vi.mock('../../lib/api', () => {
   return {
     ApiError,
     api: {
-      chat: (...a: unknown[]) => chatMock(...a),
+      chat: Object.assign((...a: unknown[]) => chatMock(...a), {
+        attachments: {
+          upload: (...a: unknown[]) => uploadMock(...a),
+          remove: (...a: unknown[]) => removeAttachmentMock(...a),
+          url: (id: string) => `/api/chat/attachments/${id}`,
+        },
+      }),
       sendChatMessage: (...a: unknown[]) => sendMock(...a),
       decideChatAction: (...a: unknown[]) => decideMock(...a),
       decideChatActions: (...a: unknown[]) => decideManyMock(...a),
@@ -110,12 +118,14 @@ beforeEach(() => {
   screenMock.mockReset();
   sendSuggestionMock.mockReset();
   dismissSuggestionMock.mockReset();
+  uploadMock.mockReset();
+  removeAttachmentMock.mockReset();
   screenMock.mockResolvedValue({ text: 'Do you want to proceed?' });
   accountsMock.mockResolvedValue({ accounts: [] });
   auth.state = { user: { id: 'u1' }, viewAs: null };
   chatMock.mockResolvedValue({ conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })], actions: [] });
   sendMock.mockResolvedValue({ message: msg({ id: 'm3', role: 'assistant', text: 'pronto' }) });
-  streamMock.mockReturnValue({ events: [], connected: true });
+  streamMock.mockReturnValue({ connected: true });
 });
 
 afterEach(() => cleanup());
@@ -139,7 +149,7 @@ it('ignores live events of another conversation', async () => {
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
-    return { events: [{ type: 'delta', conversation_id: 'c_other', message_id: 'm9', delta: 'VAZOU' }], connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({
     conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
@@ -152,9 +162,12 @@ it('ignores live events of another conversation', async () => {
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  await waitFor(() => expect(chatMock).toHaveBeenCalled());
+  // The empty row of this conversation, on screen: the panel knows its own id by now.
+  await screen.findByText('A resposta não terminou — tente de novo.');
+  // A delta for that very row, tagged with another conversation: never folded in.
+  act(() => onEvent({ type: 'delta', conversation_id: 'c_other', message_id: 'm9', delta: 'VAZOU' }));
   expect(screen.queryByText('VAZOU')).toBeNull();
-  onEvent({ type: 'confirmation', conversation_id: 'c_other', action_id: 'a9', tool: 'send_input', args: {}, class: 'write', machine_id: null, project_id: null, tab_id: null, summary: 'NÃO É DAQUI', created_at: '' });
+  act(() => onEvent({ type: 'confirmation', conversation_id: 'c_other', action_id: 'a9', tool: 'send_input', args: {}, class: 'write', machine_id: null, project_id: null, tab_id: null, summary: 'NÃO É DAQUI', created_at: '' }));
   expect(screen.queryByText('NÃO É DAQUI')).toBeNull();
 });
 
@@ -167,16 +180,7 @@ it('drops another conversation\'s events while it does not yet know its own id, 
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
-    // Both deltas sit in the buffer before the load ever resolves — this is what proves the buffered
-    // `events` filter (not just the live `onEvent` gate) re-admits the panel's own conversation once
-    // its id becomes known, instead of having dropped it for good.
-    return {
-      events: [
-        { type: 'delta', conversation_id: 'c_other', message_id: 'm9', delta: 'VAZOU' },
-        { type: 'delta', conversation_id: 'c_p1', message_id: 'm1', delta: 'chegou' },
-      ],
-      connected: true,
-    };
+    return { connected: true };
   });
   render(
     <MemoryRouter>
@@ -184,21 +188,30 @@ it('drops another conversation\'s events while it does not yet know its own id, 
     </MemoryRouter>,
   );
 
-  // A live push of another conversation's confirmation, delivered while conversationId is still null.
-  onEvent({ type: 'confirmation', conversation_id: 'c_other', action_id: 'a9', tool: 'send_input', args: {}, class: 'write', machine_id: null, project_id: null, tab_id: null, summary: 'NÃO É DAQUI', created_at: '' });
+  // Delivered while conversationId is still null: two deltas and a confirmation, none of them admitted
+  // yet. The delta of the panel's own conversation is what proves the held events are replayed into
+  // the fold once its id becomes known, instead of having been dropped for good.
+  act(() => {
+    onEvent({ type: 'delta', conversation_id: 'c_other', message_id: 'm9', delta: 'VAZOU' });
+    onEvent({ type: 'delta', conversation_id: 'c_p1', message_id: 'm1', delta: 'chegou' });
+    onEvent({ type: 'confirmation', conversation_id: 'c_other', action_id: 'a9', tool: 'send_input', args: {}, class: 'write', machine_id: null, project_id: null, tab_id: null, summary: 'NÃO É DAQUI', created_at: '' });
+  });
   expect(screen.queryByText('NÃO É DAQUI')).toBeNull();
   expect(screen.queryByText('VAZOU')).toBeNull();
+  expect(screen.queryByText('chegou')).toBeNull();
 
-  resolveLoad({
-    conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
-    messages: [{ id: 'm1', conversation_id: 'c_p1', role: 'assistant', text: '', error_code: null, created_at: '' }],
-    actions: [],
-    host: READY,
+  await act(async () => {
+    resolveLoad({
+      conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
+      messages: [{ id: 'm1', conversation_id: 'c_p1', role: 'assistant', text: '', error_code: null, created_at: '' }],
+      actions: [],
+      host: READY,
+    });
   });
 
-  // Now that the panel knows its own id, the buffered delta of its own conversation reappears...
+  // Now that the panel knows its own id, the held delta of its own conversation reappears...
   expect(await screen.findByText('chegou')).toBeTruthy();
-  // ...but the foreign one, tagged for c_other, never does — neither live nor from the buffer.
+  // ...but the foreign ones, tagged for c_other, never do.
   expect(screen.queryByText('VAZOU')).toBeNull();
   expect(screen.queryByText('NÃO É DAQUI')).toBeNull();
 });
@@ -234,7 +247,13 @@ it('shows the server error when the initial load fails, instead of an unhandled 
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  expect(await screen.findByText('Projeto não encontrado')).toBeTruthy();
+  // Said twice: in the composer's status line, and where the conversation would be — an empty thread
+  // over a status line is easy to read as a conversation that simply has nothing in it.
+  const lines = await screen.findAllByText('Projeto não encontrado');
+  expect(lines).toHaveLength(2);
+  expect(lines.some((l) => l.getAttribute('role') === 'status')).toBe(true);
+  expect(lines.some((l) => l.tagName === 'P' && l.classList.contains('text-sm'))).toBe(true);
+  expect(screen.queryByText(/Pergunte sobre este projeto/)).toBeNull();
 });
 
 it('in a project, a host that is not chosen points to /chat instead of offering a picker', async () => {
@@ -267,6 +286,99 @@ it('no link without an active grant', async () => {
   );
   await waitFor(() => expect(chatMock).toHaveBeenCalled());
   expect(screen.queryByRole('link', { name: /aba(s)? confiáve/ })).toBeNull();
+});
+
+it('a message event merges by id without a refetch, and the streamed text stays until the stored one lands', async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { connected: true };
+  });
+  chatMock.mockResolvedValue({
+    conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
+    messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm2', role: 'assistant', text: '', created_at: '2026-09-21T00:00:01.000Z' })],
+    actions: [],
+    host: READY,
+  });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await screen.findByText('oi');
+  act(() => onEvent({ type: 'delta', conversation_id: 'c_p1', message_id: 'm2', delta: 'par' }));
+  expect(await screen.findByText('par')).toBeInTheDocument();
+
+  // The stored row: same id, final text. Applied in place — no GET /chat.
+  act(() => onEvent({ type: 'message', conversation_id: 'c_p1', message: msg({ id: 'm2', role: 'assistant', text: 'parcial', created_at: '2026-09-21T00:00:01.000Z' }) }));
+  expect(await screen.findByText('parcial')).toBeInTheDocument();
+  expect(screen.queryByText('par')).toBeNull();
+  expect(chatMock).toHaveBeenCalledTimes(1);
+
+  // A row this panel has never seen is appended, again without a refetch.
+  act(() => onEvent({ type: 'message', conversation_id: 'c_p1', message: msg({ id: 'm3', role: 'user', text: 'e agora?', created_at: '2026-09-21T00:00:02.000Z' }) }));
+  expect(await screen.findByText('e agora?')).toBeInTheDocument();
+  expect(chatMock).toHaveBeenCalledTimes(1);
+});
+
+it('a streamed delta re-renders only its own row: a card in the thread is not rendered again', async () => {
+  // `summary` is read by ChatActionCard's render and by nothing else in the panel, so counting its
+  // reads counts the card's renders — without mocking the card away.
+  let reads = 0;
+  const base = action({ id: 'a1', created_at: '2026-09-21T00:00:01.000Z' });
+  const counted = {
+    ...base,
+    get summary() {
+      reads += 1;
+      return base.summary;
+    },
+  } as ChatAction;
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { connected: true };
+  });
+  chatMock.mockResolvedValue({
+    conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
+    messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm2', role: 'assistant', text: '', created_at: '2026-09-21T00:00:02.000Z' })],
+    actions: [counted],
+    host: READY,
+    grants: [],
+  });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await screen.findByText(base.summary);
+  const before = reads;
+  expect(before).toBeGreaterThan(0);
+
+  act(() => onEvent({ type: 'delta', conversation_id: 'c_p1', message_id: 'm2', delta: 'um' }));
+  expect(await screen.findByText('um')).toBeInTheDocument();
+  act(() => onEvent({ type: 'delta', conversation_id: 'c_p1', message_id: 'm2', delta: 'a' }));
+  expect(await screen.findByText('uma')).toBeInTheDocument();
+
+  expect(reads).toBe(before);
+});
+
+it('a failed send shows the server error in the composer\'s status line and gives the text back', async () => {
+  const { ApiError } = await import('../../lib/api');
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY });
+  sendMock.mockRejectedValue(new ApiError(409, 'O chat já está respondendo', 'CHAT_BUSY'));
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalledWith('p1'));
+  const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+  fireEvent.change(box, { target: { value: 'status?' } });
+  fireEvent.click(screen.getByRole('button', { name: /enviar/i }));
+  await waitFor(() => expect(sendMock).toHaveBeenCalledWith('status?', 'p1'));
+  const line = await screen.findByText('O chat já está respondendo');
+  expect(line.getAttribute('role')).toBe('status');
+  await waitFor(() => expect(box.value).toBe('status?'));
 });
 
 it('"Permitir sempre nesta aba" on a pending card records the grant, shows it on the card and counts it in the header', async () => {
@@ -317,7 +429,7 @@ it('a grant event adds to the header count, a grant_revoked removes it, a grante
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [] });
   render(
@@ -374,7 +486,7 @@ it('tab question events add and update the card; another conversation\'s are ign
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [] });
   render(
@@ -431,7 +543,7 @@ it("tab suggestion events add and update the card; another conversation's are ig
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [] });
   render(
@@ -474,23 +586,114 @@ it('takes a second message while the first is still being answered, and shows bo
 });
 
 it('shows "pensando…" on every answer that has started, not only the newest', async () => {
+  // The announcements (`message` with no text yet) reach the panel's fold through the stream's callback.
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { connected: true };
+  });
   chatMock.mockResolvedValue({
     conversation: { id: 'c1', ai_account_id: null },
     messages: [msg({ id: 'q1', text: 'um' }), msg({ id: 'a1', role: 'assistant' }), msg({ id: 'q2', text: 'dois' }), msg({ id: 'a2', role: 'assistant' })],
     actions: [],
     host: READY,
   });
-  streamMock.mockReturnValue({
-    events: [
-      { type: 'message', conversation_id: 'c1', message: msg({ id: 'a1', role: 'assistant' }) },
-      { type: 'message', conversation_id: 'c1', message: msg({ id: 'a2', role: 'assistant' }) },
-    ],
-    connected: true,
-  });
   render(
     <MemoryRouter>
       <ChatPanel />
     </MemoryRouter>,
   );
+  await screen.findByText('dois');
+  act(() => {
+    onEvent({ type: 'message', conversation_id: 'c1', message: msg({ id: 'a1', role: 'assistant' }) });
+    onEvent({ type: 'message', conversation_id: 'c1', message: msg({ id: 'a2', role: 'assistant' }) });
+  });
   await waitFor(() => expect(screen.getAllByText(/pensando/i)).toHaveLength(2));
+});
+
+const attachment = (over: Partial<import('../../lib/types').ChatAttachment> & { id: string }) => ({
+  name: 'relatorio.pdf',
+  mime: 'application/pdf',
+  kind: 'pdf' as const,
+  bytes: 10,
+  status: 'pending' as const,
+  error_code: null,
+  meta: null,
+  created_at: '2026-09-26T00:00:00.000Z',
+  ...over,
+});
+
+it('patches an attachment inside its message when its status arrives, without refetching', async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { events: [], connected: true };
+  });
+  chatMock.mockResolvedValue({
+    conversation: { id: 'c1', project_id: null, ai_account_id: null },
+    messages: [msg({ id: 'm1', role: 'user', text: 'leia', attachments: [attachment({ id: 'att1' })] })],
+    actions: [],
+    host: READY,
+  });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId={null} />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('processando…')).toBeTruthy();
+
+  act(() => onEvent({ type: 'attachment_status', conversation_id: 'c1', attachment: attachment({ id: 'att1', status: 'ready', meta: { pages: 12 } }) }));
+  await waitFor(() => expect(screen.queryByText('processando…')).toBeNull());
+  expect(chatMock).toHaveBeenCalledTimes(1);
+
+  // Another conversation's status never touches this thread.
+  act(() => onEvent({ type: 'attachment_status', conversation_id: 'c_other', attachment: attachment({ id: 'att1', status: 'failed', error_code: 'ATTACHMENT_INVALID' }) }));
+  expect(screen.queryByText(/falhou/)).toBeNull();
+});
+
+it('sends the uploaded attachment ids with the text, and a message with no text at all', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY });
+  uploadMock.mockResolvedValue({ attachment: attachment({ id: 'att1', status: 'ready' }) });
+  sendMock.mockResolvedValue({ message: { id: 'm2' } });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalledWith('p1'));
+
+  fireEvent.change(screen.getByLabelText('Arquivos para anexar'), { target: { files: [new File([new Uint8Array(10)], 'relatorio.pdf', { type: 'application/pdf' })] } });
+  await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(1));
+  // The upload carries the project, so the file lands in this project's conversation (spec §5.3).
+  expect(uploadMock.mock.calls[0][2]).toBe('p1');
+  const send = screen.getByRole('button', { name: /enviar/i }) as HTMLButtonElement;
+  await waitFor(() => expect(send.disabled).toBe(false));
+  fireEvent.click(send);
+  await waitFor(() => expect(sendMock).toHaveBeenCalledWith('', 'p1', ['att1']));
+});
+
+it('feeds an attachment status to the chip still in the box, and only for its own conversation', async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { connected: true };
+  });
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY });
+  uploadMock.mockResolvedValue({ attachment: attachment({ id: 'att1' }) });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalledWith('p1'));
+  fireEvent.change(screen.getByLabelText('Arquivos para anexar'), { target: { files: [new File([new Uint8Array(10)], 'relatorio.pdf', { type: 'application/pdf' })] } });
+  expect(await screen.findByText('processando…')).toBeTruthy();
+
+  act(() => onEvent({ type: 'attachment_status', conversation_id: 'c_other', attachment: attachment({ id: 'att1', status: 'failed', error_code: 'ATTACHMENT_INVALID' }) }));
+  expect(screen.getByText('processando…')).toBeTruthy();
+  expect(screen.queryByText(/falhou/)).toBeNull();
+
+  act(() => onEvent({ type: 'attachment_status', conversation_id: 'c_p1', attachment: attachment({ id: 'att1', status: 'ready', meta: { pages: 2 } }) }));
+  await waitFor(() => expect(screen.queryByText('processando…')).toBeNull());
+  expect(screen.getByText('relatorio.pdf')).toBeTruthy();
 });

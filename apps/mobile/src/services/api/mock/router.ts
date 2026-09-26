@@ -18,6 +18,18 @@ export interface MockContext {
   htu: string;
 }
 
+/** What a route sees as `ctx.body` for an upload: the mock never reads the file (nothing here can);
+ * it only knows where it is and what it claims to be. */
+export interface MockUploadBody {
+  upload: { file_uri: string; mime: string };
+}
+
+export function isUploadBody(body: unknown): body is MockUploadBody {
+  if (typeof body !== 'object' || body === null || !('upload' in body)) return false;
+  const upload = (body as { upload: unknown }).upload;
+  return typeof upload === 'object' && upload !== null && typeof (upload as { file_uri?: unknown }).file_uri === 'string' && typeof (upload as { mime?: unknown }).mime === 'string';
+}
+
 export type RouteHandler = (ctx: MockContext) => { status: number; body: unknown };
 
 interface RouteEntry {

@@ -64,9 +64,11 @@ ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
 # rsvg-convert + font-inter: the public city's link preview card (apps/server/src/public/card.ts)
 # rasterises with the same librsvg tool apps/landing/og/build.sh uses, as a runtime subprocess.
 # Package names are Alpine's (apk), not Debian's librsvg2-bin — this image is node:22-alpine.
+# /data/chat-files: the chat-files volume is initialised from this directory, owner included.
 RUN apk add --no-cache tmux openssh-client bash tini rsvg-convert font-inter \
  && addgroup -S app && adduser -S app -G app -h /home/app -s /bin/bash \
- && mkdir -p /home/app/.ssh && chown app:app /home/app/.ssh && chmod 700 /home/app/.ssh
+ && mkdir -p /home/app/.ssh && chown app:app /home/app/.ssh && chmod 700 /home/app/.ssh \
+ && mkdir -p /data/chat-files && chown app:app /data/chat-files
 COPY --from=build --chown=app:app /app/node_modules ./node_modules
 COPY --from=build --chown=app:app /app/package.json ./
 COPY --from=build --chown=app:app /app/apps/server/package.json ./apps/server/

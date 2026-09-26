@@ -4,6 +4,7 @@
 import type {
   TChallengeBody,
   TChallengeResponse,
+  TChatAttachment,
   TChatEvent,
   TChatGrantListResponse,
   TChatProjectsResponse,
@@ -27,6 +28,8 @@ import type {
   TTabSuggestionSendBody,
   TTokenBody,
   TTokenResponse,
+  TTranscription,
+  TTranscriptionConfigResponse,
 } from './contract';
 
 /**
@@ -35,6 +38,9 @@ import type {
  * DPoP proof internally, so callers only ever hand it a token.
  */
 export type Auth = { accessToken: string };
+
+/** A file on the phone, as the pickers hand it over: the upload task streams it from `uri`. */
+export type UploadFile = { uri: string; name: string; mime: string };
 
 export interface MobileApi {
   readonly mode: 'mock' | 'http';
@@ -80,6 +86,24 @@ export interface MobileApi {
   sendTabSuggestion(auth: Auth, suggestionId: string, body: TTabSuggestionSendBody): Promise<void>;
   /** "Dispensar": closes the card, the tab is not touched. Idempotent; 404 unknown. */
   dismissTabSuggestion(auth: Auth, suggestionId: string): Promise<void>;
+
+  // attachments (spec 2026-09-26 §5.3, §5.6)
+  /** Streams the file as the raw body; `onProgress` is 0..1. 415 ATTACHMENT_TYPE, 413 ATTACHMENT_TOO_LARGE / ATTACHMENT_QUOTA. */
+  uploadAttachment(auth: Auth, file: UploadFile, projectId: string | null, onProgress?: (fraction: number) => void): Promise<TChatAttachment>;
+  /** Only while unsent: 404 unknown, 409 once it was sent with a message. */
+  deleteAttachment(auth: Auth, id: string): Promise<void>;
+  /** The download url plus the headers a `<Image source>` needs to fetch it (bearer and a fresh DPoP proof). */
+  attachmentSource(auth: Auth, id: string): Promise<{ uri: string; headers: Record<string, string> }>;
+
+  // voice (P§6 `/transcriptions`, guarded `terminals`; `routes/m-transcriptions.ts`)
+  /** Whether the server transcribes audio at all (whisper configured). */
+  transcriptionConfig(auth: Auth): Promise<TTranscriptionConfigResponse>;
+  /** Uploads a clip (a `file://` URI, one of the server's accepted audio types) as the raw body;
+   * `seconds` is the recorded length (at most 300). Answers the accepted job, to be polled with
+   * `transcription` until `done` or `error`. 400 for an empty clip or a mime the server refuses,
+   * 429 past 10 uploads per 10 min. */
+  transcribe(auth: Auth, fileUri: string, mime: string, seconds: number, onProgress?: (fraction: number) => void): Promise<TTranscription>;
+  transcription(auth: Auth, id: string): Promise<TTranscription>;
 
   // notifications (P§9)
   notifications(auth: Auth, before?: string): Promise<TNotificationsResponse>;

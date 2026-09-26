@@ -15,7 +15,9 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "O microfone é usado para ditar mensagens no chat. O áudio é transcrito e nunca é guardado.",
-        "NSFaceIDUsageDescription": "O Face ID é um atalho para o seu PIN ao desbloquear o app e ao autorizar uma ação."
+        "NSFaceIDUsageDescription": "O Face ID é um atalho para o seu PIN ao desbloquear o app e ao autorizar uma ação.",
+        "NSPhotoLibraryUsageDescription": "A galeria é usada para anexar fotos e vídeos às mensagens do chat.",
+        "NSCameraUsageDescription": "A câmera é usada para tirar uma foto e anexá-la ao chat."
       }
     },
     "android": {
@@ -25,6 +27,8 @@
         "foregroundImage": "./assets/adaptive-icon.png"
       },
       "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
         "RECORD_AUDIO",
         "USE_BIOMETRIC",
         "USE_FINGERPRINT"
@@ -54,6 +58,14 @@
         "expo-audio",
         {
           "microphonePermission": "O microfone é usado para ditar mensagens no chat. O áudio é transcrito e nunca é guardado."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "A galeria é usada para anexar fotos e vídeos às mensagens do chat.",
+          "cameraPermission": "A câmera é usada para tirar uma foto e anexá-la ao chat.",
+          "microphonePermission": false
         }
       ],
       [

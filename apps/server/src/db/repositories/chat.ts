@@ -1,6 +1,8 @@
+import type { ChatAttachment } from '@termhub/mobile-api';
 import type { PrismaClient } from '../prisma.js';
 import { Prisma, type ChatConversation as PrismaConversation, type ChatMessage as PrismaMessage } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
+import { mapAttachment, toPublicAttachment } from './chat-attachments.js';
 
 export type ChatRole = 'user' | 'assistant';
 
@@ -31,6 +33,8 @@ export interface ChatMessage {
   usage: unknown | null;
   error_code: string | null;
   created_at: string;
+  /** The files sent with a user message (spec 2026-09-26 §5.5). Present only when there is at least one. */
+  attachments?: ChatAttachment[];
 }
 
 const mapConversation = (c: PrismaConversation): ChatConversation => ({
@@ -242,6 +246,16 @@ export class ChatRepository {
    */
   async listMessages(conversationId: string, limit = 200): Promise<ChatMessage[]> {
     const rows = await this.db.chatMessage.findMany({ where: { conversationId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit });
-    return rows.reverse().map(mapMessage);
+    const messages = rows.reverse().map(mapMessage);
+    if (messages.length === 0) return messages;
+    // Every listed message's attachments in one query; a message with none stays as it was.
+    const attached = await this.db.chatAttachment.findMany({ where: { messageId: { in: messages.map((m) => m.id) } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+    if (attached.length === 0) return messages;
+    const byMessage = new Map<string, ChatAttachment[]>();
+    for (const a of attached) {
+      const row = mapAttachment(a);
+      byMessage.set(row.message_id!, [...(byMessage.get(row.message_id!) ?? []), toPublicAttachment(row)]);
+    }
+    return messages.map((m) => (byMessage.has(m.id) ? { ...m, attachments: byMessage.get(m.id) } : m));
   }
 }

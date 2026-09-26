@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatPage } from './ChatPage';
@@ -78,7 +78,7 @@ beforeEach(() => {
   auth.state = { user: { id: 'u1' }, viewAs: null };
   chatMock.mockResolvedValue({ conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })], actions: [] });
   sendMock.mockResolvedValue({ message: msg({ id: 'm3', role: 'assistant', text: 'pronto' }) });
-  streamMock.mockReturnValue({ events: [], connected: true });
+  streamMock.mockReturnValue({ connected: true });
 });
 
 afterEach(() => cleanup());
@@ -92,6 +92,9 @@ function mockPointer(coarse: boolean): () => void {
     window.matchMedia = original;
   };
 }
+
+/** The element that scrolls is the list's parent (`ChatThread`); the list itself keeps the `Conversa` name. */
+const findScroller = async () => (await screen.findByRole('list', { name: 'Conversa' })).parentElement as HTMLElement;
 
 it('shows the stored conversation', async () => {
   render(<ChatPage />);
@@ -136,7 +139,7 @@ it('re-reads the conversation whenever the socket (re)connects', async () => {
   // Review Focus 5: /ws/chat carries no history, so a reconnect mid-answer must refetch.
   streamMock.mockImplementation((onReconnect: () => void) => {
     onReconnect();
-    return { events: [], connected: true };
+    return { connected: true };
   });
   render(<ChatPage />);
   await waitFor(() => expect(chatMock.mock.calls.length).toBeGreaterThanOrEqual(2));
@@ -158,15 +161,18 @@ it('drops the delta trail from before a reset, keeping only what streamed after 
     conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
     messages: [msg({ id: 'm2', role: 'assistant', text: '' })],
   });
-  streamMock.mockReturnValue({
-    events: [
-      { type: 'delta', message_id: 'm2', delta: 'resposta abandonada' },
-      { type: 'reset', message_id: 'm2' },
-      { type: 'delta', message_id: 'm2', delta: 'resposta nova' },
-    ],
-    connected: true,
+  let deliver: (e: unknown) => void = () => {};
+  streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
+    deliver = onEvent;
+    return { connected: true };
   });
   render(<ChatPage />);
+  await screen.findByRole('list', { name: 'Conversa' });
+  act(() => {
+    deliver({ type: 'delta', message_id: 'm2', delta: 'resposta abandonada' });
+    deliver({ type: 'reset', message_id: 'm2' });
+    deliver({ type: 'delta', message_id: 'm2', delta: 'resposta nova' });
+  });
   expect(await screen.findByText('resposta nova')).toBeTruthy();
   expect(screen.queryByText(/resposta abandonada/)).toBeNull();
 });
@@ -188,9 +194,15 @@ it('says "pensando…" while the message it is answering is the live one', async
     conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
     messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm2', role: 'assistant', text: '' })],
   });
-  // The run was announced over the socket: this row is being written right now.
-  streamMock.mockReturnValue({ events: [{ type: 'message', message: msg({ id: 'm2', role: 'assistant', text: '' }) }], connected: true });
+  let deliver: (e: unknown) => void = () => {};
+  streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
+    deliver = onEvent;
+    return { connected: true };
+  });
   render(<ChatPage />);
+  await screen.findByRole('list', { name: 'Conversa' });
+  // The run was announced over the socket: this row is being written right now.
+  act(() => deliver({ type: 'message', message: msg({ id: 'm2', role: 'assistant', text: '' }) }));
   expect(await screen.findByText(/pensando/i)).toBeTruthy();
   expect(screen.queryByText(/não terminou/i)).toBeNull();
 });
@@ -200,14 +212,14 @@ it('scrolls the list to the newest message when one arrives', async () => {
   let deliver: (e: unknown) => void = () => {};
   streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
     deliver = onEvent;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock
     .mockResolvedValueOnce({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })] })
     .mockResolvedValue({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm2', role: 'assistant', text: 'pronto' })] });
 
   render(<ChatPage />);
-  const list = await screen.findByRole('list');
+  const list = await findScroller();
   // jsdom lays nothing out, so the scrollable height is stubbed; what is asserted is that the page
   // pins the list to its bottom on new content.
   Object.defineProperty(list, 'scrollHeight', { value: 480, configurable: true });
@@ -248,14 +260,14 @@ it('leaves the scroll position alone once the reader has scrolled away from the 
   let deliver: (e: unknown) => void = () => {};
   streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
     deliver = onEvent;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock
     .mockResolvedValueOnce({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })] })
     .mockResolvedValue({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm2', role: 'assistant', text: 'pronto' })] });
 
   render(<ChatPage />);
-  const list = await screen.findByRole('list');
+  const list = await findScroller();
   // Far from the bottom by isNearBottom's own rule (100 + 200 < 1000 - 48). The scroll event is
   // the only thing that can tell the page the reader moved: nothing here reads live geometry.
   Object.defineProperty(list, 'scrollHeight', { value: 1000, configurable: true });
@@ -270,17 +282,16 @@ it('leaves the scroll position alone once the reader has scrolled away from the 
 
 it('pins the thread to the bottom when a card lands, not only when a message does', async () => {
   let deliver: (e: unknown) => void = () => {};
-  // One stable `events` array across renders, so nothing but the thread's own contents can make the
-  // pin effect run: this is what tells a card apart from a message here.
-  const events: unknown[] = [];
+  // A `confirmation` is nothing to the live fold (its version stays), so nothing but the thread's own
+  // contents can make the pin effect run: this is what tells a card apart from a message here.
   streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
     deliver = onEvent;
-    return { events, connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })], actions: [] });
 
   render(<ChatPage />);
-  const list = await screen.findByRole('list', { name: 'Conversa' });
+  const list = await findScroller();
   Object.defineProperty(list, 'scrollHeight', { value: 480, configurable: true });
   expect(list.scrollTop).toBe(0);
 
@@ -327,7 +338,7 @@ it('returns to the bottom on send, even if the reader had scrolled away', async 
     .mockResolvedValueOnce({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' })] })
     .mockResolvedValue({ conversation: { id: 'c1' }, messages: [msg({ id: 'm1', role: 'user', text: 'oi' }), msg({ id: 'm3', role: 'assistant', text: 'pronto' })] });
   render(<ChatPage />);
-  const list = await screen.findByRole('list');
+  const list = await findScroller();
   Object.defineProperty(list, 'scrollHeight', { value: 480, configurable: true });
   Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
   Object.defineProperty(list, 'scrollTop', { value: 50, configurable: true, writable: true });
@@ -361,11 +372,14 @@ it('does not call a tool-only phase a dead run', async () => {
     conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
     messages: [msg({ id: 'm1', role: 'user', text: 'o que está rodando?' }), msg({ id: 'm2', role: 'assistant', text: '' })],
   });
-  streamMock.mockReturnValue({
-    events: [{ type: 'action', message_id: 'm2', tool: 'list_tabs', tool_use_id: 'tu_1', args: {} }],
-    connected: true,
+  let deliver: (e: unknown) => void = () => {};
+  streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
+    deliver = onEvent;
+    return { connected: true };
   });
   render(<ChatPage />);
+  await screen.findByRole('list', { name: 'Conversa' });
+  act(() => deliver({ type: 'action', message_id: 'm2', tool: 'list_tabs', tool_use_id: 'tu_1', args: {} }));
 
   expect(await screen.findByText('list_tabs')).toBeTruthy();
   expect(screen.queryByText(/não terminou/i)).toBeNull();
@@ -473,7 +487,7 @@ it('a confirmation event on the socket adds the question as a card without a ref
   let deliver: (e: unknown) => void = () => {};
   streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
     deliver = onEvent;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   render(<ChatPage />);
   await waitFor(() => expect(chatMock).toHaveBeenCalledTimes(1));
@@ -500,7 +514,7 @@ it('a decision event on the socket updates the card by its action id, for a deci
   let deliver: (e: unknown) => void = () => {};
   streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
     deliver = onEvent;
-    return { events: [], connected: true };
+    return { connected: true };
   });
   chatMock.mockResolvedValue({
     conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
@@ -570,11 +584,14 @@ it('fetches nothing from an answer: no element in the model text can make the br
   await screen.findByText(/olha isso/);
   // The whole document for everything this page never draws itself — the error paragraphs today, a
   // streaming preview or a conversation title tomorrow, all outside the thread and all able to fetch.
-  expect(document.querySelectorAll('img, video, input, iframe, image')).toHaveLength(0);
-  // `svg` alone is scoped to the thread, which is where the model's text lands: the page's own chrome
-  // legitimately draws inline SVG (the composer's one send/mic glyph), and that is not model markup.
+  // The composer's own hidden file picker is the one `input` that cannot fetch anything.
+  expect(document.querySelectorAll('video, input:not([type="file"]), iframe, image')).toHaveLength(0);
+  // `img` and `svg` are scoped to the thread, which is where the model's text lands: the page's own
+  // chrome legitimately draws inline SVG (the composer's send/mic and paperclip glyphs) and an `img`
+  // (an image chip's thumbnail in the composer, a sent image's thumbnail in a user bubble — both the
+  // page's own, same-origin), and none of that is model markup. This conversation sends no image.
   const thread = screen.getByRole('list', { name: 'Conversa' });
-  expect(thread.querySelectorAll('svg')).toHaveLength(0);
+  expect(thread.querySelectorAll('img, svg')).toHaveLength(0);
 });
 
 it('puts a card between the two messages it was proposed between', async () => {
@@ -608,7 +625,8 @@ it('stretches to its region instead of asking for a percentage of it', async () 
   // lays nothing out, so the class is what can be pinned — the symptom only shows on a device.
   render(<ChatPage />);
   const thread = await screen.findByRole('list', { name: 'Conversa' });
-  const column = thread.parentElement;
+  // The page's reading column (`ChatPanel`), capped at its measure; the thread's own wrappers sit inside it.
+  const column = thread.closest('.max-w-3xl');
   expect(column?.className).toContain('flex-1');
   expect(column?.className).not.toContain('h-full');
 });
@@ -619,8 +637,8 @@ it('does not hand its scroll to the document when the thread reaches its end', a
   // for ever under the one you are reading. jsdom does not scroll, so the class is what can be
   // pinned; the behaviour itself only shows on a device.
   render(<ChatPage />);
-  const thread = await screen.findByRole('list', { name: 'Conversa' });
-  expect(thread.className).toContain('overscroll-contain');
+  const scroller = await findScroller();
+  expect(scroller.className).toContain('overscroll-contain');
 });
 
 it('cannot be widened past the viewport by an unbreakable token in an answer', async () => {
@@ -681,8 +699,14 @@ it('renders a streamed delta as Markdown too, while it is still being written', 
     conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
     messages: [msg({ id: 'm2', role: 'assistant', text: '' })],
   });
-  streamMock.mockReturnValue({ events: [{ type: 'delta', message_id: 'm2', delta: '**parcial**' }], connected: true });
+  let deliver: (e: unknown) => void = () => {};
+  streamMock.mockImplementation((_onReconnect: () => void, onEvent: (e: unknown) => void) => {
+    deliver = onEvent;
+    return { connected: true };
+  });
   render(<ChatPage />);
+  await screen.findByRole('list', { name: 'Conversa' });
+  act(() => deliver({ type: 'delta', message_id: 'm2', delta: '**parcial**' }));
 
   const el = await screen.findByText('parcial');
   expect(el.tagName).toBe('STRONG');

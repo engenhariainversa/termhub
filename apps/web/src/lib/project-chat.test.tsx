@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { ProjectChatProvider, useProjectChat } from './project-chat';
 
 const projectsMock = vi.fn();
-const useChatStreamMock = vi.fn((_r: unknown, cb: (e: unknown) => void) => ((emit = cb), { events: [], connected: true }));
+const useChatStreamMock = vi.fn((_r: unknown, cb: (e: unknown) => void) => ((emit = cb), { connected: true }));
 let emit!: (e: unknown) => void;
 // `can` defaults to true for both permissions the status feed needs, so the existing tests exercise
 // the feed exactly as before; the gating test below overrides it.

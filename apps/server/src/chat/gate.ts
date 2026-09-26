@@ -13,6 +13,7 @@ const readTools = new Set([
   'read_screen',
   'wait_for_state',
   'list_tasks',
+  'read_attachment',
 ]);
 
 const writeTools = new Set([

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatPage } from './ChatPage';
 import type { ChatMessage } from '../lib/types';
@@ -17,8 +17,10 @@ vi.mock('../lib/api', () => {
 // The chat is the signed-in user's own, never the user an admin is "viewing as" (see ChatPage).
 vi.mock('../lib/auth', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 // '../lib/chat' is deliberately NOT mocked here: this file pins the real useChatStream's
-// event-delivery contract against ChatPage. The bug lived exactly at that seam — the hook caps
-// its buffer, and the page must not derive "have I handled this event" from that capped array.
+// event-delivery contract against ChatPage. The bug lived exactly at that seam — the hook used to
+// keep a capped 500-event buffer, and the page derived "have I handled this event" from an index
+// into it, so past the cap the terminating `message` event was silently dropped. The hook now
+// delivers every event once through `onEvent`, and this is the test that keeps it so.
 
 /** Minimal stand-in for the browser WebSocket, same shape as terminal-connection.test.ts's FakeSocket. */
 class FakeSocket {
@@ -65,11 +67,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('still refetches a finished answer after the stream buffer plateaus past its cap', async () => {
-  // The hook's own buffer settles at a constant length once ~501 events have arrived (each new
-  // event evicts the oldest). 600 deltas plus the terminating `message` event comfortably clears
-  // that plateau — if the page tracks "handled" as an index into the capped array, this `message`
-  // event is silently dropped and the reply never leaves "pensando…".
+it('still lands a finished answer after 600 streamed frames', async () => {
+  // The old buffer settled at a constant length once ~501 events had arrived (each new event
+  // evicting the oldest). 600 deltas plus the terminating `message` event comfortably clears that
+  // plateau — if any delivery ever tracked "handled" as an index into a capped array, this `message`
+  // event would be silently dropped and the reply would never leave "pensando…".
   render(<ChatPage />);
   await waitFor(() => expect(chatMock).toHaveBeenCalledTimes(1));
 
@@ -90,5 +92,9 @@ it('still refetches a finished answer after the stream buffer plateaus past its 
     last().message({ type: 'message', message: msg({ id: 'm2', text: 'pronto' }) });
   });
 
-  await waitFor(() => expect(chatMock).toHaveBeenCalledTimes(3));
+  // The stored row is merged in place by id: the final text shows, and the streamed 600 x's are let
+  // go of, without one more GET /chat.
+  expect(await screen.findByText('pronto')).toBeTruthy();
+  expect(screen.queryByText(/^x+$/)).toBeNull();
+  expect(chatMock).toHaveBeenCalledTimes(2);
 });

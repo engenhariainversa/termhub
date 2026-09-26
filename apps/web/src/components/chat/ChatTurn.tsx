@@ -2,7 +2,9 @@ import { memo, useMemo } from 'react';
 import type { MouseEvent } from 'react';
 import { decorateCodeBlocks } from '../../lib/code-blocks';
 import { renderMarkdown } from '../../lib/markdown';
+import { splitSettled } from '../../lib/markdown-split';
 import type { ChatErrorCode, ChatMessage } from '../../lib/types';
+import { MessageAttachments } from './MessageAttachments';
 
 const COPY_FEEDBACK_MS = 1500;
 
@@ -100,12 +102,21 @@ function flashCopy(button: HTMLElement, outcome: (typeof COPY_OUTCOME)[keyof typ
   }, COPY_FEEDBACK_MS);
 }
 
+/** Markdown to sanitised HTML, with the copy buttons on any fence: the one path both halves go through. */
+function toHtml(markdown: string): string {
+  if (!markdown) return '';
+  const rendered = renderMarkdown(markdown, { markdownOnly: true });
+  // No fence in this piece, nothing to decorate: every delta of a prose-only reply would otherwise pay
+  // for a full DOMParser round trip that cannot change anything.
+  return rendered.includes('<pre') ? decorateCodeBlocks(rendered) : rendered;
+}
+
 export interface ChatTurnProps {
   message: ChatMessage;
-  /** What has streamed for this row so far, if anything (`live.deltas` in `ChatPage`). */
+  /** What has streamed for this row so far, if anything (`fold.get(id).text` in `ChatPanel`). */
   streaming?: string;
-  /** The tool calls seen for this row while it is being written (`live.actions` in `ChatPage`). */
-  tools?: { tool: string }[];
+  /** The tool calls seen for this row while it is being written (`fold.get(id).tools` in `ChatPanel`). */
+  tools?: readonly { tool: string }[];
   /** The page decided this empty row is the answer being written right now: say "pensando…". */
   waiting: boolean;
   /** The page decided nothing will ever fill this row: say so instead of waiting for ever. */
@@ -127,28 +138,33 @@ export interface ChatTurnProps {
  */
 export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, waiting, failed }: ChatTurnProps) {
   const body = message.role === 'user' ? '' : message.text || streaming || (waiting ? 'pensando…' : '');
-  // Keyed on the body alone: the same text always sanitises to the same HTML, so a delta only ever
-  // re-parses the row it lands in. `decorateCodeBlocks` runs inside the same memo rather than a
-  // second pass elsewhere — it, too, would otherwise re-run on every streamed delta.
-  const html = useMemo(() => {
-    if (!body) return '';
-    const rendered = renderMarkdown(body, { markdownOnly: true });
-    // No fence in this answer, nothing to decorate: every delta of a prose-only reply would otherwise
-    // pay for a full DOMParser round trip that cannot change anything.
-    return rendered.includes('<pre') ? decorateCodeBlocks(rendered) : rendered;
-  }, [body]);
+  /**
+   * While the answer streams (nothing stored yet), the body is split at its last finished block: the
+   * settled prefix is parsed once and kept by its text, and only the tail is parsed again on each
+   * delta — parsing the whole answer per delta was O(n²) over a long reply. Once the text is stored the
+   * whole body is the settled half, parsed once; it is the same Markdown, so the swap does not reflow.
+   */
+  const live = message.role === 'assistant' && !message.text && Boolean(streaming);
+  const { settled, tail } = useMemo(() => (live ? splitSettled(body) : { settled: body, tail: '' }), [body, live]);
+  const settledHtml = useMemo(() => toHtml(settled), [settled]);
+  const tailHtml = useMemo(() => toHtml(tail), [tail]);
 
   if (message.role === 'user') {
+    const attachments = message.attachments ?? [];
     return (
-      <li className="flex justify-end">
-        {/* `break-words` so a pasted path or URL wraps instead of widening the column on a phone. */}
-        <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-accent/10 px-4 py-2.5 text-sm leading-relaxed text-fg">{message.text}</div>
+      <li className="chat-enter flex justify-end">
+        {/* `break-words` so a pasted path or URL wraps instead of widening the column on a phone. A
+            message may be attachments alone (spec §3): then there is no text line at all. */}
+        <div className="max-w-[85%] break-words rounded-2xl bg-accent/10 px-4 py-2.5 text-sm leading-relaxed text-fg">
+          {message.text && <div className="whitespace-pre-wrap">{message.text}</div>}
+          {attachments.length > 0 && <MessageAttachments attachments={attachments} />}
+        </div>
       </li>
     );
   }
 
   return (
-    <li className="text-fg">
+    <li className="chat-enter text-fg">
       {/* The one place in the chat that renders HTML, and only ever `renderMarkdown`'s output: this
        * text comes from an agent that reads real terminal screens, so `markdownOnly` keeps this to
        * the elements Markdown itself produces — nothing here can make the browser fetch a URL.
@@ -162,13 +178,17 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
        * to the thread. `pre` keeps its own horizontal scroll either way. */}
       {body && (
         <div
-          className="prose-termhub overflow-x-auto break-words"
+          // `min-h-10` reserves one line (a paragraph and its margins) under "pensando…", so the first
+          // delta does not change the row's height.
+          className="prose-termhub min-h-10 overflow-x-auto break-words"
           // The one delegated handler for every copy button this row's HTML may contain (there can be
           // several, one per fence) — a per-block React handler is impossible anyway, since the blocks
           // come from an HTML string, not from JSX.
           onClick={handleCopyClick}
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
+        >
+          {settledHtml && <div dangerouslySetInnerHTML={{ __html: settledHtml }} />}
+          {tailHtml && <div dangerouslySetInnerHTML={{ __html: tailHtml }} />}
+        </div>
       )}
       {(tools ?? []).length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">

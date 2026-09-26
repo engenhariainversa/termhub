@@ -5,7 +5,17 @@
 // `@termhub/mobile-api` exports these types directly (design spec §6).
 import type { TChatAction, TChatConversation, TChatEvent, TChatGrant, TChatHostState, TChatMessage, TTabQuestion, TTabSuggestion } from '@/services/api/contract';
 
-export type ChatMessage = TChatMessage;
+/**
+ * A message row, plus what only this device knows about a row it inserted before the server echoed
+ * it (chat redesign spec §4.2 "Optimistic user bubble"): `local: 'sending'` until the `202` renames
+ * it to the server's id, `'failed'` when the send failed — the row stays, with its reason and
+ * "Tentar de novo". Never present on a row that came from the server.
+ */
+export type ChatMessage = TChatMessage & {
+  local?: 'sending' | 'failed';
+  /** pt-BR, with `local: 'failed'`: why. */
+  local_error?: string;
+};
 export type ChatAction = TChatAction;
 export type ChatConversation = TChatConversation;
 export type ChatHostState = TChatHostState;

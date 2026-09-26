@@ -7,6 +7,7 @@ vi.mock('../control/screen.js', async (orig) => ({ ...(await orig<typeof import(
 vi.mock('../control/terminals.js', async (orig) => ({ ...(await orig<typeof import('../control/terminals.js')>()), sendInput: vi.fn() }));
 vi.mock('../control/tasks.js', async (orig) => ({ ...(await orig<typeof import('../control/tasks.js')>()), createTask: vi.fn(), deleteTask: vi.fn() }));
 vi.mock('../control/agents.js', async (orig) => ({ ...(await orig<typeof import('../control/agents.js')>()), startAgent: vi.fn() }));
+vi.mock('../chat/attachments/read-tool.js', async (orig) => ({ ...(await orig<typeof import('../chat/attachments/read-tool.js')>()), readAttachment: vi.fn() }));
 
 import { canAccess } from '../auth/permissions.js';
 import { listMachines } from '../control/inventory.js';
@@ -14,6 +15,8 @@ import { readScreen } from '../control/screen.js';
 import { sendInput } from '../control/terminals.js';
 import { createTask, deleteTask } from '../control/tasks.js';
 import { startAgent } from '../control/agents.js';
+import { readAttachment } from '../chat/attachments/read-tool.js';
+import type { AttachmentStore } from '../chat/attachments/store.js';
 import { ControlError } from '../control/context.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ApiToken } from '../db/repositories/api-tokens.js';
@@ -26,7 +29,7 @@ import { TokenRateLimiter } from './rate-limit.js';
 const SECRET = 'thb_pat_' + 'A'.repeat(43);
 const token = (over: Partial<ApiToken> = {}): ApiToken => ({ id: 'tok1', user_id: 'u1', name: 'jarvis', scopes: ['read'], expires_at: null, last_used_at: null, revoked_at: null, created_at: '', ...over });
 
-function build(opts: { token?: ApiToken | undefined; grants?: string[]; limiter?: TokenRateLimiter } = {}) {
+function build(opts: { token?: ApiToken | undefined; grants?: string[]; limiter?: TokenRateLimiter; attachments?: AttachmentStore } = {}) {
   const app = Fastify();
   applyErrorHandler(app);
   const active = 'token' in opts ? opts.token : token();
@@ -38,7 +41,7 @@ function build(opts: { token?: ApiToken | undefined; grants?: string[]; limiter?
   const repos = { apiTokens, users: { findById: vi.fn(async (id: string) => (id === 'u1' ? { id: 'u1', role_id: 'r' } : undefined)) } } as unknown as Repositories;
   const grants = opts.grants ?? ['machines:read', 'projects:read', 'terminals:read'];
   vi.mocked(canAccess).mockImplementation(async (_r, _u, resource, action) => grants.includes(`${resource}:${action}`));
-  app.register((a) => mcpRoutes(a, { repos, version: '0.0.0-test', limiter: opts.limiter }));
+  app.register((a) => mcpRoutes(a, { repos, version: '0.0.0-test', limiter: opts.limiter, attachments: opts.attachments }));
   return { app, apiTokens };
 }
 
@@ -517,5 +520,49 @@ describe('start_agent', () => {
     expect(r.json().result.content[0].text).toContain('ainda não é suportado');
     await flush();
     expect(apiTokens.recordEvent.mock.calls[0][0]).toMatchObject({ tool: 'start_agent', ok: false, error_code: 'PROVIDER_UNSUPPORTED' });
+  });
+});
+
+describe('read_attachment', () => {
+  const chatGrants = ['chat:read'];
+  const store = { read: vi.fn(), write: vi.fn(), remove: vi.fn(), listAll: async function* () {} } as unknown as AttachmentStore;
+
+  it('is offered to a read token whose user can read the chat, and hidden otherwise', async () => {
+    const offered = await rpc(build({ grants: chatGrants }).app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
+    expect(offered.json().result.tools.map((t: { name: string }) => t.name)).toEqual(['read_attachment']);
+    const hidden = await rpc(build({ grants: ['machines:read'] }).app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
+    expect(hidden.json().result.tools.map((t: { name: string }) => t.name)).not.toContain('read_attachment');
+  });
+
+  it('passes an MCP content result through untouched — an image block stays an image block — and audits without the content', async () => {
+    vi.mocked(readAttachment).mockResolvedValue({ content: [{ type: 'image', data: 'QUJD', mimeType: 'image/png' }, { type: 'text', text: '«foto.png» imagem 2×2' }] });
+    const { app, apiTokens } = build({ grants: chatGrants, attachments: store });
+    const r = await rpc(app, call('read_attachment', { id: 'abc123' }));
+    expect(r.json().result).toEqual({ content: [{ type: 'image', data: 'QUJD', mimeType: 'image/png' }, { type: 'text', text: '«foto.png» imagem 2×2' }] });
+    // The store reached the tool through the context, so the tool can read the file.
+    expect(vi.mocked(readAttachment).mock.calls[0][0].attachments).toBe(store);
+    await flush();
+    expect(apiTokens.recordEvent.mock.calls[0][0]).toMatchObject({ tool: 'read_attachment', ok: true, error_code: null });
+    expect(JSON.stringify(apiTokens.recordEvent.mock.calls)).not.toMatch(/QUJD|foto\.png/);
+  });
+
+  it('a not-found is a pt-BR tool error with its code; an invalid offset never reaches the tool', async () => {
+    vi.mocked(readAttachment).mockRejectedValue(new ControlError('NOT_FOUND', 'Anexo não encontrado'));
+    const { app, apiTokens } = build({ grants: chatGrants, attachments: store });
+    const r = await rpc(app, call('read_attachment', { id: 'abc123' }));
+    expect(r.json().result).toEqual({ content: [{ type: 'text', text: 'Anexo não encontrado' }], isError: true });
+    vi.mocked(readAttachment).mockClear();
+    const bad = await rpc(app, call('read_attachment', { id: 'abc123', offset: -1 }));
+    expect(bad.json().error ?? bad.json().result?.isError).toBeTruthy();
+    expect(readAttachment).not.toHaveBeenCalled();
+    await flush();
+    expect(apiTokens.recordEvent.mock.calls.map((c) => c[0].error_code)).toEqual(['NOT_FOUND', 'INVALID_ARGS']);
+  });
+
+  it('a gated (concierge) token reads attachments without a confirmation card', async () => {
+    vi.mocked(readAttachment).mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
+    const { app } = build({ token: token({ gated: true, chat_conversation_id: 'c1' } as Partial<ApiToken>), grants: chatGrants, attachments: store });
+    const r = await rpc(app, call('read_attachment', { id: 'abc123' }));
+    expect(r.json().result).toEqual({ content: [{ type: 'text', text: 'ok' }] });
   });
 });

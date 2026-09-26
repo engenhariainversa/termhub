@@ -69,6 +69,7 @@ model User {
   deviceRequests     DeviceRequest[]
   devices            Device[]
   notifications      UserNotification[]
+  chatAttachments    ChatAttachment[]
 
   @@index([roleId])
   @@map("users")
@@ -642,6 +643,7 @@ model ChatConversation {
   actions       ChatAction[]
   grants        ChatGrant[]
   tabQuestions  TabQuestion[]
+  attachments   ChatAttachment[]
 
   @@index([userId, createdAt])
   @@index([machineId])
@@ -662,9 +664,42 @@ model ChatMessage {
   usage          Json?
   errorCode      String?          @map("error_code")
   createdAt      DateTime         @default(now()) @map("created_at")
+  attachments    ChatAttachment[]
 
   @@index([conversationId, createdAt])
   @@map("chat_messages")
+}
+
+/// A file the person attached to a chat message (spec 2026-09-26 §5.1). The bytes live on the
+/// chat-files volume at <CHAT_FILES_DIR>/<user_id>/<id>; this row holds what was learned about them.
+/// `extracted_text` is data the user sent: it never enters a stored message or a system prompt.
+model ChatAttachment {
+  id             String           @id
+  userId         String           @map("user_id")
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String           @map("conversation_id")
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// Null until the message that carries it is stored; an unsent row older than 24 h is swept.
+  messageId      String?          @map("message_id")
+  message        ChatMessage?     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  name           String
+  mime           String
+  /// image | pdf | docx | xlsx | audio | video | text
+  kind           String
+  bytes          Int
+  sha256         String
+  /// pending | ready | failed
+  status         String           @default("pending")
+  errorCode      String?          @map("error_code")
+  extractedText  String?          @map("extracted_text")
+  /// pages, duration_s, sheets, width, height, truncated
+  meta           Json?
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@index([conversationId, createdAt])
+  @@index([userId])
+  @@index([messageId])
+  @@map("chat_attachments")
 }
 
 /// One action the concierge proposed, and what became of it. `args` holds what it proposed — the

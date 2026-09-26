@@ -26,7 +26,7 @@ it('answers a two-question card: a radio on the first tab, checkboxes on the sec
   fireEvent.click(screen.getByRole('checkbox', { name: /Mango/ }));
   fireEvent.click(screen.getByRole('checkbox', { name: /Apple/ }));
   fireEvent.click(submit);
-  expect(onAnswer).toHaveBeenCalledWith({ answers: [{ selected: [1] }, { selected: [0, 2] }] });
+  expect(onAnswer).toHaveBeenCalledWith('q1', { answers: [{ selected: [1] }, { selected: [0, 2] }] });
 });
 
 it('"Outra resposta" answers with text and sets the options aside', () => {
@@ -36,7 +36,7 @@ it('"Outra resposta" answers with text and sets the options aside', () => {
   fireEvent.change(screen.getByLabelText('Outra resposta'), { target: { value: '  Purple ' } });
   expect(screen.getByRole('radio', { name: /Blue/ })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Responder' }));
-  expect(onAnswer).toHaveBeenCalledWith({ answers: [{ selected: [], text: 'Purple' }] });
+  expect(onAnswer).toHaveBeenCalledWith('q1', { answers: [{ selected: [], text: 'Purple' }] });
 });
 
 it('a permission card shows the live excerpt and allows, denies, or denies with a sentence', async () => {
@@ -49,13 +49,13 @@ it('a permission card shows the live excerpt and allows, denies, or denies with 
   expect(screen.getByText('Tela da aba')).toBeInTheDocument();
   expect(loadScreen).toHaveBeenCalledWith('q2');
   fireEvent.click(screen.getByRole('button', { name: 'Permitir' }));
-  expect(onAnswer).toHaveBeenLastCalledWith({ allow: true });
+  expect(onAnswer).toHaveBeenLastCalledWith('q2', { allow: true });
   fireEvent.click(screen.getByRole('button', { name: 'Negar' }));
-  expect(onAnswer).toHaveBeenLastCalledWith({ allow: false });
+  expect(onAnswer).toHaveBeenLastCalledWith('q2', { allow: false });
   fireEvent.click(screen.getByRole('button', { name: 'Negar e dizer…' }));
   fireEvent.change(screen.getByLabelText('O que dizer à aba'), { target: { value: 'use pnpm' } });
   fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
-  expect(onAnswer).toHaveBeenLastCalledWith({ allow: false, text: 'use pnpm' });
+  expect(onAnswer).toHaveBeenLastCalledWith('q2', { allow: false, text: 'use pnpm' });
 });
 
 it('disables every answer while one is in flight', () => {

@@ -8,4 +8,12 @@ export const CHAT_MSG = {
   network: 'Não foi possível falar com o servidor. Tente de novo.',
   tabPromptChanged: 'A pergunta mudou na aba',
   tabSuggestionChanged: 'A sugestão mudou na aba',
+  attachmentType: 'Tipo de arquivo não suportado',
+  attachmentLegacyOffice: 'Envie como .docx/.xlsx',
+  attachmentTooLarge: 'Arquivo acima de',
+  attachmentTooMany: 'No máximo 5 anexos por mensagem',
+  attachmentUploadFailed: 'Não foi possível enviar o arquivo',
+  attachmentUploading: 'enviando anexo…',
+  attachmentInvalid: 'Remova o anexo inválido para enviar',
+  attachmentGalleryDenied: 'Permissão da galeria negada',
 } as const;

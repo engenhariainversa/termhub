@@ -1,5 +1,5 @@
-import type { ChatEvent } from './types';
-import { foldLive } from './live';
+import type { ChatEvent, ChatMessage } from './types';
+import { applyLive, emptyFold, foldLive, pruneLive } from './live';
 
 const USER_ID = 'u1';
 const CONVERSATION_ID = 'c1';
@@ -133,4 +133,62 @@ it('ignores run_finished: nothing streamed is dropped or marked started', () => 
   expect(folded.deltas.get('m1')).toBe('oi');
   expect([...folded.started]).toEqual(['m1']);
   expect(foldLive([finished])).toEqual({ deltas: new Map(), actions: new Map(), started: new Set() });
+});
+
+describe('applyLive', () => {
+  it('returns the very same fold for an event that changes nothing, and replaces only the map it touched', () => {
+    const fold = foldLive([delta('m1', 'oi')]);
+    expect(applyLive(fold, hello)).toBe(fold);
+    expect(applyLive(fold, confirmation('a1'))).toBe(fold);
+    expect(applyLive(fold, userMessage('m9'))).toBe(fold);
+    expect(applyLive(fold, reset('m2'))).toBe(fold); // nothing streamed for m2
+
+    const next = applyLive(fold, delta('m1', '!'));
+    expect(next).not.toBe(fold);
+    expect(next.deltas.get('m1')).toBe('oi!');
+    expect(next.actions).toBe(fold.actions); // untouched map keeps its reference
+    expect(next.started).toBe(fold.started); // m1 was started already
+    expect(fold.deltas.get('m1')).toBe('oi'); // the old fold is never mutated
+  });
+
+  it('an announce marks the row started; its final message drops everything of that id, and only that id', () => {
+    const announced = applyLive(emptyFold(), assistantMessage('m1'));
+    expect([...announced.started]).toEqual(['m1']);
+    expect(applyLive(announced, assistantMessage('m1'))).toBe(announced);
+
+    const streaming = applyLive(applyLive(announced, delta('m1', 'oi')), delta('m2', 'x'));
+    const done = applyLive(streaming, assistantMessage('m1', { text: 'oi' }));
+    expect(done.deltas.has('m1')).toBe(false);
+    expect(done.started.has('m1')).toBe(false);
+    expect(done.deltas.get('m2')).toBe('x');
+    expect(applyLive(done, assistantMessage('m1', { text: 'oi' }))).toBe(done);
+  });
+
+  it('foldLive is applyLive over the events, from an empty fold', () => {
+    const events = [delta('m1', 'a'), toolCall('m1', 'Bash'), reset('m1'), delta('m1', 'b')];
+    expect(foldLive(events)).toEqual(events.reduce(applyLive, emptyFold()));
+    expect(foldLive([])).toEqual(emptyFold());
+  });
+
+  describe('pruneLive (after a re-read)', () => {
+    const row = (id: string, extra: Partial<ChatMessage> = {}): ChatMessage => ({ id, conversation_id: CONVERSATION_ID, role: 'assistant', text: '', usage: null, error_code: null, created_at: T0, ...extra });
+
+    it('drops the entries of rows the thread shows finished (text or an error) and keeps the rest: a row still empty, or one the thread lacks', () => {
+      const fold = foldLive([delta('m1', 'a'), toolCall('m1', 'Bash'), delta('m2', 'b'), delta('m3', 'c'), delta('m4', 'd')]);
+      const pruned = pruneLive(fold, [row('m1', { text: 'done' }), row('m2', { error_code: 'HOST_GONE' }), row('m3')]);
+      expect(pruned.deltas.has('m1')).toBe(false);
+      expect(pruned.actions.has('m1')).toBe(false);
+      expect(pruned.started.has('m1')).toBe(false);
+      expect(pruned.deltas.has('m2')).toBe(false);
+      expect(pruned.deltas.get('m3')).toBe('c');
+      expect(pruned.started.has('m3')).toBe(true);
+      expect(pruned.deltas.get('m4')).toBe('d');
+    });
+
+    it('hands back the very same fold when nothing is finished, and ignores user rows', () => {
+      const fold = foldLive([delta('m1', 'a')]);
+      expect(pruneLive(fold, [row('m1'), row('u1', { role: 'user', text: 'oi' })])).toBe(fold);
+      expect(pruneLive(fold, [])).toBe(fold);
+    });
+  });
 });

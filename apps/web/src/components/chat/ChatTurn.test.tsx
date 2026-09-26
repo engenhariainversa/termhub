@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatTurn } from './ChatTurn';
 import type { ChatMessage } from '../../lib/types';
@@ -122,6 +122,62 @@ describe('ChatTurn', () => {
     expect(renderMarkdown.mock.calls.map((c) => c[0])).toEqual(['par', 'parcial']);
   });
 
+  it('re-parses only the tail of a streaming answer: the settled paragraphs are parsed once', () => {
+    const message = answer({ text: '' });
+    const { rerender } = render(
+      <ol>
+        <ChatTurn message={message} streaming={'primeiro\n\nseg'} waiting={false} failed={false} />
+      </ol>,
+    );
+    rerender(
+      <ol>
+        <ChatTurn message={message} streaming={'primeiro\n\nsegundo'} waiting={false} failed={false} />
+      </ol>,
+    );
+    rerender(
+      <ol>
+        <ChatTurn message={message} streaming={'primeiro\n\nsegundo\n\nterc'} waiting={false} failed={false} />
+      </ol>,
+    );
+
+    // The first paragraph is parsed once, when it settles; every delta after that parses the tail only.
+    expect(renderMarkdown.mock.calls.map((c) => c[0])).toEqual(['primeiro\n\n', 'seg', 'segundo', 'primeiro\n\nsegundo\n\n', 'terc']);
+  });
+
+  it('renders the whole body once when the answer settles', () => {
+    const { rerender } = render(
+      <ol>
+        <ChatTurn message={answer({ text: '' })} streaming={'primeiro\n\nsegundo'} waiting={false} failed={false} />
+      </ol>,
+    );
+    renderMarkdown.mockClear();
+    rerender(
+      <ol>
+        <ChatTurn message={answer({ text: 'primeiro\n\nsegundo' })} waiting={false} failed={false} />
+      </ol>,
+    );
+
+    expect(renderMarkdown.mock.calls.map((c) => c[0])).toEqual(['primeiro\n\nsegundo']);
+  });
+
+  it('mounts every row with the enter motion class and reserves a line under "pensando…"', () => {
+    const { container, rerender } = render(
+      <ol>
+        <ChatTurn message={answer({ text: '' })} waiting failed={false} />
+      </ol>,
+    );
+    expect(container.querySelector('li')?.classList.contains('chat-enter')).toBe(true);
+    // The placeholder's container keeps a minimum height, so the first delta does not change the row's height.
+    expect(container.querySelector('.prose-termhub')?.classList.contains('min-h-10')).toBe(true);
+
+    rerender(
+      <ol>
+        <ChatTurn message={answer({ role: 'user', text: 'oi' })} waiting={false} failed={false} />
+      </ol>,
+    );
+    expect(container.querySelector('li')?.classList.contains('chat-enter')).toBe(true);
+  });
+
   it('keeps a wide or unbreakable answer from scrolling the whole thread sideways', () => {
     const { container } = render(
       <ol>
@@ -158,6 +214,25 @@ describe('ChatTurn', () => {
     );
 
     expect(decorateCodeBlocks).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a user message\'s attachments under its text, and a message with attachments only', () => {
+    const attachment = { id: 'a1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf' as const, bytes: 10, status: 'ready' as const, error_code: null, meta: null, created_at: '' };
+    const { rerender } = render(
+      <ol>
+        <ChatTurn message={answer({ role: 'user', text: 'leia', attachments: [attachment] })} waiting={false} failed={false} />
+      </ol>,
+    );
+    expect(screen.getByText('leia')).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Anexos da mensagem' })).toBeTruthy();
+
+    rerender(
+      <ol>
+        <ChatTurn message={answer({ role: 'user', text: '', attachments: [attachment] })} waiting={false} failed={false} />
+      </ol>,
+    );
+    expect(screen.getByRole('link', { name: /relatorio\.pdf/ })).toBeTruthy();
+    expect(renderMarkdown).not.toHaveBeenCalled();
   });
 
   it('never parses the user\'s own words as Markdown', () => {

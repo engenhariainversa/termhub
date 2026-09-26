@@ -18,8 +18,12 @@ const UNSAFE = new RegExp(`${CONTROL_CHARS_RE.source}|${FORMAT_CHARS_RE.source}|
  * everything `UNSAFE` becomes a space, « and » are dropped outright — so nothing interpolated can ever
  * contain the very delimiters that quote it — and the run of whitespace that leaves behind collapses
  * back to one space each.
+ *
+ * Exported for the attachment block (`attachments/context.ts`), whose file names are the person's
+ * own and are quoted the same way.
  */
-const sanitise = (s: string): string => s.replace(UNSAFE, ' ').replace(/[«»]/g, '').replace(/\s+/g, ' ').trim();
+export const sanitisePromptText = (s: string): string => s.replace(UNSAFE, ' ').replace(/[«»]/g, '').replace(/\s+/g, ' ').trim();
+const sanitise = sanitisePromptText;
 
 const tabOf = (q: TabQuestionView) => `«${sanitise(q.tab_name ?? q.tab_id)}»`;
 

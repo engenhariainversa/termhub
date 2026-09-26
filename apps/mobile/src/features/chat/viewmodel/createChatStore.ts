@@ -1,26 +1,31 @@
 // The chat store (design spec §6): the projects list, one slot per conversation (keyed by project
-// id, `''` for the account-wide chat), the live buffer of the answer being written, sending,
+// id, `''` for the account-wide chat), the live fold of the answer being written, sending,
 // decisions, reset and the host. A factory over injected services so tests drive it against the
 // mock transport and a real session store; `useChatStore.ts` builds the app's one instance.
 //
 // One socket for the whole app, opened by the first `open` and closed by `close()` or the end of
-// the session. The thread only ever grows through its events — `send` never appends locally — and
-// every `message` event re-reads the thread, the web's rule (no replay: a reconnect re-reads too).
+// the session. The thread grows through its events, merged by id; `send` shows the person's row at
+// once under a local id and renames it when the server accepts it. Only a reconnect re-reads the
+// thread (no replay).
 //
 // Every async action captures `generation` before its first `await` and drops its result when
 // `close()` (or the end of the session) bumped it meanwhile, so a late answer never repopulates a
 // store that was just reset.
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import type { SessionState } from '@/features/session/model/session.types';
-import { sessionEnded } from '@/features/shared/signals';
-import type { TChatProjectItem, THostOptionsResponse, TTabQuestionAnswerBody } from '@/services/api/contract';
+import { appBackgrounded, sessionEnded } from '@/features/shared/signals';
+import type { TChatAttachment, TChatProjectItem, THostOptionsResponse, TTabQuestionAnswerBody } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
+import { randomId } from '@/services/crypto/random';
 import type { MobileApi } from '@/services/api/types';
 import { mmkvStateStorage } from '@/services/storage';
-import { applyEvent, settlePending } from '../model/events';
+import { applyEvent, mergeThread, settlePending } from '../model/events';
 import { belongsTo } from '../model/filter';
 import { CHAT_MSG } from '../model/messages';
+import { emptyFold, pruneLive, type LiveFold } from '../model/live';
+import type { PickedFile } from './attachments';
+import { createThrottledStorage } from './throttled-storage';
 import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, TabQuestion, TabSuggestion } from '../model/types';
 
 /** `approve_tab` approves the card *and* trusts its tab for send_input ("Permitir sempre nesta aba"). */
@@ -58,8 +63,9 @@ export interface ChatState {
   conversations: Record<string /* project id, or '' for the account-wide chat */, ConversationSlot>;
   /** The open conversation's project: `null` is the account-wide chat, `undefined` is none. */
   activeProject: string | null | undefined;
-  /** Events of the open conversation's answer being written, folded by `foldLive`. */
-  live: ChatEvent[];
+  /** The open conversation's answer being written: streamed text, tool calls and started rows by
+   * message id, folded incrementally (`applyLive`) — a row subscribes to its own entry. */
+  live: LiveFold;
   connected: boolean;
   sending: boolean;
   decidingId: string | null;
@@ -77,14 +83,26 @@ export interface ChatState {
   hostOptions: THostOptionsResponse | null;
   /** The last failed action of the screen on show, in pt-BR. */
   error: string | null;
+  /** The latest `attachment_status` heard for each attachment of the open conversation, by id (the
+   * web's `ChatPanel` map): the thread takes the event into its message; the composer's chips take
+   * it from here, since a chip's file has no message yet. Small rows; starts over with the conversation. */
+  attachmentStatuses: Record<string, TChatAttachment>;
 
   loadProjects(): Promise<void>;
   open(projectId: string | null): Promise<void>;
   /** The `app/chat/[id]` param: a conversation id (deep links), a project id, or `general`. */
   openByRoute(id: string): Promise<void>;
   close(): void;
-  /** Resolves `true` once the server accepted the message (`202`). */
-  send(text: string): Promise<boolean>;
+  /** Resolves `true` once the server accepted the message (`202`). `text` may be empty with attachments. */
+  send(text: string, attachments?: TChatAttachment[]): Promise<boolean>;
+  /** Uploads one picked file into the open conversation; the composer's chip follows `onProgress`. */
+  uploadAttachment(file: PickedFile, onProgress: (fraction: number) => void): Promise<TChatAttachment>;
+  /** Drops an unsent attachment (a chip's ✕). Already gone (404) or already sent (409): nothing to do. */
+  deleteAttachment(id: string): Promise<void>;
+  /** `<Image source>` for a sent image: the url plus signed headers. */
+  attachmentSource(id: string): Promise<{ uri: string; headers: Record<string, string> }>;
+  /** "Tentar de novo" on a row whose send failed: the row goes, and its text is sent again as a new one. */
+  retrySend(messageId: string): Promise<boolean>;
   decide(actionId: string, decision: ChatDecision): Promise<void>;
   /** A grouped confirmation of the open conversation: one request, and one PIN entry for all its
    * approvals (none for a batch of denials). `decidingId` holds the first id while it is in flight. */
@@ -126,7 +144,7 @@ const initialData = (): Data => ({
   loadingProjects: false,
   conversations: {},
   activeProject: undefined,
-  live: [],
+  live: emptyFold(),
   connected: false,
   sending: false,
   decidingId: null,
@@ -137,6 +155,7 @@ const initialData = (): Data => ({
   suggestionErrors: {},
   hostOptions: null,
   error: null,
+  attachmentStatuses: {},
 });
 
 const emptySlot = (): ConversationSlot => ({ conversation: null, messages: [], actions: [], grants: [], tabQuestions: [], tabSuggestions: [], host: null, loaded: false, error: null });
@@ -162,6 +181,9 @@ export function createChatStore(deps: ChatDeps) {
   /** App-level taps into every raw event (`subscribeEvents`), independent of the open conversation
    * and never cleared by `close()`/`generation` — a subscriber outlives any one socket connection. */
   const eventListeners = new Set<(e: ChatEvent) => void>();
+  /** The persisted slice's writer (spec §4.2 "Persistence"): at most one MMKV write per 2 s, plus a
+   * flush at the end of a run and when the app goes to the background. */
+  const storage = createThrottledStorage<Persisted>(mmkvStateStorage);
 
   const store = create<ChatState>()(
     persist(
@@ -202,9 +224,14 @@ export function createChatStore(deps: ChatDeps) {
           try {
             const res = await api.chat(session().auth(), projectOf(key));
             if (stale()) return;
-            patchSlot(key, () => ({
+            // The same conversation: the snapshot merges into the thread by id, so a row a `message`
+            // event brought while the GET was in flight (a final answer, the person's row renamed on
+            // its 202) survives the older snapshot. Another conversation (a reset, here or elsewhere)
+            // replaces the thread. This device's own unsent rows stay either way.
+            const same = get().conversations[key]?.conversation?.id === res.conversation.id;
+            patchSlot(key, (slot) => ({
               conversation: res.conversation,
-              messages: res.messages,
+              messages: same ? mergeThread(slot.messages, res.messages) : [...res.messages, ...slot.messages.filter((m) => m.local !== undefined)],
               actions: res.actions,
               grants: res.grants,
               tabQuestions: res.tab_questions,
@@ -213,6 +240,12 @@ export function createChatStore(deps: ChatDeps) {
               loaded: true,
               error: null,
             }));
+            // The fold is the open conversation's: a row the snapshot shows answered carries its text
+            // now, so what streamed for it goes; one still empty keeps its streamed prefix on screen.
+            if (key === activeKey()) {
+              const live = same ? pruneLive(get().live, res.messages) : emptyFold();
+              if (live !== get().live) set({ live });
+            }
           } catch (e) {
             if (stale() || isLocked(e) || session().handleApiError(e)) return;
             patchSlot(key, () => ({ error: isApiError(e) ? e.message : CHAT_MSG.network }));
@@ -225,11 +258,28 @@ export function createChatStore(deps: ChatDeps) {
           const current = get().conversations[key] ?? emptySlot();
           if (!belongsTo(current.conversation?.id ?? null)(e)) return;
           const before = { messages: current.messages, actions: current.actions, live: get().live, grants: current.grants, tabQuestions: current.tabQuestions, tabSuggestions: current.tabSuggestions };
-          const { slice, reread: mustReread } = applyEvent(before, e);
-          if (slice === before) return;
-          patchSlot(key, () => ({ messages: slice.messages, actions: slice.actions, grants: slice.grants, tabQuestions: slice.tabQuestions, tabSuggestions: slice.tabSuggestions }));
-          set({ live: slice.live });
-          if (mustReread) void reread(key);
+          const slice = applyEvent(before, e);
+          // One `set` per event, touching only what changed: a delta used to cost two (the slot,
+          // then `live`), each one a persist write, and a new slot object for rows that did not move.
+          const liveChanged = slice.live !== before.live;
+          const slotChanged =
+            slice.messages !== before.messages || slice.actions !== before.actions || slice.grants !== before.grants || slice.tabQuestions !== before.tabQuestions || slice.tabSuggestions !== before.tabSuggestions;
+          if (liveChanged || slotChanged) {
+            set((s) => ({
+              ...(liveChanged ? { live: slice.live } : {}),
+              ...(slotChanged
+                ? {
+                    conversations: {
+                      ...s.conversations,
+                      [key]: { ...(s.conversations[key] ?? emptySlot()), messages: slice.messages, actions: slice.actions, grants: slice.grants, tabQuestions: slice.tabQuestions, tabSuggestions: slice.tabSuggestions },
+                    },
+                  }
+                : {}),
+            }));
+          }
+          if (e.type === 'attachment_status') set((s) => ({ attachmentStatuses: { ...s.attachmentStatuses, [e.attachment.id]: e.attachment } }));
+          // The answer is complete (or failed): what streamed in is worth an MMKV write now.
+          if (e.type === 'run_finished') storage.flush();
         };
 
         const ensureSocket = (): void => {
@@ -245,7 +295,9 @@ export function createChatStore(deps: ChatDeps) {
             },
             onReconnect: () => {
               if (gen !== generation) return;
-              set({ connected: true, live: [] });
+              // `live` stays: what streamed before the drop is still the best view of a row the
+              // re-read shows unanswered. The re-read prunes what it shows finished (`pruneLive`).
+              set({ connected: true });
               const key = activeKey();
               if (key !== null) void reread(key);
             },
@@ -302,8 +354,9 @@ export function createChatStore(deps: ChatDeps) {
             set((s) => ({
               activeProject: projectId,
               error: null,
-              // Another conversation's half-written answer has nothing to do with this one.
-              live: s.activeProject === projectId ? s.live : [],
+              // Another conversation's half-written answer has nothing to do with this one, nor its uploads' statuses.
+              live: s.activeProject === projectId ? s.live : emptyFold(),
+              attachmentStatuses: s.activeProject === projectId ? s.attachmentStatuses : {},
               conversations: s.conversations[key] ? s.conversations : { ...s.conversations, [key]: emptySlot() },
             }));
             // Locked: the persisted thread is all there is until the PIN.
@@ -327,26 +380,66 @@ export function createChatStore(deps: ChatDeps) {
             closeSocket?.();
             closeSocket = null;
             readSeq.clear();
-            set({ connected: false, live: [], activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionIds: [], questionErrors: {}, busySuggestionIds: [], suggestionErrors: {} });
+            set({ connected: false, live: emptyFold(), activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionIds: [], questionErrors: {}, busySuggestionIds: [], suggestionErrors: {}, attachmentStatuses: {} });
           },
 
-          async send(text) {
+          async send(text, attachments = []) {
             const body = text.trim();
             const projectId = get().activeProject;
-            if (!body || projectId === undefined || get().sending) return false;
+            if ((!body && attachments.length === 0) || projectId === undefined || get().sending) return false;
+            const key = keyOf(projectId);
             const gen = generation;
+            // The person's row, at once (spec §4.2 "Optimistic user bubble"): renamed to the server's
+            // id on the 202, or kept with the reason when the send fails.
+            const localId = `local:${randomId(8)}`;
+            const row: ChatMessage = {
+              id: localId,
+              conversation_id: get().conversations[key]?.conversation?.id ?? '',
+              role: 'user',
+              text: body,
+              usage: null,
+              error_code: null,
+              created_at: new Date().toISOString(),
+              ...(attachments.length > 0 ? { attachments } : {}),
+              local: 'sending',
+            };
             set({ sending: true, error: null });
+            patchSlot(key, (slot) => ({ messages: [...slot.messages, row] }));
             try {
-              await api.sendMessage(session().auth(), { text: body, project_id: projectId });
-              if (gen === generation) set({ sending: false });
+              // A `409 ATTACHMENT_UNAVAILABLE` takes the generic path below: its pt-BR message is the server's.
+              const accepted = await api.sendMessage(session().auth(), { text: body, project_id: projectId, ...(attachments.length > 0 ? { attachment_ids: attachments.map((a) => a.id) } : {}) });
+              if (gen !== generation) return false;
+              patchSlot(key, (slot) => ({
+                // The socket's echo may have landed first: then the local row simply goes; otherwise
+                // it becomes the server's row where it is, and the echo merges into it by id.
+                messages: slot.messages.some((m) => m.id === accepted.user_message_id)
+                  ? slot.messages.filter((m) => m.id !== localId)
+                  : slot.messages.map((m) => (m.id === localId ? { ...m, id: accepted.user_message_id, local: undefined } : m)),
+              }));
+              set({ sending: false });
+              // Events no longer re-read the thread; with the socket down nothing else would show the answer.
+              if (!get().connected) void reread(key);
               return true;
             } catch (e) {
               if (gen !== generation) return false;
               set({ sending: false });
               if (isApiError(e, 'CHAT_BUSY')) set({ error: CHAT_MSG.busy });
               else fail(gen, e);
+              const why = get().error ?? (isApiError(e) ? e.message : CHAT_MSG.network);
+              patchSlot(key, (slot) => ({ messages: slot.messages.map((m) => (m.id === localId ? { ...m, local: 'failed', local_error: why } : m)) }));
               return false;
             }
+          },
+
+          async retrySend(messageId) {
+            const projectId = get().activeProject;
+            // `send` refuses while another send is in flight: the failed row must not go before then.
+            if (projectId === undefined || get().sending) return false;
+            const key = keyOf(projectId);
+            const row = get().conversations[key]?.messages.find((m) => m.id === messageId && m.local === 'failed');
+            if (!row) return false;
+            patchSlot(key, (slot) => ({ messages: slot.messages.filter((m) => m.id !== messageId) }));
+            return get().send(row.text, row.attachments);
           },
 
           async decide(actionId, decision) {
@@ -506,6 +599,28 @@ export function createChatStore(deps: ChatDeps) {
             return actOnSuggestion(suggestionId, () => api.dismissTabSuggestion(session().auth(), suggestionId));
           },
 
+          uploadAttachment(file, onProgress) {
+            const projectId = get().activeProject;
+            if (projectId === undefined) return Promise.reject(new Error('NO_CONVERSATION'));
+            return api.uploadAttachment(session().auth(), file, projectId, onProgress).catch((e: unknown) => {
+              // A revoked device or an expired session ends here like anywhere else; the chip shows the rest.
+              session().handleApiError(e);
+              throw e;
+            });
+          },
+
+          deleteAttachment(id) {
+            return api.deleteAttachment(session().auth(), id).catch((e: unknown) => {
+              // Already gone, or already sent with a message: the chip goes either way.
+              if (isApiError(e) && (e.status === 404 || e.status === 409)) return;
+              throw e;
+            });
+          },
+
+          attachmentSource(id) {
+            return api.attachmentSource(session().auth(), id);
+          },
+
           async reset() {
             const projectId = get().activeProject;
             if (projectId === undefined) return;
@@ -515,7 +630,7 @@ export function createChatStore(deps: ChatDeps) {
             try {
               await api.reset(session().auth(), projectId);
               if (gen !== generation) return;
-              set({ live: [] });
+              set({ live: emptyFold() });
               patchSlot(key, () => ({ messages: [], actions: [], grants: [], tabQuestions: [], tabSuggestions: [] })); // a reset ends the old conversation's grants too
               await reread(key);
             } catch (e) {
@@ -567,11 +682,12 @@ export function createChatStore(deps: ChatDeps) {
       },
       {
         name: 'chat',
-        storage: createJSONStorage(() => mmkvStateStorage),
+        storage,
         partialize: (s): Persisted => ({
           projects: s.projects,
           conversations: Object.fromEntries(
-            Object.entries(s.conversations).map(([key, c]) => [key, { conversation: c.conversation, messages: c.messages, actions: c.actions, grants: c.grants, tabQuestions: c.tabQuestions, tabSuggestions: c.tabSuggestions, host: c.host }]),
+            // A row still in flight, or one that failed, is this device's alone: not worth a restart.
+            Object.entries(s.conversations).map(([key, c]) => [key, { conversation: c.conversation, messages: c.messages.filter((m) => m.local === undefined), actions: c.actions, grants: c.grants, tabQuestions: c.tabQuestions, tabSuggestions: c.tabSuggestions, host: c.host }]),
           ),
         }),
         merge: (persisted, current) => {
@@ -591,6 +707,7 @@ export function createChatStore(deps: ChatDeps) {
     store.getState().close();
     store.setState(initialData());
   });
+  appBackgrounded.subscribe(() => storage.flush());
 
   return store;
 }

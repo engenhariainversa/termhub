@@ -1,16 +1,16 @@
 // How one live event of the open conversation changes its thread (design spec §6): pure reducers
-// over the slice the chat store keeps — the thread's messages and actions and the `live` buffer
-// `foldLive` reads. The store decides which events reach here (`belongsTo`) and does the I/O.
+// over the slice the chat store keeps — the thread's messages and actions and the `live` fold of the
+// answer being written. The store decides which events reach here (`belongsTo`) and does the I/O.
+import type { TChatAttachment } from '@/services/api/contract';
+import { applyLive, type LiveFold } from './live';
 import { upsertTabSuggestion } from './tab-suggestion-text';
 import type { ChatAction, ChatEvent, ChatGrant, ChatMessage, TabQuestion, TabSuggestion } from './types';
-
-/** The most live events kept at once — a long answer streams hundreds of deltas. */
-export const LIVE_CAP = 500;
 
 export interface EventSlice {
   messages: ChatMessage[];
   actions: ChatAction[];
-  live: ChatEvent[];
+  /** The answer being written: streamed text, tool calls and started rows, by message id. */
+  live: LiveFold;
   /** The conversation's trusted tabs; at most one per tab (a new grant replaces the old one). */
   grants: ChatGrant[];
   /** The tabs' questions pushed into this conversation (spec 2026-09-25 §6.3). */
@@ -19,19 +19,60 @@ export interface EventSlice {
   tabSuggestions: TabSuggestion[];
 }
 
-/** The message a live event is about, if any. */
-function liveMessageId(e: ChatEvent): string | null {
-  if (e.type === 'message') return e.message.id;
-  if (e.type === 'delta' || e.type === 'action' || e.type === 'reset' || e.type === 'action_result') return e.message_id;
-  return null;
+const NO_ATTACHMENTS: readonly TChatAttachment[] = [];
+
+/** The web's `sameAttachments`: what a stored attachment can change after the phone first saw it (an extraction ended, or gave up). */
+function sameAttachments(a: readonly TChatAttachment[] = NO_ATTACHMENTS, b: readonly TChatAttachment[] = NO_ATTACHMENTS): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((x, i) => x.id === b[i]!.id && x.status === b[i]!.status && x.error_code === b[i]!.error_code);
 }
 
-const capLive = (events: ChatEvent[]): ChatEvent[] => (events.length > LIVE_CAP ? events.slice(-LIVE_CAP) : events);
+/**
+ * The web's `lib/chat-merge.ts` (`mergeMessage`): `msg` into `list` by id — appended when new,
+ * replaced when something changed, and the very same `list` (same row objects) when nothing did, so
+ * a memoised row keeps its props. `usage` is the server's JSON: compared by value. Attachments count
+ * too: a re-read is how a status event the phone missed (backgrounded, offline) gets corrected.
+ */
+export function mergeMessage(list: ChatMessage[], msg: ChatMessage): ChatMessage[] {
+  const i = list.findIndex((m) => m.id === msg.id);
+  if (i < 0) return [...list, msg];
+  const old = list[i]!;
+  const same =
+    old.text === msg.text && old.error_code === msg.error_code && old.created_at === msg.created_at && JSON.stringify(old.usage ?? null) === JSON.stringify(msg.usage ?? null) && sameAttachments(old.attachments, msg.attachments);
+  return same ? list : list.map((m, j) => (j === i ? msg : m));
+}
 
-function upsertMessage(messages: ChatMessage[], message: ChatMessage): ChatMessage[] {
-  const i = messages.findIndex((m) => m.id === message.id);
-  if (i < 0) return [...messages, message];
-  return messages.map((m, j) => (j === i ? message : m));
+/**
+ * A re-read's snapshot into the thread it refreshes (same conversation): every server row merges by
+ * id (`mergeMessage`: the server's version wins, untouched rows keep their objects); a row the
+ * snapshot lacks stays when it is this device's own (`local`) or newer than the snapshot's newest
+ * row — a `message` event that landed while the GET was in flight — and goes otherwise (the server
+ * no longer has it). The very same `current` back when nothing changed.
+ */
+export function mergeThread(current: ChatMessage[], server: ChatMessage[]): ChatMessage[] {
+  const ids = new Set(server.map((m) => m.id));
+  const newest = server.reduce((max, m) => (m.created_at > max ? m.created_at : max), '');
+  const kept = current.filter((m) => ids.has(m.id) || m.local !== undefined || m.created_at > newest);
+  return server.reduce(mergeMessage, kept.length === current.length ? current : kept);
+}
+
+/**
+ * The messages with `attachment` replaced by id inside whichever message carries it (the web's
+ * `patchMessageAttachment`); the same array, and the same message objects, when nothing changed.
+ */
+export function patchMessageAttachment(messages: ChatMessage[], attachment: TChatAttachment): ChatMessage[] {
+  let changed = false;
+  const next = messages.map((m) => {
+    const list = m.attachments;
+    if (!list) return m;
+    const i = list.findIndex((a) => a.id === attachment.id);
+    if (i < 0) return m;
+    const current = list[i]!;
+    if (current.status === attachment.status && current.error_code === attachment.error_code && JSON.stringify(current.meta) === JSON.stringify(attachment.meta)) return m;
+    changed = true;
+    return { ...m, attachments: list.map((a, j) => (j === i ? attachment : a)) };
+  });
+  return changed ? next : messages;
 }
 
 /** Settles the pending action `id` as approved or denied. A card that has moved on already — a
@@ -64,47 +105,49 @@ function actionFromConfirmation(e: Extract<ChatEvent, { type: 'confirmation' }>)
 }
 
 /**
- * The slice after `e`, and whether the thread must be re-read from the server (every `message`
- * event: the web's rule). Returns the same slice for an event that changes nothing.
+ * The slice after `e` — the same object for an event that changes nothing. A `message` merges by id
+ * and asks for no re-read (spec §4.2 "Merge on message"): the event is the row; only a reconnect
+ * re-reads the thread, in the store.
  */
-export function applyEvent(slice: EventSlice, e: ChatEvent): { slice: EventSlice; reread: boolean } {
+export function applyEvent(slice: EventSlice, e: ChatEvent): EventSlice {
   switch (e.type) {
     case 'message': {
-      // The row is final (or just announced): its deltas give way to the row itself, shown at once
-      // from the event and then confirmed by the re-read. An empty assistant row announces a run;
-      // it stays in `live` so `foldLive` marks it started ("pensando…") until its first delta.
-      const message = e.message;
-      const announce = message.role === 'assistant' && !message.text && !message.error_code;
-      const kept = slice.live.filter((ev) => liveMessageId(ev) !== message.id);
-      return { slice: { ...slice, messages: upsertMessage(slice.messages, message), live: capLive(announce ? [...kept, e] : kept) }, reread: true };
+      const messages = mergeMessage(slice.messages, e.message);
+      const live = applyLive(slice.live, e);
+      return messages === slice.messages && live === slice.live ? slice : { ...slice, messages, live };
     }
     case 'confirmation':
-      if (slice.actions.some((a) => a.id === e.action_id)) return { slice, reread: false };
-      return { slice: { ...slice, actions: [...slice.actions, actionFromConfirmation(e)] }, reread: false };
-    case 'decision':
-      return { slice: { ...slice, actions: settlePending(slice.actions, e.action_id, e.status) }, reread: false };
+      if (slice.actions.some((a) => a.id === e.action_id)) return slice;
+      return { ...slice, actions: [...slice.actions, actionFromConfirmation(e)] };
+    case 'decision': {
+      const actions = settlePending(slice.actions, e.action_id, e.status);
+      return actions === slice.actions ? slice : { ...slice, actions };
+    }
     case 'grant':
-      return { slice: { ...slice, grants: [...slice.grants.filter((g) => g.id !== e.grant.id && g.tab_id !== e.grant.tab_id), e.grant] }, reread: false };
+      return { ...slice, grants: [...slice.grants.filter((g) => g.id !== e.grant.id && g.tab_id !== e.grant.tab_id), e.grant] };
     case 'grant_revoked':
-      return { slice: { ...slice, grants: slice.grants.filter((g) => g.id !== e.grant_id) }, reread: false };
+      return { ...slice, grants: slice.grants.filter((g) => g.id !== e.grant_id) };
     case 'granted_action':
       // A send_input run under a grant never asked: its card arrives whole, already executed.
-      return {
-        slice: { ...slice, actions: slice.actions.some((a) => a.id === e.action.id) ? slice.actions.map((a) => (a.id === e.action.id ? e.action : a)) : [...slice.actions, e.action] },
-        reread: false,
-      };
+      return { ...slice, actions: slice.actions.some((a) => a.id === e.action.id) ? slice.actions.map((a) => (a.id === e.action.id ? e.action : a)) : [...slice.actions, e.action] };
     case 'tab_question':
     case 'tab_question_answered':
     case 'tab_question_closed':
-      return { slice: { ...slice, tabQuestions: upsertTabQuestion(slice.tabQuestions, e.question) }, reread: false };
+      return { ...slice, tabQuestions: upsertTabQuestion(slice.tabQuestions, e.question) };
     case 'tab_suggestion':
     case 'tab_suggestion_closed':
-      return { slice: { ...slice, tabSuggestions: upsertTabSuggestion(slice.tabSuggestions, e.suggestion) }, reread: false };
+      return { ...slice, tabSuggestions: upsertTabSuggestion(slice.tabSuggestions, e.suggestion) };
+    case 'attachment_status': {
+      const messages = patchMessageAttachment(slice.messages, e.attachment);
+      return messages === slice.messages ? slice : { ...slice, messages };
+    }
     case 'delta':
     case 'action':
-    case 'reset':
-      return { slice: { ...slice, live: capLive([...slice.live, e]) }, reread: false };
+    case 'reset': {
+      const live = applyLive(slice.live, e);
+      return live === slice.live ? slice : { ...slice, live };
+    }
     default:
-      return { slice, reread: false };
+      return slice;
   }
 }

@@ -1,7 +1,19 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
+
+const mockVoice = { state: 'idle' as import('../viewmodel/use-voice').VoiceState, seconds: 0, error: null as string | null, notice: null as string | null, start: jest.fn(), stop: jest.fn(), cancel: jest.fn() };
+let mockOnText: ((text: string) => void) | null = null;
+jest.mock('@/features/chat/viewmodel/use-voice', () => ({
+  useVoice: (onText: (text: string) => void) => {
+    mockOnText = onText;
+    return mockVoice;
+  },
+  // The attachment sheet's recorder: never records here.
+  useRecorder: () => ({ state: 'idle', seconds: 0, error: null, start: jest.fn(async () => undefined), stop: jest.fn(async () => null), cancel: jest.fn() }),
+}));
 
 let mockId = 'p-termhub';
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
@@ -14,7 +26,10 @@ jest.mock('expo-router', () => ({
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import type { TChatAction, TChatEvent, TChatGrant, TChatMessage, TChatResponse, TTabQuestion, TTabSuggestion } from '@/services/api/contract';
+import { ApiError } from '@/services/api/errors';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
+import { emptyFold, foldLive } from '../model/live';
+import type { ChatMessage } from '../model/types';
 import { ConversationScreen } from './conversation-screen';
 
 const SEEDED_USER = 'Como estão as abas do projeto?';
@@ -24,21 +39,24 @@ function assistantRow(id: string, extra: Partial<TChatMessage> = {}): TChatMessa
   return { id, conversation_id: 'c-termhub', role: 'assistant', text: '', usage: null, error_code: null, created_at: new Date().toISOString(), ...extra };
 }
 
+/** A `created_at` `n` seconds after the seeded thread: rows added in a test sort after it, in this order. */
+const at = (n: number) => new Date(Date.now() + n * 1000).toISOString();
+
 function delta(messageId: string, text: string): TChatEvent {
   return { type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: messageId, delta: text };
 }
 
 /** Appends rows to the open project's thread, as the socket's events would. */
-function addRows(rows: TChatMessage[], live: TChatEvent[]) {
+function addRows(rows: ChatMessage[], live: TChatEvent[]) {
   const s = useChatStore.getState();
   const slot = s.conversations['p-termhub']!;
-  useChatStore.setState({ conversations: { ...s.conversations, 'p-termhub': { ...slot, messages: [...slot.messages, ...rows] } }, live });
+  useChatStore.setState({ conversations: { ...s.conversations, 'p-termhub': { ...slot, messages: [...slot.messages, ...rows] } }, live: foldLive(live) });
 }
 
 /** Replaces one of the store's actions for a test. Not `jest.spyOn(getState(), …)`: zustand
  * replaces the state object on every `setState`, so a restored spy would linger on the new one. */
 const realActions = { ...stores.chat.getState() };
-function stubAction<K extends 'decide' | 'decideMany' | 'reset' | 'setHost' | 'revokeGrant' | 'answerTabQuestion' | 'sendTabSuggestion' | 'dismissTabSuggestion'>(name: K) {
+function stubAction<K extends 'decide' | 'decideMany' | 'reset' | 'setHost' | 'revokeGrant' | 'answerTabQuestion' | 'sendTabSuggestion' | 'dismissTabSuggestion' | 'retrySend'>(name: K) {
   const fn = jest.fn(async () => undefined);
   useChatStore.setState({ [name]: fn } as Partial<ReturnType<typeof useChatStore.getState>>);
   return fn;
@@ -69,10 +87,20 @@ beforeAll(async () => {
   await stores.chat.getState().loadProjects();
 });
 
+/** The slots as the test found them, restored after it: rows a test put in (`addRows`, a send over a
+ * mocked 202) would otherwise stay — a re-read merges by id and keeps rows newer than its snapshot,
+ * so the next test's open would not wash them out. */
+let conversationsBefore: ReturnType<typeof useChatStore.getState>['conversations'];
+
 beforeEach(() => {
   mockId = 'p-termhub';
+  conversationsBefore = useChatStore.getState().conversations;
   for (const fn of Object.values(mockRouter)) fn.mockClear();
   mockRouter.canGoBack.mockReturnValue(true);
+  mockVoice.state = 'idle';
+  mockVoice.seconds = 0;
+  mockVoice.error = null;
+  mockVoice.notice = null;
   // The screens are under test here, not the socket (the store's own tests cover it): no events.
   jest.spyOn(stores.api, 'events').mockReturnValue(() => undefined);
 });
@@ -81,7 +109,9 @@ afterEach(() => {
   jest.restoreAllMocks();
   useChatStore.setState({
     error: null,
-    live: [],
+    sending: false,
+    live: emptyFold(),
+    conversations: conversationsBefore,
     decide: realActions.decide,
     decideMany: realActions.decideMany,
     reset: realActions.reset,
@@ -90,6 +120,7 @@ afterEach(() => {
     answerTabQuestion: realActions.answerTabQuestion,
     sendTabSuggestion: realActions.sendTabSuggestion,
     dismissTabSuggestion: realActions.dismissTabSuggestion,
+    retrySend: realActions.retrySend,
     questionErrors: {},
     suggestionErrors: {},
     answeringQuestionIds: [],
@@ -114,10 +145,11 @@ describe('Conversa', () => {
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
 
-    const thinking = assistantRow('m-think');
+    // A started row waits wherever it is: several answers can be pending at once (spec 2026-09-26).
+    const thinking = assistantRow('m-think', { created_at: at(3) });
     await act(() =>
       addRows(
-        [assistantRow('m-stream'), thinking, assistantRow('m-failed', { error_code: 'HOST_GONE' })],
+        [assistantRow('m-stream', { created_at: at(1) }), assistantRow('m-failed', { error_code: 'HOST_GONE', created_at: at(2) }), thinking],
         [delta('m-stream', 'Rodei `npm'), delta('m-stream', ' test` no jarvis'), { type: 'message', user_id: 'u1', conversation_id: 'c-termhub', message: thinking }],
       ),
     );
@@ -134,7 +166,7 @@ describe('Conversa', () => {
     await act(() => addRows([assistantRow('m-stream')], [delta('m-stream', 'Rodei')]));
 
     renders.length = 0;
-    await act(() => useChatStore.setState({ live: [delta('m-stream', 'Rodei'), delta('m-stream', ' os testes')] }));
+    await act(() => useChatStore.setState({ live: foldLive([delta('m-stream', 'Rodei'), delta('m-stream', ' os testes')]) }));
     expect(screen.getByText('Rodei os testes')).toBeTruthy();
     expect(renders).toEqual(['Rodei os testes']);
   });
@@ -246,21 +278,86 @@ describe('Conversa', () => {
     expect(screen.queryByRole('button', { name: 'Permitir sempre nesta aba' })).toBeNull();
   });
 
-  it('the composer sends on the button and clears; the mic is disabled with "em breve"', async () => {
+  it('an empty box offers Ditar; typing turns it into Enviar, which sends and empties the box at once', async () => {
     const sent = jest.spyOn(stores.api, 'sendMessage').mockResolvedValue({ conversation_id: 'c-termhub', user_message_id: 'u', assistant_message_id: 'a' });
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
 
-    const send = screen.getByRole('button', { name: 'Enviar' });
-    expect(send.props.accessibilityState.disabled).toBe(true);
-    const mic = screen.getByRole('button', { name: /em breve/ });
-    expect(mic.props.accessibilityState.disabled).toBe(true);
-    expect(within(mic).getByText('em breve')).toBeTruthy();
+    const dictate = screen.getByRole('button', { name: 'Ditar' });
+    expect(dictate.props.accessibilityState.disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Enviar' })).toBeNull();
 
     await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'como está o deploy?');
+    expect(screen.queryByRole('button', { name: 'Ditar' })).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     expect(sent).toHaveBeenCalledWith(expect.anything(), { text: 'como está o deploy?', project_id: 'p-termhub' });
     expect(screen.getByLabelText('Mensagem').props.value).toBe('');
+  });
+
+  it('Ditar starts a recording; while recording the button reads Parar, and the transcription lands in the box', async () => {
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await fireEvent.press(screen.getByRole('button', { name: 'Ditar' }));
+    expect(mockVoice.start).toHaveBeenCalledTimes(1);
+
+    mockVoice.state = 'recording';
+    mockVoice.seconds = 65;
+    await act(() => mockOnText!('roda os testes')); // a re-render: the hook's state is read again
+    expect(screen.getByLabelText('Mensagem').props.value).toBe('roda os testes');
+    expect(screen.getByText('1:05')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Parar' }));
+    expect(mockVoice.stop).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancelar gravação' }));
+    expect(mockVoice.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('while the clip is being transcribed the button waits and the status line says so; an error shows under the box', async () => {
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    mockVoice.state = 'transcribing';
+    mockVoice.error = 'Falha ao transcrever o áudio';
+    // A store change the composer's props follow, so it renders again and reads the hook's new state
+    // (a transcription of '' would leave the text as it is, and React would skip the render).
+    await act(() => useChatStore.setState({ sending: true }));
+    expect(screen.getByText('transcrevendo…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ditar' }).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText('Falha ao transcrever o áudio')).toBeTruthy();
+  });
+
+  it("shows a sent message's attachments under its text, with their status, and opens an image full screen", async () => {
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    const attachment = { id: 'att1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf' as const, bytes: 2048, status: 'pending' as const, error_code: null, meta: null, created_at: new Date().toISOString() };
+    const image = { ...attachment, id: 'img1', name: 'foto.jpg', mime: 'image/jpeg', kind: 'image' as const, status: 'ready' as const };
+    await act(() => addRows([{ ...assistantRow('m-user'), role: 'user', text: 'leia', attachments: [attachment, image] }], []));
+
+    expect(screen.getByText('relatorio.pdf')).toBeTruthy();
+    expect(screen.getByText('2 KB')).toBeTruthy();
+    expect(screen.getByText('processando…')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Abrir imagem foto.jpg' }));
+    expect(await screen.findByRole('button', { name: 'Fechar imagem' })).toBeTruthy();
+  });
+
+  it('the box grows with its content between one and six lines', async () => {
+    await render(<ConversationScreen />);
+    const input = await screen.findByLabelText('Mensagem', undefined, LOAD);
+    // NativeWind hands the host element an array of styles: flatten before reading.
+    const height = () => StyleSheet.flatten(screen.getByLabelText('Mensagem').props.style).height;
+    expect(height()).toBe(22);
+    await fireEvent(input, 'contentSizeChange', { nativeEvent: { contentSize: { width: 300, height: 66 } } });
+    expect(height()).toBe(66);
+    await fireEvent(input, 'contentSizeChange', { nativeEvent: { contentSize: { width: 300, height: 400 } } });
+    expect(height()).toBe(132);
+    await fireEvent(input, 'contentSizeChange', { nativeEvent: { contentSize: { width: 300, height: 10 } } });
+    expect(height()).toBe(22);
+  });
+
+  it('avoids the keyboard with padding on iOS', async () => {
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    // RNTL only sees host views: the `padding` behaviour is the one that pads the bottom by the
+    // keyboard's height (0 while it is down); `height` and no behaviour leave the padding unset.
+    expect(StyleSheet.flatten(screen.getByTestId('conversation-keyboard').props.style).paddingBottom).toBe(0);
   });
 
   it('Nova conversa asks first, then resets', async () => {
@@ -469,5 +566,33 @@ describe('Conversa', () => {
     expect(screen.queryByText(/Criei o arquivo/)).toBeNull();
     await act(async () => useChatStore.setState({ suggestionErrors: { s1: 'A sugestão mudou na aba' } }));
     expect(within(screen.getByTestId('tab-suggestion-s1')).getByText('A sugestão mudou na aba')).toBeTruthy();
+  });
+
+  it('a row whose send failed shows the reason and "Tentar de novo", which calls retrySend', async () => {
+    const retrySend = stubAction('retrySend');
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await act(() =>
+      addRows([{ id: 'local:1', conversation_id: 'c-termhub', role: 'user', text: 'oi de novo', usage: null, error_code: null, created_at: new Date().toISOString(), local: 'failed', local_error: 'A máquina do chat está offline.' }], []),
+    );
+    expect(screen.getByText('oi de novo')).toBeTruthy();
+    expect(screen.getByText('A máquina do chat está offline.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(retrySend).toHaveBeenCalledWith('local:1');
+  });
+
+  it('the box empties as soon as Enviar is pressed and gets its text back when the send fails', async () => {
+    let reject!: (e: unknown) => void;
+    jest.spyOn(stores.api, 'sendMessage').mockImplementation(() => new Promise((_, r) => { reject = r; }));
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+
+    await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'oi');
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
+    expect(screen.getByLabelText('Mensagem').props.value).toBe('');
+    await act(async () => {
+      reject(new ApiError(409, 'HOST_OFFLINE', 'A máquina do chat está offline.'));
+    });
+    expect(screen.getByLabelText('Mensagem').props.value).toBe('oi');
   });
 });
