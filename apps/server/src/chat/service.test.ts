@@ -1238,7 +1238,7 @@ describe('start', () => {
     await first.done;
   });
 
-  it('a start refused as busy neither reads nor marks the answered tab questions (spec 2026-09-26 §4.10)', async () => {
+  it('a message queued behind a busy run neither reads nor marks the answered tab questions (spec 2026-09-26 §4.10)', async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     const { service, tabQuestions } = build(() => (async function* () { await gate; yield delta('ok'); yield done(); })(), { tabQuestions: [answeredQuestion()] });
@@ -1246,11 +1246,14 @@ describe('start', () => {
     // The first run read and marked them, under its lock.
     expect(tabQuestions.listToInject).toHaveBeenCalledTimes(1);
     expect(tabQuestions.markInjected).toHaveBeenCalledTimes(1);
-    await expect(service.start(user, 'segunda')).rejects.toMatchObject({ statusCode: 409, code: 'CHAT_BUSY' });
+    // Concierge always on (TER-59): the second message is queued, not refused — and queuing it reads
+    // and marks nothing; the questions were already told to the run that holds the lock.
+    const second = await service.start(user, 'segunda');
     expect(tabQuestions.listToInject).toHaveBeenCalledTimes(1);
     expect(tabQuestions.markInjected).toHaveBeenCalledTimes(1);
     release();
     await first.done;
+    await second.done;
   });
 
   it('rejects start itself when the conversation was archived before the lock, and releases the lock', async () => {
@@ -1435,7 +1438,7 @@ describe('a chat that never blocks', () => {
 
     const resumed = service.resumeAfterDecision(user, action());
     await vi.waitFor(() => expect(run.written.length).toBe(1));
-    expect(chatActions.markInjected).toHaveBeenCalledWith('a1');
+    expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1']);
     expect(JSON.parse(run.written[0]).message.content).toMatch(/^O usuário autorizou:/);
     run.push(replayOf(run.written[0]));
     run.push(delta('feito'));
