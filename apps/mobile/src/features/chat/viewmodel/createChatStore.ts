@@ -11,9 +11,9 @@
 // `close()` (or the end of the session) bumped it meanwhile, so a late answer never repopulates a
 // store that was just reset.
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import type { SessionState } from '@/features/session/model/session.types';
-import { sessionEnded } from '@/features/shared/signals';
+import { appBackgrounded, sessionEnded } from '@/features/shared/signals';
 import type { TChatProjectItem, THostOptionsResponse, TTabQuestionAnswerBody } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { MobileApi } from '@/services/api/types';
@@ -21,6 +21,7 @@ import { mmkvStateStorage } from '@/services/storage';
 import { applyEvent, settlePending } from '../model/events';
 import { belongsTo } from '../model/filter';
 import { CHAT_MSG } from '../model/messages';
+import { createThrottledStorage } from './throttled-storage';
 import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, TabQuestion, TabSuggestion } from '../model/types';
 
 /** `approve_tab` approves the card *and* trusts its tab for send_input ("Permitir sempre nesta aba"). */
@@ -162,6 +163,9 @@ export function createChatStore(deps: ChatDeps) {
   /** App-level taps into every raw event (`subscribeEvents`), independent of the open conversation
    * and never cleared by `close()`/`generation` — a subscriber outlives any one socket connection. */
   const eventListeners = new Set<(e: ChatEvent) => void>();
+  /** The persisted slice's writer (spec §4.2 "Persistence"): at most one MMKV write per 2 s, plus a
+   * flush at the end of a run and when the app goes to the background. */
+  const storage = createThrottledStorage<Persisted>(mmkvStateStorage);
 
   const store = create<ChatState>()(
     persist(
@@ -226,9 +230,25 @@ export function createChatStore(deps: ChatDeps) {
           if (!belongsTo(current.conversation?.id ?? null)(e)) return;
           const before = { messages: current.messages, actions: current.actions, live: get().live, grants: current.grants, tabQuestions: current.tabQuestions, tabSuggestions: current.tabSuggestions };
           const { slice, reread: mustReread } = applyEvent(before, e);
-          if (slice === before) return;
-          patchSlot(key, () => ({ messages: slice.messages, actions: slice.actions, grants: slice.grants, tabQuestions: slice.tabQuestions, tabSuggestions: slice.tabSuggestions }));
-          set({ live: slice.live });
+          if (slice !== before) {
+            // One `set` per event, touching only what changed: a delta used to cost two (the slot,
+            // then `live`), each one a persist write, and a new slot object for rows that did not move.
+            const slotChanged =
+              slice.messages !== before.messages || slice.actions !== before.actions || slice.grants !== before.grants || slice.tabQuestions !== before.tabQuestions || slice.tabSuggestions !== before.tabSuggestions;
+            set((s) => ({
+              ...(slice.live !== before.live ? { live: slice.live } : {}),
+              ...(slotChanged
+                ? {
+                    conversations: {
+                      ...s.conversations,
+                      [key]: { ...(s.conversations[key] ?? emptySlot()), messages: slice.messages, actions: slice.actions, grants: slice.grants, tabQuestions: slice.tabQuestions, tabSuggestions: slice.tabSuggestions },
+                    },
+                  }
+                : {}),
+            }));
+          }
+          // The answer is complete (or failed): what streamed in is worth an MMKV write now.
+          if (e.type === 'run_finished') storage.flush();
           if (mustReread) void reread(key);
         };
 
@@ -567,7 +587,7 @@ export function createChatStore(deps: ChatDeps) {
       },
       {
         name: 'chat',
-        storage: createJSONStorage(() => mmkvStateStorage),
+        storage,
         partialize: (s): Persisted => ({
           projects: s.projects,
           conversations: Object.fromEntries(
@@ -591,6 +611,7 @@ export function createChatStore(deps: ChatDeps) {
     store.getState().close();
     store.setState(initialData());
   });
+  appBackgrounded.subscribe(() => storage.flush());
 
   return store;
 }

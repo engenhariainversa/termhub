@@ -4,6 +4,8 @@ import * as SecureStore from 'expo-secure-store';
 import type { TChatEvent } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { mmkv } from '@/services/storage';
+import { appBackgrounded } from '@/features/shared/signals';
+import { PERSIST_INTERVAL_MS } from './throttled-storage';
 import { foldLive } from '../model/live';
 import { createChatStore } from './createChatStore';
 import { enrol, PIN, setupSession } from '../../../../test/helpers/enrolled-session';
@@ -50,6 +52,9 @@ beforeEach(() => {
 
 afterEach(() => {
   while (opened.length) opened.pop()!.getState().close();
+  // Stores of earlier tests stay subscribed to the signal: drain what they left pending now, so a
+  // later test's write count is its own (the next beforeEach clears MMKV anyway).
+  appBackgrounded.emit();
   jest.clearAllTimers();
   jest.useRealTimers();
   jest.restoreAllMocks();
@@ -583,6 +588,7 @@ it('persists projects and each conversation, never live or transient state', asy
   await chat.getState().loadProjects();
   await openAndConnect(chat, 'p-termhub');
   handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', delta: 'meio' });
+  await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS); // the throttled write lands
 
   const saved = JSON.parse(mmkv.getString('chat')!).state;
   expect(Object.keys(saved).sort()).toEqual(['conversations', 'projects']);
@@ -749,4 +755,40 @@ it('suggestions too: per card busy, per card error', async () => {
   await sending;
   expect(chat.getState().busySuggestionIds).toEqual([]);
   expect(chat.getState().error).toBeNull();
+});
+
+it('a delta is one set and no MMKV write; the persisted slice lands within 2 s, once, without live', async () => {
+  const { chat, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS); // the open's own writes
+  const writes = jest.spyOn(mmkv, 'set');
+  const chatWrites = () => writes.mock.calls.filter(([name]) => name === 'chat');
+  const sets = jest.fn();
+  const unsubscribe = chat.subscribe(sets);
+
+  for (let i = 0; i < 20; i++) handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', delta: `t${i}` });
+  unsubscribe();
+  expect(sets).toHaveBeenCalledTimes(20);
+  expect(chatWrites()).toHaveLength(0);
+
+  await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS);
+  expect(chatWrites()).toHaveLength(1);
+  const saved = JSON.parse(mmkv.getString('chat')!).state;
+  expect(Object.keys(saved).sort()).toEqual(['conversations', 'projects']);
+});
+
+it('run_finished and the app going to the background flush the persisted slice at once', async () => {
+  const { chat, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS);
+  const writes = jest.spyOn(mmkv, 'set');
+  const chatWrites = () => writes.mock.calls.filter(([name]) => name === 'chat');
+
+  handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', delta: 'a' });
+  handlers().onEvent({ type: 'run_finished', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', ok: true, error_code: null });
+  expect(chatWrites()).toHaveLength(1);
+
+  handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-y', delta: 'b' });
+  appBackgrounded.emit();
+  expect(chatWrites()).toHaveLength(2);
 });

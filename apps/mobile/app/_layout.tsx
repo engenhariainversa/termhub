@@ -6,6 +6,7 @@ import { AppState, Linking } from 'react-native';
 import { PinPromptSheet } from '@/features/session/view/pin-prompt-sheet';
 import { usePhaseRedirect } from '@/features/session/view/use-phase-redirect';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
+import { appBackgrounded } from '@/features/shared/signals';
 import { socketWake } from '@/services/api/wake';
 import { ThemeProvider, useSchemeName } from '@/ui/theme-provider';
 
@@ -36,8 +37,11 @@ function Navigator() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       const session = useSessionStore.getState();
-      if (next === 'background' || next === 'inactive') session.background();
-      else if (next === 'active') {
+      if (next === 'background' || next === 'inactive') {
+        session.background();
+        // A chat mid-answer has writes on a throttle: they land now, not after the OS suspends us.
+        appBackgrounded.emit();
+      } else if (next === 'active') {
         session.foreground();
         // A chat socket that backed off while the app was away reconnects now (P§6.1).
         socketWake.emit();
