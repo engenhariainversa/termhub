@@ -368,9 +368,63 @@ describe('POST /chat/actions/:id/decision', () => {
     expect((await decided.app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'deny' } })).statusCode).toBe(409);
   });
 
-  it('approve: rejects a body without the challenge or the pin proof', async () => {
-    const { app, decide } = build();
+  it('approve: a write card without a proof is approved with no challenge and no PIN work', async () => {
+    const { app, session, decide, resumeAfterDecision } = build();
     const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ queued: true });
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
+    await vi.waitFor(() => expect(resumeAfterDecision).toHaveBeenCalled());
+  });
+
+  it('approve: an irreversible card without a proof is 401 PIN_REQUIRED and stays pending, nothing consumed', async () => {
+    const { app, session, decide } = build({ findByIdForUser: vi.fn(async () => ({ ...pendingAction, status: 'pending', class: 'irreversible' })) });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve' } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'Confirme com o PIN para autorizar esta ação.', code: 'PIN_REQUIRED' });
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('approve: a read card without a proof is 401 PIN_REQUIRED and stays pending, nothing consumed', async () => {
+    const { app, session, decide } = build({ findByIdForUser: vi.fn(async () => ({ ...pendingAction, status: 'pending', class: 'read' })) });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve' } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'Confirme com o PIN para autorizar esta ação.', code: 'PIN_REQUIRED' });
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('approve: an irreversible card with a good proof is approved as before', async () => {
+    const { app, session, decide } = build({ findByIdForUser: vi.fn(async () => ({ ...pendingAction, status: 'pending', class: 'irreversible' })) });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: approve });
+    expect(res.statusCode).toBe(200);
+    expect(session.checkPin).toHaveBeenCalled();
+    expect(decide).toHaveBeenCalled();
+  });
+
+  it('approve: a write card sent with a proof (an older app) still has it checked and counted', async () => {
+    const { app, decide } = build({ checkPin: vi.fn(async () => ({ ok: false, code: 'PIN_INVALID', failures: 1 })) });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: approve });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe('PIN_INVALID');
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('approve: half a proof is a 400', async () => {
+    const { app, decide } = build();
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve', challenge: 'chal-1' } });
+    expect(res.statusCode).toBe(400);
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('approve_tab without a proof is still a 400', async () => {
+    const { app, decide } = build();
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab' } });
     expect(res.statusCode).toBe(400);
     expect(decide).not.toHaveBeenCalled();
   });

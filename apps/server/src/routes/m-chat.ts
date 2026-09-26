@@ -159,11 +159,13 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
   /**
    * Deny is the web's decision as is. Approve first makes sure there is still something to approve
    * (404 / 409 before any challenge or PIN work, so a stale card never burns a challenge or a PIN
-   * attempt), then consumes the decision challenge bound to this action, then checks the PIN proof
-   * over it. Only a good proof reaches `decide`, which stays conditional in SQL: a race with the web
-   * ends in the same 409. Once decided, the resumed run goes to the background: the answer is
-   * `{ action, queued: true, note }` for both approve and deny, and the run reaches the phone over
-   * the socket. A CHAT_BUSY there is normal — the drain injects the decision when the current run ends.
+   * attempt). A `write` card approves with the session alone, like deny; an irreversible card (or
+   * any non-`write` class) and a tab grant still need the PIN proof — a proof sent anyway (an older
+   * app) is checked and counted as before. Only a good proof reaches `decide`, which stays
+   * conditional in SQL: a race with the web ends in the same 409. Once decided, the resumed run goes
+   * to the background: the answer is `{ action, queued: true, note }` for both approve and deny, and
+   * the run reaches the phone over the socket. A CHAT_BUSY there is normal — the drain injects the
+   * decision when the current run ends.
    */
   app.post('/actions/:id/decision', { config: { action: 'create' } }, async (request, reply) => {
     const { id } = actionIdParam.parse(request.params);
@@ -177,20 +179,30 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       if (!existing) throw notFound('Ação não encontrada');
       if (existing.status !== 'pending') throw conflict('Esta ação já foi decidida');
 
-      if (!(await deps.session.consumeDecisionChallenge(device, body.challenge, id))) throw new HttpError(400, 'Desafio inválido ou expirado', 'CHALLENGE_INVALID');
+      // TER-92: a `write` card approves with the session alone (token + hardware-key proof, like deny);
+      // an irreversible card and a tab grant still need the PIN. A proof that comes anyway (an older
+      // app) is checked and counted as before.
+      const hasProof = body.challenge !== undefined && body.pin_proof !== undefined;
+      const needsPin = body.decision === 'approve_tab' || existing.class !== 'write';
+      if (needsPin && !hasProof) throw new HttpError(401, 'Confirme com o PIN para autorizar esta ação.', 'PIN_REQUIRED');
+      if (hasProof) {
+        const challenge = body.challenge!;
+        const pinProof = body.pin_proof!;
+        if (!(await deps.session.consumeDecisionChallenge(device, challenge, id))) throw new HttpError(400, 'Desafio inválido ou expirado', 'CHALLENGE_INVALID');
 
-      const pin = await deps.session.checkPin(device, decisionProofMessage(body.challenge, id, body.decision), body.pin_proof, { ip: request.ip });
-      // Mapped exactly as `POST /session/token` maps it; the action stays pending on every failure.
-      if (!pin.ok) {
-        if (pin.code === 'DEVICE_LOCKED') {
-          reply.header('retry-after', Math.ceil(pin.retryAfterMs / 1000));
-          throw new DeviceLockedError(pin.retryAfterMs);
+        const pin = await deps.session.checkPin(device, decisionProofMessage(challenge, id, body.decision), pinProof, { ip: request.ip });
+        // Mapped exactly as `POST /session/token` maps it; the action stays pending on every failure.
+        if (!pin.ok) {
+          if (pin.code === 'DEVICE_LOCKED') {
+            reply.header('retry-after', Math.ceil(pin.retryAfterMs / 1000));
+            throw new DeviceLockedError(pin.retryAfterMs);
+          }
+          if (pin.code === 'PIN_INVALID') {
+            const err = new PinInvalidError(pin.failures);
+            return reply.code(401).send({ error: err.message, code: err.code, failures: err.failures });
+          }
+          throw deviceRevoked();
         }
-        if (pin.code === 'PIN_INVALID') {
-          const err = new PinInvalidError(pin.failures);
-          return reply.code(401).send({ error: err.message, code: err.code, failures: err.failures });
-        }
-        throw deviceRevoked();
       }
     }
 

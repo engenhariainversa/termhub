@@ -2,12 +2,17 @@ import { z } from 'zod';
 
 export const mobileMessageBody = z.object({ text: z.string().trim().min(1).max(8000), project_id: z.string().min(1).max(64).nullish() });
 export const sendAccepted = z.object({ conversation_id: z.string(), user_message_id: z.string(), assistant_message_id: z.string() });
-export const mobileDecisionBody = z.discriminatedUnion('decision', [
-  z.object({ decision: z.literal('deny') }),
-  z.object({ decision: z.literal('approve'), challenge: z.string().min(1).max(128), pin_proof: z.string().min(1).max(128) }),
-  /** Approve *and* trust the tab for send_input in this conversation (24 h max). PIN-proven like approve. */
-  z.object({ decision: z.literal('approve_tab'), challenge: z.string().min(1).max(128), pin_proof: z.string().min(1).max(128) }),
-]);
+const proof = { challenge: z.string().min(1).max(128), pin_proof: z.string().min(1).max(128) };
+
+export const mobileDecisionBody = z
+  .discriminatedUnion('decision', [
+    z.object({ decision: z.literal('deny') }),
+    /** A `write` card approves with the session alone; an irreversible one needs the PIN proof (the server decides). */
+    z.object({ decision: z.literal('approve'), challenge: proof.challenge.optional(), pin_proof: proof.pin_proof.optional() }),
+    /** Approve *and* trust the tab for send_input in this conversation (24 h max). Always PIN-proven. */
+    z.object({ decision: z.literal('approve_tab'), ...proof }),
+  ])
+  .refine((b) => b.decision !== 'approve' || (b.challenge === undefined) === (b.pin_proof === undefined), { message: 'challenge e pin_proof vão juntos' });
 
 /** Mirrors the server's `grantable` (apps/server/src/chat/gate.ts), which is the judge: only
  * `send_input` to a tab, never answering a permission. Decides whether the card offers the button. */

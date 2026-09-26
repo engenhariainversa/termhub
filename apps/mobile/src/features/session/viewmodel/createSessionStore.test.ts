@@ -13,6 +13,7 @@ import { decisionProof } from '@/services/crypto/pin';
 import { mmkv } from '@/services/storage';
 import { vault } from '@/services/vault';
 import { enrol, PIN, setupSession as setup } from '../../../../test/helpers/enrolled-session';
+import { RELOCK_AFTER_MS } from './createSessionStore';
 
 // Captured before any test installs fake timers: drains every pending microtask (a `void`-started wipe).
 const realSetImmediate = setImmediate;
@@ -242,6 +243,72 @@ it('renewToken is single-flighted and returns null when locked', async () => {
   expect(await cold.getState().renewToken()).toBeNull();
   expect(cold.getState().phase).toBe('locked');
   expect(challenge).toHaveBeenCalledTimes(2);
+});
+
+it('renews the token on its own 60 s before it expires, while unlocked', async () => {
+  const ctx = setup();
+  await enrol(ctx);
+  const token = jest.spyOn(ctx.api, 'token');
+  ctx.clock.value += 839_000;
+  await jest.advanceTimersByTimeAsync(839_000);
+  expect(token).not.toHaveBeenCalled();
+  expect(ctx.store.getState().tokenStale()).toBe(false);
+  ctx.clock.value += 1_000;
+  await jest.advanceTimersByTimeAsync(1_000);
+  expect(token).toHaveBeenCalledTimes(1);
+  expect(ctx.store.getState().tokenStale()).toBe(false);
+});
+
+it('a short expires_in (<= 2 min) still gets a sane delay, not a tight renewal loop', async () => {
+  const ctx = setup();
+  await enrol(ctx);
+  const realToken = ctx.api.token.bind(ctx.api);
+  const token = jest.spyOn(ctx.api, 'token').mockImplementation(async (body) => ({ ...(await realToken(body)), expires_in: 30 }));
+
+  await ctx.store.getState().renewToken();
+  expect(token).toHaveBeenCalledTimes(1);
+  // The old `Math.max(0, expiresInS * 1000 - RENEW_BEFORE_MS)` formula schedules this at 0 ms: a burst.
+  await jest.advanceTimersByTimeAsync(0);
+  expect(token).toHaveBeenCalledTimes(1);
+  ctx.clock.value += 14_000;
+  await jest.advanceTimersByTimeAsync(14_000);
+  expect(token).toHaveBeenCalledTimes(1);
+  // Half the 30 s lifetime (15 s), the floor for a short expires_in.
+  ctx.clock.value += 1_000;
+  await jest.advanceTimersByTimeAsync(1_000);
+  expect(token).toHaveBeenCalledTimes(2);
+});
+
+it('a relock clears the renewal timer: nothing renews behind the lock screen', async () => {
+  const ctx = setup();
+  await enrol(ctx);
+  const token = jest.spyOn(ctx.api, 'token');
+  ctx.store.getState().background();
+  ctx.clock.value += RELOCK_AFTER_MS;
+  ctx.store.getState().foreground();
+  expect(ctx.store.getState().phase).toBe('locked');
+  ctx.clock.value += 900_000;
+  await jest.advanceTimersByTimeAsync(900_000);
+  expect(token).not.toHaveBeenCalled();
+  expect(ctx.store.getState().tokenStale()).toBe(true);
+});
+
+it('tokenStale is true past expires_at - 60 s', async () => {
+  const ctx = setup();
+  await enrol(ctx);
+  jest.spyOn(ctx.api, 'token').mockImplementation(() => new Promise(() => {})); // the renewal never lands
+  ctx.clock.value += 840_000;
+  expect(ctx.store.getState().tokenStale()).toBe(true);
+});
+
+it('a renewal with no secret in memory relocks with the "Sessão expirada" message', async () => {
+  const ctx = setup();
+  await enrol(ctx);
+  // A second store over the same vault has no secret in memory; force it to unlocked.
+  const cold = ctx.make();
+  cold.setState({ phase: 'unlocked' });
+  expect(await cold.getState().renewToken()).toBeNull();
+  expect(cold.getState()).toMatchObject({ phase: 'locked', error: 'Sessão expirada. Desbloqueie para continuar.' });
 });
 
 type Proof = { challenge: string; pin_proof: string };

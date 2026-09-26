@@ -229,6 +229,22 @@ it('decides an action: approve resolves and emits decision, repeating it is 409,
   collected.close();
 });
 
+it('approve on a write card resolves with no proof and broadcasts an approved decision (TER-92)', async () => {
+  const clock = { value: START };
+  const { api, auth } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+
+  await api.decide(auth, 'a-termhub-1', { decision: 'approve' });
+
+  const approveEvent = collected.events.find((e): e is Extract<TChatEvent, { type: 'decision' }> => e.type === 'decision' && e.action_id === 'a-termhub-1');
+  expect(approveEvent?.status).toBe('approved');
+  const chat = await api.chat(auth, 'p-termhub');
+  expect(chat.actions.find((a) => a.id === 'a-termhub-1')!.status).toBe('approved');
+
+  collected.close();
+});
+
 it('approve_tab approves and trusts the tab with a proof for approve_tab only; revokeGrant ends it once', async () => {
   const clock = { value: START };
   const { api, auth, deviceId, secret } = await enrol(clock);

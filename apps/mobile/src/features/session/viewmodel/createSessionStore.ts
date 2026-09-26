@@ -26,6 +26,9 @@ import { persistablePhase, type SessionDeps, type SessionState } from '../model/
 /** Relock after this long in the background (P§5.6). */
 export const RELOCK_AFTER_MS = 5 * 60_000;
 
+/** Renew the access token this long before it expires (TER-93). */
+export const RENEW_BEFORE_MS = 60_000;
+
 type Data = Omit<SessionState, { [K in keyof SessionState]: SessionState[K] extends (...args: never[]) => unknown ? K : never }[keyof SessionState]>;
 
 const initialData = (mockControls: SessionDeps['mockControls']): Data => ({
@@ -60,10 +63,12 @@ export function createSessionStore(deps: SessionDeps) {
   let accessToken: string | null = null;
   let pinSecret: Uint8Array | null = null;
   let requestSecret: string | null = null;
+  let tokenExpiresAt: number | null = null;
 
   let generation = 0;
   let wiping: Promise<void> = Promise.resolve();
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  let renewTimer: ReturnType<typeof setTimeout> | null = null;
   let renewing: Promise<string | null> | null = null;
   let prompt: Prompt | null = null;
 
@@ -80,6 +85,28 @@ export function createSessionStore(deps: SessionDeps) {
           pollTimer = null;
         };
 
+        const clearRenewTimer = () => {
+          if (renewTimer) clearTimeout(renewTimer);
+          renewTimer = null;
+        };
+
+        /** Remembers the new token's expiry and schedules its renewal `RENEW_BEFORE_MS` ahead
+         * (TER-93). A timer that fires late (the app was in the background) is harmless: a
+         * `TOKEN_EXPIRED` still renews. A lifetime of 2 min or less would make `expiresInS * 1000 -
+         * RENEW_BEFORE_MS` zero or negative — floor the delay at half the lifetime so a short-lived
+         * token does not renew in a tight loop. */
+        const tokenIssued = (expiresInS: number) => {
+          tokenExpiresAt = now() + expiresInS * 1000;
+          clearRenewTimer();
+          renewTimer = setTimeout(
+            () => {
+              renewTimer = null;
+              void get().renewToken();
+            },
+            Math.max(expiresInS * 1000 / 2, expiresInS * 1000 - RENEW_BEFORE_MS),
+          );
+        };
+
         const dropPrompt = () => {
           prompt?.reject(new Error('CANCELLED'));
           prompt = null;
@@ -91,6 +118,8 @@ export function createSessionStore(deps: SessionDeps) {
           generation++;
           accessToken = null;
           pinSecret = null;
+          tokenExpiresAt = null;
+          clearRenewTimer();
           api.forgetTokens();
           dropPrompt();
         };
@@ -105,9 +134,10 @@ export function createSessionStore(deps: SessionDeps) {
         /** A new session (activation or unlock): the token, `unlocked`, a wake-up for a chat socket
          * that backed off while locked, and — in mock mode only, the fake token means nothing to a
          * real server — one push-token registration, fire-and-forget: it must never block the flow (P§9). */
-        const startSession = (token: string, secret: Uint8Array) => {
+        const startSession = (token: string, secret: Uint8Array, expiresInS: number) => {
           accessToken = token;
           pinSecret = secret;
+          tokenIssued(expiresInS);
           set({ phase: 'unlocked', lockedUntil: null, attemptsLeft: null, error: null, busy: false });
           socketWake.emit();
           if (api.mode === 'mock') {
@@ -131,7 +161,7 @@ export function createSessionStore(deps: SessionDeps) {
           if (gen !== generation) return;
           const res = await api.token({ device_id: deviceId, challenge, pin_proof: pinProof(candidate, challenge) });
           if (gen !== generation) return;
-          startSession(res.access_token, candidate);
+          startSession(res.access_token, candidate, res.expires_in);
         };
 
         const schedulePoll = (id: string, after: number) => {
@@ -233,7 +263,7 @@ export function createSessionStore(deps: SessionDeps) {
             if (gen !== generation) return;
             requestSecret = null;
             set({ deviceId: res.device_id, request: null });
-            startSession(res.access_token, secret);
+            startSession(res.access_token, secret, res.expires_in);
           },
 
           async unlock(pin) {
@@ -294,7 +324,10 @@ export function createSessionStore(deps: SessionDeps) {
             const secret = pinSecret;
             const deviceId = get().deviceId;
             if (!secret || !deviceId) {
-              if (get().phase === 'unlocked') relock();
+              if (get().phase === 'unlocked') {
+                relock();
+                set({ error: MSG.sessionExpired });
+              }
               return Promise.resolve(null);
             }
             const gen = generation;
@@ -305,6 +338,7 @@ export function createSessionStore(deps: SessionDeps) {
                 const res = await api.token({ device_id: deviceId, challenge, pin_proof: pinProof(secret, challenge) });
                 if (gen !== generation) return null;
                 accessToken = res.access_token;
+                tokenIssued(res.expires_in);
                 return accessToken;
               } catch (e) {
                 // Silent: only the session-ending answers surface (a wrong proof means the secret
@@ -324,6 +358,10 @@ export function createSessionStore(deps: SessionDeps) {
           auth() {
             if (!accessToken) throw new Error('LOCKED');
             return { accessToken };
+          },
+
+          tokenStale() {
+            return accessToken === null || tokenExpiresAt === null || now() >= tokenExpiresAt - RENEW_BEFORE_MS;
           },
 
           requestPinProof(actionId, perform, decision = 'approve') {

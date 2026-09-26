@@ -140,7 +140,19 @@ describe('Conversa', () => {
     expect(decide).toHaveBeenCalledWith('a-termhub-1', 'approve');
   });
 
-  it('Autorizar opens the PIN sheet', async () => {
+  it('Autorizar approves a write card at once, with no PIN sheet (TER-92)', async () => {
+    // Spied, not `stubAction`: the store's own `decide` logic (the thing under test) still runs,
+    // it just never reaches the real mock server, so the shared fixture stays pending for later tests.
+    const decide = jest.spyOn(stores.api, 'decide').mockResolvedValueOnce(undefined);
+    await render(<ConversationScreen />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Autorizar' }, LOAD));
+    await waitFor(() => expect(useChatStore.getState().decidingId).toBeNull());
+    expect(decide).toHaveBeenCalledWith(expect.anything(), 'a-termhub-1', { decision: 'approve' });
+    expect(useSessionStore.getState().pinPrompt).toBeNull();
+  });
+
+  it('Autorizar opens the PIN sheet for an irreversible card (TER-92)', async () => {
+    serveChat((res) => ({ actions: withAction(res, { class: 'irreversible' }), grants: [] }));
     await render(<ConversationScreen />);
     await fireEvent.press(await screen.findByRole('button', { name: 'Autorizar' }, LOAD));
     expect(useSessionStore.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', decision: 'approve' });

@@ -365,6 +365,126 @@ describe('events()', () => {
     }
   });
 
+  it('a refused upgrade with a fresh token only backs off: no renewal', async () => {
+    const { transport, connects, handlers } = connectableTransport();
+    const onTokenExpired = jest.fn(async () => 'fresh' as string | null);
+    const api = createHttpMobileApi({
+      transport,
+      baseUrl: 'https://termhub.dev',
+      app: 'ios/0.1.0+1',
+      key,
+      onTokenExpired,
+      now: () => NOW * 1000,
+      tokenStale: () => false,
+    });
+    const onClose = jest.fn();
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      const close = api.events({ accessToken: 'stale' }, { onEvent: jest.fn(), onReconnect: jest.fn(), onClose });
+      await waitFor(() => connects.length > 0);
+
+      handlers().onClose(1006); // never opened: the server answered the upgrade with a 401
+      expect(onClose).toHaveBeenCalledWith(1006, false);
+      await jest.advanceTimersByTimeAsync(1000);
+      await waitFor(() => connects.length > 1);
+      expect(onTokenExpired).not.toHaveBeenCalled();
+      expect(connects[1]!.headers.Authorization).toBe('Bearer stale');
+      close();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a refused upgrade with a stale token renews before the next attempt', async () => {
+    const { transport, connects, handlers } = connectableTransport();
+    const onTokenExpired = jest.fn(async () => 'fresh' as string | null);
+    const api = createHttpMobileApi({
+      transport,
+      baseUrl: 'https://termhub.dev',
+      app: 'ios/0.1.0+1',
+      key,
+      onTokenExpired,
+      now: () => NOW * 1000,
+      tokenStale: () => true,
+    });
+    const onClose = jest.fn();
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      const close = api.events({ accessToken: 'stale' }, { onEvent: jest.fn(), onReconnect: jest.fn(), onClose });
+      await waitFor(() => connects.length > 0);
+
+      handlers().onClose(1006); // never opened: the server answered the upgrade with a 401
+      expect(onClose).toHaveBeenCalledWith(1006, false);
+      await jest.advanceTimersByTimeAsync(1000);
+      await waitFor(() => connects.length > 1);
+      expect(onTokenExpired).toHaveBeenCalledTimes(1);
+      expect(connects[1]!.headers.Authorization).toBe('Bearer fresh');
+      close();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a 1008 close with a fresh token only backs off: no renewal', async () => {
+    const { transport, connects, handlers } = connectableTransport();
+    const onTokenExpired = jest.fn(async () => 'fresh' as string | null);
+    const api = createHttpMobileApi({
+      transport,
+      baseUrl: 'https://termhub.dev',
+      app: 'ios/0.1.0+1',
+      key,
+      onTokenExpired,
+      now: () => NOW * 1000,
+      tokenStale: () => false,
+    });
+    const onClose = jest.fn();
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      const close = api.events({ accessToken: 'stale' }, { onEvent: jest.fn(), onReconnect: jest.fn(), onClose });
+      await waitFor(() => connects.length > 0);
+
+      handlers().onClose(1008);
+      expect(onClose).toHaveBeenCalledWith(1008, false);
+      await jest.advanceTimersByTimeAsync(1000);
+      await waitFor(() => connects.length > 1);
+      expect(onTokenExpired).not.toHaveBeenCalled();
+      expect(connects[1]!.headers.Authorization).toBe('Bearer stale');
+      close();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a 1008 close with a stale token renews once before the next attempt, which carries the new bearer', async () => {
+    const { transport, connects, handlers } = connectableTransport();
+    const onTokenExpired = jest.fn(async () => 'fresh' as string | null);
+    const api = createHttpMobileApi({
+      transport,
+      baseUrl: 'https://termhub.dev',
+      app: 'ios/0.1.0+1',
+      key,
+      onTokenExpired,
+      now: () => NOW * 1000,
+      tokenStale: () => true,
+    });
+    const onClose = jest.fn();
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      const close = api.events({ accessToken: 'stale' }, { onEvent: jest.fn(), onReconnect: jest.fn(), onClose });
+      await waitFor(() => connects.length > 0);
+
+      handlers().onClose(1008);
+      expect(onClose).toHaveBeenCalledWith(1008, false);
+      await jest.advanceTimersByTimeAsync(1000);
+      await waitFor(() => connects.length > 1);
+      expect(onTokenExpired).toHaveBeenCalledTimes(1);
+      expect(connects[1]!.headers.Authorization).toBe('Bearer fresh');
+      close();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('a close after the socket opened does not renew the token', async () => {
     const { transport, connects, handlers } = connectableTransport();
     const onTokenExpired = jest.fn(async () => 'fresh' as string | null);

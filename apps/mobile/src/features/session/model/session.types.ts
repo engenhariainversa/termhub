@@ -65,6 +65,9 @@ export interface SessionState {
   disableBiometrics(): Promise<void>;
   /** The client's renewer: single-flighted `challenge` + `token` with the in-memory secret. */
   renewToken(): Promise<string | null>;
+  /** True when the token is missing or within RENEW_BEFORE_MS of its expiry: a refused socket
+   * renews only then. */
+  tokenStale(): boolean;
   /** Throws `Error('LOCKED')` when there is no token in memory. */
   auth(): Auth;
   /** Opens the PIN sheet for an approval (P§5.6). `resolvePinPrompt` computes the proof and

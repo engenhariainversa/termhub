@@ -28,6 +28,13 @@ export function setTokenRenewer(fn: () => Promise<string | null>): void {
   renewer = fn;
 }
 
+// Same wiring as `renewer`, for the session store's `tokenStale` (Task 4): a refused chat socket
+// renews only when this says the token is actually stale (TER-93).
+let staleCheck: () => boolean = () => true;
+export function setTokenStaleCheck(fn: () => boolean): void {
+  staleCheck = fn;
+}
+
 function buildTransport(): { transport: Transport; mockControls: MockControls | null } {
   if (mode === 'http') return { transport: new FetchTransport(), mockControls: null };
   const mock = createMockTransport();
@@ -49,4 +56,5 @@ export const api: MobileApi = createHttpMobileApi({
   mode,
   // `_layout.tsx` emits it on AppState `active`, the session store on entering `unlocked`.
   foreground: { subscribe: socketWake.subscribe },
+  tokenStale: () => staleCheck(),
 });

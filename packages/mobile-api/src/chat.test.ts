@@ -6,6 +6,13 @@ describe('mobileDecisionBody', () => {
     expect(mobileDecisionBody.safeParse({ decision: 'approve_tab', challenge: 'c', pin_proof: 'p' }).success).toBe(true);
     expect(mobileDecisionBody.safeParse({ decision: 'approve_tab' }).success).toBe(false);
   });
+
+  it('accepts approve with both challenge and PIN proof or with neither, never with only one', () => {
+    expect(mobileDecisionBody.safeParse({ decision: 'approve' }).success).toBe(true);
+    expect(mobileDecisionBody.safeParse({ decision: 'approve', challenge: 'c', pin_proof: 'p' }).success).toBe(true);
+    expect(mobileDecisionBody.safeParse({ decision: 'approve', challenge: 'c' }).success).toBe(false);
+    expect(mobileDecisionBody.safeParse({ decision: 'approve', pin_proof: 'p' }).success).toBe(false);
+  });
 });
 
 describe('isTabGrantable', () => {

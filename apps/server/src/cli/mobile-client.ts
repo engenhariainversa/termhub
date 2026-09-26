@@ -415,7 +415,7 @@ async function repl(): Promise<void> {
         console.log(err.message);
         if (err.code === 'DEVICE_REVOKED') return;
         // Expired, or deleted by a revoke: renewing tells the two apart (a revoked device gets DEVICE_REVOKED).
-        if (err.code === 'TOKEN_INVALID') {
+        if (err.code === 'TOKEN_EXPIRED') {
           accessToken = null;
           console.log('Token expirado ou removido: rode "refresh".');
         }

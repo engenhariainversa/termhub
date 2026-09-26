@@ -95,7 +95,9 @@ export function buildMobileAuthHook(deps: MobileAuthDeps) {
       const any = await deps.repos.deviceSessions.findTokenAny(tokenHash);
       const dev = any ? await deps.repos.devices.findById(any.device_id) : undefined;
       if (dev?.status === 'revoked') throw new HttpError(401, 'Este aparelho foi removido da conta', 'DEVICE_REVOKED');
-      throw new HttpError(401, 'Token inválido', 'TOKEN_INVALID');
+      // Expired, or already purged: the app renews on TOKEN_EXPIRED (spec 2026-09-24 §5). A token
+      // that never existed gets the same answer — the renewal it triggers needs the key and the PIN secret.
+      throw new HttpError(401, 'Sessão expirada.', 'TOKEN_EXPIRED');
     }
     const device = found.device;
     let publicKeyJwk: JsonWebKey;
