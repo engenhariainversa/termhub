@@ -667,9 +667,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           const m = entry.message;
           const row = fold.get(m.id);
           const streaming = row?.text || undefined;
-          // An assistant row with no text and no error is either the answer being written right now
-          // or a leftover from a run that died with the process. Only the newest row can still be
-          // the live one, and only while this page knows its run is under way.
+          // An assistant row with no text and no error is either an answer still being written or a
+          // leftover from a run that died with the process. It counts as live when this page knows
+          // its run has started (`row.started`) or, while a send is in flight, when it is the newest
+          // row; any other empty row is a failed one.
           const empty = m.role === 'assistant' && !m.text && !streaming && !m.error_code;
           // Started rows show "pensando…" wherever they are: with queued or injected turns several
           // answers can be pending at once (spec 2026-09-26 concierge always free).
