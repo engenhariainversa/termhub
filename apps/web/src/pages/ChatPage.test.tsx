@@ -95,8 +95,6 @@ function mockPointer(coarse: boolean): () => void {
 
 /** The element that scrolls is the list's parent (`ChatThread`); the list itself keeps the `Conversa` name. */
 const findScroller = async () => (await screen.findByRole('list', { name: 'Conversa' })).parentElement as HTMLElement;
-/** Lets a programmatic pin settle (`ChatThread` clears its flag on the next frame) before a scroll is faked as the reader's. */
-const nextFrame = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 40)));
 
 it('shows the stored conversation', async () => {
   render(<ChatPage />);
@@ -275,7 +273,6 @@ it('leaves the scroll position alone once the reader has scrolled away from the 
   Object.defineProperty(list, 'scrollHeight', { value: 1000, configurable: true });
   Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
   Object.defineProperty(list, 'scrollTop', { value: 100, configurable: true, writable: true });
-  await nextFrame();
   fireEvent.scroll(list);
 
   deliver({ type: 'message', message: msg({ id: 'm2', role: 'assistant', text: 'pronto' }) });
@@ -345,7 +342,6 @@ it('returns to the bottom on send, even if the reader had scrolled away', async 
   Object.defineProperty(list, 'scrollHeight', { value: 480, configurable: true });
   Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
   Object.defineProperty(list, 'scrollTop', { value: 50, configurable: true, writable: true });
-  await nextFrame();
   fireEvent.scroll(list); // reader scrolled up: the page stops following
 
   const box = (await screen.findByPlaceholderText(/pergunte/i)) as HTMLTextAreaElement;
@@ -626,7 +622,8 @@ it('stretches to its region instead of asking for a percentage of it', async () 
   // lays nothing out, so the class is what can be pinned — the symptom only shows on a device.
   render(<ChatPage />);
   const thread = await screen.findByRole('list', { name: 'Conversa' });
-  const column = thread.parentElement;
+  // The page's reading column (`ChatPanel`), capped at its measure; the thread's own wrappers sit inside it.
+  const column = thread.closest('.max-w-3xl');
   expect(column?.className).toContain('flex-1');
   expect(column?.className).not.toContain('h-full');
 });
