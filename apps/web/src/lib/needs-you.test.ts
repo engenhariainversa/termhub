@@ -24,6 +24,8 @@ function tab(overrides: Partial<Tab> = {}): Tab {
     activity_verb: null,
     created_at: '2026-01-01T00:00:00Z',
     alive: true,
+    ai_account_id: null,
+    rate_limited_at: null,
     ...overrides,
   };
 }
@@ -197,6 +199,7 @@ describe('emptyMonitorHint', () => {
     agent_version: null,
     agent_last_seen_at: null,
     agent_auto_update: false,
+    claude_auto_swap: false,
     is_local: false,
     owner_id: 'u1',
     owner_name: null,

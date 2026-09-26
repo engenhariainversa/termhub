@@ -159,6 +159,8 @@ model Machine {
   agentLastSeenAt     DateTime? @map("agent_last_seen_at")
   /// Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts)
   agentAutoUpdate     Boolean   @default(false) @map("agent_auto_update")
+  /// Swap a tab's Claude to another account of this machine by itself when it hits a usage limit (opt-in).
+  claudeAutoSwap  Boolean  @default(false) @map("claude_auto_swap")
   /// The user's own computer (an agent machine): browsers other than the one that added it hide it
   isLocal             Boolean   @default(false) @map("is_local")
   /// Owner: everything under the machine (projects, tabs, tasks, notes, AI accounts) is visible only to
@@ -255,6 +257,15 @@ model Tab {
   activity      TabActivity?
   /// Claude Code's spinner verb that came with `activity` (one ASCII word); set and cleared with it.
   activityVerb  String?  @map("activity_verb")
+  /// Claude Code session last reported by a hook of this tab (uuid) and its transcript on the machine;
+  /// used to resume it under another account (spec 2026-09-26 account swap). Metadata only.
+  agentSessionId      String?   @map("agent_session_id")
+  agentTranscriptPath String?   @map("agent_transcript_path")
+  /// The AI account termhub started this tab's agent with (start_agent or a swap); null = unknown.
+  aiAccountId         String?   @map("ai_account_id")
+  /// When the tab's Claude stopped on a usage limit (StopFailure rate_limit); cleared when it runs again.
+  rateLimitedAt       DateTime? @map("rate_limited_at")
+  aiAccount           AiAccount? @relation(fields: [aiAccountId], references: [id], onDelete: SetNull)
   /// API token that opened this tab through /mcp (null: opened in the browser). Used by close_tab and the per-token open-tab limit.
   createdByTokenId String?  @map("created_by_token_id")
   createdAt     DateTime @default(now()) @map("created_at")
@@ -266,6 +277,7 @@ model Tab {
   @@index([projectId])
   @@index([machineId])
   @@index([createdByTokenId])
+  @@index([aiAccountId])
   @@map("tabs")
 }
 
@@ -487,6 +499,7 @@ model AiAccount {
   machine   Machine    @relation(fields: [machineId], references: [id], onDelete: Cascade)
   /// Conversations running on this account; deleting the account nulls the column.
   chatConversations ChatConversation[]
+  tabs      Tab[]
 
   @@index([machineId])
   @@map("ai_accounts")

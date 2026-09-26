@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useData } from '../lib/data';
 import { AI_PROVIDER_LABEL, type AiAccount, type AiAccountUsage, type AiProvider, type AiUsageWindow } from '../lib/types';
+import { AutoSwapSettings } from './AutoSwapSettings';
 import { ConfirmDialog, Modal } from './Modal';
 
 const PROVIDERS: AiProvider[] = ['claude', 'chatgpt', 'gemini', 'antigravity'];
@@ -313,6 +314,8 @@ export function AiAccountsView() {
           />
         ))}
       </ul>
+
+      {accounts && <AutoSwapSettings machines={machines} accounts={accounts} />}
 
       {form.open && (
         <AccountForm

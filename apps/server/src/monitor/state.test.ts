@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { STATE_TEXT_MAX, interpretHookEvent, needsYou } from './state.js';
+import { STATE_TEXT_MAX, claudeSessionOf, interpretHookEvent, isRateLimit, needsYou } from './state.js';
 
 describe('interpretHookEvent — claude', () => {
   it('maps permission and idle notifications to waiting states with the message', () => {
@@ -242,6 +242,37 @@ describe('needsYou', () => {
     expect(needsYou({ state: 'idle', state_at: '2026-01-01T00:00:00.000Z', state_seen_at: null })).toBe(false);
     expect(needsYou({ state: null, state_at: null, state_seen_at: null })).toBe(false);
     expect(needsYou({ state: 'waiting_input', state_at: null, state_seen_at: null })).toBe(false);
+  });
+});
+
+describe('claude StopFailure', () => {
+  it('a usage limit waits for the person, with the CLI line', () => {
+    const i = interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'rate_limit', last_assistant_message: "You've hit your weekly limit · resets 1pm" });
+    expect(i).toMatchObject({ kind: 'waiting_input', text: "Limite de uso da conta atingido — You've hit your weekly limit · resets 1pm", meta: { event: 'StopFailure', error: 'rate_limit' } });
+    expect(isRateLimit(i)).toBe(true);
+  });
+  it('a usage limit without a message still says so', () => {
+    expect(interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'rate_limit' })).toMatchObject({ text: 'Limite de uso da conta atingido' });
+  });
+  it('any other API error is an error state', () => {
+    const i = interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'authentication_failed' });
+    expect(i).toMatchObject({ kind: 'error', text: 'Erro da API do Claude (authentication_failed)', meta: { event: 'StopFailure', error: 'authentication_failed' } });
+    expect(isRateLimit(i)).toBe(false);
+  });
+  it('an unknown error value is not echoed', () => {
+    expect(interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'x"; rm' })).toMatchObject({ kind: 'error', text: 'Erro da API do Claude (unknown)' });
+  });
+});
+describe('claudeSessionOf', () => {
+  const SID = '6d127d73-4bd0-42d6-b4a6-d96899507e62';
+  it('reads a valid pair', () => {
+    expect(claudeSessionOf({ session_id: SID, transcript_path: `/h/.claude/projects/-p/${SID}.jsonl` })).toEqual({ session_id: SID, transcript_path: `/h/.claude/projects/-p/${SID}.jsonl` });
+  });
+  it('drops malformed ones', () => {
+    expect(claudeSessionOf({ session_id: SID })).toBeNull();
+    expect(claudeSessionOf({ session_id: 'x', transcript_path: '/h/.claude/projects/-p/x.jsonl' })).toBeNull();
+    expect(claudeSessionOf({ session_id: SID, transcript_path: `/h/../projects/-p/${SID}.jsonl` })).toBeNull();
+    expect(claudeSessionOf(null)).toBeNull();
   });
 });
 

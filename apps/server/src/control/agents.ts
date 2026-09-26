@@ -1,4 +1,4 @@
-import { shellQuote } from '@termhub/machine-ops';
+import { isClaudeSessionId, shellQuote } from '@termhub/machine-ops';
 import { config } from '../config.js';
 import type { AiAccount, AiProvider, Machine, Task } from '../db/repositories/types.js';
 import { sendTextToSession } from '../terminal/session-ops.js';
@@ -60,6 +60,19 @@ export function launchLine(provider: AiProvider, configDir: string | null, promp
   const { binary, configEnv } = launcher(provider);
   const env = configDir ? `${configEnv}=${configDirArg(configDir)} ` : '';
   return `${env}${binary} ${shellQuote(prompt)}`;
+}
+
+/** What the resumed session is told first (spec 2026-09-26 account swap). */
+export const RESUME_PROMPT = 'A conta anterior atingiu o limite de uso. Continue a tarefa de onde parou.';
+
+/**
+ * The line that resumes a Claude session under another account (spec 2026-09-26 account swap §4.4).
+ * The id is a uuid, checked here too: it is the one value of the line that is not quoted.
+ */
+export function resumeLine(configDir: string | null, sessionId: string, prompt: string): string {
+  if (!isClaudeSessionId(sessionId)) throw new ControlError('NO_SESSION', 'A sessão do Claude desta aba não é válida');
+  const env = configDir ? `CLAUDE_CONFIG_DIR=${configDirArg(configDir)} ` : '';
+  return `${env}claude --resume ${sessionId} ${shellQuote(checkPrompt(prompt))}`;
 }
 
 async function accountOnMachine(ctx: ControlContext, accountId: string, machine: Machine): Promise<AiAccount> {
@@ -124,6 +137,9 @@ export async function startAgent(
   } catch (e) {
     throw new ControlError('LAUNCH_FAILED', `A aba ${tab.tab_id} foi aberta, mas o agente não foi iniciado: ${reason(e)}. ${keptTab}`);
   }
+  // which account runs this tab: a later swap must not pick it again (spec 2026-09-26 account swap);
+  // best effort, the agent is already running
+  await ctx.repos.tabs.setAgentFields(tab.tab_id, { ai_account_id: account.id }).catch(() => undefined);
   if (task) {
     try {
       await ctx.repos.tasks.setTab(task.id, tab.tab_id);

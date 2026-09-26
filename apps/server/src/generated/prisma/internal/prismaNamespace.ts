@@ -3326,6 +3326,7 @@ export const MachineScalarFieldEnum = {
   agentVersion: 'agentVersion',
   agentLastSeenAt: 'agentLastSeenAt',
   agentAutoUpdate: 'agentAutoUpdate',
+  claudeAutoSwap: 'claudeAutoSwap',
   isLocal: 'isLocal',
   ownerId: 'ownerId',
   createdAt: 'createdAt'
@@ -3379,6 +3380,10 @@ export const TabScalarFieldEnum = {
   stateSeenAt: 'stateSeenAt',
   activity: 'activity',
   activityVerb: 'activityVerb',
+  agentSessionId: 'agentSessionId',
+  agentTranscriptPath: 'agentTranscriptPath',
+  aiAccountId: 'aiAccountId',
+  rateLimitedAt: 'rateLimitedAt',
   createdByTokenId: 'createdByTokenId',
   createdAt: 'createdAt'
 } as const

@@ -68,6 +68,7 @@ function machine(id: string, name: string, owner_id: string | null = 'u1'): Mach
     agent_version: null,
     agent_last_seen_at: null,
     agent_auto_update: false,
+    claude_auto_swap: false,
     is_local: false,
     owner_id,
     owner_name: 'pedro',

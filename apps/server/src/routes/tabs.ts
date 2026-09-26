@@ -4,6 +4,8 @@ import type { Repositories } from '../db/repositories/index.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
 import { requireSimCapable } from '../agent/errors.js';
+import { swapAccount } from '../control/account-swap.js';
+import { ControlError } from '../control/context.js';
 import { killTmuxSession } from '../terminal/machine-exec.js';
 import type { SimulatorSessionManager } from '../simulator/session-manager.js';
 import { PASTE_MAX_BYTES, saveFileOnMachine } from '../terminal/paste-file.js';
@@ -20,6 +22,7 @@ const patchBody = z.object({
   name: z.string().trim().min(1).max(60).optional(),
   simulator_udid: z.string().regex(/^[A-Fa-f0-9-]{8,64}$/).nullable().optional(),
 });
+const swapBody = z.object({ account_id: z.string().min(1).max(64).optional() }).default({});
 
 export async function tabRoutes(
   app: FastifyInstance,
@@ -52,6 +55,22 @@ export async function tabRoutes(
     const updated = await repos.tabs.markSeen(id);
     if (updated) publishTabChange(updated, project.id, machine);
     return { tab: updated ?? tab };
+  });
+
+  /**
+   * Moves the tab's Claude session to another Claude account of its machine and resumes it there
+   * (spec 2026-09-26 account swap). Without account_id, the account with the most room is chosen.
+   */
+  app.post('/:id/account-swap', { config: { action: 'update' } }, async (request) => {
+    const { id } = idParam.parse(request.params);
+    const body = swapBody.parse(request.body ?? {});
+    const { tab, machine } = await scoped(repos, request).tab(id);
+    try {
+      return await swapAccount(repos, request.log, tab, machine, { accountId: body.account_id, auto: false });
+    } catch (e) {
+      if (e instanceof ControlError) throw conflict(e.message);
+      throw e;
+    }
   });
 
   app.get('/:id/simulator/screenshot', async (request, reply) => {

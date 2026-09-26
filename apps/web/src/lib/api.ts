@@ -341,6 +341,9 @@ export const api = {
     input: (id: string, text: string, enter = true) => request<{ ok: true; tab: Tab }>('POST', `/tabs/${id}/input`, { text, enter }),
     /** the user focused this tab: clears its "needs you" flag if it had one (idempotent) */
     seen: (id: string) => request<{ tab: Tab }>('POST', `/tabs/${id}/seen`),
+    /** resumes a rate-limited tab's Claude session on another account (or the server's own pick); 409 with a pt-BR `message` */
+    swapAccount: (id: string, accountId?: string) =>
+      request<{ from: { id: string; label: string } | null; to: { id: string; label: string } }>('POST', `/tabs/${id}/account-swap`, accountId ? { account_id: accountId } : {}),
     events: (id: string, limit = 50) => request<{ events: TabEvent[] }>('GET', `/tabs/${id}/events?limit=${limit}`),
     /** writes the file to ~/.cache/termhub/paste/ on the tab's machine and returns its path */
     pasteFile: (id: string, file: Blob, name?: string) =>

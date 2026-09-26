@@ -30,6 +30,7 @@ function makeMachine(overrides: Partial<Machine> & { type: MachineType }): Machi
     agent_version: null,
     agent_last_seen_at: null,
     agent_auto_update: false,
+    claude_auto_swap: false,
     is_local: false,
     owner_id: 'u1',
     owner_name: null,
@@ -254,6 +255,24 @@ describe('PATCH /api/machines/:id (agent_auto_update)', () => {
     store.m1 = makeMachine({ type: 'ssh' });
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { agent_auto_update: true } });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('PATCH /api/machines/:id (claude_auto_swap)', () => {
+  it('reaches the repository with the flag set', async () => {
+    store.m1 = makeMachine({ type: 'agent' });
+    const built = buildApp(store);
+    app = built.app;
+    const res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { claude_auto_swap: true } });
+    expect(res.statusCode).toBe(200);
+    expect(built.repos.update).toHaveBeenCalledWith('m1', expect.objectContaining({ claude_auto_swap: true }));
+  });
+
+  it('rejects a non-boolean value (400)', async () => {
+    store.m1 = makeMachine({ type: 'agent' });
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { claude_auto_swap: 'yes' } });
     expect(res.statusCode).toBe(400);
   });
 });

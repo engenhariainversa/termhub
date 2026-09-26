@@ -9,7 +9,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Project, Task } from '../db/repositories/types.js';
 import { Scoped } from '../auth/scope.js';
 import { ControlError, type ControlContext } from './context.js';
-import { checkPrompt, launchLine, PROMPT_MAX_CHARS, startAgent } from './agents.js';
+import { checkPrompt, launchLine, PROMPT_MAX_CHARS, RESUME_PROMPT, resumeLine, startAgent } from './agents.js';
 
 const machine = (over: Partial<Machine> & { id: string }): Machine => ({
   name: over.id, host: null, ssh_user: null, ssh_port: 22, type: 'agent', os: 'macos', capabilities: ['tmux', 'claude', 'codex'], checked_at: null,
@@ -63,6 +63,7 @@ function ctx(grants: string[] = ['terminals:write', 'tasks:update']) {
       update: vi.fn(async () => undefined),
       startWork: vi.fn(async () => undefined),
     },
+    tabs: { setAgentFields: vi.fn(async () => undefined) },
   };
   const scope = { user: { id: 'u1' } as never, viewAs: { kind: 'self' } as const, ownerId: 'u1', createAs: 'u1' };
   const c: ControlContext = {
@@ -108,6 +109,19 @@ describe('launchLine', () => {
   });
 });
 
+describe('resumeLine', () => {
+  const SID = '6d127d73-4bd0-42d6-b4a6-d96899507e62';
+  it('resumes the session under the account, prompt quoted', () => {
+    expect(resumeLine('~/.claude_b', SID, RESUME_PROMPT)).toBe(`CLAUDE_CONFIG_DIR="$HOME"/'.claude_b' claude --resume ${SID} 'A conta anterior atingiu o limite de uso. Continue a tarefa de onde parou.'`);
+  });
+  it('no env for the default account', () => {
+    expect(resumeLine(null, SID, 'x')).toBe(`claude --resume ${SID} 'x'`);
+  });
+  it('refuses a session id that is not a uuid', () => {
+    expect(() => resumeLine(null, "x'; rm -rf ~", 'x')).toThrow(ControlError);
+  });
+});
+
 describe('checkPrompt', () => {
   it('folds CRLF into LF and keeps newlines', () => {
     expect(checkPrompt('a\r\nb\rc\nd')).toBe('a\nb\nc\nd');
@@ -138,6 +152,18 @@ describe('startAgent', () => {
       tab_id: 't9', tab_name: 'pedrogoiania', project_id: 'p1', tmux_session: 'termhub-p1-t9', tab_url: 'https://app.test/projects/p1', command: 'claude', task_id: null, previous_tab_id: null,
       note: 'O agente está subindo com o prompt. Chame wait_for_state para saber quando ele terminar ou perguntar algo, e read_screen para ver a tela.',
     });
+  });
+
+  it("records the account on the tab: a later swap must not pick it again", async () => {
+    const { c, repos } = ctx();
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
+    expect(repos.tabs.setAgentFields).toHaveBeenCalledWith('t9', { ai_account_id: 'a1' });
+  });
+
+  it('does not fail when recording the account fails', async () => {
+    const { c, repos } = ctx();
+    repos.tabs.setAgentFields.mockRejectedValue(new Error('db down'));
+    await expect(startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'p' })).resolves.toMatchObject({ tab_id: 't9' });
   });
 
   it('uses tab_name when given, else the task title', async () => {

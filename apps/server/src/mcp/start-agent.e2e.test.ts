@@ -74,13 +74,18 @@ function build(cwd: string) {
         tabs.set(id, tab);
         return tab;
       }),
+      // The account swap (TER-55) records which account runs the tab, best effort.
+      setAgentFields: vi.fn(async (id: string, fields: Record<string, unknown>) => {
+        const tab = tabs.get(id);
+        if (tab) Object.assign(tab, fields);
+      }),
     },
   } as unknown as Repositories;
 
   const app = Fastify();
   applyErrorHandler(app);
   app.register((a) => mcpRoutes(a, { repos, version: '0.0.0-test' }));
-  return { app, apiTokens };
+  return { app, apiTokens, repos };
 }
 
 const callTool = (app: ReturnType<typeof Fastify>, name: string, args: object) =>
@@ -162,7 +167,7 @@ describe.skipIf(!realTmux)('start_agent against a real tmux and a fake CLI', () 
   });
 
   it('starts the CLI in the project with the prompt as one inert argument', async () => {
-    const { app, apiTokens } = build(cwd);
+    const { app, apiTokens, repos } = build(cwd);
     // Everything a shell would love to interpret: quotes, a command separator and a substitution.
     const prompt = `spec do "XPTO"; $(echo 9) 'ok'`;
 
@@ -170,6 +175,7 @@ describe.skipIf(!realTmux)('start_agent against a real tmux and a fake CLI', () 
     const out = payloadOf(started);
     expect(started.json().result.isError).toBeUndefined();
     expect(out).toMatchObject({ tab_id: 't1', project_id: 'p1', command: 'claude', task_id: null });
+    expect(repos.tabs.setAgentFields).toHaveBeenCalledWith('t1', { ai_account_id: 'a1' }); // the account swap knows who runs it
 
     const flat = await screenWith(app, out.tab_id, 'fake-cli args=');
     expect(flat).toContain('fake-cli args=1'); // the prompt is a single argument, not a command line

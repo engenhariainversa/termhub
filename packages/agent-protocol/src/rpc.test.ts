@@ -4,7 +4,7 @@ import { RPC, RPC_METHODS, isWdaPort, rpcErrorSchema } from './rpc.js';
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.update', 'ai.credential', 'file.paste', 'fs.list', 'fs.mkdir', 'hooks.install', 'hooks.uninstall', 'hw.probe',
+      'agent.update', 'ai.credential', 'claude.linkSession', 'file.paste', 'fs.list', 'fs.mkdir', 'hooks.install', 'hooks.uninstall', 'hw.probe',
       'sim.boot', 'sim.list', 'tmux.capture', 'tmux.ensure', 'tmux.kill', 'tmux.list', 'tmux.sendKey', 'tmux.sendText', 'tools.detect',
       'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail', 'wda.setup.start', 'wda.setup.state',
     ]);
@@ -70,6 +70,15 @@ describe('rpc catalog', () => {
     expect(RPC['hw.probe'].timeoutMs).toBe(15_000);
     expect(RPC['tmux.list'].timeoutMs).toBe(8_000);
     expect(RPC['ai.credential'].timeoutMs).toBe(10_000); // same as the ssh path's credential read
+  });
+  it('validates claude.linkSession params and result', () => {
+    const good = { transcript_path: '/h/.claude/projects/-p/6d127d73-4bd0-42d6-b4a6-d96899507e62.jsonl', session_id: '6d127d73-4bd0-42d6-b4a6-d96899507e62', config_dir: '~/.claude-work' };
+    expect(RPC['claude.linkSession'].params.safeParse(good).success).toBe(true);
+    expect(RPC['claude.linkSession'].params.safeParse({ ...good, session_id: 'not-a-uuid' }).success).toBe(false);
+    expect(RPC['claude.linkSession'].params.safeParse({ ...good, config_dir: null }).success).toBe(true);
+    expect(RPC['claude.linkSession'].result.safeParse({ status: 'linked' }).success).toBe(true);
+    expect(RPC['claude.linkSession'].result.safeParse({ status: 'bogus' }).success).toBe(false);
+    expect(RPC['claude.linkSession'].timeoutMs).toBe(10_000);
   });
   it('bounds hooks.install', () => {
     expect(RPC['hooks.install'].params.safeParse({ hooks_url: 'https://app.termhub.dev/api/hooks', token: 'thb_hk_abc-123' }).success).toBe(true);
