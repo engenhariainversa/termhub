@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { chatAttachment } from './attachments.js';
 
 /** Mirrors `ChatMessage` in `apps/server/src/db/repositories/chat.ts`. */
 export const chatMessage = z.object({
@@ -9,6 +10,8 @@ export const chatMessage = z.object({
   usage: z.unknown().nullable(),
   error_code: z.string().nullable(),
   created_at: z.string(),
+  /** The files sent with a user message (spec 2026-09-26 §5.5); absent when there are none, and on older servers. */
+  attachments: z.array(chatAttachment).optional(),
 });
 
 /** Mirrors `ChatActionClass` in `apps/server/src/db/repositories/chat-actions.ts`. */
@@ -150,6 +153,8 @@ export const chatEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('tab_question_closed'), user_id: z.string(), conversation_id: z.string(), question: tabQuestionSchema }),
   z.object({ type: z.literal('tab_suggestion'), user_id: z.string(), conversation_id: z.string(), suggestion: tabSuggestionSchema }),
   z.object({ type: z.literal('tab_suggestion_closed'), user_id: z.string(), conversation_id: z.string(), suggestion: tabSuggestionSchema }),
+  /** An attachment finished extracting, or failed (spec 2026-09-26 §5.5): the chip updates its status. */
+  z.object({ type: z.literal('attachment_status'), user_id: z.string(), conversation_id: z.string(), attachment: chatAttachment }),
   z.object({
     type: z.literal('run_finished'),
     user_id: z.string(),

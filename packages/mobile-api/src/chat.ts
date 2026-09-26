@@ -1,6 +1,15 @@
 import { z } from 'zod';
+import { MAX_ATTACHMENTS_PER_MESSAGE } from './attachments.js';
 
-export const mobileMessageBody = z.object({ text: z.string().trim().min(1).max(8000), project_id: z.string().min(1).max(64).nullish() });
+/** `POST chat/messages`: text, or attachments, or both (spec 2026-09-26 §5.5). An empty text with ids
+ * is a message made of files alone; neither is refused before anything is stored. */
+export const mobileMessageBody = z
+  .object({
+    text: z.string().trim().max(8000).default(''),
+    project_id: z.string().min(1).max(64).nullish(),
+    attachment_ids: z.array(z.string().min(1).max(64)).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
+  })
+  .refine((b) => b.text.length > 0 || (b.attachment_ids?.length ?? 0) > 0, { message: 'Escreva uma mensagem ou anexe um arquivo', path: ['text'] });
 export const sendAccepted = z.object({ conversation_id: z.string(), user_message_id: z.string(), assistant_message_id: z.string() });
 const proof = { challenge: z.string().min(1).max(128), pin_proof: z.string().min(1).max(128) };
 

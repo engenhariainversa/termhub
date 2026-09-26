@@ -3,6 +3,7 @@ import type { ChatMessage } from '../db/repositories/chat.js';
 import type { ChatActionClass } from '../db/repositories/chat-actions.js';
 import type { ChatActionCard, ChatGrantView } from '../db/repositories/chat-actions-view.js';
 import type { TabQuestionView } from '../db/repositories/tab-questions-view.js';
+import type { ChatAttachment } from '@termhub/mobile-api';
 
 /** What the browser is told while an answer is being written. Terminal content never travels here:
  * an action carries the tool and its arguments, never a captured screen (spec §7.1). Every event names
@@ -48,7 +49,9 @@ export type ChatEvent =
    * §6): the card. Never pushed to the phone (noise). Its own events: older apps parse `tab_question`. */
   | { type: 'tab_suggestion'; user_id: string; conversation_id: string; suggestion: TabQuestionView }
   /** It was sent (`answered`, or `failed`), dismissed, or left the tab's screen. */
-  | { type: 'tab_suggestion_closed'; user_id: string; conversation_id: string; suggestion: TabQuestionView };
+  | { type: 'tab_suggestion_closed'; user_id: string; conversation_id: string; suggestion: TabQuestionView }
+  /** An attachment's extraction finished or failed (spec 2026-09-26 §5.5): the public row, never its text. */
+  | { type: 'attachment_status'; user_id: string; conversation_id: string; attachment: ChatAttachment };
 
 class ChatBus {
   private emitter = new EventEmitter();

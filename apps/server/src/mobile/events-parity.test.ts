@@ -66,6 +66,11 @@ const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
   tab_question_closed: { type: 'tab_question_closed', ...base, question: { ...question, kind: 'permission', payload: { tool_name: 'Bash' }, status: 'answered_in_tab', closed_at: '2026-09-25T12:02:00.000Z' } },
   tab_suggestion: { type: 'tab_suggestion', ...base, suggestion },
   tab_suggestion_closed: { type: 'tab_suggestion_closed', ...base, suggestion: { ...suggestion, status: 'dismissed', closed_at: '2026-09-25T12:02:00.000Z' } },
+  attachment_status: {
+    type: 'attachment_status',
+    ...base,
+    attachment: { id: 'at1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf', bytes: 1234, status: 'ready', error_code: null, meta: { pages: 12, truncated: false }, created_at: '2026-09-26T12:00:00.000Z' },
+  },
 };
 
 describe('ChatEvent / chatEventSchema parity', () => {

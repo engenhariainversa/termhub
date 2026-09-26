@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isTabGrantable, mobileBatchDecisionBody, mobileDecisionBody } from './chat.js';
+import { isTabGrantable, mobileBatchDecisionBody, mobileDecisionBody, mobileMessageBody } from './chat.js';
 
 describe('mobileDecisionBody', () => {
   it('accepts approve_tab with a challenge and a PIN proof, and refuses it without', () => {
@@ -38,5 +38,21 @@ describe('isTabGrantable', () => {
     expect(isTabGrantable({ ...base, args: { tab_id: 't1', text: '1', answering_permission: true } })).toBe(false);
     expect(isTabGrantable({ ...base, tool: 'run_command' })).toBe(false);
     expect(isTabGrantable({ ...base, tab_id: null })).toBe(false);
+  });
+});
+
+describe('mobileMessageBody', () => {
+  it('accepts text alone, attachments alone, and refuses neither', () => {
+    expect(mobileMessageBody.safeParse({ text: 'oi' }).success).toBe(true);
+    expect(mobileMessageBody.parse({ text: '  ', attachment_ids: ['a1'] })).toEqual({ text: '', attachment_ids: ['a1'] });
+    expect(mobileMessageBody.safeParse({ text: '   ' }).success).toBe(false);
+    expect(mobileMessageBody.safeParse({ text: '', attachment_ids: [] }).success).toBe(false);
+    expect(mobileMessageBody.safeParse({ attachment_ids: ['a1'] }).success).toBe(true);
+  });
+
+  it('caps attachments at 5 and text at 8000', () => {
+    expect(mobileMessageBody.safeParse({ text: 'oi', attachment_ids: ['1', '2', '3', '4', '5'] }).success).toBe(true);
+    expect(mobileMessageBody.safeParse({ text: 'oi', attachment_ids: ['1', '2', '3', '4', '5', '6'] }).success).toBe(false);
+    expect(mobileMessageBody.safeParse({ text: 'x'.repeat(8001) }).success).toBe(false);
   });
 });
