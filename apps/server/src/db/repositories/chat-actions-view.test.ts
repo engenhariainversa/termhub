@@ -28,8 +28,10 @@ const action = (over: Partial<ChatAction>): ChatAction => ({
   ...over,
 });
 
-// This owner's own rows.
-const tab = { id: 't1', project_id: 'p1', machine_id: 'm1', name: 'Terminal 2' };
+// This owner's own rows. `created_by_token_id: null` is the default (opened in the browser) — the
+// close_tab-specific tests below build their own variant with a token id, through `fakeRepos`'s
+// `tab` override, rather than mutating this shared fixture other tests also read.
+const tab = { id: 't1', project_id: 'p1', machine_id: 'm1', name: 'Terminal 2', created_by_token_id: null as string | null };
 const project = { id: 'p1', name: 'reactivando' };
 const machine = { id: 'm1', name: 'macbook m3' };
 const task = { id: 'tk1', project_id: 'p1', title: 'Corrigir o build', ref: 'REA-7' };
@@ -43,13 +45,21 @@ const foreignTask = { id: 'tk9', project_id: 'p9', title: 'Tarefa Alheia' };
 
 /** Each fake filters by `ownerId` exactly like the real `findByIdsForOwner` methods do: another
  * owner's id, or the wrong owner altogether, comes back empty — indistinguishable from "does not
- * exist". `OWNER` is the only owner whose fixtures ever resolve here. */
-function fakeRepos() {
+ * exist". `OWNER` is the only owner whose fixtures ever resolve here.
+ *
+ * `tabOverride` lets a close_tab test swap in a variant of `tab` with a different
+ * `created_by_token_id`, without disturbing every other test that reads the shared fixture.
+ * `apiTokens.listByUser` answers like the real, owner-scoped repository: `tokChat` is a gated
+ * (concierge) token of this owner, `tokMine` is the owner's own (non-gated) token — tokens are
+ * revoked, never deleted, so both keep showing up here regardless of revocation. */
+function fakeRepos(tabOverride?: Partial<typeof tab>) {
+  const t = { ...tab, ...tabOverride };
   return {
-    tabs: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === OWNER && ids.includes(tab.id) ? [tab] : [])) },
+    tabs: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === OWNER && ids.includes(t.id) ? [t] : [])) },
     projects: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === OWNER && ids.includes(project.id) ? [project] : [])) },
     machines: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === OWNER && ids.includes(machine.id) ? [machine] : [])) },
     tasks: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === OWNER && ids.includes(task.id) ? [task] : [])) },
+    apiTokens: { listByUser: vi.fn(async (userId: string) => (userId === OWNER ? [{ id: 'tokChat', gated: true }, { id: 'tokMine', gated: false }] : [])) },
   } as never;
 }
 
@@ -86,6 +96,51 @@ it('falls back to the verb alone when nothing at all can be resolved (no tab, no
   const repos = fakeRepos();
   const [card] = await describeActions(repos, [action({ tool: 'create_task', args: { project_id: 'nope', title: 'Nova tarefa' } })], OWNER);
   expect(card.summary).toBe('criar a tarefa "Nova tarefa"');
+});
+
+// The close_tab card names the tab's origin (TER-184) so the one confirmation the gate now asks for
+// (Task 1: a gated token may close any of the user's tabs after this single "yes") is informed —
+// the user is told plainly whether they are approving the chat closing its own tab or one of theirs.
+// `apiTokens.listByUser` is the only extra, owner-scoped lookup this needs, and only when a
+// close_tab card's tab actually resolved with a token id to classify.
+it('says a close_tab card is closing a tab the chat itself opened, when the token is a gated one of this owner', async () => {
+  const repos = fakeRepos({ created_by_token_id: 'tokChat' });
+  const [card] = await describeActions(repos, [action({ tool: 'close_tab', args: { tab_id: 't1' }, tab_id: 't1', class: 'irreversible' })], OWNER);
+  expect(card.summary).toBe('fechar a aba Terminal 2 (aberta pelo chat) do projeto reactivando, no macbook m3');
+  expect(repos.apiTokens.listByUser).toHaveBeenCalledTimes(1);
+  expect(repos.apiTokens.listByUser).toHaveBeenCalledWith(OWNER);
+});
+
+it('says a close_tab card is closing the user\'s own (browser-opened) tab when created_by_token_id is null', async () => {
+  const repos = fakeRepos({ created_by_token_id: null });
+  const [card] = await describeActions(repos, [action({ tool: 'close_tab', args: { tab_id: 't1' }, tab_id: 't1', class: 'irreversible' })], OWNER);
+  expect(card.summary).toBe('fechar a aba Terminal 2 (aberta por você, não pelo chat) do projeto reactivando, no macbook m3');
+});
+
+it('says a close_tab card is closing a tab opened by another (non-gated) API token of the user\'s own', async () => {
+  const repos = fakeRepos({ created_by_token_id: 'tokMine' });
+  const [card] = await describeActions(repos, [action({ tool: 'close_tab', args: { tab_id: 't1' }, tab_id: 't1', class: 'irreversible' })], OWNER);
+  expect(card.summary).toBe('fechar a aba Terminal 2 (aberta por um token de API seu, não pelo chat) do projeto reactivando, no macbook m3');
+});
+
+it('treats an unknown (revoked-and-gone, or foreign) token id the same as a non-gated one of the user\'s own', async () => {
+  const repos = fakeRepos({ created_by_token_id: 'tok-does-not-exist' });
+  const [card] = await describeActions(repos, [action({ tool: 'close_tab', args: { tab_id: 't1' }, tab_id: 't1', class: 'irreversible' })], OWNER);
+  expect(card.summary).toBe('fechar a aba Terminal 2 (aberta por um token de API seu, não pelo chat) do projeto reactivando, no macbook m3');
+});
+
+it('never looks up tokens for a close_tab card whose tab no longer resolves, and keeps the plain "gone" sentence', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(repos, [action({ tool: 'close_tab', args: { tab_id: foreignTab.id }, tab_id: foreignTab.id, class: 'irreversible' })], OWNER);
+  expect(card.summary).toBe('fechar a aba numa aba que não existe mais');
+  expect(repos.apiTokens.listByUser).not.toHaveBeenCalled();
+});
+
+it('never looks up tokens for actions other than close_tab, even when their tab has a token id', async () => {
+  const repos = fakeRepos({ created_by_token_id: 'tokChat' });
+  const [card] = await describeActions(repos, [action({ tool: 'send_input', args: { tab_id: 't1', text: 'npm test' }, tab_id: 't1' })], OWNER);
+  expect(card.summary).toBe('digitar `npm test` na aba Terminal 2 do projeto reactivando, no macbook m3');
+  expect(repos.apiTokens.listByUser).not.toHaveBeenCalled();
 });
 
 // link_project_machine/set_project_machine_cwd/unlink_project_machine carry both a project_id and a

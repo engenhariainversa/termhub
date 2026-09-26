@@ -10,12 +10,13 @@ export interface ControlContext {
   scope: Scope;
   scoped: Scoped;
   can(resource: Resource, action: Action): Promise<boolean>;
-  /** The API token this request came in with, when it came through /mcp (absent for web sessions). */
-  token?: { id: string; scopes: readonly ApiTokenScope[] };
+  /** The API token this request came in with, when it came through /mcp (absent for web sessions).
+   * `gated` marks the chat concierge's token (rotated every run, see `closeTab`). */
+  token?: { id: string; scopes: readonly ApiTokenScope[]; gated?: boolean };
 }
 
 /** A user's own scope — never "view as", even for admins (API tokens act as their owner only). */
-export function controlContextFor(repos: Repositories, user: User, token?: { id: string; scopes: readonly ApiTokenScope[] }): ControlContext {
+export function controlContextFor(repos: Repositories, user: User, token?: { id: string; scopes: readonly ApiTokenScope[]; gated?: boolean }): ControlContext {
   const scope: Scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id };
   return { repos, scope, scoped: new Scoped(repos, scope), can: (resource, action) => canAccess(repos, user, resource, action), token };
 }

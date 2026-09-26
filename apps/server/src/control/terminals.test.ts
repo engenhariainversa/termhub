@@ -248,6 +248,15 @@ describe('closeTab', () => {
     await expect(closeTab(ctx, { tab_id: 't1', force: true })).resolves.toMatchObject({ tab_id: 't1' });
   });
 
+  it('closes any tab of the user without force on a gated (chat) token: the gate already asked', async () => {
+    killTmuxSession.mockResolvedValue(true);
+    for (const created_by_token_id of [null, 'tok-old-concierge']) {
+      const ctx = ctxWith({ tab: tab({ created_by_token_id }) });
+      (ctx as { token: unknown }).token = { id: 'tok1', scopes: ['terminals'], gated: true };
+      await expect(closeTab(ctx, { tab_id: 't1' })).resolves.toEqual({ tab_id: 't1', killed: true });
+    }
+  });
+
   it('tells the public channel the tab is gone', async () => {
     const { publicBus } = await import('../public/bus.js');
     const gone: unknown[] = [];

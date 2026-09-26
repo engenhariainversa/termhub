@@ -548,6 +548,31 @@ it('asks before an irreversible action too, and kills nothing meanwhile', async 
   expect(collected.map((e) => e.class)).toEqual(['irreversible']);
 });
 
+it('closes an approved tab the chat did not open with the call itself, no force and no second question', async () => {
+  const typed: string[] = [];
+  attachFakeTmux(typed);
+  const { app, actions } = build({ gated: true });
+  const row = actions.seed('approved', 'close_tab', { tab_id: 't1' }); // t1.created_by_token_id is null
+
+  const res = await callTool(app, 'close_tab', { tab_id: 't1' });
+
+  expect(resultOf(res).isError).toBeUndefined();
+  expect(payloadOf(res)).toMatchObject({ tab_id: 't1' });
+  expect(actions.markExecuted).toHaveBeenCalledWith(row.id, true, null, expect.any(Number));
+  expect(actions.insertPending).not.toHaveBeenCalled();
+});
+
+it("a non-gated (personal) token still needs force for a tab it did not open", async () => {
+  attachFakeTmux([]);
+  const { app, apiTokens } = build({ gated: false });
+
+  const res = await callTool(app, 'close_tab', { tab_id: 't1' }); // t1.created_by_token_id is null
+
+  expect(resultOf(res).isError).toBe(true);
+  await settle();
+  expect(apiTokens.recordEvent.mock.calls[0][0]).toMatchObject({ tool: 'close_tab', tab_id: 't1', ok: false, error_code: 'NOT_YOURS' });
+});
+
 it('refuses a tool it does not know before the gate is ever reached', async () => {
   attachFakeTmux([]);
   const { app, actions, apiTokens } = build({ gated: true });

@@ -55,7 +55,7 @@ export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositorie
   const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = await authenticateToken(repos, request.headers.authorization);
     if (!auth) return reply.code(401).send(UNAUTHORIZED);
-    request.mcp = { token: auth.token, ctx: controlContextFor(repos, auth.user, { id: auth.token.id, scopes: auth.token.scopes }) };
+    request.mcp = { token: auth.token, ctx: controlContextFor(repos, auth.user, { id: auth.token.id, scopes: auth.token.scopes, gated: auth.token.gated }) };
     void repos.apiTokens.touchLastUsed(auth.token.id).catch((err) => request.log.warn({ err }, 'mcp: touchLastUsed failed'));
   };
 

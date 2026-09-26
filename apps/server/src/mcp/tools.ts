@@ -130,7 +130,8 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'close_tab',
-    description: 'Kill a terminal tab’s tmux session and remove the tab. Only tabs this token opened, unless force is true.',
+    description:
+      'Kill a terminal tab’s tmux session and remove the tab. A personal token closes only the tabs it opened, unless force is true; in the chat, the user’s confirmation covers any of their tabs (no force needed).',
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: { tab_id: id, force: z.boolean().optional() },
     run: (ctx, a) => closeTab(ctx, a as { tab_id: string; force?: boolean }),
