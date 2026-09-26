@@ -40,7 +40,10 @@ export interface ChatAttachmentsRepo {
   setFailed(id: string, code: string): Promise<AttachmentRow | null>;
   deleteUnsent(id: string, userId: string): Promise<boolean>;
   usageBytes(userId: string): Promise<number>;
-  listPending(): Promise<AttachmentRow[]>;
+  /** Bumps `meta.attempts` of a pending row and answers the new count; null when the row is gone or no longer pending. */
+  markAttempt(id: string): Promise<number | null>;
+  /** Every pending row, or only the ones created before `olderThan`. */
+  listPending(olderThan?: Date): Promise<AttachmentRow[]>;
   listStaleUnsent(olderThan: Date): Promise<AttachmentRow[]>;
   existingIds(ids: string[]): Promise<Set<string>>;
 }
@@ -134,8 +137,19 @@ export class ChatAttachmentsRepository implements ChatAttachmentsRepo {
     return r._sum.bytes ?? 0;
   }
 
-  async listPending(): Promise<AttachmentRow[]> {
-    return (await this.db.chatAttachment.findMany({ where: { status: 'pending' }, orderBy: ORDER })).map(mapAttachment);
+  async markAttempt(id: string): Promise<number | null> {
+    // One statement, so the count is right whatever else runs; written before the parse so a file that
+    // kills the process still carries its attempt (the queue reads it on the next boot).
+    const rows = await this.db.$queryRaw<{ attempts: number }[]>`
+      UPDATE "chat_attachments"
+      SET meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{attempts}', to_jsonb(COALESCE((meta->>'attempts')::int, 0) + 1))
+      WHERE id = ${id} AND status = 'pending'
+      RETURNING (meta->>'attempts')::int AS attempts`;
+    return rows[0]?.attempts ?? null;
+  }
+
+  async listPending(olderThan?: Date): Promise<AttachmentRow[]> {
+    return (await this.db.chatAttachment.findMany({ where: { status: 'pending', ...(olderThan ? { createdAt: { lt: olderThan } } : {}) }, orderBy: ORDER })).map(mapAttachment);
   }
 
   async listStaleUnsent(olderThan: Date): Promise<AttachmentRow[]> {

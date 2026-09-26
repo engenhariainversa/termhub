@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AttachmentRow, ChatAttachmentsRepo } from '../../db/repositories/chat-attachments.js';
 import { ExtractError, type extract } from './extract.js';
-import { createExtractionQueue, requeuePending } from './queue.js';
+import { MAX_PARSE_ATTEMPTS, MAX_TRANSCRIPTION_ATTEMPTS, REQUEUE_MIN_AGE_MS, createExtractionQueue, requeuePending } from './queue.js';
 
 const row = (over: Partial<AttachmentRow> = {}): AttachmentRow => ({
   id: 'at1', user_id: 'u1', conversation_id: 'c1', message_id: null, name: 'a.pdf', mime: 'application/pdf', kind: 'pdf', bytes: 3, sha256: 'h',
@@ -24,7 +24,14 @@ function build(rows: AttachmentRow[], extractImpl: typeof extract) {
       Object.assign(r, { status: 'failed', error_code: code });
       return { ...r };
     }),
-    listPending: vi.fn(async () => [...store.values()].filter((r) => r.status === 'pending')),
+    listPending: vi.fn(async (olderThan?: Date) => [...store.values()].filter((r) => r.status === 'pending' && (!olderThan || new Date(r.created_at) < olderThan))),
+    markAttempt: vi.fn(async (id: string) => {
+      const r = store.get(id);
+      if (!r || r.status !== 'pending') return null;
+      const attempts = (Number(r.meta?.attempts) || 0) + 1;
+      r.meta = { ...(r.meta ?? {}), attempts };
+      return attempts;
+    }),
   } as unknown as ChatAttachmentsRepo;
   const files = { read: vi.fn(async (_u: string, id: string) => (id === 'gone' ? Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' })) : Buffer.from('abc'))) };
   const onDone = vi.fn();
@@ -92,6 +99,65 @@ describe('extraction queue', () => {
     queue.enqueue('a');
     await queue.idle();
     expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('marks the attempt before parsing, so a file that kills the process is not parsed forever: past the cap the row fails without a parse', async () => {
+    const extractImpl = vi.fn(async () => ({ text: 'x', meta: {} })) as unknown as typeof extract;
+    const { queue, repo, onDone } = build([row({ id: 'a' }), row({ id: 'poison', meta: { attempts: MAX_PARSE_ATTEMPTS } }), row({ id: 'clip', kind: 'audio', meta: { attempts: MAX_TRANSCRIPTION_ATTEMPTS } })], extractImpl);
+    queue.enqueue('a');
+    queue.enqueue('poison');
+    queue.enqueue('clip');
+    await queue.idle();
+    expect(repo.markAttempt).toHaveBeenCalledWith('a');
+    // Written before the parse: a process the parse kills leaves the attempt on the row.
+    expect(vi.mocked(repo.markAttempt).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(extractImpl).mock.invocationCallOrder[0]);
+    expect(extractImpl).toHaveBeenCalledTimes(1);
+    expect(repo.setFailed).toHaveBeenCalledWith('poison', 'ATTACHMENT_INVALID');
+    expect(repo.setFailed).toHaveBeenCalledWith('clip', 'TRANSCRIPTION_UNAVAILABLE');
+    expect(onDone.mock.calls.map((c) => [c[0].id, c[0].status])).toEqual([['a', 'ready'], ['poison', 'failed'], ['clip', 'failed']]);
+  });
+
+  it('a retryable failure (whisper still loading its model) leaves the row pending for the next re-queue, until the attempts run out', async () => {
+    const extractImpl = vi.fn(async () => {
+      throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper is loading', { retryable: true });
+    }) as unknown as typeof extract;
+    const { queue, repo, onDone, store, log } = build([row({ id: 'clip', kind: 'audio' }), row({ id: 'last', kind: 'audio', meta: { attempts: MAX_TRANSCRIPTION_ATTEMPTS - 1 } })], extractImpl);
+    queue.enqueue('clip');
+    queue.enqueue('last');
+    await queue.idle();
+    expect(store.get('clip')!.status).toBe('pending');
+    expect(repo.setFailed).not.toHaveBeenCalledWith('clip', expect.anything());
+    expect(repo.setFailed).toHaveBeenCalledWith('last', 'TRANSCRIPTION_UNAVAILABLE');
+    expect(onDone.mock.calls.map((c) => c[0].id)).toEqual(['last']);
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  it('never runs the id that is running: a re-queue while a job is in flight is dropped, so a row left pending is not retried at once', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const extractImpl = vi.fn(async () => {
+      await gate;
+      throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper is loading', { retryable: true });
+    }) as unknown as typeof extract;
+    const { queue, store } = build([row({ id: 'a', kind: 'audio' })], extractImpl);
+    queue.enqueue('a');
+    await new Promise((r) => setTimeout(r, 5));
+    queue.enqueue('a'); // the hourly re-queue, mid-job
+    release();
+    await queue.idle();
+    expect(extractImpl).toHaveBeenCalledTimes(1);
+    expect(store.get('a')!.meta).toEqual({ attempts: 1 });
+  });
+
+  it('requeuePending with an age re-enqueues only the pending rows older than it (the hourly pass)', async () => {
+    const extractImpl = vi.fn(async () => ({ text: 'x', meta: {} })) as unknown as typeof extract;
+    const now = new Date('2026-09-26T13:00:00.000Z');
+    const { queue, repo } = build([row({ id: 'old', created_at: new Date(now.getTime() - 2 * REQUEUE_MIN_AGE_MS).toISOString() }), row({ id: 'fresh', created_at: new Date(now.getTime() - 1000).toISOString() })], extractImpl);
+    const olderThan = new Date(now.getTime() - REQUEUE_MIN_AGE_MS);
+    expect(await requeuePending(queue, repo, olderThan)).toBe(1);
+    expect(repo.listPending).toHaveBeenCalledWith(olderThan);
+    await queue.idle();
+    expect(extractImpl).toHaveBeenCalledTimes(1);
   });
 
   it('requeuePending re-enqueues every pending row on boot and dedupes an id already queued', async () => {

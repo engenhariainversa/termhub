@@ -24,12 +24,16 @@ export interface Extracted {
 }
 export type ExtractErrorCode = 'ATTACHMENT_INVALID' | 'TRANSCRIPTION_UNAVAILABLE' | 'TRANSCRIPTION_FAILED';
 export class ExtractError extends Error {
+  /** The failure is the moment's, not the file's (whisper loading its model): the queue may try again later. */
+  readonly retryable: boolean;
   constructor(
     public code: ExtractErrorCode,
     message: string = code,
+    opts: { retryable?: boolean } = {},
   ) {
     super(message);
     this.name = 'ExtractError';
+    this.retryable = opts.retryable ?? false;
   }
 }
 export interface ExtractDeps {
@@ -196,6 +200,8 @@ async function transcribe(file: Buffer, mime: string, deps: ExtractDeps): Promis
     throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper unreachable or too slow');
   }
   if (res.status === 422) throw new ExtractError('TRANSCRIPTION_FAILED', 'audio could not be decoded');
+  // 503 is whisper still loading its model (`terminal/transcription.ts` says the same): not this file's fault.
+  if (res.status === 503) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper is loading', { retryable: true });
   if (!res.ok) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', `whisper answered ${res.status}`);
   const body = (await res.json().catch(() => null)) as { text?: unknown; duration?: unknown; language?: unknown } | null;
   if (!body || typeof body.text !== 'string') throw new ExtractError('TRANSCRIPTION_FAILED', 'invalid whisper answer');

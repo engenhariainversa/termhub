@@ -168,6 +168,10 @@ describe('extract: audio and video go to whisper', () => {
     expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', noWhisper))).toBe('TRANSCRIPTION_UNAVAILABLE');
     expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', w(vi.fn(async () => { throw new Error('ECONNREFUSED'); }))))).toBe('TRANSCRIPTION_UNAVAILABLE');
     expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'loading' }, 503))))).toBe('TRANSCRIPTION_UNAVAILABLE');
+    // 503 is whisper loading its model: the same code, but the queue may try again later.
+    await expect(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'loading' }, 503)))).rejects.toMatchObject({ code: 'TRANSCRIPTION_UNAVAILABLE', retryable: true });
+    await expect(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'down' }, 500)))).rejects.toMatchObject({ code: 'TRANSCRIPTION_UNAVAILABLE', retryable: false });
+    await expect(extract('audio', Buffer.from('x'), 'audio/ogg', noWhisper)).rejects.toMatchObject({ retryable: false });
     expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'bad audio' }, 422))))).toBe('TRANSCRIPTION_FAILED');
     expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ nope: 1 }))))).toBe('TRANSCRIPTION_FAILED');
   });

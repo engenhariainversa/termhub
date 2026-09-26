@@ -40,7 +40,7 @@ import { chatBus } from './chat/bus.js';
 import { diskStore } from './chat/attachments/store.js';
 import { sweepAttachments } from './chat/attachments/sweep.js';
 import { extract } from './chat/attachments/extract.js';
-import { createExtractionQueue, requeuePending } from './chat/attachments/queue.js';
+import { REQUEUE_MIN_AGE_MS, createExtractionQueue, requeuePending } from './chat/attachments/queue.js';
 import { toPublicAttachment } from './db/repositories/chat-attachments.js';
 import { ChatService, failureLabel, purgeExpiredActions } from './chat/service.js';
 import { agentRunner } from './chat/runner.js';
@@ -260,6 +260,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void purgeExpiredActions(repos).catch(() => {});
     // Attachments nobody sent within a day, and files on the volume that lost their row (spec 2026-09-26 §5.1)
     void sweepAttachments({ repo: repos.chatAttachments, store: attachmentStore, log: fastify.log }).catch(() => {});
+    // Rows a deploy left pending on the retired colour, or whisper deferred: back in line after 15 min (the queue caps the attempts)
+    void requeuePending(extraction, repos.chatAttachments, new Date(Date.now() - REQUEUE_MIN_AGE_MS)).catch(() => {});
     // Mobile: stale enrolment requests expire, then device sessions, requests, trail and push history age out
     if (mobile) void purgeMobile(repos, mobile.enrolment).catch(() => {});
     // Cards whose tab vanished without a lifecycle event (the other color removed it, a crash): spec 2026-09-26 §4.7.

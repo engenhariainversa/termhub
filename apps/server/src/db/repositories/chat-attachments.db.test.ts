@@ -121,6 +121,25 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatAttachmentsRepository
     expect(await repo.existingIds([fresh.id, 'nope00000000'])).toEqual(new Set([fresh.id]));
   });
 
+  it('markAttempt counts on the row itself, only while pending, and listPending takes an age', async () => {
+    const a = await repo.create(input({ meta: null }));
+    expect(await repo.markAttempt(a.id)).toBe(1);
+    expect(await repo.markAttempt(a.id)).toBe(2);
+    expect((await repo.findById(a.id))?.meta).toEqual({ attempts: 2 });
+    const withMeta = await repo.create(input({ meta: { width: 3 } }));
+    expect(await repo.markAttempt(withMeta.id)).toBe(1);
+    expect((await repo.findById(withMeta.id))?.meta).toEqual({ width: 3, attempts: 1 });
+    await repo.setExtracted(a.id, 'texto', { pages: 1 });
+    expect(await repo.markAttempt(a.id)).toBeNull();
+    expect(await repo.markAttempt('nope00000000')).toBeNull();
+
+    const old = await repo.create(input());
+    await db.chatAttachment.update({ where: { id: old.id }, data: { createdAt: new Date(Date.now() - 20 * 60 * 1000) } });
+    const aged = (await repo.listPending(new Date(Date.now() - 15 * 60 * 1000))).map((r) => r.id);
+    expect(aged).toContain(old.id);
+    expect(aged).not.toContain(withMeta.id);
+  });
+
   it('a deleted message takes its attachments with it', async () => {
     const a = await repo.create(input());
     const message = await chat.addMessage({ conversation_id: conversationId, role: 'user', text: 'x' });

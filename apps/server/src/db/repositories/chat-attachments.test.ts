@@ -48,3 +48,27 @@ it('detach unbinds every attachment of one message, answering how many', async (
   expect(await repo.detach('m1')).toBe(2);
   expect(updateMany).toHaveBeenCalledWith({ where: { messageId: 'm1' }, data: { messageId: null } });
 });
+
+it('markAttempt bumps meta.attempts in one conditional update and answers the count, or null for a row that is gone or done', async () => {
+  const queryRaw = vi.fn(async () => [{ attempts: 2 }]);
+  const repo = new ChatAttachmentsRepository({ $queryRaw: queryRaw } as unknown as PrismaClient);
+  expect(await repo.markAttempt('a1')).toBe(2);
+  const [strings, ...values] = queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+  const sql = strings.join('?');
+  expect(sql).toMatch(/UPDATE "?chat_attachments"?/);
+  expect(sql).toMatch(/status = 'pending'/);
+  expect(sql).toMatch(/attempts/);
+  expect(values).toEqual(['a1']);
+  queryRaw.mockResolvedValueOnce([]);
+  expect(await repo.markAttempt('gone')).toBeNull();
+});
+
+it('listPending takes an age: only rows created before it', async () => {
+  const findMany = vi.fn(async () => []);
+  const repo = new ChatAttachmentsRepository({ chatAttachment: { findMany } } as unknown as PrismaClient);
+  const olderThan = new Date('2026-09-26T12:00:00.000Z');
+  await repo.listPending(olderThan);
+  expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { status: 'pending', createdAt: { lt: olderThan } } }));
+  await repo.listPending();
+  expect(findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { status: 'pending' } }));
+});
