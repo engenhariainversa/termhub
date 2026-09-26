@@ -337,11 +337,24 @@ export function createChatStore(deps: ChatDeps) {
               if (decision === 'deny') {
                 await api.decide(session().auth(), actionId, { decision: 'deny' });
               } else {
-                // The session store performs the call with the proof while its PIN sheet stays open:
-                // a wrong PIN is answered there, and this only resolves once the server accepted it.
-                // The proof signs the decision word, so `approve_tab` asks the PIN for exactly that.
-                const word = decision; // keeps the narrowed type (no 'deny') inside the closure below
-                await session().requestPinProof(actionId, (proof) => api.decide(session().auth(), actionId, { decision: word, ...proof }), word);
+                const word = decision; // keeps the narrowed type (no 'deny') inside the closures below
+                const withPin = () => session().requestPinProof(actionId, (proof) => api.decide(session().auth(), actionId, { decision: word, ...proof }), word);
+                const card = get().conversations[key]?.actions.find((a) => a.id === actionId);
+                // TER-92: a write card approves with the unlocked session; the server is the judge and
+                // answers PIN_REQUIRED when it disagrees, which falls back to the sheet.
+                if (word === 'approve' && card?.class === 'write') {
+                  try {
+                    await api.decide(session().auth(), actionId, { decision: 'approve' });
+                  } catch (e) {
+                    if (!isApiError(e, 'PIN_REQUIRED')) throw e;
+                    await withPin();
+                  }
+                } else {
+                  // The session store performs the call with the proof while its PIN sheet stays open:
+                  // a wrong PIN is answered there, and this only resolves once the server accepted it.
+                  // The proof signs the decision word, so `approve_tab` asks the PIN for exactly that.
+                  await withPin();
+                }
               }
               if (gen !== generation) return;
               // The `decision` event confirms it; this only saves a flicker back to "pending". Only a

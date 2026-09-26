@@ -465,6 +465,15 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
       return { status: 200, body: {} };
     }
 
+    const hasProof = 'challenge' in body && body.challenge !== undefined && body.pin_proof !== undefined;
+    if (!hasProof) {
+      // Mirrors the server (TER-92): only a `write` card approves with the session alone.
+      if (body.decision === 'approve_tab' || action.class !== 'write') throw new WireError(401, 'PIN_REQUIRED', 'Confirme com o PIN para autorizar esta ação.');
+      action.status = 'approved';
+      broadcast(state, { type: 'decision', user_id: USER_ID, conversation_id: action.conversation_id, action_id: action.id, status: 'approved' });
+      return { status: 200, body: {} };
+    }
+
     // An ineligible grant is refused before the challenge is spent or the PIN checked.
     if (body.decision === 'approve_tab' && !isTabGrantable({ tool: action.tool, args: action.args, tab_id: action.tab_id })) {
       throw new WireError(400, 'GRANT_NOT_ALLOWED', 'Só dá para permitir sempre o envio de texto para uma aba');
@@ -477,8 +486,6 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
       throw new WireError(423, 'DEVICE_LOCKED', 'Aparelho bloqueado por tentativas de PIN.', { retry_after: retryAfter });
     }
 
-    // TODO(TER-92 / Task 3): this mock still demands the proof for every approve; the server now
-    // waives it for a `write` card. `!` below is a stopgap until this handler is rewritten.
     const chal = state.challenges.get(body.challenge!);
     const bound = !!chal && !chal.used && now <= chal.expiresAt && chal.deviceId === device.id && chal.purpose === 'decision' && chal.actionId === action.id;
     if (bound) chal!.used = true;

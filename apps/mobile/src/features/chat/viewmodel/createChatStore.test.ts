@@ -143,18 +143,44 @@ it('a 409 CHAT_BUSY says the chat is still answering; other errors show their ow
   expect(chat.getState().error).toBe('A máquina do chat está offline.');
 });
 
-it("decide(id, 'approve') asks requestPinProof(id) and, once resolved, the card is approved", async () => {
+const markIrreversible = (chat: ChatStore, projectId: string, id: string) =>
+  chat.setState((s) => ({
+    conversations: { ...s.conversations, [projectId]: { ...s.conversations[projectId]!, actions: s.conversations[projectId]!.actions.map((a) => (a.id === id ? { ...a, class: 'irreversible' as const } : a)) } },
+  }));
+
+it("decide(id, 'approve') on a write card approves at once, with no PIN sheet and no proof", async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const decide = jest.spyOn(api, 'decide');
+  await chat.getState().decide('a-termhub-1', 'approve');
+  expect(store.getState().pinPrompt).toBeNull();
+  expect(decide).toHaveBeenCalledWith(expect.anything(), 'a-termhub-1', { decision: 'approve' });
+  expect(slot(chat, 'p-termhub').actions[0]!.status).toBe('approved');
+  expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
+});
+
+it("decide(id, 'approve') on an irreversible card asks requestPinProof(id) and, once resolved, the card is approved", async () => {
   const { chat, store } = await setup();
   await openAndConnect(chat, 'p-termhub');
-
+  markIrreversible(chat, 'p-termhub', 'a-termhub-1');
   const deciding = chat.getState().decide('a-termhub-1', 'approve');
   expect(store.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', decision: 'approve' });
-  expect(chat.getState().decidingId).toBe('a-termhub-1');
-
   await store.getState().resolvePinPrompt(PIN);
   await deciding;
   expect(slot(chat, 'p-termhub').actions[0]!.status).toBe('approved');
-  expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
+});
+
+it('a PIN_REQUIRED answer to a silent approval opens the PIN sheet for the same action and word', async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  jest.spyOn(api, 'decide').mockRejectedValueOnce(new ApiError(401, 'PIN_REQUIRED', 'Confirme com o PIN para autorizar esta ação.'));
+  const deciding = chat.getState().decide('a-termhub-1', 'approve');
+  await jest.advanceTimersByTimeAsync(0);
+  expect(store.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', decision: 'approve' });
+  expect(chat.getState().error).toBeNull();
+  await store.getState().resolvePinPrompt(PIN);
+  await deciding;
+  expect(slot(chat, 'p-termhub').actions[0]!.status).toBe('approved');
 });
 
 it("decide(id, 'approve_tab') asks the PIN for approve_tab and, once resolved, the tab is trusted", async () => {
@@ -202,6 +228,7 @@ it('revokeGrant of a grant already revoked elsewhere (409) drops it quietly; ano
 it("decide(id, 'approve') performs the decision inside the prompt: a wrong PIN leaves the sheet open with the error, the card pending; the right one approves", async () => {
   const { chat, store, api } = await setup();
   await openAndConnect(chat, 'p-termhub');
+  markIrreversible(chat, 'p-termhub', 'a-termhub-1');
   const decide = jest.spyOn(api, 'decide');
 
   let done = false;
@@ -245,6 +272,7 @@ it('decide never moves a card backwards: a re-read that already says executed wi
 it('a cancelled PIN prompt leaves the card pending and shows nothing', async () => {
   const { chat, store, api } = await setup();
   await openAndConnect(chat, 'p-termhub');
+  markIrreversible(chat, 'p-termhub', 'a-termhub-1');
   const decide = jest.spyOn(api, 'decide');
 
   const deciding = chat.getState().decide('a-termhub-1', 'approve');
