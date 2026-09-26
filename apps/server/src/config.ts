@@ -107,6 +107,11 @@ const envSchema = z.object({
   /** language hint passed to whisper ("auto" = detect) */
   WHISPER_LANGUAGE: z.string().default('pt'),
 
+  /** Where chat attachments live (spec 2026-09-26 §8): a Docker volume in prod, one directory per user id. */
+  CHAT_FILES_DIR: z.string().min(1).default('/data/chat-files'),
+  /** Per-user cap on stored attachment bytes; an upload past it answers 413 ATTACHMENT_QUOTA. Default 2 GB. */
+  CHAT_FILES_QUOTA_BYTES: z.coerce.number().int().positive().default(2 * 1024 * 1024 * 1024),
+
   // Chat concierge (docker/concierge): the container runner. Since the chat moved onto the user's own
   // machine (spec §6, `chat/agent-runner.ts`) these two reach that container alone, and nothing calls
   // it — `httpRunner` has had no caller since `app.ts` switched to `agentRunner`. The chat's only
@@ -203,6 +208,7 @@ export const config = {
   seedLocalMachine: env.SEED_LOCAL_MACHINE === 'true',
   encryptionKey: env.ENCRYPTION_KEY ?? null,
   transcription: env.WHISPER_URL ? { url: env.WHISPER_URL.replace(/\/$/, ''), language: env.WHISPER_LANGUAGE } : null,
+  chatFiles: { dir: env.CHAT_FILES_DIR, quotaBytes: env.CHAT_FILES_QUOTA_BYTES },
   /**
    * Settings for the container runner (`httpRunner`) and nothing else: the chat itself no longer reads
    * this, and no code path builds that runner any more (spec §6). What the chat needs is `mcpUrl`

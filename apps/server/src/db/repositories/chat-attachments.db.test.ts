@@ -94,6 +94,18 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatAttachmentsRepository
     expect(await repo.usageBytes(userId)).toBe(before + 1000);
   });
 
+  it('usageBytes stays a correct JS number past 2^31 (the quota is 2 147 483 648)', async () => {
+    const heavy = newId();
+    await db.user.create({ data: { id: heavy, email: `${heavy}@test.local`, name: 'heavy' } });
+    const heavyConversation = (await chat.getOrCreateForUser(heavy)).id;
+    await repo.create(input({ bytes: 1_500_000_000, user_id: heavy, conversation_id: heavyConversation }));
+    await repo.create(input({ bytes: 1_500_000_000, user_id: heavy, conversation_id: heavyConversation }));
+    const total = await repo.usageBytes(heavy);
+    expect(typeof total).toBe('number');
+    expect(total).toBe(3_000_000_000);
+    await db.user.delete({ where: { id: heavy } });
+  });
+
   it('lists pending rows, stale unsent rows by age, and which ids still exist', async () => {
     const fresh = await repo.create(input());
     const old = await repo.create(input());

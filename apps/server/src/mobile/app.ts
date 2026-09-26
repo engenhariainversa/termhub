@@ -8,6 +8,8 @@ import type { Mailer } from '../email/mailer.js';
 import type { createUpgradeRouter } from '../ws/router.js';
 import { actionForMethod, type Resource } from '../auth/permissions.js';
 import { mobileChatRoutes, mobileMeRoutes } from '../routes/m-chat.js';
+import { mobileChatAttachmentRoutes } from '../routes/m-chat-attachments.js';
+import type { ChatAttachmentDeps } from '../routes/chat-attachments.js';
 import { mobileDeviceRoutes, mobilePushTokenRoutes } from '../routes/m-devices.js';
 import { mobileNotificationRoutes } from '../routes/m-notifications.js';
 import { mobileSessionRoutes } from '../routes/m-session.js';
@@ -40,6 +42,8 @@ export interface MobileDeps {
   mailer: Mailer;
   log: FastifyBaseLogger;
   upgrades: ReturnType<typeof createUpgradeRouter>;
+  /** The chat's attachment store, queue and quota, shared with the web routes (spec 2026-09-26 §5.3). */
+  attachments: ChatAttachmentDeps;
 }
 
 /**
@@ -125,6 +129,8 @@ export async function registerMobileApi(
         // The chat, over the same ChatService as the web; `GET /me` reads under `chat` too (spec §6).
         await guarded('chat', (a) => mobileChatRoutes(a, deps.repos, { chat: deps.chat, agents: deps.agents, session: services.session }), '/chat');
         await guarded('chat', (a) => mobileMeRoutes(a, deps.repos), '');
+        // Attachments for the phone's chat: same store, queue and quota as the web (spec 2026-09-26 §5.3).
+        await guarded('chat', (a) => mobileChatAttachmentRoutes(a, deps.repos, deps.attachments), '/chat/attachments');
         // The Notificações tab: the caller's own push history.
         await guarded('chat', (a) => mobileNotificationRoutes(a, deps.repos), '/notifications');
         // Voice dictation, over the same TranscriptionService as the web (`routes/transcriptions.ts`).

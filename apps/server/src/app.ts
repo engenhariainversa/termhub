@@ -35,7 +35,13 @@ import { hooksRoutes } from './routes/hooks.js';
 import { monitorRoutes } from './routes/monitor.js';
 import { registerMonitorWs } from './monitor/ws.js';
 import { chatRoutes } from './routes/chat.js';
-import { ChatService, purgeExpiredActions } from './chat/service.js';
+import { chatAttachmentRoutes, type ChatAttachmentDeps } from './routes/chat-attachments.js';
+import { chatBus } from './chat/bus.js';
+import { diskStore } from './chat/attachments/store.js';
+import { extract } from './chat/attachments/extract.js';
+import { createExtractionQueue, requeuePending } from './chat/attachments/queue.js';
+import { toPublicAttachment } from './db/repositories/chat-attachments.js';
+import { ChatService, failureLabel, purgeExpiredActions } from './chat/service.js';
 import { agentRunner } from './chat/runner.js';
 import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
 import { stopTabSuggestions } from './chat/tab-suggestions.js';
@@ -154,7 +160,19 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // default — and the operator's container is no longer in this path at all. Shared by /api/chat
   // and the mobile API.
   const chat = new ChatService({ repos, agents, runnerFor: (machineId) => agentRunner(machineId) });
-  const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades };
+  // Attachments (spec 2026-09-26 §5): the files on the chat-files volume, and the in-process queue
+  // that reads them. A finished job tells every open screen through the bus, metadata only.
+  const attachmentStore = diskStore(config.chatFiles.dir);
+  const extraction = createExtractionQueue({
+    repo: repos.chatAttachments,
+    store: attachmentStore,
+    extract,
+    whisper: { whisperUrl: config.transcription?.url ?? null, language: config.transcription?.language ?? null },
+    onDone: (row) => chatBus.publish({ type: 'attachment_status', user_id: row.user_id, conversation_id: row.conversation_id, attachment: toPublicAttachment(row) }),
+    log: fastify.log,
+  });
+  const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes };
+  const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments };
   const mobile = config.mobile ? createMobileServices(mobileDeps) : null;
 
   // --- API (tudo autenticado, exceto rotas marcadas como public) ---
@@ -205,6 +223,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('uploads', (a) => uploadRoutes(a, repos), '/uploads');
       await guarded('api_tokens', (a) => apiTokenRoutes(a, repos, { mcpUrl: config.mcpUrl }), '/api-tokens');
       await guarded('chat', (a) => chatRoutes(a, repos, { service: chat }), '/chat');
+      await guarded('chat', (a) => chatAttachmentRoutes(a, repos, attachments), '/chat/attachments');
       if (mobile) {
         await guarded(
           'devices',
@@ -230,6 +249,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   if (!(await registerFrontend(fastify, { repos, ...dirs, publicCityUrl: config.publicCityUrl }))) {
     fastify.log.warn('apps/web/dist e apps/web/dist-city não encontrados — rodando só a API (use "npm run build" e "npm run build:city -w @termhub/web" para servir os bundles)');
   }
+
+  // Whatever was still pending when the previous process died goes back in line (spec §5.4).
+  void requeuePending(extraction, repos.chatAttachments).catch((err) => fastify.log.warn({ err: failureLabel(err) }, 'attachments: could not re-queue pending rows'));
 
   // Limpeza periódica de sessões expiradas e de perguntas do chat que ninguém respondeu
   const purge = setInterval(() => {
