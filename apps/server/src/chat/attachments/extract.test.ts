@@ -113,6 +113,25 @@ describe('extract: pdf, docx, xlsx', () => {
     expect(r.text).not.toContain('B2*2');
     expect(r.meta).toEqual({ sheets: [{ name: 'Vendas', rows: 3, cols: 2 }], truncated: false });
   });
+  it('xlsx: read through the streaming WorkbookReader, one row at a time, never a whole-workbook load', async () => {
+    const streamed = vi.spyOn(ExcelJS.stream.xlsx.WorkbookReader.prototype, 'parse');
+    // `Workbook#xlsx` is a getter that caches per instance: spy on the XLSX class behind it, not on the prototype's getter.
+    const loaded = vi.spyOn(Object.getPrototypeOf(new ExcelJS.Workbook().xlsx) as ExcelJS.Xlsx, 'load');
+    try {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Gaps');
+      ws.getRow(1).values = ['a', 'b'];
+      ws.getRow(3).values = ['c']; // row 2 stays empty: the table keeps its place, as the full load did
+      const r = await extract('xlsx', Buffer.from(await wb.xlsx.writeBuffer()), 'application/x', noWhisper);
+      expect(streamed).toHaveBeenCalledTimes(1);
+      expect(loaded).not.toHaveBeenCalled();
+      expect(r.text).toBe('## Gaps\n| a | b |\n| --- | --- |\n|  |  |\n| c |  |');
+      expect(r.meta).toEqual({ sheets: [{ name: 'Gaps', rows: 3, cols: 2 }], truncated: false });
+    } finally {
+      streamed.mockRestore();
+      loaded.mockRestore();
+    }
+  });
   it('xlsx: each sheet is capped at 500 rows and 50 columns', async () => {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Big');

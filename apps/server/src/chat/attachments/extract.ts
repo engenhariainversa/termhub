@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import ExcelJS from 'exceljs';
 import mammoth from 'mammoth';
 import { extractText as pdfExtractText } from 'unpdf';
@@ -45,8 +46,8 @@ export interface ExtractDeps {
 const convertToMarkdown = (mammoth as unknown as { convertToMarkdown: typeof mammoth.convertToHtml }).convertToMarkdown;
 /** Images inside a document are dropped: an empty `src`, and the leftover `![]()` is stripped. */
 const NO_IMAGES = mammoth.images.imgElement(async () => ({ src: '' }));
-/** exceljs declares its own `Buffer extends ArrayBuffer`; a Node Buffer is what it reads at runtime. */
-type XlsxInput = Parameters<ExcelJS.Workbook['xlsx']['load']>[0];
+/** The streaming reader's typings stop short of the sheet name it does set from `xl/workbook.xml`. */
+type NamedSheet = { name?: unknown };
 
 const capText = (text: string): { text: string; truncated: boolean } => (text.length > TEXT_CAP ? { text: text.slice(0, TEXT_CAP), truncated: true } : { text, truncated: false });
 
@@ -147,24 +148,39 @@ const escapeCell = (s: string): string => s.replace(/\|/g, '\\|').replace(/\r?\n
 
 async function fromXlsx(file: Buffer, zipBudget: number): Promise<Extracted> {
   await guardZip(file, zipBudget);
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(file as unknown as XlsxInput);
+  // The streaming reader: sheets arrive one at a time and rows one at a time, so what is held is at
+  // most the shared strings plus one sheet's first 500 rows — `Workbook#xlsx.load` held the whole
+  // workbook (gigabytes for a 20 MB file) and blocked the event loop for seconds while at it. Rows
+  // past the cap are drained, not kept: breaking out of the row loop would leave the rest of the
+  // entry buffered in exceljs's stream iterator instead.
+  const reader = new ExcelJS.stream.xlsx.WorkbookReader(Readable.from([file]), { worksheets: 'emit', sharedStrings: 'cache', hyperlinks: 'ignore', styles: 'cache', entries: 'ignore' });
   const sheets: { name: string; rows: number; cols: number }[] = [];
   const parts: string[] = [];
-  wb.eachSheet((ws) => {
-    const rows = Math.min(ws.rowCount, XLSX_MAX_ROWS);
-    const cols = Math.min(ws.columnCount, XLSX_MAX_COLS);
-    sheets.push({ name: ws.name, rows, cols });
-    const lines = [`## ${ws.name}`];
-    for (let r = 1; r <= rows; r++) {
-      const row = ws.getRow(r);
+  for await (const ws of reader) {
+    const grid: string[][] = [];
+    let cols = 0;
+    for await (const row of ws) {
+      const n = row.number;
+      if (n > XLSX_MAX_ROWS) continue;
+      const width = Math.min(row.cellCount, XLSX_MAX_COLS);
+      cols = Math.max(cols, width);
       const cells: string[] = [];
-      for (let c = 1; c <= cols; c++) cells.push(escapeCell(cellText(row.getCell(c).value)));
-      lines.push(`| ${cells.join(' | ')} |`);
-      if (r === 1) lines.push(`| ${cells.map(() => '---').join(' | ')} |`);
+      for (let c = 1; c <= width; c++) cells.push(escapeCell(cellText(row.getCell(c).value)));
+      // A row the sheet skipped keeps its (empty) line, the way the full load rendered it.
+      while (grid.length < n - 1) grid.push([]);
+      grid[n - 1] = cells;
     }
+    const nameOf = (ws as unknown as NamedSheet).name;
+    const name = typeof nameOf === 'string' ? nameOf : 'Planilha';
+    sheets.push({ name, rows: grid.length, cols });
+    const lines = [`## ${name}`];
+    grid.forEach((cells, i) => {
+      const padded = cells.concat(Array.from({ length: cols - cells.length }, () => ''));
+      lines.push(`| ${padded.join(' | ')} |`);
+      if (i === 0) lines.push(`| ${padded.map(() => '---').join(' | ')} |`);
+    });
     parts.push(lines.join('\n'));
-  });
+  }
   const c = capText(parts.join('\n\n'));
   return { text: c.text, meta: { sheets, truncated: c.truncated } };
 }
