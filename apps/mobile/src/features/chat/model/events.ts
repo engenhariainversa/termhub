@@ -1,16 +1,15 @@
 // How one live event of the open conversation changes its thread (design spec §6): pure reducers
-// over the slice the chat store keeps — the thread's messages and actions and the `live` buffer
-// `foldLive` reads. The store decides which events reach here (`belongsTo`) and does the I/O.
+// over the slice the chat store keeps — the thread's messages and actions and the `live` fold of the
+// answer being written. The store decides which events reach here (`belongsTo`) and does the I/O.
+import { applyLive, type LiveFold } from './live';
 import { upsertTabSuggestion } from './tab-suggestion-text';
 import type { ChatAction, ChatEvent, ChatGrant, ChatMessage, TabQuestion, TabSuggestion } from './types';
-
-/** The most live events kept at once — a long answer streams hundreds of deltas. */
-export const LIVE_CAP = 500;
 
 export interface EventSlice {
   messages: ChatMessage[];
   actions: ChatAction[];
-  live: ChatEvent[];
+  /** The answer being written: streamed text, tool calls and started rows, by message id. */
+  live: LiveFold;
   /** The conversation's trusted tabs; at most one per tab (a new grant replaces the old one). */
   grants: ChatGrant[];
   /** The tabs' questions pushed into this conversation (spec 2026-09-25 §6.3). */
@@ -18,15 +17,6 @@ export interface EventSlice {
   /** The tabs' suggestions pushed into this conversation (spec 2026-09-25 tab suggestions §6.4). */
   tabSuggestions: TabSuggestion[];
 }
-
-/** The message a live event is about, if any. */
-function liveMessageId(e: ChatEvent): string | null {
-  if (e.type === 'message') return e.message.id;
-  if (e.type === 'delta' || e.type === 'action' || e.type === 'reset' || e.type === 'action_result') return e.message_id;
-  return null;
-}
-
-const capLive = (events: ChatEvent[]): ChatEvent[] => (events.length > LIVE_CAP ? events.slice(-LIVE_CAP) : events);
 
 function upsertMessage(messages: ChatMessage[], message: ChatMessage): ChatMessage[] {
   const i = messages.findIndex((m) => m.id === message.id);
@@ -70,13 +60,9 @@ function actionFromConfirmation(e: Extract<ChatEvent, { type: 'confirmation' }>)
 export function applyEvent(slice: EventSlice, e: ChatEvent): { slice: EventSlice; reread: boolean } {
   switch (e.type) {
     case 'message': {
-      // The row is final (or just announced): its deltas give way to the row itself, shown at once
-      // from the event and then confirmed by the re-read. An empty assistant row announces a run;
-      // it stays in `live` so `foldLive` marks it started ("pensando…") until its first delta.
-      const message = e.message;
-      const announce = message.role === 'assistant' && !message.text && !message.error_code;
-      const kept = slice.live.filter((ev) => liveMessageId(ev) !== message.id);
-      return { slice: { ...slice, messages: upsertMessage(slice.messages, message), live: capLive(announce ? [...kept, e] : kept) }, reread: true };
+      // The row is final (or just announced): shown at once from the event and then confirmed by the
+      // re-read. The fold drops its deltas when it is final, and marks it started when it announces.
+      return { slice: { ...slice, messages: upsertMessage(slice.messages, e.message), live: applyLive(slice.live, e) }, reread: true };
     }
     case 'confirmation':
       if (slice.actions.some((a) => a.id === e.action_id)) return { slice, reread: false };
@@ -102,8 +88,10 @@ export function applyEvent(slice: EventSlice, e: ChatEvent): { slice: EventSlice
       return { slice: { ...slice, tabSuggestions: upsertTabSuggestion(slice.tabSuggestions, e.suggestion) }, reread: false };
     case 'delta':
     case 'action':
-    case 'reset':
-      return { slice: { ...slice, live: capLive([...slice.live, e]) }, reread: false };
+    case 'reset': {
+      const live = applyLive(slice.live, e);
+      return live === slice.live ? { slice, reread: false } : { slice: { ...slice, live }, reread: false };
+    }
     default:
       return { slice, reread: false };
   }

@@ -6,7 +6,7 @@ import { ApiError } from '@/services/api/errors';
 import { mmkv } from '@/services/storage';
 import { appBackgrounded } from '@/features/shared/signals';
 import { PERSIST_INTERVAL_MS } from './throttled-storage';
-import { foldLive } from '../model/live';
+import { emptyFold } from '../model/live';
 import { createChatStore } from './createChatStore';
 import { enrol, PIN, setupSession } from '../../../../test/helpers/enrolled-session';
 
@@ -100,7 +100,7 @@ it('a reconnect re-reads the conversation and empties live', async () => {
   const { chat, api, controls, handlers } = await setup();
   await openAndConnect(chat, 'p-termhub');
   handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', delta: 'meio' });
-  expect(chat.getState().live).toHaveLength(1);
+  expect(chat.getState().live.deltas.get('m-x')).toBe('meio');
 
   const read = jest.spyOn(api, 'chat');
   controls.dropSocket();
@@ -109,7 +109,7 @@ it('a reconnect re-reads the conversation and empties live', async () => {
   await jest.advanceTimersByTimeAsync(2000); // the socket's first backoff step (1 s), then its connect tick
   expect(chat.getState().connected).toBe(true);
   expect(read).toHaveBeenCalledWith(expect.anything(), 'p-termhub');
-  expect(chat.getState().live).toEqual([]);
+  expect(chat.getState().live).toEqual(emptyFold());
 });
 
 it('send answers at once and the thread grows only through events; deltas fold into foldLive(live)', async () => {
@@ -130,19 +130,19 @@ it('send answers at once and the thread grows only through events; deltas fold i
 
   await jest.advanceTimersToNextTimerAsync(); // the empty assistant row: "pensando…"
   expect(slot(chat, 'p-termhub').messages).toHaveLength(6);
-  expect(foldLive(chat.getState().live).started.has(assistantId)).toBe(true);
+  expect(chat.getState().live.started.has(assistantId)).toBe(true);
 
   await jest.advanceTimersToNextTimerAsync();
   await jest.advanceTimersToNextTimerAsync();
-  const streaming = foldLive(chat.getState().live).deltas.get(assistantId);
+  const streaming = chat.getState().live.deltas.get(assistantId);
   expect(streaming).toBeTruthy();
 
   await jest.advanceTimersByTimeAsync(5000);
   const final = slot(chat, 'p-termhub').messages.find((m) => m.id === assistantId)!;
   expect(final.text).toBe('Rodei `npm test` no jarvis: 1066 testes passaram, 137 pulados. Nada quebrou.');
   expect(final.text.startsWith(streaming!)).toBe(true);
-  expect(foldLive(chat.getState().live).deltas.has(assistantId)).toBe(false);
-  expect(chat.getState().live).toEqual([]);
+  expect(chat.getState().live.deltas.has(assistantId)).toBe(false);
+  expect(chat.getState().live).toEqual(emptyFold());
 });
 
 it('a second send while the first answer is still being written goes through', async () => {
@@ -503,7 +503,7 @@ it('events of another conversation never touch the open one', async () => {
     message: { id: 'm2', conversation_id: 'c-opapingou', role: 'user', text: 'oi', usage: null, error_code: null, created_at: new Date().toISOString() },
   });
 
-  expect(chat.getState().live).toEqual([]);
+  expect(chat.getState().live).toEqual(emptyFold());
   expect(slot(chat, 'p-termhub')).toBe(before);
   expect(read).not.toHaveBeenCalled();
 });
@@ -580,7 +580,8 @@ it('a 4401 close wipes the session, and sessionEnded resets the store and closes
   await jest.advanceTimersByTimeAsync(0);
   await flush();
   expect(store.getState().phase).toBe('new');
-  expect(chat.getState()).toMatchObject({ projects: [], conversations: {}, live: [], connected: false, activeProject: undefined });
+  expect(chat.getState()).toMatchObject({ projects: [], conversations: {}, connected: false, activeProject: undefined });
+  expect(chat.getState().live).toEqual(emptyFold());
 });
 
 it('persists projects and each conversation, never live or transient state', async () => {
@@ -600,7 +601,7 @@ it('persists projects and each conversation, never live or transient state', asy
   expect(again.getState().projects).toHaveLength(3);
   expect(slot(again, 'p-termhub')).toMatchObject({ loaded: false, error: null, conversation: { id: 'c-termhub' } });
   expect(slot(again, 'p-termhub').messages).toHaveLength(4);
-  expect(again.getState().live).toEqual([]);
+  expect(again.getState().live).toEqual(emptyFold());
 });
 
 it('subscribeEvents delivers every raw event, of any conversation, ahead of the open one\'s filter; unsubscribe stops it', async () => {
@@ -765,11 +766,14 @@ it('a delta is one set and no MMKV write; the persisted slice lands within 2 s, 
   const chatWrites = () => writes.mock.calls.filter(([name]) => name === 'chat');
   const sets = jest.fn();
   const unsubscribe = chat.subscribe(sets);
+  const slotBefore = slot(chat, 'p-termhub');
 
   for (let i = 0; i < 20; i++) handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-termhub', message_id: 'm-x', delta: `t${i}` });
   unsubscribe();
   expect(sets).toHaveBeenCalledTimes(20);
   expect(chatWrites()).toHaveLength(0);
+  // A delta touches `live` alone: the slot (and every row in it) keeps its reference.
+  expect(slot(chat, 'p-termhub')).toBe(slotBefore);
 
   await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS);
   expect(chatWrites()).toHaveLength(1);

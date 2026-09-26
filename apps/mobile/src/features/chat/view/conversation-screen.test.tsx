@@ -15,6 +15,7 @@ import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import type { TChatAction, TChatEvent, TChatGrant, TChatMessage, TChatResponse, TTabQuestion, TTabSuggestion } from '@/services/api/contract';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
+import { emptyFold, foldLive } from '../model/live';
 import { ConversationScreen } from './conversation-screen';
 
 const SEEDED_USER = 'Como estão as abas do projeto?';
@@ -32,7 +33,7 @@ function delta(messageId: string, text: string): TChatEvent {
 function addRows(rows: TChatMessage[], live: TChatEvent[]) {
   const s = useChatStore.getState();
   const slot = s.conversations['p-termhub']!;
-  useChatStore.setState({ conversations: { ...s.conversations, 'p-termhub': { ...slot, messages: [...slot.messages, ...rows] } }, live });
+  useChatStore.setState({ conversations: { ...s.conversations, 'p-termhub': { ...slot, messages: [...slot.messages, ...rows] } }, live: foldLive(live) });
 }
 
 /** Replaces one of the store's actions for a test. Not `jest.spyOn(getState(), …)`: zustand
@@ -81,7 +82,7 @@ afterEach(() => {
   jest.restoreAllMocks();
   useChatStore.setState({
     error: null,
-    live: [],
+    live: emptyFold(),
     decide: realActions.decide,
     decideMany: realActions.decideMany,
     reset: realActions.reset,
@@ -134,7 +135,7 @@ describe('Conversa', () => {
     await act(() => addRows([assistantRow('m-stream')], [delta('m-stream', 'Rodei')]));
 
     renders.length = 0;
-    await act(() => useChatStore.setState({ live: [delta('m-stream', 'Rodei'), delta('m-stream', ' os testes')] }));
+    await act(() => useChatStore.setState({ live: foldLive([delta('m-stream', 'Rodei'), delta('m-stream', ' os testes')]) }));
     expect(screen.getByText('Rodei os testes')).toBeTruthy();
     expect(renders).toEqual(['Rodei os testes']);
   });

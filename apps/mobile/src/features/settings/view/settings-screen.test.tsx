@@ -7,6 +7,7 @@ jest.mock('@/features/settings/viewmodel/useSettingsStore', () => ({ useSettings
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
 
+import { emptyFold } from '@/features/chat/model/live';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { useThemeStore } from '@/features/theme/viewmodel/useThemeStore';
@@ -34,7 +35,7 @@ afterEach(() => {
     biometricsEnabled: false,
   });
   useThemeStore.setState({ theme: 'system' });
-  useChatStore.setState({ activeProject: undefined, live: [] });
+  useChatStore.setState({ activeProject: undefined, live: emptyFold() });
 });
 
 describe('Ajustes', () => {

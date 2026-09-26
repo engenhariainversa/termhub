@@ -1,5 +1,5 @@
 // The chat store (design spec §6): the projects list, one slot per conversation (keyed by project
-// id, `''` for the account-wide chat), the live buffer of the answer being written, sending,
+// id, `''` for the account-wide chat), the live fold of the answer being written, sending,
 // decisions, reset and the host. A factory over injected services so tests drive it against the
 // mock transport and a real session store; `useChatStore.ts` builds the app's one instance.
 //
@@ -21,6 +21,7 @@ import { mmkvStateStorage } from '@/services/storage';
 import { applyEvent, settlePending } from '../model/events';
 import { belongsTo } from '../model/filter';
 import { CHAT_MSG } from '../model/messages';
+import { emptyFold, type LiveFold } from '../model/live';
 import { createThrottledStorage } from './throttled-storage';
 import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, TabQuestion, TabSuggestion } from '../model/types';
 
@@ -59,8 +60,9 @@ export interface ChatState {
   conversations: Record<string /* project id, or '' for the account-wide chat */, ConversationSlot>;
   /** The open conversation's project: `null` is the account-wide chat, `undefined` is none. */
   activeProject: string | null | undefined;
-  /** Events of the open conversation's answer being written, folded by `foldLive`. */
-  live: ChatEvent[];
+  /** The open conversation's answer being written: streamed text, tool calls and started rows by
+   * message id, folded incrementally (`applyLive`) — a row subscribes to its own entry. */
+  live: LiveFold;
   connected: boolean;
   sending: boolean;
   decidingId: string | null;
@@ -127,7 +129,7 @@ const initialData = (): Data => ({
   loadingProjects: false,
   conversations: {},
   activeProject: undefined,
-  live: [],
+  live: emptyFold(),
   connected: false,
   sending: false,
   decidingId: null,
@@ -230,13 +232,14 @@ export function createChatStore(deps: ChatDeps) {
           if (!belongsTo(current.conversation?.id ?? null)(e)) return;
           const before = { messages: current.messages, actions: current.actions, live: get().live, grants: current.grants, tabQuestions: current.tabQuestions, tabSuggestions: current.tabSuggestions };
           const { slice, reread: mustReread } = applyEvent(before, e);
-          if (slice !== before) {
-            // One `set` per event, touching only what changed: a delta used to cost two (the slot,
-            // then `live`), each one a persist write, and a new slot object for rows that did not move.
-            const slotChanged =
-              slice.messages !== before.messages || slice.actions !== before.actions || slice.grants !== before.grants || slice.tabQuestions !== before.tabQuestions || slice.tabSuggestions !== before.tabSuggestions;
+          // One `set` per event, touching only what changed: a delta used to cost two (the slot,
+          // then `live`), each one a persist write, and a new slot object for rows that did not move.
+          const liveChanged = slice.live !== before.live;
+          const slotChanged =
+            slice.messages !== before.messages || slice.actions !== before.actions || slice.grants !== before.grants || slice.tabQuestions !== before.tabQuestions || slice.tabSuggestions !== before.tabSuggestions;
+          if (liveChanged || slotChanged) {
             set((s) => ({
-              ...(slice.live !== before.live ? { live: slice.live } : {}),
+              ...(liveChanged ? { live: slice.live } : {}),
               ...(slotChanged
                 ? {
                     conversations: {
@@ -265,7 +268,7 @@ export function createChatStore(deps: ChatDeps) {
             },
             onReconnect: () => {
               if (gen !== generation) return;
-              set({ connected: true, live: [] });
+              set({ connected: true, live: emptyFold() });
               const key = activeKey();
               if (key !== null) void reread(key);
             },
@@ -323,7 +326,7 @@ export function createChatStore(deps: ChatDeps) {
               activeProject: projectId,
               error: null,
               // Another conversation's half-written answer has nothing to do with this one.
-              live: s.activeProject === projectId ? s.live : [],
+              live: s.activeProject === projectId ? s.live : emptyFold(),
               conversations: s.conversations[key] ? s.conversations : { ...s.conversations, [key]: emptySlot() },
             }));
             // Locked: the persisted thread is all there is until the PIN.
@@ -347,7 +350,7 @@ export function createChatStore(deps: ChatDeps) {
             closeSocket?.();
             closeSocket = null;
             readSeq.clear();
-            set({ connected: false, live: [], activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionIds: [], questionErrors: {}, busySuggestionIds: [], suggestionErrors: {} });
+            set({ connected: false, live: emptyFold(), activeProject: undefined, sending: false, decidingId: null, revokingId: null, answeringQuestionIds: [], questionErrors: {}, busySuggestionIds: [], suggestionErrors: {} });
           },
 
           async send(text) {
@@ -535,7 +538,7 @@ export function createChatStore(deps: ChatDeps) {
             try {
               await api.reset(session().auth(), projectId);
               if (gen !== generation) return;
-              set({ live: [] });
+              set({ live: emptyFold() });
               patchSlot(key, () => ({ messages: [], actions: [], grants: [], tabQuestions: [], tabSuggestions: [] })); // a reset ends the old conversation's grants too
               await reread(key);
             } catch (e) {

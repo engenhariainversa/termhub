@@ -1,13 +1,13 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { trustedTabsLabel } from '@/features/chat-grants/model/labels';
 import type { TTabQuestionAnswerBody } from '@/services/api/contract';
 import { AppText, Banner, Button, EmptyState, Screen, Sheet } from '@/ui';
-import { isGrantActive } from '../model/grant-time';
-import { foldLive } from '../model/live';
+import { activeGrantIndex, isGrantActive } from '../model/grant-time';
 import { chatTimeline, groupPendingActions, type ChatEntry } from '../model/timeline';
+import type { ChatMessage } from '../model/types';
 import type { ChatDecision } from '../viewmodel/createChatStore';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ActionCard } from './action-card';
@@ -17,6 +17,9 @@ import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
 import { TabQuestionCard } from './tab-question-card';
 import { TabSuggestionCard } from './tab-suggestion-card';
+
+/** How often the grant index re-checks expiry (spec §4.2 "Stable rows"): never during render. */
+const GRANT_TICK_MS = 30_000;
 
 const entryKey = (entry: ChatEntry) =>
   entry.kind === 'message'
@@ -29,6 +32,14 @@ const entryKey = (entry: ChatEntry) =>
           ? `s:${entry.suggestion.id}`
           : `q:${entry.question.id}`;
 
+/** One message row, subscribed to its own streamed text (spec §4.2 "Incremental fold"): a delta
+ * re-renders this row and nothing else — `renderItem` and `extraData` do not change for it. */
+const MessageRow = memo(function MessageRow({ message }: { message: ChatMessage }) {
+  const streamed = useChatStore((s) => s.live.deltas.get(message.id));
+  const started = useChatStore((s) => s.live.started.has(message.id));
+  return <MessageBubble message={message} streamed={streamed} started={started} />;
+});
+
 /** The conversation (spec §11.2): thread, action cards, the host line when the host needs attention,
  * the trusted tabs and composer.
  * The route param is a conversation id (a deep link), a project id or `general` — the store
@@ -40,7 +51,6 @@ export function ConversationScreen() {
   const activeProject = useChatStore((s) => s.activeProject);
   const slot = useChatStore((s) => (s.activeProject === undefined ? undefined : s.conversations[s.activeProject ?? '']));
   const projects = useChatStore((s) => s.projects);
-  const live = useChatStore((s) => s.live);
   const error = useChatStore((s) => s.error);
   const sending = useChatStore((s) => s.sending);
   const decidingId = useChatStore((s) => s.decidingId);
@@ -67,17 +77,24 @@ export function ConversationScreen() {
     if (id) void openByRoute(id);
   }, [id, openByRoute]);
 
-  const fold = useMemo(() => foldLive(live), [live]);
   const messages = slot?.messages;
   const actions = slot?.actions;
   const grants = useMemo(() => slot?.grants ?? [], [slot?.grants]);
   const activeGrantCount = useMemo(() => grants.filter((g) => isGrantActive(g)).length, [grants]);
   const tabQuestions = slot?.tabQuestions;
   const tabSuggestions = slot?.tabSuggestions;
-  const extra = useMemo(
-    () => ({ fold, decidingId, grants, revokingId, answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors }),
-    [fold, decidingId, grants, revokingId, answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors],
-  );
+
+  // The grants still in force, by the card that created them: built when `grants` change and every
+  // 30 s while there are any (a grant runs out on its own), never inside a row's render.
+  const [grantTick, setGrantTick] = useState(0);
+  useEffect(() => {
+    if (grants.length === 0) return;
+    const timer = setInterval(() => setGrantTick((t) => t + 1), GRANT_TICK_MS);
+    return () => clearInterval(timer);
+  }, [grants.length]);
+  // `grantTick` is a dependency on purpose: it is what re-checks expiry.
+  const grantIndex = useMemo(() => activeGrantIndex(grants), [grants, grantTick]);
+
   // A deep link followed after unlock replaces `/unlock` with this screen: nothing behind it.
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const onDecide = useCallback((actionId: string, decision: ChatDecision) => void decide(actionId, decision), [decide]);
@@ -94,6 +111,42 @@ export function ConversationScreen() {
   useEffect(() => setSeparate(false), [pendingKey]);
   // Newest first, for the inverted list that keeps the thread pinned to its end.
   const entries = useMemo(() => (separate ? timeline : groupPendingActions(timeline)).slice().reverse(), [separate, timeline]);
+
+  // Stable across deltas: a message row reads its own streamed text from the store (`MessageRow`),
+  // so neither this callback nor `extra` change while an answer streams. The memoised rows re-render
+  // only where their own props changed.
+  const onShowSeparately = useCallback(() => setSeparate(true), []);
+  const renderItem = useCallback(
+    ({ item }: { item: ChatEntry }) =>
+      item.kind === 'tab_suggestion' ? (
+        <TabSuggestionCard
+          suggestion={item.suggestion}
+          busy={busySuggestionIds.includes(item.suggestion.id)}
+          error={suggestionErrors[item.suggestion.id] ?? null}
+          onSend={onSendSuggestion}
+          onDismiss={onDismissSuggestion}
+        />
+      ) : item.kind === 'tab_question' ? (
+        <TabQuestionCard
+          question={item.question}
+          busy={answeringQuestionIds.includes(item.question.id)}
+          error={questionErrors[item.question.id] ?? null}
+          onAnswer={onAnswer}
+          loadScreen={loadTabQuestionScreen}
+        />
+      ) : item.kind === 'message' ? (
+        <MessageRow message={item.message} />
+      ) : item.kind === 'action_group' ? (
+        <ActionGroupCard actions={item.actions} busy={decidingId !== null} onDecide={onDecideMany} onShowSeparately={onShowSeparately} />
+      ) : (
+        <ActionCard action={item.action} busy={decidingId !== null} onDecide={onDecide} grant={grantIndex.get(item.action.id)} revoking={revokingId !== null} onRevoke={onRevoke} />
+      ),
+    [answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors, decidingId, grantIndex, loadTabQuestionScreen, onAnswer, onDecide, onDecideMany, onShowSeparately, onDismissSuggestion, onRevoke, onSendSuggestion, revokingId],
+  );
+  const extra = useMemo(
+    () => ({ decidingId, grantIndex, revokingId, answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors }),
+    [decidingId, grantIndex, revokingId, answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors],
+  );
 
   const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? 'Conversa') : 'Chat geral';
   const shownError = error ?? slot?.error ?? null;
@@ -136,49 +189,7 @@ export function ConversationScreen() {
             </Pressable>
           )
         ) : (
-          <FlatList
-            inverted
-            keyboardDismissMode="interactive"
-            keyboardShouldPersistTaps="handled"
-            data={entries}
-            keyExtractor={entryKey}
-            contentContainerClassName="gap-3 px-4 py-4"
-            // The rows read `fold`, `decidingId`, `grants` and `revokingId` besides `entries`: a change
-            // there re-runs `renderItem`, and the memoised rows re-render only where their own props changed.
-            extraData={extra}
-            renderItem={({ item }) =>
-              item.kind === 'tab_suggestion' ? (
-                <TabSuggestionCard
-                  suggestion={item.suggestion}
-                  busy={busySuggestionIds.includes(item.suggestion.id)}
-                  error={suggestionErrors[item.suggestion.id] ?? null}
-                  onSend={onSendSuggestion}
-                  onDismiss={onDismissSuggestion}
-                />
-              ) : item.kind === 'tab_question' ? (
-                <TabQuestionCard
-                  question={item.question}
-                  busy={answeringQuestionIds.includes(item.question.id)}
-                  error={questionErrors[item.question.id] ?? null}
-                  onAnswer={onAnswer}
-                  loadScreen={loadTabQuestionScreen}
-                />
-              ) : item.kind === 'message' ? (
-                <MessageBubble message={item.message} streamed={fold.deltas.get(item.message.id)} started={fold.started.has(item.message.id)} />
-              ) : item.kind === 'action_group' ? (
-                <ActionGroupCard actions={item.actions} busy={decidingId !== null} onDecide={onDecideMany} onShowSeparately={() => setSeparate(true)} />
-              ) : (
-                <ActionCard
-                  action={item.action}
-                  busy={decidingId !== null}
-                  onDecide={onDecide}
-                  grant={grants.find((g) => g.source_action_id === item.action.id && isGrantActive(g))}
-                  revoking={revokingId !== null}
-                  onRevoke={onRevoke}
-                />
-              )
-            }
-          />
+          <FlatList inverted keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled" data={entries} keyExtractor={entryKey} contentContainerClassName="gap-3 px-4 py-4" extraData={extra} renderItem={renderItem} />
         )}
         <Composer sending={sending} onSend={send} />
       </KeyboardAvoidingView>

@@ -1,4 +1,5 @@
-import { applyEvent, LIVE_CAP, type EventSlice } from './events';
+import { applyEvent, type EventSlice } from './events';
+import { emptyFold, foldLive } from './live';
 import type { ChatAction, ChatEvent, ChatMessage, TabQuestion, TabSuggestion } from './types';
 
 const at = '2026-09-24T12:00:00.000Z';
@@ -6,21 +7,21 @@ const base = { user_id: 'u1', conversation_id: 'c1' };
 const row = (id: string, extra: Partial<ChatMessage> = {}): ChatMessage => ({ id, conversation_id: 'c1', role: 'assistant', text: '', usage: null, error_code: null, created_at: at, ...extra });
 const action = (id: string, status: ChatAction['status'] = 'pending'): ChatAction => ({ id, tool: 't', args: {}, class: 'write', status, machine_id: null, project_id: null, tab_id: null, grant_id: null, summary: 's', created_at: at });
 const delta = (messageId: string, text: string): ChatEvent => ({ type: 'delta', ...base, message_id: messageId, delta: text });
-const empty: EventSlice = { messages: [], actions: [], live: [], grants: [], tabQuestions: [], tabSuggestions: [] };
+const empty: EventSlice = { messages: [], actions: [], live: emptyFold(), grants: [], tabQuestions: [], tabSuggestions: [] };
 
 it('an announced assistant row stays in live; its final row replaces it and clears its deltas, and both ask for a re-read', () => {
   const announced = applyEvent(empty, { type: 'message', ...base, message: row('m1') });
   expect(announced.reread).toBe(true);
   expect(announced.slice.messages).toEqual([row('m1')]);
-  expect(announced.slice.live).toHaveLength(1);
+  expect(announced.slice.live.started.has('m1')).toBe(true);
 
   const streaming = applyEvent(announced.slice, delta('m1', 'oi'));
   expect(streaming.reread).toBe(false);
-  expect(streaming.slice.live).toHaveLength(2);
+  expect(streaming.slice.live.deltas.get('m1')).toBe('oi');
 
   const final = applyEvent(streaming.slice, { type: 'message', ...base, message: row('m1', { text: 'oi' }) });
   expect(final.slice.messages).toEqual([row('m1', { text: 'oi' })]);
-  expect(final.slice.live).toEqual([]);
+  expect(final.slice.live).toEqual(emptyFold());
 });
 
 it('confirmations and decisions are idempotent', () => {
@@ -34,13 +35,6 @@ it('confirmations and decisions are idempotent', () => {
   expect(applyEvent(decided, { type: 'decision', ...base, action_id: 'a1', status: 'approved' }).slice.actions).toBe(decided.actions);
 });
 
-it(`keeps at most ${LIVE_CAP} live events, dropping the oldest`, () => {
-  let slice = empty;
-  for (let i = 0; i < LIVE_CAP + 10; i++) slice = applyEvent(slice, delta('m1', String(i))).slice;
-  expect(slice.live).toHaveLength(LIVE_CAP);
-  expect(slice.live[0]).toEqual(delta('m1', '10'));
-});
-
 it('leaves the slice untouched for events that change nothing here', () => {
   expect(applyEvent(empty, { type: 'hello', protocol: 1, server_time: at }).slice).toBe(empty);
   expect(applyEvent(empty, { type: 'action_result', ...base, message_id: 'm1', tool_use_id: 'x', ok: true }).slice).toBe(empty);
@@ -52,7 +46,7 @@ it('a decision only settles a pending card: a card that already ran is never mov
 });
 
 it('a run_finished event neither crashes nor changes the thread', () => {
-  const thread: EventSlice = { messages: [row('m1', { text: 'oi' })], actions: [action('a1')], live: [delta('m1', 'oi')], grants: [], tabQuestions: [], tabSuggestions: [] };
+  const thread: EventSlice = { messages: [row('m1', { text: 'oi' })], actions: [action('a1')], live: foldLive([delta('m1', 'oi')]), grants: [], tabQuestions: [], tabSuggestions: [] };
   const finished: ChatEvent = { type: 'run_finished', ...base, message_id: 'm1', ok: true, error_code: null };
   const failed: ChatEvent = { type: 'run_finished', ...base, message_id: null, ok: false, error_code: 'HOST_GONE' };
   expect(applyEvent(thread, finished)).toEqual({ slice: thread, reread: false });
@@ -62,7 +56,7 @@ it('a run_finished event neither crashes nor changes the thread', () => {
 
 describe('tab grants', () => {
   const grant = { id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'a1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2099-01-01T00:00:00.000Z', tab_name: 'api' };
-  const slice: EventSlice = { messages: [], actions: [action('a1')], live: [], grants: [], tabQuestions: [], tabSuggestions: [] };
+  const slice: EventSlice = { messages: [], actions: [action('a1')], live: emptyFold(), grants: [], tabQuestions: [], tabSuggestions: [] };
 
   it('a grant event adds it; a second grant for the same tab replaces the first', () => {
     const added = applyEvent(slice, { type: 'grant', ...base, grant });

@@ -1,5 +1,5 @@
 import type { ChatEvent } from './types';
-import { foldLive } from './live';
+import { applyLive, emptyFold, foldLive } from './live';
 
 const USER_ID = 'u1';
 const CONVERSATION_ID = 'c1';
@@ -133,4 +133,40 @@ it('ignores run_finished: nothing streamed is dropped or marked started', () => 
   expect(folded.deltas.get('m1')).toBe('oi');
   expect([...folded.started]).toEqual(['m1']);
   expect(foldLive([finished])).toEqual({ deltas: new Map(), actions: new Map(), started: new Set() });
+});
+
+describe('applyLive', () => {
+  it('returns the very same fold for an event that changes nothing, and replaces only the map it touched', () => {
+    const fold = foldLive([delta('m1', 'oi')]);
+    expect(applyLive(fold, hello)).toBe(fold);
+    expect(applyLive(fold, confirmation('a1'))).toBe(fold);
+    expect(applyLive(fold, userMessage('m9'))).toBe(fold);
+    expect(applyLive(fold, reset('m2'))).toBe(fold); // nothing streamed for m2
+
+    const next = applyLive(fold, delta('m1', '!'));
+    expect(next).not.toBe(fold);
+    expect(next.deltas.get('m1')).toBe('oi!');
+    expect(next.actions).toBe(fold.actions); // untouched map keeps its reference
+    expect(next.started).toBe(fold.started); // m1 was started already
+    expect(fold.deltas.get('m1')).toBe('oi'); // the old fold is never mutated
+  });
+
+  it('an announce marks the row started; its final message drops everything of that id, and only that id', () => {
+    const announced = applyLive(emptyFold(), assistantMessage('m1'));
+    expect([...announced.started]).toEqual(['m1']);
+    expect(applyLive(announced, assistantMessage('m1'))).toBe(announced);
+
+    const streaming = applyLive(applyLive(announced, delta('m1', 'oi')), delta('m2', 'x'));
+    const done = applyLive(streaming, assistantMessage('m1', { text: 'oi' }));
+    expect(done.deltas.has('m1')).toBe(false);
+    expect(done.started.has('m1')).toBe(false);
+    expect(done.deltas.get('m2')).toBe('x');
+    expect(applyLive(done, assistantMessage('m1', { text: 'oi' }))).toBe(done);
+  });
+
+  it('foldLive is applyLive over the events, from an empty fold', () => {
+    const events = [delta('m1', 'a'), toolCall('m1', 'Bash'), reset('m1'), delta('m1', 'b')];
+    expect(foldLive(events)).toEqual(events.reduce(applyLive, emptyFold()));
+    expect(foldLive([])).toEqual(emptyFold());
+  });
 });
