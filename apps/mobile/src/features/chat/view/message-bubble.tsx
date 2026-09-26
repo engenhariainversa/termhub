@@ -7,6 +7,7 @@ import { failureSentence } from '../model/copy';
 import { splitSettled } from '../model/markdown-split';
 import type { ChatMessage } from '../model/types';
 import { markdownStyle } from './markdown-style';
+import { MessageAttachments } from './message-attachments';
 
 type Props = {
   message: ChatMessage;
@@ -33,11 +34,14 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
   const scheme = useSchemeName();
 
   if (message.role === 'user') {
-    // Dimmed while the server has not accepted it; with the reason and a retry once it refused.
+    // Dimmed while the server has not accepted it; with the reason and a retry once it refused. What
+    // was attached rides under the text (a message may be attachments only).
+    const attachments = message.attachments ?? [];
     return (
       <View className="max-w-[85%] items-end gap-1 self-end">
         <View className={`rounded-2xl bg-app-accent px-4 py-2.5 ${message.local === 'sending' ? 'opacity-60' : ''}`}>
-          <Text className="text-base text-white">{message.text}</Text>
+          {message.text ? <Text className="text-base text-white">{message.text}</Text> : null}
+          {attachments.length > 0 ? <MessageAttachments attachments={attachments} /> : null}
         </View>
         {message.local === 'failed' ? (
           <View className="flex-row items-center gap-2">

@@ -11,6 +11,8 @@ jest.mock('@/features/chat/viewmodel/use-voice', () => ({
     mockOnText = onText;
     return mockVoice;
   },
+  // The attachment sheet's recorder: never records here.
+  useRecorder: () => ({ state: 'idle', seconds: 0, error: null, start: jest.fn(async () => undefined), stop: jest.fn(async () => null), cancel: jest.fn() }),
 }));
 
 let mockId = 'p-termhub';
@@ -320,6 +322,20 @@ describe('Conversa', () => {
     expect(screen.getByText('transcrevendo…')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Ditar' }).props.accessibilityState.disabled).toBe(true);
     expect(screen.getByText('Falha ao transcrever o áudio')).toBeTruthy();
+  });
+
+  it("shows a sent message's attachments under its text, with their status, and opens an image full screen", async () => {
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    const attachment = { id: 'att1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf' as const, bytes: 2048, status: 'pending' as const, error_code: null, meta: null, created_at: new Date().toISOString() };
+    const image = { ...attachment, id: 'img1', name: 'foto.jpg', mime: 'image/jpeg', kind: 'image' as const, status: 'ready' as const };
+    await act(() => addRows([{ ...assistantRow('m-user'), role: 'user', text: 'leia', attachments: [attachment, image] }], []));
+
+    expect(screen.getByText('relatorio.pdf')).toBeTruthy();
+    expect(screen.getByText('2 KB')).toBeTruthy();
+    expect(screen.getByText('processando…')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Abrir imagem foto.jpg' }));
+    expect(await screen.findByRole('button', { name: 'Fechar imagem' })).toBeTruthy();
   });
 
   it('the box grows with its content between one and six lines', async () => {

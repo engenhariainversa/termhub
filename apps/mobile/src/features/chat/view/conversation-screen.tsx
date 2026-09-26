@@ -60,6 +60,8 @@ export function ConversationScreen() {
   const sending = useChatStore((s) => s.sending);
   const decidingId = useChatStore((s) => s.decidingId);
   const send = useChatStore((s) => s.send);
+  const uploadAttachment = useChatStore((s) => s.uploadAttachment);
+  const deleteAttachment = useChatStore((s) => s.deleteAttachment);
   const decide = useChatStore((s) => s.decide);
   const decideMany = useChatStore((s) => s.decideMany);
   const revokingId = useChatStore((s) => s.revokingId);
@@ -206,7 +208,7 @@ export function ConversationScreen() {
         {/* The footer block, a sibling of the list like the header: its height changes the list's
             frame, not its content (spec 2026-09-26 §4.2 "Keyboard"). */}
         <View>
-          <Composer sending={sending} onSend={send} />
+          <Composer sending={sending} onSend={send} uploadAttachment={uploadAttachment} deleteAttachment={deleteAttachment} />
         </View>
       </KeyboardAvoidingView>
       <Sheet open={confirmingReset} onClose={() => setConfirmingReset(false)} title="Começar uma nova conversa?">
