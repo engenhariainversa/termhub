@@ -185,3 +185,7 @@ describe('expandHome', () => {
     expect(expandHome('/opt/claude', '/home/p')).toBe('/opt/claude');
   });
 });
+
+it('subscribes to StopFailure (usage limits end a turn with it)', () => {
+  expect(CLAUDE_HOOK_EVENTS).toContain('StopFailure');
+});

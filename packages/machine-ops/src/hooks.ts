@@ -38,12 +38,14 @@ export function expandHome(dir: string, home: string): string {
 /** Claude Code hook events we subscribe to (see the server's monitor/state.ts for what each one means).
  * `PermissionRequest` is taken for its tool name only; the script prints nothing, which Claude Code
  * reads as "no decision" — our hook never allows or denies (hook-script.test.ts keeps stdout empty).
+ * `StopFailure` fires when an API error — a usage limit, an auth failure — ends the turn instead of
+ * a normal `Stop` (spec 2026-09-26 account swap).
  * Minimum Claude Code: **2.0.45**, the first release with the `PermissionRequest` hook. An older one may
  * reject this hooks block, and before 2.1.122 a malformed hooks entry invalidated the whole settings.json.
  * Deliberately not gated on the version (spec 2026-09-26 §4.6): Claude Code updates itself by default, and
  * asking every machine and config dir for `claude --version` costs a remote call per install for a case
  * not seen in the field. */
-export const CLAUDE_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'Notification', 'Stop', 'SessionEnd'] as const;
+export const CLAUDE_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'Notification', 'Stop', 'StopFailure', 'SessionEnd'] as const;
 
 /** Events Claude Code runs per tool: their entry needs a matcher ('*' = every tool). */
 const CLAUDE_TOOL_EVENTS: ReadonlySet<string> = new Set(['PreToolUse', 'PermissionRequest']);
