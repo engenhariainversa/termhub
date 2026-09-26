@@ -4,8 +4,9 @@
 // mock transport and a real session store; `useChatStore.ts` builds the app's one instance.
 //
 // One socket for the whole app, opened by the first `open` and closed by `close()` or the end of
-// the session. The thread only ever grows through its events — `send` never appends locally — and
-// every `message` event re-reads the thread, the web's rule (no replay: a reconnect re-reads too).
+// the session. The thread grows through its events, merged by id; `send` shows the person's row at
+// once under a local id and renames it when the server accepts it. Only a reconnect re-reads the
+// thread (no replay).
 //
 // Every async action captures `generation` before its first `await` and drops its result when
 // `close()` (or the end of the session) bumped it meanwhile, so a late answer never repopulates a
@@ -16,6 +17,7 @@ import type { SessionState } from '@/features/session/model/session.types';
 import { appBackgrounded, sessionEnded } from '@/features/shared/signals';
 import type { TChatProjectItem, THostOptionsResponse, TTabQuestionAnswerBody } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
+import { randomId } from '@/services/crypto/random';
 import type { MobileApi } from '@/services/api/types';
 import { mmkvStateStorage } from '@/services/storage';
 import { applyEvent, settlePending } from '../model/events';
@@ -88,6 +90,8 @@ export interface ChatState {
   close(): void;
   /** Resolves `true` once the server accepted the message (`202`). */
   send(text: string): Promise<boolean>;
+  /** "Tentar de novo" on a row whose send failed: the row goes, and its text is sent again as a new one. */
+  retrySend(messageId: string): Promise<boolean>;
   decide(actionId: string, decision: ChatDecision): Promise<void>;
   /** A grouped confirmation of the open conversation: one request, and one PIN entry for all its
    * approvals (none for a batch of denials). `decidingId` holds the first id while it is in flight. */
@@ -208,9 +212,10 @@ export function createChatStore(deps: ChatDeps) {
           try {
             const res = await api.chat(session().auth(), projectOf(key));
             if (stale()) return;
-            patchSlot(key, () => ({
+            patchSlot(key, (slot) => ({
               conversation: res.conversation,
-              messages: res.messages,
+              // A row this device is still sending, or failed to, is not on the server yet: keep it.
+              messages: [...res.messages, ...slot.messages.filter((m) => m.local !== undefined)],
               actions: res.actions,
               grants: res.grants,
               tabQuestions: res.tab_questions,
@@ -231,7 +236,7 @@ export function createChatStore(deps: ChatDeps) {
           const current = get().conversations[key] ?? emptySlot();
           if (!belongsTo(current.conversation?.id ?? null)(e)) return;
           const before = { messages: current.messages, actions: current.actions, live: get().live, grants: current.grants, tabQuestions: current.tabQuestions, tabSuggestions: current.tabSuggestions };
-          const { slice, reread: mustReread } = applyEvent(before, e);
+          const slice = applyEvent(before, e);
           // One `set` per event, touching only what changed: a delta used to cost two (the slot,
           // then `live`), each one a persist write, and a new slot object for rows that did not move.
           const liveChanged = slice.live !== before.live;
@@ -252,7 +257,6 @@ export function createChatStore(deps: ChatDeps) {
           }
           // The answer is complete (or failed): what streamed in is worth an MMKV write now.
           if (e.type === 'run_finished') storage.flush();
-          if (mustReread) void reread(key);
         };
 
         const ensureSocket = (): void => {
@@ -357,19 +361,56 @@ export function createChatStore(deps: ChatDeps) {
             const body = text.trim();
             const projectId = get().activeProject;
             if (!body || projectId === undefined || get().sending) return false;
+            const key = keyOf(projectId);
             const gen = generation;
+            // The person's row, at once (spec §4.2 "Optimistic user bubble"): renamed to the server's
+            // id on the 202, or kept with the reason when the send fails.
+            const localId = `local:${randomId(8)}`;
+            const row: ChatMessage = {
+              id: localId,
+              conversation_id: get().conversations[key]?.conversation?.id ?? '',
+              role: 'user',
+              text: body,
+              usage: null,
+              error_code: null,
+              created_at: new Date().toISOString(),
+              local: 'sending',
+            };
             set({ sending: true, error: null });
+            patchSlot(key, (slot) => ({ messages: [...slot.messages, row] }));
             try {
-              await api.sendMessage(session().auth(), { text: body, project_id: projectId });
-              if (gen === generation) set({ sending: false });
+              const accepted = await api.sendMessage(session().auth(), { text: body, project_id: projectId });
+              if (gen !== generation) return false;
+              patchSlot(key, (slot) => ({
+                // The socket's echo may have landed first: then the local row simply goes; otherwise
+                // it becomes the server's row where it is, and the echo merges into it by id.
+                messages: slot.messages.some((m) => m.id === accepted.user_message_id)
+                  ? slot.messages.filter((m) => m.id !== localId)
+                  : slot.messages.map((m) => (m.id === localId ? { ...m, id: accepted.user_message_id, local: undefined } : m)),
+              }));
+              set({ sending: false });
+              // Events no longer re-read the thread; with the socket down nothing else would show the answer.
+              if (!get().connected) void reread(key);
               return true;
             } catch (e) {
               if (gen !== generation) return false;
               set({ sending: false });
               if (isApiError(e, 'CHAT_BUSY')) set({ error: CHAT_MSG.busy });
               else fail(gen, e);
+              const why = get().error ?? (isApiError(e) ? e.message : CHAT_MSG.network);
+              patchSlot(key, (slot) => ({ messages: slot.messages.map((m) => (m.id === localId ? { ...m, local: 'failed', local_error: why } : m)) }));
               return false;
             }
+          },
+
+          async retrySend(messageId) {
+            const projectId = get().activeProject;
+            if (projectId === undefined) return false;
+            const key = keyOf(projectId);
+            const row = get().conversations[key]?.messages.find((m) => m.id === messageId && m.local === 'failed');
+            if (!row) return false;
+            patchSlot(key, (slot) => ({ messages: slot.messages.filter((m) => m.id !== messageId) }));
+            return get().send(row.text);
           },
 
           async decide(actionId, decision) {
@@ -594,7 +635,8 @@ export function createChatStore(deps: ChatDeps) {
         partialize: (s): Persisted => ({
           projects: s.projects,
           conversations: Object.fromEntries(
-            Object.entries(s.conversations).map(([key, c]) => [key, { conversation: c.conversation, messages: c.messages, actions: c.actions, grants: c.grants, tabQuestions: c.tabQuestions, tabSuggestions: c.tabSuggestions, host: c.host }]),
+            // A row still in flight, or one that failed, is this device's alone: not worth a restart.
+            Object.entries(s.conversations).map(([key, c]) => [key, { conversation: c.conversation, messages: c.messages.filter((m) => m.local === undefined), actions: c.actions, grants: c.grants, tabQuestions: c.tabQuestions, tabSuggestions: c.tabSuggestions, host: c.host }]),
           ),
         }),
         merge: (persisted, current) => {

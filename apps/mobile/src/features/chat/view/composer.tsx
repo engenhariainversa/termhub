@@ -2,13 +2,17 @@ import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Button } from '@/ui';
 
-/** The message field and its send button; the text clears once the server accepted it. Dictation
- * is not wired yet: its button is there, disabled, saying so. */
+/** The message field and its send button; the text clears as soon as it is sent and comes back if
+ * the send fails. Dictation is not wired yet: its button is there, disabled, saying so. */
 export function Composer({ sending, onSend }: { sending: boolean; onSend(text: string): Promise<boolean> }) {
   const [text, setText] = useState('');
 
+  // The box empties at once (the row is already on screen) and gets its text back if the send
+  // fails — unless something new was typed meanwhile, which is the person's to keep.
   const submit = async () => {
-    if (await onSend(text)) setText('');
+    const sent = text;
+    setText('');
+    if (!(await onSend(sent))) setText((current) => current || sent);
   };
 
   return (

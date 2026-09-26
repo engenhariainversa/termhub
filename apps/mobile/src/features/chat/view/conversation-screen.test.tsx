@@ -14,8 +14,10 @@ jest.mock('expo-router', () => ({
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import type { TChatAction, TChatEvent, TChatGrant, TChatMessage, TChatResponse, TTabQuestion, TTabSuggestion } from '@/services/api/contract';
+import { ApiError } from '@/services/api/errors';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { emptyFold, foldLive } from '../model/live';
+import type { ChatMessage } from '../model/types';
 import { ConversationScreen } from './conversation-screen';
 
 const SEEDED_USER = 'Como estão as abas do projeto?';
@@ -30,7 +32,7 @@ function delta(messageId: string, text: string): TChatEvent {
 }
 
 /** Appends rows to the open project's thread, as the socket's events would. */
-function addRows(rows: TChatMessage[], live: TChatEvent[]) {
+function addRows(rows: ChatMessage[], live: TChatEvent[]) {
   const s = useChatStore.getState();
   const slot = s.conversations['p-termhub']!;
   useChatStore.setState({ conversations: { ...s.conversations, 'p-termhub': { ...slot, messages: [...slot.messages, ...rows] } }, live: foldLive(live) });
@@ -39,7 +41,7 @@ function addRows(rows: TChatMessage[], live: TChatEvent[]) {
 /** Replaces one of the store's actions for a test. Not `jest.spyOn(getState(), …)`: zustand
  * replaces the state object on every `setState`, so a restored spy would linger on the new one. */
 const realActions = { ...stores.chat.getState() };
-function stubAction<K extends 'decide' | 'decideMany' | 'reset' | 'setHost' | 'revokeGrant' | 'answerTabQuestion' | 'sendTabSuggestion' | 'dismissTabSuggestion'>(name: K) {
+function stubAction<K extends 'decide' | 'decideMany' | 'reset' | 'setHost' | 'revokeGrant' | 'answerTabQuestion' | 'sendTabSuggestion' | 'dismissTabSuggestion' | 'retrySend'>(name: K) {
   const fn = jest.fn(async () => undefined);
   useChatStore.setState({ [name]: fn } as Partial<ReturnType<typeof useChatStore.getState>>);
   return fn;
@@ -91,6 +93,7 @@ afterEach(() => {
     answerTabQuestion: realActions.answerTabQuestion,
     sendTabSuggestion: realActions.sendTabSuggestion,
     dismissTabSuggestion: realActions.dismissTabSuggestion,
+    retrySend: realActions.retrySend,
     questionErrors: {},
     suggestionErrors: {},
     answeringQuestionIds: [],
@@ -470,5 +473,33 @@ describe('Conversa', () => {
     expect(screen.queryByText(/Criei o arquivo/)).toBeNull();
     await act(async () => useChatStore.setState({ suggestionErrors: { s1: 'A sugestão mudou na aba' } }));
     expect(within(screen.getByTestId('tab-suggestion-s1')).getByText('A sugestão mudou na aba')).toBeTruthy();
+  });
+
+  it('a row whose send failed shows the reason and "Tentar de novo", which calls retrySend', async () => {
+    const retrySend = stubAction('retrySend');
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await act(() =>
+      addRows([{ id: 'local:1', conversation_id: 'c-termhub', role: 'user', text: 'oi de novo', usage: null, error_code: null, created_at: new Date().toISOString(), local: 'failed', local_error: 'A máquina do chat está offline.' }], []),
+    );
+    expect(screen.getByText('oi de novo')).toBeTruthy();
+    expect(screen.getByText('A máquina do chat está offline.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(retrySend).toHaveBeenCalledWith('local:1');
+  });
+
+  it('the box empties as soon as Enviar is pressed and gets its text back when the send fails', async () => {
+    let reject!: (e: unknown) => void;
+    jest.spyOn(stores.api, 'sendMessage').mockImplementation(() => new Promise((_, r) => { reject = r; }));
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+
+    await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'oi');
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
+    expect(screen.getByLabelText('Mensagem').props.value).toBe('');
+    await act(async () => {
+      reject(new ApiError(409, 'HOST_OFFLINE', 'A máquina do chat está offline.'));
+    });
+    expect(screen.getByLabelText('Mensagem').props.value).toBe('oi');
   });
 });

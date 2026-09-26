@@ -37,7 +37,9 @@ const entryKey = (entry: ChatEntry) =>
 const MessageRow = memo(function MessageRow({ message }: { message: ChatMessage }) {
   const streamed = useChatStore((s) => s.live.deltas.get(message.id));
   const started = useChatStore((s) => s.live.started.has(message.id));
-  return <MessageBubble message={message} streamed={streamed} started={started} />;
+  const retrySend = useChatStore((s) => s.retrySend);
+  const onRetry = useCallback((id: string) => void retrySend(id), [retrySend]);
+  return <MessageBubble message={message} streamed={streamed} started={started} onRetry={onRetry} />;
 });
 
 /** The conversation (spec §11.2): thread, action cards, the host line when the host needs attention,

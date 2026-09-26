@@ -112,7 +112,7 @@ it('a reconnect re-reads the conversation and empties live', async () => {
   expect(chat.getState().live).toEqual(emptyFold());
 });
 
-it('send answers at once and the thread grows only through events; deltas fold into foldLive(live)', async () => {
+it('send shows the row at once, renamed on accept; the thread then grows through events merged by id, with no re-read', async () => {
   const { chat, api } = await setup();
   await openAndConnect(chat, 'p-termhub');
   const read = jest.spyOn(api, 'chat');
@@ -121,15 +121,18 @@ it('send answers at once and the thread grows only through events; deltas fold i
   await expect(chat.getState().send('  roda o teste  ')).resolves.toBe(true);
   expect(sent).toHaveBeenCalledWith(expect.anything(), { text: 'roda o teste', project_id: 'p-termhub' });
   expect(chat.getState().sending).toBe(false);
-  expect(slot(chat, 'p-termhub').messages).toHaveLength(4); // nothing appended locally
-  const { assistant_message_id: assistantId } = await sent.mock.results[0]!.value;
+  const { user_message_id: userId, assistant_message_id: assistantId } = await sent.mock.results[0]!.value;
+  const rows = () => slot(chat, 'p-termhub').messages;
+  expect(rows()).toHaveLength(5); // the person's row, already under the server's id
+  expect(rows()[4]).toMatchObject({ id: userId, role: 'user', text: 'roda o teste' });
+  expect(rows()[4]!.local).toBeUndefined();
 
-  await jest.advanceTimersToNextTimerAsync(); // the user's row
-  expect(slot(chat, 'p-termhub').messages).toHaveLength(5);
-  expect(read).toHaveBeenCalledTimes(1); // a `message` event re-reads the thread
+  await jest.advanceTimersToNextTimerAsync(); // the server's echo of that row
+  expect(rows()).toHaveLength(5); // merged by id, not appended
+  expect(read).not.toHaveBeenCalled(); // a `message` event no longer re-reads the thread
 
   await jest.advanceTimersToNextTimerAsync(); // the empty assistant row: "pensando…"
-  expect(slot(chat, 'p-termhub').messages).toHaveLength(6);
+  expect(rows()).toHaveLength(6);
   expect(chat.getState().live.started.has(assistantId)).toBe(true);
 
   await jest.advanceTimersToNextTimerAsync();
@@ -138,11 +141,86 @@ it('send answers at once and the thread grows only through events; deltas fold i
   expect(streaming).toBeTruthy();
 
   await jest.advanceTimersByTimeAsync(5000);
-  const final = slot(chat, 'p-termhub').messages.find((m) => m.id === assistantId)!;
+  const final = rows().find((m) => m.id === assistantId)!;
   expect(final.text).toBe('Rodei `npm test` no jarvis: 1066 testes passaram, 137 pulados. Nada quebrou.');
   expect(final.text.startsWith(streaming!)).toBe(true);
-  expect(chat.getState().live.deltas.has(assistantId)).toBe(false);
   expect(chat.getState().live).toEqual(emptyFold());
+  expect(read).not.toHaveBeenCalled();
+});
+
+it('the local row is shown while the 202 is in flight, and dropped without a duplicate when the echo lands first (Review Focus #5)', async () => {
+  const { chat, api, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const rows = () => slot(chat, 'p-termhub').messages;
+  const real = api.sendMessage.bind(api);
+  let seenWhileInFlight: ReturnType<typeof rows> = [];
+  jest.spyOn(api, 'sendMessage').mockImplementation(async (auth, body) => {
+    seenWhileInFlight = rows();
+    const res = await real(auth, body);
+    // The socket's echo of the person's row arrives before the HTTP answer does.
+    handlers().onEvent({
+      type: 'message',
+      user_id: 'u1',
+      conversation_id: 'c-termhub',
+      message: { id: res.user_message_id, conversation_id: 'c-termhub', role: 'user', text: body.text, usage: null, error_code: null, created_at: new Date().toISOString() },
+    });
+    return res;
+  });
+
+  await expect(chat.getState().send('oi')).resolves.toBe(true);
+  expect(seenWhileInFlight.at(-1)).toMatchObject({ role: 'user', text: 'oi', local: 'sending' });
+  expect(seenWhileInFlight.at(-1)!.id.startsWith('local:')).toBe(true);
+
+  const mine = rows().filter((m) => m.role === 'user' && m.text === 'oi');
+  expect(mine).toHaveLength(1);
+  expect(mine[0]!.id.startsWith('local:')).toBe(false);
+  expect(mine[0]!.local).toBeUndefined();
+
+  await jest.advanceTimersByTimeAsync(5000); // the mock's own echo and answer
+  expect(rows().filter((m) => m.role === 'user' && m.text === 'oi')).toHaveLength(1);
+});
+
+it('a failed send keeps the row with its reason; it survives a re-read and is never persisted; retrySend sends its text again', async () => {
+  const { chat, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const rows = () => slot(chat, 'p-termhub').messages;
+  const sent = jest.spyOn(api, 'sendMessage').mockRejectedValueOnce(new ApiError(409, 'HOST_OFFLINE', 'A máquina do chat está offline.'));
+
+  await expect(chat.getState().send('oi')).resolves.toBe(false);
+  const failed = rows().at(-1)!;
+  expect(failed).toMatchObject({ role: 'user', text: 'oi', local: 'failed', local_error: 'A máquina do chat está offline.' });
+  expect(chat.getState().error).toBe('A máquina do chat está offline.');
+
+  await chat.getState().refresh('p-termhub');
+  expect(rows().at(-1)).toBe(failed);
+
+  await jest.advanceTimersByTimeAsync(PERSIST_INTERVAL_MS);
+  const saved = JSON.parse(mmkv.getString('chat')!).state as { conversations: Record<string, { messages: Array<{ id: string }> }> };
+  expect(saved.conversations['p-termhub']!.messages.some((m) => m.id.startsWith('local:'))).toBe(false);
+
+  await expect(chat.getState().retrySend(failed.id)).resolves.toBe(true);
+  expect(sent).toHaveBeenLastCalledWith(expect.anything(), { text: 'oi', project_id: 'p-termhub' });
+  const mine = rows().filter((m) => m.text === 'oi');
+  expect(mine).toHaveLength(1);
+  expect(mine[0]!.local).toBeUndefined();
+});
+
+it('a message event replaces only the row that changed; unchanged rows keep their objects', async () => {
+  const { chat, api, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const read = jest.spyOn(api, 'chat');
+  const before = slot(chat, 'p-termhub').messages;
+
+  handlers().onEvent({ type: 'message', user_id: 'u1', conversation_id: 'c-termhub', message: { ...before[0]! } });
+  expect(slot(chat, 'p-termhub').messages).toBe(before);
+
+  handlers().onEvent({ type: 'message', user_id: 'u1', conversation_id: 'c-termhub', message: { ...before[1]!, text: 'editado' } });
+  const after = slot(chat, 'p-termhub').messages;
+  expect(after).not.toBe(before);
+  expect(after[0]).toBe(before[0]);
+  expect(after[1]!.text).toBe('editado');
+  expect(after[2]).toBe(before[2]);
+  expect(read).not.toHaveBeenCalled();
 });
 
 it('a second send while the first answer is still being written goes through', async () => {

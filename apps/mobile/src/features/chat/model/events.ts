@@ -18,10 +18,17 @@ export interface EventSlice {
   tabSuggestions: TabSuggestion[];
 }
 
-function upsertMessage(messages: ChatMessage[], message: ChatMessage): ChatMessage[] {
-  const i = messages.findIndex((m) => m.id === message.id);
-  if (i < 0) return [...messages, message];
-  return messages.map((m, j) => (j === i ? message : m));
+/**
+ * The web's `lib/chat-merge.ts` (`mergeMessage`): `msg` into `list` by id — appended when new,
+ * replaced when something changed, and the very same `list` (same row objects) when nothing did, so
+ * a memoised row keeps its props. `usage` is the server's JSON: compared by value.
+ */
+export function mergeMessage(list: ChatMessage[], msg: ChatMessage): ChatMessage[] {
+  const i = list.findIndex((m) => m.id === msg.id);
+  if (i < 0) return [...list, msg];
+  const old = list[i]!;
+  const same = old.text === msg.text && old.error_code === msg.error_code && old.created_at === msg.created_at && JSON.stringify(old.usage ?? null) === JSON.stringify(msg.usage ?? null);
+  return same ? list : list.map((m, j) => (j === i ? msg : m));
 }
 
 /** Settles the pending action `id` as approved or denied. A card that has moved on already — a
@@ -54,45 +61,45 @@ function actionFromConfirmation(e: Extract<ChatEvent, { type: 'confirmation' }>)
 }
 
 /**
- * The slice after `e`, and whether the thread must be re-read from the server (every `message`
- * event: the web's rule). Returns the same slice for an event that changes nothing.
+ * The slice after `e` — the same object for an event that changes nothing. A `message` merges by id
+ * and asks for no re-read (spec §4.2 "Merge on message"): the event is the row; only a reconnect
+ * re-reads the thread, in the store.
  */
-export function applyEvent(slice: EventSlice, e: ChatEvent): { slice: EventSlice; reread: boolean } {
+export function applyEvent(slice: EventSlice, e: ChatEvent): EventSlice {
   switch (e.type) {
     case 'message': {
-      // The row is final (or just announced): shown at once from the event and then confirmed by the
-      // re-read. The fold drops its deltas when it is final, and marks it started when it announces.
-      return { slice: { ...slice, messages: upsertMessage(slice.messages, e.message), live: applyLive(slice.live, e) }, reread: true };
+      const messages = mergeMessage(slice.messages, e.message);
+      const live = applyLive(slice.live, e);
+      return messages === slice.messages && live === slice.live ? slice : { ...slice, messages, live };
     }
     case 'confirmation':
-      if (slice.actions.some((a) => a.id === e.action_id)) return { slice, reread: false };
-      return { slice: { ...slice, actions: [...slice.actions, actionFromConfirmation(e)] }, reread: false };
-    case 'decision':
-      return { slice: { ...slice, actions: settlePending(slice.actions, e.action_id, e.status) }, reread: false };
+      if (slice.actions.some((a) => a.id === e.action_id)) return slice;
+      return { ...slice, actions: [...slice.actions, actionFromConfirmation(e)] };
+    case 'decision': {
+      const actions = settlePending(slice.actions, e.action_id, e.status);
+      return actions === slice.actions ? slice : { ...slice, actions };
+    }
     case 'grant':
-      return { slice: { ...slice, grants: [...slice.grants.filter((g) => g.id !== e.grant.id && g.tab_id !== e.grant.tab_id), e.grant] }, reread: false };
+      return { ...slice, grants: [...slice.grants.filter((g) => g.id !== e.grant.id && g.tab_id !== e.grant.tab_id), e.grant] };
     case 'grant_revoked':
-      return { slice: { ...slice, grants: slice.grants.filter((g) => g.id !== e.grant_id) }, reread: false };
+      return { ...slice, grants: slice.grants.filter((g) => g.id !== e.grant_id) };
     case 'granted_action':
       // A send_input run under a grant never asked: its card arrives whole, already executed.
-      return {
-        slice: { ...slice, actions: slice.actions.some((a) => a.id === e.action.id) ? slice.actions.map((a) => (a.id === e.action.id ? e.action : a)) : [...slice.actions, e.action] },
-        reread: false,
-      };
+      return { ...slice, actions: slice.actions.some((a) => a.id === e.action.id) ? slice.actions.map((a) => (a.id === e.action.id ? e.action : a)) : [...slice.actions, e.action] };
     case 'tab_question':
     case 'tab_question_answered':
     case 'tab_question_closed':
-      return { slice: { ...slice, tabQuestions: upsertTabQuestion(slice.tabQuestions, e.question) }, reread: false };
+      return { ...slice, tabQuestions: upsertTabQuestion(slice.tabQuestions, e.question) };
     case 'tab_suggestion':
     case 'tab_suggestion_closed':
-      return { slice: { ...slice, tabSuggestions: upsertTabSuggestion(slice.tabSuggestions, e.suggestion) }, reread: false };
+      return { ...slice, tabSuggestions: upsertTabSuggestion(slice.tabSuggestions, e.suggestion) };
     case 'delta':
     case 'action':
     case 'reset': {
       const live = applyLive(slice.live, e);
-      return live === slice.live ? { slice, reread: false } : { slice: { ...slice, live }, reread: false };
+      return live === slice.live ? slice : { ...slice, live };
     }
     default:
-      return { slice, reread: false };
+      return slice;
   }
 }
