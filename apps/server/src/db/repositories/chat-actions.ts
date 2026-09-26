@@ -246,6 +246,24 @@ export class ChatActionsRepository {
     return row ? mapAction(row) : undefined;
   }
 
+  /** Every decided-but-uninjected user decision of a conversation, oldest decision first (spec
+   * 2026-09-26 §7.2): re-injection takes them all in one run instead of one per run. Same filters and
+   * the same `excludeIds` reasoning as `findNextToInject`; `limit` keeps one injected turn bounded. */
+  async listToInject(conversationId: string, excludeIds: string[] = [], limit = 20): Promise<ChatAction[]> {
+    const rows = await this.db.chatAction.findMany({
+      where: {
+        conversationId,
+        status: { in: ['approved', 'denied'] satisfies ChatActionStatus[] },
+        injectedAt: null,
+        grantId: null,
+        ...(excludeIds.length ? { id: { notIn: excludeIds } } : {}),
+      },
+      orderBy: [{ decidedAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+    return rows.map(mapAction);
+  }
+
   /**
    * Records that a decision is being re-injected. Set before the run that carries it starts, not
    * after: the same at-most-once trade-off `claimApproved` makes for the tool call itself — a run
@@ -254,6 +272,11 @@ export class ChatActionsRepository {
    */
   async markInjected(id: string): Promise<void> {
     await this.db.chatAction.updateMany({ where: { id }, data: { injectedAt: new Date() } });
+  }
+
+  /** `markInjected` for every decision one run carries, in one statement: all or none. */
+  async markInjectedMany(ids: string[]): Promise<void> {
+    await this.db.chatAction.updateMany({ where: { id: { in: ids } }, data: { injectedAt: new Date() } });
   }
 
   async listByConversation(conversationId: string, limit = 200): Promise<ChatAction[]> {

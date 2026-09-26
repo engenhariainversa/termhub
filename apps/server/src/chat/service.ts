@@ -149,10 +149,20 @@ const approvedProposal = (action: ChatAction, summary?: string): string =>
  * character other than a newline is always asked. */
 const GRANT_NOTE = ' O usuário também permitiu digitar nesta aba sem confirmar: os próximos send_input nesta aba, nesta conversa, rodam sem pedir confirmação, até ele revogar ou por 24 horas, e só enquanto a aba estiver rodando um agente. Isso não vale para run_command, send_key, para responder permissões, para texto que comece com "!" nem para texto com caracteres de controle.';
 
+/** Several decisions at once (a batch, or single clicks that queued behind a busy run): one line each,
+ * then one instruction — spec 2026-09-26 §7.2. One decision keeps `injectionText`'s own sentence. */
+const batchInjectionText = (actions: ChatAction[], freshSession: boolean, summaries: Map<string, string>): string => {
+  const sessionNote = freshSession ? ' A sessão de trabalho anterior não está mais disponível, então esta é uma nova sessão, sem o histórico da conversa anterior.' : '';
+  const lines = actions.map((a) =>
+    a.status === 'denied' ? `- Recusou: ${a.tool} em ${targetDescription(a)}.` : `- Autorizou: ${a.tool} em ${targetDescription(a)}.${freshSession ? approvedProposal(a, summaries.get(a.id)) : ''}`,
+  );
+  return `O usuário decidiu ${actions.length} ações pendentes de uma vez.${sessionNote}\n${lines.join('\n')}\nSiga com as autorizadas, refazendo cada chamada com os mesmos argumentos; não faça as recusadas e explique ao usuário o que ficou sem fazer.`;
+};
+
 export class ChatService {
   /** One run per conversation: two `claude -p` processes on the same --session-id would race. */
   private running = new Set<string>();
-  /** Decisions whose `markInjected` failed in this process — see `drainNextDecision`. In memory on
+  /** Decisions whose `markInjectedMany` failed in this process — see `drainNextDecision`. In memory on
    * purpose: the row itself is untouched, so a restart tries it again with a healthy database. */
   private unmarkable = new Set<string>();
 
@@ -241,6 +251,11 @@ export class ChatService {
    * here twice for the same row (ruling R9 — the second click of the same decision gets a 409 in the
    * route before this is ever called), so nothing here retries or de-dupes on its own.
    *
+   * That one message carries every decided-but-uninjected action of the conversation, not only this
+   * one (spec 2026-09-26 §7.2): `action` first, then the rest oldest decision first (`listToInject`,
+   * capped). A batch decided card by card, or clicks that queued behind a busy run, reach the model as
+   * one turn instead of one run each; a lone decision keeps its own sentence (`injectionFor`).
+   *
    * Runs in the action's own conversation, not whichever scope the caller has open: a card answered
    * from the account-wide screen may belong to a project chat, and the model that proposed it is there.
    *
@@ -249,46 +264,57 @@ export class ChatService {
    * bus events all behave exactly as they do for anything the user types.
    *
    * If another run already holds the conversation's lock, `sendIn` throws `HttpError(409, CHAT_BUSY)`
-   * before `beforeRun` ever gets to mark the row injected — the decision stays `approved`/`denied`
-   * with `injected_at` still null, exactly the state `findNextToInject` looks for. The route (fix
-   * round 2) turns that specific 409 into a 200: the decision is already durably recorded, so telling
-   * the client "conflict" would be a lie. `drainNextDecision` picks the row up once the busy run's own
-   * `send` call releases the lock, so the two paths — inject now, or inject once the lock frees up —
-   * both go through this same `beforeRun` marking, and cannot diverge (fix round 2, point 4).
+   * before `beforeRun` ever gets to mark the rows injected — every decision of the batch stays
+   * `approved`/`denied` with `injected_at` still null, exactly the state `findNextToInject` looks for.
+   * The route (fix round 2) turns that specific 409 into a 200: the decision is already durably
+   * recorded, so telling the client "conflict" would be a lie. `drainNextDecision` picks the rows up
+   * once the busy run's own `send` call releases the lock, so the two paths — inject now, or inject
+   * once the lock frees up — both go through the same `markInjectedMany` marking in `beforeRun`, and
+   * cannot diverge (fix round 2, point 4).
    */
   async resumeAfterDecision(user: User, action: ChatAction): Promise<ChatMessage> {
     const conversation = await this.deps.repos.chat.findByIdForUser(action.conversation_id, user.id);
     // `decide` already proved the row is this user's; a conversation archived since then has nobody
     // reading it, and `reset` expired its open rows — nothing to inject.
     if (!conversation || conversation.archived_at !== null) throw new HttpError(409, 'Esta conversa foi encerrada', 'CHAT_ARCHIVED');
-    return this.sendIn(user, conversation, await this.injectionFor(user, action, conversation.cli_session_id === null), {
-      beforeRun: () => this.deps.repos.chatActions.markInjected(action.id),
+    const rest = await this.deps.repos.chatActions.listToInject(conversation.id, [action.id]);
+    const batch = [action, ...rest];
+    return this.sendIn(user, conversation, await this.injectionFor(user, batch, conversation.cli_session_id === null), {
+      beforeRun: () => this.deps.repos.chatActions.markInjectedMany(batch.map((a) => a.id)),
     });
   }
 
   /**
-   * The sentence a decision is injected as. Only a fresh session pays for the enriched summary — three
-   * owner-scoped batched reads, resolved by the very function that built the card the user answered
-   * (`describeActions`, so a foreign id in the proposal still resolves to nothing here) — because only
-   * a fresh session has lost the transcript that would otherwise say what was approved.
+   * The sentence the decisions of one run are injected as: `injectionText`'s own for a single one,
+   * `batchInjectionText` for several. Only a fresh session pays for the enriched summaries — three
+   * owner-scoped batched reads for the whole batch, resolved by the very function that built the cards
+   * the user answered (`describeActions`, so a foreign id in a proposal still resolves to nothing here)
+   * — because only a fresh session has lost the transcript that would otherwise say what was approved.
+   * The grant note is appended once, however many approvals of the batch trusted their tab.
    */
-  private async injectionFor(user: User, action: ChatAction, freshSession: boolean): Promise<string> {
-    if (action.status === 'denied') return injectionText(action, freshSession);
-    const grant = await this.deps.repos.chatGrants.findActiveBySourceAction(action.conversation_id, action.id);
-    const grantNote = grant ? GRANT_NOTE : '';
-    if (!freshSession) return injectionText(action, freshSession) + grantNote;
-    const [card] = await describeActions(this.deps.repos, [action], user.id);
-    return injectionText(action, freshSession, card.summary) + grantNote;
+  private async injectionFor(user: User, actions: ChatAction[], freshSession: boolean): Promise<string> {
+    const approved = actions.filter((a) => a.status !== 'denied');
+    const grants = await Promise.all(approved.map((a) => this.deps.repos.chatGrants.findActiveBySourceAction(a.conversation_id, a.id)));
+    const grantNote = grants.some(Boolean) ? GRANT_NOTE : '';
+    const cards = freshSession && approved.length ? await describeActions(this.deps.repos, approved, user.id) : [];
+    const summaries = new Map(cards.map((c) => [c.id, c.summary]));
+    if (actions.length === 1) {
+      const [action] = actions;
+      if (action.status === 'denied') return injectionText(action, freshSession);
+      return injectionText(action, freshSession, summaries.get(action.id)) + grantNote;
+    }
+    return batchInjectionText(actions, freshSession, summaries) + grantNote;
   }
 
   /**
-   * Picks up exactly one decided-but-uninjected action for this conversation, if any, once a run's
-   * lock is released. This is how a decision that lost the race to a busy run in `resumeAfterDecision`
-   * still gets injected, without the client that clicked approve/deny ever retrying anything.
+   * Picks up the decided-but-uninjected actions for this conversation, if any, once a run's lock is
+   * released. This is how a decision that lost the race to a busy run in `resumeAfterDecision` still
+   * gets injected, without the client that clicked approve/deny ever retrying anything.
    *
-   * Injects at most one: the run this starts is itself a `send` call whose own completion calls this
-   * again, so a backlog of N decisions drains over N completions, one at a time, in the order they
-   * were decided — never by looping over the whole backlog inside a single call (which is the
+   * Injects every decided-but-uninjected action in one run, starting from the oldest (spec 2026-09-26
+   * §7.2), capped by `listToInject`: the run this starts is itself a `send` call whose own completion
+   * calls this again, so a backlog larger than the cap drains over the next completions, in the order
+   * the decisions were made — never by looping over the backlog inside a single call (which is the
    * "recursing" the fix round asked to avoid: unbounded depth in one call instead of one step per
    * natural completion).
    *
@@ -314,16 +340,18 @@ export class ChatService {
       const next = await this.deps.repos.chatActions.findNextToInject(conversation.id, [...this.unmarkable]);
       if (!next) return;
       actionId = next.id;
-      await this.sendIn(user, conversation, await this.injectionFor(user, next, conversation.cli_session_id === null), {
-        // Marking is what makes the injection at-most-once, so a row it failed on stays uninjected and
-        // would be picked again by the drain this very failure schedules — a spin on one row for as long
-        // as the database keeps refusing. Remembering it here is what stops that; the row is not lost,
-        // the next process (or `GET /api/chat`'s trail) still shows the decision the user gave.
+      const batch = [next, ...(await this.deps.repos.chatActions.listToInject(conversation.id, [...this.unmarkable, next.id]))];
+      await this.sendIn(user, conversation, await this.injectionFor(user, batch, conversation.cli_session_id === null), {
+        // Marking is what makes the injection at-most-once, so rows it failed on stay uninjected and
+        // would be picked again by the drain this very failure schedules — a spin on the same rows for
+        // as long as the database keeps refusing. Remembering every id of the batch here is what stops
+        // that; the rows are not lost, the next process (or `GET /api/chat`'s trail) still shows the
+        // decisions the user gave.
         beforeRun: async () => {
           try {
-            await this.deps.repos.chatActions.markInjected(next.id);
+            await this.deps.repos.chatActions.markInjectedMany(batch.map((a) => a.id));
           } catch (err) {
-            this.unmarkable.add(next.id);
+            for (const a of batch) this.unmarkable.add(a.id);
             throw err;
           }
         },

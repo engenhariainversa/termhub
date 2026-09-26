@@ -30,7 +30,7 @@ export interface GatedCall {
 }
 
 const PENDING = (tool: string) =>
-  `Ação pendente de confirmação: o usuário precisa aprovar a ferramenta ${tool} no chat e nada foi executado. Não repita a chamada, não tente outro caminho e não faça mais nada: diga a ele que está aguardando a confirmação e pare. Quando ele confirmar, você será avisado e poderá repetir esta mesma chamada.`;
+  `Ação pendente de confirmação: o usuário precisa aprovar a ferramenta ${tool} no chat e nada foi executado. Não repita a chamada nem tente outro caminho. Se o mesmo pedido do usuário precisa de outras ações independentes desta, proponha todas agora, nesta mesma resposta: elas aparecem juntas numa só confirmação. Depois diga a ele que está aguardando a confirmação e pare. Quando ele decidir, você será avisado e poderá repetir as chamadas autorizadas.`;
 
 const WAITING: GateOutcome = {
   ok: false,
