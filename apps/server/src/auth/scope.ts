@@ -69,13 +69,16 @@ export class Scoped {
     return { project };
   }
 
-  /** A project and one of its linked machines; the link and the machine must both be in scope. */
+  /**
+   * A project and one of its linked machines; the link and the machine must both be in scope. A scope miss
+   * is a 404 (`HttpError`); a failure reading a row (a DB error) propagates unchanged.
+   */
   async projectMachine(projectId: string, machineId: string): Promise<{ project: Project; machine: Machine; link: ProjectMachine }> {
     const { project } = await this.project(projectId);
     const link = await this.repos.projectMachines.find(projectId, machineId);
     if (!link) throw notFound('Máquina não vinculada ao projeto');
-    const machine = await this.machine(machineId).catch(() => {
-      throw notFound('Máquina não vinculada ao projeto');
+    const machine = await this.machine(machineId).catch((err: unknown) => {
+      throw err instanceof HttpError ? notFound('Máquina não vinculada ao projeto') : err;
     });
     return { project, machine, link };
   }
@@ -105,11 +108,16 @@ export class Scoped {
     return { project, ...machines[0] };
   }
 
+  /**
+   * A tab of the scope. A scope miss on its project–machine link (an `HttpError`) is the tab's own 404;
+   * any other failure (a DB error) propagates unchanged: callers read 404 as "the tab is gone", and a
+   * card expires on it (spec 2026-09-26 §4.7).
+   */
   async tab(id: string): Promise<{ tab: Tab; project: Project; machine: Machine; cwd: string }> {
     const tab = await this.repos.tabs.findById(id);
     if (!tab) throw notFound('Tab não encontrada');
-    const { project, machine, link } = await this.projectMachine(tab.project_id, tab.machine_id).catch(() => {
-      throw notFound('Tab não encontrada');
+    const { project, machine, link } = await this.projectMachine(tab.project_id, tab.machine_id).catch((err: unknown) => {
+      throw err instanceof HttpError ? notFound('Tab não encontrada') : err;
     });
     return { tab, project, machine, cwd: link.cwd };
   }
