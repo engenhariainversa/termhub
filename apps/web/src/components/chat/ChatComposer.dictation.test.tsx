@@ -203,8 +203,10 @@ describe('ChatComposer dictation', () => {
       const { container } = renderComposer(opts);
       const button = primary(name);
 
+      // One glyph on the primary button, one on the paperclip, and both decorative.
+      expect(button.querySelectorAll('svg')).toHaveLength(1);
       const glyphs = Array.from(container.querySelectorAll('svg'));
-      expect(glyphs).toHaveLength(1);
+      expect(glyphs).toHaveLength(2);
       for (const glyph of glyphs) {
         expect(glyph.getAttribute('aria-hidden')).toBe('true');
         expect(glyph.getAttribute('aria-label')).toBeNull();

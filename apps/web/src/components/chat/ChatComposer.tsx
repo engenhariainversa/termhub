@@ -1,6 +1,12 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Paperclip } from 'lucide-react';
+import { api, ApiError } from '../../lib/api';
+import { ACCEPT_ATTRIBUTE, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, checkFile, type AttachmentKind } from '../../lib/attachments';
 import { sendsMessage } from '../../lib/chat-scroll';
+import { downscaleImage } from '../../lib/image-downscale';
+import type { ChatAttachment } from '../../lib/types';
 import { useDictation, type Dictation } from '../../lib/use-dictation';
+import { AttachmentChip } from './AttachmentChip';
 
 export interface ChatComposerProps {
   /**
@@ -20,6 +26,8 @@ export interface ChatComposerProps {
   blockedReason?: string | null;
   /** The last send or decision error (pt-BR), shown in the status line in the danger colour. */
   status?: string | null;
+  /** The project whose chat this is; travels with every upload so the file lands in that conversation. */
+  projectId?: string | null;
 }
 
 const MIN_ROWS = 1;
@@ -62,6 +70,152 @@ const PRIMARY_LABEL: Record<PrimaryRole, string> = {
   stop: 'Parar',
 };
 
+/** One file in the box, from the moment it was picked until the message that carries it is sent. */
+interface DraftAttachment {
+  key: string;
+  file: File;
+  name: string;
+  kind: AttachmentKind | null;
+  bytes: number;
+  /** Object URL of an image, for its thumbnail; revoked when the chip goes. */
+  previewUrl: string | null;
+  phase: 'uploading' | 'uploaded' | 'failed';
+  /** 0..1 while uploading. */
+  progress: number;
+  attachment: ChatAttachment | null;
+  error: string | null;
+  /** The box refused it before any upload (type, size): there is nothing to retry. */
+  refused: boolean;
+  controller: AbortController | null;
+}
+
+function revokePreview(d: DraftAttachment) {
+  if (d.previewUrl) URL.revokeObjectURL(d.previewUrl);
+}
+
+/**
+ * The chips of the box (spec §5.6): each file uploads the moment it is added, with progress; ✕ aborts
+ * or deletes; a message can only leave once every chip has landed. Lives here, not in `ChatPanel`, for
+ * the same reason the text does: a percentage ticking must not re-render the thread.
+ */
+function useAttachmentDrafts(projectId: string | null | undefined) {
+  const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
+  /** The one line the box has to say about a batch of files ("No máximo 5…"); cleared on the next add. */
+  const [notice, setNotice] = useState<string | null>(null);
+  const seq = useRef(0);
+  const latest = useRef(drafts);
+  latest.current = drafts;
+
+  const patch = useCallback((key: string, p: Partial<DraftAttachment>) => setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...p } : d))), []);
+
+  const upload = useCallback(
+    async (draft: DraftAttachment) => {
+      const controller = new AbortController();
+      patch(draft.key, { phase: 'uploading', progress: 0, error: null, attachment: null, controller });
+      try {
+        const body = draft.kind === 'image' ? await downscaleImage(draft.file) : draft.file;
+        if (controller.signal.aborted) return;
+        const name = body === draft.file ? draft.name : body.name;
+        const { attachment } = await api.chat.attachments.upload(body, name, projectId ?? null, (fraction) => patch(draft.key, { progress: fraction }), controller.signal);
+        patch(draft.key, { phase: 'uploaded', progress: 1, attachment, controller: null });
+      } catch (e) {
+        // Aborted by ✕: the chip is already gone, nothing to report.
+        if (e instanceof ApiError && e.code === 'ABORTED') return;
+        patch(draft.key, { phase: 'failed', controller: null, error: e instanceof ApiError ? e.message : 'Não foi possível enviar o arquivo' });
+      }
+    },
+    [patch, projectId],
+  );
+
+  const add = useCallback(
+    (files: Iterable<File>) => {
+      const list = [...files];
+      if (list.length === 0) return;
+      const room = MAX_ATTACHMENTS_PER_MESSAGE - latest.current.length;
+      setNotice(list.length > room ? `No máximo ${MAX_ATTACHMENTS_PER_MESSAGE} anexos por mensagem` : null);
+      const next: DraftAttachment[] = list.slice(0, Math.max(0, room)).map((file) => {
+        const check = checkFile(file.name, file.type, file.size);
+        const refused = 'refused' in check;
+        const kind = refused ? null : check.kind;
+        seq.current += 1;
+        return {
+          key: `d${seq.current}`,
+          file,
+          name: file.name,
+          kind,
+          bytes: file.size,
+          previewUrl: kind === 'image' ? URL.createObjectURL(file) : null,
+          phase: refused ? 'failed' : 'uploading',
+          progress: 0,
+          attachment: null,
+          error: refused ? check.refused : null,
+          refused,
+          controller: null,
+        };
+      });
+      if (next.length === 0) return;
+      setDrafts((prev) => [...prev, ...next]);
+      for (const draft of next) if (!draft.refused) void upload(draft);
+    },
+    [upload],
+  );
+
+  const remove = useCallback((key: string) => {
+    const draft = latest.current.find((d) => d.key === key);
+    if (!draft) return;
+    setDrafts((prev) => prev.filter((d) => d.key !== key));
+    revokePreview(draft);
+    if (draft.phase === 'uploading') draft.controller?.abort();
+    // Already on the server: delete it there too, quietly — the sweep would get it anyway.
+    else if (draft.phase === 'uploaded' && draft.attachment) void api.chat.attachments.remove(draft.attachment.id).catch(() => undefined);
+  }, []);
+
+  const retry = useCallback(
+    (key: string) => {
+      const draft = latest.current.find((d) => d.key === key);
+      if (draft && draft.phase === 'failed' && !draft.refused) void upload(draft);
+    },
+    [upload],
+  );
+
+  /**
+   * Takes the chips out of the box the moment the message leaves, the way the text goes (see
+   * `onSend`): `commit` lets them go once the message is in, `restore` puts them back in front of
+   * whatever was added meanwhile when it was not — capped at the limit, the surplus dropped.
+   */
+  const take = useCallback(() => {
+    const taken = latest.current;
+    setDrafts([]);
+    setNotice(null);
+    return {
+      commit() {
+        for (const d of taken) revokePreview(d);
+      },
+      restore() {
+        setDrafts((current) => {
+          const merged = [...taken, ...current];
+          for (const d of merged.slice(MAX_ATTACHMENTS_PER_MESSAGE)) revokePreview(d);
+          return merged.slice(0, MAX_ATTACHMENTS_PER_MESSAGE);
+        });
+      },
+    };
+  }, []);
+
+  // Unmounted mid-upload (the drawer closed): nothing keeps uploading into a box that is gone. What
+  // landed and was never sent is swept by the server after 24 h.
+  useEffect(
+    () => () => {
+      for (const d of latest.current) {
+        d.controller?.abort();
+        revokePreview(d);
+      }
+    },
+    [],
+  );
+
+  return { drafts, notice, add, remove, retry, take };
+}
+
 /**
  * The message box and its one action button. Owns its text, its height and its dictation — the panel
  * only learns of the text when it is sent, so a keystroke re-renders this box and nothing else.
@@ -76,9 +230,15 @@ const PRIMARY_LABEL: Record<PrimaryRole, string> = {
  * where Enter is how every other line got started); Shift+Enter is always a newline, on either. Either
  * way it can only send what the button itself would send.
  */
-export function ChatComposer({ onSend, blockedReason, status }: ChatComposerProps) {
+export function ChatComposer({ onSend, blockedReason, status, projectId }: ChatComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
+  const attachments = useAttachmentDrafts(projectId);
+  const uploading = attachments.drafts.some((d) => d.phase === 'uploading');
+  const uploadedIds = useMemo(() => attachments.drafts.flatMap((d) => (d.phase === 'uploaded' && d.attachment ? [d.attachment.id] : [])), [attachments.drafts]);
+  /** A chip that is not a refusal counts as content: a box with one is a box about to send. */
+  const hasChips = attachments.drafts.some((d) => d.phase !== 'failed');
 
   // The hook keeps the latest callback; the functional update reads the box as it is when the clip lands.
   const dictation = useDictation((clip) => {
@@ -123,41 +283,54 @@ export function ChatComposer({ onSend, blockedReason, status }: ChatComposerProp
   // A blocked host makes the button the (disabled) send arrow: dictating more text into a box that
   // cannot send it is an invitation to lose it. A recording already under way still stops, so nothing
   // is left listening.
+  // A chip in the box (even one still uploading) is content too: the button is the send arrow.
   const blocked = Boolean(blockedReason);
-  const role: PrimaryRole = dictation.state === 'recording' ? 'stop' : hasText || blocked || dictation.state === 'off' ? 'send' : 'dictate';
+  const role: PrimaryRole = dictation.state === 'recording' ? 'stop' : hasText || hasChips || blocked || dictation.state === 'off' ? 'send' : 'dictate';
   const notReadyToDictate = busy || dictation.state === 'checking' || dictation.state === 'starting';
-  const disabled = role === 'stop' ? false : role === 'send' ? blocked || !hasText || busy : blocked || notReadyToDictate;
+  // Review Focus #2: nothing leaves while a chip is still on the wire.
+  const disabled = role === 'stop' ? false : role === 'send' ? blocked || !(hasText || uploadedIds.length > 0) || uploading || busy : blocked || notReadyToDictate;
   /** The one condition sending obeys, so the keyboard can never send what the button would refuse. */
   const canSend = role === 'send' && !disabled;
 
   // Never refused for a send still in flight: the box empties at once, so a second click has nothing to
   // send, and a message typed meanwhile goes to the concierge at once (spec 2026-09-26).
   const send = useCallback(async () => {
+    if (!canSend) return;
     const value = text.trim();
-    if (!value) return;
-    // Cleared before the request, not after (see `onSend`). On failure the text comes back below.
+    // Cleared before the request, not after (see `onSend`). On failure the text and the chips come
+    // back below.
     setText('');
+    const taken = attachments.take();
     let ok = false;
     try {
-      ok = await onSend(value, []);
+      ok = await onSend(value, uploadedIds);
     } catch {
       ok = false;
     }
+    if (ok) {
+      taken.commit();
+      return;
+    }
     // Give the text back so nothing is lost — unless something new was typed meanwhile.
-    if (!ok) setText((current) => current || value);
-  }, [text, onSend]);
+    setText((current) => current || value);
+    taken.restore();
+  }, [canSend, text, uploadedIds, attachments, onSend]);
 
   // One line, fixed height, always mounted: what appears here moves nothing. The host's own reason
-  // outranks everything (it is the one that is not going to resolve on its own); a clip being
-  // transcribed comes next (its text is about to land in this very box); then the last send or
-  // decision error. An answer being written never locks the box, so nothing here says to wait for it.
+  // outranks everything (it is the one that is not going to resolve on its own); a chip still on the
+  // wire comes next (it is why the button is refusing); then a clip being transcribed (its text is
+  // about to land in this very box); then the last send or decision error; and last, what the box had
+  // to say about the files just added (the cap). An answer being written never locks the box, so
+  // nothing here says to wait for it (spec 2026-09-26).
   const line = blockedReason
     ? { text: blockedReason, danger: false }
-    : busy
-      ? { text: 'transcrevendo…', danger: false }
-      : status
-        ? { text: status, danger: true }
-        : { text: '', danger: false };
+    : uploading
+      ? { text: 'enviando anexo…', danger: false }
+      : busy
+        ? { text: 'transcrevendo…', danger: false }
+        : status
+          ? { text: status, danger: true }
+          : { text: attachments.notice ?? '', danger: false };
 
   return (
     // `env(safe-area-inset-bottom)` resolves to 0px in every browser today, because the app-wide
@@ -169,7 +342,48 @@ export function ChatComposer({ onSend, blockedReason, status }: ChatComposerProp
           attachment chips go above the text when they land). The box, not the textarea, shows the
           focus — the textarea's own outline would draw inside the rounded border, so it is dropped
           and the border lights up instead; a keyboard user must still see where they are. */}
-      <div className="min-w-0 rounded-2xl border border-line bg-bg px-3 py-2 focus-within:border-accent focus-within:ring-1 focus-within:ring-accent">
+      <div
+        className="min-w-0 rounded-2xl border border-line bg-bg px-3 py-2 focus-within:border-accent focus-within:ring-1 focus-within:ring-accent"
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('Files')) e.preventDefault();
+        }}
+        onDrop={(e) => {
+          if (e.dataTransfer.files.length === 0) return;
+          e.preventDefault();
+          attachments.add(e.dataTransfer.files);
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          hidden
+          accept={ACCEPT_ATTRIBUTE}
+          aria-label="Arquivos para anexar"
+          onChange={(e) => {
+            if (e.target.files) attachments.add(e.target.files);
+            // The same file picked twice must fire again.
+            e.target.value = '';
+          }}
+        />
+        <ul aria-label="Anexos" className={`flex flex-wrap gap-2 ${attachments.drafts.length > 0 ? 'mb-2' : ''}`}>
+          {attachments.drafts.map((d) => (
+            <AttachmentChip
+              key={d.key}
+              name={d.name}
+              kind={d.kind}
+              bytes={d.bytes}
+              previewUrl={d.previewUrl}
+              phase={d.phase}
+              progress={d.progress}
+              statusText={d.attachment ? attachmentStatusText(d.attachment) : null}
+              error={d.error}
+              retryable={d.phase === 'failed' && !d.refused}
+              onRemove={() => attachments.remove(d.key)}
+              onRetry={() => attachments.retry(d.key)}
+            />
+          ))}
+        </ul>
         {/* 16px, not the 14px the rest of the chat uses: iOS Safari zooms the page into any field
             whose font is under 16px the moment it takes focus, and a zoomed page is wider than the
             screen — which is what "the side blows out when I tap the box" was. The zoom is silent,
@@ -181,6 +395,13 @@ export function ChatComposer({ onSend, blockedReason, status }: ChatComposerProp
           value={text}
           placeholder="Pergunte ou peça algo às suas máquinas"
           onChange={(e) => setText(e.target.value)}
+          onPaste={(e) => {
+            // Files only; a text paste stays the browser's.
+            const files = e.clipboardData?.files;
+            if (!files || files.length === 0) return;
+            e.preventDefault();
+            attachments.add(files);
+          }}
           onKeyDown={(e) => {
             // `canSend`, not just the key rule: while the box is recording the button reads "Parar",
             // and an Enter that still sent put a half-typed line in front of an agent that acts on the
@@ -194,17 +415,28 @@ export function ChatComposer({ onSend, blockedReason, status }: ChatComposerProp
           }}
         />
         <div className="mt-1 flex items-center justify-between gap-2">
-          {/* The left slot of the row: the attachment button ("Anexar arquivo") mounts here when the
-              chips land; until then it only keeps the right-hand group where the thumb expects it. */}
-          <div className="flex items-center gap-1" />
+          {/* The left slot of the row: the attachment button, greyed once the box holds its five. */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-fg-dim transition-colors hover:bg-bg-3 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Anexar arquivo"
+              title="Anexar arquivo"
+              disabled={attachments.drafts.length >= MAX_ATTACHMENTS_PER_MESSAGE}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip size={18} aria-hidden="true" />
+            </button>
+          </div>
           <div className="flex min-w-0 items-center gap-2">
             {dictation.state === 'recording' && <RecordingStatus dictation={dictation} />}
             {/* Mounted at all times: a live region a browser inserts together with its text is not
                 reliably announced — the region has to be in the accessibility tree before the text
-                changes. Fixed height (`h-4`), so a line appearing here shifts nothing. Deliberately not
-                on the clock next door: a live region that ticks every second is worse than one that
-                says nothing. */}
-            <span role="status" title={line.text || undefined} className={`h-4 min-w-0 truncate text-xs leading-4 ${line.danger ? 'text-danger' : 'text-fg-muted'}`}>
+                changes. Fixed height (`h-4`), so a line appearing here shifts nothing; `empty:-mr-2`
+                so an empty one does not open a second gap between "cancelar" and the stop button
+                while recording. Deliberately not on the clock next door: a live region that ticks
+                every second is worse than one that says nothing. */}
+            <span role="status" title={line.text || undefined} className={`h-4 min-w-0 truncate text-xs leading-4 empty:-mr-2 ${line.danger ? 'text-danger' : 'text-fg-muted'}`}>
               {line.text}
             </span>
             <button

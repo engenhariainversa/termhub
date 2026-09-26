@@ -584,7 +584,8 @@ it('fetches nothing from an answer: no element in the model text can make the br
   await screen.findByText(/olha isso/);
   // The whole document for everything this page never draws itself — the error paragraphs today, a
   // streaming preview or a conversation title tomorrow, all outside the thread and all able to fetch.
-  expect(document.querySelectorAll('img, video, input, iframe, image')).toHaveLength(0);
+  // The composer's own hidden file picker is the one `input` that cannot fetch anything.
+  expect(document.querySelectorAll('img, video, input:not([type="file"]), iframe, image')).toHaveLength(0);
   // `svg` alone is scoped to the thread, which is where the model's text lands: the page's own chrome
   // legitimately draws inline SVG (the composer's one send/mic glyph), and that is not model markup.
   const thread = screen.getByRole('list', { name: 'Conversa' });
