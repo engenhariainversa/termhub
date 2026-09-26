@@ -20,6 +20,8 @@ const answerMock = vi.fn();
 const screenMock = vi.fn();
 const sendSuggestionMock = vi.fn();
 const dismissSuggestionMock = vi.fn();
+const uploadMock = vi.fn();
+const removeAttachmentMock = vi.fn();
 
 vi.mock('../../lib/api', () => {
   // Same signature as the real one: the page shows `message`, so a stand-in that swallows it would
@@ -36,7 +38,13 @@ vi.mock('../../lib/api', () => {
   return {
     ApiError,
     api: {
-      chat: (...a: unknown[]) => chatMock(...a),
+      chat: Object.assign((...a: unknown[]) => chatMock(...a), {
+        attachments: {
+          upload: (...a: unknown[]) => uploadMock(...a),
+          remove: (...a: unknown[]) => removeAttachmentMock(...a),
+          url: (id: string) => `/api/chat/attachments/${id}`,
+        },
+      }),
       sendChatMessage: (...a: unknown[]) => sendMock(...a),
       decideChatAction: (...a: unknown[]) => decideMock(...a),
       decideChatActions: (...a: unknown[]) => decideManyMock(...a),
@@ -110,6 +118,8 @@ beforeEach(() => {
   screenMock.mockReset();
   sendSuggestionMock.mockReset();
   dismissSuggestionMock.mockReset();
+  uploadMock.mockReset();
+  removeAttachmentMock.mockReset();
   screenMock.mockResolvedValue({ text: 'Do you want to proceed?' });
   accountsMock.mockResolvedValue({ accounts: [] });
   auth.state = { user: { id: 'u1' }, viewAs: null };
@@ -237,7 +247,13 @@ it('shows the server error when the initial load fails, instead of an unhandled 
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  expect(await screen.findByText('Projeto não encontrado')).toBeTruthy();
+  // Said twice: in the composer's status line, and where the conversation would be — an empty thread
+  // over a status line is easy to read as a conversation that simply has nothing in it.
+  const lines = await screen.findAllByText('Projeto não encontrado');
+  expect(lines).toHaveLength(2);
+  expect(lines.some((l) => l.getAttribute('role') === 'status')).toBe(true);
+  expect(lines.some((l) => l.tagName === 'P' && l.classList.contains('text-sm'))).toBe(true);
+  expect(screen.queryByText(/Pergunte sobre este projeto/)).toBeNull();
 });
 
 it('in a project, a host that is not chosen points to /chat instead of offering a picker', async () => {
@@ -589,4 +605,91 @@ it('shows "pensando…" on every answer that has started, not only the newest', 
     </MemoryRouter>,
   );
   await waitFor(() => expect(screen.getAllByText(/pensando/i)).toHaveLength(2));
+});
+
+const attachment = (over: Partial<import('../../lib/types').ChatAttachment> & { id: string }) => ({
+  name: 'relatorio.pdf',
+  mime: 'application/pdf',
+  kind: 'pdf' as const,
+  bytes: 10,
+  status: 'pending' as const,
+  error_code: null,
+  meta: null,
+  created_at: '2026-09-26T00:00:00.000Z',
+  ...over,
+});
+
+it('patches an attachment inside its message when its status arrives, without refetching', async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { events: [], connected: true };
+  });
+  chatMock.mockResolvedValue({
+    conversation: { id: 'c1', project_id: null, ai_account_id: null },
+    messages: [msg({ id: 'm1', role: 'user', text: 'leia', attachments: [attachment({ id: 'att1' })] })],
+    actions: [],
+    host: READY,
+  });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId={null} />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('processando…')).toBeTruthy();
+
+  act(() => onEvent({ type: 'attachment_status', conversation_id: 'c1', attachment: attachment({ id: 'att1', status: 'ready', meta: { pages: 12 } }) }));
+  await waitFor(() => expect(screen.queryByText('processando…')).toBeNull());
+  expect(chatMock).toHaveBeenCalledTimes(1);
+
+  // Another conversation's status never touches this thread.
+  act(() => onEvent({ type: 'attachment_status', conversation_id: 'c_other', attachment: attachment({ id: 'att1', status: 'failed', error_code: 'ATTACHMENT_INVALID' }) }));
+  expect(screen.queryByText(/falhou/)).toBeNull();
+});
+
+it('sends the uploaded attachment ids with the text, and a message with no text at all', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY });
+  uploadMock.mockResolvedValue({ attachment: attachment({ id: 'att1', status: 'ready' }) });
+  sendMock.mockResolvedValue({ message: { id: 'm2' } });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalledWith('p1'));
+
+  fireEvent.change(screen.getByLabelText('Arquivos para anexar'), { target: { files: [new File([new Uint8Array(10)], 'relatorio.pdf', { type: 'application/pdf' })] } });
+  await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(1));
+  // The upload carries the project, so the file lands in this project's conversation (spec §5.3).
+  expect(uploadMock.mock.calls[0][2]).toBe('p1');
+  const send = screen.getByRole('button', { name: /enviar/i }) as HTMLButtonElement;
+  await waitFor(() => expect(send.disabled).toBe(false));
+  fireEvent.click(send);
+  await waitFor(() => expect(sendMock).toHaveBeenCalledWith('', 'p1', ['att1']));
+});
+
+it('feeds an attachment status to the chip still in the box, and only for its own conversation', async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { connected: true };
+  });
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY });
+  uploadMock.mockResolvedValue({ attachment: attachment({ id: 'att1' }) });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalledWith('p1'));
+  fireEvent.change(screen.getByLabelText('Arquivos para anexar'), { target: { files: [new File([new Uint8Array(10)], 'relatorio.pdf', { type: 'application/pdf' })] } });
+  expect(await screen.findByText('processando…')).toBeTruthy();
+
+  act(() => onEvent({ type: 'attachment_status', conversation_id: 'c_other', attachment: attachment({ id: 'att1', status: 'failed', error_code: 'ATTACHMENT_INVALID' }) }));
+  expect(screen.getByText('processando…')).toBeTruthy();
+  expect(screen.queryByText(/falhou/)).toBeNull();
+
+  act(() => onEvent({ type: 'attachment_status', conversation_id: 'c_p1', attachment: attachment({ id: 'att1', status: 'ready', meta: { pages: 2 } }) }));
+  await waitFor(() => expect(screen.queryByText('processando…')).toBeNull());
+  expect(screen.getByText('relatorio.pdf')).toBeTruthy();
 });

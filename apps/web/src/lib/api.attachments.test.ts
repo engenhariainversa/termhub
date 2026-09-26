@@ -94,3 +94,31 @@ describe('api.chat.attachments', () => {
     expect(typeof api.chat).toBe('function');
   });
 });
+
+describe('api.sendChatMessage', () => {
+  const sent = () => JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>;
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'ma' }), { status: 202 }));
+
+  beforeEach(() => {
+    fetchMock.mockClear();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  it('carries the attachment ids only when there are any, and the project only when there is one, never waiting for the answer', async () => {
+    await api.sendChatMessage('leia', 'p1', ['att1', 'att2']);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/chat/messages');
+    expect(sent()).toEqual({ text: 'leia', project_id: 'p1', attachment_ids: ['att1', 'att2'], wait: false });
+
+    fetchMock.mockClear();
+    await api.sendChatMessage('', null, ['att1']);
+    expect(sent()).toEqual({ text: '', attachment_ids: ['att1'], wait: false });
+
+    fetchMock.mockClear();
+    await api.sendChatMessage('oi', 'p1', []);
+    expect(sent()).toEqual({ text: 'oi', project_id: 'p1', wait: false });
+
+    fetchMock.mockClear();
+    await api.sendChatMessage('oi');
+    expect(sent()).toEqual({ text: 'oi', wait: false });
+  });
+});

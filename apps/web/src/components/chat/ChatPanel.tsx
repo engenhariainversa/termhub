@@ -10,6 +10,7 @@ import { TabQuestionCard } from './TabQuestionCard';
 import { TabSuggestionCard } from './TabSuggestionCard';
 import { ConfirmDialog } from '../Modal';
 import { api, ApiError } from '../../lib/api';
+import { patchMessageAttachment } from '../../lib/attachments';
 import { useChatStream } from '../../lib/chat';
 import { useChatLive } from '../../lib/chat-live';
 import { mergeMessage } from '../../lib/chat-merge';
@@ -19,7 +20,7 @@ import { isGrantActive } from './grant-time';
 import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
 import { SUGGESTION_CHANGED_TEXT, upsertTabSuggestion } from './tab-suggestion-text';
 import { useAuth } from '../../lib/auth';
-import type { AiAccount, ChatAction, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatMessage, TabQuestion, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
+import type { AiAccount, ChatAction, ChatAttachment, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatMessage, TabQuestion, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
 
 /**
  * Why the box refuses, one short line per host state — the long version is the card above the thread
@@ -117,6 +118,13 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const [inFlight, setInFlight] = useState(0);
   const sending = inFlight > 0;
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The latest `attachment_status` heard for each attachment of this conversation, by id. The thread
+   * takes the event straight into its message (`patchMessageAttachment`); the composer's chips take it
+   * from here, since a chip's file has no message yet. Small rows, one per attachment of this
+   * session: never pruned, and nothing reads it but the composer.
+   */
+  const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, ChatAttachment>>({});
 
   /**
    * Which machine and which account run this conversation, or why none can — resolved by the server on
@@ -244,6 +252,12 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       else if (e.type === 'granted_action') setActions((prev) => (prev.some((a) => a.id === e.action.id) ? prev.map((a) => (a.id === e.action.id ? e.action : a)) : [...prev, e.action]));
       else if (e.type === 'tab_question' || e.type === 'tab_question_answered' || e.type === 'tab_question_closed') setTabQuestions((prev) => upsertTabQuestion(prev, e.question));
       else if (e.type === 'tab_suggestion' || e.type === 'tab_suggestion_closed') setTabSuggestions((prev) => upsertTabSuggestion(prev, e.suggestion));
+      else if (e.type === 'attachment_status') {
+        // Into the message that carries it (no refetch: only that row gets a new object) and into the
+        // composer's chips, for a file uploaded but not yet sent.
+        setMessages((prev) => patchMessageAttachment(prev, e.attachment));
+        setAttachmentStatuses((prev) => ({ ...prev, [e.attachment.id]: e.attachment }));
+      }
     },
     [conversationId, mine, push],
   );
@@ -462,13 +476,15 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const stick = useRef(true);
 
   /**
-   * The composer's `onSend`: the text is the composer's own (it empties itself when it calls this and
-   * takes the text back on `false`); `attachmentIds` is carried through once the attachment chips land.
-   * Never refused for another send in flight: several can be (spec 2026-09-26). The POST returns as
-   * soon as the message is stored; the answer streams over the socket.
+   * The composer's `onSend`: the text and the ids of its uploaded chips are the composer's own (it
+   * empties itself when it calls this and takes them back on `false`). A message may be attachments
+   * alone (spec §3); one with neither is refused here as well as by the button. Never refused for
+   * another send in flight: several can be (spec 2026-09-26). The POST returns as soon as the message
+   * is stored; the answer streams over the socket.
    */
   const send = useCallback(
-    async (value: string, _attachmentIds: string[]): Promise<boolean> => {
+    async (value: string, attachmentIds: string[]): Promise<boolean> => {
+      if (!value && attachmentIds.length === 0) return false;
       // Sending is the reader's own way of saying "take me to the bottom" — the answer will stream
       // in below whatever they typed.
       stick.current = true;
@@ -476,8 +492,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setError(null);
       try {
         // No project = the account-wide chat: called with no second argument, for the same reason as
-        // `load` above.
-        if (projectId) await api.sendChatMessage(value, projectId);
+        // `load` above. The three-argument form only when there is something to carry in it.
+        if (attachmentIds.length > 0) await api.sendChatMessage(value, projectId, attachmentIds);
+        else if (projectId) await api.sendChatMessage(value, projectId);
         else await api.sendChatMessage(value);
         await load();
         return true;
@@ -611,13 +628,17 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
        * empty state is one line saying what this screen is for — deliberately just the one, no example
        * prompts, no tour — and only while the conversation can actually run: with no machine (or one
        * that is asleep) the host card above already says what to do, and inviting a message that cannot
-       * be sent would contradict it. */}
+       * be sent would contradict it. A conversation that never opened (the read failed) says why in
+       * that same place, and not only in the composer's status line: an empty thread over a small
+       * line at the bottom reads as a conversation with nothing in it. */}
       <ChatThread
         reconnecting={!connected}
         followKey={followKey}
         stickRef={stick}
         empty={
-          loaded && messages.length === 0 && (host === null || host.kind === 'ready') ? (
+          !loaded && error !== null && messages.length === 0 ? (
+            <p className="pt-6 text-center text-sm text-danger">{error}</p>
+          ) : loaded && messages.length === 0 && (host === null || host.kind === 'ready') ? (
             <p className="pt-6 text-center text-sm text-fg-dim">
               {projectId === null ? 'Peça algo às suas máquinas: o concierge lê os terminais e pede sua autorização antes de qualquer alteração.' : 'Pergunte sobre este projeto: o concierge lê os terminais dele e pede sua autorização antes de qualquer alteração.'}
             </p>
@@ -654,8 +675,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         })}
       </ChatThread>
       {/* A host that cannot run the message is why the box refuses, and the box says so. The send and
-       *  decision errors go in its status line too: a line that mounts above the thread shifts it. */}
-      <ChatComposer onSend={send} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} status={error ?? actionError} />
+       *  decision errors go in its status line too: a line that mounts above the thread shifts it.
+       *  `projectId` travels with every upload, so a file lands in this project's conversation. */}
+      <ChatComposer onSend={send} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} status={error ?? actionError} projectId={projectId} attachmentStatuses={attachmentStatuses} />
     </div>
   );
 }
