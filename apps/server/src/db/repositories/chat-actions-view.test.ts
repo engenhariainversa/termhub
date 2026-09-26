@@ -103,6 +103,23 @@ it('names link_project_machine by the folder it links, in the project and on the
   expect(card.summary).toBe('vincular a pasta `~/termhub` no projeto reactivando, no macbook m3');
 });
 
+it('says link_project_machine and set_project_machine_cwd are creating the folder when create_dir: true', async () => {
+  const repos = fakeRepos();
+  const [link] = await describeActions(
+    repos,
+    [action({ tool: 'link_project_machine', args: { project_id: 'p1', machine_id: 'm1', cwd: '~/termhub', create_dir: true }, project_id: 'p1', machine_id: 'm1' })],
+    OWNER,
+  );
+  expect(link.summary).toBe('vincular a pasta `~/termhub` (criando a pasta) no projeto reactivando, no macbook m3');
+
+  const [setCwd] = await describeActions(
+    repos,
+    [action({ tool: 'set_project_machine_cwd', args: { project_id: 'p1', machine_id: 'm1', cwd: '~/termhub', create_dir: true }, project_id: 'p1', machine_id: 'm1' })],
+    OWNER,
+  );
+  expect(setCwd.summary).toBe('trocar a pasta para `~/termhub` (criando a pasta) no projeto reactivando, no macbook m3');
+});
+
 it('names set_project_machine_cwd by the new folder, in the project and on the machine', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(
@@ -127,7 +144,7 @@ it('names unlink_project_machine plainly without confirm, and says the tabs clos
     [action({ tool: 'unlink_project_machine', args: { project_id: 'p1', machine_id: 'm1', confirm: true }, project_id: 'p1', machine_id: 'm1', class: 'irreversible' })],
     OWNER,
   );
-  expect(withConfirm.summary).toBe('desvincular a máquina e fechar as abas do projeto nela no projeto reactivando, no macbook m3');
+  expect(withConfirm.summary).toBe('desvincular a máquina (fechando as abas do projeto nela, se houver) no projeto reactivando, no macbook m3');
 });
 
 it('says the machine does not exist for a link tool whose machine is gone or foreign, rather than a bare id — the project still resolves', async () => {
@@ -149,7 +166,7 @@ it('says the project does not exist for a link tool whose project is gone or for
     [action({ tool: 'unlink_project_machine', args: { project_id: foreignProject.id, machine_id: 'm1', confirm: true }, project_id: foreignProject.id, machine_id: 'm1', class: 'irreversible' })],
     OWNER,
   );
-  expect(card.summary).toBe('desvincular a máquina e fechar as abas do projeto nela num projeto que não existe mais');
+  expect(card.summary).toBe('desvincular a máquina (fechando as abas do projeto nela, se houver) num projeto que não existe mais');
   expect(card.summary).not.toContain(foreignProject.name);
 });
 

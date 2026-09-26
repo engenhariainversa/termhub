@@ -112,12 +112,12 @@ describe('linkProjectMachine', () => {
     expect(ctx.repos.projectMachines.link).not.toHaveBeenCalled();
   });
 
-  it('reports git_repo false with a note when the folder has no .git', async () => {
+  it('reports git_repo false with a note when the folder has no .git — softened for the worktree/submodule case, where .git is a file browseMachine would not list', async () => {
     ensureDirectory.mockResolvedValue({ path: '/home/u/app', created: false });
     browseMachine.mockResolvedValue({ entries: [{ name: 'src', path: '/home/u/app/src' }] });
     const r = await linkProjectMachine(ctxWith(), { project_id: 'p1', machine_id: 'm1', cwd: '~/app' });
     expect(r.git_repo).toBe(false);
-    expect(r.note).toMatch(/não é um repositório git/);
+    expect(r.note).toBe('Não encontrei uma pasta .git aqui (num worktree ou submódulo o .git é um arquivo, e isso não aparece nesta checagem).');
   });
 
   it('reports git_repo null when the directory listing fails', async () => {
@@ -151,6 +151,17 @@ describe('setProjectMachineCwd', () => {
     expect(ensureDirectory).toHaveBeenCalledWith(machine, '~/app2', false);
     expect(ctx.repos.projectMachines.updateCwd).toHaveBeenCalledWith('p1', 'm1', '/home/u/app2');
     expect(r.cwd).toBe('/home/u/app2');
+  });
+
+  it('throws the same 404 scoped.projectMachine would when the link is gone by the time it writes (unlinked concurrently)', async () => {
+    ensureDirectory.mockResolvedValue({ path: '/home/u/app2', created: false });
+    browseMachine.mockResolvedValue({ entries: [] });
+    const ctx = ctxWith({ projectMachines: { updateCwd: vi.fn(async () => undefined) } });
+    await expect(setProjectMachineCwd(ctx, { project_id: 'p1', machine_id: 'm1', cwd: '~/app2' })).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'NOT_FOUND',
+      message: 'Máquina não vinculada ao projeto',
+    });
   });
 });
 

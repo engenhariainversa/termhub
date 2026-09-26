@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { ProjectRuleError } from '../db/repositories/projects.js';
 import type { Machine, Project, Tab } from '../db/repositories/types.js';
-import { HttpError } from '../lib/errors.js';
+import { HttpError, notFound } from '../lib/errors.js';
 import { browseMachine, ensureDirectory } from '../terminal/machine-fs.js';
 import { killTmuxSession } from '../terminal/machine-exec.js';
 import { publicBus } from '../public/bus.js';
@@ -70,7 +70,9 @@ async function toLinkResult(project: Project, machine: Machine, path: string, cr
     cwd: path,
     created_dir: created,
     git_repo,
-    ...(git_repo === false ? { note: 'A pasta não é um repositório git (não tem .git).' } : {}),
+    ...(git_repo === false
+      ? { note: 'Não encontrei uma pasta .git aqui (num worktree ou submódulo o .git é um arquivo, e isso não aparece nesta checagem).' }
+      : {}),
   };
 }
 
@@ -112,7 +114,10 @@ export async function linkProjectMachine(ctx: ControlContext, input: { project_i
 export async function setProjectMachineCwd(ctx: ControlContext, input: { project_id: string; machine_id: string; cwd: string; create_dir?: boolean }): Promise<LinkResult> {
   const { project, machine } = await ctx.scoped.projectMachine(input.project_id, input.machine_id);
   const dir = await checkedDir(machine, input.cwd, input.create_dir);
-  await ctx.repos.projectMachines.updateCwd(project.id, machine.id, dir.path);
+  // The link found above can be gone by the time we write (unlinked concurrently): match the 404
+  // scoped.projectMachine itself would throw for the same situation, rather than a confusing update-of-nothing.
+  const updated = await ctx.repos.projectMachines.updateCwd(project.id, machine.id, dir.path);
+  if (!updated) throw notFound('Máquina não vinculada ao projeto');
   return toLinkResult(project, machine, dir.path, dir.created);
 }
 

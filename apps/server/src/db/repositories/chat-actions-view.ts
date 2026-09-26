@@ -68,11 +68,11 @@ function verbPhrase(action: ChatAction, task: Task | undefined): string {
     case 'close_tab':
       return 'fechar a aba';
     case 'link_project_machine':
-      return `vincular a pasta \`${asString(args.cwd)}\``;
+      return `vincular a pasta \`${asString(args.cwd)}\`${args.create_dir === true ? ' (criando a pasta)' : ''}`;
     case 'set_project_machine_cwd':
-      return `trocar a pasta para \`${asString(args.cwd)}\``;
+      return `trocar a pasta para \`${asString(args.cwd)}\`${args.create_dir === true ? ' (criando a pasta)' : ''}`;
     case 'unlink_project_machine':
-      return args.confirm === true ? 'desvincular a máquina e fechar as abas do projeto nela' : 'desvincular a máquina';
+      return args.confirm === true ? 'desvincular a máquina (fechando as abas do projeto nela, se houver)' : 'desvincular a máquina';
     case 'start_agent':
       return `iniciar um agente com o prompt "${asString(args.prompt)}"`;
     case 'create_task':
