@@ -17,12 +17,14 @@ describe('mobileDecisionBody', () => {
 
 describe('mobileBatchDecisionBody', () => {
   const ok = (decisions: unknown) => mobileBatchDecisionBody.safeParse({ decisions }).success;
-  it('accepts a deny-only batch and approvals carrying their own proof', () => {
+  it('accepts a deny-only batch, approvals carrying their own proof, and approvals with none (TER-92: the server decides)', () => {
     expect(ok([{ id: 'a1', decision: 'deny' }])).toBe(true);
     expect(ok([{ id: 'a1', decision: 'approve', challenge: 'c', pin_proof: 'p' }, { id: 'a2', decision: 'deny' }])).toBe(true);
+    expect(ok([{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve', challenge: 'c', pin_proof: 'p' }])).toBe(true);
   });
-  it('refuses an approval without proof, approve_tab, repeated ids and an empty batch', () => {
-    expect(ok([{ id: 'a1', decision: 'approve' }])).toBe(false);
+  it('refuses half a proof, approve_tab, repeated ids and an empty batch', () => {
+    expect(ok([{ id: 'a1', decision: 'approve', challenge: 'c' }])).toBe(false);
+    expect(ok([{ id: 'a1', decision: 'approve', pin_proof: 'p' }])).toBe(false);
     expect(ok([{ id: 'a1', decision: 'approve_tab', challenge: 'c', pin_proof: 'p' }])).toBe(false);
     expect(ok([{ id: 'a1', decision: 'deny' }, { id: 'a1', decision: 'deny' }])).toBe(false);
     expect(ok([])).toBe(false);

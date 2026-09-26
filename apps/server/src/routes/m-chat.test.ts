@@ -640,7 +640,7 @@ describe('POST /chat/actions/:id/decision', () => {
 });
 
 describe('POST /chat/actions/decisions (batch)', () => {
-  const rowsOf = (rows: Record<string, { status: string; conversation_id?: string }>) =>
+  const rowsOf = (rows: Record<string, { status: string; conversation_id?: string; class?: string }>) =>
     vi.fn(async (id: string) => (rows[id] ? { ...pendingAction, id, conversation_id: 'c1', ...rows[id] } : undefined));
   const decideById = () => vi.fn(async (id: string, _userId: string, status: string) => ({ ...pendingAction, id, status }));
   const post = (app: ReturnType<typeof build>['app'], decisions: unknown[]) => app.inject({ method: 'POST', url: '/chat/actions/decisions', payload: { decisions } });
@@ -766,6 +766,64 @@ describe('POST /chat/actions/decisions (batch)', () => {
     expect(session.checkPin).not.toHaveBeenCalled();
     expect(decide).toHaveBeenCalledTimes(2);
     expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('TER-92: write approvals without a proof are decided with no challenge and no PIN work', async () => {
+    const decide = decideById();
+    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' }, a3: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve' }, { id: 'a3', decision: 'deny' }]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'approved' }, { id: 'a3', status: 'denied' }], skipped: [] });
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('TER-92: an irreversible approval without a proof is 401 PIN_REQUIRED and decides nothing, not even the write one', async () => {
+    const decide = decideById();
+    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending', class: 'irreversible' }, a3: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve' }, { id: 'a3', decision: 'deny' }]);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'Confirme com o PIN para autorizar esta ação.', code: 'PIN_REQUIRED' });
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+    expect(resumeAfterDecision).not.toHaveBeenCalled();
+  });
+
+  it('TER-92: a read approval without a proof is PIN_REQUIRED too (only write goes without the PIN)', async () => {
+    const { app, decide } = build({ findByIdForUser: rowsOf({ a1: { status: 'pending', class: 'read' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve' }]);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ code: 'PIN_REQUIRED' });
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('TER-92: an irreversible approval with its proof and a write one without decide together, proving only the first', async () => {
+    const decide = decideById();
+    const { app, session } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending', class: 'irreversible' }, a2: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }, { id: 'a2', decision: 'approve' }]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'approved' }] });
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledTimes(1);
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledWith(device, 'ch1', 'a1');
+    expect(session.checkPin).toHaveBeenCalledTimes(1);
+  });
+
+  it('TER-92: a write approval sent with a proof (an older app) still has it checked and counted', async () => {
+    const { app, decide } = build({ checkPin: vi.fn(async () => ({ ok: false, code: 'PIN_INVALID', failures: 1 })), findByIdForUser: rowsOf({ a1: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }]);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ code: 'PIN_INVALID' });
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('half a proof is a 400, and "Permitir sempre" (approve_tab) is never accepted in a batch', async () => {
+    const { app, session, decide } = build({ findByIdForUser: rowsOf({ a1: { status: 'pending' } }) });
+    expect((await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1' }])).statusCode).toBe(400);
+    expect((await post(app, [{ id: 'a1', decision: 'approve_tab', challenge: 'ch1', pin_proof: 'pp1' }])).statusCode).toBe(400);
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
   });
 
   it('mixed conversations are 400 MIXED_CONVERSATIONS before any challenge is consumed', async () => {

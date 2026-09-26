@@ -170,9 +170,9 @@ describe('Conversa', () => {
   });
 
   it('Autorizar approves a write card at once, with no PIN sheet (TER-92)', async () => {
+    serveChat();
     // Spied, not `stubAction`: the store's own `decide` logic (the thing under test) still runs,
     // it just never reaches the real mock server, so the shared fixture stays pending for later tests.
-    serveChat();
     const decide = jest.spyOn(stores.api, 'decide').mockResolvedValueOnce(undefined);
     await render(<ConversationScreen />);
     await fireEvent.press(await screen.findByRole('button', { name: 'Autorizar' }, LOAD));

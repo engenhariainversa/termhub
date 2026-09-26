@@ -292,9 +292,51 @@ it('decideMany of denials only sends one batch with no PIN prompt', async () => 
   expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
 });
 
-it('decideMany with approvals asks the PIN once for them and sends one body carrying their proofs', async () => {
+it('decideMany of write approvals sends one batch with no PIN prompt and no proof (TER-92)', async () => {
   const { chat, store, api } = await setup();
   await openAndConnect(chat, 'p-termhub');
+  const decideMany = jest.spyOn(api, 'decideMany');
+  const challenge = jest.spyOn(api, 'challenge');
+
+  await chat.getState().decideMany([
+    { id: 'a-termhub-1', decision: 'approve' },
+    { id: 'a-termhub-2', decision: 'deny' },
+  ]);
+  expect(decideMany).toHaveBeenCalledTimes(1);
+  expect(decideMany).toHaveBeenCalledWith(expect.anything(), { decisions: [{ id: 'a-termhub-1', decision: 'approve' }, { id: 'a-termhub-2', decision: 'deny' }] });
+  expect(challenge).not.toHaveBeenCalled();
+  expect(store.getState().pinPrompt).toBeNull();
+  expect(slot(chat, 'p-termhub').actions.map((a) => a.status)).toEqual(['approved', 'denied']);
+  expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
+});
+
+it('a PIN_REQUIRED answer to a silent batch opens the PIN sheet for every approval (TER-92)', async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const decideMany = jest.spyOn(api, 'decideMany').mockRejectedValueOnce(new ApiError(401, 'PIN_REQUIRED', 'Confirme com o PIN para autorizar esta ação.'));
+
+  const deciding = chat.getState().decideMany([
+    { id: 'a-termhub-1', decision: 'approve' },
+    { id: 'a-termhub-2', decision: 'approve' },
+  ]);
+  await jest.advanceTimersByTimeAsync(0);
+  expect(store.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', actionIds: ['a-termhub-1', 'a-termhub-2'], decision: 'approve' });
+  await store.getState().resolvePinPrompt(PIN);
+  await deciding;
+  expect(decideMany).toHaveBeenCalledTimes(2);
+  expect(decideMany).toHaveBeenLastCalledWith(expect.anything(), {
+    decisions: [
+      { id: 'a-termhub-1', decision: 'approve', challenge: expect.any(String), pin_proof: expect.any(String) },
+      { id: 'a-termhub-2', decision: 'approve', challenge: expect.any(String), pin_proof: expect.any(String) },
+    ],
+  });
+  expect(slot(chat, 'p-termhub').actions.map((a) => a.status)).toEqual(['approved', 'approved']);
+});
+
+it('decideMany with an irreversible approval asks the PIN once and sends one body carrying the proofs', async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  markIrreversible(chat, 'p-termhub', 'a-termhub-1');
   const decideMany = jest.spyOn(api, 'decideMany');
   const requestPinProofs = jest.spyOn(store.getState(), 'requestPinProofs');
 
@@ -325,6 +367,7 @@ it('decideMany with approvals asks the PIN once for them and sends one body carr
 it('decideMany: a cancelled prompt shows nothing; a 409 says so like decide', async () => {
   const { chat, store, api } = await setup();
   await openAndConnect(chat, 'p-termhub');
+  markIrreversible(chat, 'p-termhub', 'a-termhub-1');
   const decideMany = jest.spyOn(api, 'decideMany');
 
   const deciding = chat.getState().decideMany([

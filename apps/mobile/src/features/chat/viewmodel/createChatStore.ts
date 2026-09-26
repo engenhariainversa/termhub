@@ -392,12 +392,28 @@ export function createChatStore(deps: ChatDeps) {
             const approveIds = decisions.filter((d) => d.decision === 'approve').map((d) => d.id);
             const send = (proofs: Record<string, { challenge: string; pin_proof: string }>) =>
               api.decideMany(session().auth(), {
-                decisions: decisions.map((d) => (d.decision === 'approve' ? { id: d.id, decision: 'approve' as const, ...proofs[d.id]! } : { id: d.id, decision: 'deny' as const })),
+                decisions: decisions.map((d) => (d.decision === 'approve' ? { id: d.id, decision: 'approve' as const, ...proofs[d.id] } : { id: d.id, decision: 'deny' as const })),
               });
+            // Like `decide`: the session store performs the call while its PIN sheet stays open.
+            const withPin = () => session().requestPinProofs(approveIds, send, 'approve');
+            const actions = get().conversations[key]?.actions ?? [];
+            // TER-92, as in `decide`: approvals of `write` cards only go with the unlocked session. One
+            // irreversible card in the batch asks the PIN once, and then every approval carries a proof
+            // (still one PIN entry). The server is the judge: PIN_REQUIRED — or VALIDATION from a server
+            // rolled back to proofs-always — falls back to the sheet.
+            const pinFree = approveIds.every((id) => actions.find((a) => a.id === id)?.class === 'write');
             try {
-              // Like `decide`: the session store performs the call while its PIN sheet stays open.
               if (approveIds.length === 0) await send({});
-              else await session().requestPinProofs(approveIds, send, 'approve');
+              else if (!pinFree) await withPin();
+              else {
+                try {
+                  await send({});
+                } catch (e) {
+                  if (!isApiError(e, 'PIN_REQUIRED') && !isApiError(e, 'VALIDATION')) throw e;
+                  if (gen !== generation) return;
+                  await withPin();
+                }
+              }
               if (gen !== generation) return;
               // The `decision` events confirm them; this only saves a flicker back to "pending".
               patchSlot(key, (slot) => ({

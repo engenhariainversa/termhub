@@ -573,10 +573,16 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
       else pending.push({ action, decision: d.decision });
     });
 
+    // Mirrors the server (TER-92): a `write` approval goes with the session alone, any other class
+    // needs its proof, and a missing one refuses the whole batch before any challenge is spent.
+    const approvals = decisions.filter((d) => d.decision === 'approve' && pending.some((p) => p.action.id === d.id));
+    if (approvals.some((d) => d.decision === 'approve' && d.challenge === undefined && state.actions.get(d.id)!.class !== 'write')) {
+      throw new WireError(401, 'PIN_REQUIRED', 'Confirme com o PIN para autorizar esta ação.');
+    }
     let proven = false;
-    for (const d of decisions) {
-      if (d.decision !== 'approve' || !pending.some((p) => p.action.id === d.id)) continue;
-      checkDecisionProof(state, device, d.id, 'approve', d, now);
+    for (const d of approvals) {
+      if (d.decision !== 'approve' || d.challenge === undefined || d.pin_proof === undefined) continue;
+      checkDecisionProof(state, device, d.id, 'approve', { challenge: d.challenge, pin_proof: d.pin_proof }, now);
       proven = true;
     }
     if (proven) device.pinFailures = 0;

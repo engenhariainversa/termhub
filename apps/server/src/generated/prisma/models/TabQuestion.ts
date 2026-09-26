@@ -999,13 +999,13 @@ export type $TabQuestionPayload<ExtArgs extends runtime.Types.Extensions.Interna
     projectId: string
     conversationId: string
     /**
-     * choice | permission
+     * choice | permission | suggestion
      */
     kind: string
     payload: runtime.JsonValue
     toolUseId: string | null
     /**
-     * open | answered | answered_in_tab | expired | failed
+     * open | answered | answered_in_tab | expired | failed | dismissed
      */
     status: string
     answer: runtime.JsonValue | null

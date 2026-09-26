@@ -234,9 +234,10 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
   });
 
   /**
-   * A grouped confirmation from the phone (spec 2026-09-26 §7). Every approval is proven like a single
-   * one — pending first, then its challenge, then its PIN proof — and all of them before anything is
-   * decided, so a wrong PIN leaves the whole batch pending. Then one `decideMany` and one resumed run,
+   * A grouped confirmation from the phone (spec 2026-09-26 §7). Every approval follows the single
+   * route's rule — pending first, then (unless it is a `write` card sent without one) its challenge and
+   * PIN proof — and all of them before anything is decided, so a wrong or missing PIN leaves the whole
+   * batch pending. Then one `decideMany` and one resumed run,
    * in the background like the single route.
    */
   app.post('/actions/decisions', { config: { action: 'create' } }, async (request, reply) => {
@@ -245,9 +246,17 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     const { pending, skipped: firstSkipped } = await pendingBatch(repos, user.id, decisions.map((d) => d.id));
     const stillPending = new Set(pending.map((p) => p.id));
     const approvals = decisions.filter((d): d is Extract<typeof d, { decision: 'approve' }> => d.decision === 'approve' && stillPending.has(d.id));
-    if (approvals.length > 0) {
+    // TER-92, as in the single route: a `write` card approves with the session alone, any other class
+    // needs its proof. A missing proof refuses the whole batch before any challenge is spent; a proof
+    // that comes anyway (an older app) is checked and counted as before.
+    const classOf = new Map(pending.map((p) => [p.id, p.class]));
+    if (approvals.some((a) => classOf.get(a.id) !== 'write' && (a.challenge === undefined || a.pin_proof === undefined))) {
+      throw new HttpError(401, 'Confirme com o PIN para autorizar esta ação.', 'PIN_REQUIRED');
+    }
+    const proven = approvals.filter((a) => a.challenge !== undefined && a.pin_proof !== undefined);
+    if (proven.length > 0) {
       const device = deviceOf(request);
-      for (const a of approvals) if (!(await proofOk(deps, request, reply, device, a.id, 'approve', a))) return reply;
+      for (const a of proven) if (!(await proofOk(deps, request, reply, device, a.id, 'approve', { challenge: a.challenge!, pin_proof: a.pin_proof! }))) return reply;
     }
     // Only what the first read saw pending reaches `decideMany`: every approval there had its proof
     // checked above, so "no approval without a proof" holds here, not by two reads agreeing.

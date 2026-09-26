@@ -14,19 +14,22 @@ export const mobileDecisionBody = z
   ])
   .refine((b) => b.decision !== 'approve' || (b.challenge === undefined) === (b.pin_proof === undefined), { message: 'challenge e pin_proof vão juntos' });
 
-/** A grouped confirmation from the phone (spec 2026-09-26 §7): every approval carries its own proof,
- * bound to that action and the word `approve`, exactly like a single decision. */
+/** A grouped confirmation from the phone (spec 2026-09-26 §7). Each approval follows the single
+ * decision's rule (TER-92): a `write` card approves with the session alone, an irreversible one
+ * carries its own proof, bound to that action and the word `approve` (the server decides). There is
+ * no `approve_tab` here: "Permitir sempre" is always a single, PIN-proven decision. */
 export const mobileBatchDecisionBody = z.object({
   decisions: z
     .array(
       z.discriminatedUnion('decision', [
         z.object({ id: z.string().min(1).max(64), decision: z.literal('deny') }),
-        z.object({ id: z.string().min(1).max(64), decision: z.literal('approve'), challenge: z.string().min(1).max(128), pin_proof: z.string().min(1).max(128) }),
+        z.object({ id: z.string().min(1).max(64), decision: z.literal('approve'), challenge: proof.challenge.optional(), pin_proof: proof.pin_proof.optional() }),
       ]),
     )
     .min(1)
     .max(20)
-    .refine((d) => new Set(d.map((x) => x.id)).size === d.length, 'Ações repetidas'),
+    .refine((d) => new Set(d.map((x) => x.id)).size === d.length, 'Ações repetidas')
+    .refine((d) => d.every((x) => x.decision !== 'approve' || (x.challenge === undefined) === (x.pin_proof === undefined)), 'challenge e pin_proof vão juntos'),
 });
 
 /** Mirrors the server's `grantable` (apps/server/src/chat/gate.ts), which is the judge: only

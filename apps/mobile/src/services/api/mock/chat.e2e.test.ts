@@ -246,6 +246,24 @@ it('approve on a write card resolves with no proof and broadcasts an approved de
   collected.close();
 });
 
+it('decideMany: write approvals go with no proof (TER-92), one decision event each', async () => {
+  const clock = { value: START };
+  const { api, auth } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+
+  await api.decideMany(auth, { decisions: [{ id: 'a-termhub-1', decision: 'approve' }, { id: 'a-termhub-2', decision: 'deny' }] });
+  const statuses = Object.fromEntries((await api.chat(auth, 'p-termhub')).actions.map((a) => [a.id, a.status]));
+  expect(statuses).toEqual({ 'a-termhub-1': 'approved', 'a-termhub-2': 'denied' });
+  const decisions = collected.events.filter((e): e is Extract<TChatEvent, { type: 'decision' }> => e.type === 'decision');
+  expect(decisions.map((e) => [e.action_id, e.status])).toEqual([
+    ['a-termhub-1', 'approved'],
+    ['a-termhub-2', 'denied'],
+  ]);
+
+  collected.close();
+});
+
 it('decideMany: a wrong proof decides nothing; then one approval proven and one denial decide both, one decision event each', async () => {
   const clock = { value: START };
   const { api, auth, deviceId, secret } = await enrol(clock);
