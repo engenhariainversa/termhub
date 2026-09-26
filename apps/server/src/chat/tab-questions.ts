@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { Repositories } from '../db/repositories/index.js';
-import type { CloseForTabOptions, TabQuestion, TabQuestionCloseStatus } from '../db/repositories/tab-questions.js';
+import type { TabQuestion, TabQuestionCloseStatus } from '../db/repositories/tab-questions.js';
 import { describeTabQuestions, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import type { Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
@@ -41,32 +41,29 @@ export async function publishTabQuestions(repos: Pick<Repositories, 'tabs'>, typ
   return views;
 }
 
-/** Closes the tab's question (if any) and says so. */
-export async function closeTabQuestions(repos: Repositories, tabId: string, status: TabQuestionCloseStatus, opts?: CloseForTabOptions): Promise<TabQuestion[]> {
-  const closed = await repos.tabQuestions.closeForTab(tabId, status, undefined, opts);
+/** Closes the tab's question (if any), ends a permission queue, and says so. */
+export async function closeTabQuestions(repos: Repositories, tabId: string, status: TabQuestionCloseStatus): Promise<TabQuestion[]> {
+  const closed = await repos.tabQuestions.closeForTab(tabId, status);
   await publishTabQuestions(repos, 'tab_question_closed', closed);
   return closed;
 }
 
 /**
  * A tab asked something: the row goes into the project owner's most recently active conversation and
- * the card onto every screen showing it. A project nobody chats in (or with no owner) gets nothing —
- * the question stays in the tab, as before — but whatever the tab had open is still closed: the
- * screen moved on. A permission queued behind an open one opens nothing either (see `open`).
+ * the card onto every screen showing it. A project nobody chats in (or with no owner) gets no card — the
+ * question stays in the tab, as before — but the same `open` runs with no conversation (spec 2026-09-26
+ * §4.1): under the tab's lock, whatever the tab had open still closes, and a permission queue is marked
+ * or kept exactly as with a card. A permission queued behind an open one opens nothing either.
  */
 export async function openTabQuestion(repos: Repositories, tab: Pick<Tab, 'id' | 'project_id'>, input: TabQuestionInput): Promise<TabQuestion | null> {
   // Only the owner's chat: another user's conversation left on the project (a former owner, or an
   // admin's) must not receive the card, which would let them answer a tab they no longer own.
   const owner = (await repos.projects.findById(tab.project_id))?.owner_id;
   const conversation = owner ? await repos.chat.findLatestActiveForProject(tab.project_id, owner) : undefined;
-  if (!conversation) {
-    // A question event, not a closing one: it must not end a permission queue.
-    await closeTabQuestions(repos, tab.id, 'answered_in_tab', { endsQueue: false });
-    return null;
-  }
-  const { question, closed } = await repos.tabQuestions.open({ tab_id: tab.id, project_id: tab.project_id, conversation_id: conversation.id, kind: input.kind, payload: input.payload, tool_use_id: input.tool_use_id });
+  const { question, closed } = await repos.tabQuestions.open({ tab_id: tab.id, project_id: tab.project_id, conversation_id: conversation?.id ?? null, kind: input.kind, payload: input.payload, tool_use_id: input.tool_use_id });
   await publishTabQuestions(repos, 'tab_question_closed', closed);
-  if (question) await publishTabQuestions(repos, 'tab_question', [question]);
+  if (!question) return null;
+  await publishTabQuestions(repos, 'tab_question', [question]);
   return question;
 }
 

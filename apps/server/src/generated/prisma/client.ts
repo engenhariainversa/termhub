@@ -208,6 +208,8 @@ export type ChatGrant = Prisma.ChatGrantModel
  * A question an agent in a tab put to the person — Claude Code's AskUserQuestion (`choice`) or a
  * permission prompt (`permission`) — shown as a card in the project's chat (spec 2026-09-25 §5).
  * `payload` is the normalised question, never a screen; `answer` is what the chat answered.
+ * A partial index on `tab_id` where `error_code = 'QUEUED'` (the permission queue's per-event check in
+ * `closeForTab`) lives only in the migration `20260926120000_tab_questions_indexes`: Prisma cannot express it.
  */
 export type TabQuestion = Prisma.TabQuestionModel
 /**
