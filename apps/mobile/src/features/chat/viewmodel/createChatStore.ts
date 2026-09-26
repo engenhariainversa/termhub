@@ -28,7 +28,7 @@ export type ChatDecision = 'approve' | 'deny' | 'approve_tab';
 
 /** What the chat store needs from the session store (read through a getter, so tests can inject
  * a session store built over the same mock transport). */
-export type SessionApi = Pick<SessionState, 'auth' | 'handleApiError' | 'requestPinProof' | 'phase'>;
+export type SessionApi = Pick<SessionState, 'auth' | 'handleApiError' | 'requestPinProof' | 'requestPinProofs' | 'phase'>;
 
 export interface ChatDeps {
   api: MobileApi;
@@ -81,6 +81,9 @@ export interface ChatState {
   /** Resolves `true` once the server accepted the message (`202`). */
   send(text: string): Promise<boolean>;
   decide(actionId: string, decision: ChatDecision): Promise<void>;
+  /** A grouped confirmation of the open conversation: one request, and one PIN entry for all its
+   * approvals (none for a batch of denials). `decidingId` holds the first id while it is in flight. */
+  decideMany(decisions: { id: string; decision: 'approve' | 'deny' }[]): Promise<void>;
   /** "Revogar" a trusted tab of the open conversation. A grant already revoked elsewhere (409) is
    * dropped quietly: it is gone either way. */
   revokeGrant(grantId: string): Promise<void>;
@@ -372,6 +375,55 @@ export function createChatStore(deps: ChatDeps) {
               if (isApiError(e) && e.status === 409) {
                 set({ error: CHAT_MSG.alreadyDecided });
                 void reread(key); // show how it was decided
+              } else {
+                fail(gen, e);
+              }
+            } finally {
+              if (gen === generation) set({ decidingId: null });
+            }
+          },
+
+          async decideMany(decisions) {
+            const projectId = get().activeProject;
+            if (projectId === undefined || get().decidingId !== null || decisions.length === 0) return;
+            const key = keyOf(projectId);
+            const gen = generation;
+            set({ decidingId: decisions[0]!.id, error: null });
+            const approveIds = decisions.filter((d) => d.decision === 'approve').map((d) => d.id);
+            const send = (proofs: Record<string, { challenge: string; pin_proof: string }>) =>
+              api.decideMany(session().auth(), {
+                decisions: decisions.map((d) => (d.decision === 'approve' ? { id: d.id, decision: 'approve' as const, ...proofs[d.id] } : { id: d.id, decision: 'deny' as const })),
+              });
+            // Like `decide`: the session store performs the call while its PIN sheet stays open.
+            const withPin = () => session().requestPinProofs(approveIds, send, 'approve');
+            const actions = get().conversations[key]?.actions ?? [];
+            // TER-92, as in `decide`: approvals of `write` cards only go with the unlocked session. One
+            // irreversible card in the batch asks the PIN once, and then every approval carries a proof
+            // (still one PIN entry). The server is the judge: PIN_REQUIRED — or VALIDATION from a server
+            // rolled back to proofs-always — falls back to the sheet.
+            const pinFree = approveIds.every((id) => actions.find((a) => a.id === id)?.class === 'write');
+            try {
+              if (approveIds.length === 0) await send({});
+              else if (!pinFree) await withPin();
+              else {
+                try {
+                  await send({});
+                } catch (e) {
+                  if (!isApiError(e, 'PIN_REQUIRED') && !isApiError(e, 'VALIDATION')) throw e;
+                  if (gen !== generation) return;
+                  await withPin();
+                }
+              }
+              if (gen !== generation) return;
+              // The `decision` events confirm them; this only saves a flicker back to "pending".
+              patchSlot(key, (slot) => ({
+                actions: decisions.reduce((actions, d) => settlePending(actions, d.id, d.decision === 'deny' ? 'denied' : 'approved'), slot.actions),
+              }));
+            } catch (e) {
+              if (gen !== generation || isCancelled(e)) return;
+              if (isApiError(e) && e.status === 409) {
+                set({ error: CHAT_MSG.alreadyDecided });
+                void reread(key); // show how they were decided
               } else {
                 fail(gen, e);
               }

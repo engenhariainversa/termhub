@@ -79,4 +79,10 @@ describe('PinPromptSheet', () => {
     });
     expect(screen.getByText('Autorizar esta ação')).toBeTruthy();
   });
+
+  it('counts the actions of a batch: "Autorizar 2 ações"', async () => {
+    useSessionStore.setState({ pinPrompt: { actionId: 'a1', actionIds: ['a1', 'a2'], decision: 'approve' } });
+    await render(<PinPromptSheet />);
+    expect(screen.getByText('Autorizar 2 ações')).toBeTruthy();
+  });
 });

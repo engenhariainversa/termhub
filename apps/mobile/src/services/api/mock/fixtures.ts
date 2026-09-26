@@ -1,6 +1,6 @@
 // Seed data for a fresh `MockState` (design spec §4.2 "Chat"): three projects and the
-// account-wide chat, each with a short pt-BR thread dated within the last two days, and the one
-// pending confirmation (`a-termhub-1`) the plan fixes in place.
+// account-wide chat, each with a short pt-BR thread dated within the last two days, and the two
+// pending confirmations of termhub (`a-termhub-1`, the one the plan fixes in place, and `a-termhub-2`).
 import { randomId } from '../../crypto/random';
 import type { MockAction, MockConversation, MockMessage, MockNotification, MockProject, MockState } from './state';
 
@@ -98,6 +98,22 @@ export function seedFixtures(state: MockState, now: number): void {
     created_at: new Date(now - 15 * 60_000).toISOString(),
   };
   state.actions.set(action.id, action);
+  // A second pending action in the same conversation, so a grouped confirmation has two cards.
+  const second: MockAction = {
+    id: 'a-termhub-2',
+    conversation_id: 'c-termhub',
+    tool: 'move_task',
+    args: { task_id: 'task-login', status: 'doing' },
+    class: 'write',
+    status: 'pending',
+    machine_id: null,
+    project_id: 'p-termhub',
+    tab_id: null,
+    grant_id: null,
+    summary: 'mover a tarefa TER-12 "Revisar o login" do projeto termhub',
+    created_at: new Date(now - 14 * 60_000).toISOString(),
+  };
+  state.actions.set(second.id, second);
 
   // The confirmation notification this pre-existing pending action would have produced, so the
   // Notificações tab is not empty on first boot either.

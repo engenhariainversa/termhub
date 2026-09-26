@@ -95,20 +95,26 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
   // An in-memory stand-in for the two chatActions reads/writes ChatService now uses, real enough to
   // exercise the queue: findNextToInject only ever sees a decided (approved/denied) row nobody has
   // marked injected, oldest decided_at first, exactly like the repository's own ordering.
+  // `listToInject` is the same read without the `[0]`, capped like the repository's `take`.
   const actionsStore: ChatAction[] = opts.chatActions ? opts.chatActions.map((a) => ({ ...a })) : [];
+  const toInjectOf = (conversationId: string, excludeIds: string[]) =>
+    actionsStore
+      .filter(
+        (a) => a.conversation_id === conversationId && (a.status === 'approved' || a.status === 'denied') && a.injected_at === null && a.grant_id === null && !excludeIds.includes(a.id),
+      )
+      .sort((a, b) => Date.parse(a.decided_at ?? a.created_at) - Date.parse(b.decided_at ?? b.created_at));
+  // Like the repository: only rows still uninjected count, and a short count marks nothing (all or
+  // none). A row the store was not seeded with stands for one just decided, so it counts.
+  const markRows = (ids: string[]) => {
+    const fresh = ids.filter((id) => (actionsStore.find((r) => r.id === id)?.injected_at ?? null) === null);
+    if (fresh.length === ids.length) for (const row of actionsStore) if (ids.includes(row.id)) row.injected_at = new Date().toISOString();
+    return fresh.length;
+  };
   const chatActions = {
-    markInjected: vi.fn(async (id: string) => {
-      const row = actionsStore.find((a) => a.id === id);
-      if (row) row.injected_at = new Date().toISOString();
-    }),
-    findNextToInject: vi.fn(async (conversationId: string, excludeIds: string[] = []) => {
-      const open = actionsStore
-        .filter(
-          (a) => a.conversation_id === conversationId && (a.status === 'approved' || a.status === 'denied') && a.injected_at === null && !excludeIds.includes(a.id),
-        )
-        .sort((a, b) => Date.parse(a.decided_at ?? a.created_at) - Date.parse(b.decided_at ?? b.created_at));
-      return open[0];
-    }),
+    markInjectedMany: vi.fn(async (ids: string[]) => markRows(ids)),
+    findByIdForUser: vi.fn(async (id: string, userId: string) => (userId === user.id ? actionsStore.find((r) => r.id === id) : undefined)),
+    findNextToInject: vi.fn(async (conversationId: string, excludeIds: string[] = []) => toInjectOf(conversationId, excludeIds)[0]),
+    listToInject: vi.fn(async (conversationId: string, excludeIds: string[] = [], limit = 20) => toInjectOf(conversationId, excludeIds).slice(0, limit)),
     expireOpenForConversation: vi.fn(async () => 0),
     countPendingByConversation: vi.fn(async () => new Map([['c_p1', 2]])),
   };
@@ -447,7 +453,7 @@ it('resumeAfterDecision resumes the same session with a fixed authorization sent
   expect(messages.map((m) => m.role)).toEqual(['user', 'assistant']);
   // The ordinary (unblocked) path marks the row injected itself, through the same `beforeRun` hook
   // `drainNextDecision` uses — the two paths cannot diverge (fix round 2).
-  expect(chatActions.markInjected).toHaveBeenCalledWith('a1');
+  expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1']);
 });
 
 it('resumeAfterDecision sends a fixed refusal sentence for a denied action, naming the tool and target', async () => {
@@ -549,7 +555,7 @@ it('resumeAfterDecision answers busy when a run is already in flight, without ma
 
   const first = service.send(user, 'primeira'); // holds the conversation's lock
   await expect(service.resumeAfterDecision(user, action())).rejects.toMatchObject({ statusCode: 409, code: 'CHAT_BUSY' });
-  expect(chatActions.markInjected).not.toHaveBeenCalled();
+  expect(chatActions.markInjectedMany).not.toHaveBeenCalled();
   expect(runner.run).toHaveBeenCalledTimes(1); // only the first run's own call — nothing typed for the decision
 
   release();
@@ -567,7 +573,7 @@ it('injects a decision left queued by a busy run exactly once, when that run fin
   await service.send(user, 'mensagem original'); // its completion schedules the drain, without waiting for it
 
   await vi.waitFor(() => expect(runner.run).toHaveBeenCalledTimes(2));
-  expect(chatActions.markInjected).toHaveBeenCalledWith('a1');
+  expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1']);
   const userTexts = messages.filter((m) => m.role === 'user').map((m) => m.text);
   expect(userTexts).toEqual(['mensagem original', expect.stringMatching(/^O usuário autorizou:.*send_input/s)]);
 
@@ -576,7 +582,7 @@ it('injects a decision left queued by a busy run exactly once, when that run fin
   await service.send(user, 'outra mensagem');
   await settled();
   expect(runner.run).toHaveBeenCalledTimes(3); // one more call, not two — nothing left to drain
-  expect(chatActions.markInjected).toHaveBeenCalledTimes(1);
+  expect(chatActions.markInjectedMany).toHaveBeenCalledTimes(1);
 });
 
 it('returns the finished run without waiting for the queued decision it hands over to', async () => {
@@ -593,7 +599,7 @@ it('returns the finished run without waiting for the queued decision it hands ov
   const answer = await service.send(user, 'mensagem original');
 
   expect(answer.text).toBe('resposta original'); // answered while the injected run is still streaming
-  await vi.waitFor(() => expect(chatActions.markInjected).toHaveBeenCalledWith('a1'));
+  await vi.waitFor(() => expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1']));
   expect(runner.run).toHaveBeenCalledTimes(2);
   expect(messages.at(-1)!.text).toBe(''); // the injected run's answer is still empty: it is still held
   release();
@@ -609,13 +615,13 @@ it('stops draining a decision whose injection cannot even be marked, instead of 
   const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => void logged.push(args));
   try {
     const { service, runner, chatActions } = build([delta('resposta original'), done()], { chatActions: [action({ id: 'a1' })] });
-    chatActions.markInjected.mockRejectedValue(new Error('connection terminated'));
+    chatActions.markInjectedMany.mockRejectedValue(new Error('connection terminated'));
 
     await service.send(user, 'mensagem original');
-    await vi.waitFor(() => expect(chatActions.markInjected).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(chatActions.markInjectedMany).toHaveBeenCalledTimes(1));
     await settled();
 
-    expect(chatActions.markInjected).toHaveBeenCalledTimes(1); // tried once, never again
+    expect(chatActions.markInjectedMany).toHaveBeenCalledTimes(1); // tried once, never again
     expect(runner.run).toHaveBeenCalledTimes(1); // and the injected run never started
     // It is not silent, and the driver's own message ("connection terminated") is not what is logged:
     // a rejected write carries the rejected data, so only the failure's label ever is.
@@ -645,7 +651,7 @@ it('leaves a metadata-only trace when the drain dies, and still swallows the fai
 
     expect(answer.text).toBe('resposta original'); // the request that scheduled the drain is unaffected
     await vi.waitFor(() => expect(logged).toHaveLength(1));
-    expect(chatActions.markInjected).toHaveBeenCalledWith('a1'); // marked, then lost: exactly the case
+    expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1']); // marked, then lost: exactly the case
     expect(logged[0][0]).toMatch(/re-injected/i);
     expect(logged[0][1]).toEqual({ conversation_id: 'c1', action_id: 'a1', error: 'CONCIERGE_DISABLED' });
     // The whole trace, checked as one string: no proposal, no injected sentence, no prompt.
@@ -658,23 +664,174 @@ it('leaves a metadata-only trace when the drain dies, and still swallows the fai
   }
 });
 
-it('drains two decisions queued behind one run, one per completion, oldest first', async () => {
+it('drains two decisions queued behind one run in a single run, oldest first, both marked at once', async () => {
   const first = action({ id: 'a1', tool: 'send_input', tab_id: 't1', decided_at: '2026-09-21T12:00:00.000Z' });
-  const second = action({ id: 'a2', tool: 'close_tab', tab_id: 't2', decided_at: '2026-09-21T12:01:00.000Z' });
+  const second = action({ id: 'a2', tool: 'close_tab', tab_id: 't2', status: 'denied', decided_at: '2026-09-21T12:01:00.000Z' });
   const { service, runner, messages, chatActions } = build([], { chatActions: [second, first] }); // seeded out of order: the drain must still go by decided_at
   vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { yield delta('r0'); yield done(); })());
   vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { yield delta('r1'); yield done(); })());
-  vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { yield delta('r2'); yield done(); })());
 
   await service.send(user, 'mensagem original');
 
-  await vi.waitFor(() => expect(runner.run).toHaveBeenCalledTimes(3));
+  await vi.waitFor(() => expect(runner.run).toHaveBeenCalledTimes(2));
+  await settled();
+  expect(runner.run).toHaveBeenCalledTimes(2); // one injected run for both, and nothing left after it
   const userTexts = messages.filter((m) => m.role === 'user').map((m) => m.text);
-  expect(userTexts[0]).toBe('mensagem original');
-  expect(userTexts[1]).toContain('send_input'); // a1: decided first
-  expect(userTexts[2]).toContain('close_tab'); // a2: decided second
-  expect(chatActions.markInjected).toHaveBeenNthCalledWith(1, 'a1');
-  expect(chatActions.markInjected).toHaveBeenNthCalledWith(2, 'a2');
+  expect(userTexts).toHaveLength(2);
+  expect(userTexts[1]).toMatch(/^O usuário decidiu 2 ações pendentes de uma vez\./);
+  expect(userTexts[1].indexOf('Autorizou: send_input em aba t1')).toBeLessThan(userTexts[1].indexOf('Recusou: close_tab em aba t2'));
+  expect(chatActions.listToInject).toHaveBeenCalledWith('c1', ['a1']);
+  expect(chatActions.markInjectedMany).toHaveBeenCalledTimes(1);
+  expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1', 'a2']);
+});
+
+it('never retries any decision of a batch whose marking failed', async () => {
+  const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  try {
+    const first = action({ id: 'a1', decided_at: '2026-09-21T12:00:00.000Z' });
+    const second = action({ id: 'a2', status: 'denied', decided_at: '2026-09-21T12:01:00.000Z' });
+    const { service, runner, chatActions } = build([delta('ok'), done()], { chatActions: [first, second] });
+    chatActions.markInjectedMany.mockRejectedValue(new Error('connection terminated'));
+
+    await service.send(user, 'mensagem original');
+    await vi.waitFor(() => expect(chatActions.markInjectedMany).toHaveBeenCalledTimes(1));
+    await settled();
+    await service.send(user, 'outra mensagem'); // its completion drains again: both ids are remembered
+    await settled();
+
+    expect(chatActions.markInjectedMany).toHaveBeenCalledTimes(1);
+    expect(chatActions.findNextToInject).toHaveBeenLastCalledWith('c1', ['a1', 'a2']);
+    expect(runner.run).toHaveBeenCalledTimes(2); // the two typed messages, never an injected run
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+it('resumeAfterDecision starts no run when the marking comes back short: nothing is sent', async () => {
+  // Another run carried one of these decisions between the read and the marking: at most once wins.
+  const { service, runner, messages, chatActions } = build([delta('feito'), done()]);
+  chatActions.markInjectedMany.mockResolvedValueOnce(0);
+
+  const result = await service.resumeAfterDecision(user, action());
+  await settled();
+
+  expect(result).toBeUndefined();
+  expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1']);
+  expect(runner.run).not.toHaveBeenCalled();
+  expect(messages).toEqual([]);
+});
+
+it('resumeAfterDecision of an action already injected, with nothing else waiting, starts no run', async () => {
+  // The row as the route decided it says not injected; the re-read says a drain already carried it.
+  const { service, runner, messages, chatActions } = build([delta('feito'), done()], { chatActions: [action({ injected_at: '2026-09-21T12:00:01.000Z' })] });
+
+  const result = await service.resumeAfterDecision(user, action());
+  await settled();
+
+  expect(result).toBeUndefined();
+  expect(chatActions.markInjectedMany).not.toHaveBeenCalled();
+  expect(runner.run).not.toHaveBeenCalled();
+  expect(messages).toEqual([]);
+});
+
+it('resumeAfterDecision of an action already injected carries only the others still waiting', async () => {
+  const other = action({ id: 'a2', status: 'denied', tool: 'close_tab', tab_id: 't2', args: { tab_id: 't2' } });
+  const { service, conversation, messages, chatActions } = build([delta('ok'), done()], { chatActions: [action({ injected_at: '2026-09-21T12:00:01.000Z' }), other] });
+  conversation.cli_session_id = '3f1e9b1e-0000-4000-8000-000000000001';
+
+  await service.resumeAfterDecision(user, action());
+
+  expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a2']);
+  expect(messages[0].text).toMatch(/^O usuário recusou:/);
+  expect(messages[0].text).toContain('close_tab');
+});
+
+it('a drain whose marking comes back short starts no run and does not blacklist the batch', async () => {
+  const logged: unknown[][] = [];
+  const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => void logged.push(args));
+  try {
+    const { service, runner, messages, chatActions } = build([], { chatActions: [action({ id: 'a1' })] });
+    vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { yield delta('r0'); yield done(); })());
+    vi.mocked(runner.run).mockImplementationOnce(() => (async function* () { yield delta('r1'); yield done(); })());
+    chatActions.markInjectedMany.mockResolvedValueOnce(0);
+
+    await service.send(user, 'mensagem original');
+    // The short drain sent nothing; the drain its released lock schedules finds a1 still uninjected
+    // (nothing was marked) and carries it — so it was never remembered as unmarkable.
+    await vi.waitFor(() => expect(runner.run).toHaveBeenCalledTimes(2));
+    await settled();
+
+    expect(chatActions.markInjectedMany).toHaveBeenCalledTimes(2);
+    expect(chatActions.findNextToInject).not.toHaveBeenCalledWith('c1', ['a1']);
+    expect(messages.filter((m) => m.role === 'user')).toHaveLength(2);
+    expect(logged).toEqual([]);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+it('resumeAfterDecision keeps the single-decision sentence exactly when nothing else is waiting', async () => {
+  const { service, conversation, messages, chatActions } = build([delta('feito'), done()]);
+  conversation.cli_session_id = '3f1e9b1e-0000-4000-8000-000000000001';
+
+  await service.resumeAfterDecision(user, action());
+
+  expect(messages[0].text).toBe('O usuário autorizou: send_input em aba t1. Siga com essa ação.');
+  expect(chatActions.listToInject).toHaveBeenCalledWith('c1', ['a1']);
+  expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1']);
+});
+
+it('resumeAfterDecision carries every other decided action in the same run, oldest decision first', async () => {
+  const waiting = [
+    action({ id: 'a3', tool: 'move_task', tab_id: null, project_id: 'p1', status: 'denied', args: { task_id: 'k1', column: 'done' }, decided_at: '2026-09-21T11:58:00.000Z' }),
+    action({ id: 'a2', tool: 'send_input', tab_id: 't2', args: { tab_id: 't2', text: 'sim' }, decided_at: '2026-09-21T11:57:00.000Z' }),
+  ];
+  const { service, runner, conversation, messages, chatActions } = build([delta('feito'), done()], { chatActions: waiting });
+  conversation.cli_session_id = '3f1e9b1e-0000-4000-8000-000000000001';
+
+  await service.resumeAfterDecision(user, action());
+  await settled();
+
+  expect(runner.run).toHaveBeenCalledTimes(1);
+  expect(messages[0].text).toBe(
+    'O usuário decidiu 3 ações pendentes de uma vez.\n' +
+      '- Autorizou: send_input em aba t1.\n' +
+      '- Autorizou: send_input em aba t2.\n' +
+      '- Recusou: move_task em projeto p1.\n' +
+      'Siga com as autorizadas, refazendo cada chamada com os mesmos argumentos; não faça as recusadas e explique ao usuário o que ficou sem fazer.',
+  );
+  expect(chatActions.listToInject).toHaveBeenCalledWith('c1', ['a1']);
+  expect(chatActions.markInjectedMany).toHaveBeenCalledTimes(1);
+  expect(chatActions.markInjectedMany).toHaveBeenCalledWith(['a1', 'a2', 'a3']);
+});
+
+it('resumeAfterDecision spells out every approved call of a batch on a fresh session, and never a refused one', async () => {
+  const waiting = [
+    action({ id: 'a2', tool: 'send_input', tab_id: 't2', args: { tab_id: 't2', text: 'sim' }, decided_at: '2026-09-21T12:01:00.000Z' }),
+    action({ id: 'a3', tool: 'close_tab', tab_id: 't3', status: 'denied', args: { tab_id: 't3' }, decided_at: '2026-09-21T12:02:00.000Z' }),
+  ];
+  const { service, messages } = build([delta('feito'), done()], { chatActions: waiting });
+
+  await service.resumeAfterDecision(user, action());
+
+  const [head, l1, l2, l3] = messages[0].text.split('\n');
+  expect(head).toMatch(/^O usuário decidiu 3 ações pendentes de uma vez\. A sessão de trabalho anterior não está mais disponível/);
+  expect(l1).toContain('Refaça exatamente esta chamada, com estes argumentos e nenhuma alteração: {"tab_id":"t1","text":"npm test"}.');
+  expect(l1).toContain('digitar `npm test` na aba Terminal 1 do projeto app, no jarvis');
+  expect(l2).toContain('Refaça exatamente esta chamada, com estes argumentos e nenhuma alteração: {"tab_id":"t2","text":"sim"}.');
+  expect(l3).toBe('- Recusou: close_tab em aba t3.');
+});
+
+it('resumeAfterDecision appends the grant note once when any approval of a batch trusted its tab', async () => {
+  const waiting = [action({ id: 'a2', tab_id: 't2', args: { tab_id: 't2', text: 'sim' }, decided_at: '2026-09-21T12:01:00.000Z' })];
+  const { service, conversation, messages, repos } = build([delta('feito'), done()], { chatActions: waiting });
+  conversation.cli_session_id = '3f1e9b1e-0000-4000-8000-000000000001';
+  vi.mocked(repos.chatGrants.findActiveBySourceAction).mockImplementation(async (_c: string, id: string) => (id === 'a2' ? ({ id: 'g1' } as never) : undefined));
+
+  await service.resumeAfterDecision(user, action());
+
+  expect(messages[0].text.split('rodam sem pedir confirmação')).toHaveLength(2);
+  expect(messages[0].text.endsWith('nem para texto com caracteres de controle.')).toBe(true);
 });
 
 const answeredQuestion = (): TabQuestion => ({

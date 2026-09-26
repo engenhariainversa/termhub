@@ -361,6 +361,50 @@ it("requestPinProof(id, perform, 'approve_tab') asks for approve_tab and signs t
   expect(seen[0]!.pin_proof).not.toBe(decisionProof(secret, seen[0]!.challenge, 'a1', 'approve'));
 });
 
+it('requestPinProofs asks the PIN once, then signs one decision challenge per action and performs them together', async () => {
+  const ctx = setup();
+  const secret = fromB64url(await enrol(ctx));
+  const { store } = ctx;
+  const challenge = jest.spyOn(ctx.api, 'challenge');
+  const seen: Record<string, Proof>[] = [];
+  const perform = jest.fn(async (proofs: Record<string, Proof>) => {
+    expect(store.getState()).toMatchObject({ pinPrompt: { actionIds: ['a1', 'a2'] }, busy: true });
+    seen.push(proofs);
+  });
+
+  const pending = store.getState().requestPinProofs(['a1', 'a2'], perform);
+  expect(store.getState().pinPrompt).toEqual({ actionId: 'a1', actionIds: ['a1', 'a2'], decision: 'approve' });
+  await store.getState().resolvePinPrompt(PIN);
+  await pending;
+  expect(challenge).toHaveBeenCalledTimes(2);
+  expect(challenge).toHaveBeenNthCalledWith(1, { device_id: store.getState().deviceId, purpose: 'decision', action_id: 'a1' });
+  expect(challenge).toHaveBeenNthCalledWith(2, { device_id: store.getState().deviceId, purpose: 'decision', action_id: 'a2' });
+  expect(perform).toHaveBeenCalledTimes(1);
+  expect(Object.keys(seen[0]!)).toEqual(['a1', 'a2']);
+  for (const id of ['a1', 'a2']) {
+    const p = seen[0]![id]!;
+    expect(p.pin_proof).toBe(b64url(hmac(sha256, secret, utf8(decisionProofMessage(p.challenge, id, 'approve')))));
+  }
+  expect(seen[0]!.a1!.challenge).not.toBe(seen[0]!.a2!.challenge);
+  expect(store.getState()).toMatchObject({ pinPrompt: null, busy: false, error: null });
+});
+
+it('requestPinProofs: a PIN_INVALID from perform keeps the batch prompt open; the next PIN goes through', async () => {
+  const ctx = setup();
+  await enrol(ctx);
+  const { store } = ctx;
+  const perform = jest.fn(noop).mockRejectedValueOnce(new ApiError(401, 'PIN_INVALID', 'x', undefined, 2));
+  const pending = store.getState().requestPinProofs(['a1', 'a2'], perform);
+
+  await store.getState().resolvePinPrompt('000000');
+  expect(store.getState()).toMatchObject({ phase: 'unlocked', pinPrompt: { actionIds: ['a1', 'a2'] }, busy: false, error: 'PIN incorreto.', attemptsLeft: 2 });
+
+  await store.getState().resolvePinPrompt(PIN);
+  await pending;
+  expect(perform).toHaveBeenCalledTimes(2);
+  expect(store.getState()).toMatchObject({ pinPrompt: null, busy: false, error: null, attemptsLeft: null });
+});
+
 it('a PIN_INVALID from perform keeps the prompt open with the error and attempts left; the next PIN goes through', async () => {
   const ctx = setup();
   await enrol(ctx);

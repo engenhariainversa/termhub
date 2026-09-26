@@ -292,6 +292,8 @@ it('asks instead of acting, and says so in a way the model can act on', async ()
   const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'npm test' });
   expect(resultOf(res).isError).toBe(true);
   expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  // TER-94: independent siblings are proposed in the same turn, so they land on one confirmation.
+  expect(textOf(res)).toContain('proponha todas agora, nesta mesma resposta');
   expect(actions.insertPending).toHaveBeenCalledTimes(1);
   expect(typed).toEqual([]); // nothing was typed
   expect(actions.rows[0]).toMatchObject({ status: 'pending', tool: 'send_input', class: 'write', tab_id: 't1', args: { tab_id: 't1', text: 'npm test' } });

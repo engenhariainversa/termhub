@@ -42,7 +42,7 @@ describe('Chats', () => {
     expect(screen.getByText('Chat geral')).toBeTruthy();
     expect(screen.getByText('opapingou')).toBeTruthy();
     expect(screen.getByText('reactivando')).toBeTruthy();
-    expect(screen.getByLabelText('1 confirmação pendente')).toBeTruthy();
+    expect(screen.getByLabelText('2 confirmações pendentes')).toBeTruthy();
     expect(screen.queryByText('respondendo…')).toBeNull();
 
     // The mock's own busy window closes within a tick; set it directly.

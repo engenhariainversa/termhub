@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import type { ChatAction } from './chat-actions.js';
-import type { ChatGrant } from './chat-grants.js';
-import { describeActions, describeGrants } from './chat-actions-view.js';
+import type { ChatGrant, ChatGrantWithConversation } from './chat-grants.js';
+import { describeActions, describeGrantList, describeGrants, grantState } from './chat-actions-view.js';
 
 const OWNER = 'u1';
 const OTHER_OWNER = 'u2';
@@ -320,4 +320,53 @@ it('describeGrants batches: one lookup for the whole list, deduped, and none at 
   const repos2 = fakeRepos();
   await describeGrants(repos2, [], OWNER);
   expect(repos2.tabs.findByIdsForOwner).not.toHaveBeenCalled();
+});
+
+const NOW = new Date('2026-09-25T12:00:00.000Z');
+const listed = (over: Partial<ChatGrantWithConversation>): ChatGrantWithConversation => ({ ...grant({}), conversation_project_id: null, conversation_archived: false, ...over });
+
+it('grantState: active, expired, revoked by a person, ended by "Nova conversa"', () => {
+  expect(grantState(grant({}), NOW)).toBe('active');
+  expect(grantState(grant({ expires_at: '2026-09-25T11:00:00.000Z' }), NOW)).toBe('expired');
+  expect(grantState(grant({ revoked_at: '2026-09-25T11:00:00.000Z', revoked_by: OWNER }), NOW)).toBe('revoked');
+  expect(grantState(grant({ revoked_at: '2026-09-25T11:00:00.000Z', revoked_by: null }), NOW)).toBe('ended');
+});
+
+it('grantState: a grant that expired before a reset or a re-grant revoked it reads expired', () => {
+  expect(grantState(grant({ expires_at: '2026-09-25T09:00:00.000Z', revoked_at: '2026-09-25T11:00:00.000Z', revoked_by: null }), NOW)).toBe('expired');
+  expect(grantState(grant({ expires_at: '2026-09-25T09:00:00.000Z', revoked_at: '2026-09-25T11:00:00.000Z', revoked_by: OWNER }), NOW)).toBe('expired');
+});
+
+it('describeGrantList names the tab, its project and the origin conversation, with state and ended_at', async () => {
+  const repos = fakeRepos();
+  const [active, revoked, expiredThenReset] = await describeGrantList(
+    repos,
+    [
+      listed({ id: 'g1', tab_id: tab.id, conversation_project_id: project.id }),
+      listed({ id: 'g2', tab_id: tab.id, revoked_at: '2026-09-25T11:00:00.000Z', revoked_by: OWNER, conversation_archived: true }),
+      listed({ id: 'g3', tab_id: foreignTab.id, expires_at: '2026-09-25T09:00:00.000Z', revoked_at: '2026-09-25T11:00:00.000Z', revoked_by: null }),
+    ],
+    OWNER,
+    NOW,
+  );
+  expect(active).toEqual({
+    id: 'g1', tab_id: tab.id, tool: 'send_input', source_action_id: 'a1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z',
+    tab_name: tab.name, project_id: project.id, project_name: project.name, conversation_id: 'c1', conversation_project_name: project.name,
+    conversation_archived: false, state: 'active', ended_at: null,
+  });
+  expect(revoked).toMatchObject({ state: 'revoked', ended_at: '2026-09-25T11:00:00.000Z', conversation_project_name: null, conversation_archived: true });
+  expect(expiredThenReset).toMatchObject({ state: 'expired', ended_at: '2026-09-25T09:00:00.000Z', tab_name: null, project_id: null, project_name: null });
+});
+
+it('describeGrantList batches one lookup per kind, owner-scoped, and none for an empty list', async () => {
+  const repos = fakeRepos();
+  await describeGrantList(repos, [listed({ id: 'g1', tab_id: tab.id, conversation_project_id: project.id }), listed({ id: 'g2', tab_id: tab.id })], OWNER, NOW);
+  expect(repos.tabs.findByIdsForOwner).toHaveBeenCalledTimes(1);
+  expect(repos.tabs.findByIdsForOwner).toHaveBeenCalledWith([tab.id], OWNER);
+  expect(repos.projects.findByIdsForOwner).toHaveBeenCalledTimes(1);
+  expect(repos.projects.findByIdsForOwner).toHaveBeenCalledWith([project.id], OWNER);
+  const empty = fakeRepos();
+  expect(await describeGrantList(empty, [], OWNER, NOW)).toEqual([]);
+  expect(empty.tabs.findByIdsForOwner).not.toHaveBeenCalled();
+  expect(empty.projects.findByIdsForOwner).not.toHaveBeenCalled();
 });

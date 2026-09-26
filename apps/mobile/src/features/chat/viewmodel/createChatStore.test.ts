@@ -60,7 +60,7 @@ it('loadProjects fills the three projects', async () => {
   await chat.getState().loadProjects();
   const { projects, loadingProjects } = chat.getState();
   expect(projects.map((p) => p.id).sort()).toEqual(['p-opapingou', 'p-reactivando', 'p-termhub']);
-  expect(projects.find((p) => p.id === 'p-termhub')!.pending_confirmations).toBe(1);
+  expect(projects.find((p) => p.id === 'p-termhub')!.pending_confirmations).toBe(2);
   expect(loadingProjects).toBe(false);
 });
 
@@ -71,7 +71,7 @@ it("open('p-termhub') loads the thread and subscribes once for the whole app", a
   const s = slot(chat, 'p-termhub');
   expect(s).toMatchObject({ loaded: true, error: null, conversation: { id: 'c-termhub', project_id: 'p-termhub' } });
   expect(s.messages).toHaveLength(4);
-  expect(s.actions).toEqual([expect.objectContaining({ id: 'a-termhub-1', status: 'pending' })]);
+  expect(s.actions).toEqual([expect.objectContaining({ id: 'a-termhub-1', status: 'pending' }), expect.objectContaining({ id: 'a-termhub-2', status: 'pending' })]);
   expect(s.host).toMatchObject({ kind: 'ready', machine: { name: 'jarvis' } });
   expect(chat.getState().activeProject).toBe('p-termhub');
 
@@ -274,6 +274,118 @@ it("decide(id, 'approve') performs the decision inside the prompt: a wrong PIN l
   expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
 });
 
+it('decideMany of denials only sends one batch with no PIN prompt', async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const decideMany = jest.spyOn(api, 'decideMany');
+  const challenge = jest.spyOn(api, 'challenge');
+
+  await chat.getState().decideMany([
+    { id: 'a-termhub-1', decision: 'deny' },
+    { id: 'a-termhub-2', decision: 'deny' },
+  ]);
+  expect(decideMany).toHaveBeenCalledTimes(1);
+  expect(decideMany).toHaveBeenCalledWith(expect.anything(), { decisions: [{ id: 'a-termhub-1', decision: 'deny' }, { id: 'a-termhub-2', decision: 'deny' }] });
+  expect(challenge).not.toHaveBeenCalled();
+  expect(store.getState().pinPrompt).toBeNull();
+  expect(slot(chat, 'p-termhub').actions.map((a) => a.status)).toEqual(['denied', 'denied']);
+  expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
+});
+
+it('decideMany of write approvals sends one batch with no PIN prompt and no proof (TER-92)', async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const decideMany = jest.spyOn(api, 'decideMany');
+  const challenge = jest.spyOn(api, 'challenge');
+
+  await chat.getState().decideMany([
+    { id: 'a-termhub-1', decision: 'approve' },
+    { id: 'a-termhub-2', decision: 'deny' },
+  ]);
+  expect(decideMany).toHaveBeenCalledTimes(1);
+  expect(decideMany).toHaveBeenCalledWith(expect.anything(), { decisions: [{ id: 'a-termhub-1', decision: 'approve' }, { id: 'a-termhub-2', decision: 'deny' }] });
+  expect(challenge).not.toHaveBeenCalled();
+  expect(store.getState().pinPrompt).toBeNull();
+  expect(slot(chat, 'p-termhub').actions.map((a) => a.status)).toEqual(['approved', 'denied']);
+  expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
+});
+
+it('a PIN_REQUIRED answer to a silent batch opens the PIN sheet for every approval (TER-92)', async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  const decideMany = jest.spyOn(api, 'decideMany').mockRejectedValueOnce(new ApiError(401, 'PIN_REQUIRED', 'Confirme com o PIN para autorizar esta ação.'));
+
+  const deciding = chat.getState().decideMany([
+    { id: 'a-termhub-1', decision: 'approve' },
+    { id: 'a-termhub-2', decision: 'approve' },
+  ]);
+  await jest.advanceTimersByTimeAsync(0);
+  expect(store.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', actionIds: ['a-termhub-1', 'a-termhub-2'], decision: 'approve' });
+  await store.getState().resolvePinPrompt(PIN);
+  await deciding;
+  expect(decideMany).toHaveBeenCalledTimes(2);
+  expect(decideMany).toHaveBeenLastCalledWith(expect.anything(), {
+    decisions: [
+      { id: 'a-termhub-1', decision: 'approve', challenge: expect.any(String), pin_proof: expect.any(String) },
+      { id: 'a-termhub-2', decision: 'approve', challenge: expect.any(String), pin_proof: expect.any(String) },
+    ],
+  });
+  expect(slot(chat, 'p-termhub').actions.map((a) => a.status)).toEqual(['approved', 'approved']);
+});
+
+it('decideMany with an irreversible approval asks the PIN once and sends one body carrying the proofs', async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  markIrreversible(chat, 'p-termhub', 'a-termhub-1');
+  const decideMany = jest.spyOn(api, 'decideMany');
+  const requestPinProofs = jest.spyOn(store.getState(), 'requestPinProofs');
+
+  const deciding = chat.getState().decideMany([
+    { id: 'a-termhub-1', decision: 'approve' },
+    { id: 'a-termhub-2', decision: 'deny' },
+  ]);
+  expect(requestPinProofs).toHaveBeenCalledWith(['a-termhub-1'], expect.any(Function), 'approve');
+  expect(chat.getState().decidingId).toBe('a-termhub-1');
+
+  // A wrong PIN stays inside the prompt; the batch stays pending.
+  await store.getState().resolvePinPrompt('000000');
+  expect(store.getState()).toMatchObject({ pinPrompt: { actionId: 'a-termhub-1' }, error: 'PIN incorreto.', attemptsLeft: 2 });
+  expect(slot(chat, 'p-termhub').actions.map((a) => a.status)).toEqual(['pending', 'pending']);
+
+  await store.getState().resolvePinPrompt(PIN);
+  await deciding;
+  expect(decideMany).toHaveBeenLastCalledWith(expect.anything(), {
+    decisions: [
+      { id: 'a-termhub-1', decision: 'approve', challenge: expect.any(String), pin_proof: expect.any(String) },
+      { id: 'a-termhub-2', decision: 'deny' },
+    ],
+  });
+  expect(slot(chat, 'p-termhub').actions.map((a) => a.status)).toEqual(['approved', 'denied']);
+  expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
+});
+
+it('decideMany: a cancelled prompt shows nothing; a 409 says so like decide', async () => {
+  const { chat, store, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  markIrreversible(chat, 'p-termhub', 'a-termhub-1');
+  const decideMany = jest.spyOn(api, 'decideMany');
+
+  const deciding = chat.getState().decideMany([
+    { id: 'a-termhub-1', decision: 'approve' },
+    { id: 'a-termhub-2', decision: 'approve' },
+  ]);
+  expect(store.getState().pinPrompt).toEqual({ actionId: 'a-termhub-1', actionIds: ['a-termhub-1', 'a-termhub-2'], decision: 'approve' });
+  store.getState().cancelPinPrompt();
+  await deciding;
+  expect(decideMany).not.toHaveBeenCalled();
+  expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
+
+  await chat.getState().decide('a-termhub-1', 'deny');
+  await chat.getState().decide('a-termhub-2', 'deny');
+  await chat.getState().decideMany([{ id: 'a-termhub-1', decision: 'deny' }]);
+  expect(chat.getState()).toMatchObject({ decidingId: null, error: 'Essa ação já foi decidida.' });
+});
+
 it('decide never moves a card backwards: a re-read that already says executed wins over the late HTTP answer', async () => {
   const { chat, api } = await setup();
   await openAndConnect(chat, 'p-termhub');
@@ -312,7 +424,7 @@ it('a decision event updates the card by id and is idempotent; a repeated confir
 
   handlers().onEvent(decision('c-termhub', 'a-termhub-1', 'approved'));
   handlers().onEvent(decision('c-termhub', 'a-termhub-1', 'approved'));
-  expect(slot(chat, 'p-termhub').actions).toEqual([expect.objectContaining({ id: 'a-termhub-1', status: 'approved' })]);
+  expect(slot(chat, 'p-termhub').actions).toEqual([expect.objectContaining({ id: 'a-termhub-1', status: 'approved' }), expect.objectContaining({ id: 'a-termhub-2', status: 'pending' })]);
 
   const confirmation: TChatEvent = {
     type: 'confirmation',
@@ -456,7 +568,7 @@ it('persists projects and each conversation, never live or transient state', asy
   expect(Object.keys(saved.conversations['p-termhub']).sort()).toEqual(['actions', 'conversation', 'grants', 'host', 'messages', 'tabQuestions', 'tabSuggestions']);
 
   // A cold start shows the thread before any fetch.
-  const again = createChatStore({ api, session: () => ({ phase: 'locked', auth: () => { throw new Error('LOCKED'); }, handleApiError: () => false, requestPinProof: async () => { throw new Error('CANCELLED'); } }) });
+  const again = createChatStore({ api, session: () => ({ phase: 'locked', auth: () => { throw new Error('LOCKED'); }, handleApiError: () => false, requestPinProof: async () => { throw new Error('CANCELLED'); }, requestPinProofs: async () => { throw new Error('CANCELLED'); } }) });
   opened.push(again);
   expect(again.getState().projects).toHaveLength(3);
   expect(slot(again, 'p-termhub')).toMatchObject({ loaded: false, error: null, conversation: { id: 'c-termhub' } });

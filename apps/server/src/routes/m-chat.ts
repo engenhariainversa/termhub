@@ -1,6 +1,6 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { chatProjectsResponse, decisionProofMessage, deviceSelf, hostOptionsResponse, mobileDecisionBody, mobileMessageBody, sendAccepted } from '@termhub/mobile-api';
+import { chatGrantListQuery, chatGrantListResponse, chatProjectsResponse, decisionProofMessage, deviceSelf, hostOptionsResponse, mobileBatchDecisionBody, mobileDecisionBody, mobileMessageBody, sendAccepted, type PinDecision } from '@termhub/mobile-api';
 import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
@@ -12,7 +12,8 @@ import { permissionsOf } from '../auth/permissions.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { chatBus } from '../chat/bus.js';
-import { activeGrants, assertGrantableAction, grantTab, revokeGrant } from '../chat/grants.js';
+import { decideMany, pendingBatch } from '../chat/decisions.js';
+import { activeGrants, assertGrantableAction, grantTab, listGrants, revokeGrant } from '../chat/grants.js';
 import { HttpError, conflict, notFound, unauthorized } from '../lib/errors.js';
 import { DeviceLockedError, PinInvalidError, deviceRevoked, type SessionService } from '../mobile/session.js';
 
@@ -40,6 +41,25 @@ function deviceOf(request: FastifyRequest): Device {
   const mobile = request.mobile;
   if (!mobile || !('device' in mobile)) throw unauthorized();
   return mobile.device;
+}
+
+/** Consumes the decision challenge bound to one action and checks the PIN proof over it. Answers the
+ * way `POST /session/token` does on failure (sent here, so the caller just stops) and returns false;
+ * true when the proof is good. */
+async function proofOk(deps: MobileChatDeps, request: FastifyRequest, reply: FastifyReply, device: Device, actionId: string, decision: PinDecision, proof: { challenge: string; pin_proof: string }): Promise<boolean> {
+  if (!(await deps.session.consumeDecisionChallenge(device, proof.challenge, actionId))) throw new HttpError(400, 'Desafio inválido ou expirado', 'CHALLENGE_INVALID');
+  const pin = await deps.session.checkPin(device, decisionProofMessage(proof.challenge, actionId, decision), proof.pin_proof, { ip: request.ip });
+  if (pin.ok) return true;
+  if (pin.code === 'DEVICE_LOCKED') {
+    reply.header('retry-after', Math.ceil(pin.retryAfterMs / 1000));
+    throw new DeviceLockedError(pin.retryAfterMs);
+  }
+  if (pin.code === 'PIN_INVALID') {
+    const err = new PinInvalidError(pin.failures);
+    await reply.code(401).send({ error: err.message, code: err.code, failures: err.failures });
+    return false;
+  }
+  throw deviceRevoked();
 }
 
 const toDeviceSelf = (d: Device) => deviceSelf.parse({ id: d.id, name: d.name, platform: d.platform, model: d.model, created_at: d.created_at, last_seen_at: d.last_seen_at });
@@ -181,29 +201,11 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
 
       // TER-92: a `write` card approves with the session alone (token + hardware-key proof, like deny);
       // an irreversible card and a tab grant still need the PIN. A proof that comes anyway (an older
-      // app) is checked and counted as before.
+      // app) is checked and counted as before; the action stays pending on every failure.
       const hasProof = body.challenge !== undefined && body.pin_proof !== undefined;
       const needsPin = body.decision === 'approve_tab' || existing.class !== 'write';
       if (needsPin && !hasProof) throw new HttpError(401, 'Confirme com o PIN para autorizar esta ação.', 'PIN_REQUIRED');
-      if (hasProof) {
-        const challenge = body.challenge!;
-        const pinProof = body.pin_proof!;
-        if (!(await deps.session.consumeDecisionChallenge(device, challenge, id))) throw new HttpError(400, 'Desafio inválido ou expirado', 'CHALLENGE_INVALID');
-
-        const pin = await deps.session.checkPin(device, decisionProofMessage(challenge, id, body.decision), pinProof, { ip: request.ip });
-        // Mapped exactly as `POST /session/token` maps it; the action stays pending on every failure.
-        if (!pin.ok) {
-          if (pin.code === 'DEVICE_LOCKED') {
-            reply.header('retry-after', Math.ceil(pin.retryAfterMs / 1000));
-            throw new DeviceLockedError(pin.retryAfterMs);
-          }
-          if (pin.code === 'PIN_INVALID') {
-            const err = new PinInvalidError(pin.failures);
-            return reply.code(401).send({ error: err.message, code: err.code, failures: err.failures });
-          }
-          throw deviceRevoked();
-        }
-      }
+      if (hasProof && !(await proofOk(deps, request, reply, device, id, body.decision, { challenge: body.challenge!, pin_proof: body.pin_proof! }))) return reply;
     }
 
     const status = body.decision === 'deny' ? 'denied' : 'approved';
@@ -230,6 +232,49 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId }, 'mobile decision resume failed'));
     return { action, queued: true, note: DECISION_NOTE, grant };
   });
+
+  /**
+   * A grouped confirmation from the phone (spec 2026-09-26 §7). Every approval follows the single
+   * route's rule — pending first, then (unless it is a `write` card sent without one) its challenge and
+   * PIN proof — and all of them before anything is decided, so a wrong or missing PIN leaves the whole
+   * batch pending. Then one `decideMany` and one resumed run,
+   * in the background like the single route.
+   */
+  app.post('/actions/decisions', { config: { action: 'create' } }, async (request, reply) => {
+    const { decisions } = mobileBatchDecisionBody.parse(request.body);
+    const user = request.scope.user;
+    const { pending, skipped: firstSkipped } = await pendingBatch(repos, user.id, decisions.map((d) => d.id));
+    const stillPending = new Set(pending.map((p) => p.id));
+    const approvals = decisions.filter((d): d is Extract<typeof d, { decision: 'approve' }> => d.decision === 'approve' && stillPending.has(d.id));
+    // TER-92, as in the single route: a `write` card approves with the session alone, any other class
+    // needs its proof. A missing proof refuses the whole batch before any challenge is spent; a proof
+    // that comes anyway (an older app) is checked and counted as before.
+    const classOf = new Map(pending.map((p) => [p.id, p.class]));
+    if (approvals.some((a) => classOf.get(a.id) !== 'write' && (a.challenge === undefined || a.pin_proof === undefined))) {
+      throw new HttpError(401, 'Confirme com o PIN para autorizar esta ação.', 'PIN_REQUIRED');
+    }
+    const proven = approvals.filter((a) => a.challenge !== undefined && a.pin_proof !== undefined);
+    if (proven.length > 0) {
+      const device = deviceOf(request);
+      for (const a of proven) if (!(await proofOk(deps, request, reply, device, a.id, 'approve', { challenge: a.challenge!, pin_proof: a.pin_proof! }))) return reply;
+    }
+    // Only what the first read saw pending reaches `decideMany`: every approval there had its proof
+    // checked above, so "no approval without a proof" holds here, not by two reads agreeing.
+    const toDecide = decisions.filter((d) => stillPending.has(d.id)).map((d) => ({ id: d.id, decision: d.decision }));
+    if (toDecide.length === 0) throw conflict('Estas ações já foram decididas');
+    const result = await decideMany(repos, user.id, toDecide);
+    const decided = result.decided;
+    const skippedIds = new Set(firstSkipped.map((s) => s.id));
+    const skipped = [...firstSkipped, ...result.skipped.filter((s) => !skippedIds.has(s.id))];
+    const first = decided[0]!;
+    void Promise.resolve()
+      .then(() => deps.chat.resumeAfterDecision(user, first))
+      .catch((err) => request.log.warn({ code: failureLabel(err), actionId: first.id }, 'mobile batch resume failed'));
+    return { actions: decided, skipped, queued: true, note: DECISION_NOTE };
+  });
+
+  /** The phone's "Abas confiáveis": the same list as the web, validated against the shared contract. */
+  app.get('/grants', async (request) => chatGrantListResponse.parse(await listGrants(repos, request.scope.user.id, chatGrantListQuery.parse(request.query))));
 
   /** "Revogar" from the phone. No PIN: it only takes power away. `create`, like deciding a card. */
   app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {

@@ -10,6 +10,8 @@ import {
   chatActionClass,
   chatActionSchema,
   chatEventSchema,
+  chatGrantListItemSchema,
+  chatGrantListResponse,
   chatGrantSchema,
   chatMessage,
   chatProjectItem,
@@ -22,6 +24,7 @@ import {
   devicePollResponse,
   deviceSelf,
   hostOptionsResponse,
+  mobileBatchDecisionBody,
   mobileDecisionBody,
   mobileMessageBody,
   notificationRow,
@@ -139,6 +142,7 @@ export type TPushTokenBody = z.infer<typeof pushTokenBody>;
 export type TMobileMessageBody = z.infer<typeof mobileMessageBody>;
 export type TSendAccepted = z.infer<typeof sendAccepted>;
 export type TMobileDecisionBody = z.infer<typeof mobileDecisionBody>;
+export type TMobileBatchDecisionBody = z.infer<typeof mobileBatchDecisionBody>;
 export type TChatProjectItem = z.infer<typeof chatProjectItem>;
 export type TChatProjectsResponse = z.infer<typeof chatProjectsResponse>;
 export type THostOptionsResponse = z.infer<typeof hostOptionsResponse>;
@@ -153,6 +157,8 @@ export type TNotificationsResponse = z.infer<typeof notificationsResponse>;
 export type TChatHostState = z.infer<typeof chatHostStateSchema>;
 export type TChatAction = z.infer<typeof chatActionSchema>;
 export type TChatGrant = z.infer<typeof chatGrantSchema>;
+export type TChatGrantListItem = z.infer<typeof chatGrantListItemSchema>;
+export type TChatGrantListResponse = z.infer<typeof chatGrantListResponse>;
 export type TTabQuestion = z.infer<typeof tabQuestionSchema>;
 export type TTabQuestionAnswerBody = z.infer<typeof tabQuestionAnswerBody>;
 export type TTabQuestionScreenResponse = z.infer<typeof tabQuestionScreenResponse>;

@@ -10,6 +10,7 @@ const chatMock = vi.fn();
 const sendMock = vi.fn();
 const streamMock = vi.fn();
 const decideMock = vi.fn();
+const decideManyMock = vi.fn();
 const setHostMock = vi.fn();
 const machinesMock = vi.fn();
 const accountsMock = vi.fn();
@@ -38,6 +39,7 @@ vi.mock('../../lib/api', () => {
       chat: (...a: unknown[]) => chatMock(...a),
       sendChatMessage: (...a: unknown[]) => sendMock(...a),
       decideChatAction: (...a: unknown[]) => decideMock(...a),
+      decideChatActions: (...a: unknown[]) => decideManyMock(...a),
       setChatHost: (...a: unknown[]) => setHostMock(...a),
       resetChat: (...a: unknown[]) => resetMock(...a),
       revokeChatGrant: (...a: unknown[]) => revokeMock(...a),
@@ -98,6 +100,7 @@ beforeEach(() => {
   sendMock.mockReset();
   streamMock.mockReset();
   decideMock.mockReset();
+  decideManyMock.mockReset();
   setHostMock.mockReset();
   machinesMock.mockReset();
   accountsMock.mockReset();
@@ -244,21 +247,29 @@ it('in a project, a host that is not chosen points to /chat instead of offering 
   expect(await screen.findByRole('link', { name: /escolher a máquina do chat/i })).toHaveAttribute('href', '/chat');
 });
 
-it('the strip from GET /chat revokes a grant', async () => {
-  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [grant({ id: 'g1' })] });
-  revokeMock.mockResolvedValue({ grant: grant({ id: 'g1' }) });
+it('shows how many tabs are trusted as a link to Configurações, and no strip', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [grant({ id: 'g1' }), grant({ id: 'g2', tab_id: 't2' }), grant({ id: 'g3', tab_id: 't3', expires_at: new Date(Date.now() - 1000).toISOString() })] });
   render(
     <MemoryRouter>
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  expect(await screen.findByText(/Enviando direto para a aba Terminal 1 até/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Revogar' }));
-  await waitFor(() => expect(revokeMock).toHaveBeenCalledWith('g1'));
-  await waitFor(() => expect(screen.queryByText(/Enviando direto para/)).toBeNull());
+  expect(await screen.findByRole('link', { name: '2 abas confiáveis' })).toHaveAttribute('href', '/settings/chat-grants');
+  expect(screen.queryByText(/Enviando direto para/)).toBeNull();
 });
 
-it('"Permitir sempre nesta aba" on a pending card records the grant and shows it on the strip and the card', async () => {
+it('no link without an active grant', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [] });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalled());
+  expect(screen.queryByRole('link', { name: /aba(s)? confiáve/ })).toBeNull();
+});
+
+it('"Permitir sempre nesta aba" on a pending card records the grant, shows it on the card and counts it in the header', async () => {
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' })], host: READY, grants: [] });
   decideMock.mockResolvedValue({ action: { id: 'a1', status: 'approved' }, grant: grant({ id: 'g1' }) });
   render(
@@ -268,11 +279,41 @@ it('"Permitir sempre nesta aba" on a pending card records the grant and shows it
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Permitir sempre nesta aba' }));
   await waitFor(() => expect(decideMock).toHaveBeenCalledWith('a1', 'approve_tab'));
-  expect(await screen.findByText(/Enviando direto para a aba Terminal 1 até/)).toBeInTheDocument();
+  expect(await screen.findByRole('link', { name: '1 aba confiável' })).toBeInTheDocument();
   expect(screen.getByText(/^Permitido nesta aba até/)).toBeInTheDocument();
 });
 
-it('a grant event adds the strip, a grant_revoked removes it, a granted_action appends a card, and events of another conversation are ignored', async () => {
+it('two pending cards render as one group; Ver separadas shows the cards', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' }), action({ id: 'a2', summary: 'mover o card TER-1' })], host: READY });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId={null} />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('2 ações aguardando sua confirmação')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Autorizar' })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Ver separadas' }));
+  expect(screen.getAllByRole('button', { name: 'Autorizar' })).toHaveLength(2);
+});
+
+it('Aprovar selecionadas decides the whole group in one call and the cards read as decided', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' }), action({ id: 'a2', summary: 'mover o card TER-1' })], host: READY });
+  decideManyMock.mockResolvedValue({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'approved' }], skipped: [], queued: true, note: 'Sua decisão foi registrada.' });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId={null} />
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Aprovar selecionadas (2)' }));
+  await waitFor(() => expect(decideManyMock).toHaveBeenCalledWith([{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve' }]));
+  expect(await screen.findAllByText('Autorizado')).toHaveLength(2);
+  expect(screen.queryByText('2 ações aguardando sua confirmação')).toBeNull();
+  // The queued note sits under the first decided card only.
+  expect(screen.getAllByText('Sua decisão foi registrada.')).toHaveLength(1);
+});
+
+it('a grant event adds to the header count, a grant_revoked removes it, a granted_action appends a card, and events of another conversation are ignored', async () => {
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
@@ -287,16 +328,16 @@ it('a grant event adds the strip, a grant_revoked removes it, a granted_action a
   await waitFor(() => expect(chatMock).toHaveBeenCalled());
 
   onEvent({ type: 'grant', conversation_id: 'c_other', grant: grant({ id: 'g_other' }) });
-  expect(screen.queryByText(/Enviando direto para/)).toBeNull();
+  expect(screen.queryByRole('link', { name: '1 aba confiável' })).toBeNull();
 
   onEvent({ type: 'grant', conversation_id: 'c_p1', grant: grant({ id: 'g1' }) });
-  expect(await screen.findByText(/Enviando direto para a aba Terminal 1 até/)).toBeInTheDocument();
+  expect(await screen.findByRole('link', { name: '1 aba confiável' })).toBeInTheDocument();
 
   onEvent({ type: 'granted_action', conversation_id: 'c_p1', action: action({ id: 'a2', status: 'executed', grant_id: 'g1' }) });
   expect(await screen.findByText('Executado · aba confiada')).toBeInTheDocument();
 
   onEvent({ type: 'grant_revoked', conversation_id: 'c_p1', grant_id: 'g1' });
-  await waitFor(() => expect(screen.queryByText(/Enviando direto para/)).toBeNull());
+  await waitFor(() => expect(screen.queryByRole('link', { name: '1 aba confiável' })).toBeNull());
 });
 
 const question = (over: Partial<TabQuestion> & { id: string }): TabQuestion =>

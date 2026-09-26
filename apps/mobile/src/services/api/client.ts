@@ -8,6 +8,7 @@ import type { DeviceKey } from '../key/types';
 import {
   canonicalHtu,
   challengeResponse,
+  chatGrantListResponse,
   chatProjectsResponse,
   chatResponse,
   deviceActivateResponse,
@@ -24,6 +25,7 @@ import {
   type TChallengeBody,
   type TDeviceActivateBody,
   type TDeviceRequestBody,
+  type TMobileBatchDecisionBody,
   type TMobileDecisionBody,
   type TMobileMessageBody,
   type TSetHostBody,
@@ -216,7 +218,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     reset: (a: Auth, projectId: string | null) => empty('POST', '/api/m/v1/chat/reset', { token: a.accessToken, body: { project_id: projectId } }),
     decide: (a: Auth, actionId: string, body: TMobileDecisionBody) =>
       empty('POST', `/api/m/v1/chat/actions/${actionId}/decision`, { token: a.accessToken, body }),
+    decideMany: (a: Auth, body: TMobileBatchDecisionBody) => empty('POST', '/api/m/v1/chat/actions/decisions', { token: a.accessToken, body }),
     revokeGrant: (a: Auth, grantId: string) => empty('DELETE', `/api/m/v1/chat/grants/${encodeURIComponent(grantId)}`, { token: a.accessToken }),
+    listGrants: (a: Auth, q: { state: 'active' | 'ended'; cursor?: string | null }) =>
+      call('GET', `/api/m/v1/chat/grants?state=${q.state}${q.cursor ? `&cursor=${encodeURIComponent(q.cursor)}` : ''}`, chatGrantListResponse, { token: a.accessToken }),
     answerTabQuestion: (a: Auth, id: string, body: TTabQuestionAnswerBody) =>
       empty('POST', `/api/m/v1/chat/tab-questions/${encodeURIComponent(id)}/answer`, { token: a.accessToken, body }),
     tabQuestionScreen: (a: Auth, id: string) =>

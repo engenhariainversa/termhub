@@ -10,6 +10,7 @@ vi.mock('../lib/auth', () => ({ useAuth: () => authState.current }));
 vi.mock('../components/MyCityView', () => ({ MyCityView: () => <p>minha-cidade-view</p> }));
 vi.mock('../components/ProfileView', () => ({ ProfileView: () => <p>profile-view</p> }));
 vi.mock('../components/IntegrationsView', () => ({ IntegrationsView: () => <p>integrations-view</p> }));
+vi.mock('../components/ChatGrantsView', () => ({ ChatGrantsView: () => <p>chat-grants-view</p> }));
 vi.mock('../components/UploadsView', () => ({ UploadsView: () => null }));
 vi.mock('../components/ApiTokensView', () => ({ ApiTokensView: () => null }));
 vi.mock('../lib/api', () => ({
@@ -99,5 +100,12 @@ describe('SettingsPage', () => {
     authState.current = { can: (r) => r === 'integrations' };
     renderAt('/settings/integrations');
     expect(screen.getByText('integrations-view')).toBeTruthy();
+  });
+
+  it('opens Abas confiáveis as a section', () => {
+    authState.current = { can: (r) => r === 'chat' };
+    renderAt('/settings/chat-grants');
+    expect(screen.getByText('chat-grants-view')).toBeTruthy();
+    expect(titles()).toEqual(['Abas confiáveis']);
   });
 });

@@ -11,6 +11,7 @@ describe('settings sections', () => {
       'account:integrations',
       'account:api-tokens',
       'account:devices',
+      'account:chat-grants',
       'account:ai',
       'account:hardware',
       'admin:users',
@@ -48,6 +49,11 @@ describe('settings sections', () => {
   it('keeps the admin sections under their current resources', () => {
     expect(visibleSettingsSections((r) => r === 'roles').map((s) => s.key)).toEqual(['profile', 'city', 'roles', 'permissions']);
     expect(visibleSettingsSections((r) => r === 'users').map((s) => s.key)).toEqual(['profile', 'city', 'users']);
+  });
+
+  it('puts Abas confiáveis under Conta, gated by the chat resource', () => {
+    expect(SETTINGS_SECTIONS.find((s) => s.key === 'chat-grants')).toEqual({ key: 'chat-grants', label: 'Abas confiáveis', resource: 'chat', group: 'account' });
+    expect(visibleSettingsSections((r) => r === 'chat').map((s) => s.key)).toEqual(['profile', 'city', 'chat-grants']);
   });
 
   it('leaves Administração out when nothing in it is visible', () => {

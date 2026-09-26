@@ -28,6 +28,21 @@ export interface GrantInput {
   granted_by: string;
 }
 
+/** Where a page of the grant history ended: the last row's `(created_at, id)`. */
+export interface GrantCursor {
+  created_at: string;
+  id: string;
+}
+
+/** A grant with what the list needs from the conversation that granted it. */
+export interface ChatGrantWithConversation extends ChatGrant {
+  conversation_project_id: string | null;
+  conversation_archived: boolean;
+}
+
+/** The most rows one page (or the active list) ever returns. */
+export const GRANT_LIST_MAX = 100;
+
 const mapGrant = (g: PrismaChatGrant): ChatGrant => ({
   id: g.id,
   conversation_id: g.conversationId,
@@ -45,8 +60,8 @@ const mapGrant = (g: PrismaChatGrant): ChatGrant => ({
  * Who may read what. Methods keyed by a conversation id (`findActive`, `listActive`,
  * `findActiveBySourceAction`, `revokeForConversation`) trust that id: every caller derives it on the
  * server — minted into the gated token, or the scope user's own conversation — never from a client.
- * Methods keyed by an id a client sends (`findByIdForUser`, `revoke`) filter by the owning
- * conversation's `user_id` in SQL, so another user's grant reads as no grant at all.
+ * Methods keyed by an id a client sends (`findByIdForUser`, `revoke`, `listForUser`) filter by the
+ * owning conversation's `user_id` in SQL, so another user's grant reads as no grant at all.
  */
 export class ChatGrantsRepository {
   constructor(private db: PrismaClient) {}
@@ -114,5 +129,30 @@ export class ChatGrantsRepository {
   async revokeForConversation(conversationId: string, now = new Date()): Promise<number> {
     const { count } = await this.db.chatGrant.updateMany({ where: { conversationId, revokedAt: null }, data: { revokedAt: now, revokedBy: null } });
     return count;
+  }
+
+  /**
+   * Every grant of one user, across all their conversations ("Abas confiáveis", spec 2026-09-26 §3.1),
+   * scoped by the owning conversation's `user_id` in SQL. `active` returns what is in force (capped at
+   * `GRANT_LIST_MAX`, no paging: at most one per conversation + tab, each ≤ 24 h). `ended` is the history,
+   * newest first, paged by `(created_at, id)` so rows sharing a timestamp are neither skipped nor repeated.
+   */
+  async listForUser(userId: string, opts: { state: 'active' | 'ended'; cursor?: GrantCursor | null; limit: number }, now = new Date()): Promise<{ grants: ChatGrantWithConversation[]; next: GrantCursor | null }> {
+    const limit = Math.min(Math.max(Math.trunc(opts.limit), 1), GRANT_LIST_MAX);
+    const state = opts.state === 'active' ? { revokedAt: null, expiresAt: { gt: now } } : { OR: [{ revokedAt: { not: null } }, { expiresAt: { lte: now } }] };
+    const cursor = opts.state === 'ended' ? opts.cursor : null;
+    const after = cursor ? { OR: [{ createdAt: { lt: new Date(cursor.created_at) } }, { createdAt: new Date(cursor.created_at), id: { lt: cursor.id } }] } : {};
+    const rows = await this.db.chatGrant.findMany({
+      where: { AND: [{ conversation: { userId } }, state, after] },
+      include: { conversation: { select: { projectId: true, archivedAt: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+    });
+    const page = rows.slice(0, limit);
+    const last = page[page.length - 1];
+    return {
+      grants: page.map((r) => ({ ...mapGrant(r), conversation_project_id: r.conversation.projectId, conversation_archived: r.conversation.archivedAt !== null })),
+      next: opts.state === 'ended' && rows.length > limit && last ? { created_at: last.createdAt.toISOString(), id: last.id } : null,
+    };
   }
 }

@@ -1,4 +1,5 @@
 import * as Application from 'expo-application';
+import { useRouter } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Switch, View } from 'react-native';
 import { hostLine } from '@/features/chat/model/copy';
@@ -29,9 +30,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** Ajustes (spec §11.2, design spec §7): this device, biometrics, the general chat's machine, the
- * theme, the key diagnostic, the version and leaving. */
+/** Ajustes (spec §11.2, design spec §7): this device, biometrics, the general chat's machine and
+ * its trusted tabs, the theme, the key diagnostic, the version and leaving. */
 export function SettingsScreen() {
+  const router = useRouter();
   const device = useSettingsStore((s) => s.device);
   const loadDevice = useSettingsStore((s) => s.loadDevice);
   const server = useSettingsStore((s) => s.server);
@@ -91,6 +93,7 @@ export function SettingsScreen() {
           <AppText variant="muted">{host ? hostLine(host).text : 'Escolhendo a máquina do chat geral…'}</AppText>
           <Button label="Trocar máquina ou conta" variant="secondary" onPress={() => setPickingHost(true)} />
           <HostSheet open={pickingHost} onClose={() => setPickingHost(false)} />
+          <Button label="Abas confiáveis" variant="secondary" onPress={() => router.push('/chat-grants')} />
         </Section>
 
         <Section title="Aparência">

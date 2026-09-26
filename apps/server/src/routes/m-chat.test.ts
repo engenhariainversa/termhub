@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
-import { decisionProofMessage } from '@termhub/mobile-api';
+import { chatGrantListResponse, decisionProofMessage } from '@termhub/mobile-api';
 import type { Device } from '../db/repositories/devices.js';
 import { applyErrorHandler, HttpError } from '../lib/errors.js';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
@@ -57,6 +57,7 @@ function build(opts: {
   grants?: { id: string; conversation_id: string; tab_id: string; tool: string; source_action_id: string | null; granted_by: string; created_at: string; expires_at: string; revoked_at: string | null; revoked_by: string | null }[];
   revoke?: ReturnType<typeof vi.fn>;
   findGrantByIdForUser?: ReturnType<typeof vi.fn>;
+  listForUser?: ReturnType<typeof vi.fn>;
   tabQuestions?: unknown[];
 } = {}) {
   const extraProjects = opts.extraProjects ?? [];
@@ -102,6 +103,7 @@ function build(opts: {
       listActive: vi.fn(async () => opts.grants ?? []),
       revoke: opts.revoke ?? vi.fn(async (id: string) => ({ id, conversation_id: 'c1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', granted_by: 'u1', created_at: '', expires_at: '', revoked_at: 'now', revoked_by: 'u1' })),
       findByIdForUser: opts.findGrantByIdForUser ?? vi.fn(async () => undefined),
+      listForUser: opts.listForUser ?? vi.fn(async () => ({ grants: [], next: null })),
     },
     projects: {
       findByIdsForOwner: vi.fn(async () => []),
@@ -637,6 +639,207 @@ describe('POST /chat/actions/:id/decision', () => {
   });
 });
 
+describe('POST /chat/actions/decisions (batch)', () => {
+  const rowsOf = (rows: Record<string, { status: string; conversation_id?: string; class?: string }>) =>
+    vi.fn(async (id: string) => (rows[id] ? { ...pendingAction, id, conversation_id: 'c1', ...rows[id] } : undefined));
+  const decideById = () => vi.fn(async (id: string, _userId: string, status: string) => ({ ...pendingAction, id, status }));
+  const post = (app: ReturnType<typeof build>['app'], decisions: unknown[]) => app.inject({ method: 'POST', url: '/chat/actions/decisions', payload: { decisions } });
+
+  it('proves the approval, decides both, resumes once and answers queued', async () => {
+    const decide = decideById();
+    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }, { id: 'a2', decision: 'deny' }]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'denied' }], skipped: [], queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledTimes(1);
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledWith(device, 'ch1', 'a1');
+    expect(session.checkPin).toHaveBeenCalledTimes(1);
+    expect(session.checkPin).toHaveBeenCalledWith(device, decisionProofMessage('ch1', 'a1', 'approve'), 'pp1', expect.objectContaining({ ip: expect.any(String) }));
+    expect(decide).toHaveBeenCalledWith('a1', 'u1', 'approved');
+    expect(decide).toHaveBeenCalledWith('a2', 'u1', 'denied');
+    expect(session.checkPin.mock.invocationCallOrder[0]).toBeLessThan(decide.mock.invocationCallOrder[0]);
+    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('a wrong PIN on the second approval is 401 and decides nothing', async () => {
+    const checkPin = vi.fn().mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false, code: 'PIN_INVALID', failures: 1 });
+    const { app, decide, resumeAfterDecision } = build({ checkPin, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'approve', challenge: 'ch2', pin_proof: 'pp2' },
+    ]);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ code: 'PIN_INVALID', failures: 1 });
+    expect(checkPin).toHaveBeenCalledTimes(2);
+    expect(decide).not.toHaveBeenCalled();
+    expect(resumeAfterDecision).not.toHaveBeenCalled();
+  });
+
+  it('a refused challenge is 400 CHALLENGE_INVALID and decides nothing', async () => {
+    const { app, session, decide } = build({ consumeDecisionChallenge: vi.fn(async () => false), findByIdForUser: rowsOf({ a1: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }]);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'CHALLENGE_INVALID' });
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('skips an approval no longer pending without spending its challenge', async () => {
+    const decide = decideById();
+    const { app, session } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'approved' }, a2: { status: 'pending' } }) });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'approve', challenge: 'ch2', pin_proof: 'pp2' },
+    ]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a2', status: 'approved' }], skipped: [{ id: 'a1', reason: 'already_decided' }] });
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledTimes(1);
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledWith(device, 'ch2', 'a2');
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips an unknown approval without spending its challenge, and lists it in skipped', async () => {
+    const decide = decideById();
+    const { app, session } = build({ decide, findByIdForUser: rowsOf({ a2: { status: 'pending' } }) });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'deny' },
+    ]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a2', status: 'denied' }], skipped: [{ id: 'a1', reason: 'not_found' }] });
+    expect(res.json().skipped).toHaveLength(1);
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(decide).not.toHaveBeenCalledWith('a1', expect.anything(), expect.anything());
+  });
+
+  it('never approves a row whose proof was not checked, even if a later read sees it pending', async () => {
+    // First read: a1 is not pending (no proof is checked for it). Every later read says pending.
+    const reads = new Map<string, number>();
+    const findByIdForUser = vi.fn(async (id: string) => {
+      const n = (reads.get(id) ?? 0) + 1;
+      reads.set(id, n);
+      if (id === 'a1') return n === 1 ? undefined : { ...pendingAction, id, conversation_id: 'c1', status: 'pending' };
+      if (id === 'a3') return n === 1 ? { ...pendingAction, id, conversation_id: 'c1', status: 'approved' } : { ...pendingAction, id, conversation_id: 'c1', status: 'pending' };
+      return { ...pendingAction, id, conversation_id: 'c1', status: 'pending' };
+    });
+    const decide = decideById();
+    const { app, session } = build({ decide, findByIdForUser });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'approve', challenge: 'ch2', pin_proof: 'pp2' },
+      { id: 'a3', decision: 'approve', challenge: 'ch3', pin_proof: 'pp3' },
+    ]);
+    expect(res.statusCode).toBe(200);
+    expect(session.checkPin).toHaveBeenCalledTimes(1);
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(decide).toHaveBeenCalledWith('a2', 'u1', 'approved');
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a2', status: 'approved' }] });
+    expect(res.json().skipped).toEqual(
+      expect.arrayContaining([
+        { id: 'a1', reason: 'not_found' },
+        { id: 'a3', reason: 'already_decided' },
+      ])
+    );
+    expect(res.json().skipped).toHaveLength(2);
+  });
+
+  it('nothing left to decide is 409, with no challenge spent and nothing decided', async () => {
+    const { app, session, decide, resumeAfterDecision } = build({ findByIdForUser: rowsOf({ a1: { status: 'approved' } }) });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'deny' },
+    ]);
+    expect(res.statusCode).toBe(409);
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+    expect(resumeAfterDecision).not.toHaveBeenCalled();
+  });
+
+  it('a deny-only batch never touches the challenge or the PIN', async () => {
+    const decide = decideById();
+    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'deny' }, { id: 'a2', decision: 'deny' }]);
+    expect(res.statusCode).toBe(200);
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).toHaveBeenCalledTimes(2);
+    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('TER-92: write approvals without a proof are decided with no challenge and no PIN work', async () => {
+    const decide = decideById();
+    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' }, a3: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve' }, { id: 'a3', decision: 'deny' }]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'approved' }, { id: 'a3', status: 'denied' }], skipped: [] });
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('TER-92: an irreversible approval without a proof is 401 PIN_REQUIRED and decides nothing, not even the write one', async () => {
+    const decide = decideById();
+    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending', class: 'irreversible' }, a3: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve' }, { id: 'a3', decision: 'deny' }]);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'Confirme com o PIN para autorizar esta ação.', code: 'PIN_REQUIRED' });
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+    expect(resumeAfterDecision).not.toHaveBeenCalled();
+  });
+
+  it('TER-92: a read approval without a proof is PIN_REQUIRED too (only write goes without the PIN)', async () => {
+    const { app, decide } = build({ findByIdForUser: rowsOf({ a1: { status: 'pending', class: 'read' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve' }]);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ code: 'PIN_REQUIRED' });
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('TER-92: an irreversible approval with its proof and a write one without decide together, proving only the first', async () => {
+    const decide = decideById();
+    const { app, session } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending', class: 'irreversible' }, a2: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }, { id: 'a2', decision: 'approve' }]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'approved' }] });
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledTimes(1);
+    expect(session.consumeDecisionChallenge).toHaveBeenCalledWith(device, 'ch1', 'a1');
+    expect(session.checkPin).toHaveBeenCalledTimes(1);
+  });
+
+  it('TER-92: a write approval sent with a proof (an older app) still has it checked and counted', async () => {
+    const { app, decide } = build({ checkPin: vi.fn(async () => ({ ok: false, code: 'PIN_INVALID', failures: 1 })), findByIdForUser: rowsOf({ a1: { status: 'pending' } }) });
+    const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }]);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ code: 'PIN_INVALID' });
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('half a proof is a 400, and "Permitir sempre" (approve_tab) is never accepted in a batch', async () => {
+    const { app, session, decide } = build({ findByIdForUser: rowsOf({ a1: { status: 'pending' } }) });
+    expect((await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1' }])).statusCode).toBe(400);
+    expect((await post(app, [{ id: 'a1', decision: 'approve_tab', challenge: 'ch1', pin_proof: 'pp1' }])).statusCode).toBe(400);
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('mixed conversations are 400 MIXED_CONVERSATIONS before any challenge is consumed', async () => {
+    const { app, session, decide } = build({ findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending', conversation_id: 'c2' } }) });
+    const res = await post(app, [
+      { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
+      { id: 'a2', decision: 'deny' },
+    ]);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'MIXED_CONVERSATIONS' });
+    expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+    expect(session.checkPin).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
+  });
+});
+
 describe('grants', () => {
   it('DELETE /chat/grants/:id revokes and publishes grant_revoked', async () => {
     const { app, repos } = build();
@@ -667,6 +870,20 @@ describe('grants', () => {
     });
     const res = await app.inject({ method: 'GET', url: '/chat' });
     expect(res.json().grants).toEqual([{ id: 'g1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', created_at: 'a', expires_at: 'b', tab_name: 'Terminal 1' }]);
+  });
+
+  it('GET /chat/grants answers the shared contract shape for this user', async () => {
+    const row = { id: 'g1', conversation_id: 'c1', tab_id: 't1', tool: 'send_input', source_action_id: 'act1', granted_by: 'u1', created_at: '2026-09-25T10:00:00.000Z', expires_at: '2099-09-26T10:00:00.000Z', revoked_at: null, revoked_by: null, conversation_project_id: null, conversation_archived: false };
+    const listForUser = vi.fn(async () => ({ grants: [row], next: null }));
+    const { app } = build({ listForUser, tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
+    const res = await app.inject({ method: 'GET', url: '/chat/grants?state=active' });
+    expect(res.statusCode).toBe(200);
+    expect(chatGrantListResponse.safeParse(res.json()).success).toBe(true);
+    expect(res.json()).toMatchObject({ grants: [{ id: 'g1', tab_name: 'Terminal 1', state: 'active', ended_at: null }], next_cursor: null });
+    // `active` is never paged: the route always asks the repository for GRANT_LIST_MAX (100), not the
+    // query's own default of 50, so the default can never silently truncate the active list.
+    expect(listForUser).toHaveBeenCalledWith('u1', { state: 'active', cursor: null, limit: 100 }, expect.any(Date));
+    expect((await app.inject({ method: 'GET', url: '/chat/grants?state=ended&cursor=nope' })).statusCode).toBe(400);
   });
 });
 

@@ -7,6 +7,7 @@ import type { ChatAction, ChatMessage, TabQuestion, TabSuggestion } from './type
 export type ChatEntry =
   | { kind: 'message'; at: string; message: ChatMessage }
   | { kind: 'action'; at: string; action: ChatAction }
+  | { kind: 'action_group'; at: string; actions: ChatAction[] }
   | { kind: 'tab_question'; at: string; question: TabQuestion }
   | { kind: 'tab_suggestion'; at: string; suggestion: TabSuggestion };
 
@@ -46,9 +47,23 @@ export function chatTimeline(messages: ChatMessage[], actions: ChatAction[], tab
 
   return entries.sort((a, b) => {
     if (a.at !== b.at) return a.at < b.at ? -1 : 1;
-    // A card (a gate card or a tab's question) reads after the message of the same instant; two cards keep their order.
+    // A card (a gate card, a tab's question or suggestion) reads after the message of the same instant; two cards keep their order.
     if (a.kind === 'message' && b.kind !== 'message') return -1;
     if (b.kind === 'message' && a.kind !== 'message') return 1;
     return 0;
+  });
+}
+
+/** Two or more pending gate cards become one grouped confirmation, where the oldest of them was (spec
+ * 2026-09-26 §7.1): while cards wait the concierge has stopped, so they are one request's worth. */
+export function groupPendingActions(entries: ChatEntry[]): ChatEntry[] {
+  const pending = entries.flatMap((e) => (e.kind === 'action' && e.action.status === 'pending' ? [e.action] : []));
+  if (pending.length < 2) return entries;
+  let placed = false;
+  return entries.flatMap((e): ChatEntry[] => {
+    if (e.kind !== 'action' || e.action.status !== 'pending') return [e];
+    if (placed) return [];
+    placed = true;
+    return [{ kind: 'action_group', at: e.at, actions: pending }];
   });
 }

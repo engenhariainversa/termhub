@@ -2,9 +2,16 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { AppText, Button, PinInput, Sheet } from '@/ui';
 import { attemptsSuffix } from '../model/messages';
+import type { SessionState } from '../model/session.types';
 import { useSessionStore } from '../viewmodel/useSessionStore';
 
 const PIN_LENGTH = 6;
+
+function titleOf(prompt: SessionState['pinPrompt']): string {
+  if (prompt?.decision === 'approve_tab') return 'Permitir sempre nesta aba';
+  const n = prompt?.actionIds?.length ?? 1;
+  return n > 1 ? `Autorizar ${n} ações` : 'Autorizar esta ação';
+}
 
 /** Approving a pending action always asks for the PIN, even while unlocked (P§5.6, design spec
  * §5.5). Mounted once, globally, by `app/_layout.tsx`; `pinPrompt` opens it. The sheet stays open
@@ -38,7 +45,7 @@ export function PinPromptSheet() {
   };
 
   return (
-    <Sheet open={pinPrompt !== null} onClose={cancelPinPrompt} title={pinPrompt?.decision === 'approve_tab' ? 'Permitir sempre nesta aba' : 'Autorizar esta ação'}>
+    <Sheet open={pinPrompt !== null} onClose={cancelPinPrompt} title={titleOf(pinPrompt)}>
       <View className="gap-6">
         {busy ? (
           <View className="items-center gap-3 py-4">

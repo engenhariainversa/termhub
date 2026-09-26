@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChatActionCard } from './ChatActionCard';
+import { ChatActionGroup, type BatchDecision } from './ChatActionGroup';
 import { ChatComposer } from './ChatComposer';
-import { ChatGrantStrip } from './ChatGrantStrip';
 import { ChatHost } from './ChatHost';
 import { ChatTurn } from './ChatTurn';
 import { TabQuestionCard } from './TabQuestionCard';
@@ -10,8 +10,9 @@ import { TabSuggestionCard } from './TabSuggestionCard';
 import { ConfirmDialog } from '../Modal';
 import { api, ApiError } from '../../lib/api';
 import { useChatStream } from '../../lib/chat';
-import { chatTimeline } from '../../lib/chat-timeline';
+import { chatTimeline, groupPendingActions } from '../../lib/chat-timeline';
 import { isNearBottom } from '../../lib/chat-scroll';
+import { trustedTabsLabel } from './grant-list-text';
 import { isGrantActive } from './grant-time';
 import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
 import { SUGGESTION_CHANGED_TEXT, upsertTabSuggestion } from './tab-suggestion-text';
@@ -68,6 +69,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   /** A `queued: true` decision is not an error: the pt-BR note the server sent, shown under that card
    * until the next reload replaces it with the real, applied state. */
   const [queuedNotes, setQueuedNotes] = useState<Record<string, string>>({});
+  /** "Ver separadas": the pending cards shown one by one instead of grouped, until the pending set changes. */
+  const [separate, setSeparate] = useState(false);
+  const [batchDeciding, setBatchDeciding] = useState(false);
   /** The conversation's trusted-tab grants, sourced the same way as `actions`: `GET /api/chat` on
    *  load/reconnect, kept live by `grant`/`grant_revoked` events. */
   const [grants, setGrants] = useState<ChatGrant[]>([]);
@@ -219,7 +223,32 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   };
 
-  /** "Revogar", from the card or from the strip. */
+  /** A grouped confirmation: one request, one injected sentence (spec 2026-09-26 §7). */
+  const decideBatch = async (decisions: BatchDecision[]) => {
+    setBatchDeciding(true);
+    setActionError(null);
+    try {
+      const res = await api.decideChatActions(decisions);
+      const statusOf = new Map(res.actions.map((a) => [a.id, a.status]));
+      setActions((prev) => prev.map((a) => (statusOf.has(a.id) ? { ...a, status: statusOf.get(a.id)! } : a)));
+      // One note for the whole batch, under its first decided card.
+      const first = res.actions[0]?.id;
+      if (res.queued && res.note && first) setQueuedNotes((prev) => ({ ...prev, [first]: res.note! }));
+    } catch (e) {
+      // As in `decide`: a host that cannot run the answer right now still had every decision recorded first.
+      if (e instanceof ApiError && e.code !== undefined && HOST_CODES.has(e.code)) {
+        const statusOf = new Map(decisions.map((d) => [d.id, d.decision === 'deny' ? ('denied' as const) : ('approved' as const)]));
+        setActions((prev) => prev.map((a) => (statusOf.has(a.id) ? { ...a, status: statusOf.get(a.id)! } : a)));
+        const first = decisions[0]?.id;
+        if (first) setQueuedNotes((prev) => ({ ...prev, [first]: `${e.message} A decisão já está registrada e será aplicada quando o chat voltar a rodar.` }));
+        await load();
+      } else setActionError(e instanceof ApiError ? e.message : 'Não foi possível registrar as decisões');
+    } finally {
+      setBatchDeciding(false);
+    }
+  };
+
+  /** "Revogar", from the card that granted it. */
   const revoke = async (grantId: string) => {
     setRevokingId(grantId);
     setActionError(null);
@@ -227,7 +256,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       await api.revokeChatGrant(grantId);
       setGrants((prev) => prev.filter((g) => g.id !== grantId));
     } catch (e) {
-      // 409: it was already revoked (another tab, or it expired and a reset ended it) — the strip is
+      // 409: it was already revoked (another tab, or it expired and a reset ended it) — the list is
       // stale, not wrong.
       if (e instanceof ApiError && e.status === 409) setGrants((prev) => prev.filter((g) => g.id !== grantId));
       else setActionError(e instanceof ApiError ? e.message : 'Não foi possível revogar a permissão');
@@ -370,6 +399,13 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
 
   /** Messages, gate cards and tab questions as one chronological thread, so a card reads where it was proposed. */
   const timeline = useMemo(() => chatTimeline(messages, actions, tabQuestions, tabSuggestions), [messages, actions, tabQuestions, tabSuggestions]);
+  /** "Ver separadas" holds only for the cards it was clicked on: a new or decided card groups again. */
+  const pendingKey = actions
+    .filter((a) => a.status === 'pending')
+    .map((a) => a.id)
+    .join(',');
+  useEffect(() => setSeparate(false), [pendingKey]);
+  const entries = useMemo(() => (separate ? timeline : groupPendingActions(timeline)), [separate, timeline]);
   /**
    * The row a running answer would be written into: only the newest one can still be the live one.
    * Keyed on the id, not on a position: the loop below walks the merged timeline, where an index
@@ -473,6 +509,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   };
 
+  const activeGrantCount = grants.filter((g) => isGrantActive(g)).length;
+
   return (
     // Height and overflow belong to ChatLayout; this page owns the reading column: centred, capped
     // at a comfortable measure and padded so a long answer survives a phone. The bottom safe area
@@ -489,7 +527,14 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-4">
       {/* "Começar do zero" without losing the transcript: it stays server-side, just off this screen.
        *  Disabled while an answer is being written (the server would 409) or with nothing yet to reset. */}
-      <div className="flex items-center justify-end pt-2">
+      {/* The conversation's trusted tabs used to be a strip above the box; now one link, only while any is
+       *  in force, to the list in Configurações (spec 2026-09-26 §4.1). */}
+      <div className="flex items-center justify-end gap-1 pt-2">
+        {activeGrantCount > 0 && (
+          <Link to="/settings/chat-grants" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg">
+            {trustedTabsLabel(activeGrantCount)}
+          </Link>
+        )}
         <button type="button" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50" disabled={answering || resetting || messages.length === 0} onClick={() => setConfirmReset(true)}>
           Nova conversa
         </button>
@@ -567,7 +612,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           stick.current = isNearBottom(e.currentTarget);
         }}
       >
-        {timeline.map((entry) => {
+        {entries.map((entry) => {
+          if (entry.kind === 'action_group') {
+            return <ChatActionGroup key={`g:${entry.actions[0]!.id}`} actions={entry.actions} deciding={batchDeciding} onDecide={(d) => void decideBatch(d)} onShowSeparately={() => setSeparate(true)} />;
+          }
           if (entry.kind === 'tab_suggestion') {
             const s = entry.suggestion;
             return (
@@ -614,7 +662,6 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       </ol>
       {actionError && <p className="mb-2 text-sm text-danger">{actionError}</p>}
       {error && <p className="mb-2 text-sm text-danger">{error}</p>}
-      <ChatGrantStrip grants={grants} revokingId={revokingId} onRevoke={(id) => void revoke(id)} />
       {/* A host that cannot run the message is why the box refuses, and the box says so. */}
       <ChatComposer value={text} onChange={setText} onSend={() => void send()} sending={sending} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} />
     </div>

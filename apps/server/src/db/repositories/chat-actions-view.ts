@@ -1,6 +1,6 @@
 import type { Repositories } from './index.js';
 import type { ChatAction, ChatActionClass, ChatActionStatus } from './chat-actions.js';
-import type { ChatGrant } from './chat-grants.js';
+import type { ChatGrant, ChatGrantWithConversation } from './chat-grants.js';
 import type { Task } from './types.js';
 
 /**
@@ -269,4 +269,60 @@ export async function describeGrants(repos: Repositories, grants: ChatGrant[], o
     expires_at: g.expires_at,
     tab_name: nameById.get(g.tab_id) ?? null,
   }));
+}
+
+/** How a grant stands (spec 2026-09-26 §3.2). A reset or a re-grant revokes every unrevoked row, expired
+ * ones included, so a revocation that came after the expiry is not what ended it: that grant expired. */
+export type ChatGrantState = 'active' | 'expired' | 'revoked' | 'ended';
+
+export function grantState(g: Pick<ChatGrant, 'expires_at' | 'revoked_at' | 'revoked_by'>, now = new Date()): ChatGrantState {
+  const expiresAt = Date.parse(g.expires_at);
+  if (g.revoked_at !== null && Date.parse(g.revoked_at) < expiresAt) return g.revoked_by ? 'revoked' : 'ended';
+  return expiresAt > now.getTime() && g.revoked_at === null ? 'active' : 'expired';
+}
+
+/** A grant as "Abas confiáveis" lists it: the chat's view plus the tab's project, the conversation that
+ * granted it and how it stands. No user ids. */
+export interface ChatGrantListItem extends ChatGrantView {
+  project_id: string | null;
+  project_name: string | null;
+  conversation_id: string;
+  /** Null = the account-wide chat ("Chat geral"). */
+  conversation_project_name: string | null;
+  conversation_archived: boolean;
+  state: ChatGrantState;
+  /** When it stopped counting: the revocation, or the expiry; null while active. */
+  ended_at: string | null;
+}
+
+/** Enriches a page of grants like `describeGrants`: one owner-scoped lookup for the tabs and one for the
+ * projects (the tabs' and the conversations'), never one per grant. */
+export async function describeGrantList(repos: Repositories, grants: ChatGrantWithConversation[], ownerId: string, now = new Date()): Promise<ChatGrantListItem[]> {
+  const tabIds = [...new Set(grants.map((g) => g.tab_id))];
+  const tabs = tabIds.length ? await repos.tabs.findByIdsForOwner(tabIds, ownerId) : [];
+  const tabById = new Map(tabs.map((t) => [t.id, t]));
+  const projectIds = [...new Set([...tabs.map((t) => t.project_id), ...grants.flatMap((g) => (g.conversation_project_id ? [g.conversation_project_id] : []))])];
+  const projects = projectIds.length ? await repos.projects.findByIdsForOwner(projectIds, ownerId) : [];
+  const projectName = new Map(projects.map((p) => [p.id, p.name]));
+  return grants.map((g) => {
+    const tab = tabById.get(g.tab_id);
+    const state = grantState(g, now);
+    const projectId = tab?.project_id ?? null;
+    return {
+      id: g.id,
+      tab_id: g.tab_id,
+      tool: g.tool,
+      source_action_id: g.source_action_id,
+      created_at: g.created_at,
+      expires_at: g.expires_at,
+      tab_name: tab?.name ?? null,
+      project_id: projectId,
+      project_name: projectId ? (projectName.get(projectId) ?? null) : null,
+      conversation_id: g.conversation_id,
+      conversation_project_name: g.conversation_project_id ? (projectName.get(g.conversation_project_id) ?? null) : null,
+      conversation_archived: g.conversation_archived,
+      state,
+      ended_at: state === 'active' ? null : state === 'expired' ? g.expires_at : g.revoked_at,
+    };
+  });
 }

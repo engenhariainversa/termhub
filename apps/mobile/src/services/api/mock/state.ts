@@ -110,6 +110,9 @@ export interface MockAction extends TChatAction {
 export interface MockGrant extends TChatGrant {
   conversation_id: string;
   revoked: boolean;
+  /** When and whether a person revoked it — a reset revokes with `revoked_by_user: false`. */
+  revoked_at: string | null;
+  revoked_by_user: boolean;
 }
 
 /** Field-for-field the wire shape of a notification row (contract `notifications.ts`). */

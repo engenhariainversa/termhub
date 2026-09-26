@@ -38,19 +38,23 @@ function addRows(rows: TChatMessage[], live: TChatEvent[]) {
 /** Replaces one of the store's actions for a test. Not `jest.spyOn(getState(), …)`: zustand
  * replaces the state object on every `setState`, so a restored spy would linger on the new one. */
 const realActions = { ...stores.chat.getState() };
-function stubAction<K extends 'decide' | 'reset' | 'setHost' | 'revokeGrant' | 'answerTabQuestion' | 'sendTabSuggestion' | 'dismissTabSuggestion'>(name: K) {
+function stubAction<K extends 'decide' | 'decideMany' | 'reset' | 'setHost' | 'revokeGrant' | 'answerTabQuestion' | 'sendTabSuggestion' | 'dismissTabSuggestion'>(name: K) {
   const fn = jest.fn(async () => undefined);
   useChatStore.setState({ [name]: fn } as Partial<ReturnType<typeof useChatStore.getState>>);
   return fn;
 }
 
 /** Serves the open project's `GET chat` with its actions and grants changed — the screen re-reads
- * on open, so a slot seeded straight into the store would be overwritten by the mock's answer. */
-function serveChat(patch: (res: TChatResponse) => Pick<TChatResponse, 'actions' | 'grants'>) {
+ * on open, so a slot seeded straight into the store would be overwritten by the mock's answer.
+ * These tests look at one pending card: the seed's second one (`a-termhub-2`) is always left out,
+ * unless `keepBoth` is set (the grouped-card tests want both pending actions on screen). */
+function serveChat(patch: (res: TChatResponse) => Pick<TChatResponse, 'actions' | 'grants'> = (res) => res, keepBoth = false) {
   const real = stores.api.chat.bind(stores.api);
   jest.spyOn(stores.api, 'chat').mockImplementation(async (auth, projectId) => {
     const res = await real(auth, projectId);
-    return projectId === 'p-termhub' ? { ...res, ...patch(res) } : res;
+    if (projectId !== 'p-termhub') return res;
+    const one = keepBoth ? res : { ...res, actions: res.actions.filter((a) => a.id !== 'a-termhub-2') };
+    return { ...one, ...patch(one) };
   });
 }
 
@@ -79,6 +83,7 @@ afterEach(() => {
     error: null,
     live: [],
     decide: realActions.decide,
+    decideMany: realActions.decideMany,
     reset: realActions.reset,
     setHost: realActions.setHost,
     revokeGrant: realActions.revokeGrant,
@@ -131,6 +136,7 @@ describe('Conversa', () => {
   });
 
   it('renders the pending action card; Autorizar calls decide(id, approve)', async () => {
+    serveChat();
     const decide = stubAction('decide');
     await render(<ConversationScreen />);
     expect(await screen.findByText('digitar `npm test` na aba api do projeto termhub, no jarvis', undefined, LOAD)).toBeTruthy();
@@ -140,7 +146,31 @@ describe('Conversa', () => {
     expect(decide).toHaveBeenCalledWith('a-termhub-1', 'approve');
   });
 
+  it('groups two pending actions into one card; toggling and approving calls decideMany, "Ver separadas" ungroups', async () => {
+    serveChat(undefined, true);
+    const decideMany = stubAction('decideMany');
+    await render(<ConversationScreen />);
+    expect(await screen.findByText('2 ações aguardando sua confirmação', undefined, LOAD)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Autorizar' })).toBeNull();
+
+    const secondSummary = 'mover a tarefa TER-12 "Revisar o login" do projeto termhub';
+    const secondRow = screen.getByRole('checkbox', { name: secondSummary });
+    expect(secondRow.props.accessibilityState.checked).toBe(true);
+    await fireEvent.press(secondRow);
+    expect(screen.getByRole('checkbox', { name: secondSummary }).props.accessibilityState.checked).toBe(false);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Aprovar selecionadas (1)' }));
+    expect(decideMany).toHaveBeenCalledWith([
+      { id: 'a-termhub-1', decision: 'approve' },
+      { id: 'a-termhub-2', decision: 'deny' },
+    ]);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver separadas' }));
+    expect(screen.getAllByRole('button', { name: 'Autorizar' })).toHaveLength(2);
+  });
+
   it('Autorizar approves a write card at once, with no PIN sheet (TER-92)', async () => {
+    serveChat();
     // Spied, not `stubAction`: the store's own `decide` logic (the thing under test) still runs,
     // it just never reaches the real mock server, so the shared fixture stays pending for later tests.
     const decide = jest.spyOn(stores.api, 'decide').mockResolvedValueOnce(undefined);
@@ -161,22 +191,32 @@ describe('Conversa', () => {
   });
 
   it('offers "Permitir sempre nesta aba" on a pending send_input; it calls decide(id, approve_tab)', async () => {
+    serveChat();
     const decide = stubAction('decide');
     await render(<ConversationScreen />);
     await fireEvent.press(await screen.findByRole('button', { name: 'Permitir sempre nesta aba' }, LOAD));
     expect(decide).toHaveBeenCalledWith('a-termhub-1', 'approve_tab');
   });
 
-  it('shows the active grant above the composer and on the card that granted it; Revogar calls revokeGrant', async () => {
+  it('counts the active grant in the header, opens Abas confiáveis, and keeps the card\'s Revogar', async () => {
     serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT] }));
     const revokeGrant = stubAction('revokeGrant');
     await render(<ConversationScreen />);
-    expect(await screen.findByText(/^Enviando direto para a aba api até/, undefined, LOAD)).toBeTruthy();
-    expect(screen.getByText(/^Permitido até/)).toBeTruthy();
+    const link = await screen.findByRole('button', { name: '1 aba confiável' }, LOAD);
+    expect(screen.queryByText(/^Enviando direto para/)).toBeNull();
+    await fireEvent.press(link);
+    expect(mockRouter.push).toHaveBeenCalledWith('/chat-grants');
     const revoke = screen.getAllByRole('button', { name: 'Revogar' });
-    expect(revoke).toHaveLength(2);
+    expect(revoke).toHaveLength(1);
     await fireEvent.press(revoke[0]!);
     expect(revokeGrant).toHaveBeenCalledWith('g1');
+  });
+
+  it('shows no header button without an active grant', async () => {
+    serveChat((res) => ({ actions: res.actions, grants: [] }));
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    expect(screen.queryByRole('button', { name: /aba(s)? confiáve/ })).toBeNull();
   });
 
   it('a card run under a grant reads "executada · aba confiada"', async () => {

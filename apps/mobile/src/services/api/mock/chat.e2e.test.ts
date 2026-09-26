@@ -62,26 +62,27 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-it('lists projects with the fixed pending confirmation on termhub', async () => {
+it('lists projects with the fixed pending confirmations on termhub', async () => {
   const clock = { value: START };
   const { api, auth } = await enrol(clock);
 
   const { projects } = await api.chatProjects(auth);
   expect(projects.map((p) => p.id).sort()).toEqual(['p-opapingou', 'p-reactivando', 'p-termhub']);
   const termhub = projects.find((p) => p.id === 'p-termhub')!;
-  expect(termhub.pending_confirmations).toBe(1);
+  expect(termhub.pending_confirmations).toBe(2);
   expect(termhub.busy).toBe(false);
 });
 
-it('GET chat answers the conversation, one pending action and a ready host', async () => {
+it('GET chat answers the conversation, its two pending actions and a ready host', async () => {
   const clock = { value: START };
   const { api, auth } = await enrol(clock);
 
   const chat = await api.chat(auth, 'p-termhub');
   expect(chat.conversation.project_id).toBe('p-termhub');
   expect(chat.messages.length).toBeGreaterThanOrEqual(3);
-  expect(chat.actions).toHaveLength(1);
+  expect(chat.actions).toHaveLength(2);
   expect(chat.actions[0]).toMatchObject({ id: 'a-termhub-1', status: 'pending', class: 'write' });
+  expect(chat.actions[1]).toMatchObject({ id: 'a-termhub-2', status: 'pending', tool: 'move_task' });
   // Like a real row: the proposal's own args name the tab the row targets.
   expect(chat.actions[0]!.args).toMatchObject({ tab_id: chat.actions[0]!.tab_id });
   expect(chat.host).toEqual({
@@ -241,6 +242,63 @@ it('approve on a write card resolves with no proof and broadcasts an approved de
   expect(approveEvent?.status).toBe('approved');
   const chat = await api.chat(auth, 'p-termhub');
   expect(chat.actions.find((a) => a.id === 'a-termhub-1')!.status).toBe('approved');
+
+  collected.close();
+});
+
+it('decideMany: write approvals go with no proof (TER-92), one decision event each', async () => {
+  const clock = { value: START };
+  const { api, auth } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+
+  await api.decideMany(auth, { decisions: [{ id: 'a-termhub-1', decision: 'approve' }, { id: 'a-termhub-2', decision: 'deny' }] });
+  const statuses = Object.fromEntries((await api.chat(auth, 'p-termhub')).actions.map((a) => [a.id, a.status]));
+  expect(statuses).toEqual({ 'a-termhub-1': 'approved', 'a-termhub-2': 'denied' });
+  const decisions = collected.events.filter((e): e is Extract<TChatEvent, { type: 'decision' }> => e.type === 'decision');
+  expect(decisions.map((e) => [e.action_id, e.status])).toEqual([
+    ['a-termhub-1', 'approved'],
+    ['a-termhub-2', 'denied'],
+  ]);
+
+  collected.close();
+});
+
+it('decideMany: a wrong proof decides nothing; then one approval proven and one denial decide both, one decision event each', async () => {
+  const clock = { value: START };
+  const { api, auth, deviceId, secret } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+  const statuses = async () => Object.fromEntries((await api.chat(auth, 'p-termhub')).actions.map((a) => [a.id, a.status]));
+
+  const bad = await api.challenge({ device_id: deviceId, purpose: 'decision', action_id: 'a-termhub-1' });
+  await expect(
+    api.decideMany(auth, {
+      decisions: [
+        { id: 'a-termhub-1', decision: 'approve', challenge: bad.challenge, pin_proof: decisionProof(secret, bad.challenge, 'a-termhub-2', 'approve') },
+        { id: 'a-termhub-2', decision: 'deny' },
+      ],
+    }),
+  ).rejects.toMatchObject({ status: 401, code: 'PIN_INVALID' });
+  expect(await statuses()).toEqual({ 'a-termhub-1': 'pending', 'a-termhub-2': 'pending' });
+  expect(collected.events.filter((e) => e.type === 'decision')).toEqual([]);
+
+  const chal = await api.challenge({ device_id: deviceId, purpose: 'decision', action_id: 'a-termhub-1' });
+  await api.decideMany(auth, {
+    decisions: [
+      { id: 'a-termhub-1', decision: 'approve', challenge: chal.challenge, pin_proof: decisionProof(secret, chal.challenge, 'a-termhub-1', 'approve') },
+      { id: 'a-termhub-2', decision: 'deny' },
+    ],
+  });
+  expect(await statuses()).toEqual({ 'a-termhub-1': 'approved', 'a-termhub-2': 'denied' });
+  const decisions = collected.events.filter((e): e is Extract<TChatEvent, { type: 'decision' }> => e.type === 'decision');
+  expect(decisions.map((e) => [e.action_id, e.status])).toEqual([
+    ['a-termhub-1', 'approved'],
+    ['a-termhub-2', 'denied'],
+  ]);
+
+  // Nothing left to decide: 409, like the server.
+  await expect(api.decideMany(auth, { decisions: [{ id: 'a-termhub-2', decision: 'deny' }] })).rejects.toMatchObject({ status: 409 });
 
   collected.close();
 });
@@ -507,4 +565,21 @@ it('a message containing sugestão raises a tab suggestion; sending it once work
   expect((await api.chat(auth, 'p-termhub')).tab_suggestions.find((s) => s.id === id)).toMatchObject({ status: 'answered', answer: { text: 'commit it and push' } });
   await expect(api.dismissTabSuggestion(auth, 'nope')).rejects.toMatchObject({ status: 404 });
   collected.close();
+});
+
+it('listGrants lists active and ended grants, newest first, paging the history', async () => {
+  const clock = { value: START };
+  const { api, auth, deviceId, secret } = await enrol(clock);
+  expect(await api.listGrants(auth, { state: 'active' })).toEqual({ grants: [], next_cursor: null });
+
+  const chal = await api.challenge({ device_id: deviceId, purpose: 'decision', action_id: 'a-termhub-1' });
+  await api.decide(auth, 'a-termhub-1', { decision: 'approve_tab', challenge: chal.challenge, pin_proof: decisionProof(secret, chal.challenge, 'a-termhub-1', 'approve_tab') });
+  const [active] = (await api.listGrants(auth, { state: 'active' })).grants;
+  expect(active).toMatchObject({ tab_name: 'api', state: 'active', ended_at: null, conversation_project_name: 'termhub', conversation_archived: false });
+
+  await api.revokeGrant(auth, active!.id);
+  expect((await api.listGrants(auth, { state: 'active' })).grants).toEqual([]);
+  const ended = await api.listGrants(auth, { state: 'ended' });
+  expect(ended.grants).toEqual([expect.objectContaining({ id: active!.id, state: 'revoked' })]);
+  expect(ended.next_cursor).toBeNull();
 });
