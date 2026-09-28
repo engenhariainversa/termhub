@@ -9,6 +9,8 @@ import { useVoice } from '../viewmodel/use-voice';
 import { AttachmentChip } from './attachment-chip';
 import { AttachmentMenu, type MenuAnchor } from './attachment-menu';
 import { RecordingWave } from './recording-wave';
+// SPIKE (TER-368): hardware-keyboard Enter sends, Shift+Enter keeps the new line.
+import { KeyCommands } from '../../../../modules/key-commands/src';
 
 /** The box's line box for 16 px text; its height follows the content between `MIN_ROWS` and
  * `MAX_ROWS` of these (the web composer's names), and past that it scrolls. */
@@ -309,22 +311,30 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
           )}
         </View>
         <Animated.View testID="composer-text" style={[{ overflow: 'hidden' }, textStyle]}>
-          <TextInput
-            ref={inputRef}
-            value={text}
-            onChangeText={changeText}
-            placeholder="Mensagem"
-            accessibilityLabel="Mensagem"
-            multiline
-            onContentSizeChange={onContentSizeChange}
-            scrollEnabled={height >= MAX_HEIGHT}
-            textAlignVertical="top"
-            // No padding of its own (Android adds some by default, iOS some to a multiline input) and
-            // no extra font padding: the height set here is exactly the lines it shows. It takes its
-            // new height at once; the frame around it glides, and clips it meanwhile.
-            style={{ height, lineHeight: LINE_HEIGHT, fontSize: 16, padding: 0, paddingTop: 0, paddingBottom: 0, includeFontPadding: false }}
-            className="text-app-text placeholder:text-app-muted"
-          />
+          <KeyCommands
+            enabled={!recording}
+            onSubmitKey={(e) => {
+              console.log('[TER-368 spike] submit key', e.nativeEvent.modifiers);
+              void submit();
+            }}
+          >
+            <TextInput
+              ref={inputRef}
+              value={text}
+              onChangeText={changeText}
+              placeholder="Mensagem"
+              accessibilityLabel="Mensagem"
+              multiline
+              onContentSizeChange={onContentSizeChange}
+              scrollEnabled={height >= MAX_HEIGHT}
+              textAlignVertical="top"
+              // No padding of its own (Android adds some by default, iOS some to a multiline input) and
+              // no extra font padding: the height set here is exactly the lines it shows. It takes its
+              // new height at once; the frame around it glides, and clips it meanwhile.
+              style={{ height, lineHeight: LINE_HEIGHT, fontSize: 16, padding: 0, paddingTop: 0, paddingBottom: 0, includeFontPadding: false }}
+              className="text-app-text placeholder:text-app-muted"
+            />
+          </KeyCommands>
         </Animated.View>
       </View>
       {/* Only when there is something to say: an empty line here would hold the pill off the keyboard. */}
