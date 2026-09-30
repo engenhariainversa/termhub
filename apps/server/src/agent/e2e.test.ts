@@ -230,8 +230,8 @@ describe.skipIf(!hasTmux)('agent e2e: browser <-> server <-> agent <-> real tmux
     try {
       fs.rmSync(agentHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     } catch (err) {
-      // DIAGNOSTIC (temporary): names and sizes only, never contents
-      console.error('[e2e-home-diag] left behind:', execFileSync('sh', ['-c', `find ${agentHome} -exec ls -ld {} +; ps -eo pid,ppid,etime,args | grep -v grep | grep -E 'tmux|thtest|sh -c|node' | cut -c1-160`], { encoding: 'utf8' }));
+      // TER-491 follow-up: name what is still being written there (names and sizes only, never contents)
+      console.error('[e2e-home-diag] left behind:', execFileSync('sh', ['-c', `find ${agentHome} -exec ls -ld {} +; ps -eo pid,ppid,etime,args | grep thtest | grep -v grep | cut -c1-160`], { encoding: 'utf8' }));
       throw err;
     }
 
