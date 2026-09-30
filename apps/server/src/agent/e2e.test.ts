@@ -227,7 +227,13 @@ describe.skipIf(!hasTmux)('agent e2e: browser <-> server <-> agent <-> real tmux
     if (prevHome === undefined) delete process.env.HOME;
     else process.env.HOME = prevHome;
     // the tmux shells killed above may still be writing their history into this HOME: retry ENOTEMPTY
-    fs.rmSync(agentHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    try {
+      fs.rmSync(agentHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch (err) {
+      // DIAGNOSTIC (temporary): names and sizes only, never contents
+      console.error('[e2e-home-diag] left behind:', execFileSync('sh', ['-c', `find ${agentHome} -exec ls -ld {} +; ps -eo pid,ppid,etime,args | grep -v grep | grep -E 'tmux|thtest|sh -c|node' | cut -c1-160`], { encoding: 'utf8' }));
+      throw err;
+    }
 
     if (prevTmuxTmpDir === undefined) delete process.env.TMUX_TMPDIR;
     else process.env.TMUX_TMPDIR = prevTmuxTmpDir;
