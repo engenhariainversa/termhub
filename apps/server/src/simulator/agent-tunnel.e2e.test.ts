@@ -169,7 +169,8 @@ describe('agent e2e: server tunnel <-> agent tcp channel <-> local WDA port', ()
     if (stub) await new Promise<void>((r) => stub!.close(() => r()));
     if (prevHome === undefined) delete process.env.HOME;
     else process.env.HOME = prevHome;
-    fs.rmSync(agentHome, { recursive: true, force: true });
+    // the tmux shells killed above may still be writing their history into this HOME: retry ENOTEMPTY
+    fs.rmSync(agentHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   it('reads the stub WDA /status through the tunnel, reusing one channel for two requests', { timeout: 20_000 }, async () => {

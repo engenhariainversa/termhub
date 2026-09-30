@@ -226,7 +226,8 @@ describe.skipIf(!hasTmux)('agent e2e: browser <-> server <-> agent <-> real tmux
     fs.rmSync(projectCwd, { recursive: true, force: true });
     if (prevHome === undefined) delete process.env.HOME;
     else process.env.HOME = prevHome;
-    fs.rmSync(agentHome, { recursive: true, force: true });
+    // the tmux shells killed above may still be writing their history into this HOME: retry ENOTEMPTY
+    fs.rmSync(agentHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 
     if (prevTmuxTmpDir === undefined) delete process.env.TMUX_TMPDIR;
     else process.env.TMUX_TMPDIR = prevTmuxTmpDir;
