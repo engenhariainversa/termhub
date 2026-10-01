@@ -13,6 +13,7 @@ const { authState, analytics, openCookieBanner } = vi.hoisted(() => ({
       logout: vi.fn(async () => {}),
       viewAs: null,
       setViewAs: vi.fn(async () => {}),
+      config: null as { terms_url?: string | null; privacy_url?: string | null } | null,
     },
   },
   analytics: { enabled: false },
@@ -57,7 +58,7 @@ function mount() {
 }
 
 beforeEach(() => {
-  authState.current = { ...authState.current, user: user(false) };
+  authState.current = { ...authState.current, user: user(false), config: null };
   analytics.enabled = false;
 });
 afterEach(() => {
@@ -98,5 +99,15 @@ describe('ProfileView', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Preferências de cookies' }));
     expect(openCookieBanner).toHaveBeenCalledTimes(1);
+  });
+
+  it('links to the terms and the privacy policy when the server has them', () => {
+    mount();
+    expect(screen.queryByRole('link', { name: 'Termos de uso' })).toBeNull();
+    cleanup();
+    authState.current = { ...authState.current, config: { terms_url: 'https://termhub.dev/termos/', privacy_url: 'https://termhub.dev/privacidade/' } };
+    mount();
+    expect(screen.getByRole('link', { name: 'Termos de uso' })).toHaveAttribute('href', 'https://termhub.dev/termos/');
+    expect(screen.getByRole('link', { name: 'Política de privacidade' })).toHaveAttribute('href', 'https://termhub.dev/privacidade/');
   });
 });

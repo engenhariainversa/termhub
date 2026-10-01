@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
+import { LegalLinks } from '@/features/legal/view/legal-links';
 import { AppText, Banner, Button, Field, Screen } from '@/ui';
 import { useSessionStore } from '../viewmodel/useSessionStore';
 
@@ -45,6 +46,8 @@ export function StartScreen() {
           testID="start-email"
         />
         <Button label="Continuar com e-mail" onPress={submit} loading={busy} />
+        <AppText variant="muted">Usamos o seu e-mail para encontrar a sua conta e pedir a aprovação deste aparelho.</AppText>
+        <LegalLinks />
       </View>
     </Screen>
   );

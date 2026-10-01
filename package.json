@@ -22,7 +22,7 @@
     "build:landing": "npm run build -w @termhub/landing",
     "dev:landing": "npm run dev -w @termhub/landing",
     "start": "npm run start -w @termhub/server",
-    "test": "npm test -w @termhub/agent-protocol && npm test -w @termhub/machine-ops && npm test -w @termhub/claude-cli && npm test -w @termhub/mobile-api && npm test -w @termhub/server && npm test -w @termhub/web && npm test -w @termhub/mobile && npm test -w @termhub/agent",
+    "test": "npm test -w @termhub/agent-protocol && npm test -w @termhub/machine-ops && npm test -w @termhub/claude-cli && npm test -w @termhub/mobile-api && npm test -w @termhub/server && npm test -w @termhub/web && npm test -w @termhub/landing && npm test -w @termhub/mobile && npm test -w @termhub/agent",
     "prisma:generate": "npm run prisma:generate -w @termhub/server",
     "prisma:migrate": "npm run prisma:migrate -w @termhub/server --",
     "prisma:migrate:deploy": "npm run prisma:migrate:deploy -w @termhub/server",

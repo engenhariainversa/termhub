@@ -64,6 +64,8 @@ jobs:
         run: npm run build:city -w @termhub/web
       - name: Testes web
         run: npm test -w @termhub/web
+      - name: Testes landing
+        run: npm test -w @termhub/landing
       - name: Typecheck mobile
         run: npm run typecheck -w @termhub/mobile
       - name: Testes mobile

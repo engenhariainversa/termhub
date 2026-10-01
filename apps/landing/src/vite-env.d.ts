@@ -10,3 +10,9 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_APP_ID: string | undefined;
   readonly VITE_FIREBASE_MEASUREMENT_ID: string | undefined;
 }
+
+/** A legal document rendered at build time (legalMarkdown in vite.config.ts, src/legal/render.ts). */
+declare module '*.md?legal' {
+  const doc: import('./legal/render').RenderedLegal;
+  export default doc;
+}

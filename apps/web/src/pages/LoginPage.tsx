@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { ApiError } from '../lib/api';
+import { LegalLinks } from '../components/LegalLinks';
 
 const OAUTH_ERRORS: Record<string, string> = {
   google_denied: 'Login com Google cancelado.',
@@ -178,6 +179,7 @@ export function LoginPage() {
             </button>
           </form>
         )}
+        <LegalLinks className="mt-6 justify-center border-t border-line pt-4" />
       </div>
     </div>
   );

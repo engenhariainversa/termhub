@@ -73,6 +73,9 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     // it is the address handed to strangers. Served here, beside the rest of the instance's config,
     // because every sign-in path reads this once at boot and none of them returns it otherwise.
     public_city_url: config.publicCityUrl,
+    // Read before sign-in (the login screen links to them), so they live here too. null = not set.
+    terms_url: config.legal.termsUrl,
+    privacy_url: config.legal.privacyUrl,
   }));
 
   app.get('/me', { config: { public: true } }, async (request) => {

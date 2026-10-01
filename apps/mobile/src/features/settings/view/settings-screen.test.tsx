@@ -147,6 +147,13 @@ describe('Notificações e Privacidade (permission prompts spec §2)', () => {
     expect(stores.permissions.getState().adConsent).toBe('denied');
   });
 
+  // Apple 5.1.1(i) and Google Play: the privacy policy is reachable from inside the app.
+  it('links the terms and the privacy policy', async () => {
+    await render(<SettingsScreen />);
+    expect(screen.getByRole('link', { name: 'Termos de uso' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Política de privacidade' })).toBeTruthy();
+  });
+
   it('coming back to the app drops a grant revoked in the system settings', async () => {
     stores.permissions.setState({ adConsent: 'granted' });
     let onChange: (state: string) => void = () => undefined;

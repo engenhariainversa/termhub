@@ -745,6 +745,9 @@ export interface AuthConfig {
   email_code: boolean;
   /** where this instance's public cities live, e.g. https://termhub.dev/city — share links are built from it */
   public_city_url: string;
+  /** this instance's terms of use and privacy policy (TERMS_URL / PRIVACY_URL); null = no link */
+  terms_url?: string | null;
+  privacy_url?: string | null;
 }
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
