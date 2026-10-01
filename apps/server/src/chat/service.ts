@@ -898,6 +898,10 @@ export class ChatService {
    */
   async start(user: User, text: string, opts: SendOptions = {}): Promise<StartedRun> {
     const conversation = await this.conversationFor(user, opts.projectId ?? null);
+    // Before the run can see the message: from here on, a "no" given earlier no longer refuses a call
+    // on its own (TER-530) — the person may be asking for that very action again. Best effort: a
+    // failure keeps the old denial window, never the message.
+    await this.deps.repos.chat.markTyped(conversation.id).catch((err) => console.error('chat: last_typed_at not recorded', { conversation_id: conversation.id, error: failureLabel(err) }));
     const started = await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId });
     // Only a message the person typed is memory (spec D3/D4): re-injections and wakes go through
     // `startIn` directly and never reach here. Best effort, fire-and-forget: `indexMessage` never throws.

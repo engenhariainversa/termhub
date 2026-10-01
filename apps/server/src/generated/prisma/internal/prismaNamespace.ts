@@ -4466,6 +4466,7 @@ export const ChatConversationScalarFieldEnum = {
   contextTokens: 'contextTokens',
   contextWindow: 'contextWindow',
   lastMessageAt: 'lastMessageAt',
+  lastTypedAt: 'lastTypedAt',
   createdAt: 'createdAt'
 } as const
 

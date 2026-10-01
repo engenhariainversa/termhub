@@ -269,6 +269,18 @@ export class ChatRepository {
     await this.db.chatConversation.update({ where: { id }, data: { aiAccountId } });
   }
 
+  /** The person typed in this conversation now (TER-530): see `lastTypedAt`. */
+  async markTyped(id: string, at = new Date()): Promise<void> {
+    await this.db.chatConversation.update({ where: { id }, data: { lastTypedAt: at } });
+  }
+
+  /** When the person last typed here, or null. Re-injected decisions and wakes are stored as user
+   * messages too, so this — set only by `ChatService.start` — is what tells a person's own words apart. */
+  async lastTypedAt(id: string): Promise<string | null> {
+    const row = await this.db.chatConversation.findUnique({ where: { id }, select: { lastTypedAt: true } });
+    return row?.lastTypedAt?.toISOString() ?? null;
+  }
+
   async addMessage(input: { conversation_id: string; role: ChatRole; text: string; usage?: unknown; error_code?: string | null; reply_to?: { id: string; role: ChatRole; excerpt: string } }): Promise<ChatMessage> {
     const [message] = await this.db.$transaction([
       this.db.chatMessage.create({

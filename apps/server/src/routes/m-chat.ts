@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { answerTabLimit, describeTabLimits } from '../chat/tab-limits.js';
 import { tabLimitAnswerBody } from '@termhub/mobile-api';
 import { z } from 'zod';
-import { chatGrantListQuery, chatGrantListResponse, chatProjectsResponse, decisionProofMessage, deviceSelf, hostOptionsResponse, mobileBatchDecisionBody, projectFavoriteBody, mobileDecisionBody, mobileMessageBody, sendAccepted, type PinDecision } from '@termhub/mobile-api';
+import { chatGrantListQuery, chatGrantListResponse, chatProjectsResponse, decisionChallengesBody, decisionChallengesResponse, decisionProofMessage, deviceSelf, hostOptionsResponse, mobileBatchDecisionBody, projectFavoriteBody, mobileDecisionBody, mobileMessageBody, sendAccepted, type PinDecision } from '@termhub/mobile-api';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -350,6 +350,22 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       .then(() => deps.chat.resumeAfterDecision(user, action))
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId }, 'mobile decision resume failed'));
     return { action, queued: true, note: DECISION_NOTE, grant, project_grant, standing_grant };
+  });
+
+  /**
+   * The decision challenges of a grouped confirmation, one per action, in one call (TER-530). The app
+   * used to ask `session/challenge` once per action, and that route — the anonymous entry point, kept
+   * on the proxy's tightest budget — answered 429 from the sixth approval on, so a batch of irreversible
+   * cards could not be approved at all. Here the device is already authenticated (token + DPoP), so the
+   * calls share the ordinary mobile budget, and each challenge is still bound to its own action and
+   * consumed by `proofOk` exactly as before.
+   */
+  app.post('/actions/challenges', { config: { action: 'create' } }, async (request) => {
+    const { action_ids } = decisionChallengesBody.parse(request.body);
+    const device = deviceOf(request);
+    const challenges: { action_id: string; challenge: string; expires_at: string }[] = [];
+    for (const id of action_ids) challenges.push({ action_id: id, ...(await deps.session.challenge(device.id, 'decision', id)) });
+    return decisionChallengesResponse.parse({ challenges });
   });
 
   /**

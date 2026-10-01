@@ -83,6 +83,21 @@ export const mobileBatchDecisionBody = z.object({
     .refine((d) => d.every((x) => x.decision !== 'approve' || (x.challenge === undefined) === (x.pin_proof === undefined)), 'challenge e pin_proof vão juntos'),
 });
 
+/** One decision challenge per action of a grouped confirmation, issued in a single authenticated call
+ * (TER-530). Asking `session/challenge` once per action ran into that route's tight per-client budget
+ * (it is the anonymous entry point) as soon as a batch held more than a handful of approvals. Same cap
+ * as `mobileBatchDecisionBody`. */
+export const decisionChallengesBody = z.object({
+  action_ids: z
+    .array(z.string().min(1).max(64))
+    .min(1)
+    .max(20)
+    .refine((ids) => new Set(ids).size === ids.length, 'Ações repetidas'),
+});
+export const decisionChallengesResponse = z.object({
+  challenges: z.array(z.object({ action_id: z.string(), challenge: z.string(), expires_at: z.string() })),
+});
+
 /** Mirrors the server's `grantable` (apps/server/src/chat/gate.ts), which is the judge: only
  * `send_input` to a tab, never answering a permission. Decides whether the card offers the button. */
 export function isTabGrantable(action: { tool: string; args: unknown; tab_id: string | null }): boolean {

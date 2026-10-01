@@ -725,6 +725,9 @@ model ChatConversation {
   contextTokens Int?          @map("context_tokens")
   contextWindow Int?          @map("context_window")
   lastMessageAt DateTime?     @map("last_message_at")
+  /// The last time the person typed a message here (TER-530) — not a decision's re-injection nor a
+  /// wake, which are stored as user messages too. A "no" given before it no longer refuses on its own.
+  lastTypedAt   DateTime?     @map("last_typed_at")
   createdAt     DateTime      @default(now()) @map("created_at")
   messages      ChatMessage[]
   actions       ChatAction[]

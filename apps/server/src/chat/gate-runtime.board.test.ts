@@ -43,7 +43,7 @@ beforeEach(() => {
   actions = fakeActions();
   projectGrants = [];
   const repos = {
-    chat: { getOrCreateForUser: vi.fn() },
+    chat: { getOrCreateForUser: vi.fn(), lastTypedAt: vi.fn(async () => null) },
     chatActions: actions,
     chatGrants: { findActive: vi.fn(async () => undefined) },
     chatProjectGrants: { findActive: vi.fn(async (c: string, p: string) => projectGrants.find((g) => g.conversation_id === c && g.project_id === p && !g.revoked_at && Date.parse(g.expires_at) > Date.now())) },

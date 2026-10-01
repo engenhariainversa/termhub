@@ -101,6 +101,7 @@ function build(opts: {
   const session = {
     checkPin: opts.checkPin ?? vi.fn(async () => ({ ok: true })),
     consumeDecisionChallenge: opts.consumeDecisionChallenge ?? vi.fn(async () => true),
+    challenge: vi.fn(async (_deviceId: string, _purpose: string, actionId: string) => ({ challenge: `ch-${actionId}`, expires_at: '2026-10-01T12:01:00.000Z' })),
   };
   const agents = {
     capabilities: vi.fn((id: string) => (id === 'm1' ? ['chat'] : null)),
@@ -1079,6 +1080,28 @@ describe('POST /chat/actions/:id/decision: approve_project_always (TER-386)', ()
     expect(res.statusCode).toBe(200);
     expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
     expect(res.json()).not.toHaveProperty('standing_grant');
+  });
+});
+
+describe('POST /chat/actions/challenges (TER-530)', () => {
+  const post = (app: ReturnType<typeof build>['app'], payload: unknown) => app.inject({ method: 'POST', url: '/chat/actions/challenges', payload });
+
+  it('issues one decision challenge per action of a 13-card batch in a single call, each bound to its own action', async () => {
+    const { app, session } = build();
+    const ids = Array.from({ length: 13 }, (_, i) => `a${i + 1}`);
+    const res = await post(app, { action_ids: ids });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().challenges).toEqual(ids.map((id) => ({ action_id: id, challenge: `ch-${id}`, expires_at: '2026-10-01T12:01:00.000Z' })));
+    expect(session.challenge).toHaveBeenCalledTimes(13);
+    for (const id of ids) expect(session.challenge).toHaveBeenCalledWith(device.id, 'decision', id);
+  });
+
+  it('refuses an empty list, repeated ids and more than the batch cap (20) before issuing anything', async () => {
+    const { app, session } = build();
+    for (const action_ids of [[], ['a1', 'a1'], Array.from({ length: 21 }, (_, i) => `a${i}`)]) {
+      expect((await post(app, { action_ids })).statusCode).toBe(400);
+    }
+    expect(session.challenge).not.toHaveBeenCalled();
   });
 });
 
