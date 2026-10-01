@@ -15,6 +15,7 @@ function titleOf(prompt: SessionState['pinPrompt']): string {
   if (prompt?.decision === 'approve_project_all') return 'Liberar tudo neste projeto';
   // The chat store names the kind in `title`; this is the fallback when it could not.
   if (prompt?.decision === 'approve_project_always') return 'Liberar sem prazo neste projeto';
+  if (prompt?.decision === 'delete_account') return 'Excluir minha conta';
   const n = prompt?.actionIds?.length ?? 1;
   return n > 1 ? `Autorizar ${n} ações` : 'Autorizar esta ação';
 }

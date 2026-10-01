@@ -1,6 +1,7 @@
 import type { Repositories } from '../db/repositories/index.js';
 import type { ApiToken } from '../db/repositories/api-tokens.js';
 import type { User } from '../db/repositories/types.js';
+import { isPendingDeletion } from '../account/deletion.js';
 import { API_TOKEN_RE, hashApiToken } from '../auth/api-tokens.js';
 
 /**
@@ -26,5 +27,7 @@ export async function authenticateToken(
     tab = { id: row.id, project_id: row.project_id };
   }
   const user = await repos.users.findById(token.user_id);
-  return user ? { token, user, tab } : null;
+  // A deactivated account (deletion pending, TER-720): its tokens stay, refused until a cancel.
+  if (!user || isPendingDeletion(user)) return null;
+  return { token, user, tab };
 }

@@ -78,4 +78,16 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('UsersRepository (Postgres
       await db.user.deleteMany({ where: { id: a.id } });
     }
   });
+
+  it('a deactivated account never answers on its own, even with the switch on (TER-720)', async () => {
+    const a = await repo.create({ email: `${newId()}@x.dev`, name: 'A', role_id: SYSTEM_ROLE_IDS.authenticated });
+    try {
+      await repo.setChatAutodecide(a.id, true);
+      expect(await repo.chatAutodecide(a.id)).toBe(true);
+      await db.user.update({ where: { id: a.id }, data: { deletionRequestedAt: new Date(), deletionScheduledAt: new Date(Date.now() + 1000) } });
+      expect(await repo.chatAutodecide(a.id)).toBe(false);
+    } finally {
+      await db.user.deleteMany({ where: { id: a.id } });
+    }
+  });
 });

@@ -130,6 +130,37 @@ it('only TOKEN_EXPIRED triggers renewal: DEVICE_REVOKED, PROOF_REPLAYED, PROOF_I
   }
 });
 
+it('reports every 403 ACCOUNT_PENDING_DELETION, and only that, to onAccountPendingDeletion', async () => {
+  const { transport } = scripted([
+    { status: 403, body: { error: 'Conta desativada', code: 'ACCOUNT_PENDING_DELETION' } },
+    { status: 403, body: { error: 'Sem permissão', code: 'FORBIDDEN' } },
+  ]);
+  const onAccountPendingDeletion = jest.fn();
+  const api = createHttpMobileApi({ transport, baseUrl: 'https://termhub.dev', app: 'ios/0.1.0+1', key, onTokenExpired: async () => null, now: () => NOW * 1000, onAccountPendingDeletion });
+  await expect(api.chatProjects({ accessToken: 'tok' })).rejects.toMatchObject({ status: 403, code: 'ACCOUNT_PENDING_DELETION' });
+  await expect(api.chatProjects({ accessToken: 'tok' })).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  expect(onAccountPendingDeletion).toHaveBeenCalledTimes(1);
+});
+
+it('account deletion: GET, POST and DELETE on /account/deletion, validated against the contract', async () => {
+  const pending = { pending: true, requested_at: '2026-10-01T12:00:00.000Z', scheduled_at: '2026-10-31T12:00:00.000Z' };
+  const none = { pending: false, requested_at: null, scheduled_at: null };
+  const { transport, calls } = scripted([{ status: 200, body: none }, { status: 200, body: pending }, { status: 200, body: none }, { status: 200, body: { pending: 'yes' } }]);
+  const api = make(transport);
+  const a = { accessToken: 'tok' };
+  await expect(api.accountDeletion(a)).resolves.toEqual(none);
+  await expect(api.requestAccountDeletion(a, { challenge: 'c1', pin_proof: 'p1' })).resolves.toEqual(pending);
+  await expect(api.cancelAccountDeletion(a)).resolves.toEqual(none);
+  await expect(api.accountDeletion(a)).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
+  expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+    'GET https://termhub.dev/api/m/v1/account/deletion',
+    'POST https://termhub.dev/api/m/v1/account/deletion',
+    'DELETE https://termhub.dev/api/m/v1/account/deletion',
+    'GET https://termhub.dev/api/m/v1/account/deletion',
+  ]);
+  expect(JSON.parse(calls[1]!.body!)).toEqual({ challenge: 'c1', pin_proof: 'p1' });
+});
+
 it('refuses a body that does not match the contract', async () => {
   const { transport } = scripted([{ status: 200, body: { nope: 1 } }]);
   await expect(make(transport).chatProjects({ accessToken: 'tok' })).rejects.toMatchObject({ status: 502, code: 'BAD_RESPONSE' });

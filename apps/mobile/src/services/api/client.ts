@@ -6,6 +6,8 @@ import type { z } from 'zod';
 import { b64url, utf8 } from '../crypto/encoding';
 import type { DeviceKey } from '../key/types';
 import {
+  ACCOUNT_PENDING_DELETION,
+  accountDeletionStatus,
   canonicalHtu,
   challengeResponse,
   cancelSubagentResponse,
@@ -36,6 +38,7 @@ import {
   tokenResponse,
   transcriptionConfigResponse,
   transcriptionResponse,
+  type AccountDeletionBody,
   type TChallengeBody,
   type TDeviceActivateBody,
   type TDeviceRequestBody,
@@ -81,6 +84,9 @@ export type CreateHttpMobileApiOptions = {
    * refused socket renews only then; a refusal with a fresh token is not a token problem and only
    * backs off (TER-93: the Origin refusal used to renew every 1–30 s). Defaults to always stale. */
   tokenStale?: () => boolean;
+  /** Called on every `403 ACCOUNT_PENDING_DELETION` (TER-720): the account is deactivated until the
+   * person cancels its deletion. The singleton passes `accountPendingDeletion.emit`. */
+  onAccountPendingDeletion?: () => void;
 };
 
 type CallOptions = {
@@ -152,6 +158,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     return renewing;
   };
 
+  const pendingDeletion = (err: ApiError) => {
+    if (err.status === 403 && err.code === ACCOUNT_PENDING_DELETION) o.onAccountPendingDeletion?.();
+  };
+
   // `z.ZodType<T, z.ZodTypeDef, any>`, not the one-arg `z.ZodType<T>`: a schema with a `.default(...)`
   // field (e.g. `chatResponse.grants`) has an Input type stricter (optional) than its Output type T,
   // and pinning T's Input parameter to T too — what `z.ZodType<T>` does — makes inference pick up that
@@ -189,6 +199,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     if (res.status >= 200 && res.status < 300) return decode(res.text, schema);
 
     const err = ApiError.fromBody(res.status, res.headers, res.text);
+    pendingDeletion(err);
     if (err.status === 401 && err.code === 'TOKEN_EXPIRED' && opts.token && opts.retry !== false) {
       if (latestToken && latestToken !== opts.token) {
         // Someone else already renewed while this call was in flight; reuse that token instead
@@ -213,6 +224,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     if (res.status >= 200 && res.status < 300) return decode(res.body, schema);
 
     const err = ApiError.fromBody(res.status, {}, res.body);
+    pendingDeletion(err);
     if (err.status === 401 && err.code === 'TOKEN_EXPIRED' && retry) {
       const fresh = latestToken && latestToken !== token ? latestToken : await renewOnce();
       if (fresh) {
@@ -244,6 +256,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     deviceSelf: (a: Auth) => call('GET', '/api/m/v1/devices/self', deviceSelfSchema, { token: a.accessToken }),
     revokeSelf: (a: Auth) => empty('POST', '/api/m/v1/devices/self/revoke', { token: a.accessToken }),
     setPushToken: (a: Auth, token: string) => empty('PUT', '/api/m/v1/push-token', { token: a.accessToken, body: { token } }),
+
+    accountDeletion: (a: Auth) => call('GET', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
+    requestAccountDeletion: (a: Auth, body: AccountDeletionBody) => call('POST', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken, body }),
+    cancelAccountDeletion: (a: Auth) => call('DELETE', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
 
     chatProjects: (a: Auth) => call('GET', '/api/m/v1/chat/projects', chatProjectsResponse, { token: a.accessToken }),
     setProjectFavorite: (a: Auth, projectId: string, favorite: boolean) =>

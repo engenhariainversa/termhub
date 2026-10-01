@@ -56,6 +56,10 @@ export interface User {
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until */
   review_enabled_by: string | null;
+  /** self-service deletion (TER-720): when it was asked; the account is deactivated while this is set */
+  deletion_requested_at: string | null;
+  /** when the deletion job removes the account for good; null = no deletion pending */
+  deletion_scheduled_at: string | null;
   created_at: string;
 }
 
@@ -288,6 +292,8 @@ export const mapUser = (u: PrismaUser): User => ({
   last_login_at: u.lastLoginAt?.toISOString() ?? null,
   review_enabled_until: u.reviewEnabledUntil?.toISOString() ?? null,
   review_enabled_by: u.reviewEnabledBy,
+  deletion_requested_at: u.deletionRequestedAt?.toISOString() ?? null,
+  deletion_scheduled_at: u.deletionScheduledAt?.toISOString() ?? null,
   created_at: u.createdAt.toISOString(),
 });
 

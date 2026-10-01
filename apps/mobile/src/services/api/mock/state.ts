@@ -252,6 +252,9 @@ export interface MockState {
   /** "Lições" (spec 2026-09-27 failure lessons §6/§8): the mock's one user's `lesson` items, any
    * order (`GET lessons` sorts newest first) — "Esquecer" (`DELETE`) removes a row from here. */
   lessons: MockLesson[];
+  /** The mock user's pending account deletion (TER-720), milliseconds; `null` when none. While set,
+   * every authenticated route but the account-deletion ones answers `403 ACCOUNT_PENDING_DELETION`. */
+  accountDeletion: { requestedAt: number; scheduledAt: number } | null;
 }
 
 export function createMockState(): MockState {
@@ -286,6 +289,7 @@ export function createMockState(): MockState {
     chatCodexRepliesEnabled: false,
     notes: [],
     lessons: [],
+    accountDeletion: null,
   };
 }
 
@@ -340,7 +344,7 @@ export type VerifiedAuth = { device: MockDevice; token: string };
  * DPoP (bound to the token's `ath`), then the jti window — in that order (brief ruling), unlike
  * `session/token`'s order where the signature is checked before the device's revoked status.
  */
-export function verifyAuth(state: MockState, ctx: { headers: Record<string, string>; htm: string; htu: string; now: number }): VerifiedAuth {
+export function verifyAuth(state: MockState, ctx: { headers: Record<string, string>; htm: string; htu: string; now: number; allowPendingDeletion?: boolean }): VerifiedAuth {
   const bearer = bearerToken(ctx.headers);
   const tokenRow = bearer ? state.tokens.get(bearer) : undefined;
   if (!bearer || !tokenRow || tokenRow.expiresAt <= ctx.now) {
@@ -360,6 +364,11 @@ export function verifyAuth(state: MockState, ctx: { headers: Record<string, stri
 
   if (!claimJti(state, device.id, result.jti, nowSeconds)) {
     throw new WireError(401, 'PROOF_REPLAYED', 'Prova repetida.');
+  }
+
+  // A deactivated account (TER-720) reaches only the routes that show and cancel its deletion.
+  if (state.accountDeletion && !ctx.allowPendingDeletion) {
+    throw new WireError(403, 'ACCOUNT_PENDING_DELETION', 'Sua conta está desativada porque você pediu para excluí-la. Cancele a exclusão para voltar a usar o termhub.');
   }
 
   return { device, token: bearer };

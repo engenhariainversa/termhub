@@ -2,6 +2,8 @@ import * as Application from 'expo-application';
 import { useRouter } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { AppState, Switch, View } from 'react-native';
+import { ACCOUNT_MSG } from '@/features/account/model/messages';
+import { useAccountStore } from '@/features/account/viewmodel/useAccountStore';
 import { hostLine } from '@/features/chat/model/copy';
 import { HostSheet } from '@/features/chat/view/host-sheet';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
@@ -33,8 +35,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** Ajustes (spec §11.2, design spec §7): this device, biometrics, notifications and privacy, the general chat's machine and
- * "Permissões do chat" (its trusted tabs and projects), the theme, the key diagnostic, the version
- * and leaving. */
+ * "Permissões do chat" (its trusted tabs and projects), the theme, the key diagnostic, the version,
+ * leaving and "Excluir minha conta" (TER-720). */
 export function SettingsScreen() {
   const router = useRouter();
   const device = useSettingsStore((s) => s.device);
@@ -59,6 +61,12 @@ export function SettingsScreen() {
 
   const [pickingHost, setPickingHost] = useState(false);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
+  // Inline, not a sheet: the PIN sheet opens next, and one modal handing over to another is fragile on iOS.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const requestingDeletion = useAccountStore((s) => s.requesting);
+  const deletionError = useAccountStore((s) => s.error);
+  const requestDeletion = useAccountStore((s) => s.requestDeletion);
+  const clearDeletionError = useAccountStore((s) => s.clearError);
   const [diagnosing, setDiagnosing] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<KeyDiagnosticResult | null>(null);
 
@@ -89,6 +97,23 @@ export function SettingsScreen() {
   const confirmLeave = () => {
     setConfirmingLeave(false);
     void leave();
+  };
+
+  const startDelete = () => {
+    clearDeletionError();
+    setConfirmingDelete(true);
+  };
+
+  const closeDelete = () => {
+    clearDeletionError();
+    setConfirmingDelete(false);
+  };
+
+  // Once pending, the redirect swaps Ajustes for the blocking screen; the panel only closes.
+  const confirmDelete = () => {
+    void requestDeletion().then((pending) => {
+      if (pending) setConfirmingDelete(false);
+    });
   };
 
   return (
@@ -162,6 +187,21 @@ export function SettingsScreen() {
             <Button label="Cancelar" variant="ghost" onPress={() => setConfirmingLeave(false)} />
           </View>
         </Sheet>
+
+        {confirmingDelete ? (
+          <View testID="delete-account-panel" className="gap-3 rounded-xl border border-app-danger p-4">
+            <AppText variant="title">{ACCOUNT_MSG.confirmTitle}</AppText>
+            <AppText className="font-semibold">{ACCOUNT_MSG.confirmWhen}</AppText>
+            <AppText>{ACCOUNT_MSG.confirmDeleted}</AppText>
+            <AppText>{ACCOUNT_MSG.confirmKept}</AppText>
+            <AppText variant="muted">{ACCOUNT_MSG.confirmCancel}</AppText>
+            {deletionError ? <AppText className="text-app-danger">{deletionError}</AppText> : null}
+            <Button label={ACCOUNT_MSG.confirmButton} variant="danger" loading={requestingDeletion} onPress={confirmDelete} />
+            <Button label={ACCOUNT_MSG.back} variant="ghost" onPress={closeDelete} disabled={requestingDeletion} />
+          </View>
+        ) : (
+          <Button label={ACCOUNT_MSG.deleteButton} variant="danger" onPress={startDelete} />
+        )}
       </View>
     </Screen>
   );

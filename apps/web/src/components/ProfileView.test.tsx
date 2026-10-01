@@ -90,6 +90,13 @@ describe('ProfileView', () => {
     expect(screen.getByText('login-page')).toBeInTheDocument();
   });
 
+  it('opens the account deletion dialog from the danger zone', () => {
+    mount();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir minha conta' }));
+    expect(screen.getByRole('dialog', { name: 'Excluir minha conta' })).toBeInTheDocument();
+  });
+
   it('offers the cookie preferences only when analytics is on', () => {
     mount();
     expect(screen.queryByRole('button', { name: 'Preferências de cookies' })).toBeNull();

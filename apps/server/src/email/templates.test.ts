@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alphaInviteMail, deviceRequestMail, deviceRevokedMail } from './templates.js';
+import { accountDeletedMail, alphaInviteMail, deletionCancelledMail, deletionDateLabel, deletionLinkMail, deletionRequestedMail, deviceRequestMail, deviceRevokedMail } from './templates.js';
 
 const opts = { appUrl: 'https://app.termhub.dev', communityUrl: 'https://77a.it/comunidadetermhub', firstName: 'Ana' };
 
@@ -73,5 +73,32 @@ describe('deviceRevokedMail', () => {
     const evil = deviceRevokedMail('a@b.c', { deviceLabel: '<script>x</script>' });
     expect(evil.html).not.toContain('<script>');
     expect(evil.html).toContain('&lt;script&gt;');
+  });
+});
+
+describe('account deletion e-mails (TER-720, TER-728)', () => {
+  it('the request e-mail gives the final date in Brasília time and the way to cancel', () => {
+    // 02:00 UTC on Nov 1 is still Oct 31 in Brasília.
+    const mail = deletionRequestedMail('ana@gmail.com', { scheduledAt: new Date('2026-11-01T02:00:00.000Z'), appUrl: 'https://app.termhub.dev' });
+    expect(deletionDateLabel(new Date('2026-11-01T02:00:00.000Z'))).toBe('31 de outubro de 2026');
+    expect(mail.text).toContain('31 de outubro de 2026');
+    expect(mail.text).toContain('Cancelar exclusão');
+    expect(mail.text).toContain('6 meses');
+    expect(mail.html).toContain('href="https://app.termhub.dev"');
+  });
+
+  it('the link e-mail carries the link, its lifetime and the "ignore it" line', () => {
+    const mail = deletionLinkMail('ana@gmail.com', { link: 'https://termhub.dev/excluir-conta/?token=abc&x=<y>', ttlMinutes: 30 });
+    expect(mail.text).toContain('https://termhub.dev/excluir-conta/?token=abc');
+    expect(mail.text).toContain('30 minutos');
+    expect(mail.text).toContain('ignore este e-mail');
+    expect(mail.html).not.toContain('<y>');
+  });
+
+  it('cancel and final notices', () => {
+    expect(deletionCancelledMail('a@x.dev', { appUrl: 'https://app.termhub.dev' }).subject).toBe('A exclusão da sua conta foi cancelada');
+    const done = accountDeletedMail('a@x.dev');
+    expect(done.subject).toBe('Sua conta do termhub foi excluída');
+    expect(done.html).not.toContain('href=');
   });
 });

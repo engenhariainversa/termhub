@@ -2,6 +2,8 @@
 // zod-inferred types. `HttpMobileApi` (`client.ts`) is the one implementation that talks to a
 // real (or mocked) server through a `Transport`.
 import type {
+  AccountDeletionBody,
+  AccountDeletionStatus,
   TChallengeBody,
   TChallengeResponse,
   TChatAttachment,
@@ -73,6 +75,15 @@ export interface MobileApi {
   deviceSelf(auth: Auth): Promise<TDeviceSelf>;
   revokeSelf(auth: Auth): Promise<void>;
   setPushToken(auth: Auth, token: string): Promise<void>;
+
+  // account deletion (TER-720): the only routes, besides the session ones, that answer while a
+  // deletion is pending — every other one is `403 ACCOUNT_PENDING_DELETION` until it is cancelled.
+  accountDeletion(auth: Auth): Promise<AccountDeletionStatus>;
+  /** Needs a PIN proof over a decision challenge for `ACCOUNT_DELETION_ACTION_ID`, signed with
+   * `delete_account`. Same errors as an approval (PIN_INVALID, DEVICE_LOCKED, DEVICE_REVOKED,
+   * CHALLENGE_INVALID), plus `409 LAST_ADMIN`. */
+  requestAccountDeletion(auth: Auth, body: AccountDeletionBody): Promise<AccountDeletionStatus>;
+  cancelAccountDeletion(auth: Auth): Promise<AccountDeletionStatus>;
 
   // chat (P§6, §6.1)
   chatProjects(auth: Auth): Promise<TChatProjectsResponse>;

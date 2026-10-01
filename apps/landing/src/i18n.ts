@@ -187,7 +187,7 @@ const pt = {
     accept: 'Aceitar',
     decline: 'Recusar',
   },
-  footer: { docs: 'Documentação', security: 'Segurança', brand: 'Marca', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'feito em Goiânia' },
+  footer: { docs: 'Documentação', security: 'Segurança', brand: 'Marca', deleteAccount: 'Excluir conta', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'feito em Goiânia' },
   // /brand/ — logo, colors and typography for anyone writing about termhub
   brand: {
     meta: {
@@ -356,6 +356,88 @@ const pt = {
     cta: {
       title: 'Leve para o seu time de segurança',
       lead: 'O guia técnico traz a arquitetura, cada host e porta, o modelo de ameaça e onde cada afirmação está no código.',
+    },
+  },
+  // /excluir-conta/ — deleting an account without the app (Google Play requirement). What is deleted, kept
+  // and when must match apps/server/src/account/deletion.ts (30-day grace, 30-minute single-use link).
+  deleteAccount: {
+    meta: {
+      title: 'Excluir sua conta do termhub',
+      description: 'Como excluir sua conta do termhub e os seus dados, pelo app, pelo app web ou por esta página, sem instalar nada: o que é apagado, o que é guardado e por quanto tempo.',
+    },
+    back: 'Início',
+    nav: { form: 'Pedir exclusão', data: 'Seus dados', timeline: 'Prazos' },
+    badge: 'conta · exclusão de dados',
+    title: 'Excluir sua conta do termhub',
+    lead: 'O termhub é desenvolvido pela Engenharia Inversa. Você pode excluir sua conta e os dados ligados a ela a qualquer momento, pelo app ou por esta página, sem precisar instalar nada.',
+    ways: {
+      title: 'Três formas de excluir',
+      items: [
+        { where: 'No app do celular', how: 'Ajustes → Excluir minha conta.' },
+        { where: 'No app web (app.termhub.dev)', how: 'Perfil → Excluir minha conta.' },
+        { where: 'Nesta página', how: 'Informe o e-mail da conta e confirme pelo link que enviamos para ele.' },
+      ],
+    },
+    form: {
+      title: 'Pedir a exclusão por e-mail',
+      lead: 'Enviamos um link de confirmação para o e-mail da conta. A exclusão só começa quando você abre o link e confirma.',
+      email: 'E-mail da conta',
+      email_placeholder: 'voce@exemplo.com',
+      email_invalid: 'Informe um e-mail válido.',
+      submit: 'Enviar link de confirmação',
+      sending: 'Enviando…',
+      sent_title: 'Verifique seu e-mail',
+      sent_text: 'Se existir uma conta com este e-mail, enviamos um link para confirmar a exclusão. O link vale por 30 minutos.',
+      again: 'Usar outro e-mail',
+      rate_limited: 'Muitos pedidos deste endereço. Tente de novo mais tarde.',
+      error: 'Não foi possível enviar agora. Tente de novo em instantes.',
+    },
+    confirm: {
+      title: 'Confirmar a exclusão da conta',
+      lead: 'Ao confirmar, sua conta é desativada na hora e todas as sessões são encerradas. Os dados são excluídos definitivamente depois de 30 dias; até lá, entrar no termhub permite cancelar.',
+      submit: 'Confirmar exclusão da conta',
+      sending: 'Confirmando…',
+      cancel: 'Não quero excluir',
+      done_title: 'Pedido de exclusão confirmado',
+      done_text: (date: string) => `Sua conta foi desativada e será excluída definitivamente em ${date}. Até lá, entrar no termhub permite cancelar.`,
+      done_email: 'Também enviamos um e-mail confirmando o pedido, com essa data.',
+      invalid_title: 'Este link não vale mais',
+      invalid_text: 'O link é inválido, já foi usado ou passou dos 30 minutos. Peça um novo abaixo.',
+      last_admin: 'Esta conta é a única administradora do termhub. Promova outra pessoa a administradora antes de excluir a conta.',
+      rate_limited: 'Muitos pedidos deste endereço. Tente de novo mais tarde.',
+      error: 'Não foi possível confirmar agora. Tente de novo em instantes.',
+    },
+    deleted: {
+      title: 'O que é excluído',
+      lead: 'Ao fim dos 30 dias, apagamos a conta e tudo o que está ligado a ela:',
+      items: [
+        'Máquinas cadastradas.',
+        'Projetos, com seus cards, notas e tickets.',
+        'Tabs de terminal e o histórico delas.',
+        'Conversas do chat e os anexos enviados.',
+        'Memória do assistente.',
+        'Integrações e os tokens delas.',
+        'Contas de IA conectadas.',
+        'Tokens de API.',
+        'Celulares e dispositivos pareados.',
+        'Notificações.',
+        'Sessões abertas.',
+      ],
+    },
+    kept: {
+      title: 'O que é guardado, e por quanto tempo',
+      items: [
+        'Registros de acesso (endereço IP, data e hora): guardados por 6 meses, como exige o Marco Civil da Internet (Lei 12.965/2014, art. 15), e apagados depois.',
+        'Registros fiscais e de cobrança, quando existirem: guardados pelo prazo exigido pela lei.',
+      ],
+    },
+    timeline: {
+      title: 'Prazos',
+      items: [
+        { when: 'Na hora', what: 'A conta é desativada e todas as sessões são encerradas. Enviamos um e-mail confirmando o pedido, com a data da exclusão.' },
+        { when: 'Durante 30 dias', what: 'Entrar no termhub com a sua conta permite cancelar a exclusão; nada é apagado antes disso.' },
+        { when: 'Depois de 30 dias', what: 'A conta e os dados listados acima são excluídos definitivamente. Não dá para desfazer.' },
+      ],
     },
   },
 };
@@ -531,7 +613,7 @@ const en: typeof pt = {
     accept: 'Accept',
     decline: 'Decline',
   },
-  footer: { docs: 'Documentation', security: 'Security', brand: 'Brand', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'made in Goiânia' },
+  footer: { docs: 'Documentation', security: 'Security', brand: 'Brand', deleteAccount: 'Delete account', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'made in Goiânia' },
   brand: {
     meta: {
       title: 'termhub brand — logo, colors and typography',
@@ -697,6 +779,86 @@ const en: typeof pt = {
     cta: {
       title: 'Take it to your security team',
       lead: 'The technical guide covers the architecture, every host and port, the threat model and where each claim lives in the code.',
+    },
+  },
+  deleteAccount: {
+    meta: {
+      title: 'Delete your termhub account',
+      description: 'How to delete your termhub account and your data, from the app, the web app or this page, without installing anything: what is deleted, what is kept and for how long.',
+    },
+    back: 'Home',
+    nav: { form: 'Request deletion', data: 'Your data', timeline: 'Timeline' },
+    badge: 'account · data deletion',
+    title: 'Delete your termhub account',
+    lead: 'termhub is developed by Engenharia Inversa. You can delete your account and the data tied to it at any time, from the app or from this page, without installing anything.',
+    ways: {
+      title: 'Three ways to delete it',
+      items: [
+        { where: 'In the phone app', how: 'Ajustes → Excluir minha conta (Settings → Delete my account).' },
+        { where: 'In the web app (app.termhub.dev)', how: 'Perfil → Excluir minha conta (Profile → Delete my account).' },
+        { where: 'On this page', how: 'Enter the account’s e-mail and confirm through the link we send to it.' },
+      ],
+    },
+    form: {
+      title: 'Request deletion by e-mail',
+      lead: 'We send a confirmation link to the account’s e-mail. Deletion only starts once you open the link and confirm.',
+      email: 'Account e-mail',
+      email_placeholder: 'you@example.com',
+      email_invalid: 'Enter a valid e-mail address.',
+      submit: 'Send confirmation link',
+      sending: 'Sending…',
+      sent_title: 'Check your e-mail',
+      sent_text: 'If an account exists with this e-mail, we sent a link to confirm the deletion. The link is valid for 30 minutes.',
+      again: 'Use another e-mail',
+      rate_limited: 'Too many requests from this address. Try again later.',
+      error: 'Could not send it right now. Try again in a moment.',
+    },
+    confirm: {
+      title: 'Confirm the account deletion',
+      lead: 'Once you confirm, your account is deactivated at once and every session ends. The data is deleted for good after 30 days; until then, signing in to termhub lets you cancel.',
+      submit: 'Confirm account deletion',
+      sending: 'Confirming…',
+      cancel: 'I don’t want to delete it',
+      done_title: 'Deletion request confirmed',
+      done_text: (date: string) => `Your account was deactivated and will be deleted for good on ${date}. Until then, signing in to termhub lets you cancel.`,
+      done_email: 'We also sent an e-mail confirming the request, with that date.',
+      invalid_title: 'This link is no longer valid',
+      invalid_text: 'The link is invalid, was already used or is older than 30 minutes. Request a new one below.',
+      last_admin: 'This account is termhub’s only administrator. Make someone else an administrator before deleting the account.',
+      rate_limited: 'Too many requests from this address. Try again later.',
+      error: 'Could not confirm it right now. Try again in a moment.',
+    },
+    deleted: {
+      title: 'What is deleted',
+      lead: 'When the 30 days are over, we delete the account and everything tied to it:',
+      items: [
+        'Registered machines.',
+        'Projects, with their cards, notes and tickets.',
+        'Terminal tabs and their history.',
+        'Chat conversations and the attachments sent.',
+        'The assistant’s memory.',
+        'Integrations and their tokens.',
+        'Connected AI accounts.',
+        'API tokens.',
+        'Paired phones and devices.',
+        'Notifications.',
+        'Open sessions.',
+      ],
+    },
+    kept: {
+      title: 'What is kept, and for how long',
+      items: [
+        'Access logs (IP address, date and time): kept for 6 months, as required by Brazil’s Marco Civil da Internet (Law 12,965/2014, art. 15), then deleted.',
+        'Tax and billing records, when there are any: kept for the period the law requires.',
+      ],
+    },
+    timeline: {
+      title: 'Timeline',
+      items: [
+        { when: 'At once', what: 'The account is deactivated and every session ends. We e-mail you confirming the request, with the deletion date.' },
+        { when: 'For 30 days', what: 'Signing in to termhub with your account lets you cancel the deletion; nothing is deleted before that.' },
+        { when: 'After 30 days', what: 'The account and the data listed above are deleted for good. It cannot be undone.' },
+      ],
     },
   },
 };

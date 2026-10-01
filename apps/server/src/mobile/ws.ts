@@ -8,6 +8,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import { rejectUpgrade, type createUpgradeRouter } from '../ws/router.js';
 import { MOBILE_TOKEN_RE } from './codes.js';
 import { verifyProof, type JtiCache } from './dpop.js';
+import { isPendingDeletion } from '../account/deletion.js';
 import type { MobileSocketRegistry } from './revocation.js';
 
 export interface MobileChatWsDeps {
@@ -57,7 +58,7 @@ export function registerMobileChatWs(router: ReturnType<typeof createUpgradeRout
     // The jti is claimed only once the signature has verified, so garbage cannot fill the cache.
     if (!proof.ok || !deps.jtis.claim(found.device.id, proof.jti)) return rejectUpgrade(socket, 401, 'Unauthorized');
     const user = await deps.repos.users.findById(found.device.user_id);
-    if (!user || !(await canAccess(deps.repos, user, 'chat', 'read'))) return rejectUpgrade(socket, 403, 'Forbidden');
+    if (!user || isPendingDeletion(user) || !(await canAccess(deps.repos, user, 'chat', 'read'))) return rejectUpgrade(socket, 403, 'Forbidden');
 
     const deviceId = found.device.id;
     wss.handleUpgrade(req, socket, head, async (ws) => {

@@ -315,6 +315,11 @@ function UsersSection() {
                           convite pendente
                         </span>
                       )}
+                      {u.deletion_scheduled_at && (
+                        <span className="rounded bg-danger/15 px-1.5 py-0.5 text-[10px] text-danger" title="A pessoa pediu para excluir a conta; ela está desativada até lá">
+                          Exclusão em {new Date(u.deletion_scheduled_at).toLocaleDateString('pt-BR')}
+                        </span>
+                      )}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-fg-muted">{u.email}</td>
@@ -370,7 +375,9 @@ function UsersSection() {
         title="Excluir usuário"
         message={
           <>
-            Excluir <strong>{deleting?.email}</strong>? As sessões dele são encerradas{access?.configured ? ' e o e-mail sai do Cloudflare Access' : ''}.
+            Excluir <strong>{deleting?.email}</strong> agora? Tudo o que é dele também é excluído: máquinas (o agente é desconectado), projetos, abas,
+            chats, memória, integrações, contas de IA e tokens. As sessões dele são encerradas{access?.configured ? ' e o e-mail sai do Cloudflare Access' : ''}.
+            Não dá para desfazer.
           </>
         }
         confirmLabel="Excluir"
