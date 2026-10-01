@@ -85,6 +85,8 @@ O legítimo interesse precisa de um relatório (LIA) documentado?
 
 **L-12. Leitura de documentos do repositório.** O agente lê `docs/superpowers/**` e `docs/lessons/**` dos repositórios do usuário para a memória. Esses arquivos podem conter dados de terceiros. Basta o aviso na Política?
 
+**L-14. Registros de segurança na exclusão de conta.** O desenho da exclusão (TER-720, `docs/superpowers/specs/2026-10-01-account-deletion-design.md`) apaga junto com a conta os eventos de segurança dos aparelhos (`device_events`: IP, cidade, país, falhas de PIN), e mantém só os logs do servidor (IP e URL, fora do banco). Isso basta para a guarda de 6 meses do Marco Civil (art. 15), ou esses eventos também precisam ficar guardados pelo prazo legal depois da exclusão?
+
 **L-13. Anthropic: seção para o Brasil.** A Política da Anthropic tem uma seção para o Brasil, com as cláusulas-padrão da ANPD. Vale usá-la como modelo para a nossa seção de transferência?
 
 ### J. Termos de Uso
