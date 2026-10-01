@@ -12,6 +12,9 @@ limit_req_zone $http_cf_connecting_ip zone=termhub_mcp:1m rate=10r/s;
 limit_req_zone $http_cf_connecting_ip zone=termhub_public:1m rate=5r/s;
 limit_conn_zone $http_cf_connecting_ip zone=termhub_public_conn:1m;
 
+# Public account-deletion page (TER-728): a tight per-client budget; the app also limits per IP and per e-mail
+limit_req_zone $http_cf_connecting_ip zone=termhub_account_deletion:1m rate=1r/s;
+
 # Mobile API (spec 2026-09-24): per-client budgets; the app authenticates every call itself
 limit_req_zone $http_cf_connecting_ip zone=termhub_mobile:1m rate=10r/s;
 limit_req_zone $http_cf_connecting_ip zone=termhub_mobile_enrol:1m rate=2r/s;
@@ -39,6 +42,20 @@ server {
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         client_max_body_size 64k;
+    }
+    # Account deletion without the app (TER-728, termhub.dev/excluir-conta): the page asks for the
+    # e-mailed link and spends it here (public routes; no Access on this host)
+    location ~ ^/api/account/deletion/(link|confirm)$ {
+        limit_except POST { deny all; }
+        limit_req zone=termhub_account_deletion burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://$upstream_app:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        client_max_body_size 16k;
     }
     # Tab monitor: the machines' hook scripts post here (public route, bearer token; no Access on this host)
     location = /api/hooks/events {

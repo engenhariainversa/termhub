@@ -23,6 +23,8 @@ import { EnrolmentService } from './enrolment.js';
 import { ExpoPushSender, MobilePushService } from './push.js';
 import { MobileSocketRegistry, revokeDevice } from './revocation.js';
 import { SessionService } from './session.js';
+import type { AccountDeletionService } from '../account/deletion.js';
+import { mobileAccountRoutes } from '../routes/m-account.js';
 import { registerMobileChatWs } from './ws.js';
 
 export const MOBILE_PREFIX = '/api/m/v1';
@@ -47,6 +49,8 @@ export interface MobileDeps {
   upgrades: ReturnType<typeof createUpgradeRouter>;
   /** The chat's attachment store, queue and quota, shared with the web routes (spec 2026-09-26 §5.3). */
   attachments: ChatAttachmentDeps;
+  /** Account deletion (TER-720): Ajustes → "Excluir minha conta". Absent in tests that do not need it. */
+  deletion?: AccountDeletionService;
 }
 
 /**
@@ -143,6 +147,9 @@ export async function registerMobileApi(
         await guarded('projects', (a) => projectAiRoutes(a, deps.repos), '/projects');
         // Voice dictation, over the same TranscriptionService as the web (`routes/transcriptions.ts`).
         await guarded('terminals', (a) => mobileTranscriptionRoutes(a, { transcriptions: deps.transcriptions }), '/transcriptions');
+        // The person's own account: no role grant needed to delete it (device auth only).
+        const deletion = deps.deletion;
+        if (deletion) await m.register((a) => mobileAccountRoutes(a, { deletion, session: services.session }), { prefix: '/account' });
       }
 
       await mobileRoutes(guardedMobile);

@@ -80,6 +80,10 @@ import { registerSimulatorWs } from './simulator/ws.js';
 import { SimulatorSessionManager } from './simulator/session-manager.js';
 import { createRealBackend } from './simulator/backend.js';
 import { seed } from './seed.js';
+import { AccountDeletionService } from './account/deletion.js';
+import { accountRoutes } from './routes/account.js';
+import { publicBus } from './public/bus.js';
+import { CLOSE } from '@termhub/agent-protocol';
 
 /** How long `preClose` waits on `chat.suspendAll()` before letting the close go on. */
 const PRE_CLOSE_SUSPEND_MS = 5_000;
@@ -200,7 +204,22 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     log: fastify.log,
   });
   const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes };
-  const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments };
+  // Account deletion (TER-720, TER-728): the 30-day window, the cascade and the public page's links.
+  const deletion = new AccountDeletionService({
+    repos,
+    mailer,
+    access,
+    removeAttachment: (userId, id) => attachmentStore.remove(userId, id),
+    disconnectMachine: (machineId) => agents.disconnect(machineId, CLOSE.UNAUTHORIZED, 'deleted'),
+    ownerGone: (userId, machineIds) => {
+      for (const machine_id of machineIds) publicBus.publishRobotsGone({ machine_id });
+      publicBus.publishOwnerGone({ owner_id: userId });
+    },
+    appUrl: config.publicUrl,
+    pageUrl: config.accountDeletionUrl,
+    log: fastify.log.child({ mod: 'account-deletion' }),
+  });
+  const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments, deletion };
   const mobile = config.mobile ? createMobileServices(mobileDeps) : null;
 
   // --- API (tudo autenticado, exceto rotas marcadas como public) ---
@@ -226,6 +245,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
 
       await api.register((a) => authRoutes(a, auth, { onNicknameClaimed: (u) => shortLinks.onNicknameClaimed(u) }), { prefix: '/auth' });
       await api.register((a) => cityLinkRoutes(a, { shortLinks }), { prefix: '/auth' });
+      // The person's own account: any signed-in person may delete it, no role grant needed.
+      await api.register((a) => accountRoutes(a, { auth: authService, deletion }), { prefix: '/account' });
       await guarded('machines', (a) => machineRoutes(a, repos), '/machines');
       await guarded('projects', (a) => projectRoutes(a, repos, { simulators }), '/projects');
       await guarded('projects', (a) => projectGroupRoutes(a, repos), '/project-groups');
@@ -249,7 +270,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('ai_accounts', (a) => aiAccountRoutes(a, repos), '/ai-accounts');
       await guarded('waitlist', (a) => waitlistRoutes(a, repos), '/waitlist');
       await guarded('roles', (a) => roleRoutes(a, repos), '/roles');
-      await guarded('users', (a) => userRoutes(a, repos, { mailer, access, revoke: mobile ? (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer, log: fastify.log }, id, input) : null }), '/users');
+      await guarded('users', (a) => userRoutes(a, repos, { mailer, access, deletion, revoke: mobile ? (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer, log: fastify.log }, id, input) : null }), '/users');
       await guarded('uploads', (a) => uploadRoutes(a, repos), '/uploads');
       await guarded('api_tokens', (a) => apiTokenRoutes(a, repos, { mcpUrl: config.mcpUrl }), '/api-tokens');
       await guarded('chat', (a) => chatRoutes(a, repos, { service: chat }), '/chat');
@@ -296,6 +317,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     if (mobile) void purgeMobile(repos, mobile.enrolment).catch(() => {});
     // Cards whose tab vanished without a lifecycle event (the other color removed it, a crash): spec 2026-09-26 §4.7.
     void expireOrphanTabQuestions(repos, fastify.log);
+    // Accounts whose 30-day deletion window is over go for good (TER-720); both colors may run it, the row lock picks one.
+    void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
   const stopCiSync = startCiSyncScheduler(repos, fastify.log);

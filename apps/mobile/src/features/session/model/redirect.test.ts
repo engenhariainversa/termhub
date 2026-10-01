@@ -54,4 +54,20 @@ describe('redirectFor', () => {
       expect(redirectFor('unlocked', ['(tabs)'], '/chat/c1', '/')).toEqual({ target: '/chat/c1', shouldClear: false });
     });
   });
+
+  describe('a pending account deletion (TER-720)', () => {
+    it('holds an unlocked session on the blocking screen, ahead of a pending route', () => {
+      expect(redirectFor('unlocked', ['(tabs)'], null, '/', true)).toEqual({ target: '/account-deletion', shouldClear: false });
+      expect(redirectFor('unlocked', ['chat', '[id]'], '/chat/c1', '/chat/c1', true)).toEqual({ target: '/account-deletion', shouldClear: false });
+      expect(redirectFor('unlocked', ['account-deletion'], null, '/account-deletion', true)).toEqual({ target: null, shouldClear: false });
+    });
+
+    it('once cancelled, sends the blocking screen back to the tabs', () => {
+      expect(redirectFor('unlocked', ['account-deletion'], null, '/account-deletion', false)).toEqual({ target: '/(tabs)', shouldClear: false });
+    });
+
+    it('leaves a locked session on Desbloquear', () => {
+      expect(redirectFor('locked', ['unlock'], null, '/unlock', true)).toEqual({ target: null, shouldClear: false });
+    });
+  });
 });

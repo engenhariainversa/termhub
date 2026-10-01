@@ -6,6 +6,7 @@ import { canAccess } from '../auth/permissions.js';
 import { resolveScope, type Scope } from '../auth/scope.js';
 import type { User } from '../db/repositories/types.js';
 import type { Lifecycle } from './drain.js';
+import { isPendingDeletion } from '../account/deletion.js';
 
 export interface UpgradeContext {
   req: IncomingMessage;
@@ -93,6 +94,8 @@ export function createUpgradeRouter(server: HttpServer, deps: { auth: AuthContex
       user = null;
     }
     if (!user) return rejectUpgrade(socket, 401, 'Unauthorized');
+    // A deactivated account (deletion pending, TER-720) opens no socket: only the cancel path is left.
+    if (isPendingDeletion(user)) return rejectUpgrade(socket, 403, 'Forbidden');
     const scope = await resolveScope(deps.auth.repos, user, cookies);
     // One gate for every WebSocket here: terminals:read. It fits the terminal and simulator streams
     // it was written for, and /ws/chat rides on it too — the chat is the global terminal as a

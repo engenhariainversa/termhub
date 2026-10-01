@@ -56,6 +56,7 @@ export const ModelName = {
   Permission: 'Permission',
   Session: 'Session',
   LoginCode: 'LoginCode',
+  AccountDeletionLink: 'AccountDeletionLink',
   LoginAttempt: 'LoginAttempt',
   Machine: 'Machine',
   Project: 'Project',
@@ -136,7 +137,9 @@ export const UserScalarFieldEnum = {
   reviewEnabledBy: 'reviewEnabledBy',
   chatSuggestions: 'chatSuggestions',
   chatAutodecide: 'chatAutodecide',
-  chatCodexReplies: 'chatCodexReplies'
+  chatCodexReplies: 'chatCodexReplies',
+  deletionRequestedAt: 'deletionRequestedAt',
+  deletionScheduledAt: 'deletionScheduledAt'
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
@@ -188,6 +191,18 @@ export const LoginCodeScalarFieldEnum = {
 } as const
 
 export type LoginCodeScalarFieldEnum = (typeof LoginCodeScalarFieldEnum)[keyof typeof LoginCodeScalarFieldEnum]
+
+
+export const AccountDeletionLinkScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  tokenHash: 'tokenHash',
+  expiresAt: 'expiresAt',
+  usedAt: 'usedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type AccountDeletionLinkScalarFieldEnum = (typeof AccountDeletionLinkScalarFieldEnum)[keyof typeof AccountDeletionLinkScalarFieldEnum]
 
 
 export const LoginAttemptScalarFieldEnum = {

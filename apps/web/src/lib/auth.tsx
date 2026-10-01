@@ -21,6 +21,8 @@ interface AuthState {
   setNickname: (nickname: string) => Promise<void>;
   /** where this instance's public cities live (from the server, never a hardcoded host); null until known */
   publicCityUrl: string | null;
+  /** refetches /auth/me (e.g. after cancelling a pending account deletion) */
+  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -50,10 +52,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })();
     const onUnauthorized = () => setUser(null);
+    // A 403 ACCOUNT_PENDING_DELETION: the deletion was asked elsewhere; the fresh user carries the
+    // date, and AppShell swaps the app for the pending-deletion page.
+    const onPendingDeletion = () => {
+      void api.auth.me().then(
+        (me) => !cancelled && setUser(me.user),
+        () => {},
+      );
+    };
     window.addEventListener('termhub:unauthorized', onUnauthorized);
+    window.addEventListener('termhub:pending-deletion', onPendingDeletion);
     return () => {
       cancelled = true;
       window.removeEventListener('termhub:unauthorized', onUnauthorized);
+      window.removeEventListener('termhub:pending-deletion', onPendingDeletion);
     };
   }, []);
 
@@ -101,8 +113,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user);
   }, []);
 
+  const refresh = useCallback(async () => {
+    const me = await api.auth.me();
+    setUser(me.user);
+    setViewAsState(me.view_as);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, config, login, sendCode, verifyCode, logout, viewAs, setViewAs, can, setNickname, publicCityUrl: config?.public_city_url ?? null }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, loading, config, login, sendCode, verifyCode, logout, viewAs, setViewAs, can, setNickname, publicCityUrl: config?.public_city_url ?? null, refresh }}>{children}</AuthContext.Provider>
   );
 }
 

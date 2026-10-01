@@ -172,7 +172,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     return { user: await withRole(result.user) };
   });
 
-  app.post('/logout', async (request, reply) => {
+  app.post('/logout', { config: { allowPendingDeletion: true } }, async (request, reply) => {
     const token = request.cookies[SESSION_COOKIE];
     if (token) await service.destroySession(token);
     clearSessionCookies(reply);

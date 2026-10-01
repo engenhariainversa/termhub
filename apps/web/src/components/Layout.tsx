@@ -16,6 +16,7 @@ import { SettingsSidebar } from './SettingsSidebar';
 import { SidebarRail } from './SidebarRail';
 import { Sidebar } from './Sidebar';
 import { NicknamePrompt } from './NicknamePrompt';
+import { PendingDeletionPage } from './PendingDeletionPage';
 import { useEscapeLayer } from './Modal';
 
 const SIDEBAR_KEY = 'termhub:sidebar-collapsed';
@@ -31,6 +32,8 @@ export function AppShell() {
 
   if (loading) return <FullScreenMessage>Carregando…</FullScreenMessage>;
   if (!user) return <Navigate to="/login" replace />;
+  // A deactivated account (deletion pending) gets only the page that lets it cancel.
+  if (user.deletion_scheduled_at) return <PendingDeletionPage scheduledAt={user.deletion_scheduled_at} />;
   return (
     <DataProvider>
       <MonitorProvider>

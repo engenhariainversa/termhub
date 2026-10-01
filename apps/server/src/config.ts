@@ -57,6 +57,11 @@ const envSchema = z.object({
    * origin of HOOKS_URL, else PUBLIC_URL (see public/base-url.ts).
    */
   PUBLIC_CITY_URL: z.string().url().optional(),
+  /**
+   * The public account-deletion page (TER-728) the confirmation e-mail links to, with `?token=…`.
+   * Default: /excluir-conta/ on the public city's origin (termhub.dev in production).
+   */
+  ACCOUNT_DELETION_URL: z.string().url().optional(),
 
   /**
    * Public MCP endpoint (https://termhub.dev/mcp in production), shown in the "claude mcp add"
@@ -186,6 +191,7 @@ export const config = {
   hooksUrl: env.HOOKS_URL ?? `${env.PUBLIC_URL.replace(/\/$/, '')}/api/hooks/events`,
   mcpUrl: env.MCP_URL ?? null,
   publicCityUrl: resolvePublicCityUrl(env),
+  accountDeletionUrl: env.ACCOUNT_DELETION_URL ?? `${new URL(resolvePublicCityUrl(env)).origin}/excluir-conta/`,
   alphaCommunityUrl: env.ALPHA_COMMUNITY_URL,
   typeToAccess: env.TYPETOACCESS_API_KEY ? { apiKey: env.TYPETOACCESS_API_KEY } : null,
   auth: {
