@@ -11,19 +11,37 @@ function makeSocket(): { socket: AgentSocket; sendControl: ReturnType<typeof vi.
 }
 
 /** A fake node-pty process the tests fully control: capture the wired-up callbacks so tests can emit data/exit. */
-function makeFakePty(): { proc: PtyLike; emitData: (s: string) => void; emitExit: (exitCode: number, signal?: number) => void; write: ReturnType<typeof vi.fn>; resize: ReturnType<typeof vi.fn>; kill: ReturnType<typeof vi.fn> } {
+function makeFakePty(): {
+  proc: PtyLike;
+  emitData: (s: string) => void;
+  emitExit: (exitCode: number, signal?: number) => void;
+  write: ReturnType<typeof vi.fn>;
+  resize: ReturnType<typeof vi.fn>;
+  kill: ReturnType<typeof vi.fn>;
+  disposeData: ReturnType<typeof vi.fn>;
+  disposeExit: ReturnType<typeof vi.fn>;
+} {
   let dataCb: ((s: string) => void) | undefined;
   let exitCb: ((e: { exitCode: number; signal?: number }) => void) | undefined;
   const write = vi.fn();
   const resize = vi.fn();
   const kill = vi.fn();
+  // Like node-pty's IDisposable: a disposed listener is never called again.
+  const disposeData = vi.fn(() => {
+    dataCb = undefined;
+  });
+  const disposeExit = vi.fn(() => {
+    exitCb = undefined;
+  });
   const proc: PtyLike = {
     pid: 4242,
     onData: (cb) => {
       dataCb = cb;
+      return { dispose: disposeData };
     },
     onExit: (cb) => {
       exitCb = cb;
+      return { dispose: disposeExit };
     },
     write,
     resize,
@@ -36,6 +54,8 @@ function makeFakePty(): { proc: PtyLike; emitData: (s: string) => void; emitExit
     write,
     resize,
     kill,
+    disposeData,
+    disposeExit,
   };
 }
 
@@ -296,5 +316,165 @@ describe('createPtyManager', () => {
 
     const call = spawn.mock.calls[0]!;
     expect(call[2].cwd).toBe(process.env.HOME || '/');
+  });
+});
+
+describe('createPtyManager — opening races (TER-850)', () => {
+  /** Every PTY spawn() handed out, so a test can check none of them is left alive. */
+  function trackingSpawn() {
+    const fakes: ReturnType<typeof makeFakePty>[] = [];
+    const spawn = vi.fn<SpawnFn>(() => {
+      const fake = makeFakePty();
+      fakes.push(fake);
+      return fake.proc;
+    });
+    return { spawn, fakes };
+  }
+
+  const types = (sendControl: ReturnType<typeof vi.fn>) => sendControl.mock.calls.map((c) => (c[0] as { type: string }).type);
+
+  it('open -> closeAll -> spawn resolves: no live PTY and no late opened', async () => {
+    const { spawn, fakes } = trackingSpawn();
+    const manager = createPtyManager({ spawn, tmuxPath: 'tmux', log: vi.fn() });
+    const { socket, sendControl, sendStream } = makeSocket();
+
+    // open() runs up to its first await (the spawn import) before closeAll() gets in.
+    const opening = manager.open(1, openParams, socket);
+    manager.closeAll();
+    await opening;
+
+    for (const fake of fakes) expect(fake.kill).toHaveBeenCalledTimes(1);
+    expect(types(sendControl)).not.toContain('opened');
+    // The channel is gone: nothing is forwarded to or from it.
+    for (const fake of fakes) fake.emitData('late');
+    manager.write(1, Buffer.from('x'));
+    expect(sendStream).not.toHaveBeenCalled();
+    for (const fake of fakes) expect(fake.write).not.toHaveBeenCalled();
+  });
+
+  it('open -> close(ch) -> spawn resolves: no live PTY, no opened, exactly one closed ack', async () => {
+    const { spawn, fakes } = trackingSpawn();
+    const manager = createPtyManager({ spawn, tmuxPath: 'tmux', log: vi.fn() });
+    const { socket, sendControl } = makeSocket();
+
+    const opening = manager.open(1, openParams, socket);
+    manager.close(1);
+    await opening;
+    for (const fake of fakes) fake.emitExit(0);
+
+    for (const fake of fakes) expect(fake.kill).toHaveBeenCalledTimes(1);
+    // The server sent close after its open timeout and keeps the number reserved until it
+    // sees `closed` (or `open_error`): the cancelled opening still acks, once.
+    expect(sendControl.mock.calls.map((c) => c[0])).toEqual([{ type: 'closed', ch: 1, code: null }]);
+  });
+
+  it('a PTY produced by an opening cancelled during spawn is killed at once and never announced', async () => {
+    const fake = makeFakePty();
+    const manager = createPtyManager({
+      // The cancel lands while spawn is handing the PTY back (the in-flight window the race lives in).
+      spawn: vi.fn<SpawnFn>(() => {
+        manager.closeAll();
+        return fake.proc;
+      }),
+      tmuxPath: 'tmux',
+      log: vi.fn(),
+    });
+    const { socket, sendControl } = makeSocket();
+
+    await manager.open(1, openParams, socket);
+
+    expect(fake.kill).toHaveBeenCalledTimes(1);
+    expect(types(sendControl)).not.toContain('opened');
+  });
+
+  it('concurrent open of the same channel: one PTY at most, the second open is rejected', async () => {
+    const { spawn, fakes } = trackingSpawn();
+    const manager = createPtyManager({ spawn, tmuxPath: 'tmux', log: vi.fn() });
+    const { socket, sendControl } = makeSocket();
+
+    await Promise.all([manager.open(1, openParams, socket), manager.open(1, openParams, socket)]);
+
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(sendControl).toHaveBeenCalledWith({ type: 'open_error', ch: 1, error: { code: 'invalid', message: 'channel in use' } });
+    expect(types(sendControl).filter((t) => t === 'opened')).toHaveLength(1);
+    // The one PTY that exists is the tracked one: closeAll reaches it.
+    manager.closeAll();
+    expect(fakes.map((f) => f.kill.mock.calls.length)).toEqual([1]);
+  });
+
+  it('the channel can be opened again once a cancelled opening has settled', async () => {
+    const { spawn, fakes } = trackingSpawn();
+    const manager = createPtyManager({ spawn, tmuxPath: 'tmux', log: vi.fn() });
+    const { socket, sendControl } = makeSocket();
+
+    const cancelled = manager.open(1, openParams, socket);
+    manager.closeAll();
+    await cancelled;
+    sendControl.mockClear();
+    await manager.open(1, openParams, socket);
+
+    expect(sendControl).toHaveBeenCalledWith({ type: 'opened', ch: 1 });
+    const live = fakes[fakes.length - 1]!;
+    expect(live.kill).not.toHaveBeenCalled();
+  });
+
+  it('double close is idempotent: one kill, one closed ack, listeners released', async () => {
+    const fake = makeFakePty();
+    const manager = createPtyManager({ spawn: vi.fn<SpawnFn>(() => fake.proc), tmuxPath: 'tmux', log: vi.fn() });
+    const { socket, sendControl } = makeSocket();
+
+    await manager.open(1, openParams, socket);
+    sendControl.mockClear();
+    manager.close(1);
+    manager.close(1);
+    manager.closeAll();
+    fake.emitExit(0);
+    manager.close(1);
+
+    expect(fake.kill).toHaveBeenCalledTimes(1);
+    expect(sendControl.mock.calls.map((c) => c[0])).toEqual([{ type: 'closed', ch: 1, code: null }]);
+    expect(fake.disposeData).toHaveBeenCalledTimes(1);
+    expect(fake.disposeExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('process exit is idempotent: one closed, listeners released, a later close is a no-op', async () => {
+    const fake = makeFakePty();
+    const manager = createPtyManager({ spawn: vi.fn<SpawnFn>(() => fake.proc), tmuxPath: 'tmux', log: vi.fn() });
+    const { socket, sendControl } = makeSocket();
+
+    await manager.open(1, openParams, socket);
+    sendControl.mockClear();
+    fake.emitExit(3);
+    fake.emitExit(3);
+    manager.close(1);
+    manager.closeAll();
+
+    expect(fake.kill).not.toHaveBeenCalled();
+    expect(sendControl.mock.calls.map((c) => c[0])).toEqual([{ type: 'closed', ch: 1, code: 3 }]);
+    expect(fake.disposeData).toHaveBeenCalledTimes(1);
+    expect(fake.disposeExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs a PTY that has not exited some time after the kill', async () => {
+    vi.useFakeTimers();
+    try {
+      const stuck = makeFakePty();
+      const exits = makeFakePty();
+      let call = 0;
+      const log = vi.fn();
+      const manager = createPtyManager({ spawn: vi.fn<SpawnFn>(() => (call++ === 0 ? stuck.proc : exits.proc)), tmuxPath: 'tmux', log, killGraceMs: 5000 });
+      const { socket } = makeSocket();
+
+      await manager.open(1, openParams, socket);
+      await manager.open(2, openParams, socket);
+      manager.closeAll();
+      exits.emitExit(0);
+      vi.advanceTimersByTime(5000);
+
+      const stuckLogs = log.mock.calls.filter((c) => c[0] === 'pty did not exit after kill');
+      expect(stuckLogs).toEqual([['pty did not exit after kill', { ch: 1, pid: 4242, waitedMs: 5000 }]]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
