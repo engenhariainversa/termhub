@@ -16,6 +16,8 @@ import {
   mobileMessageBody,
   replyExcerpt,
   resetBody,
+  tabQuestionReplyText,
+  type ReplyCardRef,
   projectFavoriteBody,
   setHostBody,
   standingKindOf,
@@ -143,12 +145,27 @@ function bindAttachments(state: MockState, conversationId: string, ids: string[]
   return rows as MockAttachment[];
 }
 
+const replyUnavailable = () => new WireError(409, 'REPLY_UNAVAILABLE', 'A mensagem citada não está mais disponível. Cancele a citação e envie de novo.');
+
+/** The server's rule for `reply_to_card` (TER-849): a gate card or a tab's question of this conversation. */
+function replyCardTargetOf(state: MockState, conversationId: string, card: ReplyCardRef): NonNullable<MockMessage['reply_to']> {
+  if (card.kind === 'action') {
+    const action = state.actions.get(card.id);
+    if (!action || action.conversation_id !== conversationId) throw replyUnavailable();
+    return { id: null, role: 'assistant', excerpt: replyExcerpt(action.summary), card };
+  }
+  const question = state.tabQuestions.find((q) => q.id === card.id && q.conversation_id === conversationId);
+  if (!question) throw replyUnavailable();
+  return { id: null, role: 'assistant', excerpt: replyExcerpt(tabQuestionReplyText(question)), card };
+}
+
 /** The server's rule for `reply_to_id` (TER-447): a message of this conversation with words or files. */
-function replyTargetOf(state: MockState, conversationId: string, id: string | undefined): NonNullable<MockMessage['reply_to']> | null {
+function replyTargetOf(state: MockState, conversationId: string, id: string | undefined, card?: ReplyCardRef): NonNullable<MockMessage['reply_to']> | null {
+  if (card) return replyCardTargetOf(state, conversationId, card);
   if (id === undefined) return null;
   const row = state.messages.get(conversationId)?.find((m) => m.id === id);
   const names = (row?.attachments ?? []).map((a) => a.name);
-  if (!row || (!row.text && names.length === 0)) throw new WireError(409, 'REPLY_UNAVAILABLE', 'A mensagem citada não está mais disponível. Cancele a citação e envie de novo.');
+  if (!row || (!row.text && names.length === 0)) throw replyUnavailable();
   return { id: row.id, role: row.role, excerpt: replyExcerpt(row.text, names) };
 }
 
@@ -816,7 +833,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const project = projectId ? state.projects.get(projectId) : undefined;
     const userMessageId = randomId(10);
     const assistantMessageId = randomId(10);
-    const replyTo = replyTargetOf(state, conversation.id, body.reply_to_id);
+    const replyTo = replyTargetOf(state, conversation.id, body.reply_to_id, body.reply_to_card);
     const attachments = bindAttachments(state, conversation.id, body.attachment_ids ?? [], userMessageId);
 
     scheduleStream({

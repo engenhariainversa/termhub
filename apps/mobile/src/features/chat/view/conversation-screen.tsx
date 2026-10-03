@@ -6,7 +6,7 @@ import { activeGrantsLabel } from '@/features/chat-grants/model/labels';
 import type { TChatAttachment, TTabQuestionAnswerBody } from '@/services/api/contract';
 import { AppText, Banner, Button, EmptyState, MAX_READABLE_WIDTH, readableColumn, Screen, Sheet } from '@/ui';
 import { activeGrantIndex, isGrantActive } from '../model/grant-time';
-import { isReplyable, replyRefOf, type ReplyRef } from '../model/reply';
+import { isReplyable, replyRefOf, replyRefOfCard, type ReplyableCard, type ReplyRef } from '../model/reply';
 import { isActive } from '../model/subagents';
 import { chatTimeline, groupPendingActions, type ChatEntry } from '../model/timeline';
 import type { ChatAction, ChatMessage, ChatStandingGrant } from '../model/types';
@@ -158,6 +158,8 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
     return () => clearTimeout(timer);
   }, [highlightId]);
   const onReply = useCallback((message: ChatMessage) => setReplyTo(replyRefOf(message)), []);
+  // A confirmation or a tab's question is answered the same way (TER-849).
+  const onReplyCard = useCallback((card: ReplyableCard) => setReplyTo(replyRefOfCard(card)), []);
   const cancelReply = useCallback(() => setReplyTo(null), []);
   // The preview goes with the text, at once, and comes back with it if the send fails.
   const onSend = useCallback(
@@ -253,7 +255,8 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
   const onOpenReply = useCallback((id: string): boolean => {
-    const index = entriesRef.current.findIndex((e) => e.kind === 'message' && e.message.id === id);
+    // A card's quote (TER-849) finds its card, alone or in a group, like the pending bar's jump.
+    const index = entriesRef.current.findIndex((e) => (e.kind === 'message' && e.message.id === id) || holds(e, id));
     if (index < 0) return false;
     retriedJump.current = false;
     listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
@@ -278,31 +281,35 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
       ) : item.kind === 'tab_limit' ? (
         <TabLimitCard limit={item.limit} busy={busyLimitIds.includes(item.limit.id)} error={limitErrors[item.limit.id] ?? null} onAnswer={onAnswerLimit} />
       ) : item.kind === 'tab_question' ? (
-        <TabQuestionCard
-          question={item.question}
-          busy={answeringQuestionIds.includes(item.question.id)}
-          error={questionErrors[item.question.id] ?? null}
-          onAnswer={onAnswer}
-          loadScreen={loadTabQuestionScreen}
-          onForget={onForget}
-          onCancelAutoAnswer={onCancelAutoAnswer}
-        />
+        <SwipeToReply onReply={() => onReplyCard({ kind: 'tab_question', question: item.question })}>
+          <TabQuestionCard
+            question={item.question}
+            busy={answeringQuestionIds.includes(item.question.id)}
+            error={questionErrors[item.question.id] ?? null}
+            onAnswer={onAnswer}
+            loadScreen={loadTabQuestionScreen}
+            onForget={onForget}
+            onCancelAutoAnswer={onCancelAutoAnswer}
+          />
+        </SwipeToReply>
       ) : item.kind === 'message' ? (
         <MessageRow message={item.message} onReply={onReply} onOpenReply={onOpenReply} highlighted={highlightId === item.message.id} />
       ) : item.kind === 'action_group' ? (
         <ActionGroupCard actions={item.actions} busy={decidingId !== null} onDecide={onDecideMany} onShowSeparately={onShowSeparately} />
       ) : (
-        <ActionCard
-          action={item.action}
-          busy={decidingId !== null}
-          onDecide={onDecide}
-          grant={grantIndex.get(item.action.id)}
-          projectGrant={projectGrantIndex.get(item.action.id)}
-          standingGrant={standingGrantIndex.get(item.action.id)}
-          revoking={revokingId !== null}
-          onRevoke={onRevoke}
-          onRepropose={onRepropose}
-        />
+        <SwipeToReply onReply={() => onReplyCard({ kind: 'action', action: item.action })}>
+          <ActionCard
+            action={item.action}
+            busy={decidingId !== null}
+            onDecide={onDecide}
+            grant={grantIndex.get(item.action.id)}
+            projectGrant={projectGrantIndex.get(item.action.id)}
+            standingGrant={standingGrantIndex.get(item.action.id)}
+            revoking={revokingId !== null}
+            onRevoke={onRevoke}
+            onRepropose={onRepropose}
+          />
+        </SwipeToReply>
       ),
     [
       answeringQuestionIds,
@@ -319,6 +326,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
       loadTabQuestionScreen,
       onOpenReply,
       onReply,
+      onReplyCard,
       onAnswer,
       onAnswerLimit,
       onCancelAutoAnswer,

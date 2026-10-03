@@ -513,6 +513,13 @@ describe('POST /chat/messages', () => {
     expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'faz de novo', { projectId: null, replyToId: 'm7' });
     expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_id: '' } })).statusCode).toBe(400);
   });
+
+  it('passes reply_to_card to start (TER-849)', async () => {
+    const { app, start } = build();
+    const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'escolhe azul', reply_to_card: { kind: 'tab_question', id: 'q7' } } });
+    expect(res.statusCode).toBe(202);
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'escolhe azul', { projectId: null, replyToCard: { kind: 'tab_question', id: 'q7' } });
+  });
 });
 
 describe('POST /chat/actions/:id/decision', () => {

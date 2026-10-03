@@ -127,6 +127,39 @@ describe('peakUtilization', () => {
   });
 });
 
+describe('peakUtilization with the run model (TER-837)', () => {
+  const reading = (windows: { utilization: number; model?: string }[]): AiAccountUsage => ({
+    account_id: 'a', fetched_at: '', ok: true, plan: null, error: null, hint: null,
+    windows: windows.map((w, i) => ({ key: `k${i}`, label: '', resets_at: null, ...w })),
+  });
+  // the login padrão of the report: room on the account, its Fable allowance used up
+  const u = reading([{ utilization: 13 }, { utilization: 69 }, { utilization: 100, model: 'fable' }]);
+
+  it('leaves out the windows of another model', () => {
+    expect(peakUtilization(u, 'claude-opus-5-5')).toBe(69);
+    expect(peakUtilization(u, 'opus')).toBe(69);
+    expect(peakUtilization(u, 'fable')).toBe(100);
+    expect(peakUtilization(u, 'claude-fable-5-1')).toBe(100);
+  });
+
+  it('counts every window when the model is unknown', () => {
+    expect(peakUtilization(u)).toBe(100);
+    expect(peakUtilization(u, null)).toBe(100);
+  });
+
+  it('is 0, not unknown, when only other models have windows', () => {
+    expect(peakUtilization(reading([{ utilization: 100, model: 'fable' }]), 'opus')).toBe(0);
+  });
+
+  it('lets rankCandidates take an account whose full window caps another model', () => {
+    const accs = [account({ id: 'a2', machine_id: 'm1' })];
+    const map = new Map([['a2', { ...u, account_id: 'a2' }]]);
+    expect(rankCandidates(accs, map, { explicit: false, model: 'claude-opus-5-5' }).map((a) => a.id)).toEqual(['a2']);
+    expect(rankCandidates(accs, map, { explicit: false, model: 'fable' })).toEqual([]);
+    expect(rankCandidates(accs, map, { explicit: false })).toEqual([]);
+  });
+});
+
 describe('rankCandidates', () => {
   it('ranks by peak utilization, drops ≥ 90 %, unknown last', () => {
     expect(SWAP_MAX_UTILIZATION).toBe(90);

@@ -770,6 +770,10 @@ model ChatMessage {
   /// user | assistant
   replyToRole    String?          @map("reply_to_role")
   replyToExcerpt String?          @map("reply_to_excerpt")
+  /// TER-849: a reply to a card of the thread instead of a message (`replyToId` is then null).
+  /// action | tab_question, with that row's id; no foreign key, the excerpt above is the quote.
+  replyToCardKind String?         @map("reply_to_card_kind")
+  replyToCardId   String?         @map("reply_to_card_id")
   createdAt      DateTime         @default(now()) @map("created_at")
   attachments    ChatAttachment[]
 

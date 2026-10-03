@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from './attachments.js';
-import { tabQuestionSchema, type StandingGrantKind, type TAutoDecision } from './events.js';
+import { replyCardRef, tabQuestionSchema, type ReplyCardKind, type StandingGrantKind, type TAutoDecision } from './events.js';
 
 /** `POST chat/messages`: text, or attachments, or both (spec 2026-09-26 §5.5). An empty text with ids
  * is a message made of files alone; neither is refused before anything is stored. */
@@ -11,8 +11,11 @@ export const mobileMessageBody = z
     attachment_ids: z.array(z.string().min(1).max(64)).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
     /** The message this one answers (TER-447). */
     reply_to_id: z.string().min(1).max(64).optional(),
+    /** Or the card it answers (TER-849): never both. */
+    reply_to_card: replyCardRef.extend({ id: z.string().min(1).max(64) }).optional(),
   })
-  .refine((b) => b.text.length > 0 || (b.attachment_ids?.length ?? 0) > 0, { message: 'Escreva uma mensagem ou anexe um arquivo', path: ['text'] });
+  .refine((b) => b.text.length > 0 || (b.attachment_ids?.length ?? 0) > 0, { message: 'Escreva uma mensagem ou anexe um arquivo', path: ['text'] })
+  .refine((b) => b.reply_to_id === undefined || b.reply_to_card === undefined, { message: 'Responda a uma mensagem ou a um card, não aos dois', path: ['reply_to_card'] });
 /** How much of a quoted message a reply keeps and shows (TER-447). */
 export const REPLY_EXCERPT_MAX = 200;
 
@@ -38,6 +41,18 @@ export function replyExcerpt(text: string, attachmentNames: readonly string[] = 
   if (plain) return cutExcerpt(plain);
   const names = attachmentNames.join(', ').replace(/\s+/g, ' ').trim();
   return names ? cutExcerpt(`📎 ${names}`) : '';
+}
+
+/** What a quote of a card is labelled with, where a message's quote shows its author (TER-849). */
+export const REPLY_CARD_LABEL: Record<ReplyCardKind, string> = { action: 'Confirmação', tab_question: 'Pergunta da aba' };
+
+/** The words a tab question card asks, quoted by a reply to it (TER-849): every question of a choice
+ * card, or what a permission card asks for. Cut like any quote with `replyExcerpt`. */
+export function tabQuestionReplyText(
+  q: { kind: 'choice'; payload: { questions: readonly { question: string }[] } } | { kind: 'permission'; payload: { tool_name: string; question?: string } },
+): string {
+  if (q.kind === 'choice') return q.payload.questions.map((item) => item.question.trim()).filter(Boolean).join(' · ');
+  return q.payload.question?.trim() || `Permissão para usar ${q.payload.tool_name}`;
 }
 
 export const sendAccepted = z.object({ conversation_id: z.string(), user_message_id: z.string(), assistant_message_id: z.string() });

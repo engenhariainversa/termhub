@@ -901,11 +901,16 @@ export interface ChatMessage {
   reply_to?: ChatReplyRef;
 }
 
-/** What a message answers (TER-447): a snapshot taken when it was sent; `id` is null once the original was deleted. */
+/** The thread's cards a message can answer instead of a message (TER-849). */
+export type ReplyCardKind = 'action' | 'tab_question';
+
+/** What a message answers (TER-447): a snapshot taken when it was sent; `id` is null once the original
+ *  was deleted, and on a reply to a card (TER-849), which `card` names. */
 export interface ChatReplyRef {
   id: string | null;
   role: 'user' | 'assistant';
   excerpt: string;
+  card?: { kind: ReplyCardKind; id: string };
 }
 
 /** All the chat's host line ever needs of a machine; the payload carries whole `Machine` rows. */

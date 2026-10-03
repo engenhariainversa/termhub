@@ -546,6 +546,8 @@ export const ChatMessageScalarFieldEnum = {
   replyToId: 'replyToId',
   replyToRole: 'replyToRole',
   replyToExcerpt: 'replyToExcerpt',
+  replyToCardKind: 'replyToCardKind',
+  replyToCardId: 'replyToCardId',
   createdAt: 'createdAt'
 } as const
 

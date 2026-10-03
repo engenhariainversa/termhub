@@ -1569,6 +1569,55 @@ describe('replies (TER-447)', () => {
     await waitFor(() => expect(screen.queryByText('Respondendo a Concierge')).toBeNull());
   });
 
+  it('"Responder" on a confirmation card quotes it and sends reply_to_card (TER-849)', async () => {
+    chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: thread, actions: [action({ id: 'a1' })], host: READY });
+    sendMock.mockResolvedValueOnce({ conversation_id: 'c_p1', user_message_id: 'm2', assistant_message_id: 'm3' });
+    const { container } = render(
+      <MemoryRouter>
+        <ChatPanel projectId="p1" />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Abri a aba', { exact: false });
+    const card = container.querySelector<HTMLElement>('[data-chat-card="a1"]')!;
+    fireEvent.click(within(card).getByRole('button', { name: 'Responder' }));
+    expect(screen.getByText('Respondendo à confirmação')).toBeInTheDocument();
+    expect(screen.getByText('digitar npm test na aba Terminal 2 do projeto reactivando, no macbook m3')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'por que essa aba?' } });
+    fireEvent.click(screen.getByRole('button', { name: /enviar/i }));
+    await waitFor(() => expect(sendMock).toHaveBeenCalledWith('por que essa aba?', 'p1', [], { kind: 'action', id: 'a1' }));
+  });
+
+  it('"Responder no chat" on a tab question card quotes what it asks (TER-849)', async () => {
+    chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: thread, actions: [], host: READY, grants: [], tab_questions: [question({ id: 'q1' })] });
+    sendMock.mockResolvedValueOnce({ conversation_id: 'c_p1', user_message_id: 'm2', assistant_message_id: 'm3' });
+    render(
+      <MemoryRouter>
+        <ChatPanel projectId="p1" />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Responder no chat' }));
+    expect(screen.getByText('Respondendo à pergunta da aba')).toBeInTheDocument();
+    expect(screen.getByText('Permissão para usar Bash')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'pode permitir' } });
+    fireEvent.click(screen.getByRole('button', { name: /enviar/i }));
+    await waitFor(() => expect(sendMock).toHaveBeenCalledWith('pode permitir', 'p1', [], { kind: 'tab_question', id: 'q1' }));
+  });
+
+  it("a click on a card's quote scrolls to the card (TER-849)", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const replies = [...thread, msg({ id: 'm2', role: 'user', text: 'por quê?', created_at: '2026-09-21T00:00:02.000Z', reply_to: { id: null, role: 'assistant', excerpt: 'digitar npm test', card: { kind: 'action', id: 'a1' } } })];
+    chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: replies, actions: [action({ id: 'a1' })], host: READY });
+    const { container } = render(
+      <MemoryRouter>
+        <ChatPanel projectId="p1" />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver card original: Confirmação, digitar npm test' }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(container.querySelector('[data-chat-card="a1"]'));
+  });
+
   it('a click on a quote scrolls to the original and rings it; an original that is not loaded says so', async () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
