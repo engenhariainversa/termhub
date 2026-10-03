@@ -76,6 +76,15 @@ const envSchema = z.object({
   /** Expo push service access token (optional: Expo accepts unauthenticated sends when the project allows it) */
   EXPO_PUSH_ACCESS_TOKEN: z.string().optional(),
 
+  /**
+   * Public pages with this instance's terms of use and privacy policy (https://termhub.dev/termos/
+   * and /privacidade/ for the hosted service). The login screen and Configurações → Perfil link to
+   * them. Unset = no link: a self-hosted instance is not covered by termhub.dev's documents, so it
+   * shows its own or none.
+   */
+  TERMS_URL: z.string().url().optional(),
+  PRIVACY_URL: z.string().url().optional(),
+
   /** WhatsApp group the alpha-tester invite (Waitlist tab → Convidar) links to */
   ALPHA_COMMUNITY_URL: z.string().url().default('https://77a.it/comunidadetermhub'),
 
@@ -192,6 +201,7 @@ export const config = {
   hooksUrl: env.HOOKS_URL ?? `${env.PUBLIC_URL.replace(/\/$/, '')}/api/hooks/events`,
   mcpUrl: env.MCP_URL ?? null,
   publicCityUrl: resolvePublicCityUrl(env),
+  legal: { termsUrl: env.TERMS_URL ?? null, privacyUrl: env.PRIVACY_URL ?? null },
   alphaCommunityUrl: env.ALPHA_COMMUNITY_URL,
   typeToAccess: env.TYPETOACCESS_API_KEY ? { apiKey: env.TYPETOACCESS_API_KEY } : null,
   auth: {

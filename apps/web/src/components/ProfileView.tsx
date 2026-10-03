@@ -4,6 +4,7 @@ import { ANALYTICS_ENABLED } from '../lib/analytics';
 import { useAuth } from '../lib/auth';
 import { openCookieBanner } from './AnalyticsGate';
 import { Avatar } from './Avatar';
+import { LegalLinks } from './LegalLinks';
 import { ViewAsSwitch } from './ViewAsSwitch';
 
 /**
@@ -35,6 +36,7 @@ export function ProfileView() {
           Sair
         </button>
       </div>
+      <LegalLinks />
     </div>
   );
 }

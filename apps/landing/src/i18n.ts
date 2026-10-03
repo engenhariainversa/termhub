@@ -187,7 +187,26 @@ const pt = {
     accept: 'Aceitar',
     decline: 'Recusar',
   },
-  footer: { docs: 'Documentação', security: 'Segurança', brand: 'Marca', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'feito em Goiânia' },
+  footer: { docs: 'Documentação', security: 'Segurança', brand: 'Marca', terms: 'Termos', privacy: 'Privacidade', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'feito em Goiânia' },
+  // /termos/ and /privacidade/ — the documents themselves are Portuguese only (apps/landing/legal/)
+  legal: {
+    back: 'Início',
+    termos: {
+      nav: 'Termos de uso',
+      meta: { title: 'Termos de Uso do termhub', description: 'As regras de uso do serviço hospedado do termhub: app web, apps móveis, agente, API e MCP.' },
+    },
+    privacidade: {
+      nav: 'Política de privacidade',
+      meta: { title: 'Política de Privacidade do termhub', description: 'Quais dados pessoais o termhub trata, para quê, por quanto tempo e como exercer seus direitos (LGPD).' },
+    },
+    draft_badge: 'Rascunho',
+    draft_title: 'Este documento ainda não está em vigor.',
+    draft_text: 'É um rascunho em revisão jurídica. Trechos entre colchetes são dados que ainda faltam. A versão aprovada vai substituir este texto nesta mesma página.',
+    pt_only: '',
+    version: 'Versão',
+    history_title: 'Histórico de versões',
+    history_empty: 'Nenhuma versão publicada ainda.',
+  },
   // /brand/ — logo, colors and typography for anyone writing about termhub
   brand: {
     meta: {
@@ -531,7 +550,25 @@ const en: typeof pt = {
     accept: 'Accept',
     decline: 'Decline',
   },
-  footer: { docs: 'Documentation', security: 'Security', brand: 'Brand', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'made in Goiânia' },
+  footer: { docs: 'Documentation', security: 'Security', brand: 'Brand', terms: 'Terms', privacy: 'Privacy', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'made in Goiânia' },
+  legal: {
+    back: 'Home',
+    termos: {
+      nav: 'Terms of use',
+      meta: { title: 'termhub Terms of Use', description: 'The rules for using the hosted termhub service: web app, mobile apps, agent, API and MCP.' },
+    },
+    privacidade: {
+      nav: 'Privacy policy',
+      meta: { title: 'termhub Privacy Policy', description: 'Which personal data termhub processes, why, for how long and how to exercise your rights (LGPD).' },
+    },
+    draft_badge: 'Draft',
+    draft_title: 'This document is not in force yet.',
+    draft_text: 'It is a draft under legal review. Text in square brackets is information still missing. The approved version will replace this text on this same page.',
+    pt_only: 'This document is available in Portuguese only.',
+    version: 'Version',
+    history_title: 'Version history',
+    history_empty: 'No version published yet.',
+  },
   brand: {
     meta: {
       title: 'termhub brand — logo, colors and typography',
