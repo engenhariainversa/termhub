@@ -168,6 +168,17 @@ Both apps (`dev.termhub.app`) are registered in the Firebase project `apptermhub
 
 On iOS, the Firebase pods are resolved through CocoaPods (`disableSPM`), which needs static frameworks: `expo-build-properties` sets `ios.useFrameworks: "static"` for every pod. AdSupport is linked (`withoutAdIdSupport: false`) so the IDFA can be read after the App Tracking Transparency prompt; the ad signals (`ad_storage`, `ad_user_data`, `ad_personalization`) are denied by default in `firebase.json` and only granted by the person (see "Permission prompts"); screen views (`analytics_storage`) are unchanged.
 
+## Store privacy declarations
+
+**iOS privacy manifest.** `expo.ios.privacyManifests` in `app.json` becomes `ios/termhub/PrivacyInfo.xcprivacy` at prebuild. With static frameworks Apple does not reliably read each pod's own manifest, so the app's manifest repeats every required-reason API the native code uses: the union of the `PrivacyInfo.xcprivacy` files in `node_modules` (React Native, Expo modules) and of the Firebase pods (FirebaseCore, FirebaseCoreInternal, FirebaseInstallations, GoogleUtilities; GoogleAppMeasurement ships no manifest). `src/app-config.test.ts` fails when a native package adds a reason the app does not declare; the Firebase list in that test is kept by hand and must be re-checked when the Firebase iOS SDK moves.
+
+- `NSPrivacyTracking` is `true` (IDFA after ATT) and `NSPrivacyTrackingDomains` lists only `googleadservices.com`, the IDFA ad-conversion endpoint. `app-measurement.com` is deliberately left out: it also carries the first-party screen views, and iOS blocks a tracking domain for everyone who has not allowed ATT.
+- `NSPrivacyCollectedDataTypes` follows the App Privacy draft in `docs/legal/duvidas-advogado.md` (annex B), plus "Other Diagnostic Data" (not linked, analytics) that FirebaseInstallations declares. App Store Connect → App Privacy must say the same.
+
+**Android advertising id.** Firebase Analytics (`play-services-measurement-api`) merges `com.google.android.gms.permission.AD_ID` into the manifest, and the app does use the advertising id for ad measurement once the person agrees. `app.json` declares the permission itself so it does not depend on the merge. Play Console → App content → Advertising ID: "yes", for Analytics and Advertising or marketing.
+
+Any change here is native: bump `expo.version` (see "OTA updates").
+
 ## Manual checklist (design spec §10)
 
 Everything below is automated except this: run it by hand, on a development build, before trusting a change that touches enrolment, the PIN, biometrics or the key.
