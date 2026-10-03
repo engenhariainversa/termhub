@@ -47,6 +47,18 @@ describe.runIf(process.platform === 'darwin')('PTY descriptors on macOS (real no
     expect(await settledDescriptors(baseline)).toBe(baseline);
   });
 
+  it('returns to baseline when posix_spawn fails', async () => {
+    const { spawn } = await import('node-pty');
+    const baseline = ptyDescriptors();
+    const oversizedArg = 'x'.repeat(3 * 1024 * 1024);
+
+    for (let i = 0; i < 3; i++) {
+      expect(() => spawn('/bin/echo', [oversizedArg], { cols: 80, rows: 24, cwd: tmp })).toThrow(/posix_spawn/);
+    }
+
+    expect(await settledDescriptors(baseline)).toBe(baseline);
+  });
+
   it(`returns to baseline after ${CYCLES} open/close cycles through the PTY manager`, async () => {
     // Stands in for tmux: ignores the tmux argv and stays up until the manager kills it (SIGHUP).
     const fakeTmux = path.join(tmp, 'fake-tmux');
