@@ -276,7 +276,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION, attachments: attachmentStore }));
 
   // --- Mobile app API (/api/m/v1): outside /api, so only its device-token + DPoP hook runs on it ---
-  if (config.mobile && mobile) sockets.push(await registerMobileApi(fastify, mobile, mobileDeps));
+  if (config.mobile && mobile) sockets.push(...(await registerMobileApi(fastify, mobile, mobileDeps)));
 
   // --- Frontend buildado (produção) ---
   const dirs = { ...defaultFrontendDirs(ROOT_DIR), ...opts.frontend };

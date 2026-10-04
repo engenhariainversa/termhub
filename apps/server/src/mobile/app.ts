@@ -25,6 +25,7 @@ import { EnrolmentService } from './enrolment.js';
 import { ExpoPushSender, MobilePushService } from './push.js';
 import { MobileSocketRegistry, revokeDevice } from './revocation.js';
 import { SessionService } from './session.js';
+import { registerMobileTabWs } from './tab-ws.js';
 import { registerMobileChatWs } from './ws.js';
 
 export const MOBILE_PREFIX = '/api/m/v1';
@@ -79,24 +80,27 @@ export function createMobileServices(deps: MobileDeps): MobileServices {
  * The mobile app's API at /api/m/v1. It lives outside the /api plugin on purpose, so the cookie /
  * Cloudflare `buildAuthHook` never runs here: its only authentication is the device token plus a
  * DPoP proof (`buildMobileAuthHook`). Registered only when `config.mobile` is set. Returns the phone's
- * chat `WebSocketServer`, for the shutdown drain.
+ * `WebSocketServer`s (the chat and the tab chat), for the shutdown drain.
  */
 export async function registerMobileApi(
   fastify: FastifyInstance,
   services: MobileServices,
   deps: MobileDeps,
   routes?: (guardedMobile: GuardedMobile, m: FastifyInstance) => Promise<void>,
-): Promise<WebSocketServer> {
+): Promise<WebSocketServer[]> {
   const mobile = config.mobile;
   if (!mobile) throw new Error('registerMobileApi requires config.mobile (MOBILE_PUBLIC_URL)');
   const publicUrl = mobile.publicUrl;
   // The phone's chat stream, /ws/m/chat: authenticated like this prefix (device token + proof).
   const chatWs = registerMobileChatWs(deps.upgrades, { repos: deps.repos, jtis: services.jtis, publicUrl, sockets: services.sockets, log: deps.log });
+  // One open session screen, /ws/m/tabs/:id: the same checks, then the tab chat hub (spec 2026-10-01 tab chat §5.5).
+  const tabWs = registerMobileTabWs(deps.upgrades, { repos: deps.repos, jtis: services.jtis, publicUrl, sockets: services.sockets, hub: deps.tabChat, log: deps.log });
   // Pending actions and finished answers become push notifications while the server runs.
   const stopPush = services.push.start();
   fastify.addHook('onClose', async () => {
     stopPush();
     chatWs.close();
+    tabWs.close();
   });
   await fastify.register(
     async (m) => {
@@ -159,6 +163,6 @@ export async function registerMobileApi(
     },
     { prefix: MOBILE_PREFIX },
   );
-  // The shutdown drain closes its clients with the other WebSocket servers' (spec 2026-09-27 §5.2).
-  return chatWs;
+  // The shutdown drain closes their clients with the other WebSocket servers' (spec 2026-09-27 §5.2).
+  return [chatWs, tabWs];
 }
