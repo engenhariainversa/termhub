@@ -8,7 +8,6 @@ import type { DeviceEvent } from '../db/repositories/device-events.js';
 import type { Mail } from '../email/mailer.js';
 import { applyErrorHandler } from '../lib/errors.js';
 import { invalidatePermissionCache } from '../auth/permissions.js';
-import { publicBus } from '../public/bus.js';
 import { userRoutes } from './users.js';
 
 const role: Role = { id: 'r-auth', name: 'AUTHENTICATED', label: 'Autenticado', description: null, is_system: true, is_admin: false, created_at: '' };
@@ -79,7 +78,7 @@ function buildApp(opts: { entries: WaitlistEntry[]; users?: User[]; sendError?: 
     }),
   };
   const access = { add: vi.fn(), remove: vi.fn(), status: vi.fn() };
-  app.register((instance) => userRoutes(instance, repos, { mailer, access: access as never, revoke: null }), { prefix: '/api/users' });
+  app.register((instance) => userRoutes(instance, repos, { mailer, access: access as never, deletion: { purge: vi.fn() }, revoke: null }), { prefix: '/api/users' });
   return { app, created, marked, sent };
 }
 
@@ -146,31 +145,37 @@ describe('POST /api/users/invite-from-waitlist', () => {
 });
 
 describe('DELETE /api/users/:id', () => {
-  // The deleted person's nickname and city go with them: the public bus drops the memoised city
-  // and hangs up every visitor watching it (public/read.ts, public/ws.ts).
-  it('tells the public bus the owner is gone', async () => {
+  function buildDeleteApp(purged = true) {
     const app = Fastify();
     applyErrorHandler(app);
     app.addHook('preHandler', async (request) => {
       request.user = user({ id: 'admin', name: 'Pedro', email: 'pedro@gmail.com' });
     });
-    const del = vi.fn(async () => {});
     const repos = {
-      users: { findById: async (id: string) => (id === 'u-ana' ? user({ id: 'u-ana' }) : undefined), delete: del },
+      users: { findById: async (id: string) => (id === 'u-ana' ? user({ id: 'u-ana' }) : undefined) },
       roles: { findById: async (id: string) => (id === role.id ? role : undefined) },
     } as unknown as Repositories;
     const access = { add: vi.fn(), remove: vi.fn(), status: vi.fn() };
-    app.register((instance) => userRoutes(instance, repos, { mailer: { send: vi.fn() }, access: access as never, revoke: null }), { prefix: '/api/users' });
-    const gone: unknown[] = [];
-    const off = publicBus.subscribeOwnerGone((g) => gone.push(g));
-    try {
-      const res = await app.inject({ method: 'DELETE', url: '/api/users/u-ana' });
-      expect(res.statusCode).toBe(200);
-      expect(del).toHaveBeenCalledWith('u-ana');
-      expect(gone).toEqual([{ owner_id: 'u-ana' }]);
-    } finally {
-      off();
-    }
+    const purge = vi.fn(async () => purged);
+    app.register((instance) => userRoutes(instance, repos, { mailer: { send: vi.fn() }, access: access as never, deletion: { purge }, revoke: null }), { prefix: '/api/users' });
+    return { app, purge };
+  }
+
+  // The same cascade as a self-service deletion (TER-720), at once and without the e-mail: nothing
+  // the account owned is left behind ownerless, and the public city, agents and Access entry are
+  // cleaned up by the service (account/deletion.test.ts).
+  it('deletes the account and everything it owns through the deletion service', async () => {
+    const { app, purge } = buildDeleteApp();
+    const res = await app.inject({ method: 'DELETE', url: '/api/users/u-ana' });
+    expect(res.statusCode).toBe(200);
+    expect(purge).toHaveBeenCalledWith('u-ana', { actor: 'admin:admin', notify: false });
+  });
+
+  it('refuses the admin themselves and an unknown id', async () => {
+    const { app, purge } = buildDeleteApp();
+    expect((await app.inject({ method: 'DELETE', url: '/api/users/admin' })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'DELETE', url: '/api/users/nobody' })).statusCode).toBe(404);
+    expect(purge).not.toHaveBeenCalled();
   });
 });
 
@@ -229,7 +234,7 @@ function buildReviewApp(opts: ReviewAppOpts = {}) {
   } as unknown as Repositories;
   const mailer = { send: vi.fn() };
   const access = { add: vi.fn(), remove: vi.fn(), status: vi.fn() };
-  app.register((instance) => userRoutes(instance, repos, { mailer, access: access as never, revoke: revoke as never }), { prefix: '/api/users' });
+  app.register((instance) => userRoutes(instance, repos, { mailer, access: access as never, deletion: { purge: vi.fn() }, revoke: revoke as never }), { prefix: '/api/users' });
   return { app, users, devices, events, setReview, recordEvent, revoke };
 }
 

@@ -6,6 +6,7 @@ import { canonicalHtu, parseAppHeader } from '../contract';
 import type { Transport, TransportFetchInput, TransportFetchResult, TransportUploadResult } from '../transport';
 import { createMockControls, type MockControls } from './controls';
 import { seedFixtures } from './fixtures';
+import { registerAccountRoutes } from './handlers/account';
 import { registerChatRoutes } from './handlers/chat';
 import { registerDeviceRoutes } from './handlers/devices';
 import { registerMeRoutes } from './handlers/me';
@@ -44,6 +45,7 @@ export function createMockTransport(opts: CreateMockTransportOptions = {}): Tran
   registerDeviceRoutes(router, state);
   registerSessionRoutes(router, state);
   registerMeRoutes(router, state);
+  registerAccountRoutes(router, state);
   registerChatRoutes(router, state, { maxLatency });
   registerNotificationRoutes(router, state);
   registerProgressRoutes(router, state);

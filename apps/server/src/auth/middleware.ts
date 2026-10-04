@@ -8,6 +8,7 @@ import type { AuthService } from './service.js';
 import { CF_HEADER, verifyCloudflareJwt } from './cloudflare.js';
 import { actionForMethod, canAccess } from './permissions.js';
 import { resolveScope } from './scope.js';
+import { isPendingDeletion, pendingDeletion } from '../account/deletion.js';
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, safeEqual } from './tokens.js';
 
 declare module 'fastify' {
@@ -83,12 +84,14 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 /** Hook global: autentica todas as rotas, exceto as marcadas como públicas. */
 export function buildAuthHook(ctx: AuthContext) {
   return async function authHook(request: FastifyRequest, reply: FastifyReply) {
-    const routeConfig = (request.routeOptions?.config ?? {}) as { public?: boolean; resource?: string; action?: string };
+    const routeConfig = (request.routeOptions?.config ?? {}) as { public?: boolean; resource?: string; action?: string; allowPendingDeletion?: boolean };
     request.user = await resolveUser(ctx, { headers: request.headers, cookies: request.cookies as Record<string, string> });
 
     if (request.user) request.scope = await resolveScope(ctx.repos, request.user, request.cookies as Record<string, string>);
     if (routeConfig.public) return;
     if (!request.user) throw unauthorized();
+    // A deactivated account (deletion pending, TER-720) reaches only the routes that show and cancel it.
+    if (isPendingDeletion(request.user) && !routeConfig.allowPendingDeletion) throw pendingDeletion();
 
     // Resource guard: routes registered under a guarded plugin carry { resource, action } (see guarded() in app.ts).
     if (routeConfig.resource) {

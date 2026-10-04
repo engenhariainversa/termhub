@@ -8,4 +8,5 @@ export * from './notifications.js';
 export * from './proofs.js';
 export * from './progress.js';
 export * from './project-ai.js';
+export * from './account.js';
 export * from './tab-chat.js';

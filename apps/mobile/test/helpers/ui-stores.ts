@@ -1,11 +1,12 @@
 // One mock transport, one session store, one chat store, one notifications store, one settings
-// store, one chat grants store, one chat-memory store, one progress store and one permissions store
+// store, one chat grants store, one chat-memory store, one progress store, one permissions store and one account store
 // over it, for the `ui` project: a screen test mocks `useSessionStore`, `useChatStore`,
 // `useNotificationsStore`, `useSettingsStore`, `useChatGrantsStore`, `useChatMemoryStore`,
-// `useProgressStore`, `usePermissionsStore`, `useSessionsStore` and `makeTabChatStore` with these
+// `useProgressStore`, `usePermissionsStore`, `useAccountStore`, `useSessionsStore` and `makeTabChatStore` with these
 // (each `jest.mock` factory requires this module, and Jest's registry hands every store the same
 // instance within a test file).
 // `enrolStores()` leaves the session unlocked; run it once, in `beforeAll`.
+import { createAccountStore } from '@/features/account/viewmodel/createAccountStore';
 import type { PermissionsDeps } from '@/features/permissions/model/permissions.types';
 import { createPermissionsStore } from '@/features/permissions/viewmodel/createPermissionsStore';
 import { createChatGrantsStore } from '@/features/chat-grants/viewmodel/createChatGrantsStore';
@@ -48,6 +49,7 @@ export const stores = {
   progress: createProgressStore({ api: ctx.api, session: () => ctx.store.getState() }),
   permissions: createPermissionsStore(permissionDeps),
   permissionDeps,
+  account: createAccountStore({ api: ctx.api, session: () => ctx.store.getState() }),
   sessions: createSessionsStore({ api: ctx.api, session: () => ctx.store.getState() }),
   /** A session screen's store (spec 2026-10-01 tab chat): a test mocks `makeTabChatStore` with this. */
   makeTabChat: (tabId: string) => createTabChatStore({ api: ctx.api, session: () => ctx.store.getState(), tabId }),

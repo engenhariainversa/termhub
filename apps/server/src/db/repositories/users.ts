@@ -154,10 +154,11 @@ export class UsersRepository {
   }
 
   /** "Responder sozinho quando houver precedente" (spec 2026-09-26 concierge memory D8): false when
-   *  the row is missing too — off is the safe default, never send keys without an explicit opt-in. */
+   *  the row is missing too — off is the safe default, never send keys without an explicit opt-in.
+   *  Also false while the account waits out its deletion (TER-720): a deactivated account answers nothing. */
   async chatAutodecide(userId: string): Promise<boolean> {
-    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatAutodecide: true } });
-    return u?.chatAutodecide ?? false;
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatAutodecide: true, deletionScheduledAt: true } });
+    return !!u?.chatAutodecide && !u.deletionScheduledAt;
   }
 
   async setChatAutodecide(userId: string, enabled: boolean): Promise<void> {

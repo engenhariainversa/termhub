@@ -25,6 +25,8 @@ import { EnrolmentService } from './enrolment.js';
 import { ExpoPushSender, MobilePushService } from './push.js';
 import { MobileSocketRegistry, revokeDevice } from './revocation.js';
 import { SessionService } from './session.js';
+import type { AccountDeletionService } from '../account/deletion.js';
+import { mobileAccountRoutes } from '../routes/m-account.js';
 import { registerMobileTabWs } from './tab-ws.js';
 import { registerMobileChatWs } from './ws.js';
 
@@ -52,6 +54,8 @@ export interface MobileDeps {
   attachments: ChatAttachmentDeps;
   /** Who watches which tab as a conversation (spec 2026-10-01 tab chat §5.3); the hooks route pokes it. */
   tabChat: TabChatHub;
+  /** Account deletion (TER-720): Ajustes → "Excluir minha conta". Absent in tests that do not need it. */
+  deletion?: AccountDeletionService;
 }
 
 /**
@@ -151,6 +155,9 @@ export async function registerMobileApi(
         await guarded('projects', (a) => projectAiRoutes(a, deps.repos), '/projects');
         // Voice dictation, over the same TranscriptionService as the web (`routes/transcriptions.ts`).
         await guarded('terminals', (a) => mobileTranscriptionRoutes(a, { transcriptions: deps.transcriptions }), '/transcriptions');
+        // The person's own account: no role grant needed to delete it (device auth only).
+        const deletion = deps.deletion;
+        if (deletion) await m.register((a) => mobileAccountRoutes(a, { deletion, session: services.session }), { prefix: '/account' });
         // A terminal tab read as a conversation (spec 2026-10-01 tab chat).
         await guarded('terminals', (a) => mobileTabRoutes(a, deps.repos, { hub: deps.tabChat }), '/tabs');
       }

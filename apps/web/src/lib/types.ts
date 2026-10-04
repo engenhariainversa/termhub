@@ -30,6 +30,17 @@ export interface User {
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until; only the user-admin routes (/api/users) send it */
   review_enabled_by?: string | null;
+  /** when the person asked to delete their own account (TER-720); null = no request */
+  deletion_requested_at: string | null;
+  /** when the account is deleted for good; non-null = deletion pending, the account is deactivated */
+  deletion_scheduled_at: string | null;
+}
+
+/** GET/POST/DELETE /api/account/deletion. */
+export interface AccountDeletionStatus {
+  pending: boolean;
+  requested_at: string | null;
+  scheduled_at: string | null;
 }
 
 /** Side effects of an invite (the user row is created regardless). */

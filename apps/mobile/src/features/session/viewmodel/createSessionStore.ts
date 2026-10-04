@@ -12,7 +12,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { pushGranted, sessionEnded, sessionStarted } from '@/features/shared/signals';
-import type { PinDecision } from '@/services/api/contract';
+import { ACCOUNT_PENDING_DELETION, type PinDecision } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { socketWake } from '@/services/api/wake';
 import { b64url, fromB64url } from '@/services/crypto/encoding';
@@ -231,6 +231,9 @@ export function createSessionStore(deps: SessionDeps) {
               set({ error: MSG.pinInvalid, attemptsLeft: e.attemptsLeft ?? null, busy: false });
               return true;
             }
+            // The account is pending deletion (TER-720): the client already told the account store,
+            // which swaps the tabs for the blocking screen — no error text of its own here.
+            if (isApiError(e, ACCOUNT_PENDING_DELETION)) return true;
             return false;
           },
 

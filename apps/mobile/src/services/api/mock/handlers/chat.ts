@@ -710,7 +710,7 @@ function chatMemoryView(state: MockState): TChatMemory {
  * without this attempt counting again. The challenge must be a `decision` one bound to this action,
  * and is spent either way; the proof signs the decision word, so one made for `approve` is refused
  * for `approve_tab`. A bad proof counts a PIN failure and throws `PIN_INVALID`. */
-function checkDecisionProof(
+export function checkDecisionProof(
   state: MockState,
   device: MockDevice,
   actionId: string,

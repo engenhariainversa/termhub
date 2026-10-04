@@ -6,6 +6,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { User } from '../db/repositories/types.js';
 import { rejectUpgrade } from '../ws/router.js';
 import { MOBILE_TOKEN_RE } from './codes.js';
+import { isPendingDeletion } from '../account/deletion.js';
 import { verifyProof, type JtiCache } from './dpop.js';
 
 export interface MobileUpgradeDeps {
@@ -51,7 +52,8 @@ export async function authenticateMobileUpgrade(
   // The jti is claimed only once the signature has verified, so garbage cannot fill the cache.
   if (!proof.ok || !deps.jtis.claim(found.device.id, proof.jti)) return reject(socket, 401, 'Unauthorized');
   const user = await deps.repos.users.findById(found.device.user_id);
-  if (!user) return reject(socket, 403, 'Forbidden');
+  // A deactivated account (deletion pending, TER-720) opens no socket: only the cancel path is left.
+  if (!user || isPendingDeletion(user)) return reject(socket, 403, 'Forbidden');
   return { user, deviceId: found.device.id };
 }
 
