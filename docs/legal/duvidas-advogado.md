@@ -85,7 +85,7 @@ O legítimo interesse precisa de um relatório (LIA) documentado?
 
 **L-12. Leitura de documentos do repositório.** O agente lê `docs/superpowers/**` e `docs/lessons/**` dos repositórios do usuário para a memória. Esses arquivos podem conter dados de terceiros. Basta o aviso na Política?
 
-**L-14. Registros de segurança na exclusão de conta.** O desenho da exclusão (TER-720, `docs/superpowers/specs/2026-10-01-account-deletion-design.md`) apaga junto com a conta os eventos de segurança dos aparelhos (`device_events`: IP, cidade, país, falhas de PIN), e mantém só os logs do servidor (IP e URL, fora do banco). Isso basta para a guarda de 6 meses do Marco Civil (art. 15), ou esses eventos também precisam ficar guardados pelo prazo legal depois da exclusão?
+**L-14. Registros de segurança na exclusão de conta.** A exclusão de conta pelo próprio usuário (TER-720, PR #285) apaga junto com a conta os eventos de segurança dos aparelhos (`device_events`: IP, cidade, país, falhas de PIN), e mantém só os logs do servidor (IP e URL, fora do banco). Isso basta para a guarda de 6 meses do Marco Civil (art. 15), ou esses eventos também precisam ficar guardados pelo prazo legal depois da exclusão?
 
 **L-13. Anthropic: seção para o Brasil.** A Política da Anthropic tem uma seção para o Brasil, com as cláusulas-padrão da ANPD. Vale usá-la como modelo para a nossa seção de transferência?
 
@@ -165,9 +165,9 @@ A Política foi escrita como **deve ficar**. Ela só pode ser publicada quando e
 
 | # | Lacuna | Hoje | Evidência no código | Bloqueia |
 |---|---|---|---|---|
-| P-1 | **Exclusão de conta pelo próprio usuário** (web e app) | só um administrador exclui, e a rota recusa excluir a si mesmo | `apps/server/src/routes/users.ts:190-212` | lojas (Apple 5.1.1(v), Google Play) e LGPD |
-| P-2 | **Exclusão em cascata completa** | máquinas, projetos (com cards, notas e tickets), integrações (com o token cifrado) e registros de uploads **ficam sem dono**; os arquivos de anexo no disco só saem pela limpeza periódica | `apps/server/prisma/schema.prisma` (relações `SetNull` em machines, projects, integrations, uploads); `docs/security-and-network.md:185` | LGPD |
-| P-3 | **Página web para pedir a exclusão sem o app** | não existe | — | Google Play |
+| P-1 | ~~**Exclusão de conta pelo próprio usuário** (web e app)~~ | **entregue no PR #285 (TER-720)**, com janela de 30 dias para desfazer | `apps/server/src/routes/account.ts`; `apps/server/src/routes/m-account.ts` | — |
+| P-2 | ~~**Exclusão em cascata completa**~~ | **entregue no PR #285 (TER-720)**: máquinas, projetos, integrações, tickets e as tabelas por e-mail saem junto com a conta | `apps/server/src/db/repositories/account-deletion.ts` | — |
+| P-3 | ~~**Página web para pedir a exclusão sem o app**~~ | **entregue no PR #285 (TER-720)**: `termhub.dev/excluir-conta` | `apps/landing/src/delete-account/DeleteAccountPage.tsx` | — |
 | P-4 | Provedor de SMTP de produção documentado, e **e-mail fora do log**: sem `SMTP_HOST`, o e-mail inteiro, com o código de login, vai para o log | `apps/server/src/email/mailer.ts:32-42` | — | segurança |
 | P-5 | País da hospedagem declarado | não está escrito em lugar nenhum | — | Política |
 | P-6 | **Retenção dos logs** (6 meses, Marco Civil) e rotação | padrão do Docker; o log do Fastify registra IP e URL | `apps/server/src/app.ts:110` | Marco Civil |

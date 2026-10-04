@@ -302,7 +302,7 @@ O prazo é de até [30] dias, mais [N] dias para os backups. Mantemos só o que 
 
 12.3. A exclusão da conta não apaga nada nas suas máquinas, como o código, os arquivos e as transcrições locais das ferramentas de IA. Também não apaga os dados que você enviou aos fornecedores de IA e às integrações. Para remover o agente, siga [instruções de desinstalação].
 
-> Nota: a exclusão pelo próprio usuário **não existe hoje**. Hoje, quando um administrador exclui um usuário, as máquinas, os projetos e as integrações dele **ficam sem dono, mas não são apagados**. Ver os itens P-1 a P-3.
+> Nota: a exclusão pelo próprio usuário, com janela de 30 dias, e a página `termhub.dev/excluir-conta` foram entregues no PR #285 (TER-720). Conferir os caminhos das telas e os prazos com o que foi implementado antes de publicar. A exportação dos dados (P-10) ainda não existe.
 
 ## 13. Crianças e adolescentes
 
