@@ -1,7 +1,9 @@
 import { ChevronsLeft } from 'lucide-react';
 import { useMemo, useRef, useState, type DragEvent, type HTMLAttributes } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { announceTerminalEnded } from '../lib/editor-tabs';
 import { useData } from '../lib/data';
 import { useMonitor } from '../lib/monitor';
 import { needsYouByProject } from '../lib/needs-you';
@@ -33,6 +35,15 @@ function agentsByProject(tabs: Tab[]): Map<string, Tab[]> {
   }
   for (const list of byProject.values()) list.sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
   return byProject;
+}
+
+/**
+ * Ending a terminal kills its tmux session, so it asks first unless nothing would be lost: the agent in it
+ * finished (or failed) its turn. A simulator tab only goes away; the simulator keeps running.
+ */
+export function endNeedsConfirm(tab: Tab): boolean {
+  if (tab.kind === 'simulator') return false;
+  return tab.state !== 'idle' && tab.state !== 'error';
 }
 
 /** what is being dragged in the sidebar: a project row, or a group header */
@@ -91,6 +102,19 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
   /** the group "+ grupo" just created: its header opens in rename mode */
   const [newGroupId, setNewGroupId] = useState<string | null>(null);
   const [deletingGroup, setDeletingGroup] = useState<ProjectGroup | null>(null);
+  /** the terminal whose ✕ asks for confirmation */
+  const [ending, setEnding] = useState<Tab | null>(null);
+  const [endError, setEndError] = useState<string | null>(null);
+  const endTerminal = async (tab: Tab) => {
+    setEnding(null);
+    setEndError(null);
+    try {
+      await api.tabs.remove(tab.id);
+      announceTerminalEnded(tab.project_id, tab.id);
+    } catch (e) {
+      setEndError(e instanceof ApiError ? e.message : 'Erro ao encerrar o terminal');
+    }
+  };
   /** the open Grupos… menu; `key` changes per opening so a menu never inherits another row's state */
   const [menuFor, setMenuFor] = useState<{ projectId: string; anchor: HTMLElement; key: number } | null>(null);
   // the drag in progress: browsers hide dataTransfer's data during dragover (only its types show), so it is kept here too
@@ -267,6 +291,7 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
         // the same button closes it; any other ⋯ (even the same project in another section) moves it there
         onOpenGroups={(anchor) => setMenuFor((cur) => (cur?.anchor === anchor ? null : { projectId: p.id, anchor, key: (cur?.key ?? 0) + 1 }))}
         dragProps={dragProps}
+        onEndTerminal={can('terminals', 'delete') ? (tab) => (endNeedsConfirm(tab) ? setEnding(tab) : void endTerminal(tab)) : undefined}
       />
     );
   };
@@ -373,6 +398,11 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
             + grupo
           </button>
         </div>
+        {endError && (
+          <p role="alert" className="px-3 text-[11px] text-danger">
+            {endError}
+          </p>
+        )}
         {groupsError && (
           <p role="alert" className="px-3 text-[11px] text-danger">
             {groupsError}
@@ -392,6 +422,24 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
 
       {projectFormOpen && <ProjectForm open onClose={() => setProjectFormOpen(false)} />}
       {menuFor && <ProjectGroupsMenu key={menuFor.key} projectId={menuFor.projectId} anchor={menuFor.anchor} onClose={() => setMenuFor(null)} />}
+      <ConfirmDialog
+        open={!!ending}
+        title="Encerrar terminal"
+        message={
+          <>
+            Encerrar <strong>{ending?.name}</strong>
+            {ending?.state === 'working' ? ', que está trabalhando agora' : ''}? A sessão tmux{' '}
+            <code className="font-mono text-xs">{ending?.tmux_session}</code> será encerrada na máquina e o que estiver rodando nela será
+            interrompido.
+          </>
+        }
+        confirmLabel="Encerrar terminal"
+        danger
+        onCancel={() => setEnding(null)}
+        onConfirm={() => {
+          if (ending) void endTerminal(ending);
+        }}
+      />
       <ConfirmDialog
         open={!!deletingGroup}
         title="Excluir grupo"
