@@ -1,0 +1,16 @@
+name: CI na troca de base
+
+# Retargeting a pull request to main sends `pull_request` with `edited`, which "CI e Deploy" does not
+# listen to, so a PR opened against another branch and moved to main never got a check (#292). This
+# runs the same check when the base changed. It lives apart from "CI e Deploy" on purpose: an `edited`
+# there would also fire on every title or description edit, cancel the PR's running check through its
+# concurrency group, and show a skipped `check` in place of a failed one.
+on:
+  pull_request:
+    types: [edited]
+    branches: [main]
+
+jobs:
+  check:
+    if: github.event.changes.base != null
+    uses: ./.github/workflows/check.yml
