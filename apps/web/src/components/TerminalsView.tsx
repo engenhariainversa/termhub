@@ -25,13 +25,23 @@ import { SimulatorView } from './SimulatorView';
 import { RateLimitBanner } from './RateLimitBanner';
 import { PaneLayer, PANE_HEADER_HEIGHT } from './PaneLayer';
 import { FloatingWindow, FLOATING_TITLE_HEIGHT } from './FloatingWindow';
-import { ConfirmDialog } from './Modal';
 import { MachinePicker } from './MachinePicker';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/data';
 import { useMarkSeenOnFocus, useMonitor } from '../lib/monitor';
 import { setTabsOnScreen } from '../lib/visible-tabs';
 import { writeLastMachine } from '../lib/last-machine';
+import {
+  closeEditorTab,
+  getEditorTabs,
+  onTerminalEnded,
+  pinTab,
+  previewTab,
+  pruneEditorTabs,
+  seedEditorTabs,
+  updateEditorTabs,
+  useEditorTabs,
+} from '../lib/editor-tabs';
 
 interface Props {
   project: Project;
@@ -54,7 +64,6 @@ export function TerminalsView({ project, visible }: Props) {
   const [picking, setPicking] = useState<{ kind: TabKind; cell?: number } | null>(null);
   const [tabs, setTabs] = useState<Tab[] | null>(null);
   const [reachable, setReachable] = useState(true);
-  const [closing, setClosing] = useState<Tab | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Tabs mount only after the section was visible once (xterm cannot initialize inside display:none).
   const [shown, setShown] = useState(visible);
@@ -70,7 +79,13 @@ export function TerminalsView({ project, visible }: Props) {
   // empty list would consume the legacy migration key and sanitize away any saved layout.
   const [layout, setLayout] = useState<Layout>(() => emptyLayout('single'));
   const [floatingFocused, setFloatingFocused] = useState(false);
-  const tabIds = useMemo(() => (tabs ?? []).map((t) => t.id), [tabs]);
+  // Every terminal of the project is listed in the sidebar; only the open tabs (TER-904) are mounted and
+  // hold a terminal connection, so the layout works on those alone.
+  const editorTabs = useEditorTabs(project.id);
+  const openKey = (editorTabs?.open ?? []).filter((id) => (tabs ?? []).some((t) => t.id === id)).join(',');
+  const tabIds = useMemo(() => (openKey ? openKey.split(',') : []), [openKey]);
+  const openTabs = useMemo(() => tabIds.map((id) => (tabs ?? []).find((t) => t.id === id)).filter((t): t is Tab => !!t), [tabIds, tabs]);
+  const previewId = editorTabs?.preview ?? null;
 
   // Tabs in a cell or floating while this section is shown: the "needs you" toasts skip them.
   useEffect(() => {
@@ -93,8 +108,8 @@ export function TerminalsView({ project, visible }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  // Re-sanitize whenever the tab list or the area changes (deleted tabs, smaller window), and
-  // fall back to showing the first tab if that leaves nothing on screen.
+  // Re-sanitize whenever the open tabs or the area change (closed tabs, smaller window), and
+  // fall back to showing the first open tab if that leaves nothing on screen.
   useEffect(() => {
     if (!tabs) return;
     setLayout((l) => ensureVisibleTab(sanitize(l, tabIds, area), tabIds));
@@ -105,8 +120,18 @@ export function TerminalsView({ project, visible }: Props) {
   useEffect(() => {
     if (!tabs || loadedFor.current === project.id) return;
     loadedFor.current = project.id;
-    setLayout(ensureVisibleTab(loadLayout(project.id, tabIds, area), tabIds));
-  }, [tabs, tabIds, area, project.id]);
+    const all = tabs.map((t) => t.id);
+    // The first visit after TER-904 opens what the saved layout had on screen (or the first terminal),
+    // so nobody lands on an empty area; from then on the open tabs are remembered per project.
+    const saved = loadLayout(project.id, all, area);
+    let open = getEditorTabs(project.id)?.open.filter((id) => all.includes(id));
+    if (!open) {
+      const onScreen = [...saved.cells, saved.floating?.tabId ?? null].filter((id): id is string => !!id);
+      open = seedEditorTabs(project.id, onScreen.length > 0 ? { open: onScreen, preview: null } : { open: all.slice(0, 1), preview: all[0] ?? null }).open;
+    }
+    setLayout(ensureVisibleTab(sanitize(saved, open, area), open));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per project, with the first tab list
+  }, [tabs, project.id]);
 
   useEffect(() => {
     if (loadedFor.current === project.id) saveLayout(project.id, layout);
@@ -151,6 +176,8 @@ export function TerminalsView({ project, visible }: Props) {
     try {
       const r = await api.projects.tabs(project.id);
       setTabs(r.tabs);
+      const known = new Set(r.tabs.map((t) => t.id));
+      if (getEditorTabs(project.id)) updateEditorTabs(project.id, (s) => pruneEditorTabs(s, known));
       setReachable(r.reachable);
       setError(null);
     } catch (e) {
@@ -190,8 +217,47 @@ export function TerminalsView({ project, visible }: Props) {
 
   // ?tab=<id> (from a task card or a sidebar agent) shows the tab in the focused cell; a tab this
   // view does not know yet is waited for across one reload (see useFocusTabFromParam).
-  const focusTab = useCallback((tabId: string) => dispatch({ type: 'assign', tabId }), [dispatch]);
+  /**
+   * Shows a terminal: a single click opens it in the preview tab (in the cell the old preview had), a
+   * double click or the pin button pins it. An open tab just gets the focus.
+   */
+  const openTab = useCallback(
+    (tabId: string, mode: 'preview' | 'pin') => {
+      const before = getEditorTabs(project.id);
+      const after = updateEditorTabs(project.id, (s) => (mode === 'pin' ? pinTab(s, tabId) : previewTab(s, tabId)));
+      const replaced = before?.preview && before.preview !== tabId && !after.open.includes(before.preview) ? before.preview : null;
+      setLayout((l) => {
+        const cell = replaced ? l.cells.indexOf(replaced) : -1;
+        if (cell !== -1) return reduce(l, { type: 'assignTo', cell, tabId }, area);
+        const swapped = replaced && l.floating?.tabId === replaced ? reduce(l, { type: 'closeTab', tabId: replaced }, area) : l;
+        return ensureVisibleTab(reduce(swapped, { type: 'assign', tabId }, area), after.open);
+      });
+      setFloatingFocused(false);
+    },
+    [project.id, area],
+  );
+  const focusTab = useCallback((tabId: string) => openTab(tabId, 'preview'), [openTab]);
   useFocusTabFromParam(tabs, load, focusTab);
+
+  /** The tab's ✕ (and ⌘W): only the tab closes; the terminal, its tmux session and its agent keep going. */
+  const closeTab = useCallback(
+    (tabId: string) => {
+      const after = updateEditorTabs(project.id, (s) => closeEditorTab(s, tabId));
+      setLayout((l) => ensureVisibleTab(reduce(l, { type: 'closeTab', tabId }, area), after.open));
+    },
+    [project.id, area],
+  );
+
+  // A terminal ended from the sidebar: drop it from the list (its tab is already closed).
+  useEffect(
+    () =>
+      onTerminalEnded((projectId, tabId) => {
+        if (projectId !== project.id) return;
+        setTabs((t) => (t ? t.filter((x) => x.id !== tabId) : t));
+        dispatch({ type: 'closeTab', tabId });
+      }),
+    [project.id, dispatch],
+  );
 
   const newTab = useCallback(
     async (kind: TabKind = 'terminal', cell?: number, machineId?: string) => {
@@ -214,6 +280,7 @@ export function TerminalsView({ project, visible }: Props) {
         const { tab } = await api.projects.createTab(project.id, { kind, machine_id: chosen });
         writeLastMachine(project.id, chosen);
         setTabs((t) => [...(t ?? []), tab]);
+        updateEditorTabs(project.id, (s) => pinTab(s, tab.id));
         setLayout((l) => {
           const target = cell ?? (l.cells.indexOf(null) === -1 ? l.focusedCell : l.cells.indexOf(null));
           return reduce(l, { type: 'assignTo', cell: target, tabId: tab.id }, area);
@@ -237,21 +304,6 @@ export function TerminalsView({ project, visible }: Props) {
     [load],
   );
 
-  const closeTab = useCallback(
-    async (tab: Tab) => {
-      setClosing(null);
-      setTabs((t) => (t ?? []).filter((x) => x.id !== tab.id));
-      dispatch({ type: 'closeTab', tabId: tab.id });
-      try {
-        await api.tabs.remove(tab.id);
-      } catch (e) {
-        setError(e instanceof ApiError ? e.message : 'Erro ao fechar tab');
-        void load();
-      }
-    },
-    [dispatch, load],
-  );
-
   // Mark the session alive as soon as the tab connects (no need to wait for the next load).
   const markAlive = useCallback((id: string) => {
     setTabs((t) => (t ?? []).map((x) => (x.id === id && !x.alive ? { ...x, alive: true } : x)));
@@ -270,7 +322,7 @@ export function TerminalsView({ project, visible }: Props) {
   useEffect(() => {
     if (!visible) return;
     const onKey = (e: KeyboardEvent) => {
-      const list = tabs ?? [];
+      const list = openTabs;
       const meta = e.metaKey && !e.ctrlKey && !e.altKey;
       const ctrlShift = e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey;
       if ((meta && e.key === 't') || (ctrlShift && e.key === 'T')) {
@@ -278,8 +330,7 @@ export function TerminalsView({ project, visible }: Props) {
         void newTab();
       } else if ((meta && e.key === 'w') || (ctrlShift && e.key === 'W')) {
         e.preventDefault();
-        const t = list.find((x) => x.id === focusedTabId);
-        if (t) setClosing(t);
+        if (focusedTabId) closeTab(focusedTabId);
       } else if (meta && /^[1-9]$/.test(e.key)) {
         const t = list[Number(e.key) - 1];
         if (t) {
@@ -291,15 +342,17 @@ export function TerminalsView({ project, visible }: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [visible, tabs, focusedTabId, newTab, dispatch, layout.floating]);
+  }, [visible, openTabs, focusedTabId, newTab, closeTab, dispatch, layout.floating]);
 
-  const floatingTab = layout.floating ? (tabs ?? []).find((t) => t.id === layout.floating?.tabId) : undefined;
+  const floatingTab = layout.floating ? openTabs.find((t) => t.id === layout.floating?.tabId) : undefined;
 
   return (
     <div className={`absolute inset-0 flex flex-col ${visible ? '' : 'hidden'}`}>
       <TabBar
-        tabs={tabs ?? []}
+        tabs={openTabs}
         activeId={focusedTabId}
+        previewId={previewId}
+        onPin={(id) => openTab(id, 'pin')}
         onScreen={(id) => placeOf(layout, id) !== null}
         preset={layout.preset}
         onPreset={(p: Preset) => dispatch({ type: 'setPreset', preset: p })}
@@ -311,13 +364,10 @@ export function TerminalsView({ project, visible }: Props) {
         onNewSimulator={() => void newTab('simulator')}
         canSimulator={canSimulator}
         onRename={(id, name) => void rename(id, name)}
-        onClose={(id) => {
-          const t = (tabs ?? []).find((x) => x.id === id);
-          if (t) setClosing(t);
-        }}
+        onClose={closeTab}
         badges={
           projectMachines.length > 1
-            ? Object.fromEntries((tabs ?? []).map((t) => [t.id, machineById(t.machine_id)?.name ?? '']))
+            ? Object.fromEntries(openTabs.map((t) => [t.id, machineById(t.machine_id)?.name ?? '']))
             : undefined
         }
       />
@@ -374,9 +424,24 @@ export function TerminalsView({ project, visible }: Props) {
               Abrir terminal <kbd className="ml-1 rounded bg-black/30 px-1 text-[10px]">⌘T</kbd>
             </button>
           </div>
+        ) : openTabs.length === 0 && layout.preset === 'single' ? (
+          // Nothing open: the terminals are in the sidebar, but it can be collapsed (or hidden in focus mode).
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-sm text-fg-muted">
+            <p>Nenhuma aba aberta. Escolha um terminal na lateral ou aqui:</p>
+            <ul className="flex flex-wrap justify-center gap-2" aria-label="Terminais do projeto">
+              {tabs.map((t) => (
+                <li key={t.id}>
+                  <button type="button" className="btn-ghost text-xs" onClick={() => openTab(t.id, 'preview')} onDoubleClick={() => openTab(t.id, 'pin')}>
+                    {t.name}
+                    {projectMachines.length > 1 && <span className="text-fg-dim"> · {machineById(t.machine_id)?.name ?? ''}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : shown && area ? (
           <>
-            {tabs.map((t) => {
+            {openTabs.map((t) => {
               const r = rectOf(t.id);
               const place = placeOf(layout, t.id);
               const isFloating = place?.kind === 'floating';
@@ -429,7 +494,11 @@ export function TerminalsView({ project, visible }: Props) {
                 dispatch({ type: 'focus', cell });
                 setFloatingFocused(false);
               }}
-              onAssign={(cell, tabId) => dispatch({ type: 'assignTo', cell, tabId })}
+              onAssign={(cell, tabId) => {
+                // picking a terminal for a pane opens its tab, pinned
+                updateEditorTabs(project.id, (s) => pinTab(s, tabId));
+                dispatch({ type: 'assignTo', cell, tabId });
+              }}
               onClear={(cell) => dispatch({ type: 'clearCell', cell })}
               onNewTerminal={(cell) => void newTab('terminal', cell)}
             />
@@ -451,28 +520,6 @@ export function TerminalsView({ project, visible }: Props) {
           </>
         ) : null}
       </div>
-      <ConfirmDialog
-        open={!!closing}
-        title="Fechar tab"
-        message={
-          closing?.kind === 'simulator' ? (
-            <>
-              Fechar <strong>{closing?.name}</strong>? O simulador continua ligado na máquina; só a aba é removida.
-            </>
-          ) : (
-            <>
-              Fechar <strong>{closing?.name}</strong>? A sessão tmux <code className="font-mono text-xs">{closing?.tmux_session}</code> será
-              encerrada na máquina e o que estiver rodando nela será interrompido.
-            </>
-          )
-        }
-        confirmLabel="Fechar tab"
-        danger
-        onCancel={() => setClosing(null)}
-        onConfirm={() => {
-          if (closing) void closeTab(closing);
-        }}
-      />
       <MachinePicker
         open={!!picking}
         project={project}
