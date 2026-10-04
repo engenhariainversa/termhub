@@ -514,3 +514,28 @@ describe('ingestHookEvent — the last answer reaches the repository (spec 2026-
     expect(recordEvent.mock.calls[0]![1]).not.toHaveProperty('answer');
   });
 });
+
+describe('ingestHookEvent — the tab chat is told (spec 2026-10-01 tab chat §5.3)', () => {
+  it('a Claude event calls onTabEvent with the tab id, after the tab row is updated', async () => {
+    const { r, recordEvent } = repos(tab({ state: 'waiting_input' }));
+    const onTabEvent = vi.fn(() => expect(recordEvent).toHaveBeenCalledTimes(1));
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: { hook_event_name: 'UserPromptSubmit', prompt: 'x' } }, undefined, onTabEvent);
+    expect(onTabEvent).toHaveBeenCalledWith('t1');
+  });
+
+  it('a Claude event the monitor ignores still calls it: the transcript moved anyway', async () => {
+    const { r } = repos(tab({ state: 'working' }));
+    const onTabEvent = vi.fn();
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: { hook_event_name: 'SomethingNew' } }, undefined, onTabEvent);
+    expect(onTabEvent).toHaveBeenCalledWith('t1');
+  });
+
+  it('a Codex event, or a session of no tab, does not', async () => {
+    const onTabEvent = vi.fn();
+    const { r } = repos(tab({ state: 'waiting_input' }));
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'codex', session: 'th-t1', event: { hook_event_name: 'UserPromptSubmit', prompt: 'x' } }, undefined, onTabEvent);
+    const none = { tabs: { findByTmuxSession: vi.fn(async () => undefined) } } as unknown as Repositories;
+    await ingestHookEvent(none, log, { machineId: 'm1', tool: 'claude', session: 'th-x', event: { hook_event_name: 'Stop' } }, undefined, onTabEvent);
+    expect(onTabEvent).not.toHaveBeenCalled();
+  });
+});

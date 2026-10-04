@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { HostAgents } from '../chat/host.js';
 import type { ChatService } from '../chat/service.js';
+import type { TabChatHub } from '../tab-chat/hub.js';
 import type { TranscriptionService } from '../terminal/transcription.js';
 import type { Mailer } from '../email/mailer.js';
 import type { createUpgradeRouter } from '../ws/router.js';
@@ -47,6 +48,8 @@ export interface MobileDeps {
   upgrades: ReturnType<typeof createUpgradeRouter>;
   /** The chat's attachment store, queue and quota, shared with the web routes (spec 2026-09-26 §5.3). */
   attachments: ChatAttachmentDeps;
+  /** Who watches which tab as a conversation (spec 2026-10-01 tab chat §5.3); the hooks route pokes it. */
+  tabChat: TabChatHub;
 }
 
 /**
