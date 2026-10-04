@@ -36,6 +36,12 @@ import {
   tabLimitAnswerResponse,
   tabQuestionAutoAnswerCancelResponse,
   tabQuestionScreenResponse,
+  startSessionResponse,
+  tabActionResponse,
+  tabChatPage,
+  tabFileResponse,
+  tabScreenResponse,
+  tabsResponse,
   tokenResponse,
   transcriptionConfigResponse,
   transcriptionResponse,
@@ -49,6 +55,8 @@ import {
   type TMobileMessageBody,
   type TProjectAi,
   type TSetHostBody,
+  type TStartSessionBody,
+  type TTabChatAction,
   type TTabQuestionAnswerBody,
   type TTabSuggestionSendBody,
   type TTokenBody,
@@ -56,6 +64,7 @@ import {
 import { buildProof } from './dpop';
 import { ApiError } from './errors';
 import { createChatSocket } from './socket';
+import { createTabSocket } from './tab-socket';
 import type { Transport } from './transport';
 import type { Auth, MobileApi } from './types';
 
@@ -350,6 +359,55 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     markRead: (a: Auth, id: string) => empty('POST', `/api/m/v1/notifications/${id}/read`, { token: a.accessToken }),
 
     progress: (a: Auth, scope: 'active' | 'all' = 'active') => call('GET', `/api/m/v1/progress?scope=${scope}`, progressResponse, { token: a.accessToken }),
+
+    tabs: (a: Auth) => call('GET', '/api/m/v1/tabs', tabsResponse, { token: a.accessToken }),
+    startSession: (a: Auth, body: TStartSessionBody) => call('POST', '/api/m/v1/tabs', startSessionResponse, { token: a.accessToken, body }),
+    tabChat: (a: Auth, tabId: string, before?: string) =>
+      call('GET', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat${before ? `?before=${encodeURIComponent(before)}` : ''}`, tabChatPage, { token: a.accessToken }),
+    sendTabMessage: (a: Auth, tabId: string, text: string) => empty('POST', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/messages`, { token: a.accessToken, body: { text } }),
+    tabAction: (a: Auth, tabId: string, action: TTabChatAction) =>
+      call('POST', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/actions`, tabActionResponse, { token: a.accessToken, body: { action } }),
+    // Always sent as octet-stream: the server saves the bytes under `name` and never reads the type, and a
+    // JSON file sent as `application/json` would be parsed as a request body instead of saved.
+    uploadTabFile: (a: Auth, tabId: string, fileUri: string, name: string, _mime: string) =>
+      uploadCall(`/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/files?name=${encodeURIComponent(name)}`, fileUri, 'application/octet-stream', tabFileResponse, a.accessToken),
+    tabScreen: (a: Auth, tabId: string, lines?: number) =>
+      call('GET', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/screen${lines ? `?lines=${lines}` : ''}`, tabScreenResponse, { token: a.accessToken }),
+
+    tabEvents: (auth, tabId, handlers) => {
+      // The same renewal rule as `events` below: a refused upgrade or a 1008 renews only a stale token.
+      const path = `/ws/m/tabs/${encodeURIComponent(tabId)}`;
+      let renewBeforeNext = false;
+      const refusedByServer = () => {
+        if (o.tokenStale?.() ?? true) renewBeforeNext = true;
+      };
+      const headers = async (): Promise<Record<string, string>> => {
+        let fresh: string | null = null;
+        if (renewBeforeNext) {
+          renewBeforeNext = false;
+          fresh = await renewOnce();
+          if (fresh) latestToken = fresh;
+        }
+        const token = fresh ?? auth().accessToken;
+        return { Authorization: `Bearer ${token}`, DPoP: await proofFor('GET', path, token) };
+      };
+      const socket = createTabSocket({
+        transport: o.transport,
+        url: (after) => `${o.baseUrl.replace(/^http/, 'ws')}${path}?v=1${after ? `&after=${encodeURIComponent(after)}` : ''}`,
+        headers,
+        after: handlers.after,
+        onFrame: handlers.onFrame,
+        onRefused: refusedByServer,
+        onClose: (code, final) => {
+          if (code === 1008) refusedByServer();
+          handlers.onClose(code, final);
+        },
+        onServerTime: learnFrom,
+        backoff: o.backoff,
+        foreground: o.foreground,
+      });
+      return () => socket.close();
+    },
 
     events: (a, handlers) => {
       const current = typeof a === 'function' ? a : () => a;

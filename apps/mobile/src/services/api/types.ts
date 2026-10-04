@@ -36,7 +36,16 @@ import type {
   TProjectAiResponse,
   TSendAccepted,
   TSetHostBody,
+  TStartSessionBody,
+  TStartSessionResponse,
   TSubagentView,
+  TTabActionResponse,
+  TTabChatAction,
+  TTabChatFrame,
+  TTabChatPage,
+  TTabFileResponse,
+  TTabScreenResponse,
+  TTabsResponse,
   TTabQuestionAnswerBody,
   TTabQuestionAutoAnswerCancelResponse,
   TTabLimit,
@@ -190,6 +199,31 @@ export interface MobileApi {
 
   // progress panel (spec 2026-09-26 progress-panel D10)
   progress(auth: Auth, scope?: 'active' | 'all'): Promise<TProgressResponse>;
+
+  // sessions: a terminal tab read as a conversation (spec 2026-10-01 tab chat §5.4, §5.5). Reads need
+  // `terminals:read`, the rest `terminals:write`; a tab outside the person's scope is a 404.
+  /** The terminal tabs of the person's projects, with each one's state and availability. */
+  tabs(auth: Auth): Promise<TTabsResponse>;
+  /** Starts Claude Code in a new tab of the project with `prompt` as its first message. */
+  startSession(auth: Auth, body: TStartSessionBody): Promise<TStartSessionResponse>;
+  /** The newest page of the conversation, or the one before `before` (an opaque cursor). */
+  tabChat(auth: Auth, tabId: string, before?: string): Promise<TTabChatPage>;
+  /** Types `text` into the tab. 409 `WAITING_PERMISSION` while the tab waits on a permission dialog. */
+  sendTabMessage(auth: Auth, tabId: string, text: string): Promise<void>;
+  /** Escape, Shift+Tab, `/clear` or `/compact`; `cycle_mode` answers the mode the footer shows then. */
+  tabAction(auth: Auth, tabId: string, action: TTabChatAction): Promise<TTabActionResponse>;
+  /** Saves a file on the tab's machine (raw body, its mime as content type); answers its path there. */
+  uploadTabFile(auth: Auth, tabId: string, fileUri: string, name: string, mime: string): Promise<TTabFileResponse>;
+  /** The last `lines` lines of the tab's pane, as plain text. */
+  tabScreen(auth: Auth, tabId: string, lines?: number): Promise<TTabScreenResponse>;
+  /** The tab's live socket (`/ws/m/tabs/:id`), opened from `after()` on every (re)connect. `onClose`'s
+   * `final` is true for 4400, 4401, 4403 and 4404. A refused upgrade renews a stale token before the next
+   * attempt, as `events` does. Returns the socket's `close`. */
+  tabEvents(
+    auth: () => Auth,
+    tabId: string,
+    handlers: { after(): string | null; onFrame(f: TTabChatFrame): void; onClose(code: number, final: boolean): void },
+  ): () => void;
 
   // the socket (P§6.1): server -> client events, filtered by user on the server. `onReconnect`
   // fires on every (re)open, before `hello` arrives, so the store re-reads `GET chat` (no

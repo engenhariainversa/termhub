@@ -13,6 +13,7 @@ import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notifications';
 import { registerProgressRoutes } from './handlers/progress';
 import { registerSessionRoutes } from './handlers/session';
+import { registerTabRoutes, seedTabs } from './handlers/tabs';
 import { registerTranscriptionRoutes } from './handlers/transcriptions';
 import { createRouter, type MockUploadBody } from './router';
 import { createFakeSocketConnect } from './socket';
@@ -38,6 +39,7 @@ export function createMockTransport(opts: CreateMockTransportOptions = {}): Tran
   const now = opts.now ?? Date.now;
   const [minLatency, maxLatency] = opts.latency ?? [150, 400];
   seedFixtures(state, now());
+  seedTabs(state, now());
 
   const router = createRouter();
   registerDeviceRoutes(router, state);
@@ -48,6 +50,7 @@ export function createMockTransport(opts: CreateMockTransportOptions = {}): Tran
   registerNotificationRoutes(router, state);
   registerProgressRoutes(router, state);
   registerTranscriptionRoutes(router, state);
+  registerTabRoutes(router, state);
 
   const waitForLatency = (): Promise<void> => {
     const ms = minLatency + Math.random() * (maxLatency - minLatency);
