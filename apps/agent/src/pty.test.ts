@@ -486,6 +486,26 @@ describe('createPtyManager — opening races (TER-850)', () => {
     expect(live.kill).not.toHaveBeenCalled();
   });
 
+  it('a reconnect reopening the same channel while the cancelled opening is still in flight gets its opened (TER-902)', async () => {
+    const { spawn, fakes } = trackingSpawn();
+    const manager = createPtyManager({ spawn, tmuxPath: 'tmux', log: vi.fn() });
+    const old = makeSocket();
+    const fresh = makeSocket();
+
+    // A deploy: the old connection drops mid-open, and the new one asks for the same number at once.
+    const cancelled = manager.open(1, openParams, old.socket);
+    manager.closeAll();
+    const reopened = manager.open(1, openParams, fresh.socket);
+    await Promise.all([cancelled, reopened]);
+
+    expect(fresh.sendControl.mock.calls.map((c) => c[0])).toEqual([{ type: 'opened', ch: 1 }]);
+    expect(old.sendControl).not.toHaveBeenCalled();
+    expect(fakes).toHaveLength(1);
+    expect(fakes[0]!.kill).not.toHaveBeenCalled();
+    manager.write(1, Buffer.from('x'));
+    expect(fakes[0]!.write).toHaveBeenCalledTimes(1);
+  });
+
   it('double close is idempotent: one kill, one closed ack, listeners released', async () => {
     const fake = makeFakePty();
     const manager = createPtyManager({ spawn: vi.fn<SpawnFn>(() => fake.proc), tmuxPath: 'tmux', log: vi.fn() });
