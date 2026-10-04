@@ -10,6 +10,7 @@ import {
   accountDeletionStatus,
   canonicalHtu,
   challengeResponse,
+  decisionChallengesResponse,
   cancelSubagentResponse,
   chatAttachmentResponse,
   chatGrantListResponse,
@@ -43,6 +44,7 @@ import {
   type TDeviceActivateBody,
   type TDeviceRequestBody,
   type TMobileBatchDecisionBody,
+  type TDecisionChallengesBody,
   type TMobileDecisionBody,
   type TMobileMessageBody,
   type TProjectAi,
@@ -273,6 +275,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     decide: (a: Auth, actionId: string, body: TMobileDecisionBody) =>
       empty('POST', `/api/m/v1/chat/actions/${actionId}/decision`, { token: a.accessToken, body }),
     decideMany: (a: Auth, body: TMobileBatchDecisionBody) => empty('POST', '/api/m/v1/chat/actions/decisions', { token: a.accessToken, body }),
+    decisionChallenges: (a: Auth, body: TDecisionChallengesBody) => call('POST', '/api/m/v1/chat/actions/challenges', decisionChallengesResponse, { token: a.accessToken, body }),
     revokeGrant: (a: Auth, grantId: string) => empty('DELETE', `/api/m/v1/chat/grants/${encodeURIComponent(grantId)}`, { token: a.accessToken }),
     // `kinds=all_standing` unconditionally: "Permissões do chat" always wants tab, project and standing
     // grants together (design spec 2026-09-26 §7, TER-386).

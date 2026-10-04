@@ -4556,6 +4556,7 @@ export const ChatConversationScalarFieldEnum = {
   contextTokens: 'contextTokens',
   contextWindow: 'contextWindow',
   lastMessageAt: 'lastMessageAt',
+  lastTypedAt: 'lastTypedAt',
   createdAt: 'createdAt'
 } as const
 
@@ -4573,6 +4574,8 @@ export const ChatMessageScalarFieldEnum = {
   replyToId: 'replyToId',
   replyToRole: 'replyToRole',
   replyToExcerpt: 'replyToExcerpt',
+  replyToCardKind: 'replyToCardKind',
+  replyToCardId: 'replyToCardId',
   createdAt: 'createdAt'
 } as const
 

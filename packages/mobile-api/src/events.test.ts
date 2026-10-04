@@ -239,6 +239,9 @@ it('a message may carry what it answers, with a null id once the original is gon
   expect(chatMessage.parse({ ...m, reply_to: { id: 'm1', role: 'assistant', excerpt: 'Abri a aba' } }).reply_to).toEqual({ id: 'm1', role: 'assistant', excerpt: 'Abri a aba' });
   expect(chatMessage.parse({ ...m, reply_to: { id: null, role: 'user', excerpt: 'oi' } }).reply_to?.id).toBeNull();
   expect(chatMessage.parse(m).reply_to).toBeUndefined();
+  // A reply to a card (TER-849); a card kind a newer server adds is dropped, the quote stays.
+  expect(chatMessage.parse({ ...m, reply_to: { id: null, role: 'assistant', excerpt: 'Abrir aba', card: { kind: 'action', id: 'a1' } } }).reply_to?.card).toEqual({ kind: 'action', id: 'a1' });
+  expect(chatMessage.parse({ ...m, reply_to: { id: null, role: 'assistant', excerpt: 'x', card: { kind: 'later', id: 'z' } } }).reply_to).toEqual({ id: null, role: 'assistant', excerpt: 'x' });
 });
 
 // Pending cards at hand (spec 2026-09-30, TER-477): `surfaced_at` brings a card to the end of the

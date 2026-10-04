@@ -23,6 +23,12 @@ const WINDOW_LABELS: Record<string, string> = {
 
 const GROUP_LABELS: Record<string, string> = { session: '5 horas', weekly: '7 dias' };
 
+/** The model family the top-level per-model windows cap; every other top-level key is account-wide. */
+const WINDOW_MODELS: Record<string, string> = { seven_day_opus: 'opus', seven_day_sonnet: 'sonnet' };
+
+/** "Fable", "Opus 5.5" → "fable", "opus": the family a model id or alias ("claude-opus-5-5", "opus") contains. */
+const familyOf = (displayName: string) => displayName.trim().split(/\s+/)[0].toLowerCase();
+
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
 
 /**
@@ -36,7 +42,13 @@ export function parseUsageBody(body: Record<string, unknown>): AiUsageWindow[] {
     if (!isObj(val)) continue;
     const utilization = num(val.utilization);
     if (utilization === null) continue;
-    windows.push({ key, label: WINDOW_LABELS[key] ?? key.replace(/_/g, ' '), utilization: clamp(utilization), resets_at: toIso(val.resets_at) });
+    windows.push({
+      key,
+      label: WINDOW_LABELS[key] ?? key.replace(/_/g, ' '),
+      utilization: clamp(utilization),
+      resets_at: toIso(val.resets_at),
+      ...(WINDOW_MODELS[key] ? { model: WINDOW_MODELS[key] } : {}),
+    });
   }
   // known windows first, in a stable order
   const order = Object.keys(WINDOW_LABELS);
@@ -57,6 +69,7 @@ export function parseUsageBody(body: Record<string, unknown>): AiUsageWindow[] {
         label: `${GROUP_LABELS[group] ?? group.replace(/_/g, ' ')} · ${scope}`,
         utilization: clamp(percent),
         resets_at: toIso(lim.resets_at),
+        ...(model ? { model: familyOf(model) } : {}),
       });
     }
   }

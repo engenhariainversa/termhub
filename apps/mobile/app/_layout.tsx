@@ -116,7 +116,12 @@ function Navigator() {
   return (
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
+        {/* The thread's rows answer a drag to the right (TER-447). Left unset, iOS 26 also pops the
+            screen on a right drag from anywhere in it, so a drag that missed a row's own recognizer
+            left the chat (TER-849). Back stays on the screen's edge, as before iOS 26. */}
+        <Stack.Screen name="chat/[id]" options={{ fullScreenGestureEnabled: false }} />
+      </Stack>
       <PinPromptSheet />
       <PushPrimerSheet />
     </>

@@ -5,7 +5,7 @@ import { ACCEPT_ATTRIBUTE, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, ch
 import { sendsMessage } from '../../lib/chat-scroll';
 import { downscaleImage } from '../../lib/image-downscale';
 import type { ReplyTarget } from '../../lib/chat-reply';
-import type { ChatAttachment } from '../../lib/types';
+import type { ChatAttachment, ReplyCardKind } from '../../lib/types';
 import { useDictation, type Dictation } from '../../lib/use-dictation';
 import { AttachmentChip } from './AttachmentChip';
 
@@ -42,6 +42,9 @@ export interface ChatComposerProps {
    */
   attachmentStatuses?: Readonly<Record<string, ChatAttachment>>;
 }
+
+/** The preview's heading for a card being answered (TER-849). */
+const CARD_HEADING: Record<ReplyCardKind, string> = { action: 'Respondendo à confirmação', tab_question: 'Respondendo à pergunta da aba' };
 
 const MIN_ROWS = 1;
 const MAX_ROWS = 8;
@@ -431,7 +434,7 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
         {replyTo && (
           <div className="mb-2 flex items-start gap-2 rounded-lg border-l-2 border-accent bg-bg-3 px-2.5 py-1.5 text-xs">
             <div className="min-w-0 flex-1">
-              <div className="font-medium text-accent">{replyTo.role === 'assistant' ? 'Respondendo a Concierge' : 'Respondendo a você'}</div>
+              <div className="font-medium text-accent">{replyTo.card ? CARD_HEADING[replyTo.card] : replyTo.role === 'assistant' ? 'Respondendo a Concierge' : 'Respondendo a você'}</div>
               <div className="truncate text-fg-dim">{replyTo.excerpt}</div>
             </div>
             <button type="button" aria-label="Cancelar resposta" onClick={onCancelReply} className="rounded px-1 text-fg-dim hover:text-fg">

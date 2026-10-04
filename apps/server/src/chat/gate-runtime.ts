@@ -102,10 +102,8 @@ const REFUSED: GateOutcome = {
  * have changed their mind, and a permanent refusal would leave them no way to say so. A question the
  * user never answered (`expired`) is not a "no" at all, and is simply asked again.
  *
- * Scoping this to the assistant turn would be the better rule, since the retry is a within-turn
- * behaviour, but it needs the runtime to know which message is current and a call carrying only a
- * token has no such plumbing. A clock window is cruder and entirely predictable, which is the right
- * trade until that plumbing exists.
+ * The window is also cut short by the person writing again (`denialInForce`, TER-530): a message they
+ * typed after the "no" is a new request, and the same call then asks again instead of refusing.
  */
 const DENIAL_HOLDS_MS = 15 * 60 * 1000;
 
@@ -124,12 +122,17 @@ const DENIAL_HOLDS_MS = 15 * 60 * 1000;
  */
 const APPROVAL_HOLDS_MS = ACTION_TTL_MS;
 
-/** The user's "no" while it still holds. An older one is history: the same proposal is asked again. */
+/** The user's "no" while it still holds. An older one is history: the same proposal is asked again.
+ * So is one the person has written after (TER-530): the retry a denial guards against is the model's
+ * own, within the turn it was told no; once the person types again — "pode fechar as janelas" — the
+ * same call is their request, and it gets a fresh card instead of a refusal they never gave. */
 async function denialInForce(ctx: ControlContext, conversationId: string, key: string): Promise<ChatAction | undefined> {
   const row = await ctx.repos.chatActions.findDeniedByKey(conversationId, key);
   if (!row) return undefined;
   const decidedAt = Date.parse(row.decided_at ?? row.created_at);
-  return Number.isFinite(decidedAt) && Date.now() - decidedAt < DENIAL_HOLDS_MS ? row : undefined;
+  if (!(Number.isFinite(decidedAt) && Date.now() - decidedAt < DENIAL_HOLDS_MS)) return undefined;
+  const typedAt = Date.parse((await ctx.repos.chat.lastTypedAt(conversationId)) ?? '');
+  return Number.isFinite(typedAt) && typedAt > decidedAt ? undefined : row;
 }
 
 /** The mirror of `denialInForce` for a "yes": whether this approval is still the user's current

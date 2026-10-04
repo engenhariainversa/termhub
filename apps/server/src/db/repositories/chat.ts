@@ -1,4 +1,4 @@
-import type { ChatAttachment, ChatNotice } from '@termhub/mobile-api';
+import type { ChatAttachment, ChatNotice, ReplyCardRef } from '@termhub/mobile-api';
 import type { PrismaClient } from '../prisma.js';
 import { Prisma, type ChatConversation as PrismaConversation, type ChatMessage as PrismaMessage } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
@@ -49,11 +49,12 @@ const NO_SESSION = { cliSessionId: null, contextTokens: null, contextWindow: nul
 export type { ChatNotice };
 
 /** What a message answers (TER-447): the snapshot taken when it was sent. `id` is null once the
- *  quoted row was deleted. */
+ *  quoted row was deleted, and on a reply to a card (TER-849), which names the card in `card`. */
 export interface ChatReplyRef {
   id: string | null;
   role: ChatRole;
   excerpt: string;
+  card?: ReplyCardRef;
 }
 
 export interface ChatMessage {
@@ -89,6 +90,9 @@ const mapConversation = (c: PrismaConversation): ChatConversation => ({
   created_at: c.createdAt.toISOString(),
 });
 
+const replyCardOf = (m: PrismaMessage): { card?: ReplyCardRef } =>
+  m.replyToCardId !== null && (m.replyToCardKind === 'action' || m.replyToCardKind === 'tab_question') ? { card: { kind: m.replyToCardKind, id: m.replyToCardId } } : {};
+
 const mapMessage = (m: PrismaMessage): ChatMessage => ({
   id: m.id,
   conversation_id: m.conversationId,
@@ -98,7 +102,7 @@ const mapMessage = (m: PrismaMessage): ChatMessage => ({
   error_code: m.errorCode,
   ...(m.notice ? { notice: m.notice as ChatNotice } : {}),
   created_at: m.createdAt.toISOString(),
-  ...(m.replyToRole === null ? {} : { reply_to: { id: m.replyToId, role: m.replyToRole as ChatRole, excerpt: m.replyToExcerpt ?? '' } }),
+  ...(m.replyToRole === null ? {} : { reply_to: { id: m.replyToId, role: m.replyToRole as ChatRole, excerpt: m.replyToExcerpt ?? '', ...replyCardOf(m) } }),
 });
 
 export class ChatRepository {
@@ -269,7 +273,19 @@ export class ChatRepository {
     await this.db.chatConversation.update({ where: { id }, data: { aiAccountId } });
   }
 
-  async addMessage(input: { conversation_id: string; role: ChatRole; text: string; usage?: unknown; error_code?: string | null; reply_to?: { id: string; role: ChatRole; excerpt: string } }): Promise<ChatMessage> {
+  /** The person typed in this conversation now (TER-530): see `lastTypedAt`. */
+  async markTyped(id: string, at = new Date()): Promise<void> {
+    await this.db.chatConversation.update({ where: { id }, data: { lastTypedAt: at } });
+  }
+
+  /** When the person last typed here, or null. Re-injected decisions and wakes are stored as user
+   * messages too, so this — set only by `ChatService.start` — is what tells a person's own words apart. */
+  async lastTypedAt(id: string): Promise<string | null> {
+    const row = await this.db.chatConversation.findUnique({ where: { id }, select: { lastTypedAt: true } });
+    return row?.lastTypedAt?.toISOString() ?? null;
+  }
+
+  async addMessage(input: { conversation_id: string; role: ChatRole; text: string; usage?: unknown; error_code?: string | null; reply_to?: { id: string | null; role: ChatRole; excerpt: string; card?: ReplyCardRef } }): Promise<ChatMessage> {
     const [message] = await this.db.$transaction([
       this.db.chatMessage.create({
         data: {
@@ -280,6 +296,7 @@ export class ChatRepository {
           usage: (input.usage ?? null) as never,
           errorCode: input.error_code ?? null,
           ...(input.reply_to ? { replyToId: input.reply_to.id, replyToRole: input.reply_to.role, replyToExcerpt: input.reply_to.excerpt } : {}),
+          ...(input.reply_to?.card ? { replyToCardKind: input.reply_to.card.kind, replyToCardId: input.reply_to.card.id } : {}),
         },
       }),
       this.db.chatConversation.update({ where: { id: input.conversation_id }, data: { lastMessageAt: new Date() } }),

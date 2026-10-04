@@ -57,3 +57,23 @@ it('carries every action id, space-separated, for the pending bar to find any of
   expect(container.querySelector('[data-chat-card~="a2"]')).not.toBeNull();
   expect(container.querySelector('[data-chat-card~="a1"]')).toBe(container.querySelector('[data-chat-card~="a2"]'));
 });
+
+it('keeps the ticks across a remount, so a retry never turns ticked irreversible cards into refusals (TER-530)', () => {
+  const onDecide = vi.fn();
+  const actions = [action('r1', { class: 'irreversible', summary: 'fechar a aba 1' }), action('r2', { class: 'irreversible', summary: 'fechar a aba 2' }), action('r3')];
+  const first = render(<ChatActionGroup actions={actions} deciding={false} onDecide={vi.fn()} onShowSeparately={vi.fn()} />);
+  fireEvent.click(screen.getByRole('checkbox', { name: /fechar a aba 1/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /fechar a aba 2/ }));
+  // The request failed (a 429, say) and the group remounted: a new pending card moved its key.
+  first.unmount();
+  render(<ChatActionGroup actions={[...actions, action('r4')]} deciding={false} onDecide={onDecide} onShowSeparately={vi.fn()} />);
+  expect(screen.getByRole('checkbox', { name: /fechar a aba 1/ })).toBeChecked();
+  expect(screen.getByRole('checkbox', { name: /fechar a aba 2/ })).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Aprovar selecionadas (4)' }));
+  expect(onDecide).toHaveBeenCalledWith([
+    { id: 'r1', decision: 'approve' },
+    { id: 'r2', decision: 'approve' },
+    { id: 'r3', decision: 'approve' },
+    { id: 'r4', decision: 'approve' },
+  ]);
+});

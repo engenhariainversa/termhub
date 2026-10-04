@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_CLAUDE_SYSTEM_PROMPT } from '@termhub/agent-protocol';
-import { STANDING_KIND_LABEL, replyExcerpt, type ChatAttachment } from '@termhub/mobile-api';
+import { STANDING_KIND_LABEL, replyExcerpt, tabQuestionReplyText, type ChatAttachment, type ReplyCardRef } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ChatConversation, ChatMessage, ChatNotice } from '../db/repositories/chat.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
@@ -26,6 +26,7 @@ import { RESUME_WINDOW_MS, STALE_MS, resumeNote } from './resume.js';
 import { codeForReason, parseFrame, type ChatErrorCode, type ChatFailureReason } from './stream.js';
 import { toSubagentView, type SubagentView } from './subagent-view.js';
 import { tabQuestionContext } from './tab-question-context.js';
+import type { ChoicePayload, PermissionPayload } from './tab-question-payload.js';
 import { mintConciergeToken } from './token.js';
 import { indexMessage } from '../memory/index-items.js';
 import { groupsOf, type GroupView } from '../control/groups.js';
@@ -58,6 +59,12 @@ class LimitFallback {
   readonly tried = new Set<string>();
   private first: { label: string | null; resets_at: string | null } | null = null;
   account: RunAccount;
+  /**
+   * The model the run is on: the configured one, else — once the CLI's `init` said it — the one the
+   * account's default resolved to (TER-837). It decides which usage windows count when picking the next
+   * account, and the turn keeps it there: that account's own default may be a model it has no room for.
+   */
+  model: string | null;
 
   /** The run is on the project's account list (TER-589): the account that takes over becomes the project chat's own. */
   private readonly projectRun: boolean;
@@ -68,15 +75,18 @@ class LimitFallback {
     private projectId: string | null,
     private conversationId: string,
     host: RunHost,
+    model: string | null,
   ) {
     this.account = runAccountOf(host);
+    this.model = model;
     if (this.account.id) this.tried.add(this.account.id);
     this.projectRun = host.account.kind === 'chosen' && host.account.via === 'project';
   }
 
   /** The next account, its session moved there when it can be, and the notice its answer carries. */
-  async next(limit: { resets_at: string | null }, session: { dir: string | null; id: string | null }): Promise<{ pick: FallbackPick; notice: ChatNotice } | { pick: null; notice: ChatNotice }> {
+  async next(limit: { resets_at: string | null }, session: { dir: string | null; id: string | null; model: string | null }): Promise<{ pick: FallbackPick; notice: ChatNotice } | { pick: null; notice: ChatNotice }> {
     this.first ??= { label: this.account.label, resets_at: limit.resets_at };
+    this.model ??= session.model;
     // The same opt-in as the tabs' automatic swap (TER-55): an account of the machine is used for
     // someone else's quota only when its owner asked for that.
     if (!this.machine.claude_auto_swap) {
@@ -85,7 +95,7 @@ class LimitFallback {
     }
     let pick: FallbackPick | null = null;
     try {
-      pick = await pickFallback(this.repos, { machine: this.machine, currentAccountId: this.account.id, tried: this.tried, projectId: this.projectId, sessionDir: session.dir, sessionId: session.id });
+      pick = await pickFallback(this.repos, { machine: this.machine, currentAccountId: this.account.id, tried: this.tried, projectId: this.projectId, sessionDir: session.dir, sessionId: session.id, model: this.model });
     } catch (err) {
       console.error('chat: account fallback failed', { conversation_id: this.conversationId, error: failureLabel(err) });
     }
@@ -124,12 +134,15 @@ export interface SendOptions {
   attachmentIds?: string[];
   /** The message this one answers (TER-447): a message of this conversation that has something in it. */
   replyToId?: string;
+  /** Or the card it answers (TER-849): a gate card or a tab's question of this conversation. */
+  replyToCard?: ReplyCardRef;
 }
 /** What `startIn` takes besides the text: a decision's marking hook, and the attachment ids of a typed message. */
 interface StartOptions {
   beforeRun?: () => Promise<void>;
   attachmentIds?: string[];
   replyToId?: string;
+  replyToCard?: ReplyCardRef;
 }
 /** The attachment rows a message checked before storing anything (`attachableRows`): the ids to bind and the rows themselves. */
 interface Attachable {
@@ -898,7 +911,11 @@ export class ChatService {
    */
   async start(user: User, text: string, opts: SendOptions = {}): Promise<StartedRun> {
     const conversation = await this.conversationFor(user, opts.projectId ?? null);
-    const started = await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId });
+    // Before the run can see the message: from here on, a "no" given earlier no longer refuses a call
+    // on its own (TER-530) — the person may be asking for that very action again. Best effort: a
+    // failure keeps the old denial window, never the message.
+    await this.deps.repos.chat.markTyped(conversation.id).catch((err) => console.error('chat: last_typed_at not recorded', { conversation_id: conversation.id, error: failureLabel(err) }));
+    const started = await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId, replyToCard: opts.replyToCard });
     // Only a message the person typed is memory (spec D3/D4): re-injections and wakes go through
     // `startIn` directly and never reach here. Best effort, fire-and-forget: `indexMessage` never throws.
     void this.deps.indexMessage({ id: started.user_message_id, owner_id: user.id, project_id: conversation.project_id, text, created_at: new Date().toISOString() });
@@ -991,7 +1008,7 @@ export class ChatService {
       role: 'user',
       text,
       // The quote the thread shows, cut now: it has to read the same once the original is gone (TER-447).
-      ...(reply ? { reply_to: { id: reply.id, role: reply.role, excerpt: replyExcerpt(reply.text, reply.attachmentNames) } } : {}),
+      ...(reply ? { reply_to: { id: reply.id, role: reply.role, excerpt: replyExcerpt(reply.text, reply.attachmentNames), ...(reply.card ? { card: { kind: reply.card.kind, id: reply.card.id } } : {}) } } : {}),
     });
     const question = await this.bindAttachments(stored, attachable.ids, user, conversationId);
     chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversationId, message: question });
@@ -1043,7 +1060,7 @@ export class ChatService {
     // `startIn`: a bad id is a message never sent — 409, nothing stored, no decision marked, no tab
     // context stamped — whether the message is injected or queued.
     const attachable = await this.attachableRows(user, conversation.id, opts?.attachmentIds ?? []);
-    const reply = await this.replyTargetFor(conversation.id, opts?.replyToId);
+    const reply = await this.replyTargetFor(user, conversation.id, opts);
     if (live?.accepting && opts?.beforeRun) await opts.beforeRun();
     let runText = live?.accepting ? await this.runTextFor(user, conversation.id, text, attachable.rows, reply) : undefined;
     const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply);
@@ -1073,13 +1090,36 @@ export class ChatService {
    * still being written, or one that never came) is not quotable. Anything else is a message never
    * sent: 409, nothing stored, nothing stamped.
    */
-  private async replyTargetFor(conversationId: string, id: string | undefined): Promise<ReplyTarget | null> {
+  private async replyTargetFor(user: User, conversationId: string, opts: Pick<StartOptions, 'replyToId' | 'replyToCard'> | undefined): Promise<ReplyTarget | null> {
+    if (opts?.replyToCard) return this.replyCardTargetFor(user, conversationId, opts.replyToCard);
+    const id = opts?.replyToId;
     if (id === undefined) return null;
     const [row] = await this.deps.repos.chat.findMessagesByIds(conversationId, [id]);
     if (!row) throw replyUnavailable();
     const attachmentNames = row.text ? [] : (await this.deps.repos.chatAttachments.listForMessages([row.id])).map((a) => a.name);
     if (!row.text && attachmentNames.length === 0) throw replyUnavailable();
     return { id: row.id, role: row.role, text: row.text, attachmentNames };
+  }
+
+  /**
+   * The card a reply answers (TER-849), under the same rule as a message: read before anything is
+   * written, and refused (409, nothing stored) unless it is a card of this conversation — a gate card,
+   * or a tab's question (a suggestion is not one). Its words are what the card shows: the action's
+   * summary, resolved owner-scoped like the card's own, or what the question asks.
+   */
+  private async replyCardTargetFor(user: User, conversationId: string, ref: ReplyCardRef): Promise<ReplyTarget> {
+    const repos = this.deps.repos;
+    if (ref.kind === 'action') {
+      const row = await repos.chatActions.findByIdForUser(ref.id, user.id);
+      if (!row || row.conversation_id !== conversationId) throw replyUnavailable();
+      const [card] = await describeActions(repos, [row], user.id);
+      return { id: null, role: 'assistant', text: card?.summary ?? '', attachmentNames: [], card: { kind: 'action', id: row.id, status: row.status } };
+    }
+    const row = await repos.tabQuestions.findByIdForUser(ref.id, user.id);
+    if (!row || row.conversation_id !== conversationId || row.kind === 'suggestion') throw replyUnavailable();
+    const [view] = await describeTabQuestions(repos, [row], user.id);
+    const text = row.kind === 'choice' ? tabQuestionReplyText({ kind: 'choice', payload: row.payload as ChoicePayload }) : tabQuestionReplyText({ kind: 'permission', payload: row.payload as PermissionPayload });
+    return { id: null, role: 'assistant', text, attachmentNames: [], card: { kind: 'tab_question', id: row.id, status: row.status, tab_name: view?.tab_name ?? null } };
   }
 
   /**
@@ -1182,7 +1222,7 @@ export class ChatService {
       // injected and before the tab context is stamped.
       const attachable = await this.attachableRows(user, conversation.id, opts?.attachmentIds ?? []);
       // The message this one answers (TER-447), under the same rule: read before anything is written.
-      const reply = await this.replyTargetFor(conversation.id, opts?.replyToId);
+      const reply = await this.replyTargetFor(user, conversation.id, opts);
 
       // The host this run uses is the host this conversation has, and from here on it says so: a
       // conversation whose machine was auto-picked (one candidate, nothing stored) is otherwise
@@ -1269,6 +1309,8 @@ export class ChatService {
       /** Whether the answer called a tool: then it is never re-run elsewhere. */
       let acted = false;
       let sessionDir: string | null = null;
+      /** The model the CLI's `init` said the run is on (TER-837). */
+      let runModel: string | null = null;
       let notice: ChatNotice | undefined;
 
       const consume = async (run: RunnerInput) => {
@@ -1292,8 +1334,9 @@ export class ChatService {
             turnReason = frame.reason;
           } else if (frame.type === 'usage_limit') {
             limit = { resets_at: frame.resets_at };
-          } else if (frame.type === 'session_dir') {
-            sessionDir = frame.dir;
+          } else if (frame.type === 'init') {
+            sessionDir = frame.dir ?? sessionDir;
+            runModel = frame.model ?? runModel;
           } else if (frame.type === 'error') {
             // The reason is the container's closed-set classification, so a failure is diagnosable
             // from the stored row alone: CLI_REJECTED means our own flags were refused, which no
@@ -1332,14 +1375,14 @@ export class ChatService {
       }
 
       if (token !== undefined) {
-        const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host);
+        // the conversation's own model, else the project's default (TER-589)
+        const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host, conversation.model ?? host.model ?? null);
         let input: RunnerInput = {
           session_id: conversation.cli_session_id ?? randomUUID(),
           resume: conversation.cli_session_id !== null,
           text,
           config_dir: fallback.account.configDir,
-          // the conversation's own model, else the project's default (TER-589)
-          model: conversation.model ?? host.model ?? null,
+          model: fallback.model,
           token,
           append_system_prompt: appendSystemPrompt,
         };
@@ -1386,7 +1429,7 @@ export class ChatService {
           // (Read through a widened copy: `consume` assigns it, which the compiler cannot see here.)
           const failed = errorCode as ChatErrorCode;
           if (failed === 'USAGE_LIMIT' && collected === '' && !acted) {
-            const next = await fallback.next(limit ?? { resets_at: null }, { dir: sessionDir, id: input.session_id });
+            const next = await fallback.next(limit ?? { resets_at: null }, { dir: sessionDir, id: input.session_id, model: runModel });
             notice = next.notice;
             if (!next.pick) break;
             startOver();
@@ -1394,7 +1437,7 @@ export class ChatService {
               freshTried = true;
               await this.deps.repos.chat.setCliSession(conversation.id, null);
             }
-            input = { ...input, config_dir: next.pick.account.config_dir, resume: next.pick.resume, session_id: next.pick.resume ? input.session_id : randomUUID() };
+            input = { ...input, config_dir: next.pick.account.config_dir, model: fallback.model, resume: next.pick.resume, session_id: next.pick.resume ? input.session_id : randomUUID() };
             continue;
           }
 
@@ -1499,7 +1542,8 @@ export class ChatService {
         else await live.failOpen('TOKEN_FAILED');
         return;
       }
-      const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host);
+      // the conversation's own model, else the project's default (TER-589)
+      const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host, conversation.model ?? host.model ?? null);
       /** A missing session is retried on a fresh one once — and never after a swap started one fresh. */
       let freshTried = false;
       for (;;) {
@@ -1510,8 +1554,7 @@ export class ChatService {
           resume,
           text: live.initialText(),
           config_dir: fallback.account.configDir,
-          // the conversation's own model, else the project's default (TER-589)
-          model: conversation.model ?? host.model ?? null,
+          model: fallback.model,
           token,
           append_system_prompt: appendSystemPrompt,
           stream_input: true,
@@ -1536,7 +1579,7 @@ export class ChatService {
         // The account hit its usage limit and the turn that met it waits again (TER-588): it goes on
         // another account of the machine, or every open turn is stored as the limit.
         if (outcome.limit) {
-          const next = await fallback.next(outcome.limit, { dir: live.sessionDir, id: live.sessionId });
+          const next = await fallback.next(outcome.limit, { dir: live.sessionDir, id: live.sessionId, model: live.model });
           if (this.suspending) {
             live.rejectOpen(serverRestarting());
             return;

@@ -6,6 +6,7 @@ import { splitSettled } from '../../lib/markdown-split';
 import { limitSentence, swapSentence } from '../../lib/chat-notice';
 import { isReplyable } from '../../lib/chat-reply';
 import type { ChatErrorCode, ChatMessage } from '../../lib/types';
+import { ChatReplyButton } from './ChatReplyButton';
 import { ChatReplyQuote } from './ChatReplyQuote';
 import { MessageAttachments } from './MessageAttachments';
 
@@ -142,19 +143,6 @@ export interface ChatTurnProps {
   highlighted?: boolean;
 }
 
-/** "Responder" (TER-447): shown on hover and on keyboard focus, and always on a device with no hover. */
-function ReplyButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="shrink-0 rounded px-1.5 py-0.5 text-xs text-fg-dim opacity-0 hover:text-fg focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"
-    >
-      Responder
-    </button>
-  );
-}
-
 /**
  * One turn of the conversation. The user's words go in a bubble on the right and are never parsed
  * as Markdown — what they typed is what they see. The concierge's answer is left-aligned prose with
@@ -181,7 +169,7 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
   const settledHtml = useMemo(() => toHtml(settled), [settled]);
   const tailHtml = useMemo(() => toHtml(tail), [tail]);
 
-  const reply = onReply && isReplyable(message) ? <ReplyButton onClick={() => onReply(message)} /> : null;
+  const reply = onReply && isReplyable(message) ? <ChatReplyButton onClick={() => onReply(message)} /> : null;
   // The ring is always there, transparent until a quote scrolls here: showing it must not move the row.
   const ring = highlighted ? 'ring-2 ring-accent/60' : 'ring-2 ring-transparent';
 
