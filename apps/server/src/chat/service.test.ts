@@ -69,6 +69,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
     getOrCreateForUser: vi.fn(async () => activeFor(null)),
     getOrCreateForProject: vi.fn(async (_userId: string, projectId: string) => activeFor(projectId)),
     setRunAccount: vi.fn(async () => undefined),
+    markTyped: vi.fn(async () => undefined),
     setHost: vi.fn(async (id: string, h: { machine_id: string; ai_account_id: string | null }) => {
       const row = conversations.find((c) => c.id === id)!;
       const moved = (row.machine_id !== null && row.machine_id !== h.machine_id) || row.ai_account_id !== h.ai_account_id;
@@ -395,6 +396,29 @@ it('resumeAfterDecision never indexes anything: a decision re-injection is not a
   const { service, indexMessage } = build([delta('feito'), done()]);
   await service.resumeAfterDecision(user, action());
   expect(indexMessage).not.toHaveBeenCalled();
+});
+
+it('start() records that the person typed, before the run can see the message (TER-530)', async () => {
+  const { service, chat, runner, conversation } = build([delta('ok'), done()]);
+  await (await service.start(user, 'pode fechar as janelas')).done;
+  expect(chat.markTyped).toHaveBeenCalledTimes(1);
+  expect(chat.markTyped).toHaveBeenCalledWith(conversation.id);
+  expect(chat.markTyped.mock.invocationCallOrder[0]).toBeLessThan(runner.run.mock.invocationCallOrder[0]);
+});
+
+it('a decision re-injection and a wake never count as the person typing (TER-530)', async () => {
+  const { service, chat } = build([delta('feito'), done()]);
+  await service.resumeAfterDecision(user, action());
+  await (await service.wake(user, 'c_p1', 'Automático: x')).done;
+  expect(chat.markTyped).not.toHaveBeenCalled();
+});
+
+it('a failure recording it never costs the message (TER-530)', async () => {
+  const { service, chat, runner } = build([delta('ok'), done()]);
+  chat.markTyped.mockRejectedValueOnce(new Error('db down'));
+  const answer = await service.send(user, 'oi');
+  expect(answer.text).toBe('ok');
+  expect(runner.run).toHaveBeenCalledTimes(1);
 });
 
 describe('wake', () => {

@@ -23,6 +23,8 @@ import type {
   TLessonsResponse,
   TMeResponse,
   TMobileBatchDecisionBody,
+  TDecisionChallengesBody,
+  TDecisionChallengesResponse,
   TMobileDecisionBody,
   TMobileMessageBody,
   TNotesResponse,
@@ -87,6 +89,8 @@ export interface MobileApi {
   /** A grouped confirmation: every approval carries its own proof, all checked before anything is
    * decided (a wrong PIN is a 401 and leaves the whole batch pending). */
   decideMany(auth: Auth, body: TMobileBatchDecisionBody): Promise<void>;
+  /** One decision challenge per action of a grouped confirmation, in one call (TER-530). */
+  decisionChallenges(auth: Auth, body: TDecisionChallengesBody): Promise<TDecisionChallengesResponse>;
   /** "Revogar" a trusted tab (no PIN: it only takes power away). 404 unknown, 409 already revoked. */
   revokeGrant(auth: Auth, grantId: string): Promise<void>;
   /** "Permissões do chat": active grants (no paging) or the ended/expired/revoked history (paged,

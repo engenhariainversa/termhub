@@ -242,7 +242,15 @@ function build(opts: { gated: boolean; conversationId?: string }) {
   };
   const actions = fakeChatActions();
   const grants = fakeChatGrants();
-  const chat = { getOrCreateForUser: vi.fn(async (userId: string) => ({ id: CONVERSATION, user_id: userId, cli_session_id: null, created_at: '' })) };
+  // When the person last typed (TER-530): null until a test says they wrote, minutes ago.
+  let typedAt: string | null = null;
+  const chat = {
+    getOrCreateForUser: vi.fn(async (userId: string) => ({ id: CONVERSATION, user_id: userId, cli_session_id: null, created_at: '' })),
+    lastTypedAt: vi.fn(async () => typedAt),
+  };
+  const typed = (minutesAgo: number) => {
+    typedAt = new Date(Date.now() - minutesAgo * 60 * 1000).toISOString();
+  };
   const projectsRepo = {
     findById: vi.fn(async () => project),
     findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === machine.owner_id && ids.includes(project.id) ? [project] : [])),
@@ -283,7 +291,7 @@ function build(opts: { gated: boolean; conversationId?: string }) {
   const app = Fastify();
   applyErrorHandler(app);
   app.register((a) => mcpRoutes(a, { repos, version: '0.0.0-test' }));
-  return { app, apiTokens, actions, tabs, grants, projects: projectsRepo };
+  return { app, apiTokens, actions, tabs, grants, projects: projectsRepo, typed };
 }
 
 /** What the monitor hooks report for an agent at work in the tab. A grant only covers a tab in this
@@ -435,6 +443,35 @@ it('still refuses the identical proposal a minute after the denial', async () =>
   expect(resultOf(res).isError).toBe(true);
   expect(textOf(res)).toMatch(/recusou/i);
   expect(typed).toEqual([]);
+  expect(actions.insertPending).not.toHaveBeenCalled();
+});
+
+it('asks again, with a fresh card, when the person wrote after the denial: the same call is now their request (TER-530)', async () => {
+  const typedKeys: string[] = [];
+  attachFakeTmux(typedKeys);
+  const { app, actions, typed } = build({ gated: true });
+  actions.seed('denied', 'send_input', { tab_id: 't1', text: 'npm test' }, 2);
+  typed(1); // "pode fechar as janelas", a minute after the "no"
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'npm test' });
+
+  expect(resultOf(res).isError).toBe(true);
+  expect(textOf(res)).toMatch(/pendente de confirmação/i);
+  expect(textOf(res)).not.toMatch(/recusou/i);
+  expect(typedKeys).toEqual([]); // asked, never executed on the strength of an old answer
+  expect(actions.rows.map((r) => r.status)).toEqual(['denied', 'pending']);
+});
+
+it('keeps refusing when the person last wrote before the denial: only the model is retrying', async () => {
+  const typedKeys: string[] = [];
+  attachFakeTmux(typedKeys);
+  const { app, actions, typed } = build({ gated: true });
+  typed(3);
+  actions.seed('denied', 'send_input', { tab_id: 't1', text: 'npm test' }, 2);
+
+  const res = await callTool(app, 'send_input', { tab_id: 't1', text: 'npm test' });
+
+  expect(textOf(res)).toMatch(/recusou/i);
   expect(actions.insertPending).not.toHaveBeenCalled();
 });
 

@@ -7,6 +7,7 @@ import { randomId } from '../../../crypto/random';
 import {
   chatGrantListQuery,
   chatMemoryPatchBody,
+  decisionChallengesBody,
   isBoardGrantable,
   isTabGrantable,
   isTerminalGrantable,
@@ -1023,6 +1024,21 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const projectGrant = projectGrantView(state, grantProject(state, action, grantedProjectId!, now, body.decision === 'approve_project_all' ? 'all' : 'board'));
     broadcast(state, { type: 'project_grant', user_id: USER_ID, conversation_id: action.conversation_id, grant: projectGrant });
     return { status: 200, body: { project_grant: projectGrant } };
+  });
+
+  /** The decision challenges of a grouped confirmation in one authenticated call, like the server
+   * (TER-530): one per action, each bound to its own action, consumed by `checkDecisionProof`. */
+  router.route('POST', '/api/m/v1/chat/actions/challenges', (ctx) => {
+    const { device } = verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const { action_ids } = decisionChallengesBody.parse(ctx.body);
+    const now = ctx.now();
+    const expires_at = new Date(now + 60_000).toISOString();
+    const challenges = action_ids.map((actionId) => {
+      const challenge = randomId(24);
+      state.challenges.set(challenge, { deviceId: device.id, purpose: 'decision', actionId, expiresAt: now + 60_000, used: false });
+      return { action_id: actionId, challenge, expires_at };
+    });
+    return { status: 200, body: { challenges } };
   });
 
   /** A grouped confirmation, like the server: ids of two conversations are a 400; every approval
