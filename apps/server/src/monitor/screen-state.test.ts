@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { claudeScreenState } from './screen-state.js';
+import { claudeFooterMode, claudeScreenState } from './screen-state.js';
 
 /** Real captures of Claude Code 2.1.285 (TER-615), trailing blanks trimmed, paths replaced. */
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/claude-screens/${name}-2.1.285.txt`, import.meta.url), 'utf8');
@@ -61,5 +61,34 @@ describe('claudeScreenState — what a Claude Code tab shows (TER-615)', () => {
 
   it('never takes a typed "❯" inside the transcript for the input box', () => {
     expect(claudeScreenState('❯ Run the tests\n\n● Done.')).toBeNull();
+  });
+});
+
+describe('claudeFooterMode — the permission mode under the input box (spec 2026-10-01 tab chat §5.4)', () => {
+  const RULE = '─'.repeat(40);
+  const screen = (footer: string[], above: string[] = ['● Pronto.']) => [...above, '', RULE, '❯ ', RULE, '  Opus | ctx 4%', ...footer].join('\n');
+
+  it('reads each mode the footer names', () => {
+    expect(claudeFooterMode(screen(['  ⏵⏵ accept edits on (shift+tab to cycle)']))).toBe('acceptEdits');
+    expect(claudeFooterMode(screen(['  ⏸ plan mode on (shift+tab to cycle)']))).toBe('plan');
+    expect(claudeFooterMode(screen(['  ⏵⏵ bypass permissions on (shift+tab to cycle)']))).toBe('bypassPermissions');
+    // a real footer seen on 2026-10-04
+    expect(claudeFooterMode(screen(['  ⏵⏵ auto mode on (shift+tab to cycle)']))).toBe('auto');
+  });
+
+  it('a real capture: bypass permissions, with an agent running in the background', () => {
+    expect(claudeFooterMode(fixture('idle'))).toBe('bypassPermissions');
+  });
+
+  it('an input box with none of them is the default mode, even when the conversation mentions one', () => {
+    expect(claudeFooterMode(screen([], ['● Turn plan mode on with shift+tab.']))).toBe('default');
+    expect(claudeFooterMode(screen(['  ? for shortcuts']))).toBe('default');
+    // Claude Code 2.1.289 names the default mode in the footer
+    expect(claudeFooterMode(screen(['  ⏸ manual mode on · ← 1 agent']))).toBe('default');
+  });
+
+  it('a pane with no input box is unknown', () => {
+    expect(claudeFooterMode('$ ls\nfile.txt\n$ ')).toBe('unknown');
+    expect(claudeFooterMode('')).toBe('unknown');
   });
 });

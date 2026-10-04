@@ -63,6 +63,7 @@ import { apiTokenRoutes } from './routes/api-tokens.js';
 import { deviceRoutes } from './routes/devices.js';
 import { mcpRoutes } from './mcp/route.js';
 import { createMobileServices, registerMobileApi } from './mobile/app.js';
+import { TabChatHub } from './tab-chat/hub.js';
 import { revokeDevice } from './mobile/revocation.js';
 import { purgeMobile } from './mobile/purge.js';
 import { actionForMethod, type Resource } from './auth/permissions.js';
@@ -188,6 +189,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // §7): built here, next to `chat`, since it needs a live `ChatService` to inject the wake turn into —
   // the hooks route (ingest path) has no `ChatService` of its own to build one from.
   const waker = createWaker({ repos, chat, maxPerHour: config.autoWakeMaxPerHour, log: fastify.log });
+  // The phone's tab chat (spec 2026-10-01): one follower per watched tab, poked by the hooks route below.
+  const tabChat = new TabChatHub({ repos, log: fastify.log });
   // Attachments (spec 2026-09-26 §5): the files on the chat-files volume, and the in-process queue
   // that reads them. A finished job tells every open screen through the bus, metadata only.
   const attachmentStore = diskStore(config.chatFiles.dir);
@@ -200,7 +203,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     log: fastify.log,
   });
   const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes };
-  const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments };
+  const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments, tabChat };
   const mobile = config.mobile ? createMobileServices(mobileDeps) : null;
 
   // --- API (tudo autenticado, exceto rotas marcadas como public) ---
@@ -245,7 +248,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('terminals', (a) => tabRoutes(a, repos, { simulators, closeSimulatorTab: (id) => simWs.closeTab(id) }), '/tabs');
       await guarded('terminals', (a) => transcriptionRoutes(a, { transcriptions }), '/transcriptions');
       await guarded('terminals', (a) => monitorRoutes(a, repos), '/monitor');
-      await guarded('terminals', (a) => hooksRoutes(a, repos, { waker }), '/hooks');
+      await guarded('terminals', (a) => hooksRoutes(a, repos, { waker, onTabEvent: (tabId) => tabChat.poke(tabId) }), '/hooks');
       await guarded('ai_accounts', (a) => aiAccountRoutes(a, repos), '/ai-accounts');
       await guarded('waitlist', (a) => waitlistRoutes(a, repos), '/waitlist');
       await guarded('roles', (a) => roleRoutes(a, repos), '/roles');
@@ -273,7 +276,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION, attachments: attachmentStore }));
 
   // --- Mobile app API (/api/m/v1): outside /api, so only its device-token + DPoP hook runs on it ---
-  if (config.mobile && mobile) sockets.push(await registerMobileApi(fastify, mobile, mobileDeps));
+  if (config.mobile && mobile) sockets.push(...(await registerMobileApi(fastify, mobile, mobileDeps)));
 
   // --- Frontend buildado (produção) ---
   const dirs = { ...defaultFrontendDirs(ROOT_DIR), ...opts.frontend };
@@ -352,6 +355,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     // Before the database closes: a send in flight finishes (or records its failure) first.
     await stopAutoAnswerSweeper();
     stopTabSuggestions();
+    tabChat.close();
     await simulators.shutdownAll();
     await closePrisma();
   });
