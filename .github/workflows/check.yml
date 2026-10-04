@@ -1,0 +1,96 @@
+name: Check
+
+# The verification job (typecheck, tests, builds, migrations), shared by "CI e Deploy" (push to main,
+# pull requests) and "CI na troca de base" (a pull request retargeted to main).
+on:
+  workflow_call:
+
+jobs:
+  # ── Verificação: typecheck + build (GitHub-hosted) ─────────────────
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dependências
+        run: npm ci
+      - name: Gerar Prisma Client
+        run: npm run prisma:generate
+      - name: Generated Prisma client is committed
+        run: |
+          stale="$(git status --porcelain -- apps/server/src/generated)"
+          if [ -n "$stale" ]; then
+            echo "The committed Prisma client is stale; run npm run prisma:generate -w @termhub/server and commit:"
+            echo "$stale"
+            exit 1
+          fi
+      - name: Build dos pacotes compartilhados
+        run: npm run build:packages
+      - name: Testes agent
+        run: npm test -w @termhub/agent
+      - name: Typecheck agent
+        run: npm run typecheck -w @termhub/agent
+      - name: Build agent
+        run: npm run build -w @termhub/agent
+      - name: Testes concierge
+        run: npm test -w @termhub/concierge
+      - name: Typecheck + build concierge
+        run: npm run typecheck -w @termhub/concierge && npm run build -w @termhub/concierge
+      - name: Instalar tmux (teste e2e do agente)
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Aplicar migrations (testes de repositório usam o Postgres)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
+        run: cd apps/server && npx prisma migrate deploy
+      - name: Testes server
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
+          TERMHUB_DB_TESTS: '1'
+        run: npm test -w @termhub/server
+      # Ahead of the web tests on purpose: the public city ships as its own bundle, and the test
+      # that proves it carries nothing of the private app greps that bundle's built output.
+      - name: Build do bundle público da cidade
+        run: npm run build:city -w @termhub/web
+      - name: Testes web
+        run: npm test -w @termhub/web
+      - name: Typecheck mobile
+        run: npm run typecheck -w @termhub/mobile
+      - name: Testes mobile
+        run: npm test -w @termhub/mobile
+      - name: Testes protocolo do agente
+        run: npm test -w @termhub/agent-protocol
+      - name: Testes machine-ops
+        run: npm test -w @termhub/machine-ops
+      - name: Testes claude-cli
+        run: npm test -w @termhub/claude-cli
+      - name: Testes mobile-api
+        run: npm test -w @termhub/mobile-api
+      - name: Typecheck server
+        run: npm run typecheck -w @termhub/server
+      - name: Typecheck + build web
+        run: npm run build -w @termhub/web
+      - name: Build server
+        run: npm run build -w @termhub/server
+      - name: Typecheck + build landing
+        run: npm run build -w @termhub/landing
+      - name: Migrations aplicadas batem com o schema (sem drift)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
+        run: |
+          cd apps/server
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+    services:
+      postgres:
+        # pgvector/pgvector:pg16: the check job needs the `vector` extension for the chat_decisions migration.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: termhub
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 3s --health-retries 10
