@@ -66,3 +66,35 @@ it('a 403 means the person has no terminal access', async () => {
   expect(sessions.getState().forbidden).toBe(true);
   expect(sessions.getState().error).toBeNull();
 });
+
+describe('starting a session', () => {
+  it('start() answers the new tab id', async () => {
+    const { sessions, api } = await setup();
+    const call = jest.spyOn(api, 'startSession');
+    const id = await sessions.getState().start({ project_id: 'p-termhub', prompt: ' revisa o PR ' });
+    expect(id).toMatch(/^t-/);
+    expect(call).toHaveBeenCalledWith(expect.anything(), { project_id: 'p-termhub', prompt: 'revisa o PR' });
+    expect(sessions.getState().starting).toBe(false);
+  });
+
+  it("a refusal keeps the server's own words", async () => {
+    const { sessions, api } = await setup();
+    jest.spyOn(api, 'startSession').mockRejectedValueOnce(new ApiError(409, 'NO_ACCOUNT', 'O projeto não tem conta de IA'));
+    expect(await sessions.getState().start({ project_id: 'p-termhub', prompt: 'oi' })).toBeNull();
+    expect(sessions.getState().startError).toBe('O projeto não tem conta de IA');
+  });
+
+  it('refuses a first message over 4000 characters before the call', async () => {
+    const { sessions, api } = await setup();
+    const call = jest.spyOn(api, 'startSession');
+    expect(await sessions.getState().start({ project_id: 'p-termhub', prompt: 'x'.repeat(4001) })).toBeNull();
+    expect(call).not.toHaveBeenCalled();
+    expect(sessions.getState().startError).toBe('Mensagem longa demais (máximo de 4000 caracteres)');
+  });
+
+  it("projectMachines lists the machines of the project's accounts once each", async () => {
+    const { sessions } = await setup();
+    expect(await sessions.getState().projectMachines('p-termhub')).toEqual([{ id: 'm-jarvis', name: 'jarvis' }]);
+    expect(await sessions.getState().projectMachines('p-nope')).toEqual([]);
+  });
+});

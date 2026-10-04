@@ -321,7 +321,8 @@ export function createTabChatStore(deps: TabChatDeps) {
           if (action === 'cycle_mode' && res.mode !== null && res.mode !== 'unknown') set({ mode: res.mode });
         } catch (e) {
           if (handled(gen, e)) return;
-          set({ error: isApiError(e) && e.status < 500 ? e.message : TAB_CHAT_MSG.actionFailed });
+          // The server explains its refusals (a dialog open, an old agent, the machine offline) in pt-BR.
+          set({ error: isApiError(e) && !e.code.startsWith('HTTP_') && e.code !== 'BAD_RESPONSE' ? e.message : TAB_CHAT_MSG.actionFailed });
         }
       },
 

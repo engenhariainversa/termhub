@@ -1,10 +1,9 @@
-// The session stores of the app, over the real API singleton and the session store: one store per open
-// session screen (`useTabChatStore`), closed when the screen goes, and the app's one Sessões list.
+// The session screens' stores, over the real API singleton and the session store: one per open session
+// screen, closed when the screen goes.
 import { useEffect, useState } from 'react';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { api } from '@/services/api';
-import { createSessionsStore } from './createSessionsStore';
 import { createTabChatStore } from './createTabChatStore';
 
 export type TabChatStore = ReturnType<typeof createTabChatStore>;
@@ -35,5 +34,3 @@ export function useTabChatStore(tabId: string, make: (tabId: string) => TabChatS
   }, [store]);
   return store;
 }
-
-export const useSessionsStore = createSessionsStore({ api, session: () => useSessionStore.getState() });
