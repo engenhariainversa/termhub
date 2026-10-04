@@ -17,6 +17,7 @@ import { mobileNotificationRoutes } from '../routes/m-notifications.js';
 import { progressRoutes } from '../routes/progress.js';
 import { projectAiRoutes } from '../routes/project-ai.js';
 import { mobileSessionRoutes } from '../routes/m-session.js';
+import { mobileTabRoutes } from '../routes/m-tabs.js';
 import { mobileTranscriptionRoutes } from '../routes/m-transcriptions.js';
 import { buildMobileAuthHook, type MobileAuthMode } from './auth.js';
 import { JtiCache } from './dpop.js';
@@ -146,6 +147,8 @@ export async function registerMobileApi(
         await guarded('projects', (a) => projectAiRoutes(a, deps.repos), '/projects');
         // Voice dictation, over the same TranscriptionService as the web (`routes/transcriptions.ts`).
         await guarded('terminals', (a) => mobileTranscriptionRoutes(a, { transcriptions: deps.transcriptions }), '/transcriptions');
+        // A terminal tab read as a conversation (spec 2026-10-01 tab chat).
+        await guarded('terminals', (a) => mobileTabRoutes(a, deps.repos, { hub: deps.tabChat }), '/tabs');
       }
 
       await mobileRoutes(guardedMobile);

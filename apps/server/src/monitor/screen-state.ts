@@ -41,3 +41,36 @@ export function claudeScreenState(screen: string): ScreenState | null {
   }
   return null;
 }
+
+/** Claude Code's permission mode, as its footer shows it (spec 2026-10-01 tab chat §5.4). */
+export type ClaudeFooterMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions' | 'auto' | 'unknown';
+
+/**
+ * What the footer under the input box says for each mode other than `default` (which says nothing).
+ * One row per mode, so a Claude Code release that rewords one is a one-line fix. Checked on
+ * 2026-10-04 against a real footer: `⏵⏵ auto mode on (shift+tab to cycle)` and `⏵⏵ bypass permissions
+ * on (shift+tab to cycle)` (the latter also in `fixtures/claude-screens/idle-2.1.285.txt`).
+ */
+export const CLAUDE_FOOTER_MODES: readonly { text: string; mode: Exclude<ClaudeFooterMode, 'default' | 'unknown'> }[] = [
+  { text: 'accept edits on', mode: 'acceptEdits' },
+  { text: 'plan mode on', mode: 'plan' },
+  { text: 'bypass permissions on', mode: 'bypassPermissions' },
+  { text: 'auto mode on', mode: 'auto' },
+];
+
+/**
+ * The mode read from a plain capture of a Claude Code pane, after Shift+Tab cycled it: the transcript
+ * writes its `permission-mode` line with the next prompt, not with the key, so the screen is the only
+ * witness. Only the rows under the input box's last rule are read, so a conversation that merely
+ * mentions "plan mode on" is not taken for the footer. `unknown`: no Claude Code input box on screen.
+ */
+export function claudeFooterMode(screen: string): ClaudeFooterMode {
+  if (claudeScreenState(screen) === null) return 'unknown';
+  const lines = lastNonBlankLines(screen, SCREEN_STATE_LINES).split('\n').map((l) => l.trimEnd());
+  let lastRule = -1;
+  lines.forEach((l, i) => {
+    if (RULE.test(l)) lastRule = i;
+  });
+  const footer = lines.slice(lastRule + 1).join('\n');
+  return CLAUDE_FOOTER_MODES.find((m) => footer.includes(m.text))?.mode ?? 'default';
+}

@@ -289,6 +289,19 @@ export class TabQuestionsRepository {
     return row ? mapQuestion(row) : undefined;
   }
 
+  /**
+   * The tab's open rows (questions, permissions, suggestions) of this user's own conversations, oldest
+   * first: the cards a tab chat shows at the end of its conversation (spec 2026-10-01 tab chat D13).
+   */
+  async listOpenForTab(tabId: string, userId: string): Promise<TabQuestion[]> {
+    const rows = await this.db.tabQuestion.findMany({
+      where: { tabId, status: 'open', conversation: { userId } },
+      include: withOwner,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(mapQuestion);
+  }
+
   async findByIdForUser(id: string, userId: string): Promise<TabQuestion | undefined> {
     const row = await this.db.tabQuestion.findFirst({ where: { id, conversation: { userId } }, include: withOwner });
     return row ? mapQuestion(row) : undefined;
