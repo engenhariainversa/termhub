@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConnectGate } from './connect-gate';
 import { TerminalConnection, type ConnectionState } from './terminal-connection';
 
 /** Minimal stand-in for the browser WebSocket: the test drives open/message/close by hand. */
@@ -38,7 +39,7 @@ const last = () => FakeSocket.all[FakeSocket.all.length - 1];
 
 beforeEach(() => {
   FakeSocket.all = [];
-  vi.stubGlobal('WebSocket', Object.assign(FakeSocket, { OPEN: 1 }));
+  vi.stubGlobal('WebSocket', Object.assign(FakeSocket, { CONNECTING: 0, OPEN: 1 }));
   vi.useFakeTimers();
 });
 afterEach(() => {
@@ -46,13 +47,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function start() {
+function start(gate = new ConnectGate(), tabId = 't1') {
   const states: [ConnectionState, number][] = [];
   const errors: string[] = [];
-  const conn = new TerminalConnection('t1', { onData: () => {}, onState: (s, a) => states.push([s, a]), onError: (m) => errors.push(m) });
+  const conn = new TerminalConnection(tabId, { onData: () => {}, onState: (s, a) => states.push([s, a]), onError: (m) => errors.push(m) }, gate);
   conn.connect({ cols: 80, rows: 24 });
   return { conn, states, errors };
 }
+
+const socketOf = (tabId: string) => FakeSocket.all.filter((s) => s.url.includes(`/ws/tabs/${tabId}?`));
 
 /** The server accepts the socket, then the machine refuses to start the terminal. */
 function failOpen(ws: FakeSocket) {
@@ -116,6 +119,53 @@ describe('TerminalConnection', () => {
     expect(states.at(-1)?.[0]).toBe('closed');
     vi.advanceTimersByTime(2000);
     expect(FakeSocket.all).toHaveLength(1);
+  });
+
+  // TER-902: Chromium runs one WebSocket handshake per host at a time and delays each new socket more the more
+  // are pending, so a page that opens every terminal of a project at once (or reconnects them all after a
+  // deploy) left the tab on screen at the back of a queue of 1–5 s handshakes.
+  describe('opening many terminals', () => {
+    it('keeps at most two handshakes pending and opens the next as one completes', () => {
+      const gate = new ConnectGate();
+      for (const id of ['a', 'b', 'c', 'd']) start(gate, id);
+      expect(FakeSocket.all.map((s) => s.url.split('/ws/tabs/')[1].split('?')[0])).toEqual(['a', 'b']);
+      socketOf('a')[0].open();
+      expect(socketOf('c')).toHaveLength(1);
+      expect(socketOf('d')).toHaveLength(0);
+    });
+
+    it('the visible terminal skips the queue', () => {
+      const gate = new ConnectGate();
+      for (const id of ['a', 'b', 'c', 'd']) start(gate, id);
+      const { conn: visible, states } = start(gate, 'shown');
+      visible.setPriority(true);
+      expect(states.at(-1)?.[0]).toBe('connecting');
+      socketOf('a')[0].open();
+      expect(socketOf('shown')).toHaveLength(1);
+      expect(socketOf('c')).toHaveLength(0);
+    });
+
+    it('gives up on a handshake that never completes, frees its slot and tries again', () => {
+      const gate = new ConnectGate(1);
+      const { states } = start(gate, 'stuck');
+      start(gate, 'next');
+      expect(socketOf('next')).toHaveLength(0);
+      vi.advanceTimersByTime(10_000);
+      expect(socketOf('next')).toHaveLength(1);
+      expect(states.at(-1)?.[0]).toBe('reconnecting');
+      socketOf('next')[0].open();
+      vi.advanceTimersByTime(2_000);
+      expect(socketOf('stuck')).toHaveLength(2);
+    });
+
+    it('a terminal closed while waiting never opens a socket', () => {
+      const gate = new ConnectGate(1);
+      start(gate, 'a');
+      const { conn } = start(gate, 'b');
+      conn.close();
+      socketOf('a')[0].open();
+      expect(socketOf('b')).toHaveLength(0);
+    });
   });
 
   describe('wheel scroll', () => {
