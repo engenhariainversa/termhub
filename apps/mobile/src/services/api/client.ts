@@ -351,8 +351,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     sendTabMessage: (a: Auth, tabId: string, text: string) => empty('POST', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/messages`, { token: a.accessToken, body: { text } }),
     tabAction: (a: Auth, tabId: string, action: TTabChatAction) =>
       call('POST', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/actions`, tabActionResponse, { token: a.accessToken, body: { action } }),
-    uploadTabFile: (a: Auth, tabId: string, fileUri: string, name: string, mime: string) =>
-      uploadCall(`/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/files?name=${encodeURIComponent(name)}`, fileUri, mime, tabFileResponse, a.accessToken),
+    // Always sent as octet-stream: the server saves the bytes under `name` and never reads the type, and a
+    // JSON file sent as `application/json` would be parsed as a request body instead of saved.
+    uploadTabFile: (a: Auth, tabId: string, fileUri: string, name: string, _mime: string) =>
+      uploadCall(`/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/files?name=${encodeURIComponent(name)}`, fileUri, 'application/octet-stream', tabFileResponse, a.accessToken),
     tabScreen: (a: Auth, tabId: string, lines?: number) =>
       call('GET', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/screen${lines ? `?lines=${lines}` : ''}`, tabScreenResponse, { token: a.accessToken }),
 

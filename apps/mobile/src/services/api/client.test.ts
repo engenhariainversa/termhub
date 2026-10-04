@@ -763,7 +763,7 @@ describe('tab chat (spec 2026-10-01 tab chat §5.4)', () => {
     expect(res.text).toBe('$ ls');
   });
 
-  it('uploadTabFile posts the file as the body with its mime, the name in the query', async () => {
+  it('uploadTabFile posts the file as raw bytes (octet-stream, so a JSON file is not parsed), the name in the query', async () => {
     const uploads: Array<{ url: string; fileUri: string; mime: string; headers: Record<string, string> }> = [];
     const transport: Transport = {
       fetch: async () => {
@@ -777,10 +777,10 @@ describe('tab chat (spec 2026-10-01 tab chat §5.4)', () => {
         return { status: 200, body: JSON.stringify({ path: '/tmp/termhub/foto.png', name: 'foto.png' }) };
       },
     };
-    const res = await make(transport).uploadTabFile({ accessToken: 'tok' }, 't1', 'file:///x/foto.png', 'foto ü.png', 'image/png');
+    const res = await make(transport).uploadTabFile({ accessToken: 'tok' }, 't1', 'file:///x/dados.json', 'foto ü.png', 'application/json');
     expect(res).toEqual({ path: '/tmp/termhub/foto.png', name: 'foto.png' });
     expect(uploads[0]!.url).toBe('https://termhub.dev/api/m/v1/tabs/t1/chat/files?name=foto%20%C3%BC.png');
-    expect(uploads[0]!.mime).toBe('image/png');
+    expect(uploads[0]!.mime).toBe('application/octet-stream');
     expect(dpopPayload(uploads[0]!.headers.DPoP!)).toMatchObject({ htm: 'POST', htu: 'https://termhub.dev/api/m/v1/tabs/t1/chat/files' });
   });
 
