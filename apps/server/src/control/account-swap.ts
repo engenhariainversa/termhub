@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { agents } from '../agent/registry.js';
 import { linkClaudeSession } from '../ai/claude-session.js';
 import { getAccountUsage, type AiAccountUsage } from '../ai/index.js';
+import type { AiUsageWindow } from '../ai/types.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
@@ -34,10 +35,20 @@ export interface SwapResult {
   to: { id: string; label: string };
 }
 
-/** The fullest window of the account, 0..100; null when the usage could not be read. */
-export function peakUtilization(u: AiAccountUsage | undefined): number | null {
+/**
+ * Whether a usage window limits a run on `model` (an alias or id, e.g. "opus", "claude-opus-5-5"). A window
+ * that caps one model (the weekly Fable allowance) does not stop a run on another one; with the model
+ * unknown (null: the CLI's own default) every window counts, as a full one may be the one it runs on.
+ */
+export function windowLimits(w: AiUsageWindow, model: string | null | undefined): boolean {
+  return !w.model || !model || model.toLowerCase().includes(w.model);
+}
+
+/** The fullest window of the account that limits `model`, 0..100; null when the usage could not be read. */
+export function peakUtilization(u: AiAccountUsage | undefined, model?: string | null): number | null {
   if (!u || !u.ok || u.windows.length === 0) return null;
-  return Math.max(...u.windows.map((w) => w.utilization));
+  const windows = u.windows.filter((w) => windowLimits(w, model));
+  return windows.length === 0 ? 0 : Math.max(...windows.map((w) => w.utilization));
 }
 
 /**
@@ -47,17 +58,19 @@ export function peakUtilization(u: AiAccountUsage | undefined): number | null {
  * With `priority` (the project's accounts, TER-589) the order is the project's, not the usage: only the
  * accounts it lists, in its order, the full ones still dropped and unknown usage kept in place — the owner
  * chose "the next one in the order", not "the emptiest".
+ *
+ * `model`: what the session runs on (TER-837) — a window capping another model is left out of the reading.
  */
-export function rankCandidates(accounts: AiAccount[], usage: Map<string, AiAccountUsage>, opts: { explicit: boolean; priority?: string[] }): AiAccount[] {
+export function rankCandidates(accounts: AiAccount[], usage: Map<string, AiAccountUsage>, opts: { explicit: boolean; priority?: string[]; model?: string | null }): AiAccount[] {
   const room = (a: AiAccount) => {
-    const peak = peakUtilization(usage.get(a.id));
+    const peak = peakUtilization(usage.get(a.id), opts.model);
     return opts.explicit || peak === null || peak < SWAP_MAX_UTILIZATION;
   };
   if (opts.priority) {
     const byId = new Map(accounts.map((a) => [a.id, a]));
     return opts.priority.map((id) => byId.get(id)).filter((a): a is AiAccount => !!a && room(a));
   }
-  const scored = accounts.map((a, i) => ({ a, i, peak: peakUtilization(usage.get(a.id)) }));
+  const scored = accounts.map((a, i) => ({ a, i, peak: peakUtilization(usage.get(a.id), opts.model) }));
   return scored
     .filter((s) => room(s.a))
     .sort((x, y) => (x.peak === null ? 1 : 0) - (y.peak === null ? 1 : 0) || (x.peak ?? 0) - (y.peak ?? 0) || x.i - y.i)
@@ -152,7 +165,7 @@ export async function swapAccount(
     // getAccountUsage never rejects: a failed reading comes back as `ok: false` and ranks last
     const usage = new Map<string, AiAccountUsage>();
     await Promise.all(pool.map(async (a) => usage.set(a.id, await getAccountUsage(a, machine, true))));
-    const ranked = rankCandidates(pool, usage, { explicit: !!opts.accountId, ...(opts.accountId ? {} : { priority: prefs.priority }) });
+    const ranked = rankCandidates(pool, usage, { explicit: !!opts.accountId, model: prefs.model, ...(opts.accountId ? {} : { priority: prefs.priority }) });
 
     // Link before touching the tab: a candidate that is the current account under another name
     // (same_account) or whose dir already holds something else (conflict) is skipped.

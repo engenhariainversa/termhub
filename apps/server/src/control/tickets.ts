@@ -1,6 +1,6 @@
 import type { Task, TaskStatus, Ticket } from '../db/repositories/types.js';
 import { getProvider, type IntegrationProvider } from '../integrations/index.js';
-import { readTicketLink, ticketLinkJson } from '../integrations/ticket-link.js';
+import { providerIdOf, readTicketLink, ticketLinkJson } from '../integrations/ticket-link.js';
 import { HttpError } from '../lib/errors.js';
 import { sourceIdentity } from '../setup/schema.js';
 import { lastSync, syncProjectTickets, type SyncResult } from '../setup/tickets-sync.js';
@@ -30,6 +30,8 @@ export interface TicketOut {
   labels: string[];
   assignee: string | null;
   synced_at: string;
+  /** set when the source no longer returns this imported ticket (closed, or out of the filter) */
+  left_source_at: string | null;
   card: { id: string; ref: string; url: string } | null;
 }
 
@@ -50,6 +52,7 @@ function toOut(t: Ticket, card: Task | undefined, full: boolean): TicketOut {
     labels,
     assignee: typeof t.meta.assignee === 'string' ? t.meta.assignee : null,
     synced_at: t.synced_at,
+    left_source_at: t.left_source_at,
     card: card ? { id: card.id, ref: card.ref, url: cardUrl(card.ref) } : null,
   };
 }
@@ -172,11 +175,6 @@ export async function importTickets(ctx: ControlContext, input: { project_id: st
 }
 
 /** The provider API id from the sync key: "linear:<uuid>", "jira:<KEY>", "github:<owner/repo>#<n>". */
-function providerIdOf(t: Ticket): string {
-  if (t.provider === 'github') return t.sync_key.split('#').pop() ?? t.sync_key;
-  return t.sync_key.slice(t.sync_key.indexOf(':') + 1);
-}
-
 export async function pushTicketStatus(ctx: ControlContext, input: { task_id: string }) {
   const { task } = await ctx.scoped.task(input.task_id);
   const link = readTicketLink(task.external_ref);

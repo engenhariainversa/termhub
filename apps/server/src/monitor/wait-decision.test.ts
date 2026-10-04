@@ -318,3 +318,30 @@ describe('decideWait — a subagent in the background never takes the tab out of
     expect(decideWait(current({ state: 'working' }), [row('working', 'UserPromptSubmit')], subagentTool())).toEqual(NEW);
   });
 });
+
+describe('decideWait — a main thread waiting on its own background work (TER-644)', () => {
+  const background = [row('waiting_background', 'Stop', 500, true), row('working', 'UserPromptSubmit', 30_000)];
+
+  it('drops the tool calls of the subagents it waits on', () => {
+    for (const id of ['a1', null]) {
+      expect(decideWait(current({ state: 'waiting_background' }), background, event({ kind: 'working', name: 'PreToolUse', subagent: { id } }))).toEqual({ action: 'drop', reason: 'subagent_during_wait' });
+    }
+  });
+
+  it('drops the idle_prompt that follows that Stop: the turn did not end in a question', () => {
+    expect(decideWait(current({ state: 'waiting_background' }), background, reminder)).toEqual({ action: 'drop', reason: 'reminder_during_background' });
+  });
+
+  it('records what moves it on: the main thread back at work, the real end of the work, a permission prompt', () => {
+    expect(decideWait(current({ state: 'waiting_background' }), background, event({ kind: 'working', name: 'PreToolUse' }))).toEqual(NEW);
+    expect(decideWait(current({ state: 'waiting_background' }), background, event({ kind: 'waiting_input', name: 'Stop' }))).toEqual(NEW);
+    expect(decideWait(current({ state: 'waiting_background' }), background, event({ kind: 'waiting_permission', name: 'PermissionRequest', subagent: { id: 'a1' } }))).toEqual(NEW);
+    expect(decideWait(current({ state: 'waiting_background' }), background, event({ kind: 'idle', name: 'SessionEnd' }))).toEqual(NEW);
+  });
+
+  it('a Stop that leaves background work is no wait to re-arm', () => {
+    const outcome = decideWait(current({ state: 'working', seenAgeMs: 30_000 }), [row('working', 'PreToolUse', 500), row('waiting_input', 'Stop', 60_000)], event({ kind: 'waiting_background', name: 'Stop' }));
+    expect(outcome).toEqual(NEW);
+    expect(rearmOf(current({ state: 'working', seenAgeMs: 30_000 }), [row('working', 'PreToolUse', 500), row('waiting_input', 'Stop', 60_000)], event({ kind: 'waiting_background', name: 'Stop' }), outcome)).toBeNull();
+  });
+});

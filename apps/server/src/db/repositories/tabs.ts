@@ -10,7 +10,7 @@ const EVENTS_KEPT_PER_TAB = 200;
 export const MAX_WORKING_INTERVAL_S = 7200;
 
 /** States that mean a tool is mid-task in that tab — as opposed to `idle`, `error` or never seen. */
-const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission'];
+const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background'];
 
 const metaOf = (meta: unknown): Record<string, unknown> => (meta && typeof meta === 'object' && !Array.isArray(meta) ? (meta as Record<string, unknown>) : {});
 
@@ -118,12 +118,13 @@ export class TabsRepository {
   }
 
   /**
-   * Claude Code tabs left `working` with no hook event since `before` (TER-615), oldest first, at most
-   * `limit`: the tabs whose screen the monitor reads again (monitor/stale-working.ts).
+   * Claude Code and Codex tabs left `working` (or `waiting_background`, TER-644) with no hook event since
+   * `before` (TER-615), oldest first, at most `limit`: the tabs the monitor looks at again
+   * (monitor/stale-working.ts).
    */
   async listStaleWorking(before: Date, limit = 50): Promise<Tab[]> {
     const rows = await this.db.tab.findMany({
-      where: { kind: 'terminal', tmuxSession: { not: null }, state: 'working', stateTool: { in: ['claude', 'codex'] }, stateAt: { lt: before } },
+      where: { kind: 'terminal', tmuxSession: { not: null }, state: { in: ['working', 'waiting_background'] }, stateTool: { in: ['claude', 'codex'] }, stateAt: { lt: before } },
       orderBy: [{ stateAt: 'asc' }],
       take: limit,
     });
@@ -195,8 +196,8 @@ export class TabsRepository {
       answer?: string;
       /**
        * Only for a state read off the screen (monitor/stale-working.ts): the tab's `state_at` when the
-       * screen was captured. The event is dropped unless the tab is still `working` since then — a
-       * hook that landed meanwhile knows better than the capture.
+       * screen was captured. The event is dropped unless the tab is still `working` (or
+       * `waiting_background`) since then — a hook that landed meanwhile knows better than the capture.
        */
       ifStateAt?: string;
     },
@@ -221,14 +222,16 @@ export class TabsRepository {
         seenAgeMs: current?.stateSeenAt ? at.getTime() - current.stateSeenAt.getTime() : null,
       };
       const incoming = { kind: event.kind, name: eventName(event.meta), continuesWait: !!event.continuesWait, keepsWaitText: !!event.keepsWaitText, subagent: subagentOf(event.meta) };
-      const outdated = event.ifStateAt !== undefined && (current?.state !== 'working' || current.stateAt?.toISOString() !== event.ifStateAt);
+      const stillWorking = current?.state === 'working' || current?.state === 'waiting_background';
+      const outdated = event.ifStateAt !== undefined && (!stillWorking || current?.stateAt?.toISOString() !== event.ifStateAt);
       const outcome = outdated ? ({ action: 'drop' } as const) : decideWait(now, history, incoming);
       if (outcome.action === 'drop') {
         return [null, await tx.tab.findUniqueOrThrow({ where: { id: tabId } }), null] as const;
       }
 
       // A working interval ends here: credit it to the card this tab works on (a subtask's parent), once.
-      if (previous?.kind === 'working') {
+      // Time spent waiting on the agent's own background work (TER-644) is that work's time, so it counts.
+      if (previous?.kind === 'working' || previous?.kind === 'waiting_background') {
         const seconds = Math.min(MAX_WORKING_INTERVAL_S, Math.round((at.getTime() - previous.createdAt.getTime()) / 1000));
         if (seconds > 0) {
           await tx.$executeRaw`UPDATE "tasks" SET "active_seconds" = "active_seconds" + ${seconds} WHERE "id" IN (SELECT DISTINCT COALESCE("parent_id", "id") FROM "tasks" WHERE "tab_id" = ${tabId})`;

@@ -22,6 +22,7 @@ async function otherAccounts(repos: Pick<Repositories, 'aiAccounts'>, machine: M
 /**
  * The accounts to fall back to, best first: the machine's other Claude accounts not tried yet in this
  * run, with room left (under SWAP_MAX_UTILIZATION on a fresh reading; an unknown reading goes last).
+ * `model`: what the run is on — a window that caps another model does not count (TER-837).
  * `projectId` is for TER-589, which orders a configured project's chat by the project's own priority.
  */
 export async function fallbackCandidates(
@@ -30,6 +31,7 @@ export async function fallbackCandidates(
   currentAccountId: string | null,
   tried: ReadonlySet<string>,
   projectId: string | null,
+  model: string | null = null,
 ): Promise<AiAccount[]> {
   const pool = (await otherAccounts(repos, machine, currentAccountId)).filter((a) => !tried.has(a.id));
   // A project that lists Claude accounts on this machine keeps its chat on them, in its order
@@ -42,7 +44,7 @@ export async function fallbackCandidates(
   const usage = new Map<string, AiAccountUsage>();
   // getAccountUsage never rejects: a failed reading comes back as `ok: false` and ranks last
   await Promise.all(pool.map(async (a) => usage.set(a.id, await getAccountUsage(a, machine, true))));
-  return rankCandidates(pool, usage, { explicit: false, priority });
+  return rankCandidates(pool, usage, { explicit: false, priority, model });
 }
 
 /** Why no account could take over: there is none besides this one, or none has room left. */
@@ -83,9 +85,9 @@ export interface FallbackPick {
  */
 export async function pickFallback(
   repos: Pick<Repositories, 'aiAccounts'> & Partial<Pick<Repositories, 'projectSetup' | 'projectMachines'>>,
-  input: { machine: Machine; currentAccountId: string | null; tried: Set<string>; projectId: string | null; sessionDir: string | null; sessionId: string | null },
+  input: { machine: Machine; currentAccountId: string | null; tried: Set<string>; projectId: string | null; sessionDir: string | null; sessionId: string | null; model?: string | null },
 ): Promise<FallbackPick | null> {
-  const candidates = await fallbackCandidates(repos, input.machine, input.currentAccountId, input.tried, input.projectId);
+  const candidates = await fallbackCandidates(repos, input.machine, input.currentAccountId, input.tried, input.projectId, input.model ?? null);
   for (const account of candidates) {
     input.tried.add(account.id);
     if (!input.sessionId) return { account, resume: false };

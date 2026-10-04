@@ -239,6 +239,32 @@ describe('waitForState', () => {
     await expect(p).resolves.toMatchObject({ state: 'idle', timed_out: false });
   });
 
+  it('keeps waiting through waiting_background: the agent waits on its own work, not on the person (TER-644)', async () => {
+    const p = waitForState(ctx(), { tab_id: 't1', timeout_seconds: 5 });
+    await tick();
+    publish(baseTab({ state: 'waiting_background', state_text: 'Aguardando o subagente.' }));
+    let done = false;
+    void p.then(() => (done = true));
+    await tick();
+    expect(done).toBe(false);
+    publish(baseTab({ state: 'waiting_input', state_text: 'Revisão pronta.' }));
+    await expect(p).resolves.toMatchObject({ state: 'waiting_input', state_text: 'Revisão pronta.', timed_out: false });
+  });
+
+  it('waits from waiting_background too, and returns on it only when asked (return_on_background)', async () => {
+    const p = waitForState(ctx(baseTab({ state: 'waiting_background' })), { tab_id: 't1', timeout_seconds: 5 });
+    await tick();
+    publish(baseTab({ state: 'working' }));
+    publish(baseTab({ state: 'idle' }));
+    await expect(p).resolves.toMatchObject({ state: 'idle', timed_out: false });
+
+    await expect(waitForState(ctx(baseTab({ state: 'waiting_background' })), { tab_id: 't1', return_on_background: true })).resolves.toMatchObject({ state: 'waiting_background', timed_out: false });
+    const q = waitForState(ctx(), { tab_id: 't1', timeout_seconds: 5, return_on_background: true });
+    await tick();
+    publish(baseTab({ state: 'waiting_background' }));
+    await expect(q).resolves.toMatchObject({ state: 'waiting_background', timed_out: false });
+  });
+
   it('times out without error and clamps the timeout to 90 s', async () => {
     vi.useFakeTimers();
     const p = waitForState(ctx(), { tab_id: 't1', timeout_seconds: 500 });

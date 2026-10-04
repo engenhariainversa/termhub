@@ -3,6 +3,9 @@
 // `logic` Jest project, same as every other file in `model/`.
 import type { Phase } from './session.types';
 
+/** The blocking screen of a pending account deletion (`app/account-deletion.tsx`). */
+const ACCOUNT_DELETION_SEGMENT = 'account-deletion';
+
 /** Each phase's own screen. */
 const HOME: Record<Phase, string> = {
   new: '/',
@@ -49,8 +52,16 @@ const normalise = (path: string) => `/${path.split('/').filter(Boolean).join('/'
  * "Reached" compares the full `pathname` (`usePathname()`, e.g. `/chat/c1`), not `segments`:
  * expo-router's segments hold the file names (`['chat', '[id]']`), so they cannot tell one
  * conversation from another — `/chat/c2` must not count as arriving at `/chat/c1`.
+ *
+ * `deletionPending` (TER-720) sends an unlocked session to `/account-deletion` ahead of everything.
  */
-export function redirectFor(phase: Phase, segments: string[], pendingRoute: string | null, pathname: string): RedirectDecision {
+export function redirectFor(phase: Phase, segments: string[], pendingRoute: string | null, pathname: string, deletionPending = false): RedirectDecision {
+  // A pending account deletion (TER-720) takes over the unlocked app: only its blocking screen is
+  // reachable, and a deep link waits (not cleared) until the person cancels. Once cancelled, the
+  // screen is no unlocked home, so the checks below send it back to the tabs.
+  if (phase === 'unlocked' && deletionPending) {
+    return segments[0] === ACCOUNT_DELETION_SEGMENT ? { target: null, shouldClear: false } : { target: `/${ACCOUNT_DELETION_SEGMENT}`, shouldClear: false };
+  }
   if (phase === 'unlocked' && pendingRoute) {
     const arrived = normalise(pathname) === normalise(pendingRoute);
     return arrived ? { target: null, shouldClear: true } : { target: pendingRoute, shouldClear: false };

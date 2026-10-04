@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { RPC, RPC_METHODS, docPath, isWdaPort, rpcErrorSchema } from './rpc.js';
+import { RPC, RPC_METHODS, TMUX_KEYS, docPath, isWdaPort, rpcErrorSchema, tmuxKey } from './rpc.js';
 
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
       'agent.update', 'ai.credential', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.paste', 'fs.list', 'fs.mkdir', 'hooks.install',
       'hooks.uninstall', 'hw.probe', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
-      'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
+      'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
     ]);
   });
@@ -189,4 +189,28 @@ describe('terminal RPCs', () => {
     expect(RPC['tmux.sendText'].timeoutMs).toBe(10_000);
     expect(RPC['tmux.sendKey'].timeoutMs).toBe(10_000);
   });
+});
+
+const SID = '0f8fad5b-d9cb-469f-a165-70867728950e';
+const base = { transcript_path: `/home/u/.claude/projects/-w/${SID}.jsonl`, session_id: SID, direction: 'forward', offset: 0, max_bytes: 262_144, types: ['user', 'assistant'], max_string: 4000 };
+
+describe('transcript.read', () => {
+  it('accepts a forward and a backward read', () => {
+    expect(RPC['transcript.read'].params.safeParse(base).success).toBe(true);
+    expect(RPC['transcript.read'].params.safeParse({ ...base, direction: 'backward', offset: null }).success).toBe(true);
+  });
+  it('refuses a bad session id, a relative path, no types and an oversized window', () => {
+    for (const bad of [{ session_id: 'x' }, { transcript_path: 'a/b.jsonl' }, { types: [] }, { max_bytes: 600_000 }, { max_string: 10 }]) {
+      expect(RPC['transcript.read'].params.safeParse({ ...base, ...bad }).success).toBe(false);
+    }
+  });
+  it('validates the result', () => {
+    expect(RPC['transcript.read'].result.safeParse({ status: 'ok', lines: ['{}'], start: 0, end: 3, size: 3 }).success).toBe(true);
+    expect(RPC['transcript.read'].result.safeParse({ status: 'gone', lines: [], start: 0, end: 0, size: 0 }).success).toBe(false);
+  });
+});
+
+it('BTab is a key a terminal tool may press', () => {
+  expect(TMUX_KEYS).toContain('BTab');
+  expect(tmuxKey.safeParse('BTab').success).toBe(true);
 });

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LAST_ANSWER_MAX, STATE_TEXT_MAX, claudeSessionOf, interpretHookEvent, isRateLimit, needsYou, runningBackgroundTasks } from './state.js';
+import { LAST_ANSWER_MAX, NEEDS_YOU, STATE_TEXT_MAX, claudeSessionOf, interpretHookEvent, isRateLimit, needsYou, runningBackgroundTasks } from './state.js';
 import { activityOf } from './activity.js';
 
 describe('interpretHookEvent — claude', () => {
@@ -570,6 +570,8 @@ describe('claude Stop background tasks (spec 2026-09-26 TER-203 §4.1)', () => {
   ])('%s', (_label, background, count) => {
     const i = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Vigiando o CI.', ...(background === undefined ? {} : { background_tasks: background }) });
     expect(i?.text).toBe('Vigiando o CI.');
+    // background work still running is not a wait for the person (TER-644)
+    expect(i?.kind).toBe(count > 0 ? 'waiting_background' : 'waiting_input');
     expect(i?.backgroundTasks).toBe(count > 0 ? count : undefined);
     expect(i?.meta).toEqual(count > 0 ? { event: 'Stop', background_tasks: count } : { event: 'Stop' });
     expect(JSON.stringify(i)).not.toContain('s3cr3t');
@@ -650,5 +652,14 @@ describe('the whole answer (spec 2026-09-30 last answer)', () => {
     const out = interpretHookEvent('cursor', { hook_event_name: 'afterAgentResponse', text: '\u0000\u0000' })!;
     expect(out.answer).toBeUndefined();
     expect(out.text).toBeNull();
+  });
+});
+
+describe('waiting_background is not "needs you" (TER-644)', () => {
+  it('a tab waiting on its own background work never needs the person, seen or not', () => {
+    const at = '2026-10-01T15:00:00.000Z';
+    expect(NEEDS_YOU).not.toContain('waiting_background');
+    expect(needsYou({ state: 'waiting_background', state_at: at, state_seen_at: null })).toBe(false);
+    expect(needsYou({ state: 'waiting_input', state_at: at, state_seen_at: null })).toBe(true);
   });
 });

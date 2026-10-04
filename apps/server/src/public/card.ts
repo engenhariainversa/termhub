@@ -42,7 +42,7 @@ export function buildCardSvg(city: PublicCity, focus: { building?: string }): st
   // What "is happening right now" scopes to the depth the link points at: a building card counts
   // only that project's agents, the city card counts everyone's.
   const robots = building ? building.robots : city.buildings.flatMap((b) => b.robots);
-  const agents = plural(robots.filter((r) => r.state === 'working').length, 'agente trabalhando', 'agentes trabalhando');
+  const agents = plural(robots.filter((r) => r.state === 'working' || r.state === 'waiting_background').length, 'agente trabalhando', 'agentes trabalhando');
   const live = building ? `${xml(building.name)} — ${agents}` : `${plural(city.buildings.length, 'projeto', 'projetos')} · ${agents}`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_WIDTH}" height="${CARD_HEIGHT}" viewBox="0 0 ${CARD_WIDTH} ${CARD_HEIGHT}">

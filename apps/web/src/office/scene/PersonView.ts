@@ -14,6 +14,7 @@ const SHIRT: Record<string, number> = {
   waiting_permission: 0xf0883e,
   idle: 0x7d8799,
   error: 0xf85149,
+  waiting_background: 0x58a6ff,
   none: 0x475569,
 };
 const SEAT = { u: 0.5, v: 0.78 };

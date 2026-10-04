@@ -15,6 +15,8 @@ const STATE_DOT: Record<string, string> = {
   waiting_permission: 'bg-amber-500',
   idle: 'bg-zinc-400',
   error: 'bg-red-500',
+  // waiting on its own background work: neutral, never the colour of "esperando você" (TER-644)
+  background: 'bg-sky-400',
 };
 
 function Bar({ percent, label }: { percent: number; label: string }) {
@@ -41,11 +43,11 @@ function AgentChip({ agent, projectId }: { agent: AgentOnCard; projectId: string
       to={`/projects/${projectId}?tab=${agent.tab_id}`}
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${agent.needs_you ? 'border-amber-500 bg-amber-50 dark:bg-amber-950' : 'border-zinc-300 dark:border-zinc-700'}`}
     >
-      <span className={`h-2 w-2 rounded-full ${agent.state ? STATE_DOT[agent.state] : 'bg-zinc-300'}`} aria-hidden />
+      <span className={`h-2 w-2 rounded-full ${agent.background ? STATE_DOT.background : agent.state ? STATE_DOT[agent.state] : 'bg-zinc-300'}`} aria-hidden />
       <span>{agent.tab_name}</span>
       <span>
-        {stateLabel(agent.state)}
-        {agent.state === 'working' && agent.activity_verb ? ` (${agent.activity_verb})` : ''}
+        {stateLabel(agent.state, agent.background)}
+        {agent.state === 'working' && !agent.background && agent.activity_verb ? ` (${agent.activity_verb})` : ''}
         {since}
       </span>
       {agent.subtask_ref && <span className="text-zinc-500">{agent.subtask_ref}</span>}

@@ -14,12 +14,24 @@ const state = vi.hoisted(() => ({
   items: [] as MonitorItem[],
 }));
 
-const auth = vi.hoisted(() => ({ canChat: true, canCreateProjects: true }));
+const auth = vi.hoisted(() => ({ canChat: true, canCreateProjects: true, canDeleteTerminals: true }));
+const apiMock = vi.hoisted(() => ({ remove: vi.fn(async (_id: string) => ({ ok: true, killed: true })) }));
+vi.mock('../lib/api', () => ({
+  api: { tabs: { remove: apiMock.remove } },
+  ApiError: class ApiError extends Error {},
+}));
 vi.mock('../lib/auth', () => ({
   useAuth: () => ({
     user: { id: 'u1', name: 'Pedro', avatar_url: null, email: 'pedro@example.com' },
     logout: vi.fn(),
-    can: (resource: string, action?: string) => (resource === 'chat' ? auth.canChat : resource === 'projects' && action === 'create' ? auth.canCreateProjects : true),
+    can: (resource: string, action?: string) =>
+      resource === 'chat'
+        ? auth.canChat
+        : resource === 'projects' && action === 'create'
+          ? auth.canCreateProjects
+          : resource === 'terminals' && action === 'delete'
+            ? auth.canDeleteTerminals
+            : true,
     viewAs: 'self',
   }),
 }));
@@ -62,6 +74,7 @@ vi.mock('../lib/data', () => ({
 }));
 
 import { Sidebar } from './Sidebar';
+import { getEditorTabs, onTerminalEnded, resetEditorTabsCache, updateEditorTabs } from '../lib/editor-tabs';
 
 const machine = (id: string, name: string) => ({ id, name, type: 'agent', capabilities: [], is_local: false, os: null, owner_name: null }) as unknown as Machine;
 const project = (id: string, name: string, over: Partial<Project> = {}): Project =>
@@ -112,6 +125,8 @@ const agentsOf = (container: HTMLElement, projectName: string) =>
 beforeEach(() => {
   seed();
   localStorage.clear();
+  resetEditorTabsCache();
+  apiMock.remove.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -119,6 +134,7 @@ afterEach(() => {
   groupsState.error = null;
   auth.canChat = true;
   auth.canCreateProjects = true;
+  auth.canDeleteTerminals = true;
   chat.currentProjectId = null;
   chat.openIds = [];
   vi.clearAllMocks();
@@ -209,27 +225,26 @@ describe('Sidebar sections', () => {
 });
 
 describe('Sidebar agent rows', () => {
-  it('nests each open tab under its project, ordered by position, with the machine only when the project has several', () => {
+  it('lists each project\'s terminals under the machine each runs on, machines in link order, terminals by position', () => {
     renderSidebar();
     const running = section('Em execução');
     const alpha = agentsOf(running, 'alpha')!;
-    const rows = within(alpha).getAllByRole('link');
-    expect(rows.map((r) => r.textContent)).toEqual(['Ana · jarvis', 'Bia · mac']);
+    expect(within(within(alpha).getByRole('list', { name: 'Terminais em mac' })).getAllByRole('link').map((r) => r.textContent)).toEqual(['Bia']);
+    expect(within(within(alpha).getByRole('list', { name: 'Terminais em jarvis' })).getAllByRole('link').map((r) => r.textContent)).toEqual(['Ana']);
+    // machine headings come in link order (mac is linked first), not in tab order
+    expect(within(alpha).getAllByRole('list').map((l) => l.getAttribute('aria-label'))).toEqual(['Terminais em mac', 'Terminais em jarvis']);
 
+    // one machine: its heading still says where the terminal runs
     const beta = agentsOf(running, 'beta')!;
-    expect(within(beta).getByRole('link').textContent).toBe('Caio'); // one machine: no suffix
-    expect(within(beta).queryByText(/mac/)).not.toBeInTheDocument();
+    expect(within(beta).getByRole('list', { name: 'Terminais em mac' })).toBeInTheDocument();
+    expect(within(beta).getByRole('link').textContent).toBe('Caio');
   });
 
-  it('keeps the tab name readable next to a long machine name: the machine name gives way first', () => {
+  it('keeps a long terminal name and a long machine name inside the sidebar width', () => {
     renderSidebar();
-    const row = within(agentsOf(section('Em execução'), 'alpha')!).getAllByRole('link')[0];
-    const name = within(row).getByText('Ana');
-    const machine = within(row).getByText(/jarvis/);
-    expect(name).toHaveClass('shrink-0', 'truncate');
-    expect(name.className).toMatch(/max-w-/);
-    expect(machine).toHaveClass('min-w-0', 'truncate');
-    expect(machine).not.toHaveClass('shrink-0');
+    const alpha = agentsOf(section('Em execução'), 'alpha')!;
+    expect(within(alpha).getByText('Ana')).toHaveClass('min-w-0', 'truncate');
+    expect(within(alpha).getByText('jarvis')).toHaveClass('truncate');
   });
 
   it('names each agent list after its section too, so a running project\'s two lists are told apart', () => {
@@ -616,5 +631,83 @@ describe('Sidebar project chat', () => {
     auth.canChat = false;
     renderSidebar();
     expect(screen.queryByRole('button', { name: 'Chat do projeto' })).toBeNull();
+  });
+});
+
+describe('Sidebar terminal list (TER-904)', () => {
+  const alphaList = () => agentsOf(section('Em execução'), 'alpha')!;
+
+  it('a double click pins the terminal\'s tab and opens the project on it', () => {
+    renderSidebar();
+    fireEvent.doubleClick(within(alphaList()).getByRole('link', { name: /Bia/ }));
+    expect(getEditorTabs('p1')).toEqual({ open: ['t2'], preview: null });
+    expect(screen.getByTestId('where')).toHaveTextContent('/projects/p1');
+  });
+
+  it('a double click replaces the preview, like the click before it would have, and pins', () => {
+    updateEditorTabs('p1', () => ({ open: ['t1'], preview: 't1' }));
+    renderSidebar();
+    fireEvent.doubleClick(within(alphaList()).getByRole('link', { name: /Bia/ }));
+    expect(getEditorTabs('p1')).toEqual({ open: ['t2'], preview: null });
+  });
+
+  it('shows which terminals have an open tab, the preview one in italics', () => {
+    updateEditorTabs('p1', () => ({ open: ['t1', 't2'], preview: 't2' }));
+    renderSidebar();
+    expect(within(alphaList()).getByText('Bia')).toHaveClass('italic');
+    expect(within(alphaList()).getByText('Ana')).not.toHaveClass('italic');
+    expect(within(alphaList()).getByRole('link', { name: /Ana/ })).toHaveClass('text-fg');
+    expect(within(agentsOf(section('Em execução'), 'beta')!).getByRole('link', { name: /Caio/ })).toHaveClass('text-fg-muted');
+  });
+
+  it('says on the row that a terminal is waiting for you', () => {
+    renderSidebar();
+    expect(within(within(alphaList()).getByRole('link', { name: /Ana/ })).getByLabelText('esperando você')).toBeInTheDocument();
+    expect(within(within(alphaList()).getByRole('link', { name: /Bia/ })).queryByLabelText('esperando você')).toBeNull();
+  });
+
+  it('the ✕ next to a working terminal asks first, then ends it and closes its tab', async () => {
+    updateEditorTabs('p1', () => ({ open: ['t2'], preview: null }));
+    const ended = vi.fn();
+    const off = onTerminalEnded(ended);
+    renderSidebar();
+    fireEvent.click(within(alphaList()).getByRole('button', { name: 'Encerrar terminal Bia' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('que está trabalhando agora');
+    expect(apiMock.remove).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Encerrar terminal' }));
+    await waitFor(() => expect(apiMock.remove).toHaveBeenCalledWith('t2'));
+    await waitFor(() => expect(ended).toHaveBeenCalledWith('p1', 't2'));
+    expect(getEditorTabs('p1')).toEqual({ open: [], preview: null });
+    off();
+  });
+
+  it('cancelling the confirmation leaves the terminal alone', async () => {
+    renderSidebar();
+    fireEvent.click(within(alphaList()).getByRole('button', { name: 'Encerrar terminal Bia' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }));
+    expect(apiMock.remove).not.toHaveBeenCalled();
+  });
+
+  it('a terminal whose agent finished ends without asking', async () => {
+    state.openTabs = state.openTabs.map((t) => (t.id === 't2' ? { ...t, state: 'idle' as const } : t));
+    renderSidebar();
+    fireEvent.click(within(alphaList()).getByRole('button', { name: 'Encerrar terminal Bia' }));
+    await waitFor(() => expect(apiMock.remove).toHaveBeenCalledWith('t2'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows the error when the terminal could not be ended', async () => {
+    apiMock.remove.mockRejectedValueOnce(new Error('offline'));
+    state.openTabs = state.openTabs.map((t) => (t.id === 't2' ? { ...t, state: 'idle' as const } : t));
+    renderSidebar();
+    fireEvent.click(within(alphaList()).getByRole('button', { name: 'Encerrar terminal Bia' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Erro ao encerrar o terminal');
+  });
+
+  it('has no ✕ without permission to close terminals', () => {
+    auth.canDeleteTerminals = false;
+    renderSidebar();
+    expect(within(alphaList()).queryByRole('button', { name: /Encerrar terminal/ })).toBeNull();
   });
 });

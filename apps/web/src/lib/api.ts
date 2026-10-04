@@ -1,4 +1,4 @@
-import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView } from './types';
+import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -44,7 +44,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 function errorFrom(status: number, data: unknown): ApiError {
   const d = (data ?? {}) as { error?: string; code?: string; issues?: unknown };
-  if (status === 401) window.dispatchEvent(new CustomEvent('termhub:unauthorized'));
+  // A wrong password/code while re-authenticating is a 401 too, but the session is still fine.
+  if (status === 401 && d.code !== 'REAUTH_FAILED') window.dispatchEvent(new CustomEvent('termhub:unauthorized'));
+  // The account asked to be deleted (maybe from another device): the auth layer refetches /auth/me and shows the gate.
+  if (status === 403 && d.code === 'ACCOUNT_PENDING_DELETION') window.dispatchEvent(new CustomEvent('termhub:pending-deletion'));
   return new ApiError(status, d.error ?? `Erro ${status}`, d.code, d.issues);
 }
 
@@ -108,6 +111,16 @@ export const api = {
     setCustomCityLink: (short_url: string) => request<CityLink>('PUT', '/auth/me/city-link', { short_url }),
     /** back to the partner link */
     clearCustomCityLink: () => request<CityLink>('DELETE', '/auth/me/city-link/custom'),
+  },
+  /** The person's own account (TER-720). Only `deletion` and its DELETE answer while a deletion is pending. */
+  account: {
+    deletion: () => request<AccountDeletionStatus>('GET', '/account/deletion'),
+    /** e-mails a 6-digit code that confirms the request; 429 RATE_LIMITED, 502 SEND_FAILED */
+    sendDeletionCode: () => request<{ ok: true; ttl_minutes: number }>('POST', '/account/deletion/code'),
+    /** deactivates the account and schedules its deletion. Ends every session, this one included.
+     *  401 REAUTH_FAILED (wrong password/code), 429 LOCKED, 409 LAST_ADMIN. */
+    requestDeletion: (reauth: { password: string } | { code: string }) => request<AccountDeletionStatus>('POST', '/account/deletion', reauth),
+    cancelDeletion: () => request<AccountDeletionStatus>('DELETE', '/account/deletion'),
   },
   machines: {
     list: () => request<{ machines: Machine[]; latest_agent_version: string | null }>('GET', '/machines'),
@@ -245,14 +258,14 @@ export const api = {
    *  CHAT_AGENT_TOO_OLD when the host cannot run it, 409 CHAT_ARCHIVED or CHAT_BUSY while a reset is
    *  under way (each with its pt-BR sentence); 409 ATTACHMENT_UNAVAILABLE when an id is not this
    *  conversation's, already sent or invalid (the text and chips stay in the box); 409 REPLY_UNAVAILABLE
-   *  when the quoted message (`replyToId`, TER-447) is gone or empty. `text` may be empty
-   *  when there is at least one attachment. */
-  sendChatMessage: (text: string, projectId?: string | null, attachmentIds?: string[], replyToId?: string) =>
+   *  when the quoted message (`reply`, TER-447: a message id) or card (TER-849) is gone or empty. `text`
+   *  may be empty when there is at least one attachment. */
+  sendChatMessage: (text: string, projectId?: string | null, attachmentIds?: string[], reply?: string | { kind: ReplyCardKind; id: string }) =>
     request<{ conversation_id: string; user_message_id: string; assistant_message_id: string }>('POST', '/chat/messages', {
       text,
       ...(projectId ? { project_id: projectId } : {}),
       ...(attachmentIds && attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
-      ...(replyToId ? { reply_to_id: replyToId } : {}),
+      ...(typeof reply === 'string' ? { reply_to_id: reply } : reply ? { reply_to_card: reply } : {}),
       wait: false,
     }),
   /** "Nova conversa": archives the scope's active conversation (the transcript is kept) and answers the
@@ -423,7 +436,7 @@ export const api = {
     resendInvite: (id: string) => request<InviteResult>('POST', `/users/${id}/invite`),
     inviteFromWaitlist: (input: { ids: string[]; role_id: string }) => request<{ results: WaitlistInviteResult[] }>('POST', '/users/invite-from-waitlist', input),
     setRole: (id: string, role_id: string) => request<{ user: User }>('PATCH', `/users/${id}`, { role_id }),
-    remove: (id: string) => request<{ ok: true; access_removed: boolean }>('DELETE', `/users/${id}`),
+    remove: (id: string) => request<{ ok: true }>('DELETE', `/users/${id}`),
     /** Store-review switch (Settings → Usuários → Revisão). `days: null` turns it off. 400 REVIEW_ADMIN
      *  ("A conta de revisão não pode ser admin.") when the target is an admin. `revoked_devices` is how
      *  many of the target's active devices were actually revoked (a failing one is skipped, not fatal). */

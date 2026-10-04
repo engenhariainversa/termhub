@@ -29,9 +29,10 @@ function travel(t: number): number {
 }
 
 /**
- * WhatsApp's drag-to-answer around one message row (TER-447). The bubble follows the finger to the
- * right on the UI thread; a reply icon grows in behind it; crossing the threshold gives one light tap,
- * and a release past it calls `onReply`. The recognizer only starts on a clear move to the right and
+ * WhatsApp's drag-to-answer around one row of the thread: a message (TER-447), or a confirmation or
+ * a tab's question card (TER-849). The row follows the finger to the right on the UI thread; a reply
+ * icon grows in behind it; crossing the threshold gives one light tap, and a release past it calls
+ * `onReply`. The recognizer only starts on a clear move to the right and
  * gives up on a vertical one, so the thread's own scroll wins every vertical drag; a touch that begins
  * at the screen's left edge is left to the system's back gesture. A drag cannot be made with VoiceOver
  * or TalkBack, so the row also offers "Responder" as an accessibility action.

@@ -80,7 +80,7 @@ export interface WaitEvent {
 }
 
 export type WaitOutcome =
-  | { action: 'drop'; reason: 'session_start_during_turn' | 'post_tool_after_interrupt' | 'subagent_during_wait' }
+  | { action: 'drop'; reason: 'session_start_during_turn' | 'post_tool_after_interrupt' | 'subagent_during_wait' | 'reminder_during_background' }
   /**
    * `carry`: the person had seen the wait this one follows. `born`: a wait with nothing new in it,
    * seen from its first moment. `none`: a request the person has not seen.
@@ -148,9 +148,16 @@ export function decideWait(current: WaitCurrent, history: HistoryRow[], event: W
   // turn (a Stop with background tasks), asked a question or opened a permission dialog (TER-615).
   // The tab is where its main thread is: that wait is still the person's to answer, and nothing the
   // main thread sends later would take the tab out of working again. Only the subagent whose own
-  // prompt the tab waits on is back at work when it calls a tool: the person approved it.
-  if (event.kind === 'working' && event.subagent && isWait(current.state) && !waitOwnedBy(history, event.subagent)) {
+  // prompt the tab waits on is back at work when it calls a tool: the person approved it. A main thread
+  // that waits on its own background work (TER-644) stays there too: those tool calls are that work.
+  if (event.kind === 'working' && event.subagent && (isWait(current.state) || current.state === 'waiting_background') && !waitOwnedBy(history, event.subagent)) {
     return { action: 'drop', reason: 'subagent_during_wait' };
+  }
+
+  // Claude's idle_prompt fires a minute after any Stop, also one that left background work running. That
+  // turn did not end in a question: the tab still waits on its work, not on the person (TER-644).
+  if (event.continuesWait && event.keepsWaitText && event.kind === 'waiting_input' && current.state === 'waiting_background') {
+    return { action: 'drop', reason: 'reminder_during_background' };
   }
 
   // Cursor's launch with a prompt fires sessionStart and beforeSubmitPrompt together. When the

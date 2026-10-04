@@ -38,6 +38,12 @@ export function ticketLinkJson(
   };
 }
 
+/** The provider's own id, from the sync key: the issue number (GitHub), the issue id (Linear), the key (Jira). */
+export function providerIdOf(t: { provider: TicketLink['provider']; sync_key: string }): string {
+  if (t.provider === 'github') return t.sync_key.split('#').pop() ?? t.sync_key;
+  return t.sync_key.slice(t.sync_key.indexOf(':') + 1);
+}
+
 const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
 
 /** Reads links from both releases; a legacy GitHub `#12` becomes `owner/repo#12` from its scope. */

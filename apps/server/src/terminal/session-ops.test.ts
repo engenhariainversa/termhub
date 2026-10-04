@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 
-const { agentRpc, requireAgentVersion, runOnMachine } = vi.hoisted(() => ({
+const { agentRpc, requireAgentVersion, requireTranscriptCapable, runOnMachine } = vi.hoisted(() => ({
   agentRpc: vi.fn(),
   requireAgentVersion: vi.fn(),
+  requireTranscriptCapable: vi.fn(),
   runOnMachine: vi.fn(),
 }));
-vi.mock('../agent/errors.js', () => ({ agentRpc, requireAgentVersion }));
+vi.mock('../agent/errors.js', () => ({ agentRpc, requireAgentVersion, requireTranscriptCapable }));
 vi.mock('./machine-exec.js', async (orig) => ({ ...(await orig<typeof import('./machine-exec.js')>()), runOnMachine }));
 // Deterministic buffer name so the paste tests can assert the exact script instead of a pattern.
 // A plain function, not vi.fn(): beforeEach's resetAllMocks() would otherwise wipe its return value.
@@ -66,6 +67,19 @@ describe('agent machines', () => {
     expect(requireAgentVersion).toHaveBeenCalledWith(expect.anything(), TERMINAL_RPC_MIN_AGENT_VERSION);
     await sendKeyToSession(machine('agent'), 's1', 'C-c');
     expect(agentRpc).toHaveBeenCalledWith(expect.anything(), 'tmux.sendKey', { session: 's1', key: 'C-c' });
+  });
+
+  it('sends Shift+Tab only to an agent that claims the transcript capability', async () => {
+    agentRpc.mockResolvedValue({ sent: true });
+    requireTranscriptCapable.mockReset();
+    await sendKeyToSession(machine('agent'), 's1', 'Enter');
+    expect(requireTranscriptCapable).not.toHaveBeenCalled();
+    requireTranscriptCapable.mockImplementationOnce(() => {
+      throw new HttpError(409, 'Atualize o agente', 'AGENT_OUTDATED');
+    });
+    agentRpc.mockClear();
+    await expect(sendKeyToSession(machine('agent'), 's1', 'BTab')).rejects.toMatchObject({ code: 'AGENT_OUTDATED' });
+    expect(agentRpc).not.toHaveBeenCalled();
   });
 
   it('requests paste and checks the higher, paste-only version floor when opts.paste is true', async () => {

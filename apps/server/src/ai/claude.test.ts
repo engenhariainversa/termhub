@@ -26,6 +26,15 @@ describe('parseUsageBody', () => {
     expect(fable.resets_at).toBe(new Date('2026-09-21T23:59:59.383855+00:00').toISOString());
   });
 
+  it('marks the windows that cap one model with its family, and only those (TER-837)', () => {
+    expect(parseUsageBody(body).map((w) => w.model)).toEqual([undefined, undefined, undefined, 'fable']);
+    const windows = parseUsageBody({
+      seven_day_opus: { utilization: 40, resets_at: null },
+      limits: [{ kind: 'weekly_scoped', group: 'weekly', percent: 30, scope: { model: { display_name: 'Opus 5.5' } } }],
+    });
+    expect(windows.map((w) => [w.key, w.model])).toEqual([['seven_day_opus', 'opus'], ['limit:weekly_scoped:Opus 5.5', 'opus']]);
+  });
+
   it('does not duplicate unscoped limits already covered by the top-level windows', () => {
     const windows = parseUsageBody(body);
     expect(windows.filter((w) => w.key.startsWith('limit:'))).toHaveLength(1);

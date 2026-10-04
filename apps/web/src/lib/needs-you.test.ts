@@ -112,6 +112,12 @@ describe('tabDotClass', () => {
     expect(tabDotClass(true, tab({ state: 'waiting_permission', state_at: T1 }))).toContain('bg-attention');
   });
 
+  it('is neutral, never orange, while the agent waits on its own background work (TER-644)', () => {
+    expect(tabNeedsYou(tab({ state: 'waiting_background', state_at: T1 }))).toBe(false);
+    expect(tabDotClass(true, tab({ state: 'waiting_background', state_at: T1 }))).toBe('bg-fg-muted');
+    expect(tabDotClass(false, tab({ state: 'waiting_background', state_at: T1 }))).toBe('bg-fg-dim');
+  });
+
   it('is not orange once the tab has been seen', () => {
     expect(tabDotClass(true, tab({ state: 'waiting_input', state_at: T1, state_seen_at: T1 }))).toBe('bg-ok');
   });

@@ -58,6 +58,30 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TicketsRepository (Postgr
     expect(await repo.pruneMissing(projectId, { integration_id: integ, scope: 'acme/api' }, ['github:acme/api#1'], true)).toBe(1);
   });
 
+  it('an imported ticket that left its source is listed again only once it comes back (TER-718)', async () => {
+    await repo.upsertMany(projectId, [t(5, 'acme/api')]);
+    const five = (await repo.listByProject(projectId)).find((x) => x.key === 'acme/api#5')!;
+    await repo.linkTask(five.id, `task-${five.id}`);
+    const src = { integration_id: integ, scope: 'acme/api' };
+    // pruneMissing keeps it (imported); listLeftImported finds it, not the ticket still in the source
+    expect(await repo.pruneMissing(projectId, src, ['github:acme/api#1'], false)).toBe(0);
+    expect((await repo.listLeftImported(projectId, src, ['github:acme/api#1'], false, 50)).map((x) => x.key)).toEqual(['acme/api#5']);
+
+    const marked = await repo.markLeftSource(five.id, { key: 'acme/api#5', title: 'Issue 5', description: null, url: 'u5', state: 'closed', status: 'done', meta: {} });
+    expect(marked).toMatchObject({ state: 'closed', status: 'done', task_id: `task-${five.id}` });
+    expect(marked.left_source_at).not.toBeNull();
+    expect((await repo.listByProject(projectId)).map((x) => x.key)).not.toContain('acme/api#5');
+    expect((await repo.listByProject(projectId, { include_left: true })).map((x) => x.key)).toContain('acme/api#5');
+    expect(await repo.listLeftImported(projectId, src, ['github:acme/api#1'], false, 50)).toEqual([]);
+    expect((await repo.findByKeyish([projectId], { key: 'acme/api#5' })).map((x) => x.state)).toEqual(['closed']);
+
+    // reopened: the sync brings it back and the mark goes
+    await repo.upsertMany(projectId, [t(5, 'acme/api')]);
+    const back = (await repo.listByProject(projectId)).find((x) => x.key === 'acme/api#5');
+    expect(back).toMatchObject({ state: 'open', left_source_at: null });
+    await db.ticket.deleteMany({ where: { id: five.id } });
+  });
+
   it('findByIdsForOwner resolves only tickets whose project belongs to that owner', async () => {
     const [mine] = await repo.listByProject(projectId);
     const otherOwnerId = newId();

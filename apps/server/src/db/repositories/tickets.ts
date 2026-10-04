@@ -26,9 +26,15 @@ export interface TicketUpsert {
 export class TicketsRepository {
   constructor(private db: PrismaClient) {}
 
-  async listByProject(projectId: string, filter: { integration_id?: string; scope?: string } = {}): Promise<Ticket[]> {
+  /** The open tickets: an imported one its source no longer returns (`left_source_at`) only with `include_left`. */
+  async listByProject(projectId: string, filter: { integration_id?: string; scope?: string; include_left?: boolean } = {}): Promise<Ticket[]> {
     const rows = await this.db.ticket.findMany({
-      where: { projectId, ...(filter.integration_id ? { integrationId: filter.integration_id } : {}), ...(filter.scope ? { scope: filter.scope } : {}) },
+      where: {
+        projectId,
+        ...(filter.integration_id ? { integrationId: filter.integration_id } : {}),
+        ...(filter.scope ? { scope: filter.scope } : {}),
+        ...(filter.include_left ? {} : { leftSourceAt: null }),
+      },
       orderBy: [{ status: 'asc' }, { syncedAt: 'desc' }],
     });
     return rows.map(mapTicket);
@@ -82,6 +88,8 @@ export class TicketsRepository {
         status: t.status,
         meta: t.meta as object,
         syncedAt: now,
+        // back in its source (reopened, or in the filter again): it is open there once more
+        leftSourceAt: null,
       };
       if (!existing) {
         await this.db.ticket.create({ data: { id: newId(), projectId, syncKey: t.sync_key, ...data } });
@@ -117,6 +125,44 @@ export class TicketsRepository {
       },
     });
     return r.count;
+  }
+
+  /**
+   * Imported tickets of this source that it no longer returns and that are not marked yet (TER-718):
+   * the import keeps their row, so pruneMissing never touches them. Oldest sync first.
+   */
+  async listLeftImported(projectId: string, source: TicketSource, keepSyncKeys: string[], legacyNullScope: boolean, take: number): Promise<Ticket[]> {
+    const rows = await this.db.ticket.findMany({
+      where: {
+        projectId,
+        integrationId: source.integration_id,
+        taskId: { not: null },
+        leftSourceAt: null,
+        syncKey: { notIn: keepSyncKeys },
+        ...(legacyNullScope ? { OR: [{ scope: source.scope }, { scope: null }] } : { scope: source.scope }),
+      },
+      orderBy: { syncedAt: 'asc' },
+      take,
+    });
+    return rows.map(mapTicket);
+  }
+
+  /**
+   * Marks a ticket as gone from its source, with what the provider says of it now when it answered
+   * (`fresh`; its sync key and source stay). Without `fresh`, the last known fields stay.
+   */
+  async markLeftSource(ticketId: string, fresh?: Omit<TicketUpsert, 'integration_id' | 'scope' | 'sync_key' | 'provider'>): Promise<Ticket> {
+    const now = new Date();
+    const row = await this.db.ticket.update({
+      where: { id: ticketId },
+      data: {
+        leftSourceAt: now,
+        ...(fresh
+          ? { key: fresh.key, title: fresh.title, description: fresh.description, url: fresh.url, state: fresh.state, status: fresh.status, meta: fresh.meta as object, syncedAt: now }
+          : {}),
+      },
+    });
+    return mapTicket(row);
   }
 
   /** A source removed from the setup: its non-imported tickets go; imported cards keep their link. */

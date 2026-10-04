@@ -1,6 +1,6 @@
 import type { Repositories } from '../db/repositories/index.js';
 import { getProvider, type IntegrationProvider } from '../integrations/index.js';
-import { ticketLinkJson } from '../integrations/ticket-link.js';
+import { providerIdOf, ticketLinkJson } from '../integrations/ticket-link.js';
 import { sourceIdentity, type TicketSource } from './schema.js';
 
 export interface SourceSyncResult {
@@ -11,6 +11,8 @@ export interface SourceSyncResult {
   created?: number;
   updated?: number;
   removed?: number;
+  /** imported tickets the source stopped returning (closed, or out of the filter), marked in this run */
+  left?: number;
   truncated?: boolean;
   error?: string;
 }
@@ -25,6 +27,9 @@ const lastByProject = new Map<string, SyncResult>();
 export const lastSync = (projectId: string): SyncResult | null => lastByProject.get(projectId) ?? null;
 /** Drops the project's last sync (setup saved: its sources may have changed), so the next sync is not throttled. */
 export const forgetSync = (projectId: string): void => void lastByProject.delete(projectId);
+
+/** At most this many imported tickets that left their source are looked up per source and run; the rest wait for the next one. */
+export const LEFT_LOOKUPS_PER_SYNC = 50;
 
 /** A scheduled run of one source: replaces that source's entry in the project's last sync (or starts one). */
 function recordSource(projectId: string, r: SourceSyncResult): void {
@@ -73,12 +78,54 @@ export async function syncSource(repos: Repositories, projectId: string, source:
       const t = page.tickets.find((x) => x.sync_key === linked.sync_key);
       if (t && linked.task_id) await repos.tasks.setExternalRef(linked.task_id, ticketLinkJson({ ...t, updated_at: t.updatedAt }, where));
     }
+    const keep = page.tickets.map((t) => t.sync_key);
     // tickets that left the source (filter, closed) and were never imported leave the list
-    const removed = await repos.tickets.pruneMissing(projectId, where, page.tickets.map((t) => t.sync_key), legacyNullScope);
-    return { ...base, fetched: page.tickets.length, created: r.created, updated: r.updated, removed, truncated: page.truncated };
+    const removed = await repos.tickets.pruneMissing(projectId, where, keep, legacyNullScope);
+    // imported ones keep their row and card; a truncated page cannot tell which ones left
+    const left = page.truncated ? 0 : await markLeftImported(repos, projectId, source, secret, integration.config, keep, legacyNullScope);
+    return { ...base, fetched: page.tickets.length, created: r.created, updated: r.updated, removed, left, truncated: page.truncated };
   } catch (e) {
     return { ...base, error: `Falha ao gravar os tickets: ${(e as Error).message}` };
   }
+}
+
+/**
+ * Imported tickets the source no longer returns (TER-718): the list only brings open ones, so a closed
+ * ticket would otherwise read as open for ever, on its row and on its card. Each one is asked about once
+ * (its real state goes to the row and the card's link) and marked, so later syncs skip it and the
+ * ticket lists leave it out. A lookup that fails still marks it, with the last known state.
+ */
+async function markLeftImported(
+  repos: Repositories,
+  projectId: string,
+  source: TicketSource,
+  secret: string,
+  config: Record<string, unknown>,
+  keep: string[],
+  legacyNullScope: boolean,
+): Promise<number> {
+  const where = { integration_id: source.integration_id, scope: source.scope };
+  const gone = await repos.tickets.listLeftImported(projectId, where, keep, legacyNullScope, LEFT_LOOKUPS_PER_SYNC);
+  for (const t of gone) {
+    const fresh = await getProvider(source.provider)
+      .getTicket(secret, config, { provider_id: providerIdOf(t), key: t.key, scope: source.scope })
+      .catch(() => null);
+    if (!fresh) {
+      await repos.tickets.markLeftSource(t.id);
+      continue;
+    }
+    await repos.tickets.markLeftSource(t.id, {
+      key: fresh.key,
+      title: fresh.title,
+      description: fresh.description,
+      url: fresh.url,
+      state: fresh.state,
+      status: fresh.status,
+      meta: { ...(fresh.meta ?? {}), updated_at: fresh.updatedAt, scope: source.scope },
+    });
+    if (t.task_id) await repos.tasks.setExternalRef(t.task_id, ticketLinkJson({ ...fresh, updated_at: fresh.updatedAt }, where));
+  }
+  return gone.length;
 }
 
 /** Every source of the project, one after the other; one failing source does not stop the rest. */

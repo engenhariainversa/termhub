@@ -40,6 +40,25 @@ function adfToText(node: unknown): string {
   return n.type === 'paragraph' || n.type === 'heading' || n.type === 'listItem' ? inner + '\n' : inner;
 }
 
+type Issue = { id: string; key: string; fields: { summary: string; description: unknown; updated: string; status: { name: string; statusCategory: { key: string } }; priority?: { name: string } | null; assignee?: { displayName: string } | null; labels?: string[] } };
+const FIELDS = ['summary', 'description', 'updated', 'status', 'priority', 'assignee', 'labels'];
+
+function toTicket(config: Record<string, unknown>, i: Issue): ExternalTicket {
+  return {
+    sync_key: `jira:${i.key}`,
+    provider: 'jira',
+    provider_id: i.id,
+    key: i.key,
+    title: i.fields.summary,
+    description: i.fields.description ? adfToText(i.fields.description).trim() || null : null,
+    url: `${base(config)}/browse/${i.key}`,
+    state: i.fields.status.name,
+    status: mapCategory(i.fields.status.statusCategory.key),
+    updatedAt: i.fields.updated,
+    meta: { priority: i.fields.priority?.name ?? null, assignee: i.fields.assignee?.displayName ?? null, labels: i.fields.labels ?? [] },
+  };
+}
+
 export const jiraProvider: TicketProvider = {
   provider: 'jira',
 
@@ -61,30 +80,21 @@ export const jiraProvider: TicketProvider = {
     const parts = [`project = "${source.scope}"`, 'statusCategory != Done'];
     if (source.filter) parts.push(`(${source.filter})`);
     const jql = parts.join(' AND ') + ' ORDER BY updated DESC';
-    type Issue = { id: string; key: string; fields: { summary: string; description: unknown; updated: string; status: { name: string; statusCategory: { key: string } }; priority?: { name: string } | null; assignee?: { displayName: string } | null; labels?: string[] } };
     const { items, truncated } = await collectPages<Issue, string>(async (token) => {
       const data = await jira<{ issues: Issue[]; nextPageToken?: string; isLast?: boolean }>(config, secret, '/rest/api/3/search/jql', {
         method: 'POST',
-        body: JSON.stringify({ jql, maxResults: 100, ...(token ? { nextPageToken: token } : {}), fields: ['summary', 'description', 'updated', 'status', 'priority', 'assignee', 'labels'] }),
+        body: JSON.stringify({ jql, maxResults: 100, ...(token ? { nextPageToken: token } : {}), fields: FIELDS }),
       });
       return { items: data.issues, next: data.isLast === true ? null : (data.nextPageToken ?? null) };
     });
     return {
       truncated,
-      tickets: items.map<ExternalTicket>((i) => ({
-        sync_key: `jira:${i.key}`,
-        provider: 'jira',
-        provider_id: i.id,
-        key: i.key,
-        title: i.fields.summary,
-        description: i.fields.description ? adfToText(i.fields.description).trim() || null : null,
-        url: `${base(config)}/browse/${i.key}`,
-        state: i.fields.status.name,
-        status: mapCategory(i.fields.status.statusCategory.key),
-        updatedAt: i.fields.updated,
-        meta: { priority: i.fields.priority?.name ?? null, assignee: i.fields.assignee?.displayName ?? null, labels: i.fields.labels ?? [] },
-      })),
+      tickets: items.map((i) => toTicket(config, i)),
     };
+  },
+
+  async getTicket(secret, config, ticket) {
+    return toTicket(config, await jira<Issue>(config, secret, `/rest/api/3/issue/${encodeURIComponent(ticket.provider_id)}?fields=${FIELDS.join(',')}`));
   },
 
   async updateStatus(secret, config, ticket, status) {

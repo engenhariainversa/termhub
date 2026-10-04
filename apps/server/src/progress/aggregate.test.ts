@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PullRequestBadge } from '@termhub/mobile-api';
+import { agentOnCard, progressResponse, type PullRequestBadge } from '@termhub/mobile-api';
 import { aggregateCard, aggregateEpic, selectEpics, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
 
 const at = (min: number) => new Date(Date.UTC(2026, 8, 27, 12, 0) + min * 60_000);
@@ -107,5 +107,18 @@ describe('selectEpics', () => {
   });
   it('all keeps every epic with cards, finished ones last', () => {
     expect(selectEpics([finished, todoOnly, doing, empty], 'all').map((e) => e.id)).toEqual(['a', 'b', 'd']);
+  });
+});
+
+describe('an agent waiting on its own background work (TER-644)', () => {
+  it('is sent as working with background: true, so an app that predates the state still parses it, and counts as working', () => {
+    const e = aggregateEpic(epic([card({ id: '2', tab: tab('t1', 'waiting_background') }), card({ id: '3', tab: tab('t2', 'working') })]), true);
+    expect(e.cards[0]!.agents![0]).toMatchObject({ state: 'working', background: true, needs_you: false });
+    expect(e.cards[1]!.agents![0]).toMatchObject({ state: 'working', background: false });
+    expect(e.agents).toEqual({ working: 2, needs_you: 0, idle: 0 });
+    // the shared contract accepts it, and an older payload without the flag reads as false
+    expect(() => progressResponse.parse({ epics: [e], generated_at: at(0).toISOString() })).not.toThrow();
+    const { background: _b, ...older } = e.cards[0]!.agents![0]!;
+    expect(agentOnCard.parse(older).background).toBe(false);
   });
 });

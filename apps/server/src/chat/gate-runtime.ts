@@ -102,10 +102,8 @@ const REFUSED: GateOutcome = {
  * have changed their mind, and a permanent refusal would leave them no way to say so. A question the
  * user never answered (`expired`) is not a "no" at all, and is simply asked again.
  *
- * Scoping this to the assistant turn would be the better rule, since the retry is a within-turn
- * behaviour, but it needs the runtime to know which message is current and a call carrying only a
- * token has no such plumbing. A clock window is cruder and entirely predictable, which is the right
- * trade until that plumbing exists.
+ * The window is also cut short by the person writing again (`denialInForce`, TER-530): a message they
+ * typed after the "no" is a new request, and the same call then asks again instead of refusing.
  */
 const DENIAL_HOLDS_MS = 15 * 60 * 1000;
 
@@ -124,12 +122,17 @@ const DENIAL_HOLDS_MS = 15 * 60 * 1000;
  */
 const APPROVAL_HOLDS_MS = ACTION_TTL_MS;
 
-/** The user's "no" while it still holds. An older one is history: the same proposal is asked again. */
+/** The user's "no" while it still holds. An older one is history: the same proposal is asked again.
+ * So is one the person has written after (TER-530): the retry a denial guards against is the model's
+ * own, within the turn it was told no; once the person types again — "pode fechar as janelas" — the
+ * same call is their request, and it gets a fresh card instead of a refusal they never gave. */
 async function denialInForce(ctx: ControlContext, conversationId: string, key: string): Promise<ChatAction | undefined> {
   const row = await ctx.repos.chatActions.findDeniedByKey(conversationId, key);
   if (!row) return undefined;
   const decidedAt = Date.parse(row.decided_at ?? row.created_at);
-  return Number.isFinite(decidedAt) && Date.now() - decidedAt < DENIAL_HOLDS_MS ? row : undefined;
+  if (!(Number.isFinite(decidedAt) && Date.now() - decidedAt < DENIAL_HOLDS_MS)) return undefined;
+  const typedAt = Date.parse((await ctx.repos.chat.lastTypedAt(conversationId)) ?? '');
+  return Number.isFinite(typedAt) && typedAt > decidedAt ? undefined : row;
 }
 
 /** The mirror of `denialInForce` for a "yes": whether this approval is still the user's current
@@ -416,7 +419,7 @@ async function executeGranted(ctx: ControlContext, call: GatedCall, conversation
  * start with `!` into a `!` command by the time the TUI reads it. `CONTROL_CHARS` is the same check
  * `checkPrompt` uses for a prompt's own text; only `\n` (a pasted multi-line prompt) is allowed. Both
  * checks read the arguments alone, before any read, and the tab must separately report an agent at
- * work (`working` or `waiting_input`, from the monitor hooks). A tab that never reported (a shell), an
+ * work (`working`, `waiting_background` or `waiting_input`, from the monitor hooks). A tab that never reported (a shell), an
  * agent that ended (`idle`) or errored falls back to a normal question. Two readings deliberately still
  * go through the grant: a tab that does not resolve (missing, or somebody else's) and one waiting on a
  * permission, so `execute()` records them as the `TAB_GONE` / `WAITING_PERMISSION` locks — the model
@@ -429,7 +432,7 @@ const textOutsideGrant = (args: Record<string, unknown>) =>
 async function grantCoversTab(ctx: ControlContext, tabId: string): Promise<boolean> {
   const [tab] = await ctx.repos.tabs.findByIdsForOwner([tabId], ctx.scope.user.id);
   if (!tab) return true; // recorded as TAB_GONE by `execute()`
-  return tab.state === 'working' || tab.state === 'waiting_input' || tab.state === 'waiting_permission';
+  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'waiting_permission';
 }
 
 /**
@@ -502,7 +505,7 @@ async function standingGrantCovering(ctx: ControlContext, call: GatedCall): Prom
   if (kind === 'terminal' && textOutsideGrant(call.args)) return null;
   const target = await standingProjectOf(ctx.repos, ctx.scope.user.id, kind, call.tool, call.args);
   if (!target) return null;
-  if (kind === 'close_tab' && (target.tab?.state === 'working' || target.tab?.state === 'waiting_permission')) return null;
+  if (kind === 'close_tab' && (target.tab?.state === 'working' || target.tab?.state === 'waiting_background' || target.tab?.state === 'waiting_permission')) return null;
   if (kind === 'terminal' && target.tab?.state === 'waiting_permission') return null;
   const grant = await ctx.repos.chatStandingGrants.findActive(ctx.scope.user.id, target.projectId, kind);
   if (!grant) return null;
@@ -541,7 +544,7 @@ async function idleDespiteWorking(ctx: ControlContext, tab: Tab): Promise<boolea
  * or null: what the chat does without asking for every user who did not restrict it in "Permissões do
  * chat". The standing grant's resolution and guards, owner-scoped, and stricter where a default reaches
  * further than a grant someone chose:
- * - terminal: an agent at work in the tab (`working` or `waiting_input`) — typed text on a bare shell is
+ * - terminal: an agent at work in the tab (`working`, `waiting_background` or `waiting_input`) — typed text on a bare shell is
  *   `run_command` under another name — never `!`/control characters, never a permission (state or screen);
  * - close_tab: a stopped tab (`STOPPED_TAB_STATES`), or a `working` one the screen shows idle;
  * - link_tab_task: the tab resolves (the tool checks the card itself).
@@ -561,7 +564,7 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
     if (!target) return null;
     tab = target.tab;
   }
-  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_input') return null;
+  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input') return null;
   if (kind === 'close_tab' && !(tab && (STOPPED_TAB_STATES.has(tab.state ?? '') || (tab.state === 'working' && (await idleDespiteWorking(ctx, tab)))))) return null;
   const grantId = defaultGrantId(ctx.scope.user.id, kind);
   const used = await ctx.repos.chatActions.countByGrantSince(grantId, new Date(Date.now() - STANDING_BUDGET_WINDOW_MS));

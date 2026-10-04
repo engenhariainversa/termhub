@@ -48,7 +48,8 @@ export const TabState = {
   waiting_input: 'waiting_input',
   waiting_permission: 'waiting_permission',
   idle: 'idle',
-  error: 'error'
+  error: 'error',
+  waiting_background: 'waiting_background'
 } as const
 
 export type TabState = (typeof TabState)[keyof typeof TabState]

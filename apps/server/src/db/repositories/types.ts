@@ -23,7 +23,7 @@ export type TaskType = 'epic' | 'story' | 'task' | 'subtask' | 'bug' | 'spike';
 export type ColumnCategory = Exclude<TaskStatus, 'backlog'>;
 export type TabKind = 'terminal' | 'simulator';
 /** Monitor state of the tool running in a tab (see monitor/state.ts). */
-export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error';
+export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background';
 /** What a working agent is doing, from the tool it is about to call (monitor/activity.ts). */
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 export const TAB_ACTIVITIES: readonly TabActivity[] = ['coding', 'reading', 'researching', 'planning', 'terminal', 'working'];
@@ -56,6 +56,10 @@ export interface User {
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until */
   review_enabled_by: string | null;
+  /** self-service deletion (TER-720): when it was asked; the account is deactivated while this is set */
+  deletion_requested_at: string | null;
+  /** when the deletion job removes the account for good; null = no deletion pending */
+  deletion_scheduled_at: string | null;
   created_at: string;
 }
 
@@ -257,6 +261,8 @@ export interface Ticket {
   status: TaskStatus;
   meta: Record<string, unknown>;
   task_id: string | null;
+  /** an imported ticket its source no longer returns; null while it is open there */
+  left_source_at: string | null;
   synced_at: string;
   created_at: string;
 }
@@ -286,6 +292,8 @@ export const mapUser = (u: PrismaUser): User => ({
   last_login_at: u.lastLoginAt?.toISOString() ?? null,
   review_enabled_until: u.reviewEnabledUntil?.toISOString() ?? null,
   review_enabled_by: u.reviewEnabledBy,
+  deletion_requested_at: u.deletionRequestedAt?.toISOString() ?? null,
+  deletion_scheduled_at: u.deletionScheduledAt?.toISOString() ?? null,
   created_at: u.createdAt.toISOString(),
 });
 
@@ -421,6 +429,7 @@ export const mapTicket = (t: PrismaTicket): Ticket => ({
   status: t.status,
   meta: (t.meta ?? {}) as Record<string, unknown>,
   task_id: t.taskId,
+  left_source_at: t.leftSourceAt?.toISOString() ?? null,
   synced_at: t.syncedAt.toISOString(),
   created_at: t.createdAt.toISOString(),
 });

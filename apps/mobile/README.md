@@ -147,6 +147,15 @@ The script bakes in the same `EXPO_PUBLIC_*` values as the store builds and runs
 
 Manifests are code-signed: the server holds the app's private key, and `certs/certificate.pem` (public, committed) goes into every build. `expo start` cannot sign development manifests without the private key, so `npm start`, `npm run ios` and `npm run android` set `DISABLE_CODE_SIGNING=1`; the release scripts leave it unset. A development build loads its JS from Metro, not from the OTA server.
 
+## Sessões (a terminal tab as a conversation)
+
+The Chats tab has two segments: "Conversas" (the concierge chat) and "Sessões". Sessões lists the terminal tabs of your projects and opens one that runs Claude Code as a conversation, with no concierge in between (spec `docs/superpowers/specs/2026-10-01-tab-chat-design.md`).
+
+- **What it reads.** The session's own Claude Code transcript, read on the machine by the agent (`transcript.read`, agent **0.15.0** or newer) and turned into items by the server (`apps/server/src/tab-chat/`). Tabs on an older agent show "Atualize o agente desta máquina"; only agent machines and Claude Code tabs open. The tab's state comes from the hooks, as everywhere else.
+- **Nothing is stored.** The server relays the transcript while a phone has the screen open (`GET /api/m/v1/tabs/:id/chat` for a page, `/ws/m/tabs/:id` for live items) and keeps nothing; the app keeps the items in memory only. Neither side logs content.
+- **Writing.** A message is typed into the tab as in the web terminal (no confirmation card). While the tab waits on a permission, sending answers "Responda a pergunta acima antes de enviar uma mensagem": the question card sits at the end of the conversation. While Claude works, the send button interrupts (Escape); a long press still sends. The menu holds `/clear`, `/compact`, "Alternar modo" (Shift+Tab, the mode is read back from the footer) and "Ver tela" (the raw pane). An attachment is saved on the tab's machine and its path goes into the message.
+- **Permissions.** Reading needs `terminals:read`; writing and "Nova sessão" need `terminals:write`.
+
 ## Push notifications
 
 `expo-notifications` (spec §9). The server sends through the Expo Push Service to the token the app registers with `PUT push-token`; `src/services/push.ts` reads that token:
@@ -167,6 +176,17 @@ Delivery to real phones needs credentials on the Expo project, set once with `ea
 Both apps (`dev.termhub.app`) are registered in the Firebase project `apptermhub`; `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) are committed next to `app.json` (they identify the app, they are not secrets). `@react-native-firebase/app` and `@react-native-firebase/analytics` are installed for Firebase App Distribution and Analytics: `src/services/analytics.ts` logs a `screen_view` per expo-router route pattern (`/chat/[id]`, never the resolved id).
 
 On iOS, the Firebase pods are resolved through CocoaPods (`disableSPM`), which needs static frameworks: `expo-build-properties` sets `ios.useFrameworks: "static"` for every pod. AdSupport is linked (`withoutAdIdSupport: false`) so the IDFA can be read after the App Tracking Transparency prompt; the ad signals (`ad_storage`, `ad_user_data`, `ad_personalization`) are denied by default in `firebase.json` and only granted by the person (see "Permission prompts"); screen views (`analytics_storage`) are unchanged.
+
+## Store privacy declarations
+
+**iOS privacy manifest.** `expo.ios.privacyManifests` in `app.json` becomes `ios/termhub/PrivacyInfo.xcprivacy` at prebuild. With static frameworks Apple does not reliably read each pod's own manifest, so the app's manifest repeats every required-reason API the native code uses: the union of the `PrivacyInfo.xcprivacy` files in `node_modules` (React Native, Expo modules) and of the Firebase pods (FirebaseCore, FirebaseCoreInternal, FirebaseInstallations, GoogleUtilities; GoogleAppMeasurement ships no manifest). `src/app-config.test.ts` fails when a native package adds a reason the app does not declare; the Firebase list in that test is kept by hand and must be re-checked when the Firebase iOS SDK moves.
+
+- `NSPrivacyTracking` is `true` (IDFA after ATT) and `NSPrivacyTrackingDomains` lists only `googleadservices.com`, the IDFA ad-conversion endpoint. `app-measurement.com` is deliberately left out: it also carries the first-party screen views, and iOS blocks a tracking domain for everyone who has not allowed ATT.
+- `NSPrivacyCollectedDataTypes` follows the App Privacy draft in `docs/legal/duvidas-advogado.md` (annex B), plus "Other Diagnostic Data" (not linked, analytics) that FirebaseInstallations declares. App Store Connect → App Privacy must say the same.
+
+**Android advertising id.** Firebase Analytics (`play-services-measurement-api`) merges `com.google.android.gms.permission.AD_ID` into the manifest, and the app does use the advertising id for ad measurement once the person agrees. `app.json` declares the permission itself so it does not depend on the merge. Play Console → App content → Advertising ID: "yes", for Analytics and Advertising or marketing.
+
+Any change here is native: bump `expo.version` (see "OTA updates").
 
 ## Manual checklist (design spec §10)
 

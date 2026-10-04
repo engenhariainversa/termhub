@@ -30,6 +30,17 @@ export interface User {
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until; only the user-admin routes (/api/users) send it */
   review_enabled_by?: string | null;
+  /** when the person asked to delete their own account (TER-720); null = no request */
+  deletion_requested_at: string | null;
+  /** when the account is deleted for good; non-null = deletion pending, the account is deactivated */
+  deletion_scheduled_at: string | null;
+}
+
+/** GET/POST/DELETE /api/account/deletion. */
+export interface AccountDeletionStatus {
+  pending: boolean;
+  requested_at: string | null;
+  scheduled_at: string | null;
 }
 
 /** Side effects of an invite (the user row is created regardless). */
@@ -263,8 +274,10 @@ export interface AgentOnCard {
   tab_name: string;
   machine_name: string;
   subtask_ref: string | null;
+  /** the server sends `waiting_background` as `working` with `background: true` (the contract predates it, TER-644) */
   state: TabState | null;
   state_at: string | null;
+  background: boolean;
   needs_you: boolean;
   activity: string | null;
   activity_verb: string | null;
@@ -545,7 +558,8 @@ export interface Tab {
   rate_limited_at: string | null;
 }
 
-export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error';
+/** `waiting_background`: the agent ended its turn while its own subagents, shells or monitors still run (TER-644). */
+export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background';
 
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 
@@ -555,6 +569,7 @@ export const TAB_STATE_LABEL: Record<TabState, string> = {
   waiting_permission: 'pedindo permissão',
   idle: 'terminou',
   error: 'erro',
+  waiting_background: 'aguardando segundo plano',
 };
 
 /** States in which the tool is waiting for the person. */
@@ -897,11 +912,16 @@ export interface ChatMessage {
   reply_to?: ChatReplyRef;
 }
 
-/** What a message answers (TER-447): a snapshot taken when it was sent; `id` is null once the original was deleted. */
+/** The thread's cards a message can answer instead of a message (TER-849). */
+export type ReplyCardKind = 'action' | 'tab_question';
+
+/** What a message answers (TER-447): a snapshot taken when it was sent; `id` is null once the original
+ *  was deleted, and on a reply to a card (TER-849), which `card` names. */
 export interface ChatReplyRef {
   id: string | null;
   role: 'user' | 'assistant';
   excerpt: string;
+  card?: { kind: ReplyCardKind; id: string };
 }
 
 /** All the chat's host line ever needs of a machine; the payload carries whole `Machine` rows. */

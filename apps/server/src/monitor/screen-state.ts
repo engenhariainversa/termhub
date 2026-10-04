@@ -6,6 +6,8 @@ import { dialogFooterVisible, lastNonBlankLines, permissionDialogVisible } from 
  *
  * - `dialog`: a question (AskUserQuestion) or a permission dialog waits for the person;
  * - `busy`: the spinner of a turn in progress (`✢ Catapulting… (14s · ↓ 145 tokens)`);
+ * - `background`: the turn ended and Claude Code waits on background work it started
+ *   (`✻ Waiting for 1 background agent to finish`, TER-644) — not a wait for the person;
  * - `prompt`: Claude Code is back at its input box with no turn running;
  * - null: anything else (a shell after Claude Code exited, an empty pane) — nothing is derived.
  *
@@ -15,13 +17,15 @@ import { dialogFooterVisible, lastNonBlankLines, permissionDialogVisible } from 
  * 1 background agent to finish"). The transcript never starts a line with a spinner glyph: an
  * answer's first line starts with "●" and the rest are indented. Never logged.
  */
-export type ScreenState = 'dialog' | 'busy' | 'prompt';
+export type ScreenState = 'dialog' | 'busy' | 'background' | 'prompt';
 
 /** How many non-blank rows, from the bottom, are read: the spinner, the input box and the footer. */
 export const SCREEN_STATE_LINES = 30;
 
 /** Claude Code's spinner glyphs (the hook script's list, `*` being the ASCII fallback). */
 const SPINNER = /^[·✢✳✶✻✽*] [^\s(][^(]{0,60}?(?:…|\.\.\.)(?: \(.*)?$/u;
+/** The line a finished turn leaves while its background work runs: "Waiting for 2 background agents to finish". */
+const BACKGROUND = /^[·✢✳✶✻✽*] Waiting for \d+ background [A-Za-z ]{1,40}? to finish\b/u;
 /** The rules drawn above and below the input box. */
 const RULE = /^\s*[─━]{10,}\s*$/;
 /** The input box's first row: the prompt glyph at column 0 (`>` is the ASCII fallback). */
@@ -31,8 +35,44 @@ export function claudeScreenState(screen: string): ScreenState | null {
   if (dialogFooterVisible(screen) || permissionDialogVisible(screen)) return 'dialog';
   const lines = lastNonBlankLines(screen, SCREEN_STATE_LINES).split('\n').map((l) => l.trimEnd());
   if (lines.some((l) => SPINNER.test(l))) return 'busy';
+  if (lines.some((l) => BACKGROUND.test(l))) return 'background';
   for (let i = 1; i < lines.length; i++) {
     if (INPUT.test(lines[i]!) && RULE.test(lines[i - 1]!)) return 'prompt';
   }
   return null;
+}
+
+/** Claude Code's permission mode, as its footer shows it (spec 2026-10-01 tab chat §5.4). */
+export type ClaudeFooterMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions' | 'auto' | 'unknown';
+
+/**
+ * What the footer under the input box says for each mode other than `default` (no row: anything else
+ * reads as `default`). One row per mode, so a Claude Code release that rewords one is a one-line fix.
+ * Checked on 2026-10-04 by cycling Shift+Tab in Claude Code 2.1.289: `⏵⏵ auto mode on`, `⏸ manual mode
+ * on` (the default mode, which older releases left blank), `⏵⏵ accept edits on`, `⏸ plan mode on`, each
+ * followed by `(shift+tab to cycle)` but the default. `⏵⏵ bypass permissions on` only shows in a session
+ * started with it, as in `fixtures/claude-screens/idle-2.1.285.txt`.
+ */
+export const CLAUDE_FOOTER_MODES: readonly { text: string; mode: Exclude<ClaudeFooterMode, 'default' | 'unknown'> }[] = [
+  { text: 'accept edits on', mode: 'acceptEdits' },
+  { text: 'plan mode on', mode: 'plan' },
+  { text: 'bypass permissions on', mode: 'bypassPermissions' },
+  { text: 'auto mode on', mode: 'auto' },
+];
+
+/**
+ * The mode read from a plain capture of a Claude Code pane, after Shift+Tab cycled it: the transcript
+ * writes its `permission-mode` line with the next prompt, not with the key, so the screen is the only
+ * witness. Only the rows under the input box's last rule are read, so a conversation that merely
+ * mentions "plan mode on" is not taken for the footer. `unknown`: no Claude Code input box on screen.
+ */
+export function claudeFooterMode(screen: string): ClaudeFooterMode {
+  if (claudeScreenState(screen) === null) return 'unknown';
+  const lines = lastNonBlankLines(screen, SCREEN_STATE_LINES).split('\n').map((l) => l.trimEnd());
+  let lastRule = -1;
+  lines.forEach((l, i) => {
+    if (RULE.test(l)) lastRule = i;
+  });
+  const footer = lines.slice(lastRule + 1).join('\n');
+  return CLAUDE_FOOTER_MODES.find((m) => footer.includes(m.text))?.mode ?? 'default';
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { claudeScreenState } from './screen-state.js';
+import { claudeFooterMode, claudeScreenState } from './screen-state.js';
 
 /** Real captures of Claude Code 2.1.285 (TER-615), trailing blanks trimmed, paths replaced. */
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/claude-screens/${name}-2.1.285.txt`, import.meta.url), 'utf8');
@@ -14,8 +14,24 @@ describe('claudeScreenState — what a Claude Code tab shows (TER-615)', () => {
     expect(claudeScreenState(fixture('idle'))).toBe('prompt');
   });
 
-  it('a main thread that ended its turn while a subagent runs in the background is at its prompt', () => {
-    expect(claudeScreenState(fixture('background-agent'))).toBe('prompt');
+  it('a main thread that ended its turn while a subagent runs in the background waits on it, not on the person (TER-644)', () => {
+    expect(claudeScreenState(fixture('background-agent'))).toBe('background');
+  });
+
+  it('reads the background line in the plural and with the ASCII glyph', () => {
+    for (const line of ['✻ Waiting for 2 background agents to finish', '* Waiting for 1 background agent to finish']) {
+      expect(claudeScreenState(`● Lançado.\n\n${line}\n\n────────────\n❯ \n────────────`)).toBe('background');
+    }
+  });
+
+  it('a live spinner wins over a background line left above it: the agent is at work again', () => {
+    const screen = ['✻ Waiting for 1 background agent to finish', '', '● Agora reviso.', '', '✢ Reviewing… (4s)', '', '────────────', '❯ ', '────────────'].join('\n');
+    expect(claudeScreenState(screen)).toBe('busy');
+  });
+
+  it('never takes the background line quoted inside an answer for the real one', () => {
+    const answer = ['● A tela dizia:', '  ✻ Waiting for 1 background agent to finish', '', '✻ Brewed for 3s', '', '────────────', '❯ ', '────────────'].join('\n');
+    expect(claudeScreenState(answer)).toBe('prompt');
   });
 
   it('an AskUserQuestion dialog', () => {
@@ -45,5 +61,34 @@ describe('claudeScreenState — what a Claude Code tab shows (TER-615)', () => {
 
   it('never takes a typed "❯" inside the transcript for the input box', () => {
     expect(claudeScreenState('❯ Run the tests\n\n● Done.')).toBeNull();
+  });
+});
+
+describe('claudeFooterMode — the permission mode under the input box (spec 2026-10-01 tab chat §5.4)', () => {
+  const RULE = '─'.repeat(40);
+  const screen = (footer: string[], above: string[] = ['● Pronto.']) => [...above, '', RULE, '❯ ', RULE, '  Opus | ctx 4%', ...footer].join('\n');
+
+  it('reads each mode the footer names', () => {
+    expect(claudeFooterMode(screen(['  ⏵⏵ accept edits on (shift+tab to cycle)']))).toBe('acceptEdits');
+    expect(claudeFooterMode(screen(['  ⏸ plan mode on (shift+tab to cycle)']))).toBe('plan');
+    expect(claudeFooterMode(screen(['  ⏵⏵ bypass permissions on (shift+tab to cycle)']))).toBe('bypassPermissions');
+    // a real footer seen on 2026-10-04
+    expect(claudeFooterMode(screen(['  ⏵⏵ auto mode on (shift+tab to cycle)']))).toBe('auto');
+  });
+
+  it('a real capture: bypass permissions, with an agent running in the background', () => {
+    expect(claudeFooterMode(fixture('idle'))).toBe('bypassPermissions');
+  });
+
+  it('an input box with none of them is the default mode, even when the conversation mentions one', () => {
+    expect(claudeFooterMode(screen([], ['● Turn plan mode on with shift+tab.']))).toBe('default');
+    expect(claudeFooterMode(screen(['  ? for shortcuts']))).toBe('default');
+    // Claude Code 2.1.289 names the default mode in the footer
+    expect(claudeFooterMode(screen(['  ⏸ manual mode on · ← 1 agent']))).toBe('default');
+  });
+
+  it('a pane with no input box is unknown', () => {
+    expect(claudeFooterMode('$ ls\nfile.txt\n$ ')).toBe('unknown');
+    expect(claudeFooterMode('')).toBe('unknown');
   });
 });

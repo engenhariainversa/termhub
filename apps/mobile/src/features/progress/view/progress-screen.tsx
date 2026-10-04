@@ -20,7 +20,7 @@ function Agent({ agent }: { agent: TAgentOnCard }) {
   const since = agent.state_at ? ` · ${relativeTime(agent.state_at, Date.now())}` : '';
   return (
     <Text className={agent.needs_you ? 'text-xs text-amber-400' : 'text-xs text-zinc-400'}>
-      {`${agent.tab_name} · ${stateLabel(agent.state)}${since} · ${agent.machine_name}`}
+      {`${agent.tab_name} · ${stateLabel(agent.state, agent.background)}${since} · ${agent.machine_name}`}
     </Text>
   );
 }

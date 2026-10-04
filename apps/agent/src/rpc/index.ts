@@ -11,6 +11,7 @@ import * as sim from './sim.js';
 import * as tabMcp from './tab-mcp.js';
 import * as tmux from './tmux.js';
 import * as tools from './tools.js';
+import * as transcript from './transcript.js';
 import * as update from './update.js';
 import * as wda from './wda.js';
 
@@ -51,4 +52,5 @@ export const handlers: Handlers = {
   'wda.setup.state': wda.setupState,
   'tab.mcp.write': tabMcp.write,
   'tab.mcp.remove': tabMcp.remove,
+  'transcript.read': transcript.read,
 };

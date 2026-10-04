@@ -160,3 +160,27 @@ describe('sweepStaleWorking — the agent exited without a hook (TER-643)', () =
     expect(exited).not.toHaveBeenCalled();
   });
 });
+
+describe('sweepStaleWorking — background work (TER-644)', () => {
+  const now = new Date(Date.parse(AT) + STALE_WORKING_MS + 1);
+  const WAITING_BACKGROUND = '● Aguardando o subagente.\n\n✻ Waiting for 1 background agent to finish\n\n────────────\n❯ \n────────────';
+
+  it('a working tab whose turn ended on background work is waiting on it, not on the person', async () => {
+    const { repos, recordEvent, deps } = setup([tab()], WAITING_BACKGROUND);
+    await sweepStaleWorking(repos, log() as never, now, deps);
+    expect(recordEvent).toHaveBeenCalledWith('t1', { kind: 'waiting_background', tool: 'claude', text: null, meta: { event: 'ScreenCheck', screen: 'background' }, ifStateAt: AT });
+  });
+
+  it('a tab already waiting on its background work only gets the exit check: a quiet screen proves nothing', async () => {
+    const quiet = setup([tab({ state: 'waiting_background' })], PROMPT, { pane: 'busy' });
+    await sweepStaleWorking(quiet.repos, log() as never, now, quiet.deps);
+    expect(quiet.foreground).toHaveBeenCalled();
+    expect(quiet.capture).not.toHaveBeenCalled();
+    expect(quiet.recordEvent).not.toHaveBeenCalled();
+
+    const gone = setup([tab({ state: 'waiting_background' })], 'pedro@jarvis:~$ ', { pane: 'shell' });
+    await sweepStaleWorking(gone.repos, log() as never, now, gone.deps);
+    expect(gone.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'idle', meta: { event: 'AgentExited', pane: 'shell' }, ifStateAt: AT }));
+    expect(gone.exited).toHaveBeenCalled();
+  });
+});

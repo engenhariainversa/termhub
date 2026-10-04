@@ -16,16 +16,39 @@ export type IngestResult = { ok: true; tab: Tab } | { ok: false; reason: 'unknow
  * the event as the tab's state and tell the subscribers. Logs metadata only (never `text`). `waker`
  * (spec 2026-09-26 concierge memory §7) reaches `noteHookEvent` from here — the route's own deps,
  * passed down from `app.ts` next to `repos` and `log` — since this module already sits between the
- * hooks route and the tab-question bookkeeping.
+ * hooks route and the tab-question bookkeeping. `onTabEvent` is told the tab of every Claude event
+ * (the tab chat hub's `poke`).
  */
 export async function ingestHookEvent(
   repos: Repositories,
   log: FastifyBaseLogger,
   input: { machineId: string; tool: HookTool; session: string; event: unknown },
   waker?: Waker,
+  onTabEvent?: (tabId: string) => void,
 ): Promise<IngestResult> {
   const tab = await repos.tabs.findByTmuxSession(input.machineId, input.session);
   if (!tab) return { ok: false, reason: 'unknown_session' };
+  const result = await ingestForTab(repos, log, tab, input, waker);
+  // A Claude hook means the session's transcript moved: an open tab chat reads it now, after the tab
+  // row (session id, state) is updated (spec 2026-10-01 tab chat §5.3). Every event, even one the wait
+  // rule dropped: a dropped event still wrote lines.
+  if (input.tool === 'claude' && onTabEvent) {
+    try {
+      onTabEvent(tab.id);
+    } catch (err) {
+      log.warn({ tabId: tab.id, err: err instanceof Error ? err.message : String(err) }, 'monitor: tab event listener failed');
+    }
+  }
+  return result;
+}
+
+async function ingestForTab(
+  repos: Repositories,
+  log: FastifyBaseLogger,
+  tab: Tab,
+  input: { machineId: string; tool: HookTool; session: string; event: unknown },
+  waker?: Waker,
+): Promise<IngestResult> {
   const interpreted = interpretHookEvent(input.tool, input.event);
   // A subagent ended (spec 2026-09-30 tab questions per subagent §5): the tab's screen and state are
   // its main thread's, so nothing is recorded and a suggestion check still waiting is left alone.

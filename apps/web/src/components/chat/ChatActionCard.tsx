@@ -3,6 +3,7 @@ import type { ChatAction, ChatDecisionWord, ChatGrant, ChatProjectGrant, ChatSta
 import { actionAutoDecision, AutoDecisionBadge } from './AutoDecisionBadge';
 import { STANDING_KIND_LABEL, standingKindLabel } from './grant-list-text';
 import { untilLabel } from './grant-time';
+import { ChatReplyButton } from './ChatReplyButton';
 
 /** How a decided action reads once there is nothing left to click. `pending` has its own buttons
  * instead of a label here. */
@@ -88,6 +89,8 @@ export interface ChatActionCardProps {
   onDecide: (id: string, decision: ChatDecisionWord) => void;
   /** "Propor de novo" on an expired or stale card (TER-477): asks the concierge for a fresh card. */
   onRepropose?: (action: ChatAction) => void;
+  /** "Responder" (TER-849): quotes this card in the composer; absent, the button is not offered. */
+  onReply?: (action: ChatAction) => void;
 }
 
 /**
@@ -95,16 +98,19 @@ export interface ChatActionCardProps {
  * request, the decision call and the queued note all live in `ChatPanel`. Memoised, with callbacks
  * that take the id: a streamed delta re-renders the panel, and this card must not follow.
  */
-export const ChatActionCard = memo(function ChatActionCard({ action, deciding, note, grant, projectGrant, standingGrant, revoking, onRevoke, onDecide, onRepropose }: ChatActionCardProps) {
+export const ChatActionCard = memo(function ChatActionCard({ action, deciding, note, grant, projectGrant, standingGrant, revoking, onRevoke, onDecide, onRepropose, onReply }: ChatActionCardProps) {
   const standingKind = standingKindOf(action);
   const stale = staleLabel(action);
   const autoDecision = actionAutoDecision(action);
   return (
     // `data-chat-card`: how the pending bar finds this card to scroll to it (TER-477). A stale card waits
     // on nobody, so it drops the attention border.
-    <li data-chat-card={action.id} className={`chat-enter rounded-xl border ${stale ? 'border-line' : 'border-attention/40'} bg-bg-2 px-4 py-3 text-sm`}>
-      {/* Plain text only — never HTML: this sentence can carry a command the model read off a real terminal screen. */}
-      <p className="whitespace-pre-wrap text-fg">{action.summary}</p>
+    <li data-chat-card={action.id} className={`chat-enter group rounded-xl border ${stale ? 'border-line' : 'border-attention/40'} bg-bg-2 px-4 py-3 text-sm`}>
+      <div className="flex items-start gap-2">
+        {/* Plain text only — never HTML: this sentence can carry a command the model read off a real terminal screen. */}
+        <p className="flex-1 whitespace-pre-wrap text-fg">{action.summary}</p>
+        {onReply && <ChatReplyButton onClick={() => onReply(action)} />}
+      </div>
       {/* The subagent whose turn proposed this action (spec 2026-09-26 §4), when there is one. */}
       {action.subagent && <p className="text-xs text-fg-dim">Pedido pelo subagente «{action.subagent.description}»</p>}
       {action.status === 'pending' ? (

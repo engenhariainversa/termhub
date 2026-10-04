@@ -1,6 +1,7 @@
 import { useId, type HTMLAttributes } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { tabDotClass } from '../lib/needs-you';
+import { pinTab, previewTab, updateEditorTabs, useEditorTabs } from '../lib/editor-tabs';
+import { tabDotClass, tabNeedsYou } from '../lib/needs-you';
 import { TAB_STATE_LABEL, type Machine, type Project, type Tab } from '../lib/types';
 
 interface Props {
@@ -9,7 +10,7 @@ interface Props {
   section: string;
   /** the project's open terminal tabs ("agents"), already ordered */
   agents: Tab[];
-  /** the project's linked machines: the agent rows name their machine only when there are several */
+  /** the project's linked machines: its terminals are listed under the machine each runs on */
   machines: Machine[];
   /** how many of its tabs are waiting for you */
   waiting: number;
@@ -24,13 +25,27 @@ interface Props {
   onOpenGroups: (anchor: HTMLElement) => void;
   /** drag-and-drop handlers for moving the row between groups; filled by the sidebar's drag layer */
   dragProps?: HTMLAttributes<HTMLLIElement>;
+  /** ends a terminal (kills its session): the ✕ next to it; absent without permission to close terminals */
+  onEndTerminal?: (tab: Tab) => void;
+}
+
+/** The project's terminals under the machine each runs on, machines in link order (unknown ones last). */
+function byMachine(agents: Tab[], machines: Machine[]): { id: string; name: string; tabs: Tab[] }[] {
+  const groups = machines.map((m) => ({ id: m.id, name: m.name, tabs: agents.filter((t) => t.machine_id === m.id) }));
+  const known = new Set(machines.map((m) => m.id));
+  for (const t of agents) {
+    if (known.has(t.machine_id)) continue;
+    known.add(t.machine_id);
+    groups.push({ id: t.machine_id, name: 'outra máquina', tabs: agents.filter((x) => x.machine_id === t.machine_id) });
+  }
+  return groups.filter((g) => g.tabs.length > 0);
 }
 
 /** One project in the sidebar: its link and actions, and its running agents underneath. */
-export function ProjectRow({ project: p, section, agents, machines, waiting, expanded, onToggle, chat, favorite, onToggleFavorite, onOpenGroups, dragProps }: Props) {
+export function ProjectRow({ project: p, section, agents, machines, waiting, expanded, onToggle, chat, favorite, onToggleFavorite, onOpenGroups, dragProps, onEndTerminal }: Props) {
   const navigate = useNavigate();
   const hasAgents = agents.length > 0;
-  const showMachine = machines.length > 1;
+  const editorTabs = useEditorTabs(p.id);
   const listId = useId();
   const pinLabel = favorite ? 'Tirar de Favoritos' : 'Fixar em Favoritos';
   const pin = (
@@ -132,23 +147,58 @@ export function ProjectRow({ project: p, section, agents, machines, waiting, exp
       </div>
       {hasAgents && expanded && (
         <ul id={listId} className="ml-4 border-l border-line pl-2" aria-label={`Agentes de ${p.name} · ${section}`}>
-          {agents.map((tab) => {
-            const machineName = showMachine ? machines.find((m) => m.id === tab.machine_id)?.name : null;
-            return (
-              <li key={tab.id}>
-                <Link
-                  to={`/projects/${p.id}?tab=${tab.id}`}
-                  className="flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-xs text-fg-muted hover:bg-bg-3 hover:text-fg"
-                >
-                  {/* an open tab is a live one here: no state = the neutral dot the tab bar shows */}
-                  <span data-dot className={`h-1.5 w-1.5 shrink-0 rounded-full ${tabDotClass(true, tab)}`} title={tab.state ? TAB_STATE_LABEL[tab.state] : undefined} />
-                  {/* the tab's name wins the width, up to a cap; a long machine name gives way first */}
-                  <span className="max-w-[9rem] shrink-0 truncate">{tab.name}</span>
-                  {machineName && <span className="min-w-0 truncate text-fg-dim"> · {machineName}</span>}
-                </Link>
-              </li>
-            );
-          })}
+          {byMachine(agents, machines).map((m) => (
+            <li key={m.id}>
+              <div className="truncate px-1 pt-0.5 text-[10px] text-fg-dim" title={m.name}>
+                {m.name}
+              </div>
+              <ul aria-label={`Terminais em ${m.name}`}>
+                {m.tabs.map((tab) => {
+                  // like a code editor's explorer: a click opens the terminal in the preview tab, a double
+                  // click pins it; the ✕ here is the one that ends the terminal (the tab's ✕ only closes the tab)
+                  const open = !!editorTabs?.open.includes(tab.id);
+                  const preview = editorTabs?.preview === tab.id;
+                  const needsYou = tabNeedsYou(tab);
+                  return (
+                    <li key={tab.id} className="group/t flex min-w-0 items-center rounded hover:bg-bg-3">
+                      <Link
+                        to={`/projects/${p.id}?tab=${tab.id}`}
+                        className={`flex min-w-0 flex-1 items-center gap-1.5 px-1 py-0.5 text-xs ${open ? 'text-fg' : 'text-fg-muted'} hover:text-fg`}
+                        onDoubleClick={(e) => {
+                          e.preventDefault();
+                          // what the first click did (preview, in place of the old preview), then pin: the same
+                          // result however fast the clicks come, before or after the click's navigation lands
+                          updateEditorTabs(p.id, (s) => pinTab(previewTab(s, tab.id), tab.id));
+                          navigate(`/projects/${p.id}?tab=${tab.id}`);
+                        }}
+                        title={`${tab.name}${open ? (preview ? ' · aberta em prévia (duplo clique fixa)' : ' · aba aberta') : ' · clique abre em prévia, duplo clique fixa'}`}
+                      >
+                        {/* an open tab is a live one here: no state = the neutral dot the tab bar shows */}
+                        <span
+                          data-dot
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${tabDotClass(true, tab)}`}
+                          title={tab.state ? TAB_STATE_LABEL[tab.state] : undefined}
+                          aria-label={needsYou ? 'esperando você' : undefined}
+                        />
+                        <span className={`min-w-0 truncate ${preview ? 'pr-0.5 italic' : ''}`}>{tab.name}</span>
+                      </Link>
+                      {onEndTerminal && (
+                        <button
+                          type="button"
+                          className="hidden shrink-0 rounded px-1 text-[10px] text-fg-dim hover:bg-bg-4 hover:text-danger group-focus-within/t:block group-hover/t:block"
+                          title="Encerrar terminal (mata a sessão tmux)"
+                          aria-label={`Encerrar terminal ${tab.name}`}
+                          onClick={() => onEndTerminal(tab)}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          ))}
         </ul>
       )}
     </li>

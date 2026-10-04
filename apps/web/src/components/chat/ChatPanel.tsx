@@ -19,7 +19,7 @@ import { useChatStream } from '../../lib/chat';
 import { compactDoneText, compactFailedText, isCompactCommand, isCompactShortcut } from '../../lib/chat-context';
 import { useChatLive } from '../../lib/chat-live';
 import { droppedRows, mergeMessage, mergeThread } from '../../lib/chat-merge';
-import { replyTargetOf, type ReplyTarget } from '../../lib/chat-reply';
+import { replyTargetOf, replyTargetOfAction, replyTargetOfQuestion, type ReplyTarget } from '../../lib/chat-reply';
 import { chatTimeline, groupPendingActions } from '../../lib/chat-timeline';
 import { activeGrantsLabel } from './grant-list-text';
 import { isGrantActive } from './grant-time';
@@ -751,7 +751,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    * another send in flight: several can be (spec 2026-09-26). The POST returns as soon as the message
    * is stored; the answer streams over the socket.
    */
-  /** The message the next send answers (TER-447); dropped with the conversation. */
+  /** The message (TER-447) or card (TER-849) the next send answers; dropped with the conversation. */
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   /** The row a quote just scrolled to, ringed for a moment. */
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -763,11 +763,15 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     return () => window.clearTimeout(timer);
   }, [highlightId]);
   const startReply = useCallback((m: ChatMessage) => setReplyTo(replyTargetOf(m)), []);
+  // A confirmation or a tab's question is answered the same way (TER-849).
+  const startActionReply = useCallback((a: ChatAction) => setReplyTo(replyTargetOfAction(a)), []);
+  const startQuestionReply = useCallback((q: TabQuestion) => setReplyTo(replyTargetOfQuestion(q)), []);
   const cancelReply = useCallback(() => setReplyTo(null), []);
   /** A quote's click: the original, if this thread has it, is brought to the middle and ringed. */
   const openReply = useCallback((id: string): boolean => {
     const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/["\\]/g, '\\$&');
-    const row = rootRef.current?.querySelector<HTMLElement>(`[data-message-id="${escaped}"]`);
+    // A card's quote (TER-849) finds its card the way the pending bar does.
+    const row = rootRef.current?.querySelector<HTMLElement>(`[data-message-id="${escaped}"], [data-chat-card="${escaped}"]`);
     if (!row) return false;
     row.scrollIntoView({ block: 'center', behavior: 'smooth' });
     setHighlightId(id);
@@ -794,7 +798,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       try {
         // No project = the account-wide chat: called with no second argument, for the same reason as
         // `load` above. The three-argument form only when there is something to carry in it.
-        if (replyToId) await api.sendChatMessage(value, projectId, attachmentIds, replyToId);
+        if (replyToId) await api.sendChatMessage(value, projectId, attachmentIds, quoted?.card ? { kind: quoted.card, id: replyToId } : replyToId);
         else if (attachmentIds.length > 0) await api.sendChatMessage(value, projectId, attachmentIds);
         else if (projectId) await api.sendChatMessage(value, projectId);
         else await api.sendChatMessage(value);
@@ -1045,6 +1049,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
                 loadScreen={loadTabQuestionScreen}
                 onForget={forgetDecision}
                 onCancelAutoAnswer={cancelAutoAnswer}
+                onReply={startQuestionReply}
               />
             );
           }
@@ -1065,6 +1070,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
                 onRevoke={revoke}
                 onDecide={decide}
                 onRepropose={repropose}
+                onReply={startActionReply}
               />
             );
           }

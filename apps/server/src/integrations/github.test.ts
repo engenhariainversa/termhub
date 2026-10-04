@@ -33,3 +33,13 @@ describe('github.listTickets', () => {
     expect(r.truncated).toBe(true);
   });
 });
+
+describe('github.getTicket', () => {
+  it('reads one issue whatever its state; a closed one is done', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(json(issue(7, { state: 'closed' })));
+    vi.stubGlobal('fetch', fetch);
+    const t = await github.getTicket('tok', {}, { provider_id: '7', key: 'acme/api#7', scope: 'acme/api' });
+    expect(fetch.mock.calls[0][0]).toBe('https://api.github.com/repos/acme/api/issues/7');
+    expect(t).toMatchObject({ sync_key: 'github:acme/api#7', key: 'acme/api#7', state: 'closed', status: 'done' });
+  });
+});

@@ -625,6 +625,23 @@ describe('Conversa', () => {
     expect(answer).toHaveBeenCalledWith('q1', { answers: [{ selected: [0] }] });
   });
 
+  it("dragging a tab's question card answers it with a reference to the card (TER-849)", async () => {
+    serveQuestions([OPEN_CHOICE]);
+    const sent = jest.spyOn(stores.api, 'sendMessage').mockReturnValue(new Promise(() => undefined));
+    await render(<ConversationScreen />);
+    const card = await screen.findByTestId('tab-question-q1', undefined, LOAD);
+    const row = screen.getAllByTestId('swipe-to-reply-row').find((r) => within(r).queryByTestId('tab-question-q1'))!;
+    expect(within(row).getByTestId('tab-question-q1')).toBe(card);
+    await fireEvent(row, 'accessibilityAction', { nativeEvent: { actionName: 'reply' } });
+    expect(screen.getByText('Respondendo à pergunta da aba')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'Postgres, como na produção');
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
+    expect(sent).toHaveBeenCalledWith(expect.anything(), { text: 'Postgres, como na produção', project_id: 'p-termhub', reply_to_card: { kind: 'tab_question', id: 'q1' } });
+    expect(await screen.findByRole('button', { name: 'Ver card original: Pergunta da aba, Qual banco usamos nos testes?' })).toBeTruthy();
+    useChatStore.setState({ sending: false });
+  });
+
   it('"Outra resposta" answers with the text', async () => {
     serveQuestions([OPEN_CHOICE]);
     const answer = stubAction('answerTabQuestion');
@@ -932,6 +949,44 @@ describe('replies (TER-447)', () => {
     // The new row shows what it answers, above its text, from the moment it is sent.
     expect(await screen.findByRole('button', { name: /^Ver mensagem original: Concierge,/ })).toBeTruthy();
     useChatStore.setState({ sending: false });
+  });
+
+  it('dragging a confirmation card answers it with a reference to the card (TER-849)', async () => {
+    serveChat();
+    const sent = jest.spyOn(stores.api, 'sendMessage').mockReturnValue(new Promise(() => undefined));
+    await render(<ConversationScreen />);
+    const summary = await screen.findByText('digitar `npm test` na aba api do projeto termhub, no jarvis', undefined, LOAD);
+    const row = screen.getAllByTestId('swipe-to-reply-row').find((r) => within(r).queryByText('digitar `npm test` na aba api do projeto termhub, no jarvis'))!;
+    expect(within(row).getByText('digitar `npm test` na aba api do projeto termhub, no jarvis')).toBe(summary);
+    await fireEvent(row, 'accessibilityAction', { nativeEvent: { actionName: 'reply' } });
+    expect(screen.getByText('Respondendo à confirmação')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'por que essa aba?');
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
+    expect(sent).toHaveBeenCalledWith(expect.anything(), { text: 'por que essa aba?', project_id: 'p-termhub', reply_to_card: { kind: 'action', id: 'a-termhub-1' } });
+    expect(await screen.findByRole('button', { name: 'Ver card original: Confirmação, digitar npm test na aba api do projeto termhub, no jarvis' })).toBeTruthy();
+    useChatStore.setState({ sending: false });
+  });
+
+  it("a tap on a card's quote scrolls to the card; one no longer in the thread says so", async () => {
+    serveChat();
+    const scroll = jest.spyOn(require('react-native').FlatList.prototype, 'scrollToIndex').mockImplementation(() => undefined);
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await act(async () =>
+      addRows(
+        [
+          { id: 'r1', conversation_id: 'c-termhub', role: 'user', text: 'e isso?', usage: null, error_code: null, created_at: at(1), reply_to: { id: null, role: 'assistant', excerpt: 'digitar npm test', card: { kind: 'action', id: 'a-termhub-1' } } },
+          { id: 'r2', conversation_id: 'c-termhub', role: 'user', text: 'e aquela?', usage: null, error_code: null, created_at: at(2), reply_to: { id: null, role: 'assistant', excerpt: 'Qual cor?', card: { kind: 'tab_question', id: 'gone' } } },
+        ],
+        [],
+      ),
+    );
+    await fireEvent.press(await screen.findByRole('button', { name: 'Ver card original: Confirmação, digitar npm test' }));
+    expect(scroll).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver card original: Pergunta da aba, Qual cor?' }));
+    expect(screen.getByText('Card original indisponível')).toBeTruthy();
+    expect(scroll).toHaveBeenCalledTimes(1);
   });
 
   it('a tap on a quote scrolls to the original; one that is not loaded says so', async () => {

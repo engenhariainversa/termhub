@@ -11,6 +11,8 @@ import { HOOK_TOKEN_PREFIX, hashHookToken } from '../monitor/token.js';
  *  instance to build one from simply omits it, and no card is ever woken for. */
 export interface HooksDeps {
   waker?: Waker;
+  /** told the tab of every Claude hook event (the tab chat hub's `poke`, spec 2026-10-01 tab chat §5.3) */
+  onTabEvent?: (tabId: string) => void;
 }
 
 declare module 'fastify' {
@@ -53,7 +55,7 @@ export async function hooksRoutes(app: FastifyInstance, repos: Repositories, dep
     if (!machineId) throw unauthorized();
 
     const body = hookEventBody.parse(request.body);
-    const result = await ingestHookEvent(repos, request.log, { machineId, tool: body.tool, session: body.session, event: body.event }, deps.waker);
+    const result = await ingestHookEvent(repos, request.log, { machineId, tool: body.tool, session: body.session, event: body.event }, deps.waker, deps.onTabEvent);
     if (!result.ok) return reply.code(202).send({ ok: false, reason: result.reason });
     return { ok: true, tab_id: result.tab.id, state: result.tab.state };
   });

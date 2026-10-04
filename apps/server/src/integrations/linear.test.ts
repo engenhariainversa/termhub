@@ -25,3 +25,19 @@ describe('linear.listTickets', () => {
     expect(filter.state).toEqual({ type: { nin: ['completed', 'canceled'] }, name: { in: ['Todo', 'In Progress'] } });
   });
 });
+
+describe('linear.getTicket', () => {
+  it('reads one issue by id, completed or not', async () => {
+    const done = { ...node(3), state: { name: 'Done', type: 'completed' } };
+    const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ data: { issue: done } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    const t = await linear.getTicket('k', {}, { provider_id: 'u3', key: 'EI-3', scope: 'EI' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body).variables).toEqual({ id: 'u3' });
+    expect(t).toMatchObject({ sync_key: 'linear:u3', key: 'EI-3', state: 'Done', status: 'done' });
+  });
+
+  it('throws when Linear does not know the issue', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ data: { issue: null } }), { status: 200 })));
+    await expect(linear.getTicket('k', {}, { provider_id: 'gone', key: 'EI-9', scope: 'EI' })).rejects.toThrow('EI-9');
+  });
+});

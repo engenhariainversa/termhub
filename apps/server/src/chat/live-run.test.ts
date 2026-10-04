@@ -1135,9 +1135,12 @@ it('answers the turn on the next account, resuming the same session, with the no
   expect(h.live.accepting).toBe(true);
   expect(h.live.sessionId).toBe('ee7af5ab-976a-43f5-92e0-d1afd433c518');
   expect(h.chat.setCliSession).not.toHaveBeenCalledWith('c1', null);
+  // a new uuid: the resumed session holds U1, and a CLI that reads a uuid it has on file answers nothing (TER-837)
+  const U2 = JSON.parse(h.live.initialText().trim()).uuid as string;
+  expect(U2).not.toBe(U1);
   const s2 = manualStream();
   const again = h.live.consume(s2.stream);
-  s2.push(replay(U1)); s2.push(delta('oi!')); s2.push(result('ee7af5ab-976a-43f5-92e0-d1afd433c518'));
+  s2.push(replay(U2)); s2.push(delta('oi!')); s2.push(result('ee7af5ab-976a-43f5-92e0-d1afd433c518'));
   await settle();
   s2.end();
   expect(await again).toMatchObject({ code: null, limit: null });

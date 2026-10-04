@@ -224,3 +224,83 @@ export function alphaInviteMail(to: string, opts: { appUrl: string; communityUrl
 </html>`;
   return { to, subject: c.subject, html, text };
 }
+
+// ---------- account deletion (TER-720, TER-728) ----------
+
+/** The date a deletion becomes final, as the person reads it (Brasília time). */
+export function deletionDateLabel(at: Date): string {
+  return at.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+/** The card shared by the deletion e-mails: a title, plain paragraphs and an optional button. */
+function noticeMail(to: string, subject: string, paragraphs: string[], button?: { label: string; url: string }): Mail {
+  const text = `${subject}\n\n${paragraphs.join('\n\n')}${button ? `\n\n${button.label}: ${button.url}` : ''}`;
+  const rows = paragraphs
+    .map((p) => `<tr><td style="padding:0 32px 12px;text-align:center;font-size:13px;color:#9aa1b1;line-height:1.6;">${esc(p)}</td></tr>`)
+    .join('\n        ');
+  const cta = button
+    ? `<tr><td style="padding:8px 32px 8px;text-align:center;">
+          <a href="${esc(button.url)}" style="display:inline-block;background:#4f8cff;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:10px;">${esc(button.label)}</a>
+        </td></tr>`
+    : '';
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${esc(subject)}</title></head>
+<body style="margin:0;padding:0;background:#0f1115;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f1115;">
+    <tr><td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:440px;background:#161920;border:1px solid #2a2f3a;border-radius:14px;">
+        <tr><td style="padding:28px 32px 4px;text-align:center;font-size:18px;font-weight:700;color:#e6e8ee;"><span style="color:#4f8cff;">&#9646;</span> termhub</td></tr>
+        <tr><td style="padding:12px 32px 16px;text-align:center;font-size:16px;font-weight:600;color:#e6e8ee;">${esc(subject)}</td></tr>
+        ${rows}
+        ${cta}
+        <tr><td style="padding:0 0 20px;"></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  return { to, subject, html, text };
+}
+
+/** The deletion was asked: the account is deactivated, and this is the date it goes for good. */
+export function deletionRequestedMail(to: string, opts: { scheduledAt: Date; appUrl: string }): Mail {
+  const date = deletionDateLabel(opts.scheduledAt);
+  return noticeMail(
+    to,
+    'Recebemos o pedido de exclusão da sua conta',
+    [
+      `Sua conta do termhub foi desativada e será excluída definitivamente em ${date}.`,
+      'Nessa data apagamos suas máquinas, projetos, cards, notas, chats, memória, integrações, tokens, aparelhos e anexos. Guardamos só o que a lei exige, como os registros de acesso (6 meses).',
+      'Mudou de ideia? Entre no termhub até essa data e toque em "Cancelar exclusão".',
+      'Se não foi você que pediu, entre agora e cancele a exclusão.',
+    ],
+    { label: 'Entrar e cancelar a exclusão', url: opts.appUrl },
+  );
+}
+
+export function deletionCancelledMail(to: string, opts: { appUrl: string }): Mail {
+  return noticeMail(to, 'A exclusão da sua conta foi cancelada', ['Sua conta do termhub voltou ao normal. Nada foi apagado.'], { label: 'Acessar o termhub', url: opts.appUrl });
+}
+
+/** Sent after the deletion job ran: nothing is left to sign in to. */
+export function accountDeletedMail(to: string): Mail {
+  return noticeMail(to, 'Sua conta do termhub foi excluída', [
+    'Concluímos a exclusão da sua conta e de todos os dados ligados a ela.',
+    'Guardamos só o que a lei exige, como os registros de acesso (6 meses). Este é o último e-mail que você recebe do termhub.',
+  ]);
+}
+
+/** The public page's confirmation link (termhub.dev/excluir-conta): single use, short-lived. */
+export function deletionLinkMail(to: string, opts: { link: string; ttlMinutes: number }): Mail {
+  return noticeMail(
+    to,
+    'Confirme a exclusão da sua conta do termhub',
+    [
+      'Alguém pediu, na página de exclusão do termhub, para excluir a conta deste e-mail.',
+      `Para confirmar, use o botão abaixo nos próximos ${opts.ttlMinutes} minutos. A conta fica desativada por 30 dias e depois é excluída definitivamente; até lá, entrar no termhub permite cancelar.`,
+      'Se não foi você, ignore este e-mail: nada muda na sua conta.',
+    ],
+    { label: 'Confirmar exclusão', url: opts.link },
+  );
+}

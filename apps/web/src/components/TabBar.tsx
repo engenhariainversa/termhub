@@ -5,13 +5,19 @@ import { tabDotClass } from '../lib/needs-you';
 import { useMonitor } from '../lib/monitor';
 
 interface Props {
+  /** the open tabs (TER-904): every terminal of the project is in the sidebar, these are the ones shown here */
   tabs: Tab[];
   activeId: string | null;
+  /** the preview tab (italic), reused by the next single click in the sidebar; null = all pinned */
+  previewId?: string | null;
+  /** pins the preview tab (double click on it, or its 📌) */
+  onPin?: (id: string) => void;
   onSelect: (id: string) => void;
   onNew: () => void;
   onNewSimulator?: () => void;
   canSimulator: boolean;
   onRename: (id: string, name: string) => void;
+  /** closes the tab only: the terminal keeps running and stays in the sidebar */
   onClose: (id: string) => void;
   preset: Preset;
   onPreset: (p: Preset) => void;
@@ -57,7 +63,7 @@ function PresetIcon({ preset }: { preset: Preset }) {
   );
 }
 
-export function TabBar({ tabs, activeId, onSelect, onNew, onNewSimulator, canSimulator, onRename, onClose, preset, onPreset, onScreen, badges }: Props) {
+export function TabBar({ tabs, activeId, previewId = null, onPin, onSelect, onNew, onNewSimulator, canSimulator, onRename, onClose, preset, onPreset, onScreen, badges }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +84,7 @@ export function TabBar({ tabs, activeId, onSelect, onNew, onNewSimulator, canSim
         {tabs.map((t, i) => {
           const active = t.id === activeId;
           const shown = onScreen(t.id);
+          const preview = t.id === previewId;
           return (
             <div
               key={t.id}
@@ -86,10 +93,13 @@ export function TabBar({ tabs, activeId, onSelect, onNew, onNewSimulator, canSim
               }`}
               onClick={() => onSelect(t.id)}
               onDoubleClick={() => {
+                // like a code editor: a double click pins a preview tab; on a pinned one it renames
+                if (preview && onPin) return onPin(t.id);
                 setEditing(t.id);
                 setDraft(t.name);
               }}
-              title={`${t.name} — ${t.kind === 'simulator' ? 'simulador iOS' : t.tmux_session}${i < 9 ? `  (⌘${i + 1})` : ''}`}
+              data-preview={preview || undefined}
+              title={`${t.name} — ${t.kind === 'simulator' ? 'simulador iOS' : t.tmux_session}${preview ? ' · prévia (duplo clique fixa)' : ''}${i < 9 ? `  (⌘${i + 1})` : ''}`}
             >
               {(active || shown) && <span className={`absolute inset-x-0 top-0 h-px ${active ? 'bg-accent' : 'bg-accent/40'}`} />}
               {(() => {
@@ -117,17 +127,31 @@ export function TabBar({ tabs, activeId, onSelect, onNew, onNewSimulator, canSim
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
-                <span className="truncate">{t.name}</span>
+                <span className={`truncate ${preview ? 'pr-0.5 italic' : ''}`}>{t.name}</span>
               )}
               {badges?.[t.id] && <span className="ml-1 max-w-[72px] truncate rounded bg-bg-4 px-1 text-[10px] text-fg-dim">{badges[t.id]}</span>}
+              {preview && onPin && (
+                // the touch path to pin (no double click there), and a hint of what the italic means
+                <button
+                  className={`ml-auto rounded px-0.5 text-[10px] text-fg-dim hover:bg-bg-4 hover:text-fg ${active ? '' : 'invisible group-hover:visible'}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPin(t.id);
+                  }}
+                  title="Fixar aba (ou dê um duplo clique)"
+                  aria-label={`Fixar aba ${t.name}`}
+                >
+                  📌
+                </button>
+              )}
               <button
-                className={`ml-auto rounded px-1 text-fg-dim hover:bg-bg-4 hover:text-fg ${active ? '' : 'invisible group-hover:visible'}`}
+                className={`${preview && onPin ? '' : 'ml-auto '}rounded px-1 text-fg-dim hover:bg-bg-4 hover:text-fg ${active ? '' : 'invisible group-hover:visible'}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onClose(t.id);
                 }}
-                title="Fechar tab (⌘W)"
-                aria-label="Fechar tab"
+                title="Fechar aba (⌘W) — o terminal continua rodando"
+                aria-label={`Fechar aba ${t.name}`}
               >
                 ✕
               </button>

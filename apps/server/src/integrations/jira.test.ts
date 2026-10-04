@@ -20,3 +20,14 @@ describe('jira.listTickets', () => {
     expect(r.tickets.map((t) => [t.key, t.provider_id, t.sync_key])).toEqual([['P-1', 'id-P-1', 'jira:P-1'], ['P-2', 'id-P-2', 'jira:P-2']]);
   });
 });
+
+describe('jira.getTicket', () => {
+  it('reads one issue by id, done or not', async () => {
+    const done = { ...issue('P-3'), fields: { ...issue('P-3').fields, status: { name: 'Concluído', statusCategory: { key: 'done' } } } };
+    const fetch = vi.fn().mockResolvedValueOnce(res(done));
+    vi.stubGlobal('fetch', fetch);
+    const t = await jiraProvider.getTicket('t', cfg, { provider_id: 'id-P-3', key: 'P-3', scope: 'P' });
+    expect(fetch.mock.calls[0][0]).toMatch(/^https:\/\/acme\.atlassian\.net\/rest\/api\/3\/issue\/id-P-3\?fields=summary,/);
+    expect(t).toMatchObject({ sync_key: 'jira:P-3', key: 'P-3', state: 'Concluído', status: 'done' });
+  });
+});

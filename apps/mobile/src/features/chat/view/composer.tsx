@@ -100,10 +100,15 @@ type Props = {
   replyTo?: ReplyRef | null;
   /** ✕ on the preview. */
   onCancelReply?(): void;
+  /** Nothing can be typed or sent (a session whose machine is offline, spec 2026-10-01 tab chat §7). */
+  disabled?: boolean;
+  /** Set while the other side works (a terminal session): ↑ becomes "Interromper", always shown, and a
+   * long press on it still sends what is typed (Claude Code queues it). */
+  onInterrupt?(): void;
 };
 
 /** A round button of the pill: the symbol on a filled circle (`fill`) or bare. */
-function RoundButton({ label, icon, onPress, disabled = false, fill, tone }: { label: string; icon: IconName; onPress(): void; disabled?: boolean; fill?: string; tone: string }) {
+function RoundButton({ label, icon, onPress, onLongPress, disabled = false, fill, tone }: { label: string; icon: IconName; onPress(): void; onLongPress?(): void; disabled?: boolean; fill?: string; tone: string }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -111,6 +116,7 @@ function RoundButton({ label, icon, onPress, disabled = false, fill, tone }: { l
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
+      onLongPress={onLongPress}
       hitSlop={4}
       className={`h-9 w-9 items-center justify-center rounded-full ${fill ?? ''} ${disabled ? 'opacity-40' : ''}`}
     >
@@ -138,7 +144,7 @@ function RoundButton({ label, icon, onPress, disabled = false, fill, tone }: { l
  * (TER-447) is previewed on top of the pill, with ✕; the screen keeps the reference and sends it. The text clears as soon as it is
  * sent and comes back if the send fails; the chips only go once the server accepted.
  */
-export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses, replyTo = null, onCancelReply }: Props) {
+export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses, replyTo = null, onCancelReply, disabled = false, onInterrupt }: Props) {
   const [text, setText] = useState('');
   const [height, setHeight] = useState(MIN_HEIGHT);
   // Latched: once the text wraps the buttons stay below until the box is emptied. Leaving as soon as
@@ -175,7 +181,7 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   /** A chip that is (or will be) part of the message: uploading or uploaded; a refused one is not. */
   const hasChips = attachments.drafts.some((d) => d.phase !== 'failed');
   const invalid = attachments.invalid.length > 0;
-  const sendable = (body: string) => (body.trim().length > 0 || attachments.uploaded.length > 0) && !attachments.uploading && !invalid && !sending;
+  const sendable = (body: string) => (body.trim().length > 0 || attachments.uploaded.length > 0) && !attachments.uploading && !invalid && !sending && !disabled;
   const canSend = sendable(text);
 
   // The box empties at once (the row is already on screen) and gets its text back if the send
@@ -227,7 +233,7 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   // and ↑ joins it once there is text or a chip. With dictation off there is no microphone and the
   // empty box keeps the (disabled) ↑. While `checking` or `starting` the microphone is there, disabled.
   const showMic = voice.state !== 'off';
-  const micDisabled = busy || voice.state === 'checking' || voice.state === 'starting';
+  const micDisabled = busy || disabled || voice.state === 'checking' || voice.state === 'starting';
   const showSend = hasText || hasChips || voice.state === 'off';
   const sendDisabled = !canSend || busy;
   const statusText = busy
@@ -239,7 +245,7 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
         : (attachments.notice ?? '');
   // No + while dictation holds the microphone or its clip: the menu's recorder would release the
   // audio session under it (one recorder at a time), and five chips is the message's limit.
-  const attachOff = attachments.drafts.length >= MAX_CHIPS || voice.state === 'starting' || recording || busy;
+  const attachOff = disabled || attachments.drafts.length >= MAX_CHIPS || voice.state === 'starting' || recording || busy;
   const openMenu = () => {
     // Where the button is now (the pill moves with the keyboard); unmeasured, the menu uses a default place.
     attachRef.current?.measureInWindow((x, y) => setAnchor({ x, y }));
@@ -249,7 +255,7 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   // The status line needs the row's middle, which the text covers while it shares the row.
   const stacked = wrapped || statusText !== '';
   const still = useReducedMotion();
-  const frame = recording ? RECORDING_FRAME : textFrame(stacked, height, (showMic ? 1 : 0) + (showSend ? 1 : 0));
+  const frame = recording ? RECORDING_FRAME : textFrame(stacked, height, (showMic ? 1 : 0) + (showSend || onInterrupt ? 1 : 0));
   const left = useGlide(frame.left, still);
   const right = useGlide(frame.right, still);
   const top = useGlide(frame.top, still);
@@ -324,7 +330,11 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
               {/* The microphone is a plain symbol, like the one next to ChatGPT's box; ↑ is the filled
                   circle in the text colour, so it inverts with the theme (white on the dark one). */}
               {showMic ? <RoundButton label="Ditar" icon={MIC_ICON} onPress={voice.start} disabled={micDisabled} tone="text" /> : null}
-              {showSend ? <RoundButton label="Enviar" icon={SEND_ICON} onPress={() => void submit()} disabled={sendDisabled} fill="bg-app-text" tone="bg" /> : null}
+              {onInterrupt ? (
+                <RoundButton label="Interromper" icon={STOP_ICON} onPress={onInterrupt} onLongPress={() => void submit()} disabled={disabled} fill="bg-app-text" tone="bg" />
+              ) : showSend ? (
+                <RoundButton label="Enviar" icon={SEND_ICON} onPress={() => void submit()} disabled={sendDisabled} fill="bg-app-text" tone="bg" />
+              ) : null}
             </>
           )}
         </View>
@@ -337,6 +347,7 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
               ref={inputRef}
               value={text}
               onChangeText={changeText}
+              editable={!disabled}
               placeholder="Mensagem"
               accessibilityLabel="Mensagem"
               multiline
