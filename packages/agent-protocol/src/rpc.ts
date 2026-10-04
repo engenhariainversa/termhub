@@ -30,12 +30,17 @@ export function isWdaPort(port: number): boolean {
 }
 export const wdaPort = z.number().int().refine(isWdaPort, 'port outside the WDA ranges');
 
-/** The only keys a terminal tool may press (spec §4.2): no arbitrary key names reach tmux. */
-export const TMUX_KEYS = ['Enter', 'Escape', 'C-c', 'Up', 'Down', 'Tab', 'y', 'n', '1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+/** The only keys a terminal tool may press (spec §4.2): no arbitrary key names reach tmux. `BTab` is
+ *  Shift+Tab, Claude Code's mode switch, since agent 0.15.0: the server sends it only to an agent
+ *  that advertises `CAPABILITY_TRANSCRIPT`, because an older agent's schema refuses it. */
+export const TMUX_KEYS = ['Enter', 'Escape', 'C-c', 'Up', 'Down', 'Tab', 'y', 'n', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'BTab'] as const;
 export const tmuxKey = z.enum(TMUX_KEYS);
 export type TmuxKey = (typeof TMUX_KEYS)[number];
 
 export const TEXT_MAX_CHARS = 4000;
+
+/** A shrunk transcript line larger than this travels as a stub (`termhub_dropped`). */
+export const TRANSCRIPT_LINE_MAX_BYTES = 65_536;
 
 export const rpcErrorSchema = z.object({
   /** `failed`: the operation ran on the machine and `message` says why it failed, in words meant for the user.
@@ -109,6 +114,33 @@ export const RPC = {
       config_dir: machinePath.nullable(),
     }),
     z.object({ status: z.enum(['linked', 'same_account', 'no_transcript', 'no_config_dir', 'conflict']) }),
+    10_000,
+  ),
+  /**
+   * Lines of a Claude Code transcript by byte range (spec 2026-10-01 tab chat §4). The agent knows
+   * nothing about a line's shape: it keeps the lines whose `type` is in `types`, truncates every
+   * string longer than `max_string` and replaces a line still over TRANSCRIPT_LINE_MAX_BYTES by a
+   * stub. `forward` reads from `offset`; `backward` reads what ends at `offset` (null: the end of
+   * the file). `start`/`end` are the byte range covered, on line boundaries. `missing`: no such
+   * transcript, here or in the account's other project dirs (since agent 0.15.0).
+   */
+  'transcript.read': def(
+    z.object({
+      transcript_path: machinePath,
+      session_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+      direction: z.enum(['forward', 'backward']),
+      offset: z.number().int().min(0).nullable(),
+      max_bytes: z.number().int().min(1024).max(512 * 1024),
+      types: z.array(z.string().min(1).max(32)).min(1).max(16),
+      max_string: z.number().int().min(256).max(16_384),
+    }),
+    z.object({
+      status: z.enum(['ok', 'missing']),
+      lines: z.array(z.string()),
+      start: z.number().int().min(0),
+      end: z.number().int().min(0),
+      size: z.number().int().min(0),
+    }),
     10_000,
   ),
   'file.paste': def(z.object({ name: pasteName, data_b64: z.string().min(1).max(28 * 1024 * 1024) }), z.object({ path: z.string() }), 60_000),

@@ -214,8 +214,8 @@ describe('failures the CLI reports in the stream', () => {
     expect(frames.some((f) => f!.type === 'text')).toBe(false);
   });
 
-  it('reads where the session lives from the init frame', () => {
-    expect(recorded('stream-usage-limit').find((f) => f!.type === 'session_dir')).toEqual({ type: 'session_dir', dir: '/home/u/.claude/projects/-srv' });
+  it('reads where the session lives and the model it runs on from the init frame', () => {
+    expect(recorded('stream-usage-limit').find((f) => f!.type === 'init')).toEqual({ type: 'init', dir: '/home/u/.claude/projects/-srv', model: 'claude-opus-5-5' });
   });
 
   it('names a model the CLI does not know, and a machine that is not logged in', () => {

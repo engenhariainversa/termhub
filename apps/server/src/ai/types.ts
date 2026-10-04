@@ -6,6 +6,8 @@ export interface AiUsageWindow {
   label: string;
   utilization: number;
   resets_at: string | null;
+  /** Set when the window caps one model only (lowercase family, e.g. "fable"); absent = the whole account. */
+  model?: string;
 }
 
 export interface AiUsageResult {

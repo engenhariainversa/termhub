@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { ApiError } from '../lib/api';
+import { deletionDate, takeDeletionNotice } from '../lib/account-deletion';
 
 const OAUTH_ERRORS: Record<string, string> = {
   google_denied: 'Login com Google cancelado.',
@@ -25,6 +26,8 @@ export function LoginPage() {
     return e ? (OAUTH_ERRORS[e] ?? 'Falha no login.') : null;
   });
   const [info, setInfo] = useState<string | null>(null);
+  // set by Perfil → Excluir minha conta, whose request ended the session (TER-720)
+  const [deletionNotice] = useState(takeDeletionNotice);
   const [busy, setBusy] = useState(false);
   const codeRef = useRef<HTMLInputElement>(null);
 
@@ -86,6 +89,11 @@ export function LoginPage() {
           <span className="text-accent">▮</span> termhub
         </h1>
         <p className="mb-6 text-sm text-fg-muted">Terminais das suas máquinas, no navegador.</p>
+        {deletionNotice && (
+          <p role="status" className="mb-4 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
+            Sua conta foi desativada e será excluída em {deletionDate(deletionNotice)}. Para cancelar, entre de novo antes dessa data.
+          </p>
+        )}
 
         {!appMode ? (
           <p className="text-sm text-fg-muted">Este servidor não usa login próprio. Acesse pelo endereço protegido pelo Cloudflare Access.</p>

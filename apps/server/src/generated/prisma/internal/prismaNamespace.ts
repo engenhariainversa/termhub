@@ -402,6 +402,7 @@ export const ModelName = {
   Permission: 'Permission',
   Session: 'Session',
   LoginCode: 'LoginCode',
+  AccountDeletionLink: 'AccountDeletionLink',
   LoginAttempt: 'LoginAttempt',
   Machine: 'Machine',
   Project: 'Project',
@@ -460,7 +461,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -831,6 +832,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.LoginCodeCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.LoginCodeCountAggregateOutputType> | number
+        }
+      }
+    }
+    AccountDeletionLink: {
+      payload: Prisma.$AccountDeletionLinkPayload<ExtArgs>
+      fields: Prisma.AccountDeletionLinkFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.AccountDeletionLinkFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.AccountDeletionLinkFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload>
+        }
+        findFirst: {
+          args: Prisma.AccountDeletionLinkFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.AccountDeletionLinkFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload>
+        }
+        findMany: {
+          args: Prisma.AccountDeletionLinkFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload>[]
+        }
+        create: {
+          args: Prisma.AccountDeletionLinkCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload>
+        }
+        createMany: {
+          args: Prisma.AccountDeletionLinkCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.AccountDeletionLinkCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload>[]
+        }
+        delete: {
+          args: Prisma.AccountDeletionLinkDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload>
+        }
+        update: {
+          args: Prisma.AccountDeletionLinkUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload>
+        }
+        deleteMany: {
+          args: Prisma.AccountDeletionLinkDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.AccountDeletionLinkUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.AccountDeletionLinkUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload>[]
+        }
+        upsert: {
+          args: Prisma.AccountDeletionLinkUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccountDeletionLinkPayload>
+        }
+        aggregate: {
+          args: Prisma.AccountDeletionLinkAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAccountDeletionLink>
+        }
+        groupBy: {
+          args: Prisma.AccountDeletionLinkGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AccountDeletionLinkGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.AccountDeletionLinkCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AccountDeletionLinkCountAggregateOutputType> | number
         }
       }
     }
@@ -4074,7 +4149,9 @@ export const UserScalarFieldEnum = {
   reviewEnabledBy: 'reviewEnabledBy',
   chatSuggestions: 'chatSuggestions',
   chatAutodecide: 'chatAutodecide',
-  chatCodexReplies: 'chatCodexReplies'
+  chatCodexReplies: 'chatCodexReplies',
+  deletionRequestedAt: 'deletionRequestedAt',
+  deletionScheduledAt: 'deletionScheduledAt'
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
@@ -4126,6 +4203,18 @@ export const LoginCodeScalarFieldEnum = {
 } as const
 
 export type LoginCodeScalarFieldEnum = (typeof LoginCodeScalarFieldEnum)[keyof typeof LoginCodeScalarFieldEnum]
+
+
+export const AccountDeletionLinkScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  tokenHash: 'tokenHash',
+  expiresAt: 'expiresAt',
+  usedAt: 'usedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type AccountDeletionLinkScalarFieldEnum = (typeof AccountDeletionLinkScalarFieldEnum)[keyof typeof AccountDeletionLinkScalarFieldEnum]
 
 
 export const LoginAttemptScalarFieldEnum = {
@@ -4467,6 +4556,7 @@ export const ChatConversationScalarFieldEnum = {
   contextTokens: 'contextTokens',
   contextWindow: 'contextWindow',
   lastMessageAt: 'lastMessageAt',
+  lastTypedAt: 'lastTypedAt',
   createdAt: 'createdAt'
 } as const
 
@@ -4484,6 +4574,8 @@ export const ChatMessageScalarFieldEnum = {
   replyToId: 'replyToId',
   replyToRole: 'replyToRole',
   replyToExcerpt: 'replyToExcerpt',
+  replyToCardKind: 'replyToCardKind',
+  replyToCardId: 'replyToCardId',
   createdAt: 'createdAt'
 } as const
 
@@ -5278,6 +5370,7 @@ export type GlobalOmitConfig = {
   permission?: Prisma.PermissionOmit
   session?: Prisma.SessionOmit
   loginCode?: Prisma.LoginCodeOmit
+  accountDeletionLink?: Prisma.AccountDeletionLinkOmit
   loginAttempt?: Prisma.LoginAttemptOmit
   machine?: Prisma.MachineOmit
   project?: Prisma.ProjectOmit

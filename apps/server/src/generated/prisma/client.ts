@@ -67,6 +67,13 @@ export type Session = Prisma.SessionModel
  */
 export type LoginCode = Prisma.LoginCodeModel
 /**
+ * Model AccountDeletionLink
+ * A deletion asked from the public page (termhub.dev/excluir-conta, TER-728): the e-mailed link's
+ * token, hashed, single use and short-lived. No FK: written only for an existing account, removed
+ * with it by e-mail.
+ */
+export type AccountDeletionLink = Prisma.AccountDeletionLinkModel
+/**
  * Model LoginAttempt
  * Rate limit / lockout progressivo (chave "email:<e-mail>" ou "ip:<ip>").
  */

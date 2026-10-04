@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { TabQuestion, TabQuestionAnswer, TabQuestionChoice, TabQuestionPermission, TabQuestionSuggestionItem } from '../../lib/types';
 import { AutoDecisionBadge } from './AutoDecisionBadge';
+import { ChatReplyButton } from './ChatReplyButton';
 import { answerSummary, autoAnswerFailureText, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence, tabLabel } from './tab-question-text';
 
 export interface TabQuestionCardProps {
@@ -20,6 +21,8 @@ export interface TabQuestionCardProps {
    *  `ChatPanel` calls the API, updates this question from the response and surfaces a failure through
    *  `error` (409 `NOT_SCHEDULED` — the countdown already sent — gets its own sentence). */
   onCancelAutoAnswer?: (id: string) => void;
+  /** "Responder no chat" (TER-849): quotes this card in the composer, where "Responder" answers the tab. */
+  onReply?: (question: TabQuestion) => void;
 }
 
 /**
@@ -30,8 +33,13 @@ export const TabQuestionCard = memo(function TabQuestionCard(props: TabQuestionC
   const { question, error } = props;
   return (
     // `data-chat-card`: how the pending bar finds this card to scroll to it (TER-477).
-    <li data-chat-card={question.id} className="chat-enter rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
+    <li data-chat-card={question.id} className="chat-enter group rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
       {question.kind === 'choice' ? <ChoiceBody {...props} question={question} /> : <PermissionBody {...props} question={question} />}
+      {props.onReply && (
+        <div className="mt-1 flex justify-end">
+          <ChatReplyButton label="Responder no chat" onClick={() => props.onReply?.(question)} />
+        </div>
+      )}
       {/* TER-641: the countdown decides (or decided) this card by itself, from memory. */}
       {question.auto_decision && <AutoDecisionBadge decision={question.auto_decision} />}
       {question.status !== 'open' && <p className="mt-1 text-xs text-fg-dim">{statusLabel(question)}</p>}

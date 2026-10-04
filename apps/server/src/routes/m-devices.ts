@@ -75,7 +75,8 @@ export async function mobileDeviceRoutes(app: FastifyInstance, _repos: Repositor
     return toDeviceSelf(mobile.device);
   });
 
-  app.post('/self/revoke', { config: { action: 'delete' } }, async (request) => {
+  // Reachable while a deletion is pending (TER-720): the blocking screen's "Sair e remover este aparelho".
+  app.post('/self/revoke', { config: { action: 'delete', allowPendingDeletion: true } }, async (request) => {
     const mobile = request.mobile;
     if (!mobile || !('device' in mobile)) throw unauthorized();
     await deps.revoke(mobile.device.id, { reason: 'user', actor: 'user', ip: clientLocation(request).ip });

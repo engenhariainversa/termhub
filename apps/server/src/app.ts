@@ -63,6 +63,7 @@ import { apiTokenRoutes } from './routes/api-tokens.js';
 import { deviceRoutes } from './routes/devices.js';
 import { mcpRoutes } from './mcp/route.js';
 import { createMobileServices, registerMobileApi } from './mobile/app.js';
+import { TabChatHub } from './tab-chat/hub.js';
 import { revokeDevice } from './mobile/revocation.js';
 import { purgeMobile } from './mobile/purge.js';
 import { actionForMethod, type Resource } from './auth/permissions.js';
@@ -80,6 +81,10 @@ import { registerSimulatorWs } from './simulator/ws.js';
 import { SimulatorSessionManager } from './simulator/session-manager.js';
 import { createRealBackend } from './simulator/backend.js';
 import { seed } from './seed.js';
+import { AccountDeletionService } from './account/deletion.js';
+import { accountRoutes } from './routes/account.js';
+import { publicBus } from './public/bus.js';
+import { CLOSE } from '@termhub/agent-protocol';
 
 /** How long `preClose` waits on `chat.suspendAll()` before letting the close go on. */
 const PRE_CLOSE_SUSPEND_MS = 5_000;
@@ -119,7 +124,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   setPublicIdKey(await loadPublicIdKey(repos));
   await seed(repos, (m) => fastify.log.info(m));
 
-  const mailer = createMailer((m) => fastify.log.info(m));
+  const mailer = createMailer({ info: (m) => fastify.log.info(m), error: (m) => fastify.log.error(m) });
   const access = createAccessAllowlist(config.cloudflareAccess);
   const shortLinks = new ShortLinkService({
     users: repos.users,
@@ -188,6 +193,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // §7): built here, next to `chat`, since it needs a live `ChatService` to inject the wake turn into —
   // the hooks route (ingest path) has no `ChatService` of its own to build one from.
   const waker = createWaker({ repos, chat, maxPerHour: config.autoWakeMaxPerHour, log: fastify.log });
+  // The phone's tab chat (spec 2026-10-01): one follower per watched tab, poked by the hooks route below.
+  const tabChat = new TabChatHub({ repos, log: fastify.log });
   // Attachments (spec 2026-09-26 §5): the files on the chat-files volume, and the in-process queue
   // that reads them. A finished job tells every open screen through the bus, metadata only.
   const attachmentStore = diskStore(config.chatFiles.dir);
@@ -200,7 +207,22 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     log: fastify.log,
   });
   const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes };
-  const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments };
+  // Account deletion (TER-720, TER-728): the 30-day window, the cascade and the public page's links.
+  const deletion = new AccountDeletionService({
+    repos,
+    mailer,
+    access,
+    removeAttachment: (userId, id) => attachmentStore.remove(userId, id),
+    disconnectMachine: (machineId) => agents.disconnect(machineId, CLOSE.UNAUTHORIZED, 'deleted'),
+    ownerGone: (userId, machineIds) => {
+      for (const machine_id of machineIds) publicBus.publishRobotsGone({ machine_id });
+      publicBus.publishOwnerGone({ owner_id: userId });
+    },
+    appUrl: config.publicUrl,
+    pageUrl: config.accountDeletionUrl,
+    log: fastify.log.child({ mod: 'account-deletion' }),
+  });
+  const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments, tabChat, deletion };
   const mobile = config.mobile ? createMobileServices(mobileDeps) : null;
 
   // --- API (tudo autenticado, exceto rotas marcadas como public) ---
@@ -226,6 +248,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
 
       await api.register((a) => authRoutes(a, auth, { onNicknameClaimed: (u) => shortLinks.onNicknameClaimed(u) }), { prefix: '/auth' });
       await api.register((a) => cityLinkRoutes(a, { shortLinks }), { prefix: '/auth' });
+      // The person's own account: any signed-in person may delete it, no role grant needed.
+      await api.register((a) => accountRoutes(a, { auth: authService, deletion }), { prefix: '/account' });
       await guarded('machines', (a) => machineRoutes(a, repos), '/machines');
       await guarded('projects', (a) => projectRoutes(a, repos, { simulators }), '/projects');
       await guarded('projects', (a) => projectGroupRoutes(a, repos), '/project-groups');
@@ -245,11 +269,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('terminals', (a) => tabRoutes(a, repos, { simulators, closeSimulatorTab: (id) => simWs.closeTab(id) }), '/tabs');
       await guarded('terminals', (a) => transcriptionRoutes(a, { transcriptions }), '/transcriptions');
       await guarded('terminals', (a) => monitorRoutes(a, repos), '/monitor');
-      await guarded('terminals', (a) => hooksRoutes(a, repos, { waker }), '/hooks');
+      await guarded('terminals', (a) => hooksRoutes(a, repos, { waker, onTabEvent: (tabId) => tabChat.poke(tabId) }), '/hooks');
       await guarded('ai_accounts', (a) => aiAccountRoutes(a, repos), '/ai-accounts');
       await guarded('waitlist', (a) => waitlistRoutes(a, repos), '/waitlist');
       await guarded('roles', (a) => roleRoutes(a, repos), '/roles');
-      await guarded('users', (a) => userRoutes(a, repos, { mailer, access, revoke: mobile ? (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer, log: fastify.log }, id, input) : null }), '/users');
+      await guarded('users', (a) => userRoutes(a, repos, { mailer, access, deletion, revoke: mobile ? (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer, log: fastify.log }, id, input) : null }), '/users');
       await guarded('uploads', (a) => uploadRoutes(a, repos), '/uploads');
       await guarded('api_tokens', (a) => apiTokenRoutes(a, repos, { mcpUrl: config.mcpUrl }), '/api-tokens');
       await guarded('chat', (a) => chatRoutes(a, repos, { service: chat }), '/chat');
@@ -273,7 +297,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION, attachments: attachmentStore }));
 
   // --- Mobile app API (/api/m/v1): outside /api, so only its device-token + DPoP hook runs on it ---
-  if (config.mobile && mobile) sockets.push(await registerMobileApi(fastify, mobile, mobileDeps));
+  if (config.mobile && mobile) sockets.push(...(await registerMobileApi(fastify, mobile, mobileDeps)));
 
   // --- Frontend buildado (produção) ---
   const dirs = { ...defaultFrontendDirs(ROOT_DIR), ...opts.frontend };
@@ -296,6 +320,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     if (mobile) void purgeMobile(repos, mobile.enrolment).catch(() => {});
     // Cards whose tab vanished without a lifecycle event (the other color removed it, a crash): spec 2026-09-26 §4.7.
     void expireOrphanTabQuestions(repos, fastify.log);
+    // Accounts whose 30-day deletion window is over go for good (TER-720); both colors may run it, the row lock picks one.
+    void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
   const stopCiSync = startCiSyncScheduler(repos, fastify.log);
@@ -352,6 +378,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     // Before the database closes: a send in flight finishes (or records its failure) first.
     await stopAutoAnswerSweeper();
     stopTabSuggestions();
+    tabChat.close();
     await simulators.shutdownAll();
     await closePrisma();
   });

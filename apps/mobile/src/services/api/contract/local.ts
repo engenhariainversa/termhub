@@ -24,6 +24,8 @@ import {
   chatStandingGrantSchema,
   chatProjectsResponse,
   conciergeNoteView,
+  decisionChallengesBody,
+  decisionChallengesResponse,
   decisionsResponse,
   decisionViewSchema,
   deviceActivateBody,
@@ -212,6 +214,8 @@ export type TMobileMessageBody = z.infer<typeof mobileMessageBody>;
 export type TSendAccepted = z.infer<typeof sendAccepted>;
 export type TMobileDecisionBody = z.infer<typeof mobileDecisionBody>;
 export type TMobileBatchDecisionBody = z.infer<typeof mobileBatchDecisionBody>;
+export type TDecisionChallengesBody = z.infer<typeof decisionChallengesBody>;
+export type TDecisionChallengesResponse = z.infer<typeof decisionChallengesResponse>;
 export type TChatProjectItem = z.infer<typeof chatProjectItem>;
 export type TChatProjectsResponse = z.infer<typeof chatProjectsResponse>;
 export type THostOptionsResponse = z.infer<typeof hostOptionsResponse>;

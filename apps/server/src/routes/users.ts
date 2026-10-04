@@ -13,8 +13,8 @@ import type { RevokeInput } from '../mobile/revocation.js';
 import { canAccess, isAdmin } from '../auth/permissions.js';
 import { failureLabel } from '../chat/service.js';
 import { config } from '../config.js';
-import { publicBus } from '../public/bus.js';
 import { describeDeviceEvent } from './devices.js';
+import type { AccountDeletionService } from '../account/deletion.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const deviceParams = z.object({ id: z.string().min(1).max(64), deviceId: z.string().min(1).max(64) });
@@ -39,6 +39,8 @@ const mobileDisabled = () => new HttpError(503, 'O app mobile não está habilit
 export interface UserRouteDeps {
   mailer: Mailer;
   access: AccessAllowlist;
+  /** The same cascade as a self-service deletion (TER-720), without the 30-day window. */
+  deletion: Pick<AccountDeletionService, 'purge'>;
   /** null when this server has no mobile app configured (config.mobile unset) — see app.ts. */
   revoke: ((deviceId: string, input: RevokeInput) => Promise<Device | undefined>) | null;
 }
@@ -196,19 +198,11 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
       const role = await repos.roles.findById(user.role_id);
       if (role?.is_admin && (await repos.users.countAdmins()) <= 1) throw badRequest('Este é o único administrador');
     }
-    await repos.users.delete(id);
-    // Their nickname is gone, and with it their public city: drop the memoised copy and hang up
-    // every visitor watching it (their projects and machines outlive them, ownerless).
-    publicBus.publishOwnerGone({ owner_id: id });
-    // Best effort: the account is gone either way; a stale allowlist entry only lets them reach the login screen.
-    let accessRemoved = false;
-    try {
-      await deps.access.remove(user.email);
-      accessRemoved = true;
-    } catch (err) {
-      request.log.warn({ err, userId: id }, 'user delete: cloudflare access allowlist removal failed');
-    }
-    return { ok: true, access_removed: accessRemoved };
+    // Everything the account owns goes with it (machines, projects, integrations, chat, files…),
+    // and its public city, agents and Cloudflare Access entry are cleaned up after the commit.
+    // No e-mail: the admin did this, not the person.
+    if (!(await deps.deletion.purge(id, { actor: `admin:${request.user!.id}`, notify: false }))) throw notFound('Usuário não encontrado');
+    return { ok: true };
   });
 
   /**

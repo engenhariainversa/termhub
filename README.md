@@ -341,7 +341,8 @@ See [.env.example](.env.example). Main ones:
 | `AUTH_MODE` | `app`, `cloudflare`, `disabled` (dev) or the combination `app,cloudflare` |
 | `PUBLIC_URL` | public URL (secure cookies and OAuth redirect) |
 | `DATABASE_URL` | Postgres (`postgresql://user:pass@host:5432/db`) |
-| `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`EMAIL_FROM` | login code and invite delivery |
+| `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`EMAIL_FROM` | login code and invite delivery; without `SMTP_HOST` no e-mail is sent and the server logs an error (never the e-mail itself) |
+| `EMAIL_DEV_CONSOLE` | `true` = development only: print e-mails (login codes included) to the log instead of sending them; refused in production |
 | `CF_ACCOUNT_ID`/`CF_API_TOKEN`/`CF_ACCESS_APP_DOMAIN`/`CF_ACCESS_POLICY_NAME` | Cloudflare Access allowlist sync on invite/delete (optional) |
 | `ALPHA_COMMUNITY_URL` | WhatsApp group linked from the alpha-tester e-mail (Waitlist tab → Convidar); default `https://77a.it/comunidadetermhub` |
 | `TYPETOACCESS_API_KEY` | TypeToAccess key: creates each public city's short link (`77a.it/<nickname>`) and lets owners paste their own in Minha cidade; unset = long city links only |
@@ -376,7 +377,7 @@ apps/server/prisma schema.prisma + migrations (npm run prisma:migrate -- --name 
 apps/server/src
   auth/          providers (password, google, cloudflare), session, CSRF, middleware
   db/            Prisma client + repositories (the rest of the app never imports Prisma)
-  email/         mailer (SMTP/console) and templates
+  email/         mailer (SMTP, or the explicit dev console) and templates
   cli/           create-user
   routes/        REST routes (zod on every input)
   terminal/      exec on machines (local/ssh), PTY, WebSocket

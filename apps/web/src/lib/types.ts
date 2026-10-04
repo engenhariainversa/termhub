@@ -30,6 +30,17 @@ export interface User {
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until; only the user-admin routes (/api/users) send it */
   review_enabled_by?: string | null;
+  /** when the person asked to delete their own account (TER-720); null = no request */
+  deletion_requested_at: string | null;
+  /** when the account is deleted for good; non-null = deletion pending, the account is deactivated */
+  deletion_scheduled_at: string | null;
+}
+
+/** GET/POST/DELETE /api/account/deletion. */
+export interface AccountDeletionStatus {
+  pending: boolean;
+  requested_at: string | null;
+  scheduled_at: string | null;
 }
 
 /** Side effects of an invite (the user row is created regardless). */
@@ -901,11 +912,16 @@ export interface ChatMessage {
   reply_to?: ChatReplyRef;
 }
 
-/** What a message answers (TER-447): a snapshot taken when it was sent; `id` is null once the original was deleted. */
+/** The thread's cards a message can answer instead of a message (TER-849). */
+export type ReplyCardKind = 'action' | 'tab_question';
+
+/** What a message answers (TER-447): a snapshot taken when it was sent; `id` is null once the original
+ *  was deleted, and on a reply to a card (TER-849), which `card` names. */
 export interface ChatReplyRef {
   id: string | null;
   role: 'user' | 'assistant';
   excerpt: string;
+  card?: { kind: ReplyCardKind; id: string };
 }
 
 /** All the chat's host line ever needs of a machine; the payload carries whole `Machine` rows. */

@@ -28,7 +28,7 @@ import { closeLive, emptyFold, pruneLive, seedLive, type LiveFold } from '../mod
 import type { PickedFile } from './attachments';
 import { createThrottledStorage } from './throttled-storage';
 import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, ChatProjectGrant, ChatStandingGrant, SubagentView, TabLimit, TabQuestion, TabSuggestion } from '../model/types';
-import type { ReplyRef } from '../model/reply';
+import { replyBody, replyOnRow, replyRefOfRow, type ReplyRef } from '../model/reply';
 
 /** `approve_tab` approves the card *and* trusts its tab for send_input ("Permitir sempre nesta aba");
  * `approve_project` approves it *and* trusts its project's board ("Permitir sempre neste projeto");
@@ -124,7 +124,7 @@ export interface ChatState {
   openByRoute(id: string): Promise<void>;
   close(): void;
   /** Resolves `true` once the server accepted the message (`202`). `text` may be empty with attachments.
-   *  `replyTo` is the message it answers (TER-447): shown on the row at once, its id sent with it. */
+   *  `replyTo` is the message (TER-447) or card (TER-849) it answers: shown on the row at once, its id sent with it. */
   send(text: string, attachments?: TChatAttachment[], replyTo?: ReplyRef): Promise<boolean>;
   /** Uploads one picked file into the open conversation; the composer's chip follows `onProgress`. */
   uploadAttachment(file: PickedFile, onProgress: (fraction: number) => void): Promise<TChatAttachment>;
@@ -637,14 +637,14 @@ export function createChatStore(deps: ChatDeps) {
               error_code: null,
               created_at: new Date().toISOString(),
               ...(attachments.length > 0 ? { attachments } : {}),
-              ...(replyTo ? { reply_to: replyTo } : {}),
+              ...(replyTo ? { reply_to: replyOnRow(replyTo) } : {}),
               local: 'sending',
             };
             set({ sending: true, error: null });
             patchSlot(key, (slot) => ({ messages: [...slot.messages, row] }));
             try {
               // A `409 ATTACHMENT_UNAVAILABLE` takes the generic path below: its pt-BR message is the server's.
-              const accepted = await api.sendMessage(session().auth(), { text: body, project_id: projectId, ...(attachments.length > 0 ? { attachment_ids: attachments.map((a) => a.id) } : {}), ...(replyTo ? { reply_to_id: replyTo.id } : {}) });
+              const accepted = await api.sendMessage(session().auth(), { text: body, project_id: projectId, ...(attachments.length > 0 ? { attachment_ids: attachments.map((a) => a.id) } : {}), ...(replyTo ? replyBody(replyTo) : {}) });
               if (gen !== generation) return false;
               // Accepted: the row exists on the server now, newer than any snapshot still in flight.
               arrivedDuringReads(key, accepted.user_message_id);
@@ -679,9 +679,8 @@ export function createChatStore(deps: ChatDeps) {
             const row = get().conversations[key]?.messages.find((m) => m.id === messageId && m.local === 'failed');
             if (!row) return false;
             patchSlot(key, (slot) => ({ messages: slot.messages.filter((m) => m.id !== messageId) }));
-            // A failed reply is sent again as the same reply: a local row's quote always has its id.
-            const replyTo = row.reply_to && row.reply_to.id !== null ? { ...row.reply_to, id: row.reply_to.id } : undefined;
-            return get().send(row.text, row.attachments, replyTo);
+            // A failed reply is sent again as the same reply: a local row's quote always names what it answers.
+            return get().send(row.text, row.attachments, replyRefOfRow(row.reply_to));
           },
 
           async decide(actionId, decision) {

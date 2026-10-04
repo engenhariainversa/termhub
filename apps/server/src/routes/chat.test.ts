@@ -1006,6 +1006,15 @@ it('POST /messages passes reply_to_id to the service (TER-447)', async () => {
   expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_id: '' } })).statusCode).toBe(400);
 });
 
+it('POST /messages passes reply_to_card to the service, never together with reply_to_id (TER-849)', async () => {
+  const { app, start } = build();
+  const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'por quê?', reply_to_card: { kind: 'action', id: 'a7' } } });
+  expect(res.statusCode).toBe(202);
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'por quê?', { projectId: null, replyToCard: { kind: 'action', id: 'a7' } });
+  expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_card: { kind: 'tab_suggestion', id: 'q1' } } })).statusCode).toBe(400);
+  expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_id: 'm7', reply_to_card: { kind: 'action', id: 'a7' } } })).statusCode).toBe(400);
+});
+
 it('POST /messages answers 409 ATTACHMENT_UNAVAILABLE as the service throws it', async () => {
   const { app } = build({ start: vi.fn(async () => { throw new HttpError(409, 'Um dos anexos não está disponível: envie de novo', 'ATTACHMENT_UNAVAILABLE'); }) });
   const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', attachment_ids: ['gone'] } });

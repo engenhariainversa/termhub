@@ -9,7 +9,7 @@ const user = { id: 'u1', email: 'a@b.c', name: 'A' };
 vi.mock('./api', () => ({
   api: {
     auth: {
-      me: vi.fn(async () => ({ user: null, config: {} })),
+      me: vi.fn(async () => ({ user: null, config: {} }) as { user: unknown }),
       login: vi.fn(async () => ({ user })),
       verifyCode: vi.fn(async () => ({ user })),
     },
@@ -17,6 +17,7 @@ vi.mock('./api', () => ({
   ApiError: class ApiError extends Error {},
 }));
 
+import { api } from './api';
 import { AuthProvider, useAuth } from './auth';
 
 type Auth = ReturnType<typeof useAuth>;
@@ -51,5 +52,18 @@ describe('AuthProvider analytics', () => {
     const auth = mount();
     await act(() => auth().verifyCode('a@b.c', '123456'));
     expect(trackMock).toHaveBeenCalledWith('login', { method: 'code' });
+  });
+});
+
+describe('AuthProvider pending deletion', () => {
+  it('refetches the user when a request answers ACCOUNT_PENDING_DELETION', async () => {
+    const auth = mount();
+    await act(async () => {});
+    const pending = { ...user, deletion_scheduled_at: '2026-10-31T12:00:00.000Z' };
+    vi.mocked(api.auth.me).mockResolvedValueOnce({ user: pending });
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('termhub:pending-deletion'));
+    });
+    expect(auth().user).toEqual(pending);
   });
 });

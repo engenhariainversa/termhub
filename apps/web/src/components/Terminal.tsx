@@ -356,6 +356,8 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
       onExit: () => onExitRef.current?.(),
     });
     connRef.current = conn;
+    // the tab on screen goes ahead of the hidden ones in the handshake queue (TER-902)
+    conn.setPriority(!!activeRef.current);
     conn.connect({ cols: term.cols, rows: term.rows });
 
     const dataSub = term.onData((d) => conn.send(d));
@@ -593,6 +595,7 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
   // Ao ativar a tab: reajusta tamanho (não mexe no foco do teclado — isso é o `focused` abaixo,
   // senão a última tab montada rouba o foco de quem está de fato na célula focada).
   useEffect(() => {
+    connRef.current?.setPriority(!!active);
     if (!active) return;
     const id = requestAnimationFrame(() => {
       try {

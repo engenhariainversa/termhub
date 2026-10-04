@@ -309,4 +309,12 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatRepository (Postgres)
     await repo.deleteMessage(original.id);
     expect((await repo.listMessages(c.id)).find((m) => m.id === reply.id)?.reply_to).toEqual({ id: null, role: 'assistant', excerpt: 'Abri a aba build' });
   });
+
+  it('a reply to a card names the card and keeps its quote (TER-849)', async () => {
+    const c = await repo.getOrCreateForUser(userId);
+    const card = { kind: 'action' as const, id: newId() };
+    const reply = await repo.addMessage({ conversation_id: c.id, role: 'user', text: 'por quê?', reply_to: { id: null, role: 'assistant', excerpt: 'Abrir aba build', card } });
+    expect(reply.reply_to).toEqual({ id: null, role: 'assistant', excerpt: 'Abrir aba build', card });
+    expect((await repo.listMessages(c.id)).find((m) => m.id === reply.id)?.reply_to).toEqual({ id: null, role: 'assistant', excerpt: 'Abrir aba build', card });
+  });
 });

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
+jest.mock('@/features/tab-chat/viewmodel/useSessionsStore', () => ({ useSessionsStore: require('../../../../test/helpers/ui-stores').stores.sessions }));
 // The screen now renders the wide split's embedded `ConversationView` too (unused at this narrow
 // width, but its module graph is still loaded): the composer's microphone never records here.
 jest.mock('@/features/chat/viewmodel/use-voice', () => ({
@@ -116,3 +117,25 @@ describe('Chats: pinning a project (TER-541)', () => {
   });
 });
 
+
+describe('Chats: the Sessões segment (spec 2026-10-01 tab chat §6)', () => {
+  it('starts on Conversas, and Sessões shows the open tabs, loading them once', async () => {
+    const load = jest.spyOn(stores.api, 'tabs');
+    await render(<ChatsScreen />);
+    const conversas = await screen.findByRole('tab', { name: 'Conversas' }, LOAD);
+    expect(conversas.props.accessibilityState).toMatchObject({ selected: true });
+    expect(screen.getByText('Chat geral')).toBeTruthy();
+    expect(load).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Sessões' }));
+    expect(await screen.findByText('Trabalhando · Bash', undefined, LOAD)).toBeTruthy();
+    expect(screen.queryByText('Chat geral')).toBeNull();
+    expect(load).toHaveBeenCalledTimes(1);
+
+    await fireEvent.press(screen.getByRole('button', { name: /^api/ }));
+    expect(mockPush).toHaveBeenLastCalledWith('/session/t-api');
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Conversas' }));
+    expect(screen.getByText('Chat geral')).toBeTruthy();
+  });
+});

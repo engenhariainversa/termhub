@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
 jest.mock('@/features/permissions/viewmodel/usePermissionsStore', () => ({ usePermissionsStore: require('../../../../test/helpers/ui-stores').stores.permissions }));
+jest.mock('@/features/account/viewmodel/useAccountStore', () => ({ useAccountStore: require('../../../../test/helpers/ui-stores').stores.account }));
 jest.mock('@/features/settings/viewmodel/useSettingsStore', () => ({ useSettingsStore: require('../../../../test/helpers/ui-stores').stores.settings }));
 
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
@@ -13,6 +14,8 @@ import { emptyFold } from '@/features/chat/model/live';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { useThemeStore } from '@/features/theme/viewmodel/useThemeStore';
+import { ACCOUNT_DELETION_ACTION_ID } from '@/services/api/contract';
+import { PIN } from '../../../../test/helpers/enrolled-session';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { SettingsScreen } from './settings-screen';
 
@@ -82,6 +85,42 @@ describe('Ajustes', () => {
     expect(leave).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByRole('button', { name: 'Remover' }));
     expect(leave).toHaveBeenCalledTimes(1);
+  });
+
+  it('"Excluir minha conta" explains first, then asks for the PIN and posts a proof for the deletion', async () => {
+    const challenge = jest.spyOn(stores.api, 'challenge');
+    const post = jest.spyOn(stores.api, 'requestAccountDeletion');
+    await render(<SettingsScreen />);
+
+    await fireEvent.press(await screen.findByRole('button', { name: 'Excluir minha conta' }, LOAD));
+    expect(screen.getByText(/excluída de vez em 30 dias/)).toBeTruthy();
+    expect(screen.getByText(/^O que é apagado/)).toBeTruthy();
+    expect(screen.getByText(/^O que fica/)).toBeTruthy();
+    expect(screen.getByText(/cancelar a exclusão/)).toBeTruthy();
+    expect(useSessionStore.getState().pinPrompt).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Confirmar exclusão' }));
+    expect(useSessionStore.getState().pinPrompt).toMatchObject({ actionId: ACCOUNT_DELETION_ACTION_ID, decision: 'delete_account' });
+    expect(challenge).not.toHaveBeenCalled();
+
+    await act(async () => useSessionStore.getState().resolvePinPrompt(PIN));
+    await waitFor(() => expect(stores.account.getState().pending).toBe(true), LOAD);
+    expect(challenge).toHaveBeenCalledWith({ device_id: useSessionStore.getState().deviceId, purpose: 'decision', action_id: ACCOUNT_DELETION_ACTION_ID });
+    expect(post).toHaveBeenCalledWith(expect.anything(), { challenge: expect.any(String), pin_proof: expect.any(String) });
+    expect(stores.account.getState().scheduledAt).not.toBeNull();
+
+    // The mock refuses every other route while pending: cancel, for the tests that follow.
+    await act(async () => stores.account.getState().cancelDeletion());
+    expect(stores.account.getState().pending).toBe(false);
+  });
+
+  it('"Voltar" closes the explanation without asking for the PIN', async () => {
+    await render(<SettingsScreen />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Excluir minha conta' }, LOAD));
+    await fireEvent.press(screen.getByRole('button', { name: 'Voltar' }));
+    expect(screen.queryByRole('button', { name: 'Confirmar exclusão' })).toBeNull();
+    expect(useSessionStore.getState().pinPrompt).toBeNull();
+    await screen.findByText('iPhone de teste', undefined, LOAD);
   });
 
   it('shows the general chat host line and the mock server mode, without switching what is actually open', async () => {

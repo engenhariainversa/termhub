@@ -179,7 +179,8 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 | An API token | Settings › API tokens › revoke | The next call is refused. |
 | A phone | Settings › Devices › revoke | Its WebSocket closes with 4401 and its tokens are refused. |
 | A chat grant | the grant's "revoke" button (web or phone) | The next action asks again. |
-| A user | Admin › Users › remove | Sessions, tokens, devices and conversations are deleted. The user's machines lose their owner, so also rotate or delete them. |
+| A user | Admin › Users › remove | The account and everything it owns are deleted at once: machines (their agents are disconnected), projects, integrations, sessions, tokens, devices, conversations and attachment files. |
+| Your own account | Perfil (web) or Ajustes (app) › Excluir minha conta, or `termhub.dev/excluir-conta` | The account is deactivated at once (sessions end; API and device tokens are refused) and deleted for good after 30 days, with the same cascade as above. Signing in during the 30 days can cancel it. |
 | On the machine itself | `termhub-agent service uninstall`, `termhub-agent disconnect`, `npm rm -g @termhub/agent` | Removes the service and the local config. Remove the monitor hooks first from the machine's page in the app ("Remover" on the hooks card). |
 
 ## 6. Checklist for IT

@@ -55,6 +55,10 @@ export const CAPABILITY_SIM = 'sim';
  */
 export const CAPABILITY_CLAUDE_STREAM_INPUT = 'claude.stream_input';
 
+/** The agent answers `transcript.read` and presses `BTab` (spec 2026-10-01 tab chat). The server
+ *  requires it before either: an older agent drops the RPC and refuses the key. */
+export const CAPABILITY_TRANSCRIPT = 'transcript';
+
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
 export function streamUserMessageLine(text: string, uuid: string): string {

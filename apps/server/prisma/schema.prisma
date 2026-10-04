@@ -82,8 +82,13 @@ model User {
   verifiedMemoryItems MemoryItem[] @relation("MemoryItemVerifier")
   standingGrants     ChatStandingGrant[]
   chatDefaultRestrictions ChatDefaultRestriction[]
+  /// Self-service deletion (TER-720): when the person asked; the account is deactivated from then on.
+  deletionRequestedAt DateTime? @map("deletion_requested_at")
+  /// When the deletion job removes the account for good (30 days after the request). Null = not pending.
+  deletionScheduledAt DateTime? @map("deletion_scheduled_at")
 
   @@index([roleId])
+  @@index([deletionScheduledAt])
   @@map("users")
 }
 
@@ -140,6 +145,22 @@ model LoginCode {
 
   @@index([email, createdAt])
   @@map("login_codes")
+}
+
+/// A deletion asked from the public page (termhub.dev/excluir-conta, TER-728): the e-mailed link's
+/// token, hashed, single use and short-lived. No FK: written only for an existing account, removed
+/// with it by e-mail.
+model AccountDeletionLink {
+  id        String    @id
+  email     String
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  @@index([expiresAt])
+  @@map("account_deletion_links")
 }
 
 /// Rate limit / lockout progressivo (chave "email:<e-mail>" ou "ip:<ip>").
@@ -729,6 +750,9 @@ model ChatConversation {
   contextTokens Int?          @map("context_tokens")
   contextWindow Int?          @map("context_window")
   lastMessageAt DateTime?     @map("last_message_at")
+  /// The last time the person typed a message here (TER-530) — not a decision's re-injection nor a
+  /// wake, which are stored as user messages too. A "no" given before it no longer refuses on its own.
+  lastTypedAt   DateTime?     @map("last_typed_at")
   createdAt     DateTime      @default(now()) @map("created_at")
   messages      ChatMessage[]
   actions       ChatAction[]
@@ -770,6 +794,10 @@ model ChatMessage {
   /// user | assistant
   replyToRole    String?          @map("reply_to_role")
   replyToExcerpt String?          @map("reply_to_excerpt")
+  /// TER-849: a reply to a card of the thread instead of a message (`replyToId` is then null).
+  /// action | tab_question, with that row's id; no foreign key, the excerpt above is the quote.
+  replyToCardKind String?         @map("reply_to_card_kind")
+  replyToCardId   String?         @map("reply_to_card_id")
   createdAt      DateTime         @default(now()) @map("created_at")
   attachments    ChatAttachment[]
 
