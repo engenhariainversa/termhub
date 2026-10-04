@@ -1,4 +1,4 @@
-import { CAPABILITY_SIM, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
+import { CAPABILITY_SIM, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { AgentClosedError, AgentRpcError, AgentTimeoutError } from './connection.js';
@@ -76,6 +76,26 @@ export function requireSimCapable(machine: Machine): void {
   const capabilities = agents.capabilities(machine.id) ?? [];
   if (!capabilities.includes(CAPABILITY_SIM)) {
     throw new HttpError(409, `Atualize o agente desta máquina (npm i -g @termhub/agent, versão ${SIM_MIN_AGENT_VERSION} ou mais nova) para usar o simulador`, 'AGENT_OUTDATED');
+  }
+}
+
+/** First agent release that advertises `transcript` (`transcript.read` and the `BTab` key). */
+export const TRANSCRIPT_MIN_AGENT_VERSION = '0.15.0';
+
+/**
+ * Reading a tab's transcript, or pressing Shift+Tab (`BTab`), needs an agent machine whose connected
+ * agent claims `transcript` (spec 2026-10-01 tab chat D7): an older agent drops the RPC, which would
+ * read as a timeout, and its schema refuses the key.
+ */
+export function requireTranscriptCapable(machine: Machine): void {
+  if (machine.type !== 'agent') throw new HttpError(400, 'Esta máquina não usa o agente do termhub', 'UNSUPPORTED_MACHINE');
+  if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
+  if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_TRANSCRIPT)) {
+    throw new HttpError(
+      409,
+      `Atualize o agente desta máquina (npm i -g @termhub/agent, versão ${TRANSCRIPT_MIN_AGENT_VERSION} ou mais nova) para abrir a sessão como chat`,
+      'AGENT_OUTDATED',
+    );
   }
 }
 
