@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agentMessage,
   CAPABILITY_CLAUDE_STREAM_INPUT,
+  CAPABILITY_TRANSCRIPT,
   CAPABILITY_SIM,
   claudeOpenParams,
   helloMessage,
@@ -142,4 +143,8 @@ describe('streamed claude input', () => {
     expect(line).not.toBe(STREAM_END_INPUT_LINE);
     expect(JSON.parse(STREAM_END_INPUT_LINE)).toEqual({ type: 'termhub_end_input' });
   });
+});
+
+it('names the transcript capability once', () => {
+  expect(CAPABILITY_TRANSCRIPT).toBe('transcript');
 });

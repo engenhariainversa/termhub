@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type TmuxKey } from '@termhub/agent-protocol';
 import { buildPaneForegroundScript, buildScrollScript, parsePaneForeground, type PaneForeground } from '@termhub/machine-ops';
-import { agentRpc, requireAgentVersion } from '../agent/errors.js';
+import { agentRpc, requireAgentVersion, requireTranscriptCapable } from '../agent/errors.js';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { REMOTE_PATH_PREFIX, assertSessionName, runOnMachine, shellQuote } from './machine-exec.js';
@@ -97,6 +97,8 @@ export async function sendKeyToSession(machine: Machine, session: string, key: T
   assertSessionName(session);
   if (machine.type === 'agent') {
     requireAgentVersion(machine, TERMINAL_RPC_MIN_AGENT_VERSION);
+    // Shift+Tab joined the key list with the transcript capability; an older agent refuses it.
+    if (key === 'BTab') requireTranscriptCapable(machine);
     await agentRpc(machine, 'tmux.sendKey', { session, key });
     return;
   }
