@@ -83,6 +83,8 @@ describe('claudeFooterMode — the permission mode under the input box (spec 202
   it('an input box with none of them is the default mode, even when the conversation mentions one', () => {
     expect(claudeFooterMode(screen([], ['● Turn plan mode on with shift+tab.']))).toBe('default');
     expect(claudeFooterMode(screen(['  ? for shortcuts']))).toBe('default');
+    // Claude Code 2.1.289 names the default mode in the footer
+    expect(claudeFooterMode(screen(['  ⏸ manual mode on · ← 1 agent']))).toBe('default');
   });
 
   it('a pane with no input box is unknown', () => {

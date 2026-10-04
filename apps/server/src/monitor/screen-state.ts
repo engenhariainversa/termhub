@@ -46,10 +46,12 @@ export function claudeScreenState(screen: string): ScreenState | null {
 export type ClaudeFooterMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions' | 'auto' | 'unknown';
 
 /**
- * What the footer under the input box says for each mode other than `default` (which says nothing).
- * One row per mode, so a Claude Code release that rewords one is a one-line fix. Checked on
- * 2026-10-04 against a real footer: `⏵⏵ auto mode on (shift+tab to cycle)` and `⏵⏵ bypass permissions
- * on (shift+tab to cycle)` (the latter also in `fixtures/claude-screens/idle-2.1.285.txt`).
+ * What the footer under the input box says for each mode other than `default` (no row: anything else
+ * reads as `default`). One row per mode, so a Claude Code release that rewords one is a one-line fix.
+ * Checked on 2026-10-04 by cycling Shift+Tab in Claude Code 2.1.289: `⏵⏵ auto mode on`, `⏸ manual mode
+ * on` (the default mode, which older releases left blank), `⏵⏵ accept edits on`, `⏸ plan mode on`, each
+ * followed by `(shift+tab to cycle)` but the default. `⏵⏵ bypass permissions on` only shows in a session
+ * started with it, as in `fixtures/claude-screens/idle-2.1.285.txt`.
  */
 export const CLAUDE_FOOTER_MODES: readonly { text: string; mode: Exclude<ClaudeFooterMode, 'default' | 'unknown'> }[] = [
   { text: 'accept edits on', mode: 'acceptEdits' },
