@@ -691,3 +691,123 @@ describe('attachments', () => {
     expect(calls[0]!.url).toBe('https://termhub.dev/api/m/v1/chat/attachments/att1');
   });
 });
+
+describe('tab chat (spec 2026-10-01 tab chat §5.4)', () => {
+  const summary = {
+    id: 't 1',
+    name: 'api',
+    project: { id: 'p-termhub', key: 'TER', name: 'termhub' },
+    machine: { id: 'm-jarvis', name: 'jarvis' },
+    state: 'working',
+    background: false,
+    state_at: null,
+    needs_you: false,
+    activity: 'Bash',
+    activity_verb: null,
+    availability: 'ready',
+  };
+  const page = { tab: summary, session_id: 's1', items: [{ kind: 'user', id: 'u1', at: '', text: 'oi', images: 0 }, { kind: 'hologram', id: 'x' }], before: 's1.10', live: 's1.99', mode: 'default', degraded: false, questions: [], suggestions: [] };
+
+  it('tabs lists the summaries', async () => {
+    const { transport, calls } = scripted([{ status: 200, body: { tabs: [summary] } }]);
+    const res = await make(transport).tabs({ accessToken: 'tok' });
+    expect(calls[0]).toMatchObject({ method: 'GET', url: 'https://termhub.dev/api/m/v1/tabs' });
+    expect(res.tabs[0]!.name).toBe('api');
+  });
+
+  it('startSession posts the body and answers the new tab id', async () => {
+    const { transport, calls } = scripted([{ status: 200, body: { tab_id: 't9' } }]);
+    const res = await make(transport).startSession({ accessToken: 'tok' }, { project_id: 'p-termhub', prompt: 'oi' });
+    expect(calls[0]).toMatchObject({ method: 'POST', url: 'https://termhub.dev/api/m/v1/tabs' });
+    expect(JSON.parse(calls[0]!.body!)).toEqual({ project_id: 'p-termhub', prompt: 'oi' });
+    expect(res).toEqual({ tab_id: 't9' });
+  });
+
+  it('tabChat reads a page, encodes the id and the cursor, and drops an item kind it does not know', async () => {
+    const { transport, calls } = scripted([
+      { status: 200, body: page },
+      { status: 200, body: page },
+    ]);
+    const api = make(transport);
+    const first = await api.tabChat({ accessToken: 'tok' }, 't 1');
+    expect(calls[0]).toMatchObject({ method: 'GET', url: 'https://termhub.dev/api/m/v1/tabs/t%201/chat' });
+    expect(first.items).toEqual([{ kind: 'user', id: 'u1', at: '', text: 'oi', images: 0 }]);
+    await api.tabChat({ accessToken: 'tok' }, 't 1', 's1.10');
+    expect(calls[1]!.url).toBe('https://termhub.dev/api/m/v1/tabs/t%201/chat?before=s1.10');
+  });
+
+  it('sendTabMessage posts the text; a 409 surfaces its code', async () => {
+    const { transport, calls } = scripted([
+      { status: 204, text: '' },
+      { status: 409, body: { error: 'Responda a pergunta acima antes de enviar uma mensagem', code: 'WAITING_PERMISSION' } },
+    ]);
+    const api = make(transport);
+    await api.sendTabMessage({ accessToken: 'tok' }, 't1', 'faz o deploy');
+    expect(calls[0]).toMatchObject({ method: 'POST', url: 'https://termhub.dev/api/m/v1/tabs/t1/chat/messages' });
+    expect(JSON.parse(calls[0]!.body!)).toEqual({ text: 'faz o deploy' });
+    await expect(api.sendTabMessage({ accessToken: 'tok' }, 't1', 'x')).rejects.toMatchObject({ status: 409, code: 'WAITING_PERMISSION' });
+  });
+
+  it('tabAction posts the action and answers the mode', async () => {
+    const { transport, calls } = scripted([{ status: 200, body: { done: true, mode: 'plan' } }]);
+    const res = await make(transport).tabAction({ accessToken: 'tok' }, 't1', 'cycle_mode');
+    expect(calls[0]).toMatchObject({ method: 'POST', url: 'https://termhub.dev/api/m/v1/tabs/t1/chat/actions' });
+    expect(JSON.parse(calls[0]!.body!)).toEqual({ action: 'cycle_mode' });
+    expect(res).toEqual({ done: true, mode: 'plan' });
+  });
+
+  it('tabScreen reads the pane, with the line count', async () => {
+    const { transport, calls } = scripted([{ status: 200, body: { text: '$ ls' } }]);
+    const res = await make(transport).tabScreen({ accessToken: 'tok' }, 't1', 80);
+    expect(calls[0]).toMatchObject({ method: 'GET', url: 'https://termhub.dev/api/m/v1/tabs/t1/screen?lines=80' });
+    expect(res.text).toBe('$ ls');
+  });
+
+  it('uploadTabFile posts the file as the body with its mime, the name in the query', async () => {
+    const uploads: Array<{ url: string; fileUri: string; mime: string; headers: Record<string, string> }> = [];
+    const transport: Transport = {
+      fetch: async () => {
+        throw new Error('not in this test');
+      },
+      connect: () => {
+        throw new Error('not in this test');
+      },
+      upload: async (url, fileUri, mime, headers) => {
+        uploads.push({ url, fileUri, mime, headers });
+        return { status: 200, body: JSON.stringify({ path: '/tmp/termhub/foto.png', name: 'foto.png' }) };
+      },
+    };
+    const res = await make(transport).uploadTabFile({ accessToken: 'tok' }, 't1', 'file:///x/foto.png', 'foto ü.png', 'image/png');
+    expect(res).toEqual({ path: '/tmp/termhub/foto.png', name: 'foto.png' });
+    expect(uploads[0]!.url).toBe('https://termhub.dev/api/m/v1/tabs/t1/chat/files?name=foto%20%C3%BC.png');
+    expect(uploads[0]!.mime).toBe('image/png');
+    expect(dpopPayload(uploads[0]!.headers.DPoP!)).toMatchObject({ htm: 'POST', htu: 'https://termhub.dev/api/m/v1/tabs/t1/chat/files' });
+  });
+
+  it('tabEvents connects to /ws/m/tabs/:id with the cursor, signs the bare path and hands over the frames', async () => {
+    const connects: Array<{ url: string; headers: Record<string, string>; handlers: import('./transport').TransportSocketHandlers }> = [];
+    const transport: Transport = {
+      fetch: () => {
+        throw new Error('not in this test');
+      },
+      connect: (url, headers, handlers) => {
+        connects.push({ url, headers, handlers });
+        return { close: jest.fn() };
+      },
+      upload: () => {
+        throw new Error('not in this test');
+      },
+    };
+    const api = make(transport);
+    const onFrame = jest.fn();
+    const close = api.tabEvents(() => ({ accessToken: 'tok' }), 't 1', { after: () => 's1.99', onFrame, onClose: jest.fn() });
+    await waitFor(() => connects.length > 0);
+    expect(connects[0]!.url).toBe('wss://termhub.dev/ws/m/tabs/t%201?v=1&after=s1.99');
+    expect(dpopPayload(connects[0]!.headers.DPoP!)).toMatchObject({ htm: 'GET', htu: 'https://termhub.dev/ws/m/tabs/t%201', ath: b64url(sha256(utf8('tok'))) });
+    connects[0]!.handlers.onOpen();
+    connects[0]!.handlers.onMessage(JSON.stringify({ type: 'hello', protocol: 1, server_time: new Date((NOW + 7) * 1000).toISOString(), availability: 'ready' }));
+    expect(api.skewSeconds).toBe(7);
+    expect(onFrame).toHaveBeenCalledWith({ type: 'hello', protocol: 1, server_time: expect.any(String), availability: 'ready' });
+    close();
+  });
+});
