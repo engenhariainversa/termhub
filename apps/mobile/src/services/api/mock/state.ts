@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
-import type { StandingGrantKind, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLessonItem, TNotificationRow, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
+import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLessonItem, TNotificationRow, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
  * `transport.ts`. `error` is pt-BR text; `extra` carries `attempts_left` / `retry_after`, spread
@@ -79,6 +79,24 @@ export interface MockSocket {
   deviceId: string;
   send(event: unknown): void;
   close(code: number): void;
+}
+
+/** A socket open on `/ws/m/tabs/:id` (spec 2026-10-01 tab chat §5.5): kept apart from `sockets`, which
+ * carry the chat's events. */
+export interface MockTabSocket {
+  tabId: string;
+  send(frame: unknown): void;
+  close(code: number): void;
+}
+
+/** A terminal tab read as a conversation (`handlers/tabs.ts`): its summary, its session (null: no
+ * transcript yet), the items of that session, oldest first, its mode and its pane's text. */
+export interface MockTab {
+  summary: TTabSummary;
+  session: string | null;
+  items: TTabChatItem[];
+  mode: string;
+  screen: string;
 }
 
 /** `chat/projects`' rows minus the derived fields (`busy`, `pending_confirmations`,
@@ -200,6 +218,9 @@ export interface MockState {
    * (seconds) the jti was first seen at, used to prune entries older than the window. */
   jtis: Map<string, Map<string, number>>;
   sockets: Set<MockSocket>;
+  /** Sessions (spec 2026-10-01 tab chat): the tabs by id, and the sockets open on them. */
+  tabs: Map<string, MockTab>;
+  tabSockets: Set<MockTabSocket>;
 
   projects: Map<string, MockProject>;
   /** The mock user's Favoritos (TER-541): pinned project ids, in order. Starts empty. */
@@ -262,6 +283,8 @@ export function createMockState(): MockState {
     challenges: new Map(),
     jtis: new Map(),
     sockets: new Set(),
+    tabs: new Map(),
+    tabSockets: new Set(),
     projects: new Map(),
     favorites: [],
     conversations: new Map(),
