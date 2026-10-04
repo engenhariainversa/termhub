@@ -328,6 +328,7 @@ export const TicketScalarFieldEnum = {
   status: 'status',
   meta: 'meta',
   taskId: 'taskId',
+  leftSourceAt: 'leftSourceAt',
   syncedAt: 'syncedAt',
   createdAt: 'createdAt'
 } as const
@@ -546,6 +547,8 @@ export const ChatMessageScalarFieldEnum = {
   replyToId: 'replyToId',
   replyToRole: 'replyToRole',
   replyToExcerpt: 'replyToExcerpt',
+  replyToCardKind: 'replyToCardKind',
+  replyToCardId: 'replyToCardId',
   createdAt: 'createdAt'
 } as const
 

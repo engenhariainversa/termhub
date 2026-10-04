@@ -1693,6 +1693,21 @@ describe('replies (TER-447)', () => {
     expect(sent).toHaveBeenLastCalledWith(expect.anything(), { text: 'oi', project_id: 'p-termhub' });
   });
 
+  it('a reply to a card (TER-849) goes as reply_to_card, keeps the card on its row, and is retried as the same reply', async () => {
+    const { chat, api } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const ref = { id: 'a-termhub-1', role: 'assistant' as const, excerpt: 'digitar npm test', card: 'action' as const };
+    const sent = jest.spyOn(api, 'sendMessage').mockRejectedValueOnce(new ApiError(409, 'HOST_OFFLINE', 'A máquina do chat está offline.'));
+    await expect(chat.getState().send('por quê?', [], ref)).resolves.toBe(false);
+    const failed = slot(chat, 'p-termhub').messages.at(-1)!;
+    expect(failed.reply_to).toEqual({ id: null, role: 'assistant', excerpt: 'digitar npm test', card: { kind: 'action', id: 'a-termhub-1' } });
+    await expect(chat.getState().retrySend(failed.id)).resolves.toBe(true);
+    expect(sent).toHaveBeenLastCalledWith(expect.anything(), { text: 'por quê?', project_id: 'p-termhub', reply_to_card: { kind: 'action', id: 'a-termhub-1' } });
+    await jest.advanceTimersByTimeAsync(2000);
+    const stored = slot(chat, 'p-termhub').messages.find((m) => m.text === 'por quê?' && m.local === undefined)!;
+    expect(stored.reply_to?.card).toEqual({ kind: 'action', id: 'a-termhub-1' });
+  });
+
   it('the mock refuses a reply to a message it does not have, with the server\'s sentence', async () => {
     const { chat } = await setup();
     await openAndConnect(chat, 'p-termhub');

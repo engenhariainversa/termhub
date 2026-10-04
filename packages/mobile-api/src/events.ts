@@ -10,9 +10,18 @@ export const chatNotice = z.discriminatedUnion('kind', [
 ]);
 export type ChatNotice = z.infer<typeof chatNotice>;
 
+/** The thread's cards a message can answer instead of a message (TER-849): a gate card the concierge
+ * proposed, or a tab's question (choice or permission). */
+export const replyCardKind = z.enum(['action', 'tab_question']);
+export type ReplyCardKind = z.infer<typeof replyCardKind>;
+export const replyCardRef = z.object({ kind: replyCardKind, id: z.string() });
+export type ReplyCardRef = z.infer<typeof replyCardRef>;
+
 /** What a message answers (TER-447): a snapshot taken when the reply was sent. `id` is null once the
- * quoted message was deleted; the role and the excerpt stay. */
-export const chatReplyRef = z.object({ id: z.string().nullable(), role: z.enum(['user', 'assistant']), excerpt: z.string() });
+ * quoted message was deleted; the role and the excerpt stay. A reply to a card (TER-849) has a null
+ * `id`, the role `assistant` and the card in `card`: an app that predates it shows the quote all the
+ * same, and a card kind this app does not know is dropped rather than failing the message. */
+export const chatReplyRef = z.object({ id: z.string().nullable(), role: z.enum(['user', 'assistant']), excerpt: z.string(), card: replyCardRef.optional().catch(undefined) });
 
 /** Mirrors `ChatMessage` in `apps/server/src/db/repositories/chat.ts`. */
 export const chatMessage = z.object({

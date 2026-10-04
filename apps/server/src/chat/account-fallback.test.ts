@@ -73,6 +73,28 @@ describe('fallbackCandidates', () => {
   });
 });
 
+describe('fallbackCandidates and the run model (TER-837)', () => {
+  beforeEach(() => {
+    // b has room on the account, but its Fable allowance is used up
+    getAccountUsage.mockImplementation(async (a: AiAccount) =>
+      a.id === 'b'
+        ? { ...usage('b', 69), windows: [{ key: 'seven_day', label: '', utilization: 69, resets_at: null }, { key: 'limit:weekly_scoped:Fable', label: '', utilization: 100, resets_at: null, model: 'fable' }] }
+        : usage(a.id, 100),
+    );
+  });
+
+  it('takes an account whose only full window caps another model', async () => {
+    expect((await fallbackCandidates(repos, machine, 'a', new Set(), null, 'claude-opus-5-5')).map((a) => a.id)).toEqual(['b']);
+    const pick = await pickFallback(repos, { machine, currentAccountId: 'a', tried: new Set(), projectId: null, sessionDir: DIR, sessionId: SID, model: 'opus' });
+    expect(pick?.account.id).toBe('b');
+  });
+
+  it('does not take it for that model, or when the model is unknown', async () => {
+    expect(await fallbackCandidates(repos, machine, 'a', new Set(), null, 'fable')).toEqual([]);
+    expect(await fallbackCandidates(repos, machine, 'a', new Set(), null)).toEqual([]);
+  });
+});
+
 describe('linkChatSession', () => {
   it('resumes a linked session, starts over on a missing or conflicting one, skips an unusable account', async () => {
     expect(await linkChatSession(machine, { sessionDir: DIR, sessionId: SID, toConfigDir: '~/.claude_b' })).toBe('resume');

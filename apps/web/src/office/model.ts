@@ -106,7 +106,7 @@ const BUILDING_LABEL_MAX = 28;
 /** The desk's machine line: name and subtitle together stay this short, or the subtitle goes. */
 export const SUBTITLE_CAP = 30;
 
-const POSE: Record<TabState, Pose> = { working: 'type', waiting_input: 'raise', waiting_permission: 'raise', idle: 'sleep', error: 'shake' };
+const POSE: Record<TabState, Pose> = { working: 'type', waiting_input: 'raise', waiting_permission: 'raise', idle: 'sleep', error: 'shake', waiting_background: 'sit' };
 
 const ACTIVITY_LABEL: Record<TabActivity, string> = { coding: 'codando', reading: 'lendo arquivos', researching: 'pesquisando', planning: 'planejando', terminal: 'no terminal', working: 'trabalhando' };
 /** What a working person is doing, under them on the floor — pt-BR, or null when nothing is known. */
@@ -201,7 +201,7 @@ function deskOf(tab: ModelTab, live: Tab | undefined, machine: ModelMachine | un
   if (!t.alive && reachable) return { ...base, kind: 'person', pose: 'empty', marker: null, dimmed: down, screenOn: false, state: t.state, activity: null, verb: null };
   const needs = tabNeedsYou(t);
   const marker: Marker = t.state === 'error' ? 'error' : !needs ? null : t.state === 'waiting_permission' ? 'permission' : 'input';
-  return { ...base, kind: 'person', pose: t.state ? POSE[t.state] : 'sit', marker, dimmed: !t.state || down, screenOn: t.state === 'working', state: t.state, activity: t.state === 'working' ? t.activity : null, verb: t.state === 'working' ? t.activity_verb : null };
+  return { ...base, kind: 'person', pose: t.state ? POSE[t.state] : 'sit', marker, dimmed: !t.state || down, screenOn: t.state === 'working' || t.state === 'waiting_background', state: t.state, activity: t.state === 'working' ? t.activity : null, verb: t.state === 'working' ? t.activity_verb : null };
 }
 
 function buildingOf(b: ModelBuilding, machines: Map<string, ModelMachine>, liveTab: (tabId: string) => Tab | undefined): BuildingModel {

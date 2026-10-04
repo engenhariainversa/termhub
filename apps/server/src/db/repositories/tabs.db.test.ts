@@ -195,6 +195,37 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.markSeen /
     });
   });
 
+  describe('recordEvent — a turn that ends on its own background work (TER-644)', () => {
+    const sub = (tool: string) => ({ kind: 'working' as const, tool: 'claude', text: null, meta: { event: 'PreToolUse', tool, subagent: true, agent_id: 'a1' } });
+    const idlePrompt = { kind: 'waiting_input' as const, tool: 'claude', text: 'Claude is waiting for your input', meta: { event: 'Notification', type: 'idle_prompt' }, continuesWait: true as const, keepsWaitText: true as const };
+
+    it('replays OPM-440: the tab waits on its subagent, never on the person, until the agent really stops', async () => {
+      await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
+      const stop = await repo.recordEvent(tabId, { kind: 'waiting_background', tool: 'claude', text: 'Aguardando o subagente da Tarefa 2.', meta: { event: 'Stop', background_tasks: 1 } });
+      expect(stop.tab).toMatchObject({ state: 'waiting_background', state_text: 'Aguardando o subagente da Tarefa 2.' });
+      expect(needsYou(stop.tab)).toBe(false);
+      // the subagent's tool calls and the reminder a minute later leave it there
+      expect((await repo.recordEvent(tabId, sub('Bash'))).event).toBeNull();
+      const reminder = await repo.recordEvent(tabId, idlePrompt);
+      expect(reminder.event).toBeNull();
+      expect(reminder.tab.state).toBe('waiting_background');
+      expect(await repo.countBusyByMachine(machineId)).toBe(1);
+      // the subagent reports: the main thread works again, then ends for good and waits for the person
+      expect((await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'PreToolUse', tool: 'Read' } })).tab.state).toBe('working');
+      const done = await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Revisão pronta.', meta: { event: 'Stop' } });
+      expect(done.tab.state).toBe('waiting_input');
+      expect(needsYou(done.tab)).toBe(true);
+    });
+
+    it('is looked at again when it goes quiet, and the screen check writes over it under ifStateAt', async () => {
+      const { tab } = await repo.recordEvent(tabId, { kind: 'waiting_background', tool: 'claude', text: null, meta: { event: 'Stop', background_tasks: 2 } });
+      expect((await repo.listStaleWorking(new Date(Date.parse(tab.state_at!) + 1))).map((t) => t.id)).toContain(tabId);
+      const exited = await repo.recordEvent(tabId, { kind: 'idle', tool: 'claude', text: 'Agente encerrado sem terminar o turno', meta: { event: 'AgentExited', pane: 'shell' }, ifStateAt: tab.state_at! });
+      expect(exited.event).not.toBeNull();
+      expect(exited.tab.state).toBe('idle');
+    });
+  });
+
   describe('stale working tabs (TER-615)', () => {
     it('lists Claude and Codex terminal tabs working with nothing since the cut, oldest first (TER-643: Codex too)', async () => {
       const { tab } = await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });

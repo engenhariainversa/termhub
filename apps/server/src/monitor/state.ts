@@ -174,9 +174,12 @@ function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
       // notification only comes about a minute later. The last answer, when sent, is the question.
       const raw = str(ev.last_assistant_message);
       const text = cap(raw);
+      // A turn that ends with background work still running (a subagent, a `run_in_background` shell, a
+      // Monitor) is not a wait for the person: the agent waits on that work, and its notification starts
+      // the next turn (TER-644). The next Stop with nothing left running is the real end of the work.
       const background = runningBackgroundTasks(ev.background_tasks);
       if (background === 0) return withAnswer({ kind: 'waiting_input', text, meta: { event: name } }, raw);
-      return withAnswer({ kind: 'waiting_input', text, meta: { event: name, background_tasks: background }, backgroundTasks: background }, raw);
+      return withAnswer({ kind: 'waiting_background', text, meta: { event: name, background_tasks: background }, backgroundTasks: background }, raw);
     }
     case 'StopFailure': {
       // An API error ended the turn (spec 2026-09-26 account swap). On a usage limit Claude Code does
@@ -385,8 +388,11 @@ export function interpretHookEvent(tool: HookTool, raw: unknown): Interpreted | 
   return INTERPRETERS[tool](raw);
 }
 
-/** States in which the tool is waiting for the person (the "needs you" list). */
+/** States in which the tool is waiting for the person (the "needs you" list). `waiting_background` is not one. */
 export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission'];
+
+/** States in which the agent is still at its task: working, or waiting on background work of its own (TER-644). */
+export const STILL_WORKING: readonly TabState[] = ['working', 'waiting_background'];
 
 /**
  * A tab "needs you" when it is waiting and has not been seen since that state began: a new hook

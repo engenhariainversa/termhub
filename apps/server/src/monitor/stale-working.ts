@@ -40,8 +40,8 @@ const defaultDeps = (): StaleWorkingDeps => ({
   checked: new Map(),
 });
 
-/** The state a screen stands for, when it is a wait. */
-const WAIT_OF: Partial<Record<ScreenState, TabState>> = { dialog: 'waiting_permission', prompt: 'waiting_input' };
+/** The state a screen stands for, when it is a wait (on the person, or on the agent's own background work). */
+const WAIT_OF: Partial<Record<ScreenState, TabState>> = { dialog: 'waiting_permission', background: 'waiting_background', prompt: 'waiting_input' };
 
 /**
  * One pass (TER-615). The hooks are the source of truth, but an event can go missing or arrive out of
@@ -85,7 +85,9 @@ async function checkTab(repos: Repositories, log: Log, tab: Tab & { tmux_session
       await deps.exited(repos, log, updated, machine, tab.state_at);
       return;
     }
-    if (tab.state_tool !== 'claude') return;
+    // A tab that waits on its background work (TER-644) only gets the check above: its hooks went quiet on
+    // purpose, and a screen without the background line (a shell runs in the background) proves nothing.
+    if (tab.state_tool !== 'claude' || tab.state === 'waiting_background') return;
     const screen = claudeScreenState(await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20));
     const kind = screen ? WAIT_OF[screen] : undefined;
     if (!screen || !kind) return;

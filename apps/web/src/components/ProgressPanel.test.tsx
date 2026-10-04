@@ -23,7 +23,7 @@ const response = (): ProgressResponse => ({
       id: 'c1', ref: 'TER-183', title: 'Painel de progresso', type: 'story', status: 'doing', column_name: 'Fazendo',
       units: { done: 3, total: 5 }, percent: 60, started_at: null, done_at: null, active_seconds: 1800,
       estimate: { kind: 'range', low_s: 1200, high_s: 2700, basis: 'agent_time', samples: 3 },
-      agents: [{ tab_id: 't1', tab_name: 'spec', machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: '2026-09-27T11:50:00.000Z', needs_you: false, activity: 'coding', activity_verb: 'Coding', rate_limited: false }],
+      agents: [{ tab_id: 't1', tab_name: 'spec', machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: '2026-09-27T11:50:00.000Z', background: false, needs_you: false, activity: 'coding', activity_verb: 'Coding', rate_limited: false }],
       pull_requests: [],
     }],
     ci: null, ci_error: null,

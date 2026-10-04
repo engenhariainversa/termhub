@@ -12,6 +12,25 @@ async function gh<T>(token: string, path: string, init?: RequestInit): Promise<T
   return (await res.json()) as T;
 }
 
+type Issue = { number: number; title: string; body: string | null; html_url: string; state: string; updated_at: string; pull_request?: unknown; labels: { name: string }[]; assignee: { login: string } | null };
+
+function toTicket(owner: string, repo: string, i: Issue): ExternalTicket {
+  return {
+    sync_key: `github:${owner}/${repo}#${i.number}`,
+    provider: 'github',
+    provider_id: String(i.number),
+    key: `${owner}/${repo}#${i.number}`,
+    title: i.title,
+    description: i.body,
+    url: i.html_url,
+    state: i.state,
+    // the list only brings open issues; a closed one comes from getTicket
+    status: i.state === 'closed' ? 'done' : i.assignee ? 'doing' : 'backlog',
+    updatedAt: i.updated_at,
+    meta: { labels: i.labels.map((l) => l.name), assignee: i.assignee?.login ?? null },
+  };
+}
+
 export const github: TicketProvider = {
   provider: 'github',
 
@@ -29,7 +48,6 @@ export const github: TicketProvider = {
     const [owner, repo] = source.scope.split('/');
     if (!owner || !repo) throw new Error('scope do GitHub deve ser owner/repo');
     const labels = source.filter ? `&labels=${encodeURIComponent(source.filter)}` : '';
-    type Issue = { number: number; title: string; body: string | null; html_url: string; state: string; updated_at: string; pull_request?: unknown; labels: { name: string }[]; assignee: { login: string } | null };
     const { items, truncated } = await collectPages<Issue, number>(async (page) => {
       const p = page ?? 1;
       const raw = await gh<Issue[]>(secret, `/repos/${owner}/${repo}/issues?state=open&per_page=100&page=${p}${labels}`);
@@ -37,20 +55,14 @@ export const github: TicketProvider = {
     });
     return {
       truncated,
-      tickets: items.map<ExternalTicket>((i) => ({
-        sync_key: `github:${owner}/${repo}#${i.number}`,
-        provider: 'github',
-        provider_id: String(i.number),
-        key: `${owner}/${repo}#${i.number}`,
-        title: i.title,
-        description: i.body,
-        url: i.html_url,
-        state: i.state,
-        status: i.assignee ? 'doing' : 'backlog',
-        updatedAt: i.updated_at,
-        meta: { labels: i.labels.map((l) => l.name), assignee: i.assignee?.login ?? null },
-      })),
+      tickets: items.map((i) => toTicket(owner, repo, i)),
     };
+  },
+
+  async getTicket(secret, _config, ticket) {
+    const [owner, repo] = ticket.scope.split('/');
+    if (!owner || !repo) throw new Error('scope do GitHub deve ser owner/repo');
+    return toTicket(owner, repo, await gh<Issue>(secret, `/repos/${owner}/${repo}/issues/${encodeURIComponent(ticket.provider_id)}`));
   },
 
   async updateStatus(secret, _config, ticket, status) {

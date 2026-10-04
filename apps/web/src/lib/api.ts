@@ -1,4 +1,4 @@
-import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView } from './types';
+import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -245,14 +245,14 @@ export const api = {
    *  CHAT_AGENT_TOO_OLD when the host cannot run it, 409 CHAT_ARCHIVED or CHAT_BUSY while a reset is
    *  under way (each with its pt-BR sentence); 409 ATTACHMENT_UNAVAILABLE when an id is not this
    *  conversation's, already sent or invalid (the text and chips stay in the box); 409 REPLY_UNAVAILABLE
-   *  when the quoted message (`replyToId`, TER-447) is gone or empty. `text` may be empty
-   *  when there is at least one attachment. */
-  sendChatMessage: (text: string, projectId?: string | null, attachmentIds?: string[], replyToId?: string) =>
+   *  when the quoted message (`reply`, TER-447: a message id) or card (TER-849) is gone or empty. `text`
+   *  may be empty when there is at least one attachment. */
+  sendChatMessage: (text: string, projectId?: string | null, attachmentIds?: string[], reply?: string | { kind: ReplyCardKind; id: string }) =>
     request<{ conversation_id: string; user_message_id: string; assistant_message_id: string }>('POST', '/chat/messages', {
       text,
       ...(projectId ? { project_id: projectId } : {}),
       ...(attachmentIds && attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
-      ...(replyToId ? { reply_to_id: replyToId } : {}),
+      ...(typeof reply === 'string' ? { reply_to_id: reply } : reply ? { reply_to_card: reply } : {}),
       wait: false,
     }),
   /** "Nova conversa": archives the scope's active conversation (the transcript is kept) and answers the

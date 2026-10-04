@@ -119,13 +119,18 @@ const result = (tab: Tab, timedOut: boolean): WaitResult => ({ tab_id: tab.id, s
  * Waits until the tab's tool stops working (reported by its hooks) or the timeout. A timeout is a
  * normal answer (`timed_out: true`), not an error — call again to keep waiting. Aborting (client
  * gone) ends the wait the same way and always removes the bus listener.
+ *
+ * An agent that ended its turn while its own background work runs (`waiting_background`, TER-644) has
+ * not stopped: its next turn starts when that work reports, so the wait goes on through it, unless
+ * `return_on_background` asks to hear about it.
  */
-export async function waitForState(ctx: ControlContext, input: { tab_id: string; timeout_seconds?: number }, signal?: AbortSignal): Promise<WaitResult> {
+export async function waitForState(ctx: ControlContext, input: { tab_id: string; timeout_seconds?: number; return_on_background?: boolean }, signal?: AbortSignal): Promise<WaitResult> {
   const { tab } = await ctx.scoped.tab(input.tab_id);
   if (tab.state === null) {
     return { ...result(tab, false), note: 'Esta aba não tem estado do monitor (hooks não instalados na máquina ou nenhuma ferramenta rodou nela). Use read_screen para ver o terminal.' };
   }
-  if (tab.state !== 'working') return result(tab, false);
+  const busy = (state: TabState | null) => state === 'working' || (state === 'waiting_background' && !input.return_on_background);
+  if (!busy(tab.state)) return result(tab, false);
 
   const timeoutMs = clamp(input.timeout_seconds, WAIT_DEFAULT_SECONDS, WAIT_MAX_SECONDS) * 1000;
   return new Promise<WaitResult>((resolve) => {
@@ -142,7 +147,7 @@ export async function waitForState(ctx: ControlContext, input: { tab_id: string;
     const unsubscribe = monitorBus.subscribe((change) => {
       if (change.tab.id !== tab.id) return;
       last = change.tab;
-      if (change.tab.state !== 'working') finish(result(change.tab, false));
+      if (!busy(change.tab.state)) finish(result(change.tab, false));
     });
     const timer = setTimeout(() => finish(result(last, true)), timeoutMs);
     const onAbort = () => finish(result(last, true));
@@ -151,7 +156,7 @@ export async function waitForState(ctx: ControlContext, input: { tab_id: string;
     // The tab may have left working between the read above and the subscription; a failed re-read just keeps waiting.
     ctx.repos.tabs.findById(tab.id).then(
       (now) => {
-        if (now && now.state !== 'working') finish(result(now, false));
+        if (now && !busy(now.state)) finish(result(now, false));
       },
       () => {},
     );

@@ -248,8 +248,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
    * the same tick `start` resolved: nothing else awaits it, and an unhandled rejection kills the process.
    */
   app.post('/messages', { config: { action: 'create' } }, async (request, reply) => {
-    const { text, project_id, attachment_ids, reply_to_id } = mobileMessageBody.parse(request.body);
-    const started = await deps.chat.start(request.scope.user, text, { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}) });
+    const { text, project_id, attachment_ids, reply_to_id, reply_to_card } = mobileMessageBody.parse(request.body);
+    const started = await deps.chat.start(request.scope.user, text, { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}) });
     started.done.catch((err) => request.log.warn({ code: failureLabel(err), conversationId: started.conversation_id }, 'mobile run failed after start'));
     return reply.code(202).send(sendAccepted.parse({ conversation_id: started.conversation_id, user_message_id: started.user_message_id, assistant_message_id: started.assistant_message_id }));
   });

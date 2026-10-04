@@ -119,7 +119,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   setPublicIdKey(await loadPublicIdKey(repos));
   await seed(repos, (m) => fastify.log.info(m));
 
-  const mailer = createMailer((m) => fastify.log.info(m));
+  const mailer = createMailer({ info: (m) => fastify.log.info(m), error: (m) => fastify.log.error(m) });
   const access = createAccessAllowlist(config.cloudflareAccess);
   const shortLinks = new ShortLinkService({
     users: repos.users,

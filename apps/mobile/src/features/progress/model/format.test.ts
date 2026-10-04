@@ -19,6 +19,12 @@ it('names states', () => {
   expect(stateLabel(null)).toBe('sem sinal');
 });
 
+it('names an agent waiting on its own background work, never as waiting for you (TER-644)', () => {
+  expect(stateLabel('working', true)).toBe('aguardando segundo plano');
+  expect(stateLabel('working', false)).toBe('trabalhando');
+  expect(stateLabel('working')).toBe('trabalhando');
+});
+
 const p = (over: Partial<TPullRequestBadge>): TPullRequestBadge => ({
   number: 7, url: 'u', title: 't', state: 'open', draft: false, ci_state: 'passed',
   ci_summary: { total: 2, passed: 2, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, ...over,

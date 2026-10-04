@@ -3,7 +3,8 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { ExternalTicket } from '../integrations/types.js';
 
 const listTickets = vi.fn();
-vi.mock('../integrations/index.js', () => ({ getProvider: () => ({ listTickets }) }));
+const getTicket = vi.fn();
+vi.mock('../integrations/index.js', () => ({ getProvider: () => ({ listTickets, getTicket }) }));
 
 const { forgetSync, lastSync, startTicketSyncScheduler, syncProjectTickets } = await import('./tickets-sync.js');
 
@@ -17,17 +18,20 @@ function makeRepos() {
   const upsertMany = vi.fn(async () => ({ created: 1, updated: 0, linked: [{ id: 'tk', sync_key: 'github:acme/api#1', task_id: 'task1' }] }));
   const pruneMissing = vi.fn(async () => 0);
   const setExternalRef = vi.fn(async () => undefined);
+  const listLeftImported = vi.fn(async (): Promise<unknown[]> => []);
+  const markLeftSource = vi.fn(async () => ({}));
   const repos = {
     integrations: { findById: vi.fn(async () => ({ id: 'g', provider: 'github', config: {} })), getSecret: vi.fn(async () => 'tok') },
-    tickets: { upsertMany, pruneMissing },
+    tickets: { upsertMany, pruneMissing, listLeftImported, markLeftSource },
     tasks: { setExternalRef },
   } as unknown as Repositories;
-  return { repos, upsertMany, pruneMissing, setExternalRef };
+  return { repos, upsertMany, pruneMissing, setExternalRef, listLeftImported, markLeftSource };
 }
 
 // Block body: an arrow returning the mock itself would be treated as an implicit teardown callback by Vitest.
 beforeEach(() => {
   listTickets.mockReset();
+  getTicket.mockReset();
 });
 
 describe('syncProjectTickets', () => {
@@ -71,6 +75,43 @@ describe('syncProjectTickets', () => {
     const r = await syncProjectTickets(repos, 'p1', [src('acme/api'), src('acme/web')]);
     expect(r.sources[0]).toMatchObject({ scope: 'acme/api', error: 'Falha ao gravar os tickets: write failed' });
     expect(r.sources[1]).toMatchObject({ scope: 'acme/web', fetched: 1 });
+  });
+});
+
+describe('imported tickets that left their source (TER-718)', () => {
+  const imported = { id: 'tk9', provider: 'github', sync_key: 'github:acme/api#9', key: 'acme/api#9', task_id: 'task9', meta: {} };
+
+  it('asks the provider once, stores the real state on the row and the card, and marks it', async () => {
+    listTickets.mockResolvedValue({ tickets: [ext('acme/api', 1)], truncated: false });
+    getTicket.mockResolvedValue({ ...ext('acme/api', 9), state: 'closed', status: 'done' });
+    const { repos, listLeftImported, markLeftSource, setExternalRef } = makeRepos();
+    listLeftImported.mockResolvedValueOnce([imported]);
+    const r = await syncProjectTickets(repos, 'p1', [src('acme/api')]);
+    expect(listLeftImported).toHaveBeenCalledWith('p1', { integration_id: 'g', scope: 'acme/api' }, ['github:acme/api#1'], true, 50);
+    expect(getTicket).toHaveBeenCalledWith('tok', {}, { provider_id: '9', key: 'acme/api#9', scope: 'acme/api' });
+    expect(markLeftSource).toHaveBeenCalledWith('tk9', expect.objectContaining({ state: 'closed', status: 'done' }));
+    expect(setExternalRef).toHaveBeenCalledWith('task9', expect.objectContaining({ key: 'acme/api#9', state: 'closed', scope: 'acme/api' }));
+    expect(r.sources[0]).toMatchObject({ left: 1 });
+  });
+
+  it('a lookup that fails still marks it, with the last known fields', async () => {
+    listTickets.mockResolvedValue({ tickets: [], truncated: false });
+    getTicket.mockRejectedValue(new Error('GitHub 404: Not Found'));
+    const { repos, listLeftImported, markLeftSource, setExternalRef } = makeRepos();
+    listLeftImported.mockResolvedValueOnce([imported]);
+    const r = await syncProjectTickets(repos, 'p1', [src('acme/api')]);
+    expect(markLeftSource).toHaveBeenCalledWith('tk9');
+    expect(setExternalRef).not.toHaveBeenCalledWith('task9', expect.anything());
+    expect(r.sources[0]).toMatchObject({ left: 1 });
+  });
+
+  it('a truncated source marks nothing: it cannot tell which tickets left', async () => {
+    listTickets.mockResolvedValue({ tickets: [ext('acme/api', 1)], truncated: true });
+    const { repos, listLeftImported, markLeftSource } = makeRepos();
+    const r = await syncProjectTickets(repos, 'p1', [src('acme/api')]);
+    expect(listLeftImported).not.toHaveBeenCalled();
+    expect(markLeftSource).not.toHaveBeenCalled();
+    expect(r.sources[0]).toMatchObject({ left: 0, truncated: true });
   });
 });
 

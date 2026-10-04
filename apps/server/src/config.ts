@@ -90,12 +90,14 @@ const envSchema = z.object({
   TMUX_PATH: z.string().default('tmux'),
   SEED_LOCAL_MACHINE: z.enum(['true', 'false']).default('true'),
 
-  // E-mail (código de login). Sem SMTP_HOST em dev, o código é impresso no log.
+  // E-mail (login code, invites, device notices). Without SMTP_HOST no e-mail is sent; in
+  // development only, EMAIL_DEV_CONSOLE=true prints them (login code included) to the log instead.
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_SECURE: z.enum(['true', 'false']).default('false'),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  EMAIL_DEV_CONSOLE: z.enum(['true', 'false']).default('false'),
   EMAIL_FROM: z.string().default('termhub <termhub@localhost>'),
   LOGIN_CODE_TTL_MINUTES: z.coerce.number().int().positive().default(10),
 
@@ -172,8 +174,12 @@ if (authModes.has('cloudflare') && (!env.CF_TEAM_DOMAIN || !env.CF_AUD)) {
 if (authModes.has('disabled') && env.NODE_ENV === 'production') {
   console.warn('AVISO: AUTH_MODE=disabled em produção. Qualquer pessoa com acesso à porta tem acesso total.');
 }
+if (env.EMAIL_DEV_CONSOLE === 'true' && env.NODE_ENV === 'production') {
+  // The dev console prints login codes to the log: refuse to boot rather than leak them.
+  throw new Error('EMAIL_DEV_CONSOLE=true não é permitido em produção (imprime o código de login no log); configure SMTP_HOST');
+}
 if (authModes.has('app') && env.NODE_ENV === 'production' && !env.SMTP_HOST) {
-  console.warn('AVISO: SMTP_HOST não configurado — o login por código de e-mail não vai funcionar em produção.');
+  console.error('ERRO: SMTP_HOST não configurado — o login por código de e-mail não vai funcionar em produção.');
 }
 
 export const config = {
@@ -223,6 +229,7 @@ export const config = {
           auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS ?? '' } : undefined,
         }
       : null,
+    devConsole: env.EMAIL_DEV_CONSOLE === 'true',
     from: env.EMAIL_FROM,
   },
   seedLocalMachine: env.SEED_LOCAL_MACHINE === 'true',

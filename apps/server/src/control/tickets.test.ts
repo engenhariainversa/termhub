@@ -19,7 +19,7 @@ const project = (id: string, owner: string): Project => ({ id, owner_id: owner, 
 const ticket = (over: Partial<Ticket> & { id: string; key: string }): Ticket => ({
   project_id: 'p1', integration_id: 'g', scope: 'acme/api', provider: 'github', sync_key: `s-${over.id}`, title: `T ${over.id}`,
   description: 'x'.repeat(800), url: `https://github.com/${over.key.replace('#', '/issues/')}`, state: 'open', status: 'backlog',
-  meta: { labels: ['bug'], assignee: 'ana' }, task_id: null, synced_at: '2026-09-26T10:00:00.000Z', created_at: '', ...over,
+  meta: { labels: ['bug'], assignee: 'ana' }, task_id: null, left_source_at: null, synced_at: '2026-09-26T10:00:00.000Z', created_at: '', ...over,
 });
 const task = (over: Partial<Task> & { id: string }): Task => ({
   project_id: 'p1', type: 'task', number: 7, ref: 'P1-7', title: 't', description: null, status: 'doing', position: 0, external_ref: null, external_key: null,

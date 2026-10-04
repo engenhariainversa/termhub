@@ -14,8 +14,24 @@ describe('claudeScreenState — what a Claude Code tab shows (TER-615)', () => {
     expect(claudeScreenState(fixture('idle'))).toBe('prompt');
   });
 
-  it('a main thread that ended its turn while a subagent runs in the background is at its prompt', () => {
-    expect(claudeScreenState(fixture('background-agent'))).toBe('prompt');
+  it('a main thread that ended its turn while a subagent runs in the background waits on it, not on the person (TER-644)', () => {
+    expect(claudeScreenState(fixture('background-agent'))).toBe('background');
+  });
+
+  it('reads the background line in the plural and with the ASCII glyph', () => {
+    for (const line of ['✻ Waiting for 2 background agents to finish', '* Waiting for 1 background agent to finish']) {
+      expect(claudeScreenState(`● Lançado.\n\n${line}\n\n────────────\n❯ \n────────────`)).toBe('background');
+    }
+  });
+
+  it('a live spinner wins over a background line left above it: the agent is at work again', () => {
+    const screen = ['✻ Waiting for 1 background agent to finish', '', '● Agora reviso.', '', '✢ Reviewing… (4s)', '', '────────────', '❯ ', '────────────'].join('\n');
+    expect(claudeScreenState(screen)).toBe('busy');
+  });
+
+  it('never takes the background line quoted inside an answer for the real one', () => {
+    const answer = ['● A tela dizia:', '  ✻ Waiting for 1 background agent to finish', '', '✻ Brewed for 3s', '', '────────────', '❯ ', '────────────'].join('\n');
+    expect(claudeScreenState(answer)).toBe('prompt');
   });
 
   it('an AskUserQuestion dialog', () => {

@@ -38,6 +38,7 @@ export type TicketMinAggregateOutputType = {
   state: string | null
   status: $Enums.TaskStatus | null
   taskId: string | null
+  leftSourceAt: Date | null
   syncedAt: Date | null
   createdAt: Date | null
 }
@@ -56,6 +57,7 @@ export type TicketMaxAggregateOutputType = {
   state: string | null
   status: $Enums.TaskStatus | null
   taskId: string | null
+  leftSourceAt: Date | null
   syncedAt: Date | null
   createdAt: Date | null
 }
@@ -75,6 +77,7 @@ export type TicketCountAggregateOutputType = {
   status: number
   meta: number
   taskId: number
+  leftSourceAt: number
   syncedAt: number
   createdAt: number
   _all: number
@@ -95,6 +98,7 @@ export type TicketMinAggregateInputType = {
   state?: true
   status?: true
   taskId?: true
+  leftSourceAt?: true
   syncedAt?: true
   createdAt?: true
 }
@@ -113,6 +117,7 @@ export type TicketMaxAggregateInputType = {
   state?: true
   status?: true
   taskId?: true
+  leftSourceAt?: true
   syncedAt?: true
   createdAt?: true
 }
@@ -132,6 +137,7 @@ export type TicketCountAggregateInputType = {
   status?: true
   meta?: true
   taskId?: true
+  leftSourceAt?: true
   syncedAt?: true
   createdAt?: true
   _all?: true
@@ -224,6 +230,7 @@ export type TicketGroupByOutputType = {
   status: $Enums.TaskStatus
   meta: runtime.JsonValue
   taskId: string | null
+  leftSourceAt: Date | null
   syncedAt: Date
   createdAt: Date
   _count: TicketCountAggregateOutputType | null
@@ -264,6 +271,7 @@ export type TicketWhereInput = {
   status?: Prisma.EnumTaskStatusFilter<"Ticket"> | $Enums.TaskStatus
   meta?: Prisma.JsonFilter<"Ticket">
   taskId?: Prisma.StringNullableFilter<"Ticket"> | string | null
+  leftSourceAt?: Prisma.DateTimeNullableFilter<"Ticket"> | Date | string | null
   syncedAt?: Prisma.DateTimeFilter<"Ticket"> | Date | string
   createdAt?: Prisma.DateTimeFilter<"Ticket"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
@@ -284,6 +292,7 @@ export type TicketOrderByWithRelationInput = {
   status?: Prisma.SortOrder
   meta?: Prisma.SortOrder
   taskId?: Prisma.SortOrderInput | Prisma.SortOrder
+  leftSourceAt?: Prisma.SortOrderInput | Prisma.SortOrder
   syncedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
@@ -308,6 +317,7 @@ export type TicketWhereUniqueInput = Prisma.AtLeast<{
   state?: Prisma.StringFilter<"Ticket"> | string
   status?: Prisma.EnumTaskStatusFilter<"Ticket"> | $Enums.TaskStatus
   meta?: Prisma.JsonFilter<"Ticket">
+  leftSourceAt?: Prisma.DateTimeNullableFilter<"Ticket"> | Date | string | null
   syncedAt?: Prisma.DateTimeFilter<"Ticket"> | Date | string
   createdAt?: Prisma.DateTimeFilter<"Ticket"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
@@ -328,6 +338,7 @@ export type TicketOrderByWithAggregationInput = {
   status?: Prisma.SortOrder
   meta?: Prisma.SortOrder
   taskId?: Prisma.SortOrderInput | Prisma.SortOrder
+  leftSourceAt?: Prisma.SortOrderInput | Prisma.SortOrder
   syncedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.TicketCountOrderByAggregateInput
@@ -353,6 +364,7 @@ export type TicketScalarWhereWithAggregatesInput = {
   status?: Prisma.EnumTaskStatusWithAggregatesFilter<"Ticket"> | $Enums.TaskStatus
   meta?: Prisma.JsonWithAggregatesFilter<"Ticket">
   taskId?: Prisma.StringNullableWithAggregatesFilter<"Ticket"> | string | null
+  leftSourceAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Ticket"> | Date | string | null
   syncedAt?: Prisma.DateTimeWithAggregatesFilter<"Ticket"> | Date | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Ticket"> | Date | string
 }
@@ -371,6 +383,7 @@ export type TicketCreateInput = {
   status: $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: string | null
+  leftSourceAt?: Date | string | null
   syncedAt?: Date | string
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutTicketsInput
@@ -391,6 +404,7 @@ export type TicketUncheckedCreateInput = {
   status: $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: string | null
+  leftSourceAt?: Date | string | null
   syncedAt?: Date | string
   createdAt?: Date | string
 }
@@ -409,6 +423,7 @@ export type TicketUpdateInput = {
   status?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  leftSourceAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutTicketsNestedInput
@@ -429,6 +444,7 @@ export type TicketUncheckedUpdateInput = {
   status?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  leftSourceAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -448,6 +464,7 @@ export type TicketCreateManyInput = {
   status: $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: string | null
+  leftSourceAt?: Date | string | null
   syncedAt?: Date | string
   createdAt?: Date | string
 }
@@ -466,6 +483,7 @@ export type TicketUpdateManyMutationInput = {
   status?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  leftSourceAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -485,6 +503,7 @@ export type TicketUncheckedUpdateManyInput = {
   status?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  leftSourceAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -519,6 +538,7 @@ export type TicketCountOrderByAggregateInput = {
   status?: Prisma.SortOrder
   meta?: Prisma.SortOrder
   taskId?: Prisma.SortOrder
+  leftSourceAt?: Prisma.SortOrder
   syncedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
@@ -537,6 +557,7 @@ export type TicketMaxOrderByAggregateInput = {
   state?: Prisma.SortOrder
   status?: Prisma.SortOrder
   taskId?: Prisma.SortOrder
+  leftSourceAt?: Prisma.SortOrder
   syncedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
@@ -555,6 +576,7 @@ export type TicketMinOrderByAggregateInput = {
   state?: Prisma.SortOrder
   status?: Prisma.SortOrder
   taskId?: Prisma.SortOrder
+  leftSourceAt?: Prisma.SortOrder
   syncedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
@@ -623,6 +645,7 @@ export type TicketCreateWithoutProjectInput = {
   status: $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: string | null
+  leftSourceAt?: Date | string | null
   syncedAt?: Date | string
   createdAt?: Date | string
 }
@@ -641,6 +664,7 @@ export type TicketUncheckedCreateWithoutProjectInput = {
   status: $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: string | null
+  leftSourceAt?: Date | string | null
   syncedAt?: Date | string
   createdAt?: Date | string
 }
@@ -689,6 +713,7 @@ export type TicketScalarWhereInput = {
   status?: Prisma.EnumTaskStatusFilter<"Ticket"> | $Enums.TaskStatus
   meta?: Prisma.JsonFilter<"Ticket">
   taskId?: Prisma.StringNullableFilter<"Ticket"> | string | null
+  leftSourceAt?: Prisma.DateTimeNullableFilter<"Ticket"> | Date | string | null
   syncedAt?: Prisma.DateTimeFilter<"Ticket"> | Date | string
   createdAt?: Prisma.DateTimeFilter<"Ticket"> | Date | string
 }
@@ -707,6 +732,7 @@ export type TicketCreateManyProjectInput = {
   status: $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: string | null
+  leftSourceAt?: Date | string | null
   syncedAt?: Date | string
   createdAt?: Date | string
 }
@@ -725,6 +751,7 @@ export type TicketUpdateWithoutProjectInput = {
   status?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  leftSourceAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -743,6 +770,7 @@ export type TicketUncheckedUpdateWithoutProjectInput = {
   status?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  leftSourceAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -761,6 +789,7 @@ export type TicketUncheckedUpdateManyWithoutProjectInput = {
   status?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   meta?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  leftSourceAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -782,6 +811,7 @@ export type TicketSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   status?: boolean
   meta?: boolean
   taskId?: boolean
+  leftSourceAt?: boolean
   syncedAt?: boolean
   createdAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
@@ -802,6 +832,7 @@ export type TicketSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   status?: boolean
   meta?: boolean
   taskId?: boolean
+  leftSourceAt?: boolean
   syncedAt?: boolean
   createdAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
@@ -822,6 +853,7 @@ export type TicketSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   status?: boolean
   meta?: boolean
   taskId?: boolean
+  leftSourceAt?: boolean
   syncedAt?: boolean
   createdAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
@@ -842,11 +874,12 @@ export type TicketSelectScalar = {
   status?: boolean
   meta?: boolean
   taskId?: boolean
+  leftSourceAt?: boolean
   syncedAt?: boolean
   createdAt?: boolean
 }
 
-export type TicketOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "integrationId" | "provider" | "syncKey" | "key" | "scope" | "title" | "description" | "url" | "state" | "status" | "meta" | "taskId" | "syncedAt" | "createdAt", ExtArgs["result"]["ticket"]>
+export type TicketOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "integrationId" | "provider" | "syncKey" | "key" | "scope" | "title" | "description" | "url" | "state" | "status" | "meta" | "taskId" | "leftSourceAt" | "syncedAt" | "createdAt", ExtArgs["result"]["ticket"]>
 export type TicketInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }
@@ -893,6 +926,10 @@ export type $TicketPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
      * task criada a partir deste ticket (null = ainda não importado)
      */
     taskId: string | null
+    /**
+     * an imported ticket its source no longer returns (closed, or out of the filter); cleared when it comes back
+     */
+    leftSourceAt: Date | null
     syncedAt: Date
     createdAt: Date
   }, ExtArgs["result"]["ticket"]>
@@ -1333,6 +1370,7 @@ export interface TicketFieldRefs {
   readonly status: Prisma.FieldRef<"Ticket", 'TaskStatus'>
   readonly meta: Prisma.FieldRef<"Ticket", 'Json'>
   readonly taskId: Prisma.FieldRef<"Ticket", 'String'>
+  readonly leftSourceAt: Prisma.FieldRef<"Ticket", 'DateTime'>
   readonly syncedAt: Prisma.FieldRef<"Ticket", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"Ticket", 'DateTime'>
 }

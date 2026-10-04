@@ -25,6 +25,25 @@ function mapState(type: string): ExternalTicket['status'] {
 /** kanban → tipo de estado do Linear (o estado escolhido é o primeiro do tipo, por posição). */
 const STATE_TYPE: Record<string, string> = { backlog: 'backlog', todo: 'unstarted', doing: 'started', done: 'completed' };
 
+type Node = { id: string; identifier: string; title: string; description: string | null; url: string; updatedAt: string; priority: number; state: { name: string; type: string }; assignee: { name: string } | null; labels: { nodes: { name: string }[] } };
+const ISSUE_FIELDS = 'id identifier title description url updatedAt priority state { name type } assignee { name } labels { nodes { name } }';
+
+function toTicket(i: Node): ExternalTicket {
+  return {
+    sync_key: `linear:${i.id}`,
+    provider: 'linear',
+    provider_id: i.id,
+    key: i.identifier,
+    title: i.title,
+    description: i.description,
+    url: i.url,
+    state: i.state.name,
+    status: mapState(i.state.type),
+    updatedAt: i.updatedAt,
+    meta: { priority: i.priority, assignee: i.assignee?.name ?? null, labels: i.labels.nodes.map((l) => l.name) },
+  };
+}
+
 export const linear: TicketProvider = {
   provider: 'linear',
 
@@ -48,13 +67,12 @@ export const linear: TicketProvider = {
     const names = source.filter ? source.filter.split(',').map((s) => s.trim()).filter(Boolean) : [];
     // one `state` object: a separate name filter would overwrite the open-only one
     const state = { type: { nin: ['completed', 'canceled'] }, ...(names.length ? { name: { in: names } } : {}) };
-    type Node = { id: string; identifier: string; title: string; description: string | null; url: string; updatedAt: string; priority: number; state: { name: string; type: string }; assignee: { name: string } | null; labels: { nodes: { name: string }[] } };
     const { items, truncated } = await collectPages<Node, string>(async (after) => {
       const data = await gql<{ issues: { nodes: Node[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(
         secret,
         `query($filter: IssueFilter, $after: String) {
           issues(filter: $filter, first: 100, after: $after, orderBy: updatedAt) {
-            nodes { id identifier title description url updatedAt priority state { name type } assignee { name } labels { nodes { name } } }
+            nodes { ${ISSUE_FIELDS} }
             pageInfo { hasNextPage endCursor }
           }
         }`,
@@ -64,20 +82,14 @@ export const linear: TicketProvider = {
     });
     return {
       truncated,
-      tickets: items.map<ExternalTicket>((i) => ({
-        sync_key: `linear:${i.id}`,
-        provider: 'linear',
-        provider_id: i.id,
-        key: i.identifier,
-        title: i.title,
-        description: i.description,
-        url: i.url,
-        state: i.state.name,
-        status: mapState(i.state.type),
-        updatedAt: i.updatedAt,
-        meta: { priority: i.priority, assignee: i.assignee?.name ?? null, labels: i.labels.nodes.map((l) => l.name) },
-      })),
+      tickets: items.map(toTicket),
     };
+  },
+
+  async getTicket(secret, _config, ticket) {
+    const data = await gql<{ issue: Node | null }>(secret, `query($id: String!) { issue(id: $id) { ${ISSUE_FIELDS} } }`, { id: ticket.provider_id });
+    if (!data.issue) throw new Error(`Linear: ticket ${ticket.key} não encontrado`);
+    return toTicket(data.issue);
   },
 
   async updateStatus(secret, _config, ticket, status) {

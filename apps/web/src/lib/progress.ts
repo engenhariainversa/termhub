@@ -28,19 +28,25 @@ const STATE_LABEL: Record<TabState, string> = {
   waiting_permission: 'pedindo permissão',
   idle: 'parado',
   error: 'erro',
+  waiting_background: 'aguardando segundo plano',
 };
 
-export function stateLabel(state: TabState | null): string {
+/** `background`: the agent waits on its own background work (sent as `working`, TER-644). */
+export function stateLabel(state: TabState | null, background = false): string {
+  if (background && state === 'working') return STATE_LABEL.waiting_background;
   return state ? STATE_LABEL[state] : 'sem sinal';
 }
 
 /** The monitor streams tab states live; the panel's own copy is up to 15 s old. */
 export function withLiveTab(agent: AgentOnCard, live: Tab | undefined): AgentOnCard {
   if (!live) return agent;
+  const background = live.state === 'waiting_background';
   return {
     ...agent,
-    state: live.state,
+    // the shape the server sends (TER-644): still at work, flagged
+    state: background ? 'working' : live.state,
     state_at: live.state_at,
+    background,
     needs_you: live.state === 'waiting_input' || live.state === 'waiting_permission',
     activity: live.activity,
     activity_verb: live.activity_verb,

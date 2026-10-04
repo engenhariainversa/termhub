@@ -22,6 +22,7 @@ function stateStyle(state: TabState | null): string {
     case 'waiting_input':
       return 'bg-accent/15 text-accent';
     case 'idle':
+    case 'waiting_background':
       return 'bg-bg-4 text-fg-muted';
     case 'error':
       return 'bg-danger/15 text-danger';

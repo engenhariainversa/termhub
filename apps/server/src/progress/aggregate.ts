@@ -1,4 +1,5 @@
 import type { AgentOnCard, CardProgress, EpicProgress, ProgressEstimate, ProgressScope, PullRequestBadge } from '@termhub/mobile-api';
+import type { TabState } from '../db/repositories/types.js';
 import { NEEDS_YOU } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
 
@@ -9,7 +10,7 @@ export interface ProgressTabRow {
   id: string;
   name: string;
   machine_name: string;
-  state: 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | null;
+  state: TabState | null;
   state_at: Date | null;
   activity: string | null;
   activity_verb: string | null;
@@ -51,8 +52,10 @@ function agentOf(tab: ProgressTabRow, subtaskRef: string | null): AgentOnCard {
     tab_name: tab.name,
     machine_name: tab.machine_name,
     subtask_ref: subtaskRef,
-    state: tab.state,
+    // the contract's state predates `waiting_background`: still at work, flagged (TER-644)
+    state: tab.state === 'waiting_background' ? 'working' : tab.state,
     state_at: iso(tab.state_at),
+    background: tab.state === 'waiting_background',
     needs_you: tab.state !== null && NEEDS_YOU.includes(tab.state),
     activity: tab.activity,
     activity_verb: tab.activity_verb,

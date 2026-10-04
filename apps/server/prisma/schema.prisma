@@ -306,6 +306,8 @@ enum TabState {
   waiting_permission
   idle
   error
+  /// The agent ended its turn while background work it started (subagents, shells, monitors) still runs (TER-644).
+  waiting_background
 }
 
 /// What a working agent is doing, from the tool it is about to call (monitor/activity.ts).
@@ -379,6 +381,8 @@ model Ticket {
   meta          Json                @default("{}")
   /// task criada a partir deste ticket (null = ainda não importado)
   taskId        String?             @unique @map("task_id")
+  /// an imported ticket its source no longer returns (closed, or out of the filter); cleared when it comes back
+  leftSourceAt  DateTime?           @map("left_source_at")
   syncedAt      DateTime            @default(now()) @map("synced_at")
   createdAt     DateTime            @default(now()) @map("created_at")
   project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -769,6 +773,10 @@ model ChatMessage {
   /// user | assistant
   replyToRole    String?          @map("reply_to_role")
   replyToExcerpt String?          @map("reply_to_excerpt")
+  /// TER-849: a reply to a card of the thread instead of a message (`replyToId` is then null).
+  /// action | tab_question, with that row's id; no foreign key, the excerpt above is the quote.
+  replyToCardKind String?         @map("reply_to_card_kind")
+  replyToCardId   String?         @map("reply_to_card_id")
   createdAt      DateTime         @default(now()) @map("created_at")
   attachments    ChatAttachment[]
 
