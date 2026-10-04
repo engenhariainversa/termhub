@@ -1,21 +1,13 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { WebSocketServer, WebSocket } from 'ws';
-import { MOBILE_API_VERSION, canonicalHtu } from '@termhub/mobile-api';
+import { MOBILE_API_VERSION } from '@termhub/mobile-api';
 import { canAccess } from '../auth/permissions.js';
-import { hashToken } from '../auth/tokens.js';
 import { chatBus } from '../chat/bus.js';
-import type { Repositories } from '../db/repositories/index.js';
 import { rejectUpgrade, type createUpgradeRouter } from '../ws/router.js';
-import { MOBILE_TOKEN_RE } from './codes.js';
-import { verifyProof, type JtiCache } from './dpop.js';
-import { isPendingDeletion } from '../account/deletion.js';
 import type { MobileSocketRegistry } from './revocation.js';
+import { authenticateMobileUpgrade, type MobileUpgradeDeps } from './ws-auth.js';
 
-export interface MobileChatWsDeps {
-  repos: Repositories;
-  jtis: JtiCache;
-  /** The mobile API's public base URL: proofs are bound to `<publicUrl>/ws/m/chat`. */
-  publicUrl: string;
+export interface MobileChatWsDeps extends MobileUpgradeDeps {
   sockets: MobileSocketRegistry;
   log: FastifyBaseLogger;
 }
@@ -30,37 +22,13 @@ export interface MobileChatWsDeps {
 export function registerMobileChatWs(router: ReturnType<typeof createUpgradeRouter>, deps: MobileChatWsDeps): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
   const log = deps.log.child({ mod: 'mobile-chat-ws' });
-  const ownOrigin = new URL(deps.publicUrl).origin;
 
   router.addPublic(/^\/ws\/m\/chat\/?$/, async ({ req, socket, head, url }) => {
-    // React Native's WebSocket (SocketRocket on iOS, OkHttp on Android) always sends the socket
-    // URL's own origin, and the app cannot drop it. Any other Origin is a page elsewhere trying
-    // its luck; it could not send the bearer token and proof anyway, so refuse it outright.
-    const origin = req.headers.origin;
-    if (origin && origin !== ownOrigin) return rejectUpgrade(socket, 403, 'Forbidden');
-    const raw = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
-    if (!MOBILE_TOKEN_RE.test(raw)) return rejectUpgrade(socket, 401, 'Unauthorized');
-    const found = await deps.repos.deviceSessions.findValidToken(hashToken(raw), new Date());
-    if (!found) return rejectUpgrade(socket, 401, 'Unauthorized');
-    let publicKeyJwk: JsonWebKey;
-    try {
-      publicKeyJwk = JSON.parse(found.device.public_key) as JsonWebKey;
-    } catch {
-      return rejectUpgrade(socket, 401, 'Unauthorized');
-    }
-    const proof = await verifyProof({
-      proof: String(req.headers.dpop ?? ''),
-      htm: 'GET',
-      htu: canonicalHtu(deps.publicUrl, url.pathname),
-      publicKeyJwk,
-      accessToken: raw,
-    });
-    // The jti is claimed only once the signature has verified, so garbage cannot fill the cache.
-    if (!proof.ok || !deps.jtis.claim(found.device.id, proof.jti)) return rejectUpgrade(socket, 401, 'Unauthorized');
-    const user = await deps.repos.users.findById(found.device.user_id);
-    if (!user || isPendingDeletion(user) || !(await canAccess(deps.repos, user, 'chat', 'read'))) return rejectUpgrade(socket, 403, 'Forbidden');
+    const who = await authenticateMobileUpgrade(deps, { req, socket, url });
+    if (!who) return;
+    const { user, deviceId } = who;
+    if (!(await canAccess(deps.repos, user, 'chat', 'read'))) return rejectUpgrade(socket, 403, 'Forbidden');
 
-    const deviceId = found.device.id;
     wss.handleUpgrade(req, socket, head, async (ws) => {
       // Closed after the upgrade so the app reads a close code, not an opaque HTTP failure.
       if (url.searchParams.get('v') !== String(MOBILE_API_VERSION)) return ws.close(4400, 'protocol');

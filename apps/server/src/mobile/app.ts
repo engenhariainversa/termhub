@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { HostAgents } from '../chat/host.js';
 import type { ChatService } from '../chat/service.js';
+import type { TabChatHub } from '../tab-chat/hub.js';
 import type { TranscriptionService } from '../terminal/transcription.js';
 import type { Mailer } from '../email/mailer.js';
 import type { createUpgradeRouter } from '../ws/router.js';
@@ -16,6 +17,7 @@ import { mobileNotificationRoutes } from '../routes/m-notifications.js';
 import { progressRoutes } from '../routes/progress.js';
 import { projectAiRoutes } from '../routes/project-ai.js';
 import { mobileSessionRoutes } from '../routes/m-session.js';
+import { mobileTabRoutes } from '../routes/m-tabs.js';
 import { mobileTranscriptionRoutes } from '../routes/m-transcriptions.js';
 import { buildMobileAuthHook, type MobileAuthMode } from './auth.js';
 import { JtiCache } from './dpop.js';
@@ -25,6 +27,7 @@ import { MobileSocketRegistry, revokeDevice } from './revocation.js';
 import { SessionService } from './session.js';
 import type { AccountDeletionService } from '../account/deletion.js';
 import { mobileAccountRoutes } from '../routes/m-account.js';
+import { registerMobileTabWs } from './tab-ws.js';
 import { registerMobileChatWs } from './ws.js';
 
 export const MOBILE_PREFIX = '/api/m/v1';
@@ -49,6 +52,8 @@ export interface MobileDeps {
   upgrades: ReturnType<typeof createUpgradeRouter>;
   /** The chat's attachment store, queue and quota, shared with the web routes (spec 2026-09-26 §5.3). */
   attachments: ChatAttachmentDeps;
+  /** Who watches which tab as a conversation (spec 2026-10-01 tab chat §5.3); the hooks route pokes it. */
+  tabChat: TabChatHub;
   /** Account deletion (TER-720): Ajustes → "Excluir minha conta". Absent in tests that do not need it. */
   deletion?: AccountDeletionService;
 }
@@ -79,24 +84,27 @@ export function createMobileServices(deps: MobileDeps): MobileServices {
  * The mobile app's API at /api/m/v1. It lives outside the /api plugin on purpose, so the cookie /
  * Cloudflare `buildAuthHook` never runs here: its only authentication is the device token plus a
  * DPoP proof (`buildMobileAuthHook`). Registered only when `config.mobile` is set. Returns the phone's
- * chat `WebSocketServer`, for the shutdown drain.
+ * `WebSocketServer`s (the chat and the tab chat), for the shutdown drain.
  */
 export async function registerMobileApi(
   fastify: FastifyInstance,
   services: MobileServices,
   deps: MobileDeps,
   routes?: (guardedMobile: GuardedMobile, m: FastifyInstance) => Promise<void>,
-): Promise<WebSocketServer> {
+): Promise<WebSocketServer[]> {
   const mobile = config.mobile;
   if (!mobile) throw new Error('registerMobileApi requires config.mobile (MOBILE_PUBLIC_URL)');
   const publicUrl = mobile.publicUrl;
   // The phone's chat stream, /ws/m/chat: authenticated like this prefix (device token + proof).
   const chatWs = registerMobileChatWs(deps.upgrades, { repos: deps.repos, jtis: services.jtis, publicUrl, sockets: services.sockets, log: deps.log });
+  // One open session screen, /ws/m/tabs/:id: the same checks, then the tab chat hub (spec 2026-10-01 tab chat §5.5).
+  const tabWs = registerMobileTabWs(deps.upgrades, { repos: deps.repos, jtis: services.jtis, publicUrl, sockets: services.sockets, hub: deps.tabChat, log: deps.log });
   // Pending actions and finished answers become push notifications while the server runs.
   const stopPush = services.push.start();
   fastify.addHook('onClose', async () => {
     stopPush();
     chatWs.close();
+    tabWs.close();
   });
   await fastify.register(
     async (m) => {
@@ -150,6 +158,8 @@ export async function registerMobileApi(
         // The person's own account: no role grant needed to delete it (device auth only).
         const deletion = deps.deletion;
         if (deletion) await m.register((a) => mobileAccountRoutes(a, { deletion, session: services.session }), { prefix: '/account' });
+        // A terminal tab read as a conversation (spec 2026-10-01 tab chat).
+        await guarded('terminals', (a) => mobileTabRoutes(a, deps.repos, { hub: deps.tabChat }), '/tabs');
       }
 
       await mobileRoutes(guardedMobile);
@@ -160,6 +170,6 @@ export async function registerMobileApi(
     },
     { prefix: MOBILE_PREFIX },
   );
-  // The shutdown drain closes its clients with the other WebSocket servers' (spec 2026-09-27 §5.2).
-  return chatWs;
+  // The shutdown drain closes their clients with the other WebSocket servers' (spec 2026-09-27 §5.2).
+  return [chatWs, tabWs];
 }
