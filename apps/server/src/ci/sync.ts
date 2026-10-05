@@ -17,6 +17,8 @@ const MESSAGES: Record<GithubCiError['kind'], (status: number) => string> = {
   auth: () => 'GitHub: o token não tem acesso ao repositório',
   not_found: () => 'GitHub: repositório não encontrado',
   rate_limited: () => 'GitHub: limite de requisições atingido',
+  forbidden: () => 'GitHub: sem permissão de escrita',
+  not_mergeable: () => 'GitHub: o pull request não pode ser mesclado',
   http: (status) => `GitHub: falha ao consultar (HTTP ${status})`,
 };
 
