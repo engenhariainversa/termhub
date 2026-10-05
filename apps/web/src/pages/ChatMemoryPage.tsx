@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import type { ChatDecision, ChatMemory, ConciergeNote, LessonItem } from '../lib/types';
+import { formatDate } from '../lib/format';
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
+const fmtDate = (iso: string) => formatDate(iso);
 
 /** "Lições" (spec 2026-09-27 failure lessons §6/§8): pt-BR labels for the two enums the list shows —
  *  binding clarifications, verbatim. */

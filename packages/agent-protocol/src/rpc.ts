@@ -53,6 +53,14 @@ export const FILE_READ_EXTENSIONS = ['.md', '.markdown', '.txt'] as const;
 /** Why `file.read` answered without a body. `outside`: not under an allowed folder (or a link leaves
  *  it); `hidden`: a dot-folder or dot-file below the folder; `type`: not one of FILE_READ_EXTENSIONS;
  *  `not_file`: a directory, socket, …; `binary`: not UTF-8 text; `eperm`: the agent's user cannot read it. */
+/** The extensions `file.list` lists (spec 2026-10-04 recent Markdown files, D2): Markdown only, no `.txt`. */
+export const FILE_LIST_EXTENSIONS = ['.md', '.markdown'] as const;
+/** The most entries one `file.list` answers, newest first (D4). */
+export const FILE_LIST_MAX_ENTRIES = 500;
+/** A folder relative to the project folder, for `file.list`: no leading `/` or `~`, no empty, `.`, `..` or
+ *  dot-prefixed segment, a plain charset and at most 16 segments. */
+export const REL_DIR_RE = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}){0,15}$/;
+export const relDir = z.string().min(1).max(512).regex(REL_DIR_RE);
 export const FILE_READ_REFUSALS = ['missing', 'outside', 'hidden', 'type', 'not_file', 'too_large', 'binary', 'eperm'] as const;
 export type FileReadRefusal = (typeof FILE_READ_REFUSALS)[number];
 
@@ -159,6 +167,38 @@ export const RPC = {
       z.object({ status: z.enum(FILE_READ_REFUSALS), size: z.number().int().min(0).optional() }),
     ]),
     10_000,
+  ),
+  /**
+   * The Markdown files of a project on this machine (spec 2026-10-04 recent Markdown files, TER-953): the
+   * non-recursive contents of each of `dirs` (relative to `cwd`; none when `cwd` is null) plus each cited
+   * file of `paths` (absolute or `~/…`). Every entry passes `file.read`'s checks (allowed folders with
+   * `roots` as the project folders, no dot segment, the link target too, FILE_LIST_EXTENSIONS, a regular
+   * file by `stat`); a refused or missing one is left out silently. A file over FILE_READ_MAX_BYTES is
+   * listed with `too_large`. `path` is the resolved file, `asked` the path as sent (cited) or the joined
+   * folder path (listed). Names, sizes and dates only, never a body; newest first, at most
+   * FILE_LIST_MAX_ENTRIES (since agent 0.17.0).
+   */
+  'file.list': def(
+    z.object({
+      cwd: machinePath.nullable(),
+      dirs: z.array(relDir).max(8),
+      paths: z.array(machinePath).max(100),
+      roots: z.array(machinePath).max(16),
+    }),
+    z.object({
+      entries: z
+        .array(
+          z.object({
+            path: z.string().max(4096),
+            asked: z.string().max(4096),
+            size: z.number().int().min(0),
+            mtime_ms: z.number().min(0),
+            too_large: z.boolean(),
+          }),
+        )
+        .max(FILE_LIST_MAX_ENTRIES),
+    }),
+    15_000,
   ),
   'transcript.read': def(
     z.object({

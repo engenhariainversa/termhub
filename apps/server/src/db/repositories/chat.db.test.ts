@@ -260,6 +260,15 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatRepository (Postgres)
     expect(found.map((m) => m.id)).toEqual([mine.id]);
   });
 
+  it('findUserMessagesForUser returns only the person’s own messages, in their own conversations (TER-851)', async () => {
+    const c = await repo.getOrCreateForUser(userId);
+    const typed = await repo.addMessage({ conversation_id: c.id, role: 'user', text: 'pode mesclar' });
+    const answer = await repo.addMessage({ conversation_id: c.id, role: 'assistant', text: 'mesclado' });
+    const found = await repo.findUserMessagesForUser([typed.id, answer.id, 'missing'], userId);
+    expect(found.map((m) => m.id)).toEqual([typed.id]);
+    expect(await repo.findUserMessagesForUser([typed.id], 'someone-else')).toEqual([]);
+  });
+
   it('findByIdForUser never answers for another user', async () => {
     const c = await repo.getOrCreateForProject(userId, projectId);
     expect(await repo.findByIdForUser(c.id, 'someone-else')).toBeUndefined();
