@@ -93,11 +93,16 @@ Never pass `'pt-BR'` to `toLocale*` or `Intl`. Use `lib/format.ts`: `formatDate`
 - a used key with no English entry, or with different `{{placeholders}}`;
 - a catalog entry nothing uses any more (delete it with the string);
 - a plural without `_one`/`_other` in both catalogs;
-- in a **guarded** file: JSX text, or a `title`, `placeholder`, `aria-label`, `alt`, `label`,
-  `confirmLabel`, `message`, `subtitle` attribute, holding letters outside `t()`.
+- JSX text, or a `title`, `placeholder`, `aria-label`, `alt`, `label`, `confirmLabel`,
+  `message`, `subtitle` attribute, holding letters outside `t()`;
+- a source file outside `GUARDED`.
 
-When a folder (or file) is fully translated, add it to `GUARDED` in `scripts/i18n-check.mjs`
-(a folder with a trailing `/`, e.g. `'components/chat/'`), so it stays translated.
+`GUARDED` in `scripts/i18n-check.mjs` lists every top-level folder and file of `src/` (a folder
+with a trailing `/`), so the whole app stays translated. A new top-level folder or file goes there.
+
+The guard reads JSX only. Copy kept elsewhere (a label table, a `toast()`, `setError()`,
+`confirm()`, `document.title`) is up to you: wrap it in `t()`/`i18n.t()`, or keep it as a `tk()`
+key and translate it where it is shown.
 
 A literal that must stay as is (a brand, code, a symbol word) takes an `i18n-ignore` comment on
 its line or the line above: `// i18n-ignore` in code, `{/* i18n-ignore */}` in JSX text, or

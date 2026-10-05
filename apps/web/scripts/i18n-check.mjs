@@ -7,7 +7,8 @@
  *    (or `_one`/`_other` plural forms, mirrored in `src/locales/pt-BR/*.json`), with the same
  *    `{{placeholders}}` as the key; and every catalog entry must still be used somewhere.
  *
- * 2. Guard. In the files and folders listed in GUARDED (the parts of the app already translated),
+ * 2. Guard. In the files and folders listed in GUARDED (the whole app: a source file outside it is a
+ *    problem too, so a new top-level folder cannot slip by untranslated),
  *    JSX text and the copy attributes below may not hold letters outside `t()`. A legit literal (a
  *    brand, code, a symbol word) is allowed with an `i18n-ignore` comment on its line or the line
  *    above (`// i18n-ignore`, or `{/* i18n-ignore *\/}` inside JSX).
@@ -20,147 +21,10 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 /**
- * Paths under `src/` the untranslated-copy guard covers: a folder (trailing `/`) or a file. Add a
- * folder or file once every string in it goes through `t()`; at the end, this is every folder.
+ * Paths under `src/` the untranslated-copy guard covers: a folder (trailing `/`) or a file. The whole
+ * app is translated, so this is every top-level folder and file; a new one goes here too.
  */
-export const GUARDED = [
-  'App.tsx',
-  'main.tsx',
-  'i18n/',
-  'components/Layout.tsx',
-  'components/MainNav.tsx',
-  'components/Sidebar.tsx',
-  'components/SidebarRail.tsx',
-  'components/SettingsSidebar.tsx',
-  'components/ProfileButton.tsx',
-  'components/ProfileView.tsx',
-  'components/LanguageSetting.tsx',
-  'components/PageHeader.tsx',
-  'components/ChatLayout.tsx',
-  'components/GroupHeader.tsx',
-  'components/ProjectRow.tsx',
-  'components/ProjectGroupsMenu.tsx',
-  'components/ErrorBoundary.tsx',
-  'components/PendingDeletionPage.tsx',
-  'components/ViewAsSwitch.tsx',
-  'components/Modal.tsx',
-  'components/CookieBanner.tsx',
-  'components/DeviceRequestBanner.tsx',
-  'components/NeedsYouToasts.tsx',
-  'components/NicknamePrompt.tsx',
-  'lib/toast.tsx',
-  'lib/view-as.ts',
-  'pages/LoginPage.tsx',
-  'pages/SettingsPage.tsx',
-  'lib/settings-sections.ts',
-  'lib/format.ts',
-  // board + projects
-  'components/BacklogView.tsx',
-  'components/BoardColumnsSettings.tsx',
-  'components/CardPullRequests.tsx',
-  'components/ProjectAiCard.tsx',
-  'components/ProjectCards.tsx',
-  'components/ProjectForm.tsx',
-  'components/ProjectSettings.tsx',
-  'components/SubtaskList.tsx',
-  'components/TaskEditor.tsx',
-  'components/TasksBoard.tsx',
-  'components/TicketsView.tsx',
-  'components/TypeBadge.tsx',
-  'components/NotesEditor.tsx',
-  'components/ProgressPanel.tsx',
-  'components/NeedsYouList.tsx',
-  'pages/CardPage.tsx',
-  'pages/ProjectPage.tsx',
-  'pages/HomePage.tsx',
-  'lib/board.ts',
-  'lib/epic-summary.ts',
-  'lib/ticket-link.ts',
-  'lib/home-onboarding.ts',
-  'lib/project-groups-model.ts',
-  'lib/project-groups.tsx',
-  'lib/progress.ts',
-  'lib/needs-you.ts',
-  // chat
-  'components/chat/',
-  'pages/ChatMemoryPage.tsx',
-  'pages/ChatPage.tsx',
-  'lib/chat-context.ts',
-  'lib/chat-inbox.ts',
-  'lib/chat-live.ts',
-  'lib/chat-merge.ts',
-  'lib/chat-notice.ts',
-  'lib/chat-pool.ts',
-  'lib/chat-reply.ts',
-  'lib/chat-scroll.ts',
-  'lib/chat-timeline.ts',
-  'lib/chat.tsx',
-  'lib/project-chat.tsx',
-  'lib/project-chat-prefs.ts',
-  'lib/subagents.ts',
-  'lib/use-dictation.ts',
-  'lib/voice-recorder.ts',
-  'lib/voice-store.ts',
-  'lib/attachments.ts',
-  'lib/code-blocks.ts',
-  'lib/markdown.ts',
-  // settings + city
-  'components/AiAccountsView.tsx',
-  'components/ApiTokensView.tsx',
-  'components/AutoSwapSettings.tsx',
-  'components/ChatGrantsView.tsx',
-  'components/DeleteAccountDialog.tsx',
-  'components/DevicesView.tsx',
-  'components/HardwareView.tsx',
-  'components/IntegrationsView.tsx',
-  'components/MyCityView.tsx',
-  'components/NicknameDialog.tsx',
-  'components/ReviewAccountPanel.tsx',
-  'components/UploadsView.tsx',
-  'components/WaitlistView.tsx',
-  'components/AnalyticsGate.tsx',
-  'components/RateLimitBanner.tsx',
-  'components/PublishControl.tsx',
-  'city/',
-  'lib/account-deletion.ts',
-  'lib/city-link.ts',
-  'lib/public-city.ts',
-  'lib/consent.ts',
-  // machines + terminal + office
-  'components/AgentEnrollment.tsx',
-  'components/AgentUpdateCard.tsx',
-  'components/Avatar.tsx',
-  'components/DirectoryBrowser.tsx',
-  'components/DropdownMenu.tsx',
-  'components/FileView.tsx',
-  'components/FloatingWindow.tsx',
-  'components/MachineForm.tsx',
-  'components/MachinePicker.tsx',
-  'components/MonitorHooksCard.tsx',
-  'components/OfficeEmptyState.tsx',
-  'components/PaneLayer.tsx',
-  'components/ProjectMachines.tsx',
-  'components/SetupForm.tsx',
-  'components/SimulatorSetupCard.tsx',
-  'components/SimulatorView.tsx',
-  'components/TabBar.tsx',
-  'components/Terminal.tsx',
-  'components/TerminalsView.tsx',
-  'pages/MachinesPage.tsx',
-  'pages/OfficePage.tsx',
-  'pages/FilePage.tsx',
-  'office/',
-  'lib/machine-labels.ts',
-  'lib/machine-status.ts',
-  'lib/terminal-connection.ts',
-  'lib/simulator-connection.ts',
-  'lib/reconnect.ts',
-  'lib/local-machines.ts',
-  'lib/md-paths.ts',
-  'lib/connect-gate.ts',
-  'lib/monitor.tsx',
-  'lib/lazy-retry.ts',
-];
+export const GUARDED = ['App.tsx', 'main.tsx', 'test-commit.ts', 'city/', 'components/', 'i18n/', 'lib/', 'office/', 'pages/'];
 
 /** JSX attributes that carry copy a person reads (or hears). */
 export const COPY_ATTRIBUTES = new Set(['title', 'placeholder', 'aria-label', 'alt', 'label', 'confirmLabel', 'message', 'subtitle']);
@@ -323,7 +187,9 @@ export function runCheck({ root = DEFAULT_ROOT, guarded = GUARDED } = {}) {
   const used = new Map();
   for (const file of sourceFiles(src)) {
     const rel = posix(relative(src, file));
-    const r = scanSource(posix(relative(root, file)), readFileSync(file, 'utf8'), { guarded: isGuarded(rel, guarded) });
+    const isG = isGuarded(rel, guarded);
+    if (!isG) problems.push(`${posix(relative(root, file))}: not under GUARDED; add its top-level folder or file to GUARDED in scripts/i18n-check.mjs`);
+    const r = scanSource(posix(relative(root, file)), readFileSync(file, 'utf8'), { guarded: isG });
     problems.push(...r.problems);
     for (const k of r.keys) if (!used.has(k.key)) used.set(k.key, k.where);
   }
