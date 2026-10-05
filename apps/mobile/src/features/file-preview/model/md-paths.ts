@@ -114,12 +114,14 @@ function linkInline(text: string): string {
 }
 
 /** The route's params as a preview link builds them. */
-export type FilePreviewParams = { path: string; project_id?: string; tab_id?: string };
+export type FilePreviewParams = { path: string; project_id?: string; tab_id?: string; machine_id?: string };
 
-/** The `/file-preview` route for a path: from the chat (its project) or from Sessões (its tab). */
-export function filePreviewRoute(path: string, ctx: { projectId?: string | null; tabId?: string | null }) {
+/** The `/file-preview` route for a path: from the chat (its project), from Sessões (its tab), or from
+ *  Arquivos (its project and the machine that listed it). */
+export function filePreviewRoute(path: string, ctx: { projectId?: string | null; tabId?: string | null; machineId?: string | null }) {
   const params: FilePreviewParams = { path };
   if (ctx.tabId) params.tab_id = ctx.tabId;
   else if (ctx.projectId) params.project_id = ctx.projectId;
+  if (ctx.machineId) params.machine_id = ctx.machineId;
   return { pathname: '/file-preview' as const, params };
 }
