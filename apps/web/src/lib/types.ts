@@ -1468,3 +1468,24 @@ export interface CreatedApiToken {
   token: string;
   mcp_url: string | null;
 }
+
+/** A previewed file (spec 2026-10-04 file preview): the body, or why there is none. `status` is a plain
+ *  string on the way in: a reason a newer server adds shows as the generic line, not an error. */
+export interface FilePreviewOk {
+  status: 'ok';
+  machine: { id: string; name: string };
+  project_id: string | null;
+  path: string;
+  rel_path: string | null;
+  name: string;
+  size: number;
+  mtime: string;
+  content: string;
+  github_url: string | null;
+}
+export interface FilePreviewRefused {
+  status: Exclude<string, 'ok'>;
+  machine: { id: string; name: string } | null;
+  size?: number;
+}
+export type FilePreview = FilePreviewOk | FilePreviewRefused;

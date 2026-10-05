@@ -4,6 +4,9 @@ import {
   announceTerminalEnded,
   closeEditorTab,
   editorTabsKey,
+  filePathOf,
+  fileTabId,
+  isFileTabId,
   getEditorTabs,
   onTerminalEnded,
   pinTab,
@@ -105,5 +108,28 @@ describe('editor tab store', () => {
     off();
     announceTerminalEnded('p1', 'a');
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('file tabs (TER-941)', () => {
+  it('a file id is told apart from a terminal id and gives its path back', () => {
+    const id = fileTabId('docs/a.md');
+    expect(isFileTabId(id)).toBe(true);
+    expect(isFileTabId('t1')).toBe(false);
+    expect(filePathOf(id)).toBe('docs/a.md');
+  });
+
+  it('previews and pins a file like a terminal', () => {
+    const f = fileTabId('~/r.md');
+    const previewed = previewTab(s(['t1']), f);
+    expect(previewed).toEqual(s(['t1', f], f));
+    expect(pinTab(previewed, f)).toEqual(s(['t1', f]));
+    // the next single click replaces the preview, file or terminal
+    expect(previewTab(previewed, 't2')).toEqual(s(['t1', 't2'], 't2'));
+  });
+
+  it('pruning against the terminal list keeps the file tabs', () => {
+    const f = fileTabId('docs/a.md');
+    expect(pruneEditorTabs(s(['t1', f, 'gone'], f), new Set(['t1']))).toEqual(s(['t1', f], f));
   });
 });

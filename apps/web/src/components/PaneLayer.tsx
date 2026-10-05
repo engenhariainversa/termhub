@@ -1,5 +1,5 @@
 import type { Preset, Rect } from '../lib/layout';
-import type { Tab } from '../lib/types';
+import type { BarTab } from './TabBar';
 
 export const PANE_HEADER_HEIGHT = 24;
 
@@ -8,7 +8,7 @@ interface Props {
   rects: Rect[];
   cells: (string | null)[];
   focusedCell: number;
-  tabs: Tab[];
+  tabs: BarTab[];
   onFocus: (cell: number) => void;
   onAssign: (cell: number, tabId: string) => void;
   onClear: (cell: number) => void;
@@ -16,7 +16,7 @@ interface Props {
 }
 
 /** Dropdown listing every tab of the project plus a "new terminal" entry. */
-function TabPicker({ tabs, value, onPick, onNew }: { tabs: Tab[]; value: string | null; onPick: (id: string) => void; onNew: () => void }) {
+function TabPicker({ tabs, value, onPick, onNew }: { tabs: BarTab[]; value: string | null; onPick: (id: string) => void; onNew: () => void }) {
   return (
     <select
       className="h-5 max-w-[180px] rounded border border-line bg-bg px-1 text-[11px] text-fg"
@@ -31,7 +31,7 @@ function TabPicker({ tabs, value, onPick, onNew }: { tabs: Tab[]; value: string 
       <option value="">Escolha uma aba…</option>
       {tabs.map((t) => (
         <option key={t.id} value={t.id}>
-          {t.kind === 'simulator' ? '📱 ' : ''}
+          {t.kind === 'simulator' ? '📱 ' : t.kind === 'file' ? '📄 ' : ''}
           {t.name}
         </option>
       ))}
@@ -65,7 +65,7 @@ export function PaneLayer({ preset, rects, cells, focusedCell, tabs, onFocus, on
             >
               {tab ? (
                 <>
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tab.alive ? 'bg-ok' : 'bg-fg-dim'}`} />
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tab.kind === 'file' || tab.alive ? 'bg-ok' : 'bg-fg-dim'}`} />
                   <span className="truncate text-fg">{tab.name}</span>
                   <TabPicker tabs={tabs} value={tab.id} onPick={(id) => onAssign(cell, id)} onNew={() => onNewTerminal(cell)} />
                   <button

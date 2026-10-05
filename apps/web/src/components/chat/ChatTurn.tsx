@@ -1,7 +1,9 @@
 import { memo, useMemo } from 'react';
 import type { MouseEvent } from 'react';
+import { appNavigate } from '../../lib/app-navigate';
 import { decorateCodeBlocks } from '../../lib/code-blocks';
 import { renderMarkdown } from '../../lib/markdown';
+import { filePreviewHref, linkifyMdPaths, MD_PATH_ATTR } from '../../lib/md-paths';
 import { splitSettled } from '../../lib/markdown-split';
 import { limitSentence, swapSentence } from '../../lib/chat-notice';
 import { isReplyable } from '../../lib/chat-reply';
@@ -69,7 +71,7 @@ const COPY_OUTCOME = {
  * out of this handler on `.then`. Copying the block is the whole point of the button — a tap that
  * silently does nothing, again and again, is the one outcome it must never have.
  */
-function handleCopyClick(event: MouseEvent<HTMLDivElement>): void {
+export function handleCopyClick(event: MouseEvent<HTMLDivElement>): void {
   const target = event.target as HTMLElement;
   const button = target.closest('[data-copy]') as HTMLElement | null;
   if (!button) return;
@@ -116,13 +118,15 @@ function flashCopy(button: HTMLElement, outcome: (typeof COPY_OUTCOME)[keyof typ
   }, COPY_FEEDBACK_MS);
 }
 
-/** Markdown to sanitised HTML, with the copy buttons on any fence: the one path both halves go through. */
-function toHtml(markdown: string): string {
+/** Markdown to sanitised HTML, with the copy buttons on any fence and preview links on Markdown paths
+ *  (spec 2026-10-04 file preview): the one path both halves go through. */
+function toHtml(markdown: string, projectId: string | null): string {
   if (!markdown) return '';
   const rendered = renderMarkdown(markdown, { markdownOnly: true });
   // No fence in this piece, nothing to decorate: every delta of a prose-only reply would otherwise pay
-  // for a full DOMParser round trip that cannot change anything.
-  return rendered.includes('<pre') ? decorateCodeBlocks(rendered) : rendered;
+  // for a full DOMParser round trip that cannot change anything. `linkifyMdPaths` skips the same way.
+  const decorated = rendered.includes('<pre') ? decorateCodeBlocks(rendered) : rendered;
+  return linkifyMdPaths(decorated, (path) => filePreviewHref(projectId, path));
 }
 
 export interface ChatTurnProps {
@@ -141,6 +145,8 @@ export interface ChatTurnProps {
   onReply?: (message: ChatMessage) => void;
   /** The row a quote just scrolled to: a ring for a moment. */
   highlighted?: boolean;
+  /** The conversation's project: a Markdown path opens as a file tab there; null = the account chat. */
+  projectId?: string | null;
 }
 
 /**
@@ -156,7 +162,7 @@ export interface ChatTurnProps {
  * every delta, and parsing plus sanitising one message costs about 1 ms — a 50-message thread was
  * paying ~51 ms per delta, on the same main thread the answer is being written on.
  */
-export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, waiting, failed, onOpenReply, onReply, highlighted = false }: ChatTurnProps) {
+export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, waiting, failed, onOpenReply, onReply, highlighted = false, projectId = null }: ChatTurnProps) {
   const body = message.role === 'user' ? '' : message.text || streaming || (waiting ? 'pensando…' : '');
   /**
    * While the answer streams (nothing stored yet), the body is split at its last finished block: the
@@ -166,8 +172,20 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
    */
   const live = message.role === 'assistant' && !message.text && Boolean(streaming);
   const { settled, tail } = useMemo(() => (live ? splitSettled(body) : { settled: body, tail: '' }), [body, live]);
-  const settledHtml = useMemo(() => toHtml(settled), [settled]);
-  const tailHtml = useMemo(() => toHtml(tail), [tail]);
+  const settledHtml = useMemo(() => toHtml(settled, projectId), [settled, projectId]);
+  const tailHtml = useMemo(() => toHtml(tail, projectId), [tail, projectId]);
+
+  /** A Markdown path: open its preview in the app (a double click pins it); a modified click keeps the browser's own. */
+  const onBodyClick = (event: MouseEvent<HTMLDivElement>) => {
+    const link = (event.target as HTMLElement).closest(`a[${MD_PATH_ATTR}]`);
+    if (link instanceof HTMLAnchorElement && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+      event.preventDefault();
+      const href = link.getAttribute('href') ?? '';
+      appNavigate(event.detail >= 2 ? `${href}&pin=1` : href);
+      return;
+    }
+    handleCopyClick(event);
+  };
 
   const reply = onReply && isReplyable(message) ? <ChatReplyButton onClick={() => onReply(message)} /> : null;
   // The ring is always there, transparent until a quote scrolls here: showing it must not move the row.
@@ -213,7 +231,7 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
           // The one delegated handler for every copy button this row's HTML may contain (there can be
           // several, one per fence) — a per-block React handler is impossible anyway, since the blocks
           // come from an HTML string, not from JSX.
-          onClick={handleCopyClick}
+          onClick={onBodyClick}
         >
           {settledHtml && <div dangerouslySetInnerHTML={{ __html: settledHtml }} />}
           {tailHtml && <div dangerouslySetInnerHTML={{ __html: tailHtml }} />}

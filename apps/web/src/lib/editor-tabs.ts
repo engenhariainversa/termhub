@@ -18,6 +18,15 @@ export interface EditorTabs {
 
 export const EMPTY_EDITOR_TABS: EditorTabs = { open: [], preview: null };
 
+/**
+ * A file preview tab (spec 2026-10-04 file preview D14): the same list, the same preview and pin, keyed by
+ * the path as the answer wrote it. Its id never collides with a terminal's (`[a-z0-9]` ids).
+ */
+export const FILE_TAB_PREFIX = 'file:';
+export const fileTabId = (path: string) => `${FILE_TAB_PREFIX}${path}`;
+export const isFileTabId = (id: string) => id.startsWith(FILE_TAB_PREFIX);
+export const filePathOf = (id: string) => id.slice(FILE_TAB_PREFIX.length);
+
 /** Opens `id` as the preview tab, in place of the current preview; an already open tab keeps its state. */
 export function previewTab(s: EditorTabs, id: string): EditorTabs {
   if (s.open.includes(id)) return s;
@@ -36,11 +45,13 @@ export function closeEditorTab(s: EditorTabs, id: string): EditorTabs {
   return { open: s.open.filter((x) => x !== id), preview: s.preview === id ? null : s.preview };
 }
 
-/** Drops the ids that are not terminals of the project any more (ended elsewhere, a machine unlinked). */
+/** Drops the ids that are not terminals of the project any more (ended elsewhere, a machine unlinked).
+ *  File tabs stay: a file is not a terminal of the list. */
 export function pruneEditorTabs(s: EditorTabs, known: ReadonlySet<string>): EditorTabs {
-  if (s.open.every((id) => known.has(id))) return s;
-  const open = s.open.filter((id) => known.has(id));
-  return { open, preview: s.preview && known.has(s.preview) ? s.preview : null };
+  const keep = (id: string) => known.has(id) || isFileTabId(id);
+  if (s.open.every(keep)) return s;
+  const open = s.open.filter(keep);
+  return { open, preview: s.preview && keep(s.preview) ? s.preview : null };
 }
 
 function sanitize(raw: unknown): EditorTabs | null {

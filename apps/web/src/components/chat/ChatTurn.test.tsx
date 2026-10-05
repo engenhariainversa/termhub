@@ -17,6 +17,9 @@ vi.mock('../../lib/code-blocks', async (importOriginal) => {
   return { ...actual, decorateCodeBlocks: decorateCodeBlocks.mockImplementation(actual.decorateCodeBlocks) };
 });
 
+const appNavigate = vi.hoisted(() => vi.fn());
+vi.mock('../../lib/app-navigate', () => ({ appNavigate }));
+
 function answer(overrides: Partial<ChatMessage> = {}): ChatMessage {
   return { id: 'm1', conversation_id: 'c1', role: 'assistant', text: 'feito', error_code: null, created_at: '2026-09-21T00:00:00.000Z', ...overrides };
 }
@@ -397,5 +400,30 @@ describe('ChatTurn', () => {
     expect(onReply).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
     rerender(<ol><ChatTurn message={answer({ text: '' })} waiting failed={false} onReply={onReply} /></ol>);
     expect(screen.queryByRole('button', { name: 'Responder' })).toBeNull();
+  });
+});
+
+describe('ChatTurn: Markdown paths (TER-941)', () => {
+  it('links a path and opens it in the app on a click, pinned on a double click', async () => {
+    appNavigate.mockClear();
+    render(
+      <ol>
+        <ChatTurn message={answer({ text: 'Relatório em ~/r.md' })} waiting={false} failed={false} projectId="p1" />
+      </ol>,
+    );
+    const link = screen.getByRole('link', { name: '~/r.md' });
+    expect(link.getAttribute('href')).toBe('/projects/p1?file=%7E%2Fr.md');
+    fireEvent.click(link, { detail: 1 });
+    fireEvent.click(link, { detail: 2 });
+    expect(appNavigate.mock.calls).toEqual([['/projects/p1?file=%7E%2Fr.md'], ['/projects/p1?file=%7E%2Fr.md&pin=1']]);
+  });
+
+  it('outside a project, links to the file page', () => {
+    render(
+      <ol>
+        <ChatTurn message={answer({ text: 'veja /tmp/a.md' })} waiting={false} failed={false} />
+      </ol>,
+    );
+    expect(screen.getByRole('link', { name: '/tmp/a.md' }).getAttribute('href')).toBe('/files?file=%2Ftmp%2Fa.md');
   });
 });

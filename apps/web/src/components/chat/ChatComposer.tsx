@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Paperclip } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
+import { useChatInbox } from '../../lib/chat-inbox';
 import { ACCEPT_ATTRIBUTE, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, checkFile, type AttachmentKind } from '../../lib/attachments';
 import { sendsMessage } from '../../lib/chat-scroll';
 import { downscaleImage } from '../../lib/image-downscale';
@@ -290,6 +291,8 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
   const attachments = useAttachmentDrafts(projectId, attachmentStatuses);
+  // A file sent here from a preview ("Mandar para o chat") lands as a chip, like a dropped one.
+  useChatInbox(projectId ?? null, (files) => attachments.add(files));
   const uploading = attachments.drafts.some((d) => d.phase === 'uploading');
   const uploadedIds = useMemo(() => attachments.drafts.flatMap((d) => (d.phase === 'uploaded' && d.attachment ? [d.attachment.id] : [])), [attachments.drafts]);
   /** A chip that is not a refusal counts as content: a box with one is a box about to send. */
