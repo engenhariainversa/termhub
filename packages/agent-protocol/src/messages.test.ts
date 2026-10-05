@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agentMessage,
   CAPABILITY_CLAUDE_STREAM_INPUT,
+  CAPABILITY_FILE_LIST,
   CAPABILITY_FILE_READ,
   CAPABILITY_TRANSCRIPT,
   CAPABILITY_SIM,
@@ -152,4 +153,8 @@ it('names the transcript capability once', () => {
 
 it('names the file read capability once', () => {
   expect(CAPABILITY_FILE_READ).toBe('file_read');
+});
+
+it('names the file list capability once', () => {
+  expect(CAPABILITY_FILE_LIST).toBe('file_list');
 });

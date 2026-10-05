@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
 import { useMonitor } from '../lib/monitor';
 import { useData } from '../lib/data';
 import { ApiError } from '../lib/api';
@@ -35,6 +36,7 @@ function stateStyle(state: TabState | null): string {
 
 function Item({ item, now }: { item: MonitorItem; now: number }) {
   const { reply } = useMonitor();
+  const { can } = useAuth();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,8 @@ function Item({ item, now }: { item: MonitorItem; now: number }) {
   // The highlight follows "needs you" (drops once seen); the quick-reply form follows the raw
   // state — the tool is still actually waiting for an answer either way, seen or not.
   const waiting = tabNeedsYou(tab);
-  const canReply = !!tab.state && NEEDS_YOU.includes(tab.state);
+  // Replying types into the terminal: it takes terminals:write (TER-576), like typing in the tab itself.
+  const canReply = !!tab.state && NEEDS_YOU.includes(tab.state) && can('terminals', 'write');
 
   const send = async (e: FormEvent, value = text) => {
     e.preventDefault();
