@@ -45,7 +45,7 @@ export async function automationPauseRoutes(app: FastifyInstance, repos: Reposit
   /** The built-in middle paragraph of each role's prompt: the placeholder of the Setup textareas. */
   app.get('/prompt-defaults', async () => ({
     implementer: DEFAULT_IMPLEMENTER_TEXT,
-    integrator: DEFAULT_INTEGRATOR_TEXT,
+    integrator: DEFAULT_INTEGRATOR_TEXT('a branch base'),
     fixer: `${DEFAULT_FIXER_CONFLICT_TEXT('a branch base')}\n${DEFAULT_FIXER_CI_TEXT}`,
   }));
   app.post('/pause', { config: { action: 'update' } }, async (request) => {
