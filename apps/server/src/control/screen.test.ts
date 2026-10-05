@@ -265,6 +265,14 @@ describe('waitForState', () => {
     await expect(q).resolves.toMatchObject({ state: 'waiting_background', timed_out: false });
   });
 
+  it('returns on finished: the agent ended its turn with a report, it is done (TER-972)', async () => {
+    const p = waitForState(ctx(), { tab_id: 't1', timeout_seconds: 5 });
+    await tick();
+    publish(baseTab({ state: 'finished', state_text: 'Deploy feito, card em Feito.' }));
+    await expect(p).resolves.toMatchObject({ state: 'finished', state_text: 'Deploy feito, card em Feito.', timed_out: false });
+    await expect(waitForState(ctx(baseTab({ state: 'finished' })), { tab_id: 't1' })).resolves.toMatchObject({ state: 'finished', timed_out: false });
+  });
+
   it('times out without error and clamps the timeout to 90 s', async () => {
     vi.useFakeTimers();
     const p = waitForState(ctx(), { tab_id: 't1', timeout_seconds: 500 });

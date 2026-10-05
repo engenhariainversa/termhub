@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { ANALYTICS_ENABLED, disableAnalytics, initAnalytics, setLang as setAnalyticsLang, track } from './analytics';
 import { CookieBanner } from './CookieBanner';
 import { readConsent, subscribeConsent } from './consent';
-import { DICT, LANG_KEY, LangContext, detectLang, useLang, type Dict, type Lang } from './i18n';
+import { DICT, HTML_LANG, LANG_KEY, LANG_NAMES, LangContext, detectLang, useLang, type Dict, type Lang } from './i18n';
 
 /**
  * What every page of termhub.dev shares: the language switch, analytics and
@@ -29,9 +29,9 @@ export function Chevron() {
 }
 
 function LangSwitch() {
-  const { lang, setLang } = useLang();
+  const { lang, t, setLang } = useLang();
   return (
-    <span className="flex rounded-field border border-border-2 p-0.5 text-caption" role="group" aria-label="Language">
+    <span className="flex rounded-field border border-border-2 p-0.5 text-caption" role="group" aria-label={t.lang_switch.label}>
       {(['pt', 'en'] as Lang[]).map((l) => (
         <button
           key={l}
@@ -39,6 +39,8 @@ function LangSwitch() {
           onClick={() => setLang(l)}
           className={`hover-tint tap px-2 py-0.5 font-medium uppercase ${lang === l ? 'bg-surface text-white' : 'text-muted hover:text-frost'}`}
           aria-pressed={lang === l}
+          aria-label={LANG_NAMES[l]}
+          lang={HTML_LANG[l]}
         >
           {l}
         </button>
@@ -115,10 +117,21 @@ export function Site({ meta, children }: { meta: (t: Dict) => { title: string; d
   };
   useEffect(() => {
     const m = meta(DICT[lang]);
-    document.documentElement.lang = lang === 'pt' ? 'pt-BR' : 'en';
+    document.documentElement.lang = HTML_LANG[lang];
     document.title = m.title;
     document.querySelector('meta[name="description"]')?.setAttribute('content', m.description);
+    document.querySelector('meta[property="og:title"]')?.setAttribute('content', m.title);
+    document.querySelector('meta[property="og:locale"]')?.setAttribute('content', lang === 'pt' ? 'pt_BR' : 'en_US');
   }, [lang, meta]);
+  // A page opened with an explicit ?lang= (the hreflang alternates) is its own canonical URL; the
+  // bare URL stays canonical for itself, since it is the x-default that follows the browser language.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('lang');
+    if (q !== 'pt' && q !== 'en') return;
+    const canonical = document.querySelector('link[rel="canonical"]');
+    const href = canonical?.getAttribute('href');
+    if (canonical && href) canonical.setAttribute('href', `${href.split('?')[0]}?lang=${q}`);
+  }, []);
   // analytics starts only with a stored "granted"; withdrawing it stops collection at once,
   // without waiting for the next page load
   useEffect(() => {

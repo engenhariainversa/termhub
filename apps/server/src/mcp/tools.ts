@@ -97,7 +97,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'list_tabs',
-    description: 'List the tabs of a project (or of every project of a machine): whether the tmux session is alive, what the tool in it is doing (working, waiting_input, waiting_permission, idle, error, or waiting_background: it ended its turn while its own subagents, background shells or monitors still run — still at work, not waiting for the person), its pending question, and the task linked to it.',
+    description: 'List the tabs of a project (or of every project of a machine): whether the tmux session is alive, what the tool in it is doing (working, waiting_input, waiting_permission, idle, error, or waiting_background: it ended its turn while its own subagents, background shells or monitors still run — still at work, not waiting for the person; or finished: it ended its turn with a report and asks nothing — done, not waiting for the person), its pending question, and the task linked to it.',
     scope: 'read', resource: 'terminals', action: 'read',
     input: { project_id: id.optional(), machine_id: id.optional() },
     run: (ctx, a) => listTabs(ctx, a as { project_id?: string; machine_id?: string }),
@@ -138,7 +138,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'wait_for_state',
-    description: `Wait until the tool in a tab stops working (it finished, asks something, or needs a permission), up to timeout_seconds (default 60, max ${WAIT_MAX_SECONDS}). A tab in waiting_background (its turn ended while its own subagents, background shells or monitors still run) is still working: the wait goes on until that work reports and the agent stops for real, unless return_on_background is true. A timeout is not an error: call again to keep waiting. This is how to follow a tab (no read_screen loops or sleep); when it stops, read_last_answer for what it said.`,
+    description: `Wait until the tool in a tab stops working (it finished — state finished, a report that asks nothing —, asks something, or needs a permission), up to timeout_seconds (default 60, max ${WAIT_MAX_SECONDS}). A tab in waiting_background (its turn ended while its own subagents, background shells or monitors still run) is still working: the wait goes on until that work reports and the agent stops for real, unless return_on_background is true. A timeout is not an error: call again to keep waiting. This is how to follow a tab (no read_screen loops or sleep); when it stops, read_last_answer for what it said.`,
     scope: 'read', resource: 'terminals', action: 'read',
     input: { tab_id: id, timeout_seconds: z.number().int().min(1).max(WAIT_MAX_SECONDS).optional(), return_on_background: z.boolean().optional() },
     run: (ctx, a, signal) => waitForState(ctx, a as { tab_id: string; timeout_seconds?: number; return_on_background?: boolean }, signal),

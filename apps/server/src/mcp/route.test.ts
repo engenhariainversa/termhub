@@ -396,6 +396,34 @@ describe('terminals scope', () => {
     expect(list.json().result.tools.map((t: { name: string }) => t.name)).not.toContain('send_input');
   });
 
+  // TER-576: a role that can read (and even create/update/delete) terminals but lacks terminals:write —
+  // the default AUTHENTICATED/MANAGER grants before the migration — never types through the MCP.
+  it('neither lists nor runs send_input, send_key or run_command for a user without terminals:write', async () => {
+    vi.mocked(sendInput).mockClear();
+    const crud = ['machines:read', 'projects:read', 'terminals:create', 'terminals:read', 'terminals:update', 'terminals:delete'];
+    const { app, apiTokens } = build({ token: terminalsToken, grants: crud });
+    const list = await rpc(app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
+    const names = list.json().result.tools.map((t: { name: string }) => t.name);
+    for (const tool of ['send_input', 'send_key', 'run_command']) expect(names).not.toContain(tool);
+    expect(names).toContain('read_screen');
+
+    for (const [tool, args] of [
+      ['send_input', { tab_id: 't1', text: 'oi' }],
+      ['send_key', { tab_id: 't1', key: 'Enter' }],
+      ['run_command', { tab_id: 't1', command: 'ls' }],
+    ] as const) {
+      const r = await rpc(app, call(tool, args));
+      expect(r.json().result.isError).toBe(true);
+    }
+    await flush();
+    expect(apiTokens.recordEvent.mock.calls.map((c) => c[0])).toEqual([
+      expect.objectContaining({ tool: 'send_input', ok: false, error_code: 'TOOL_NOT_ALLOWED' }),
+      expect.objectContaining({ tool: 'send_key', ok: false, error_code: 'TOOL_NOT_ALLOWED' }),
+      expect.objectContaining({ tool: 'run_command', ok: false, error_code: 'TOOL_NOT_ALLOWED' }),
+    ]);
+    expect(sendInput).not.toHaveBeenCalled();
+  });
+
   it('refuses a key outside the closed list before the machine is touched', async () => {
     const { app, apiTokens } = build({ token: terminalsToken, grants: writeGrants });
     const r = await rpc(app, call('send_key', { tab_id: 't1', key: 'C-d' }));

@@ -26,6 +26,8 @@ export interface User {
   last_login_at: string | null;
   /** the address of this user's public city (`/city/@<nickname>`); null until claimed */
   nickname: string | null;
+  /** the language the person picked ('pt-BR' | 'en'); null = automatic; absent on servers older than the i18n release */
+  locale?: 'pt-BR' | 'en' | null;
   /** store-review mode: while in the future, this account's mobile device requests auto-approve */
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until; only the user-admin routes (/api/users) send it */
@@ -278,10 +280,15 @@ export interface AgentOnCard {
   tab_name: string;
   machine_name: string;
   subtask_ref: string | null;
-  /** the server sends `waiting_background` as `working` with `background: true` (the contract predates it, TER-644) */
+  /**
+   * the server sends `waiting_background` as `working` with `background: true` (the contract predates it, TER-644),
+   * and `finished` as `idle` with `finished: true` (TER-972)
+   */
   state: TabState | null;
   state_at: string | null;
   background: boolean;
+  /** the agent ended its turn with a report and asks nothing (TER-972); only with `state: 'idle'` */
+  finished: boolean;
   needs_you: boolean;
   activity: string | null;
   activity_verb: string | null;
@@ -595,8 +602,11 @@ export interface Tab {
   rate_limited_at: string | null;
 }
 
-/** `waiting_background`: the agent ended its turn while its own subagents, shells or monitors still run (TER-644). */
-export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background';
+/**
+ * `waiting_background`: the agent ended its turn while its own subagents, shells or monitors still run (TER-644).
+ * `finished`: the agent ended its turn with a plain report and asks nothing (TER-972).
+ */
+export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background' | 'finished';
 
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 
@@ -607,6 +617,7 @@ export const TAB_STATE_LABEL: Record<TabState, string> = {
   idle: 'terminou',
   error: 'erro',
   waiting_background: 'aguardando segundo plano',
+  finished: 'concluído',
 };
 
 /** States in which the tool is waiting for the person. */

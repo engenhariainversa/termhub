@@ -1,4 +1,5 @@
 import type { ChatNotice } from './types';
+import { dateTimeFormat } from './format';
 
 /**
  * The sentences of a chat answer's notice (TER-588): the usage limit it hit, or the account that took
@@ -9,7 +10,7 @@ import type { ChatNotice } from './types';
 const two = (n: number) => String(n).padStart(2, '0');
 
 function parts(d: Date, timeZone?: string) {
-  const f = new Intl.DateTimeFormat('pt-BR', { timeZone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const f = dateTimeFormat({ timeZone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   const get = (type: string) => Number(f.formatToParts(d).find((p) => p.type === type)?.value ?? '0');
   return { day: get('day'), month: get('month'), hour: get('hour'), minute: get('minute') };
 }

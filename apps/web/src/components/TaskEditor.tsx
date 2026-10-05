@@ -6,6 +6,7 @@ import { PROVIDER_LABEL, TASK_STATUS_LABEL, TASK_TYPE_LABEL, type Task, type Tas
 import { CardPullRequests } from './CardPullRequests';
 import { ConfirmDialog, Modal } from './Modal';
 import { SubtaskList } from './SubtaskList';
+import { formatDate, formatDateTime } from '../lib/format';
 
 /** Where the column select sends a card. */
 export type PlaceTarget = { column_id: string } | { status: 'backlog' };
@@ -212,7 +213,7 @@ export function TaskEditor({
               </button>
             </div>
             {pushing !== 'idle' && pushing !== 'busy' && <p className="mt-1 text-ok">{pushing}</p>}
-            {ref.pushed_at && <p className="mt-1 text-fg-dim">último envio: {new Date(ref.pushed_at).toLocaleString('pt-BR')}</p>}
+            {ref.pushed_at && <p className="mt-1 text-fg-dim">último envio: {formatDateTime(ref.pushed_at)}</p>}
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -251,7 +252,7 @@ export function TaskEditor({
         </div>
         <div className="flex items-center justify-between gap-2 pt-2 text-xs text-fg-dim">
           <span className="flex items-center gap-2">
-            criado em {new Date(task.created_at).toLocaleDateString('pt-BR')}
+            criado em {formatDate(task.created_at)}
             <button type="button" className="btn-ghost border border-line px-2 py-0.5 text-[11px]" onClick={() => void copyLink()}>
               {copied === 'ok' ? 'Link copiado' : 'Copiar link'}
             </button>
