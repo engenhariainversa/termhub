@@ -41,6 +41,7 @@ vi.mock('../components/BacklogView', () => ({ BacklogView: () => null }));
 vi.mock('../components/ProgressPanel', () => ({ ProgressPanel: () => <div>progress-panel</div> }));
 vi.mock('../components/TicketsView', () => ({ TicketsView: () => null }));
 vi.mock('../components/NotesEditor', () => ({ NotesEditor: () => null }));
+vi.mock('../components/RecentFiles', () => ({ RecentFiles: ({ projectId }: { projectId: string }) => <div>recent-files {projectId}</div> }));
 vi.mock('../components/ProjectSettings', () => ({ ProjectSettings: () => null }));
 
 import { ProjectPage } from './ProjectPage';
@@ -216,6 +217,7 @@ describe('ProjectPage header', () => {
       '/projects/p1/progress',
       '/projects/p1/tickets',
       '/projects/p1/notes',
+      '/projects/p1/files',
       '/projects/p1/settings',
     ]);
     expect(within(tabs).getByRole('link', { name: /Board/ }).textContent).toBe('Board3');
@@ -237,6 +239,22 @@ describe('ProjectPage progress section', () => {
     );
     expect(screen.getByText('progress-panel')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Progresso' }).getAttribute('href')).toBe('/projects/p1/progress');
+  });
+});
+
+describe('ProjectPage files section', () => {
+  it('shows the recent Markdown files at their own route, with a nav link to it', () => {
+    const proj = project();
+    dataState.current = { ...dataState.current, projects: [proj] };
+    render(
+      <MemoryRouter initialEntries={[`/projects/${proj.id}/files`]}>
+        <Routes>
+          <Route path="/projects/:id/:section" element={<ProjectPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('recent-files p1')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Arquivos' }).getAttribute('href')).toBe('/projects/p1/files');
   });
 });
 
