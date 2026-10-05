@@ -12,6 +12,7 @@ import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendIn
 import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
 import { addSubtasks, createTask, deleteTask, listTasks, moveTask, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
+import { automationQueue } from '../automation/queue.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
 import { answerTabQuestionTool, listTabQuestions, recordDecision, searchMemory, MEMORY_REF, type MemoryRefKind } from '../control/memory.js';
 import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } from '../control/integrations.js';
@@ -247,6 +248,14 @@ export const TOOLS: ToolDef[] = [
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id, status: taskStatus.optional(), type: taskType.optional(), epic_id: id.optional() },
     run: (ctx, a) => listTasks(ctx, a as { project_id: string; status?: TaskStatus; type?: TaskType; epic_id?: string }),
+  },
+  {
+    name: 'list_automation_queue',
+    description:
+      "List a project's cards tagged \"automático\" in the order automatic work takes them (board order: column, then position). Each item has the card's ref, title, whether it is eligible now and, when it is not, the reason code and its pt-BR text (automation off, paused, type not allowed, not in a todo column, no description, already has an agent, no machine with the worktree capability, repository not configured). Untagged cards and subtasks are not listed.",
+    scope: 'tasks', resource: 'tasks', action: 'read',
+    input: { project_id: id },
+    run: async (ctx, a) => ({ items: await automationQueue(ctx, (a as { project_id: string }).project_id) }),
   },
   {
     name: 'read_attachment',
