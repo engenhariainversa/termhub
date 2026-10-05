@@ -157,13 +157,13 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 | `reported_blocked` | The agent said it is stuck | Read its report, unblock or take over |
 | `ci_cap` | CI still red after the fix attempts | Open the PR, fix it, push; the merge follows when green |
 | `conflict_cap` | Conflict after the fix attempts | Resolve it; the merge follows when CI is green |
+| `deploy_failed` | The deploy failed after a merge; the project is paused | Section 10, then "Retomar automático" |
+| `deploy_failed_not_paused` | Same, and the pause could not be applied | Pause the project yourself first, then section 10 |
+| `release_failed` | A release workflow failed after a merge; nothing is paused | Section 10 |
 
 `ci_cap` and `conflict_cap` also come before the cap when a fix ended without a push (the PR head did not
 move after its fixer, or after the fix typed into the card's own run): the escalation then carries
 `cause: fixer_no_push`, once per PR head. Read the fixer's tab to see why it stopped.
-| `deploy_failed` | The deploy failed after a merge; the project is paused | Section 10, then "Retomar automático" |
-| `deploy_failed_not_paused` | Same, and the pause could not be applied | Pause the project yourself first, then section 10 |
-| `release_failed` | A release workflow failed after a merge; nothing is paused | Section 10 |
 
 ## 10. After a failed deploy or release
 
