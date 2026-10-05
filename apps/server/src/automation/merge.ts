@@ -46,8 +46,12 @@ export interface MergeDeps {
 
 const defaultSeen = new Map<string, string>();
 
-/** One card per PR head (spec §10.1): a push makes a new head, and a new question. */
-export const mergeKey = (repo: string, n: number, sha: string) => `${MERGE_TOOL}:${repo}#${n}@${sha}`;
+/** One card per PR head and base (spec §10.1): a push or a retarget makes a new question. */
+export const mergeKey = (repo: string, n: number, sha: string, base: string) => `${MERGE_TOOL}:${repo}#${n}@${sha}->${base}`;
+
+/** How much a merge may do, to tell whether a fresh reading needs more than what the person approved. */
+const NEED_RANK: Record<string, number> = { pr: 0, merge: 1, deploy: 2, release: 3, store: 4, files_incomplete: 4, other_base: 5 };
+const needRank = (needed: string) => NEED_RANK[needed] ?? Number.MAX_SAFE_INTEGER;
 
 /** What the approval card carries: ids, the PR and why it asks — never file names or content. */
 const mergeArgs = z.object({
@@ -130,6 +134,8 @@ async function candidateOf(
   const { epicBranch } = targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, base.setup);
   const baseBranch = base.setup.repo?.base_branch ?? 'main';
   if (row.base_ref !== baseBranch && row.base_ref !== epicBranch) return null;
+  // a head named like the base or the epic branch is never a card's own branch
+  if (row.head_ref === baseBranch || row.head_ref === epicBranch) return null;
   return { ...base, rows, tasks, primary, epicBranch, baseBranch };
 }
 
@@ -178,6 +184,14 @@ export async function runMergeExecutor(deps: MergeDeps, projectId: string): Prom
   }
 }
 
+/** Draining, paused, or automation turned off since the pass began: read fresh, right before a merge (D24). */
+async function stopped(c: PullCtx): Promise<boolean> {
+  const { repos } = c.deps;
+  if (c.deps.lifecycle.draining) return true;
+  if (!(await repos.projectSetup.get(c.project.id)).data.automation.enabled) return true;
+  return isPaused(repos, c.project.owner_id, c.project.id);
+}
+
 /** A write the token may not do (F-26): the card says so, and the CI panel too. */
 function noWrite(c: PullCtx): void {
   waitOn(c, 'merge_no_write');
@@ -199,7 +213,7 @@ async function handlePull(c: PullCtx): Promise<void> {
 
   // a card already asked for this head: act on an approval a missed hook left behind, else wait for the person
   // (a conflict that appears while the card waits is left to the person, who sees it on GitHub)
-  const asked = await repos.chatActions.findLatestByKeyInProject(c.project.owner_id, c.project.id, mergeKey(repo, row.number, row.head_sha));
+  const asked = await repos.chatActions.findLatestByKeyInProject(c.project.owner_id, c.project.id, mergeKey(repo, row.number, row.head_sha, row.base_ref!));
   if (asked) {
     if (asked.status === 'approved') await mergeApproved(deps, asked.id);
     else if (asked.status === 'pending') waitOn(c, (asked.args as { needed?: unknown })?.needed === 'store' ? 'merge_store' : 'merge_needs_approval');
@@ -218,29 +232,35 @@ async function handlePull(c: PullCtx): Promise<void> {
     return waitOn(c, delivery);
   }
 
-  const files = await deps.gh.files(token, repo, row.number);
-  const paths = files.paths.map(normalizePath).filter((p) => p.length > 0);
-  // an empty or cut list cannot prove the PR stays within the level: a person decides
-  const complete = files.complete && paths.length > 0;
-  const needed = requiredLevel({
-    base: pull.base_ref,
-    epicBranch: c.epicBranch,
-    baseBranch: c.baseBranch,
-    deployWorkflow: setup.repo?.deploy_workflow ?? null,
-    files: paths,
-    releasePaths: setup.automation.release_paths,
-    storePaths: setup.automation.store_paths,
-  });
-  await repos.taskPullRequests.setChangedLevel(c.project.id, repo, row.number, complete ? needed : 'files_incomplete');
+  const { needed, complete } = await readNeeded(c, row, pull.base_ref);
 
   if (complete && allows(setup.automation.autonomy, needed)) {
     // D24 / Review Focus 4: the last check before the merge
-    if (deps.lifecycle.draining || (await isPaused(repos, c.project.owner_id, c.project.id))) return;
+    if (await stopped(c)) return;
     const outcome = await mergePull(c, row, needed, 'policy');
     if (outcome === 'no_write') noWrite(c);
     return;
   }
   await askApproval(c, row, pull.base_ref, complete ? needed : 'files_incomplete');
+}
+
+/** The level the PR's files need now (D6), stored on its rows. An empty or cut list cannot prove the PR stays
+ *  within any level: `complete` false, stored as `files_incomplete`, and a person decides. */
+async function readNeeded(c: PullCtx, row: TaskPullRequest, base: string): Promise<{ needed: NeededLevel; complete: boolean }> {
+  const files = await c.deps.gh.files(c.token, c.repo, row.number);
+  const paths = files.paths.map(normalizePath).filter((p) => p.length > 0);
+  const complete = files.complete && paths.length > 0;
+  const needed = requiredLevel({
+    base,
+    epicBranch: c.epicBranch,
+    baseBranch: c.baseBranch,
+    deployWorkflow: c.setup.repo?.deploy_workflow ?? null,
+    files: paths,
+    releasePaths: c.setup.automation.release_paths,
+    storePaths: c.setup.automation.store_paths,
+  });
+  await c.deps.repos.taskPullRequests.setChangedLevel(c.project.id, c.repo, row.number, complete ? needed : 'files_incomplete');
+  return { needed, complete };
 }
 
 /**
@@ -327,7 +347,7 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
 async function askApproval(c: PullCtx, row: TaskPullRequest, base: string, needed: NeededLevel | 'files_incomplete'): Promise<void> {
   const { repos } = c.deps;
   const args: MergeArgs = { project_id: c.project.id, repo: c.repo, number: row.number, head_sha: row.head_sha, title: row.title, url: row.url, base, needed };
-  const card = await askForAutomation(repos, c.project.owner_id, c.project.id, { tool: MERGE_TOOL, args, key: mergeKey(c.repo, row.number, row.head_sha) });
+  const card = await askForAutomation(repos, c.project.owner_id, c.project.id, { tool: MERGE_TOOL, args, key: mergeKey(c.repo, row.number, row.head_sha, base) });
   waitOn(c, needed === 'store' ? 'merge_store' : 'merge_needs_approval');
   if (!card) return;
   for (const task of c.tasks) {
@@ -407,7 +427,8 @@ async function finish(repos: Repositories, action: ChatAction, ownerId: string, 
  * and the drain are checked once more and the row is claimed right before the merge (`claimApproved`), so
  * two approvals, two hooks or both colours merge once. A gate that only has to wait (checks running, base
  * pending, paused, draining) leaves the approval as it is, and the executor acts on it on a later pass.
- * Closed without a merge: `HEAD_MOVED` (the head the card was asked for is gone), `CI_FAILED`, `BEHIND_BASE`
+ * Closed without a merge: `HEAD_MOVED` (the head the card was asked for is gone), `BASE_CHANGED` (the PR was
+ * retargeted), `LEVEL_CHANGED` (its files now need more than what was approved), `CI_FAILED`, `BEHIND_BASE`
  * (the branch was updated: a new head and a new card), `NOT_CANDIDATE`, `GITHUB_NO_ACCESS`.
  */
 export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<void> {
@@ -422,8 +443,7 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
   if (!project?.owner_id) return;
   const owned = project as Project & { owner_id: string };
   const setup = (await repos.projectSetup.get(project.id)).data;
-  const halted = async () => deps.lifecycle.draining || !setup.automation.enabled || (await isPaused(repos, owned.owner_id, project.id));
-  if (await halted()) return;
+  if (!setup.automation.enabled || (await isPaused(repos, owned.owner_id, project.id))) return;
   // the card is the owner's: it was asked in one of the owner's conversations of this project
   const conversation = await repos.chat.findByIdForUser(action.conversation_id, owned.owner_id);
   if (!conversation || conversation.project_id !== project.id) return;
@@ -439,12 +459,15 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
   if (!row || row.head_sha !== args.head_sha) return void (await close('HEAD_MOVED'));
   const c = await candidateOf(deps, { deps, project: owned, setup, ...access }, rows);
   if (!c) return void (await close('NOT_CANDIDATE'));
+  // the approval was for this base: a PR retargeted since (say from the epic branch to the deploying base) is a new question
+  if (row.base_ref !== args.base) return void (await close('BASE_CHANGED'));
 
   // R1 again, on the head the card was asked for: the CI may have been re-run since
   if (row.ci_state === 'failed') return void (await close('CI_FAILED'));
   if (!(await checksGreen(c, row, null, ''))) return;
   const pull = await deps.gh.pull(access.token, args.repo, args.number);
   if (pull.head_sha !== args.head_sha) return void (await close('HEAD_MOVED'));
+  if (pull.base_ref !== args.base) return void (await close('BASE_CHANGED'));
   if (!sameTarget(c, row, pull)) return void (await close('NOT_CANDIDATE'));
   let delivery: 'ok' | MergeWait;
   try {
@@ -455,9 +478,12 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
   }
   if (delivery === 'merge_updating') return void (await close('BEHIND_BASE'));
   if (delivery !== 'ok') return waitOn(c, delivery);
+  // the files read now may need more than what the person approved (the setup's globs changed, say)
+  const fresh = await readNeeded(c, row, pull.base_ref);
+  if (needRank(fresh.complete ? fresh.needed : 'files_incomplete') > needRank(args.needed)) return void (await close('LEVEL_CHANGED'));
 
-  // D24 / Review Focus 4: the last check before the merge, after every GitHub read
-  if (await halted()) return;
+  // D24 / Review Focus 4: the last check before the merge, after every GitHub read (setup read fresh)
+  if (await stopped(c)) return;
   if (!(await repos.chatActions.claimApproved(action.id))) return;
 
   const started = Date.now();

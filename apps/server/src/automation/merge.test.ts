@@ -172,7 +172,7 @@ describe('runMergeExecutor', () => {
     await runMergeExecutor(w.deps, 'p1');
     expect(w.gh.merge).not.toHaveBeenCalled();
     expect(w.state.actions).toHaveLength(1);
-    expect(w.state.actions[0]).toMatchObject({ tool: MERGE_TOOL, class: 'irreversible', status: 'pending', idempotency_key: mergeKey('acme/app', 7, 'h1'), project_id: 'p1', injected_at: 'now' });
+    expect(w.state.actions[0]).toMatchObject({ tool: MERGE_TOOL, class: 'irreversible', status: 'pending', idempotency_key: mergeKey('acme/app', 7, 'h1', 'main'), project_id: 'p1', injected_at: 'now' });
     expect(w.state.actions[0]!.args).toMatchObject({ project_id: 'p1', repo: 'acme/app', number: 7, head_sha: 'h1', needed: 'deploy' });
     expect(w.state.events).toEqual([expect.objectContaining({ kind: 'merge_needs_approval', task_id: 'c2', payload: expect.objectContaining({ pr: 7, needed: 'deploy', action_id: 'a1' }) })]);
     expect(mergeWaitOf('c2', new Date('2026-10-05T12:00:00Z'))).toBe('merge_needs_approval');
@@ -274,6 +274,26 @@ describe('runMergeExecutor', () => {
   });
 
   // Only the card's own automatic branch, from this repository, into its epic branch or the base branch.
+  it('a head branch named like the base or the epic branch is never a candidate', async () => {
+    for (const head_ref of ['main', EPIC_BRANCH]) {
+      const w = world({ prs: [pr({ head_ref, base_ref: head_ref === 'main' ? EPIC_BRANCH : 'main' })] });
+      vi.mocked(w.repos.automationRuns.branchesOfTask).mockResolvedValue([head_ref]);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.pull).not.toHaveBeenCalled();
+      expect(w.state.actions).toHaveLength(0);
+    }
+  });
+
+  it('automation turned off during the pass stops the merge right before it (setup read fresh)', async () => {
+    const w = world();
+    vi.mocked(w.repos.projectSetup.get)
+      .mockResolvedValueOnce({ data: w.state.setup } as never)
+      .mockResolvedValue({ data: setupWith({ enabled: false }) } as never);
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.files).toHaveBeenCalled();
+    expect(w.gh.merge).not.toHaveBeenCalled();
+  });
+
   it('a PR from a fork is ignored: no merge, no card', async () => {
     const w = world();
     w.gh.pull.mockResolvedValue(w.pullFor({ head_repo: 'mallory/app' }));
@@ -497,6 +517,55 @@ describe('mergeApproved', () => {
     expect(w.gh.updateBranch).toHaveBeenCalledWith('tok', 'acme/app', 7, 'h1');
     expect(w.gh.merge).not.toHaveBeenCalled();
     expect(action).toMatchObject({ status: 'failed', error_code: 'BEHIND_BASE' });
+  });
+
+  it('a PR retargeted after the approval (epic branch → base branch, same head) is not merged: BASE_CHANGED', async () => {
+    const w = world({ setup: setupWith({ autonomy: 'pr' }, { deploy_workflow: 'deploy.yml' }) });
+    await runMergeExecutor(w.deps, 'p1');
+    const action = w.state.actions[0]!;
+    expect(action.args).toMatchObject({ base: EPIC_BRANCH, needed: 'merge' });
+    expect(action.idempotency_key).toBe(mergeKey('acme/app', 7, 'h1', EPIC_BRANCH));
+    approve(action);
+    // the same head now targets main, which deploys
+    w.state.prs = [pr({ base_ref: 'main' })];
+    await mergeApproved(w.deps, action.id);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(action).toMatchObject({ status: 'failed', error_code: 'BASE_CHANGED' });
+    // the executor asks again, for the new base
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.state.actions).toHaveLength(2);
+    expect(w.state.actions[1]!.args).toMatchObject({ base: 'main', needed: 'deploy' });
+  });
+
+  it('GitHub reporting a base other than the approved one closes the card the same way', async () => {
+    const { w, action } = await asked();
+    approve(action);
+    w.gh.pull.mockResolvedValue(w.pullFor({ base_ref: EPIC_BRANCH }));
+    await mergeApproved(w.deps, action.id);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(action).toMatchObject({ status: 'failed', error_code: 'BASE_CHANGED' });
+  });
+
+  it('files that now need more than the approved level close the card: LEVEL_CHANGED', async () => {
+    const { w, action } = await asked(setupWith({ autonomy: 'merge', release_paths: ['apps/agent/**'] }, { deploy_workflow: 'deploy.yml' }));
+    expect(action.args).toMatchObject({ needed: 'deploy' });
+    approve(action);
+    w.gh.files.mockResolvedValue({ paths: ['apps/agent/package.json'], complete: true });
+    await mergeApproved(w.deps, action.id);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(action).toMatchObject({ status: 'failed', error_code: 'LEVEL_CHANGED' });
+  });
+
+  it('automation turned off during an approved merge stops it; the approval stays', async () => {
+    const { w, action } = await asked();
+    approve(action);
+    vi.mocked(w.repos.projectSetup.get)
+      .mockResolvedValueOnce({ data: w.state.setup } as never)
+      .mockResolvedValue({ data: setupWith({ enabled: false }) } as never);
+    await mergeApproved(w.deps, action.id);
+    expect(w.gh.pull).toHaveBeenCalled();
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(action.status).toBe('approved');
   });
 
   it('the CI turned red on the same head after the card: the approval closes with CI_FAILED, no merge', async () => {
