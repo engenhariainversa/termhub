@@ -32,6 +32,7 @@ import {
   deviceSelf as deviceSelfSchema,
   emptyResponse,
   filePreviewResponse,
+  fileRecentResponse,
   hostOptionsResponse,
   lessonForgetSchema,
   lessonItemSchema,
@@ -398,6 +399,8 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       if (q.machine_id) p.set('machine_id', q.machine_id);
       return call('GET', `/api/m/v1/file-preview?${p.toString()}`, filePreviewResponse, { token: a.accessToken });
     },
+    fileRecent: (a: Auth, projectId: string) =>
+      call('GET', `/api/m/v1/file-recent?project_id=${encodeURIComponent(projectId)}`, fileRecentResponse, { token: a.accessToken }),
     tabs: (a: Auth) => call('GET', '/api/m/v1/tabs', tabsResponse, { token: a.accessToken }),
     startSession: (a: Auth, body: TStartSessionBody) => call('POST', '/api/m/v1/tabs', startSessionResponse, { token: a.accessToken, body }),
     tabChat: (a: Auth, tabId: string, before?: string) =>
