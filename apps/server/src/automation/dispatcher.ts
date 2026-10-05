@@ -19,6 +19,7 @@ import { clearWaiting, noteWaiting, placeRun, type Placement } from './placement
 import { policyText } from './policy.js';
 import { automationPermission } from './permission.js';
 import { implementerPrompt } from './prompts.js';
+import { integrateEpic } from './integrator.js';
 import { eligibilityQueue } from './queue.js';
 
 /** Spec D11: a tick every 15 s, plus one shortly after a relevant event. */
@@ -62,12 +63,13 @@ export interface DispatcherDeps {
   log?: Log;
 }
 
-/** A run the server starts by itself on a card (spike R2): a conflict fixer on the PR's own branch. */
+/** A run the server starts by itself on a card (spike R2): a conflict fixer on the PR's own branch, or an
+ *  epic's integrator on the epic branch. */
 export interface TriggeredRun {
   projectId: string;
   taskId: string;
-  role: 'fixer';
-  /** the PR head the run answers: one run per (card, role, trigger_sha), in any status */
+  role: 'fixer' | 'integrator';
+  /** the PR head (fixer) or epic branch head (integrator) the run answers: one run per (card, role, trigger_sha), in any status */
   triggerSha: string;
   branch: string;
   base: string;
@@ -81,7 +83,7 @@ export type TriggeredStart = 'started' | 'taken' | 'waiting' | 'halted';
 export interface Dispatcher {
   /** One pass over every project with automatic work on. Concurrent calls share the pass in progress. */
   tick(reason: string): Promise<void>;
-  /** Starts a server-triggered run (the merge executor's conflict fixer), like a claimed card from the queue. */
+  /** Starts a server-triggered run (a conflict fixer, an epic's integrator), like a claimed card from the queue. */
   startTriggered(i: TriggeredRun): Promise<TriggeredStart>;
   /** Heartbeat of this instance's runs, then the takeover of runs whose instance went silent. */
   heartbeat(): Promise<void>;
@@ -358,6 +360,22 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     return 'started';
   }
 
+  /** Automatic epics whose cards are all merged into the epic branch get their PR and integrator (spec §10.2). */
+  async function integrateProject(projectId: string, setup: ProjectSetupData): Promise<void> {
+    const project = await repos.projects.findById(projectId);
+    if (!project?.owner_id || (await isPaused(repos, project.owner_id, projectId))) return;
+    const board = await repos.tasks.listByProject(projectId);
+    for (const epic of board) {
+      if (halted()) return;
+      if (epic.type !== 'epic' || !epic.auto || epic.status === 'done') continue;
+      try {
+        await integrateEpic({ repos, gh: deps.gh, lifecycle: deps.lifecycle, log, startTriggered }, epic, setup, board);
+      } catch (e) {
+        log.warn({ projectId, taskId: epic.id, code: errorCode(e) }, 'automation: epic integration failed');
+      }
+    }
+  }
+
   /** Runs whose card was deleted are cancelled; their worktrees are removed when clean (spec §13). */
   async function sweep(): Promise<void> {
     for (const orphan of await repos.automationRuns.cancelOrphaned()) {
@@ -422,6 +440,12 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         await dispatchProject(project_id, data);
       } catch (e) {
         log.warn({ projectId: project_id, code: errorCode(e) }, 'automation: dispatch failed');
+      }
+      if (halted()) return;
+      try {
+        await integrateProject(project_id, data);
+      } catch (e) {
+        log.warn({ projectId: project_id, code: errorCode(e) }, 'automation: integration pass failed');
       }
     }
   }

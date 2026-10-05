@@ -153,6 +153,13 @@ describe('following a run (spec D15, F-13)', () => {
     expect(w.repos.tasks.startWork).not.toHaveBeenCalled();
   });
 
+  it('an integrator stopping with the epic PR open is resumed, not ended (the server opened that PR before it)', async () => {
+    const w = world({ run: { role: 'integrator', branch: 'epic/TER-1-x' }, prs: [{ state: 'open', head_ref: 'epic/TER-1-x', url: 'https://github.com/o/r/pull/9', number: 9 }] });
+    await followRun(w.deps, w.run.id);
+    expect(w.run.status).toBe('running');
+    expect(w.type).toHaveBeenCalledTimes(1);
+  });
+
   it('a PR from another branch, or closed, does not end the run', async () => {
     const w = world({ prs: [{ state: 'open', head_ref: 'other', url: 'u1', number: 1 }, { state: 'closed', head_ref: 'TER-1-card', url: 'u2', number: 2 }] });
     await followRun(w.deps, w.run.id);

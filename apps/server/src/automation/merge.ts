@@ -11,7 +11,7 @@ import { localeOf, t } from '../i18n/index.js';
 import { GithubCiError, type GithubCiClient } from '../integrations/github-ci.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import type { ProjectSetupData } from '../setup/schema.js';
-import { targetOf } from './branches.js';
+import { epicBranchName, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
 import { CONFLICT_CAP } from './escalation-text.js';
@@ -76,7 +76,7 @@ const codeOf = (e: unknown): string => {
 };
 
 /** The project's GitHub token, under the CI sync's rule: a GitHub integration of the project's owner. */
-async function githubAccess(repos: Repositories, project: Project, setup: ProjectSetupData): Promise<{ token: string; repo: string } | null> {
+export async function githubAccess(repos: Repositories, project: Project, setup: ProjectSetupData): Promise<{ token: string; repo: string } | null> {
   const repo = setup.repo;
   if (!repo?.integration_id || !repo.full_name) return null;
   const integration = await repos.integrations.findById(repo.integration_id);
@@ -108,7 +108,8 @@ const waitOn = (c: PullCtx, wait: MergeWait) => noteMergeWait(c.tasks.map((t) =>
  * Whether termhub may merge this PR at all, from its rows: every card it names is automatic, its head branch
  * is the branch an automatic run of one of them worked on (that card is the primary), and its base is that
  * card's epic branch or the project's base branch. A PR anyone else opened that only mentions a card, or one
- * into another branch, is ignored: no merge and no card. Null when it is not a candidate.
+ * into another branch, is ignored: no merge and no card. The epic PR, linked to its automatic epic alone, is
+ * the one PR whose head may be an epic branch (`epicCandidate`). Null when it is not a candidate.
  */
 async function candidateOf(
   deps: MergeDeps,
@@ -130,13 +131,38 @@ async function candidateOf(
     }
   }
   if (!primary) return null;
+  const baseBranch = base.setup.repo?.base_branch ?? 'main';
+  if (primary.type === 'epic') return epicCandidate(base, rows, tasks, primary, baseBranch);
   const epic = primary.epic_id ? await repos.tasks.findById(primary.epic_id) : undefined;
   const { epicBranch } = targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, base.setup);
-  const baseBranch = base.setup.repo?.base_branch ?? 'main';
   if (row.base_ref !== baseBranch && row.base_ref !== epicBranch) return null;
   // a head named like the base or the epic branch is never a card's own branch
   if (row.head_ref === baseBranch || row.head_ref === epicBranch) return null;
   return { ...base, rows, tasks, primary, epicBranch, baseBranch };
+}
+
+/**
+ * The epic PR (spec §10.2, D20): the epic's own branch, which its integrator run worked on, into the project's
+ * base branch, and naming the epic alone. Only the epic card may have its epic branch as a PR head; a card's
+ * PR from that branch is still refused by `candidateOf`.
+ */
+function epicCandidate(
+  base: Omit<PullCtx, 'rows' | 'tasks' | 'primary' | 'epicBranch' | 'baseBranch'>,
+  rows: TaskPullRequest[],
+  tasks: Task[],
+  epic: Task,
+  baseBranch: string,
+): PullCtx | null {
+  const row = rows[0]!;
+  if (tasks.length !== 1) return null;
+  let own: string;
+  try {
+    own = epicBranchName(base.setup.automation.epic_branch_pattern, epic);
+  } catch {
+    return null;
+  }
+  if (own === baseBranch || row.head_ref !== own || row.base_ref !== baseBranch) return null;
+  return { ...base, rows, tasks, primary: epic, epicBranch: own, baseBranch };
 }
 
 /** GitHub's own view of the PR still matches the candidate: same head branch, from this repository (no fork), same base. */
