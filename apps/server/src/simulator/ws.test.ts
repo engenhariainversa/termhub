@@ -8,7 +8,8 @@ import { createUpgradeRouter } from '../ws/router.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, Project, Tab } from '../db/repositories/types.js';
 import type { SimulatorSessionManager } from './session-manager.js';
-import { registerSimulatorWs } from './ws.js';
+import { registerSimulatorWs, commandErrorMessage, RECONNECTING_TOAST } from './ws.js';
+import { WdaError } from './wda-client.js';
 
 const { resolveUserMock, canAccessMock } = vi.hoisted(() => ({ resolveUserMock: vi.fn(), canAccessMock: vi.fn() }));
 
@@ -79,6 +80,18 @@ function shutdown(server: http.Server): Promise<void> {
     server.close(() => resolve());
   });
 }
+
+describe('commandErrorMessage', () => {
+  it('turns undici "fetch failed" into a pt-BR toast', () => {
+    expect(commandErrorMessage(new TypeError('fetch failed'))).toBe(RECONNECTING_TOAST);
+    expect(RECONNECTING_TOAST).toBe('Simulador reconectando; tente de novo em instantes.');
+  });
+  it('keeps WDA errors and other messages as before', () => {
+    expect(commandErrorMessage(new WdaError(500, 'boom'))).toBe('WDA: boom');
+    expect(commandErrorMessage(new Error('outra coisa'))).toBe('outra coisa');
+    expect(commandErrorMessage('x')).toBe('Comando falhou');
+  });
+});
 
 describe('registerSimulatorWs', () => {
   let server: http.Server;
