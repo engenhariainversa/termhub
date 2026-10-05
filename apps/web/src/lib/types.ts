@@ -222,6 +222,8 @@ export interface Task {
   epic_id: string | null;
   /** board column; null in the backlog and on subtasks */
   column_id: string | null;
+  /** tagged for automatic work ("Trabalho automático"); absent from an older server */
+  auto?: boolean;
   /** Only on top-level cards from the list endpoint. */
   subtasks?: Task[];
   subtask_counts?: { done: number; total: number };
@@ -262,6 +264,8 @@ export interface TaskPatchInput {
   status?: TaskStatus;
   type?: TaskType;
   epic_id?: string | null;
+  /** tag for automatic work; on an epic it is the whole epic (new cards included) */
+  auto?: boolean;
 }
 
 /** Where a move sends a card: a column, or a status (backlog, or the first column of a category). */
@@ -457,6 +461,37 @@ export interface TabLimit {
   closed_at: string | null;
 }
 
+/** GET /projects/:id/automation/queue: a tagged card and whether the agents can take it. */
+export interface AutomationQueueItem {
+  task_id: string;
+  ref: string;
+  title: string;
+  eligible: boolean;
+  reason: string | null;
+  reason_text: string | null;
+}
+
+export type AutomationAutonomy = 'pr' | 'merge' | 'deploy' | 'release';
+
+/** Mirrors the server's `ProjectAutomation` (setup/schema.ts). Off by default. */
+export interface ProjectAutomation {
+  enabled: boolean;
+  types: ('story' | 'task' | 'bug' | 'spike')[];
+  autonomy: AutomationAutonomy;
+  release_paths: string[];
+  store_paths: string[];
+  release_workflows: string[];
+  epic_branch_pattern: string;
+  worktrees_dir: string;
+  allowed_tools: string[] | null;
+  max_parallel: number | null;
+  resume_max: number;
+  fix_attempts: number;
+  daily_budget_usd: number | null;
+  summary_hour: number | null;
+  prompts: { implementer: string | null; integrator: string | null; fixer: string | null };
+}
+
 export interface ProjectSetupData {
   repo: {
     integration_id: string | null;
@@ -480,6 +515,8 @@ export interface ProjectSetupData {
   agent: { command: string; plugins: string[]; model: string | null; extra_args: string | null };
   verify: { type: 'none' | 'ios-simulator' | 'web-screenshot' | 'command'; target: string | null; build_command: string | null };
   approvals: Record<'spec' | 'plan' | 'pr' | 'merge' | 'tool_permissions' | 'questions', DecisionMode>;
+  /** absent from an older server; the form sends back what it received */
+  automation?: ProjectAutomation;
 }
 
 export interface ProjectSetup {

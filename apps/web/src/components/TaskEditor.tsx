@@ -4,7 +4,7 @@ import { canHaveSubtasks, cardPath, taskStatusLabel, taskTypeLabel, typeOptions 
 import { ticketKey } from '../lib/ticket-link';
 import { PROVIDER_LABEL, type Task, type TaskColumn, type TaskPatchInput, type TaskType } from '../lib/types';
 import { CardPullRequests } from './CardPullRequests';
-import { Modal } from './Modal';
+import { ConfirmDialog, Modal } from './Modal';
 import { SubtaskList } from './SubtaskList';
 import { formatDate, formatDateTime } from '../lib/format';
 import { useTranslation } from '../i18n';
@@ -29,6 +29,9 @@ export interface TaskEditorProps {
   /** the project's open terminal tabs the card can be linked to (an agent started by hand) */
   linkableTabs: LinkableTab[];
   onClose: () => void;
+  /** epics: how many cards (the epic included) tagging it would newly reach */
+  epicUntagged: number;
+  onSetAuto: (auto: boolean) => void;
   onSave: (patch: TaskPatchInput) => void;
   onPlace: (target: PlaceTarget) => void;
   onDelete: () => void;
@@ -48,6 +51,8 @@ export function TaskEditor({
   terminalHref,
   linkableTabs,
   onClose,
+  epicUntagged,
+  onSetAuto,
   onSave,
   onPlace,
   onDelete,
@@ -67,6 +72,7 @@ export function TaskEditor({
   const [pushing, setPushing] = useState<'idle' | 'busy' | string>('idle');
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
   const [tabToLink, setTabToLink] = useState('');
+  const [confirmAuto, setConfirmAuto] = useState(false);
   const ref = task.external_ref;
   const types = typeOptions(task);
 
@@ -156,6 +162,32 @@ export function TaskEditor({
             placeholder={t('Detalhes, links, contexto…')}
           />
         </div>
+        {task.type !== 'subtask' && (
+          <div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="accent-accent"
+                checked={Boolean(task.auto)}
+                onChange={(e) => (e.target.checked && task.type === 'epic' ? setConfirmAuto(true) : onSetAuto(e.target.checked))}
+              />
+              {t('Trabalho automático')}
+            </label>
+            <p className="ml-6 text-xs text-fg-dim">
+              {task.type === 'epic' ? t('Marca todos os cards deste épico (os novos também).') : t('O termhub pega este card sozinho quando ele estiver numa coluna "a fazer".')}
+            </p>
+          </div>
+        )}
+        <ConfirmDialog
+          open={confirmAuto}
+          title={t('Trabalho automático')}
+          message={t('Marcar {{count}} cards deste épico para trabalho automático? Os cards novos também serão marcados.', { count: epicUntagged })}
+          onConfirm={() => {
+            setConfirmAuto(false);
+            onSetAuto(true);
+          }}
+          onCancel={() => setConfirmAuto(false)}
+        />
         {canHaveSubtasks(task) && <SubtaskList parent={task} onChange={onSubtasks} onError={onError} />}
         <CardPullRequests taskId={task.id} />
         {ref && (
