@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { t, useTranslation } from '@/i18n';
 import { AppText, Button, PinInput, Sheet } from '@/ui';
 import { attemptsSuffix } from '../model/messages';
 import type { SessionState } from '../model/session.types';
@@ -9,15 +10,15 @@ const PIN_LENGTH = 6;
 
 function titleOf(prompt: SessionState['pinPrompt']): string {
   if (prompt?.title) return prompt.title;
-  if (prompt?.decision === 'approve_tab') return 'Permitir sempre nesta aba';
-  if (prompt?.decision === 'approve_project') return 'Permitir sempre neste projeto';
-  if (prompt?.decision === 'approve_tab_terminal') return 'Liberar teclas e shell nesta aba';
-  if (prompt?.decision === 'approve_project_all') return 'Liberar tudo neste projeto';
+  if (prompt?.decision === 'approve_tab') return t('Permitir sempre nesta aba');
+  if (prompt?.decision === 'approve_project') return t('Permitir sempre neste projeto');
+  if (prompt?.decision === 'approve_tab_terminal') return t('Liberar teclas e shell nesta aba');
+  if (prompt?.decision === 'approve_project_all') return t('Liberar tudo neste projeto');
   // The chat store names the kind in `title`; this is the fallback when it could not.
-  if (prompt?.decision === 'approve_project_always') return 'Liberar sem prazo neste projeto';
-  if (prompt?.decision === 'delete_account') return 'Excluir minha conta';
+  if (prompt?.decision === 'approve_project_always') return t('Liberar sem prazo neste projeto');
+  if (prompt?.decision === 'delete_account') return t('Excluir minha conta');
   const n = prompt?.actionIds?.length ?? 1;
-  return n > 1 ? `Autorizar ${n} ações` : 'Autorizar esta ação';
+  return n > 1 ? t('Autorizar {{n}} ações', { n }) : t('Autorizar esta ação');
 }
 
 /** Approving a pending action always asks for the PIN, even while unlocked (P§5.6, design spec
@@ -25,6 +26,8 @@ function titleOf(prompt: SessionState['pinPrompt']): string {
  * (and busy) while `resolvePinPrompt` performs the decision: a wrong PIN shows here with the
  * attempts left; success, a lock or `cancelPinPrompt` close it. */
 export function PinPromptSheet() {
+  // Re-renders on a language change; the module's `t` reads it.
+  useTranslation();
   const pinPrompt = useSessionStore((s) => s.pinPrompt);
   const error = useSessionStore((s) => s.error);
   const attemptsLeft = useSessionStore((s) => s.attemptsLeft);
@@ -57,10 +60,10 @@ export function PinPromptSheet() {
         {busy ? (
           <View className="items-center gap-3 py-4">
             <ActivityIndicator />
-            <AppText variant="muted">Conferindo o PIN…</AppText>
+            <AppText variant="muted">{t('Conferindo o PIN…')}</AppText>
           </View>
         ) : (
-          <PinInput value={pin} onChange={onChange} length={PIN_LENGTH} error={Boolean(error)} accessibilityLabel="PIN" />
+          <PinInput value={pin} onChange={onChange} length={PIN_LENGTH} error={Boolean(error)} accessibilityLabel={t('PIN')} />
         )}
         {error ? (
           <AppText className="text-app-danger">
@@ -69,9 +72,9 @@ export function PinPromptSheet() {
           </AppText>
         ) : null}
         {biometricsEnabled ? (
-          <Button label="Usar biometria" variant="secondary" onPress={() => void resolvePinPrompt('biometrics')} disabled={busy} />
+          <Button label={t('Usar biometria')} variant="secondary" onPress={() => void resolvePinPrompt('biometrics')} disabled={busy} />
         ) : null}
-        <Button label="Cancelar" variant="ghost" onPress={cancelPinPrompt} disabled={busy} />
+        <Button label={t('Cancelar')} variant="ghost" onPress={cancelPinPrompt} disabled={busy} />
       </View>
     </Sheet>
   );

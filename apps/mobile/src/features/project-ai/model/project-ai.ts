@@ -1,6 +1,7 @@
 // "Contas e modelo do projeto" (spec 2026-09-30 project AI accounts §8): the pure editing rules of the
 // screen — the accounts in priority order, the model choice per provider, what is saved. The web's
 // setup card follows the same rules (`apps/web`'s SetupForm); the server validates what it saves.
+import { t } from '@/i18n';
 import { CLAUDE_MODEL_ALIASES, type TProjectAi, type TProjectAiOption } from '@/services/api/contract';
 
 export type Provider = TProjectAiOption['provider'];
@@ -27,20 +28,22 @@ export const PROVIDERS: readonly Provider[] = ['claude', 'chatgpt'];
 export const CLAUDE_ALIASES: readonly ClaudeAlias[] = CLAUDE_MODEL_ALIASES;
 export const PROVIDER_LABEL: Record<Provider, string> = { claude: 'Claude', chatgpt: 'Codex' };
 
+/** The screen's copy: each property is a getter, read in the language the app shows at that moment. */
 export const PROJECT_AI_MSG = {
-  title: 'Contas e modelo do projeto',
-  empty: 'Sem contas escolhidas, cada início de agente pede a conta, como hoje.',
-  invalidModel: 'Use só letras, números, ponto, hífen, dois-pontos ou colchetes.',
-  freeIdWarning: 'Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.',
-  saved: 'Contas e modelo salvos.',
-  network: 'Não foi possível falar com o servidor. Tente de novo.',
-} as const;
+  get title() { return t('Contas e modelo do projeto'); },
+  get empty() { return t('Sem contas escolhidas, cada início de agente pede a conta, como hoje.'); },
+  get invalidModel() { return t('Use só letras, números, ponto, hífen, dois-pontos ou colchetes.'); },
+  get freeIdWarning() { return t('Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.'); },
+  get saved() { return t('Contas e modelo salvos.'); },
+  get network() { return t('Não foi possível falar com o servidor. Tente de novo.'); },
+};
 
 const isAlias = (value: string): value is ClaudeAlias => (CLAUDE_MODEL_ALIASES as readonly string[]).includes(value);
 
 /** "Pessoal (login padrão) · Claude · jarvis". */
 export function accountLabel(o: TProjectAiOption): string {
-  return `${o.label}${o.default ? ' (login padrão)' : ''} · ${PROVIDER_LABEL[o.provider]} · ${o.machine_name}`;
+  const label = o.default ? t('{{label}} (login padrão)', { label: o.label }) : o.label;
+  return `${label} · ${PROVIDER_LABEL[o.provider]} · ${o.machine_name}`;
 }
 
 /** The providers that have an account the project may list, in a fixed order: one model choice each. */
