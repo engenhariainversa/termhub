@@ -35,9 +35,28 @@ export const AUTOMATION_DENIED_TOOLS: readonly string[] = [
   'Bash(git push --mirror*)',
   'Bash(git push * --mirror*)',
   'Bash(git push * +*)',
+  // git options that run a program or reach outside the worktree, on the subcommands the allow list names
+  // (TER-968 review 2: `git fetch --upload-pack='…' .` runs any command)
+  'Bash(git -c*)',
+  'Bash(git * -c *)',
+  'Bash(git *--config-env*)',
+  'Bash(git *--upload-pack*)',
+  'Bash(git *--receive-pack*)',
+  'Bash(git *--exec*)',
+  'Bash(git diff *--ext-diff*)',
+  'Bash(git log *--ext-diff*)',
+  'Bash(git diff *--output*)',
+  'Bash(git log *--output*)',
+  'Bash(git diff *--no-index*)',
+  'Bash(git merge -s*)',
+  'Bash(git merge * -s*)',
+  'Bash(git merge *--strategy*)',
   'Bash(gh pr merge:*)',
   'Bash(gh api:*)',
   'Bash(gh secret:*)',
+  'Bash(gh workflow:*)',
+  'Bash(gh release:*)',
+  'Bash(gh repo:*)',
   'Bash(npm publish:*)',
   'Bash(pnpm publish:*)',
   'Bash(yarn publish:*)',
@@ -80,6 +99,20 @@ export function branchPushRules(branch: string | null): string[] {
   ];
 }
 
+/**
+ * The fetch an automatic run may send for its own branch, next to the default list's exact `git fetch` and
+ * `git fetch origin` (which brings the base and the epic branch too). Exact on purpose: `git fetch:*`
+ * would cover `--upload-pack=<command>`.
+ */
+export function branchFetchRules(branch: string | null): string[] {
+  if (!branch || !GIT_BRANCH_RE.test(branch)) return [];
+  return [`Bash(git fetch origin ${branch})`];
+}
+
+/** Every rule an automatic run gets from its own branch: its pushes and its fetch. */
+export function runBranchRules(branch: string | null): string[] {
+  return [...branchPushRules(branch), ...branchFetchRules(branch)];
+}
 
 /**
  * Command families an allow rule must never reach: every `git push` (only `branchPushRules` may allow one)
@@ -90,9 +123,15 @@ const DANGER_FAMILIES: readonly Family[] = [
   ...AUTOMATION_DENIED_TOOLS.flatMap((r) => {
     const m = /^Bash\((.*)\)$/.exec(r);
     if (!m) return [];
-    const before = m[1]!.replace(/:\*$/, ' *').split('*')[0]!;
+    const glob = m[1]!.replace(/:\*$/, ' *');
+    // only a deny whose one `*` ends it names a family; `git * -c *` is about an option, not a command
+    if (glob.indexOf('*') !== glob.length - 1) return glob.includes('*') ? [] : [{ text: squash(glob).toLowerCase(), glued: false }];
+    const before = glob.slice(0, -1);
+    // a git option deny (`git merge -s*`) is enforced by the CLI whatever the allow list says; as a family
+    // it would drop `git merge:*` itself. Every `git push` is a family on its own, above.
+    if (/^git( \S+)* -/.test(before)) return [];
     // `npm run release*`: the `*` is glued to the word, so `npm run release:ota` is in the family too
-    return [{ text: squash(before), glued: before !== '' && !before.endsWith(' ') && m[1]!.includes('*') }];
+    return [{ text: squash(before).toLowerCase(), glued: before !== '' && !before.endsWith(' ') }];
   }),
 ];
 
@@ -106,7 +145,14 @@ interface Family {
  * Commands that run another command given as their argument: a wildcard after them reaches anything,
  * `sh -c 'git push origin main'` included. An exact rule naming one (`npx prisma generate`) stays.
  */
-const RUNNERS: readonly string[] = ['sh', 'bash', 'zsh', 'dash', 'fish', 'env', 'eval', 'exec', 'sudo', 'xargs', 'npx', 'timeout', 'nice', 'nohup', 'time', 'stdbuf', 'command', 'builtin'];
+const RUNNERS: readonly string[] = [
+  'sh', 'bash', 'zsh', 'dash', 'fish', 'env', 'eval', 'exec', 'sudo', 'xargs', 'timeout', 'nice', 'nohup', 'time', 'stdbuf', 'command', 'builtin',
+  'npx', 'npm exec', 'npm x', 'pnpm exec', 'pnpm dlx', 'yarn dlx', 'bunx',
+];
+
+/** git words that send to a remote (`git -C x push`, `git subtree push`, `git send-pack`) or set a program (global options). */
+const GIT_SENDS = new Set(['push', 'send-pack', 'subtree']);
+const GIT_PROGRAM_OPTION = /^(-c|--config-env|--exec-path|--exec|--upload-pack|--receive-pack)(=|$)/;
 
 function squash(s: string): string {
   return s.trim().replace(/\s+/g, ' ');
@@ -129,12 +175,18 @@ export function unsafeAllowedTool(rule: string): boolean {
   const [, tool, spec] = m;
   if (tool!.includes('*')) return true;
   if (tool !== 'Bash') return false;
-  if (spec === undefined) return true;
+  // `Bash` and `Bash()` both mean every command
+  if (spec === undefined || spec.trim() === '') return true;
   const glob = squash(spec.endsWith(':*') ? `${spec.slice(0, -2)} *` : spec);
+  // a program named by path, quoted or escaped (`/usr/bin/git`, `'git'`, `g\it`) hides what it is
+  if (/[/'"\\`]/.test(glob.split(' ')[0]!)) return true;
   const wild = glob.includes('*');
-  const literal = wild ? glob.slice(0, glob.indexOf('*')) : glob;
+  // compared in lower case: on a case-insensitive file system `GIT` runs git
+  const literal = (wild ? glob.slice(0, glob.indexOf('*')) : glob).toLowerCase();
   const head = literal.trimEnd();
   if (DANGER_FAMILIES.some((f) => inFamily(head, f.text, f.glued) || (wild && f.text.startsWith(literal)))) return true;
+  const words = head.split(' ');
+  if (words[0] === 'git' && words.slice(1).some((w) => GIT_SENDS.has(w) || GIT_PROGRAM_OPTION.test(w))) return true;
   if (!wild) return false;
   if (/^git -/.test(literal)) return true;
   return RUNNERS.some((r) => inFamily(head, r) || r.startsWith(literal));

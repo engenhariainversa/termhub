@@ -14,9 +14,9 @@ import { ControlError, type ControlContext } from './context.js';
 import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
 import { openTab } from './terminals.js';
 import { msg } from '../i18n/index.js';
-import { AUTOMATION_DENIED_TOOLS, branchPushRules, safeAllowedTools } from './automation-tools.js';
+import { AUTOMATION_DENIED_TOOLS, runBranchRules, safeAllowedTools } from './automation-tools.js';
 
-export { AUTOMATION_DENIED_TOOLS, branchPushRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
+export { AUTOMATION_DENIED_TOOLS, branchFetchRules, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
 /** Same ceiling as one typed input: the prompt travels as a single command-line argument. */
 export const PROMPT_MAX_CHARS = 4000;
@@ -119,7 +119,8 @@ export const DEFAULT_AUTOMATION_TOOLS: string[] = [
   'Bash(git diff:*)',
   'Bash(git add:*)',
   'Bash(git commit:*)',
-  'Bash(git fetch:*)',
+  'Bash(git fetch)',
+  'Bash(git fetch origin)',
   'Bash(git merge:*)',
   'Bash(git log:*)',
   'Bash(gh pr create:*)',
@@ -164,7 +165,7 @@ function checkAllowedTools(tools: string[]): string[] {
  */
 function permissionFlags(permission: AgentPermission, mcpTabId: string | null): string {
   if (permission.mode !== 'acceptEdits') throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
-  const tools = [...safeAllowedTools(checkAllowedTools(permission.allowedTools)).kept, ...branchPushRules(permission.branch)];
+  const tools = [...safeAllowedTools(checkAllowedTools(permission.allowedTools)).kept, ...runBranchRules(permission.branch)];
   const allow = mcpTabId ? claudeMcpFlags(mcpTabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
   const deny = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => shellQuote(t)).join(' ')}`;
   return `--permission-mode ${permission.mode}${allow ? ` ${allow}` : ''} ${deny}`;

@@ -21,7 +21,7 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import { Scoped } from '../auth/scope.js';
 import { ControlError, type ControlContext } from './context.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { AUTOMATION_DENIED_TOOLS, branchPushRules, checkPrompt, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
+import { AUTOMATION_DENIED_TOOLS, branchFetchRules, branchPushRules, checkPrompt, runBranchRules, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
 
 /** A Claude agent's first prompt: the lessons reminder, then the origin reminder (TER-851). */
 const started = (prompt: string) => withOriginReminder(withLessonsReminder(prompt));
@@ -764,7 +764,7 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
 
   it('the default allow list is the closed F-6 list: no push (only the run\'s own branch, TER-968), no generic npm run', () => {
     expect(DEFAULT_AUTOMATION_TOOLS).toEqual([
-      'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(git fetch:*)', 'Bash(git merge:*)', 'Bash(git log:*)',
+      'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(git fetch)', 'Bash(git fetch origin)', 'Bash(git merge:*)', 'Bash(git log:*)',
       'Bash(gh pr create:*)', 'Bash(gh pr view:*)', 'Bash(gh pr checks:*)',
       'Bash(npm test:*)', 'Bash(npm ci)', 'Bash(npm install)', 'Bash(npx prisma generate)',
       'Bash(node scripts/automation/rename-migrations.mjs:*)', 'Bash(npm run build:*)', 'Bash(npm run typecheck:*)',
@@ -809,7 +809,8 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
       expect(AUTOMATION_DENIED_TOOLS).toContain(rule);
     // an allow rule cannot carve an exception out of a deny rule in Claude Code: no generic push deny, or the run's own push would be blocked too
     expect(AUTOMATION_DENIED_TOOLS).not.toContain('Bash(git push:*)');
-    for (const t of AUTOMATION_DENIED_TOOLS) for (const own of branchPushRules('TER-1-card')) expect(denyGlob(t).test(own)).toBe(false);
+    // no deny silently cancels a rule the tab is meant to have
+    for (const t of AUTOMATION_DENIED_TOOLS) for (const own of [...runBranchRules('TER-1-card'), ...DEFAULT_AUTOMATION_TOOLS]) expect(denyGlob(t).test(own), `${t} vs ${own}`).toBe(false);
   });
 
   it('path rules use the documented anchors: `//` (filesystem root) for .env, `~/` for the home dir; none is cwd-relative', () => {
@@ -824,7 +825,36 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     const line = launchLine('claude', null, 'x', null, null, { mode: 'acceptEdits', allowedTools: [...broad, 'Bash(npm test:*)'], branch: 'TER-1-card' });
     const allow = line.slice(line.indexOf('--allowedTools'), line.indexOf('--disallowedTools'));
     for (const b of broad) expect(allow, b).not.toContain(` '${b}'`);
-    expect(allow).toContain(`'Bash(npm test:*)' ${branchPushRules('TER-1-card').map((t) => `'${t}'`).join(' ')}`);
+    expect(allow).toContain(`'Bash(npm test:*)' ${runBranchRules('TER-1-card').map((t) => `'${t}'`).join(' ')}`);
+  });
+
+  it('the deny list closes git options that run a program or reach outside the worktree, and gh workflow/release/repo (TER-968 review 2)', () => {
+    const denied = (c: string) => AUTOMATION_DENIED_TOOLS.some((t) => denyGlob(t).test(`Bash(${c})`));
+    for (const c of [
+      "git fetch --upload-pack='git push origin HEAD:main #' .",
+      'git fetch origin --upload-pack=x',
+      'git -c core.sshCommand=x fetch',
+      'git -c core.hooksPath=/tmp/h commit -m x',
+      'git -c alias.p=push p',
+      'git -C /w -c x=y status',
+      'git --config-env=core.sshCommand=E fetch',
+      'git push --receive-pack=x origin b',
+      'git --exec-path=/tmp status',
+      'git diff --ext-diff',
+      'git log -p --ext-diff',
+      'git diff --output=/tmp/x',
+      'git log --output=/home/u/.bashrc',
+      'git diff --no-index /home/u/.ssh/id_rsa /dev/null',
+      'git merge -s ours origin/main',
+      'git merge origin/main -s evil',
+      'git merge --strategy=evil origin/main',
+      'gh workflow run deploy',
+      'gh release create v1',
+      'gh repo delete o/r',
+    ])
+      expect(denied(c), c).toBe(true);
+    for (const c of ['git fetch', 'git fetch origin', 'git merge origin/main', 'git diff HEAD~1', 'git log --oneline -5', 'git commit -m x', 'gh pr create --fill', 'gh pr view 3'])
+      expect(denied(c), c).toBe(false);
   });
 
   it('the run\'s own branch push rules are exact and built only from a valid branch name', () => {
@@ -834,12 +864,17 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
       'Bash(git push origin HEAD:refs/heads/TER-1-card)',
       'Bash(git push -u origin HEAD:refs/heads/TER-1-card)',
     ]);
-    for (const bad of [null, '', '-x', 'a b', 'a*', 'HEAD:main', '+main', 'a..b', "a'b"]) expect(branchPushRules(bad), String(bad)).toEqual([]);
+    expect(branchFetchRules('TER-1-card')).toEqual(['Bash(git fetch origin TER-1-card)']);
+    expect(runBranchRules('TER-1-card')).toEqual([...branchPushRules('TER-1-card'), ...branchFetchRules('TER-1-card')]);
+    for (const bad of [null, '', '-x', 'a b', 'a*', 'HEAD:main', '+main', 'a..b', "a'b"]) {
+      expect(branchPushRules(bad), String(bad)).toEqual([]);
+      expect(runBranchRules(bad), String(bad)).toEqual([]);
+    }
   });
 
   it('an automatic line carries the run\'s own push rules in the single --allowedTools, then the deny list, then `--`', () => {
     const line = launchLine('claude', null, 'x', { tabId: 'abc', url: MCP_URL }, null, { ...PERMISSION, branch: 'TER-7-epic' });
-    const own = branchPushRules('TER-7-epic').map((t) => `'${t}'`).join(' ');
+    const own = runBranchRules('TER-7-epic').map((t) => `'${t}'`).join(' ');
     expect(line).toContain(`${TAB_TOOLS} ${TOOLS} ${own} ${DENY} -- 'x'`);
     expect(line.indexOf('--allowedTools')).toBeLessThan(line.indexOf('--disallowedTools'));
     expect(line.indexOf('--disallowedTools')).toBeLessThan(line.lastIndexOf(' -- '));
