@@ -32,7 +32,7 @@ Spec §15.5 (automatic rollback) was left to this spike: see section 4.
 | --- | --- | --- | --- |
 | R1 | Merge only on explicitly green CI (`required_checks`, `none` is never green), only onto a green base, one delivery at a time on the base branch, up to date with the base | **TER-964** (new) | Task 25 |
 | R2 | Server-started runs (conflict fixer, integrator) keyed by SHA and capped | **TER-965** (new) | Task 25 |
-| R3 | termhub repo: CI on PRs into `epic/**`; main requires a PR and the check | **TER-966** (new) | Task 35 |
+| R3 | termhub repo: CI on PRs into `epic/**`; main requires a PR and the check (ruleset only with the maintainer's explicit approval) | **TER-966** (new) | Task 35 |
 | R4 | termhub deploy: smoke test after the switch, automatic rollback to the previous colour | **TER-967** (new) | Task 35 |
 | R5 | Fixed deny list for automatic tabs; `git push` only to the run's own branch | **TER-968** (new) | Task 35 |
 | R6 | Machine room (memory, disk, load from `hw.probe`), account headroom, machine opt-out | **TER-969** (new) | Task 35 |
@@ -47,7 +47,8 @@ Cards created in epic TER-852, all type `task`, in the backlog:
 - [TER-965](https://app.termhub.dev/project/TER-965) — Teto das runs que o servidor dispara
   (conflito e integrador), por SHA. **Before Task 25.**
 - [TER-966](https://app.termhub.dev/project/TER-966) — Repositório termhub: CI nos PRs para
-  `epic/**` e regra de PR + check na main. **Before Task 35.**
+  `epic/**` e regra de PR + check na main. **Before Task 35** (the ruleset part only with the
+  maintainer's explicit approval, section 4.2).
 - [TER-967](https://app.termhub.dev/project/TER-967) — Deploy do termhub: smoke test depois da troca
   e rollback automático para a cor anterior. **Before Task 35.**
 - [TER-968](https://app.termhub.dev/project/TER-968) — Abas automáticas: lista fixa de proibições e
@@ -124,6 +125,18 @@ each answered question's text (the hash only; question text is terminal content 
 stored). The same question answered twice escalates on the third ask ("pergunta repetida"); more than
 ten automatic answers in one run escalate ("muitas perguntas").
 
+How R7 relates to `memory/blocklist.ts`. `autoAnswerBlocked` is the deterministic floor under every
+automatic answer (its own comment: "a deterministic floor under the concierge's judgement"; reused by the agentic board's D18 and §9.2): a question whose header,
+text or chosen labels contain a stem such as `deploy`, `prod`/`producao`, `push`, `merge`, `delete`/
+`apagar`/`excluir`/`remover`, `drop`, `reset`, `force`, `rm`, `publish`/`publicar`, `release`, `pay`
+or `destroy` (accents stripped, prefix match for stems of four letters or more, exact match for `rm`,
+`prod` and `apaga`) is never answered automatically, only suggested. It is crude on purpose — it
+cannot tell "não fazer deploy" from "fazer deploy" — and errs towards escalation. It decides *what*
+may be answered, one question at a time. It does not see *how often*: a harmless question ("qual
+nome de arquivo?") answered with the recommended option passes the blocklist every time it is asked,
+which is exactly the cycle R7 counts. R7 adds the per-run memory the blocklist lacks; it does not
+replace or loosen it — a blocked question still escalates on its first ask.
+
 ## 4. Broken main and rollback
 
 ### 4.1 What can break main
@@ -147,6 +160,11 @@ ten automatic answers in one run escalate ("muitas perguntas").
 - **An agent pushing straight to main.** D19's default allow list permits "git except push
   --force", which includes `git push origin HEAD:main` with the machine's own git credentials. That
   bypasses D5 entirely. See section 5.
+- **A release that ships beyond the server.** A merge at level `release` does more than deploy the
+  app: on the same push to main, `publish-agent.yml` publishes `@termhub/agent` to npm when the
+  version in `apps/agent/package.json` is new, and `publish-mobile-ota.yml` publishes an OTA bundle
+  when the push touches `apps/mobile/**` or `packages/mobile-api/**`. These run in parallel with the
+  deploy, not after it, and nothing in section 4.4 undoes them. See section 4.5.
 
 ### 4.2 Recommendations
 
@@ -174,6 +192,12 @@ ten automatic answers in one run escalate ("muitas perguntas").
   merges through the PR API, which the rule allows. Epic branches do not require a PR: the integrator
   pushes to them directly.
 - The termhub setup (Task 35) sets `automation.required_checks = ["CI e Deploy"]`.
+
+**The ruleset on main needs the maintainer's explicit approval.** It changes his own flow: main would
+stop accepting direct pushes, including manual hotfixes. This epic does not apply it without that
+approval: in TER-966 the CI change on `epic/**` (needed for Task 35) lands on its own, and the
+ruleset is applied by hand in GitHub only after he says yes. Without it, R1's server-side gate is
+still the gate for automatic merges.
 
 **Freezing.** Task 28 (TER-875) already pauses the project's automation and escalates when the
 `deploy_workflow` fails on a merge commit, and treats `cancelled` as superseded, not failed
@@ -253,6 +277,37 @@ same way, and whether they roll back is their pipeline's business.
 Impact on other users: R3 and R4 change only the termhub repository's own pipeline. They apply to
 manual pushes to main too, which is intended.
 
+### 4.5 Releases: what the rollback does not undo
+
+`blue-green.sh --rollback` swaps the app container back. It does not touch the two artifacts a
+`release` merge publishes, and those reach further than termhub.dev:
+
+| Artifact | Workflow | Who receives it | Can it be undone? |
+| --- | --- | --- | --- |
+| `@termhub/agent` on npm | `publish-agent.yml`: on every push to main, publishes when the package version is not on npm yet (OIDC trusted publishing, then tags `agent-vX.Y.Z`). Runs on GitHub-hosted runners, in parallel with the deploy | Every machine of **every termhub user** that installs or updates the agent; machines with `agent_auto_update` take it within the hour | No. A published version cannot be republished or reused. Recovery is a newer version: revert the change, bump the patch version, merge; CI publishes it. `npm deprecate` on the bad version needs an authenticated npm, which jarvis does not have — the maintainer runs it from his own machine. A bad agent that still connects auto-updates to the fix; one that cannot connect or update needs a manual reinstall on each machine |
+| Mobile OTA bundle (xprem, branch `production`) | `publish-mobile-ota.yml`: on a push to main touching `apps/mobile/**` or `packages/mobile-api/**`, on jarvis; skips (and says so) when `app.json`, `app.config.js` or the app's `package.json` changed without an `expo.version` bump | Every installed app on that runtime version, for **every user** of the app | Yes, by hand: the xprem MCP's `republish_update` puts an earlier update back on the branch, `rollback_branch` falls back to the bundle embedded in the binary; `get_update_health` and `count_online_devices` show the reach. Devices that already ran the bad bundle take the fix on their next update check |
+
+What this means for automation:
+
+- **Never roll back a release automatically.** The npm side cannot be rolled back at all, and an OTA
+  republish is a product decision (which earlier update, for which runtime). A failed `release_workflows`
+  run already freezes the project and escalates (Task 28); a successful publish of a bad build is
+  found by people, not by a workflow conclusion. The escalation and the runbook (Task 35) carry the
+  recovery steps above.
+- **A release merge is always its own delivery.** R1's one-delivery-at-a-time rule already holds the
+  next merge into the base until the previous merge's `deploy_workflow` and every `release_workflows`
+  run finished. Keep `release_workflows` listing both publish workflows in the termhub setup (Task
+  35), or that hold does not see them.
+- **The level is the lever, and no new code is needed.** The maintainer decided `release` for the
+  termhub project. The agent package is the widest blast radius in the system — it runs on other
+  users' machines and a broken one can cut off its own fix — so this spike recommends, as the
+  maintainer's call, to turn automation on at `deploy` for the first week: every PR that touches a
+  `release_paths` glob then becomes an approval card (D7, PIN on the phone) instead of merging, while
+  everything else ships alone. Raise to `release` once the first automatic deploys were clean. This
+  does not reopen his decision; it is the order in which to reach it.
+- Store builds stay out entirely (`store_paths`), so no release path can produce a native change
+  the OTA guard would then have to catch.
+
 ## 5. Secrets and scope
 
 What an automatic agent never touches, and the layer that enforces each:
@@ -273,6 +328,16 @@ beats any `allowed_tools` entry. `git push` is allowed only as a per-run rule fo
 branch (and the epic branch for an integrator run). Anything else is escalated, never answered
 "allow". This closes the `git push origin HEAD:main` hole in D19's default and makes D5 a property of
 the system instead of a line in the prompt.
+
+How R5 relates to `memory/blocklist.ts`. The blocklist guards *answers*: a choice or permission
+question that names deploy, push, merge, delete, drop, publish, release and the like is never
+answered automatically (section 3; spec §9.2 applies it to permission requests too). It does not
+guard *commands*: a permission request for `git push origin HEAD:main` is phrased by Claude Code as
+a Bash approval, and a command allowed by `allowed_tools` never produces a question at all, so the
+blocklist never sees it. R5 closes that side: the deny list acts before any question exists
+(`--disallowedTools`, enforced by the CLI) and again in the server's permission rule. The two are
+layered, not merged: the blocklist keeps escalating risky questions, R5 removes risky commands from
+what an automatic tab can run even when nobody asks.
 
 ## 6. Concurrency
 
@@ -318,5 +383,10 @@ deploy pipeline.
   rollback outcome (R4).
 - Task 33: for the termhub project, leave `daily_budget_usd` off for the first week and set it from
   measured days (section 2).
-- Task 35: set `required_checks = ["CI e Deploy"]`, turn the machine switch off on jarvis, and list R3
-  and R4 in the runbook (how to read a rollback, how to unfreeze).
+- Task 35: set `required_checks = ["CI e Deploy"]`, turn the machine switch off on jarvis, keep both
+  publish workflows in `release_workflows`, consider starting at `deploy` for the first week (section
+  4.5, maintainer's call), and put in the runbook how to read a rollback, how to unfreeze, and how to
+  recover a bad agent release (newer patch version, `npm deprecate` by hand) or a bad OTA (xprem
+  `republish_update` / `rollback_branch`).
+- Task 28: the escalation after a failed `release_workflows` run names the artifact (npm or OTA) and
+  points at the recovery steps of section 4.5; it never tries to undo a release by itself.
