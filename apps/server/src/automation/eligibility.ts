@@ -1,4 +1,4 @@
-import { WORKTREE_MIN_AGENT_VERSION } from '@termhub/agent-protocol';
+import { tk } from '../i18n/index.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
 import type { ProjectAutomation } from '../setup/schema.js';
 
@@ -14,14 +14,14 @@ export type IneligibleReason =
 
 /** What the card shows when it is tagged but does not run (spec §5). `not_in_todo` is not shown: backlog, doing and done are not "waiting". */
 export const REASON_TEXT: Record<IneligibleReason, string> = {
-  automation_off: 'Trabalho automático desligado no projeto',
-  paused: 'Automático pausado',
-  type_not_allowed: 'Tipo não permitido no automático',
-  not_in_todo: 'Fora da coluna A fazer',
-  no_description: 'Sem descrição',
-  has_agent: 'Já tem um agente',
-  no_capable_machine: `Nenhuma máquina com agente ${WORKTREE_MIN_AGENT_VERSION.split('.').slice(0, 2).join('.')} ligada ao projeto`,
-  repo_missing: 'Repositório não configurado no Setup',
+  automation_off: tk('Trabalho automático desligado no projeto'),
+  paused: tk('Automático pausado'),
+  type_not_allowed: tk('Tipo não permitido no automático'),
+  not_in_todo: tk('Fora da coluna A fazer'),
+  no_description: tk('Sem descrição'),
+  has_agent: tk('Já tem um agente'),
+  no_capable_machine: tk('Nenhuma máquina com agente 0.18 ligada ao projeto'),
+  repo_missing: tk('Repositório não configurado no Setup'),
 };
 
 export interface EligibilityInput {

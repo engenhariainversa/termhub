@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import { dismissDelivered, setIconBadge, expoPushToken, notificationStatus, pushConversationId, pushNotificationId, requestNotifications } from './push';
+import { dismissDelivered, setIconBadge, expoPushToken, notificationStatus, pushConversationId, pushNotificationId, pushRoute, requestNotifications } from './push';
 
 // A getter, so the switch reaches `push.ts` through Babel's namespace copy of the module.
 jest.mock('expo-device', () => {
@@ -82,6 +82,13 @@ it('pushConversationId reads data.conversation_id, and nothing else', () => {
 it('pushNotificationId reads data.notification_id, when the server sent one', () => {
   expect(pushNotificationId({ kind: 'reply', conversation_id: 'c1', notification_id: 'n1' })).toBe('n1');
   expect(pushNotificationId({ kind: 'reply', conversation_id: 'c1' })).toBeNull();
+});
+
+it('pushRoute: the tab of an "aba terminou" push first, else the conversation, else nothing (TER-925)', () => {
+  expect(pushRoute({ kind: 'tab_finished', tab_id: 't1', conversation_id: 'c1' })).toBe('/session/t1');
+  expect(pushRoute({ kind: 'reply', conversation_id: 'c1' })).toBe('/chat/c1');
+  expect(pushRoute({ kind: 'device_request' })).toBeNull();
+  expect(pushRoute({ tab_id: '' , conversation_id: 'c1' })).toBe('/chat/c1');
 });
 
 describe('icon badge and notification center (TER-923)', () => {

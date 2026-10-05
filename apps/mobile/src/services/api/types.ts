@@ -3,6 +3,7 @@
 // real (or mocked) server through a `Transport`.
 import type {
   AccountDeletionBody,
+  PushSettings,
   PushTestBody,
   PushTestResponse,
   AccountDeletionStatus,
@@ -49,6 +50,7 @@ import type {
   TTabChatPage,
   TFilePreviewQuery,
   TFilePreviewResponse,
+  TFileRecentResponse,
   TTabFileResponse,
   TTabScreenResponse,
   TTabsResponse,
@@ -94,6 +96,9 @@ export interface MobileApi {
   setPushToken(auth: Auth, token: string): Promise<void>;
   /** A sample push to this device (TER-913). 409 NO_PUSH_TOKEN, 429 PUSH_TEST_RATE_LIMITED. */
   pushTest(auth: Auth, body: PushTestBody): Promise<PushTestResponse>;
+  /** The account's opt-in pushes (TER-925). */
+  pushSettings(auth: Auth): Promise<PushSettings>;
+  setPushSettings(auth: Auth, body: PushSettings): Promise<PushSettings>;
 
   // account deletion (TER-720): the only routes, besides the session ones, that answer while a
   // deletion is pending — every other one is `403 ACCOUNT_PENDING_DELETION` until it is cancelled.
@@ -229,6 +234,9 @@ export interface MobileApi {
   /** A file an agent wrote, read on its machine (spec 2026-10-04 file preview): the body, or why not.
    *  409 `AGENT_OUTDATED` when the machine's agent cannot read files yet. */
   filePreview(auth: Auth, q: TFilePreviewQuery): Promise<TFilePreviewResponse>;
+  /** A project's recent Markdown files across its machines (spec 2026-10-04 recent Markdown files), and
+   *  the machines left out with why. Names, sizes and dates only. */
+  fileRecent(auth: Auth, projectId: string): Promise<TFileRecentResponse>;
   /** The terminal tabs of the person's projects, with each one's state and availability. */
   tabs(auth: Auth): Promise<TTabsResponse>;
   /** Starts Claude Code in a new tab of the project with `prompt` as its first message. */
