@@ -9,6 +9,7 @@ import { seedFixtures } from './fixtures';
 import { registerAccountRoutes } from './handlers/account';
 import { registerChatRoutes } from './handlers/chat';
 import { registerDeviceRoutes } from './handlers/devices';
+import { registerFileRoutes } from './handlers/files';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notifications';
 import { registerProgressRoutes } from './handlers/progress';
@@ -51,6 +52,7 @@ export function createMockTransport(opts: CreateMockTransportOptions = {}): Tran
   registerProgressRoutes(router, state);
   registerTranscriptionRoutes(router, state);
   registerTabRoutes(router, state);
+  registerFileRoutes(router, state);
 
   const waitForLatency = (): Promise<void> => {
     const ms = minLatency + Math.random() * (maxLatency - minLatency);

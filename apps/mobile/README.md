@@ -156,6 +156,19 @@ The Chats tab has two segments: "Conversas" (the concierge chat) and "Sessões".
 - **Writing.** A message is typed into the tab as in the web terminal (no confirmation card). While the tab waits on a permission, sending answers "Responda a pergunta acima antes de enviar uma mensagem": the question card sits at the end of the conversation. While Claude works, the send button interrupts (Escape); a long press still sends. The menu holds `/clear`, `/compact`, "Alternar modo" (Shift+Tab, the mode is read back from the footer) and "Ver tela" (the raw pane). An attachment is saved on the tab's machine and its path goes into the message.
 - **Permissions.** Reading needs `terminals:read`; writing and "Nova sessão" need `terminals:write`.
 
+## File preview (TER-941)
+
+A `.md`/`.markdown` path in an answer (the concierge chat, and Sessões) is a link: tapping it pushes
+`/file-preview` (`features/file-preview`), which reads the file on its machine through
+`GET /api/m/v1/file-preview` — the chat's project, or the session's tab. The agent decides what can be
+read (spec `docs/superpowers/specs/2026-10-04-file-preview-design.md`); the screen says why when it
+cannot, and "Atualize o agente" for an agent older than 0.16.0. Images show as a tappable
+"imagem: …" line and are never fetched by the screen; links open another preview (relative `.md`) or
+the browser (http/https only). Actions: **Compartilhar** (the share sheet also copies and saves),
+**Abrir no GitHub**, **Mandar para o chat** (an attachment chip in the project chat's composer, not
+sent). In mock mode, `~/relatorio-termhub-10-dias.md`, `notas.txt`, `~/.ssh/notas.md`,
+`~/grande.md` and `~/antigo/x.md` show each state.
+
 ## Push notifications
 
 `expo-notifications` (spec §9). The server sends through the Expo Push Service to the token the app registers with `PUT push-token`; `src/services/push.ts` reads that token:

@@ -43,6 +43,8 @@ import type {
   TTabChatAction,
   TTabChatFrame,
   TTabChatPage,
+  TFilePreviewQuery,
+  TFilePreviewResponse,
   TTabFileResponse,
   TTabScreenResponse,
   TTabsResponse,
@@ -202,6 +204,9 @@ export interface MobileApi {
 
   // sessions: a terminal tab read as a conversation (spec 2026-10-01 tab chat §5.4, §5.5). Reads need
   // `terminals:read`, the rest `terminals:write`; a tab outside the person's scope is a 404.
+  /** A file an agent wrote, read on its machine (spec 2026-10-04 file preview): the body, or why not.
+   *  409 `AGENT_OUTDATED` when the machine's agent cannot read files yet. */
+  filePreview(auth: Auth, q: TFilePreviewQuery): Promise<TFilePreviewResponse>;
   /** The terminal tabs of the person's projects, with each one's state and availability. */
   tabs(auth: Auth): Promise<TTabsResponse>;
   /** Starts Claude Code in a new tab of the project with `prompt` as its first message. */

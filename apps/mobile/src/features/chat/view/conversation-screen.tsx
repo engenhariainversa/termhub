@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { activeGrantsLabel } from '@/features/chat-grants/model/labels';
 import type { TChatAttachment, TTabQuestionAnswerBody } from '@/services/api/contract';
 import { AppText, Banner, Button, EmptyState, MAX_READABLE_WIDTH, readableColumn, Screen, Sheet } from '@/ui';
+import { inboxKey } from '../model/chat-inbox';
 import { activeGrantIndex, isGrantActive } from '../model/grant-time';
 import { isReplyable, replyRefOf, replyRefOfCard, type ReplyableCard, type ReplyRef } from '../model/reply';
 import { isActive } from '../model/subagents';
@@ -76,7 +77,10 @@ const MessageRow = memo(function MessageRow({
   const retrySend = useChatStore((s) => s.retrySend);
   const onRetry = useCallback((id: string) => void retrySend(id), [retrySend]);
   const reply = useCallback(() => onReply(message), [onReply, message]);
-  const bubble = <MessageBubble message={message} streamed={streamed} started={started} onRetry={onRetry} onOpenReply={onOpenReply} highlighted={highlighted} />;
+  // Markdown paths in an answer open as previews, looked for on the conversation's project machines.
+  const activeProject = useChatStore((s) => s.activeProject);
+  const fileContext = useMemo(() => ({ projectId: activeProject ?? null }), [activeProject]);
+  const bubble = <MessageBubble message={message} streamed={streamed} started={started} onRetry={onRetry} onOpenReply={onOpenReply} highlighted={highlighted} fileContext={fileContext} />;
   // Only a row the server has, with something in it, can be answered (TER-447).
   return isReplyable(message) ? <SwipeToReply onReply={reply}>{bubble}</SwipeToReply> : bubble;
 });
@@ -424,7 +428,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
         <View testID="conversation-composer-column" style={READABLE_COLUMN}>
           {/* What waits on the person, however far up the thread (TER-477); hidden while nothing does. */}
           <PendingBar entries={timeline} deciding={decidingId !== null} onJump={onJump} onApprove={onApproveWrites} />
-          <Composer sending={sending} onSend={onSend} replyTo={replyTo} onCancelReply={cancelReply} uploadAttachment={uploadAttachment} deleteAttachment={deleteAttachment} attachmentStatuses={attachmentStatuses} />
+          <Composer sending={sending} onSend={onSend} replyTo={replyTo} onCancelReply={cancelReply} uploadAttachment={uploadAttachment} deleteAttachment={deleteAttachment} attachmentStatuses={attachmentStatuses} inbox={activeProject === undefined ? undefined : inboxKey(activeProject)} />
         </View>
       </KeyboardAvoidingView>
       </View>
