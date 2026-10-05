@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { unauthorized } from '../lib/errors.js';
+import { unauthorized, sendError } from '../lib/errors.js';
 import { effectiveShortUrl, type ShortLinkService } from '../public/short-link.js';
 
 const customBody = z.object({ short_url: z.string().trim().min(1).max(300) });
@@ -27,17 +27,17 @@ export async function cityLinkRoutes(app: FastifyInstance, deps: { shortLinks: S
 
   app.put('/me/city-link', async (request, reply) => {
     if (!request.user) throw unauthorized();
-    if (!links.enabled) return reply.code(404).send({ error: 'O link curto não está disponível nesta instância', code: 'SHORT_LINK_DISABLED' });
+    if (!links.enabled) return sendError(request, reply, 404, 'O link curto não está disponível nesta instância', 'SHORT_LINK_DISABLED');
     const nickname = request.user.nickname;
-    if (!nickname) return reply.code(409).send({ error: 'Escolha seu apelido antes', code: 'NICKNAME_REQUIRED' });
+    if (!nickname) return sendError(request, reply, 409, 'Escolha seu apelido antes', 'NICKNAME_REQUIRED');
     const { short_url } = customBody.parse(request.body);
     const out = await links.setCustom(request.user, short_url);
     if (out.ok) {
       request.log.info({ userId: request.user.id }, 'short link: custom link set');
       return links.view(out.user);
     }
-    if (out.code === 'SHORT_LINK_INVALID') return reply.code(400).send({ error: 'Use um link no formato https://77a.it/seu-link', code: out.code });
-    if (out.code === 'SHORT_LINK_UNREACHABLE') return reply.code(502).send({ error: 'Não foi possível abrir esse link agora. Tente de novo.', code: out.code });
+    if (out.code === 'SHORT_LINK_INVALID') return sendError(request, reply, 400, 'Use um link no formato https://77a.it/seu-link', out.code);
+    if (out.code === 'SHORT_LINK_UNREACHABLE') return sendError(request, reply, 502, 'Não foi possível abrir esse link agora. Tente de novo.', out.code);
     const cityUrl = links.cityUrlOf(nickname);
     const error = out.location
       ? `Esse link leva para ${out.location}, não para a sua cidade (${cityUrl}).`
@@ -47,10 +47,10 @@ export async function cityLinkRoutes(app: FastifyInstance, deps: { shortLinks: S
 
   app.delete('/me/city-link/custom', async (request, reply) => {
     if (!request.user) throw unauthorized();
-    if (!links.enabled) return reply.code(404).send({ error: 'O link curto não está disponível nesta instância', code: 'SHORT_LINK_DISABLED' });
+    if (!links.enabled) return sendError(request, reply, 404, 'O link curto não está disponível nesta instância', 'SHORT_LINK_DISABLED');
     const out = await links.clearCustom(request.user);
     if (!out.ok) {
-      return reply.code(502).send({ error: 'Não foi possível criar o link da parceria agora. Seu link curto continua valendo; tente de novo mais tarde.', code: out.code });
+      return sendError(request, reply, 502, 'Não foi possível criar o link da parceria agora. Seu link curto continua valendo; tente de novo mais tarde.', out.code);
     }
     request.log.info({ userId: request.user.id }, 'short link: custom link cleared');
     return links.view(out.user);

@@ -2,6 +2,7 @@ import type { ZodRawShape } from 'zod';
 import { newApiToken, type ApiTokenScope } from '../auth/api-tokens.js';
 import { ControlError } from '../control/context.js';
 import type { Repositories } from '../db/repositories/index.js';
+import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 
 /**
  * Tab tokens (spec 2026-09-27 agent tab MCP): the `/mcp` token `start_agent` mints for one agent tab,
@@ -9,9 +10,9 @@ import type { Repositories } from '../db/repositories/index.js';
  */
 
 /** The fixed allowlist of a tab token (D2): every other tool is absent from `tools/list` and refused on
- *  `tools/call`, whatever the scopes and grants say. `record_lesson` (TER-205) is listed by name ahead of
- *  time; it shows up on its own once that tool is registered. */
-export const TAB_TOKEN_TOOLS = ['search_memory', 'record_lesson'] as const;
+ *  `tools/call`, whatever the scopes and grants say. `get_automation_policy` is read-only: the project's autonomy
+ *  level and what it covers, so the agent knows what happens after it opens a PR. */
+export const TAB_TOKEN_TOOLS = ['search_memory', 'record_lesson', 'get_automation_policy'] as const;
 
 /** Scopes of a tab token (D2). The allowlist narrows them further. */
 export const TAB_TOKEN_SCOPES: ApiTokenScope[] = ['read', 'memory'];
@@ -74,6 +75,6 @@ export function tabInputShape(shape: ZodRawShape): ZodRawShape {
 
 /** pt-BR answer for a tools/call outside the allowlist (D2): naming a scope, as the ordinary refusal
  *  does, would mislead — no scope or grant unlocks it for a tab token. */
-export function tabRefusalMessage(name: string): string {
-  return `O token desta aba só usa as ferramentas de memória (${TAB_TOKEN_TOOLS.join(', ')}); ${name.slice(0, 64)} não está disponível aqui`;
+export function tabRefusalMessage(name: string, locale: Locale = DEFAULT_LOCALE): string {
+  return t(locale, 'O token desta aba só usa as ferramentas permitidas ({{tools}}); {{tool}} não está disponível aqui', { tools: TAB_TOKEN_TOOLS.join(', '), tool: name.slice(0, 64) });
 }

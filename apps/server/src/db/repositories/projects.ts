@@ -3,6 +3,7 @@ import { newId } from '../../lib/ids.js';
 import { isValidProjectKey } from '../../lib/project-key.js';
 import { ensureDefaultColumns } from './task-board.js';
 import { mapProject, type Project, type ProjectStatus } from './types.js';
+import { LocalizedText, msg } from '../../i18n/index.js';
 
 export interface ProjectInput {
   owner_id: string | null;
@@ -19,11 +20,15 @@ export type ProjectRuleCode = 'KEY_INVALID' | 'KEY_TAKEN' | 'MACHINE_ALREADY_LIN
 
 /** A project rule broken by the caller (pt-BR message, shown as is by the routes). */
 export class ProjectRuleError extends Error {
+  /** Non-enumerable, so equality checks on the error (tests, logs) see only code and message. */
+  declare readonly localized: LocalizedText;
   constructor(
     readonly code: ProjectRuleCode,
-    message: string,
+    message: string | LocalizedText,
   ) {
-    super(message);
+    const localized = message instanceof LocalizedText ? message : new LocalizedText(message);
+    super(localized.toString());
+    Object.defineProperty(this, 'localized', { value: localized, enumerable: false });
     this.name = 'ProjectRuleError';
   }
 }
@@ -73,7 +78,7 @@ export class ProjectsRepository {
 
   async create(input: ProjectInput): Promise<Project> {
     if (!isValidProjectKey(input.key)) throw new ProjectRuleError('KEY_INVALID', 'Chave inválida: 2 a 10 letras maiúsculas ou dígitos, começando com letra');
-    if ((await this.db.project.count({ where: { key: input.key } })) > 0) throw new ProjectRuleError('KEY_TAKEN', `A chave ${input.key} já está em uso`);
+    if ((await this.db.project.count({ where: { key: input.key } })) > 0) throw new ProjectRuleError('KEY_TAKEN', msg('A chave {{key}} já está em uso', { key: input.key }));
     return this.db.$transaction(async (tx) => {
       const p = await tx.project.create({
         data: {

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import type { Device, DeviceEventView, DeviceRequestView } from '../lib/types';
+import type { Device, DeviceEventView, DeviceRequestView, PushTestKind } from '../lib/types';
 import { ConfirmDialog } from './Modal';
 import { formatDate, formatTime } from '../lib/format';
-import { i18n, useTranslation } from '../i18n';
+import { i18n, tk, useTranslation } from '../i18n';
 
 /** Same ceiling the server enforces (mobile/enrolment.ts's DEVICE_LIMIT, 409 "Revogue um aparelho
  *  antes"): Aprovar is disabled here too, instead of always waiting for that round-trip. */
@@ -38,6 +38,18 @@ function situationLabel(d: Device, now = new Date()): string {
   return d.revoked_reason === 'pin_bruteforce' ? i18n.t('revogado (tentativas de PIN)') : i18n.t('revogado');
 }
 
+const PUSH_TEST_KINDS: { value: PushTestKind; label: string }[] = [
+  { value: 'confirmation', label: tk('Confirmação do chat') },
+  { value: 'tab_question', label: tk('Pergunta de aba') },
+  { value: 'reply', label: tk('Resposta pronta') },
+  { value: 'device_request', label: tk('Pedido de aparelho novo') },
+];
+
+const PUSH_TEST_DELAYS = [0, 10, 30];
+
+/** The receipt is read ~15 s after the send (server, TER-913): the trail is re-read a bit after that. */
+const PUSH_TEST_TRAIL_AFTER_MS = 20_000;
+
 function notifyDevicesChanged(): void {
   window.dispatchEvent(new Event(DEVICES_CHANGED_EVENT));
 }
@@ -58,6 +70,11 @@ export function DevicesView() {
   const [revoking, setRevoking] = useState<Device | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [testDeviceId, setTestDeviceId] = useState('');
+  const [testKind, setTestKind] = useState<PushTestKind>('confirmation');
+  const [testDelay, setTestDelay] = useState(0);
+  const [testing, setTesting] = useState(false);
+  const [testNote, setTestNote] = useState<string | null>(null);
   // Ticks once a minute so each pending card's "expira em X min" stays true without a reload.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -80,6 +97,34 @@ export function DevicesView() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A late trail refresh must not outlive the page.
+  useEffect(() => {
+    if (!testNote) return;
+    const timer = setTimeout(() => {
+      void api.devices.events().then((e) => setEvents(e.events), () => undefined);
+    }, PUSH_TEST_TRAIL_AFTER_MS + testDelay * 1000);
+    return () => clearTimeout(timer);
+  }, [testNote, testDelay]);
+
+  const pushDevices = useMemo(() => (devices ?? []).filter((d) => d.status === 'active' && !!d.push_token), [devices]);
+  const testTarget = pushDevices.find((d) => d.id === testDeviceId) ?? pushDevices[0];
+
+  const sendTestPush = async () => {
+    if (!testTarget) return;
+    setTesting(true);
+    setTestNote(null);
+    setError(null);
+    try {
+      const r = await api.devices.testPush(testTarget.id, { kind: testKind, delay_seconds: testDelay });
+      if (r.ticket?.status === 'error') setError(t('A notificação de teste falhou: {{code}}', { code: r.ticket.error }));
+      else setTestNote(testDelay > 0 ? t('Enviando em {{seconds}} s. Feche o app para ver como ela chega.', { seconds: testDelay }) : t('Enviada. Confira o celular.'));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('Erro ao enviar a notificação de teste'));
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const activeCount = useMemo(() => (devices ?? []).filter((d) => d.status === 'active').length, [devices]);
   const atLimit = activeCount >= MAX_DEVICES;
@@ -254,6 +299,42 @@ export function DevicesView() {
               </div>
             )}
           </section>
+
+          {pushDevices.length > 0 && can('devices', 'update') && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold">{t('Notificação de teste')}</h2>
+              <p className="text-xs text-fg-dim">{t('Envia um aviso de exemplo para o seu aparelho, sem entrar no histórico de notificações. O resultado aparece em Atividade.')}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {pushDevices.length > 1 && (
+                  <select className="input w-auto py-1" aria-label={t('Aparelho')} value={testTarget?.id ?? ''} onChange={(e) => setTestDeviceId(e.target.value)}>
+                    {pushDevices.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <select className="input w-auto py-1" aria-label={t('Tipo de aviso')} value={testKind} onChange={(e) => setTestKind(e.target.value as PushTestKind)}>
+                  {PUSH_TEST_KINDS.map((k) => (
+                    <option key={k.value} value={k.value}>
+                      {t(k.label)}
+                    </option>
+                  ))}
+                </select>
+                <select className="input w-auto py-1" aria-label={t('Quando enviar')} value={testDelay} onChange={(e) => setTestDelay(Number(e.target.value))}>
+                  {PUSH_TEST_DELAYS.map((s) => (
+                    <option key={s} value={s}>
+                      {s === 0 ? t('Agora') : t('Em {{seconds}} s', { seconds: s })}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn-primary" disabled={testing} onClick={() => void sendTestPush()}>
+                  {t('Enviar notificação de teste')}
+                </button>
+              </div>
+              {testNote && <p className="text-xs text-fg-muted">{testNote}</p>}
+            </section>
+          )}
         </>
       )}
 

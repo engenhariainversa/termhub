@@ -48,7 +48,7 @@ export function requirePinFor(_kind: TabQuestionKind, _answer: TabAnswer): boole
   return false;
 }
 
-export const asHttp = (err: unknown): unknown => (err instanceof ControlError ? new HttpError(409, err.message, err.code) : err);
+export const asHttp = (err: unknown): unknown => (err instanceof ControlError ? new HttpError(409, err.localized, err.code) : err);
 export const codeOf = (err: unknown, fallback = 'SEND_FAILED'): string => (err instanceof ControlError || err instanceof HttpError ? (err.code ?? fallback) : fallback);
 const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 

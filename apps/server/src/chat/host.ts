@@ -3,6 +3,7 @@ import { projectAccountsOn } from '../ai/project-accounts.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, User } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
+import { msg } from '../i18n/index.js';
 
 /**
  * The slice of the agent registry this reads: what the machine's agent said when it connected, or
@@ -188,8 +189,6 @@ async function accountFor(ctx: HostContext, accountId: string | null, machine: M
  * would cost more than it saves. If the shape of the note changes, change both — they are not wired
  * together and nothing will fail if one is forgotten.
  */
-const versionNote = (version: string): string => (version ? ` (versão ${version})` : '');
-
 /**
  * What a host that cannot run says to the person who just sent a message. Thrown before any
  * assistant row is written, so the browser shows this sentence instead of an empty bubble waiting for
@@ -206,11 +205,13 @@ export function hostFailure(problem: HostProblem): HttpError {
     case 'not_chosen':
       return new HttpError(409, 'Escolha em qual das suas máquinas o chat vai rodar.', 'CHAT_HOST_NOT_CHOSEN');
     case 'offline':
-      return new HttpError(409, `A máquina ${problem.machine.name} está offline. Ligue-a ou escolha outra máquina para o chat.`, 'CHAT_HOST_OFFLINE');
+      return new HttpError(409, msg('A máquina {{name}} está offline. Ligue-a ou escolha outra máquina para o chat.', { name: problem.machine.name }), 'CHAT_HOST_OFFLINE');
     case 'agent_too_old':
       return new HttpError(
         409,
-        `O agente da máquina ${problem.machine.name}${versionNote(problem.version)} ainda não sabe rodar o chat. Atualize o agente e tente de novo.`,
+        problem.version
+          ? msg('O agente da máquina {{name}} (versão {{version}}) ainda não sabe rodar o chat. Atualize o agente e tente de novo.', { name: problem.machine.name, version: problem.version })
+          : msg('O agente da máquina {{name}} ainda não sabe rodar o chat. Atualize o agente e tente de novo.', { name: problem.machine.name }),
         'CHAT_AGENT_TOO_OLD',
       );
   }

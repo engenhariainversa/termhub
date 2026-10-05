@@ -9,6 +9,7 @@ import { newId } from '../../lib/ids.js';
 import type { ExtractionQueue } from './queue.js';
 import { sniff } from './sniff.js';
 import type { AttachmentStore } from './store.js';
+import { msg, tk } from '../../i18n/index.js';
 
 /** The largest accepted kind (audio/video, 64 MB): the per-route body limit for both upload routes. */
 export const UPLOAD_BODY_LIMIT = 64 * 1024 * 1024;
@@ -29,7 +30,15 @@ export interface UploadInput {
   log: Pick<FastifyBaseLogger, 'info'>;
 }
 
-const KIND_LABEL: Record<AttachmentKind, string> = { image: 'imagem', pdf: 'PDF', docx: 'documento Word', xlsx: 'planilha Excel', audio: 'áudio', video: 'vídeo', text: 'texto' };
+const KIND_LABEL: Record<AttachmentKind, string> = {
+  image: tk('imagem'),
+  pdf: tk('PDF'),
+  docx: tk('documento Word'),
+  xlsx: tk('planilha Excel'),
+  audio: tk('áudio'),
+  video: tk('vídeo'),
+  text: tk('texto'),
+};
 /** "10 MB", "2 GB": whole units, GB from 1024 MB up. */
 const mb = (n: number): string => {
   const inMb = n / (1024 * 1024);
@@ -58,9 +67,9 @@ export async function storeUpload(deps: UploadDeps, user: User, input: UploadInp
   if (sniffed === null) throw new HttpError(415, 'Tipo de arquivo não suportado', 'ATTACHMENT_TYPE');
   if ('refused' in sniffed) throw new HttpError(415, 'Envie como .docx/.xlsx', 'ATTACHMENT_TYPE');
   const limit = ATTACHMENT_LIMITS[sniffed.kind];
-  if (body.length > limit) throw new HttpError(413, `Arquivo maior que o limite de ${mb(limit)} para ${KIND_LABEL[sniffed.kind]}`, 'ATTACHMENT_TOO_LARGE');
+  if (body.length > limit) throw new HttpError(413, msg('Arquivo maior que o limite de {{size}} para {{kind}}', { size: mb(limit), kind: msg(KIND_LABEL[sniffed.kind]) }), 'ATTACHMENT_TOO_LARGE');
   const used = await deps.repo.usageBytes(user.id);
-  if (used + body.length > deps.quotaBytes) throw new HttpError(413, `Espaço de anexos esgotado (limite de ${mb(deps.quotaBytes)})`, 'ATTACHMENT_QUOTA');
+  if (used + body.length > deps.quotaBytes) throw new HttpError(413, msg('Espaço de anexos esgotado (limite de {{size}})', { size: mb(deps.quotaBytes) }), 'ATTACHMENT_QUOTA');
 
   const id = newId();
   const sha256 = createHash('sha256').update(body).digest('hex');

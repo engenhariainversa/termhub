@@ -4,6 +4,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import { buildCardSvg, renderCard, resolveFocus } from '../public/card.js';
 import { normalizeNickname } from '../public/nickname.js';
 import { readPublicCityCached } from '../public/read.js';
+import { sendError } from '../lib/errors.js';
 
 // No length cap here: `normalizeNickname` is the only judge of shape (it is strictly stricter,
 // 3-30 characters), so a too-long segment lands on the same 404 as any other bad nickname instead
@@ -83,9 +84,9 @@ function cardCacheKey(nickname: string, focus: { building?: { id: string } }): s
 export async function publicCityRoutes(app: FastifyInstance, repos: Repositories) {
   app.get('/city/:nickname', { config: { public: true } }, async (request, reply) => {
     const parsed = normalizeNickname(params.parse(request.params).nickname);
-    if (!parsed.ok) return reply.code(404).send({ error: 'Cidade não encontrada', code: 'NOT_FOUND' });
+    if (!parsed.ok) return sendError(request, reply, 404, 'Cidade não encontrada', 'NOT_FOUND');
     const city = await readPublicCityCached(repos, parsed.value);
-    if (!city) return reply.code(404).send({ error: 'Cidade não encontrada', code: 'NOT_FOUND' });
+    if (!city) return sendError(request, reply, 404, 'Cidade não encontrada', 'NOT_FOUND');
     request.log.debug({ nickname: parsed.value, buildings: city.buildings.length }, 'public city: snapshot');
     reply.header('cache-control', 'public, max-age=5');
     return city;

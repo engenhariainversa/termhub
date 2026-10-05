@@ -2,6 +2,7 @@ import type { Machine } from '../db/repositories/types.js';
 import { badRequest } from '../lib/errors.js';
 import { runOnMachine, shellQuote } from './machine-exec.js';
 import { PASTE_DIR } from './paste-file.js';
+import { tk } from '../i18n/index.js';
 
 /** A file found in ~/.cache/termhub/paste/ on a machine. */
 export interface DiskFile {
@@ -26,7 +27,7 @@ export function assertUploadName(name: string): void {
  */
 export async function listPasteDir(machine: Machine): Promise<DirListing> {
   // runOnMachine throws for agents (named RPCs only, none lists this directory yet): report it as a machine error instead
-  if (machine.type === 'agent') return { ok: false, error: 'Listagem de arquivos ainda não disponível em máquinas com agente' };
+  if (machine.type === 'agent') return { ok: false, error: tk('Listagem de arquivos ainda não disponível em máquinas com agente') };
   const script = [
     `d="$HOME/${PASTE_DIR}"`,
     `[ -d "$d" ] || exit 0`,
@@ -35,8 +36,8 @@ export async function listPasteDir(machine: Machine): Promise<DirListing> {
     `if stat -c '%n' . >/dev/null 2>&1; then for f in paste-*; do [ -f "$f" ] && stat -c '%n\t%s\t%Y' "$f"; done; else for f in paste-*; do [ -f "$f" ] && stat -f '%N\t%z\t%m' "$f"; done; fi; true`,
   ].join('; ');
   const r = await runOnMachine(machine, { file: '/bin/sh', args: ['-c', script] }, script, 15_000);
-  if (r.timedOut) return { ok: false, error: 'A máquina não respondeu' };
-  if (r.code !== 0) return { ok: false, error: machine.type === 'ssh' ? 'Falha ao conectar via SSH' : 'Falha ao listar os arquivos' };
+  if (r.timedOut) return { ok: false, error: tk('A máquina não respondeu') };
+  if (r.code !== 0) return { ok: false, error: machine.type === 'ssh' ? tk('Falha ao conectar via SSH') : tk('Falha ao listar os arquivos') };
   const files: DiskFile[] = [];
   for (const line of r.stdout.split('\n')) {
     const [name, size, mtime] = line.split('\t');

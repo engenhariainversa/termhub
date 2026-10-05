@@ -71,7 +71,7 @@ export async function taskTicketRoutes(app: FastifyInstance, repos: Repositories
     try {
       await linkTabTask(controlContextForRequest(repos, request), { tab_id, task_id: id });
     } catch (e) {
-      if (e instanceof ControlError) throw e.code === 'FORBIDDEN' ? forbidden(e.message) : conflict(e.message);
+      if (e instanceof ControlError) throw e.code === 'FORBIDDEN' ? forbidden(e.localized) : conflict(e.localized);
       throw e;
     }
     // the board's own shape of the card (the control operation answers the tools' one)
