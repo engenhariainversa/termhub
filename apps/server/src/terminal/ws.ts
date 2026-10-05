@@ -46,7 +46,7 @@ export function registerTerminalWs(router: ReturnType<typeof createUpgradeRouter
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
   const log = deps.log.child({ mod: 'ws' });
 
-  router.add(/^\/ws\/tabs\/([a-z0-9]+)\/?$/, async ({ req, socket, head, url, params, scope }) => {
+  router.add(/^\/ws\/tabs\/([a-z0-9]+)\/?$/, async ({ req, socket, head, url, params, scope, canWrite }) => {
     const tabId = params[0];
     // ownership: a tab outside the caller's scope is a 404, like a missing one
     const found = await new Scoped(deps.repos, scope).tab(tabId).catch(() => null);
@@ -58,7 +58,7 @@ export function registerTerminalWs(router: ReturnType<typeof createUpgradeRouter
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
-      void handleConnection(ws, { tab, project, machine, cwd, cols, rows }, deps, log);
+      void handleConnection(ws, { tab, project, machine, cwd, cols, rows, readonly: !canWrite }, deps, log);
     });
   });
 
@@ -81,7 +81,7 @@ export function registerTerminalWs(router: ReturnType<typeof createUpgradeRouter
 
 async function handleConnection(
   ws: WebSocket,
-  ctx: { tab: Tab; project: Project; machine: Machine; cwd: string; cols: number; rows: number },
+  ctx: { tab: Tab; project: Project; machine: Machine; cwd: string; cols: number; rows: number; readonly: boolean },
   deps: Deps,
   log: FastifyBaseLogger,
 ) {
@@ -163,8 +163,11 @@ async function handleConnection(
   // Nunca logamos conteúdo do terminal: só metadados.
   log.info({ tabId: ctx.tab.id, machineId: ctx.machine.id, pid: session.pid }, 'terminal conectado');
   void deps.repos.projects.touchTerminal(ctx.project.id).catch(() => {});
-  const scroll = canScroll(ctx.machine);
-  send({ type: 'ready', scroll });
+  // A read-only viewer (no terminals:write, TER-576) watches the stream but never acts on the pane:
+  // its keystrokes, resizes and wheel scrolls (copy-mode moves the shared pane) are all dropped.
+  const readonly = ctx.readonly;
+  const scroll = !readonly && canScroll(ctx.machine);
+  send({ type: 'ready', scroll, readonly });
 
   // ── Mouse wheel (TER-465) ──
   // Every tmux call of this connection runs in order on one chain, so a scroll and the "leave copy-mode"
@@ -220,7 +223,7 @@ async function handleConnection(
 
   ws.on('message', (raw, isBinary) => {
     if (isBinary) {
-      onInput(raw as Buffer);
+      if (!readonly) onInput(raw as Buffer);
       return;
     }
     let parsed: unknown;
@@ -231,8 +234,9 @@ async function handleConnection(
     }
     const msg = controlSchema.safeParse(parsed);
     if (!msg.success) return;
-    if (msg.data.type === 'resize') session.resize(msg.data);
-    else if (msg.data.type === 'ping') send({ type: 'pong' });
+    if (msg.data.type === 'resize') {
+      if (!readonly) session.resize(msg.data);
+    } else if (msg.data.type === 'ping') send({ type: 'pong' });
     else if (msg.data.type === 'scroll' && scroll) onScroll(msg.data.lines);
   });
 

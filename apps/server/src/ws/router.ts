@@ -16,6 +16,11 @@ export interface UpgradeContext {
   params: string[];
   user: User;
   scope: Scope;
+  /**
+   * Whether the user holds terminals:write: may type into a terminal or act on a simulator. Without
+   * it the socket still opens (terminals:read is enough to watch), and the route drops the input.
+   */
+  canWrite: boolean;
 }
 export type UpgradeHandler = (ctx: UpgradeContext) => void | Promise<void>;
 
@@ -101,11 +106,14 @@ export function createUpgradeRouter(server: HttpServer, deps: { auth: AuthContex
     // it was written for, and /ws/chat rides on it too — the chat is the global terminal as a
     // conversation, so nobody who cannot read a terminal has any business on it either.
     // (The chat's own per-user filter lives in chat/ws.ts; this only decides who may connect.)
+    // Reading only lets someone watch: typing into a terminal or acting on a simulator takes
+    // terminals:write (TER-576), which the routes enforce per message from `canWrite`.
     if (!(await canAccess(deps.auth.repos, user, 'terminals', 'read'))) return rejectUpgrade(socket, 403, 'Forbidden');
+    const canWrite = await canAccess(deps.auth.repos, user, 'terminals', 'write');
     // The awaits above give a drain time to start: a socket admitted now would miss its handover.
     if (deps.lifecycle?.draining) return rejectUpgrade(socket, 503, 'Service Unavailable');
     try {
-      await route.r.handler({ req, socket, head, url, params: route.m.slice(1), user, scope });
+      await route.r.handler({ req, socket, head, url, params: route.m.slice(1), user, scope, canWrite });
     } catch {
       rejectUpgrade(socket, 500, 'Internal Server Error');
     }

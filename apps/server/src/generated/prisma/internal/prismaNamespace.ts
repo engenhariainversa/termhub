@@ -4390,6 +4390,7 @@ export const TaskScalarFieldEnum = {
   startedAt: 'startedAt',
   doneAt: 'doneAt',
   activeSeconds: 'activeSeconds',
+  auto: 'auto',
   externalKey: 'externalKey',
   tabId: 'tabId',
   parentId: 'parentId',

@@ -5,7 +5,7 @@
 - **Commit messages, PR titles and PR descriptions are written in English.** Imperative subject line (≤ 72 chars), blank line, then a short body explaining the *why* when it is not obvious. Example: `Terminal: copy selection on mouse release`.
 - **README.md and other repo docs are in English.**
 - Code comments and identifiers are in English. Existing Portuguese comments may be translated when the surrounding code is touched; do not do mass rewrites just for that.
-- The **UI copy stays in Portuguese (pt-BR)** — it is the product language. Do not translate labels, messages or e-mail templates.
+- The **UI copy is written in Portuguese (pt-BR)**, the product's source language, and translated to English through the catalogs (spec `docs/superpowers/specs/2026-10-04-i18n-english-design.md`). Every UI string goes through `t()` with the pt-BR text as the key (`t('Salvar alterações')`), never an English or invented key; a label kept in a table or constant is marked with `tk('…')` and shown with `t(label)`; the English entry goes into `src/locales/en/<area>.json` of the same app in the same PR (plurals also get their pt-BR forms in `src/locales/pt-BR/`), and `npm run i18n:check -w <app>` must pass. In the web, a folder or file listed in `GUARDED` (`apps/web/scripts/i18n-check.mjs`) may not hold copy outside `t()`; add yours there once it is translated. How-to: `apps/web/src/i18n/README.md`. Dates and numbers go through `apps/web/src/lib/format.ts`, never a `'pt-BR'` literal. Server errors, e-mails and push texts follow the same rule with the server's `t`/`msg`. The landing keeps its own `apps/landing/src/i18n.ts` dictionaries.
 - Conversation with the user may be in Portuguese; that does not change the rules above.
 
 ## Layout
@@ -27,9 +27,9 @@ npm workspaces: `apps/server` (`@termhub/server`), `apps/web` (`@termhub/web`), 
 
 ## Verifying before pushing
 
-- The host that holds this checkout (jarvis) has no Node. Run typecheck/build through Docker, and only push if it passes:
+- The host that holds this checkout (jarvis) has no Node. Run typecheck/build through Docker in `node:22`, the version CI uses, and only push if it passes (`node:20` fails the web office tests, see `docs/lessons/2026-10-04-web-office-tests-fail-on-node-20.md`; in a fresh checkout run `npm ci && npm run prisma:generate && npm run build:packages` first, the same way):
   ```bash
-  docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/w" -w /w node:20 \
+  docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/w" -w /w node:22 \
     sh -c 'npm run typecheck -w @termhub/server && npm run build -w @termhub/web && npm run build -w @termhub/landing'
   rm -rf .npm   # cache the container leaves behind
   ```

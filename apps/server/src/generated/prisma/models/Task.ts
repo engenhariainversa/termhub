@@ -52,6 +52,7 @@ export type TaskMinAggregateOutputType = {
   startedAt: Date | null
   doneAt: Date | null
   activeSeconds: number | null
+  auto: boolean | null
   externalKey: string | null
   tabId: string | null
   parentId: string | null
@@ -73,6 +74,7 @@ export type TaskMaxAggregateOutputType = {
   startedAt: Date | null
   doneAt: Date | null
   activeSeconds: number | null
+  auto: boolean | null
   externalKey: string | null
   tabId: string | null
   parentId: string | null
@@ -95,6 +97,7 @@ export type TaskCountAggregateOutputType = {
   startedAt: number
   doneAt: number
   activeSeconds: number
+  auto: number
   externalKey: number
   tabId: number
   parentId: number
@@ -130,6 +133,7 @@ export type TaskMinAggregateInputType = {
   startedAt?: true
   doneAt?: true
   activeSeconds?: true
+  auto?: true
   externalKey?: true
   tabId?: true
   parentId?: true
@@ -151,6 +155,7 @@ export type TaskMaxAggregateInputType = {
   startedAt?: true
   doneAt?: true
   activeSeconds?: true
+  auto?: true
   externalKey?: true
   tabId?: true
   parentId?: true
@@ -173,6 +178,7 @@ export type TaskCountAggregateInputType = {
   startedAt?: true
   doneAt?: true
   activeSeconds?: true
+  auto?: true
   externalKey?: true
   tabId?: true
   parentId?: true
@@ -282,6 +288,7 @@ export type TaskGroupByOutputType = {
   startedAt: Date | null
   doneAt: Date | null
   activeSeconds: number
+  auto: boolean
   externalKey: string | null
   tabId: string | null
   parentId: string | null
@@ -327,6 +334,7 @@ export type TaskWhereInput = {
   startedAt?: Prisma.DateTimeNullableFilter<"Task"> | Date | string | null
   doneAt?: Prisma.DateTimeNullableFilter<"Task"> | Date | string | null
   activeSeconds?: Prisma.IntFilter<"Task"> | number
+  auto?: Prisma.BoolFilter<"Task"> | boolean
   externalKey?: Prisma.StringNullableFilter<"Task"> | string | null
   tabId?: Prisma.StringNullableFilter<"Task"> | string | null
   parentId?: Prisma.StringNullableFilter<"Task"> | string | null
@@ -357,6 +365,7 @@ export type TaskOrderByWithRelationInput = {
   startedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   doneAt?: Prisma.SortOrderInput | Prisma.SortOrder
   activeSeconds?: Prisma.SortOrder
+  auto?: Prisma.SortOrder
   externalKey?: Prisma.SortOrderInput | Prisma.SortOrder
   tabId?: Prisma.SortOrderInput | Prisma.SortOrder
   parentId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -392,6 +401,7 @@ export type TaskWhereUniqueInput = Prisma.AtLeast<{
   startedAt?: Prisma.DateTimeNullableFilter<"Task"> | Date | string | null
   doneAt?: Prisma.DateTimeNullableFilter<"Task"> | Date | string | null
   activeSeconds?: Prisma.IntFilter<"Task"> | number
+  auto?: Prisma.BoolFilter<"Task"> | boolean
   externalKey?: Prisma.StringNullableFilter<"Task"> | string | null
   tabId?: Prisma.StringNullableFilter<"Task"> | string | null
   parentId?: Prisma.StringNullableFilter<"Task"> | string | null
@@ -422,6 +432,7 @@ export type TaskOrderByWithAggregationInput = {
   startedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   doneAt?: Prisma.SortOrderInput | Prisma.SortOrder
   activeSeconds?: Prisma.SortOrder
+  auto?: Prisma.SortOrder
   externalKey?: Prisma.SortOrderInput | Prisma.SortOrder
   tabId?: Prisma.SortOrderInput | Prisma.SortOrder
   parentId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -452,6 +463,7 @@ export type TaskScalarWhereWithAggregatesInput = {
   startedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Task"> | Date | string | null
   doneAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Task"> | Date | string | null
   activeSeconds?: Prisma.IntWithAggregatesFilter<"Task"> | number
+  auto?: Prisma.BoolWithAggregatesFilter<"Task"> | boolean
   externalKey?: Prisma.StringNullableWithAggregatesFilter<"Task"> | string | null
   tabId?: Prisma.StringNullableWithAggregatesFilter<"Task"> | string | null
   parentId?: Prisma.StringNullableWithAggregatesFilter<"Task"> | string | null
@@ -473,6 +485,7 @@ export type TaskCreateInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   project: Prisma.ProjectCreateNestedOneWithoutTasksInput
   tab?: Prisma.TabCreateNestedOneWithoutTasksInput
@@ -499,6 +512,7 @@ export type TaskUncheckedCreateInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -523,6 +537,7 @@ export type TaskUpdateInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   project?: Prisma.ProjectUpdateOneRequiredWithoutTasksNestedInput
   tab?: Prisma.TabUpdateOneWithoutTasksNestedInput
@@ -549,6 +564,7 @@ export type TaskUncheckedUpdateInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -574,6 +590,7 @@ export type TaskCreateManyInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -595,6 +612,7 @@ export type TaskUpdateManyMutationInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
@@ -613,6 +631,7 @@ export type TaskUncheckedUpdateManyInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -660,6 +679,7 @@ export type TaskCountOrderByAggregateInput = {
   startedAt?: Prisma.SortOrder
   doneAt?: Prisma.SortOrder
   activeSeconds?: Prisma.SortOrder
+  auto?: Prisma.SortOrder
   externalKey?: Prisma.SortOrder
   tabId?: Prisma.SortOrder
   parentId?: Prisma.SortOrder
@@ -687,6 +707,7 @@ export type TaskMaxOrderByAggregateInput = {
   startedAt?: Prisma.SortOrder
   doneAt?: Prisma.SortOrder
   activeSeconds?: Prisma.SortOrder
+  auto?: Prisma.SortOrder
   externalKey?: Prisma.SortOrder
   tabId?: Prisma.SortOrder
   parentId?: Prisma.SortOrder
@@ -708,6 +729,7 @@ export type TaskMinOrderByAggregateInput = {
   startedAt?: Prisma.SortOrder
   doneAt?: Prisma.SortOrder
   activeSeconds?: Prisma.SortOrder
+  auto?: Prisma.SortOrder
   externalKey?: Prisma.SortOrder
   tabId?: Prisma.SortOrder
   parentId?: Prisma.SortOrder
@@ -1000,6 +1022,7 @@ export type TaskCreateWithoutProjectInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tab?: Prisma.TabCreateNestedOneWithoutTasksInput
   parent?: Prisma.TaskCreateNestedOneWithoutSubtasksInput
@@ -1024,6 +1047,7 @@ export type TaskUncheckedCreateWithoutProjectInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -1078,6 +1102,7 @@ export type TaskScalarWhereInput = {
   startedAt?: Prisma.DateTimeNullableFilter<"Task"> | Date | string | null
   doneAt?: Prisma.DateTimeNullableFilter<"Task"> | Date | string | null
   activeSeconds?: Prisma.IntFilter<"Task"> | number
+  auto?: Prisma.BoolFilter<"Task"> | boolean
   externalKey?: Prisma.StringNullableFilter<"Task"> | string | null
   tabId?: Prisma.StringNullableFilter<"Task"> | string | null
   parentId?: Prisma.StringNullableFilter<"Task"> | string | null
@@ -1099,6 +1124,7 @@ export type TaskCreateWithoutTabInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   project: Prisma.ProjectCreateNestedOneWithoutTasksInput
   parent?: Prisma.TaskCreateNestedOneWithoutSubtasksInput
@@ -1124,6 +1150,7 @@ export type TaskUncheckedCreateWithoutTabInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   parentId?: string | null
   epicId?: string | null
@@ -1173,6 +1200,7 @@ export type TaskCreateWithoutColumnInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   project: Prisma.ProjectCreateNestedOneWithoutTasksInput
   tab?: Prisma.TabCreateNestedOneWithoutTasksInput
@@ -1198,6 +1226,7 @@ export type TaskUncheckedCreateWithoutColumnInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -1247,6 +1276,7 @@ export type TaskCreateWithoutSubtasksInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   project: Prisma.ProjectCreateNestedOneWithoutTasksInput
   tab?: Prisma.TabCreateNestedOneWithoutTasksInput
@@ -1272,6 +1302,7 @@ export type TaskUncheckedCreateWithoutSubtasksInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -1300,6 +1331,7 @@ export type TaskCreateWithoutParentInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   project: Prisma.ProjectCreateNestedOneWithoutTasksInput
   tab?: Prisma.TabCreateNestedOneWithoutTasksInput
@@ -1325,6 +1357,7 @@ export type TaskUncheckedCreateWithoutParentInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   epicId?: string | null
@@ -1358,6 +1391,7 @@ export type TaskCreateWithoutEpicCardsInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   project: Prisma.ProjectCreateNestedOneWithoutTasksInput
   tab?: Prisma.TabCreateNestedOneWithoutTasksInput
@@ -1383,6 +1417,7 @@ export type TaskUncheckedCreateWithoutEpicCardsInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -1411,6 +1446,7 @@ export type TaskCreateWithoutEpicInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   project: Prisma.ProjectCreateNestedOneWithoutTasksInput
   tab?: Prisma.TabCreateNestedOneWithoutTasksInput
@@ -1436,6 +1472,7 @@ export type TaskUncheckedCreateWithoutEpicInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -1480,6 +1517,7 @@ export type TaskUpdateWithoutSubtasksInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   project?: Prisma.ProjectUpdateOneRequiredWithoutTasksNestedInput
   tab?: Prisma.TabUpdateOneWithoutTasksNestedInput
@@ -1505,6 +1543,7 @@ export type TaskUncheckedUpdateWithoutSubtasksInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1555,6 +1594,7 @@ export type TaskUpdateWithoutEpicCardsInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   project?: Prisma.ProjectUpdateOneRequiredWithoutTasksNestedInput
   tab?: Prisma.TabUpdateOneWithoutTasksNestedInput
@@ -1580,6 +1620,7 @@ export type TaskUncheckedUpdateWithoutEpicCardsInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1619,6 +1660,7 @@ export type TaskCreateWithoutPullRequestsInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   project: Prisma.ProjectCreateNestedOneWithoutTasksInput
   tab?: Prisma.TabCreateNestedOneWithoutTasksInput
@@ -1644,6 +1686,7 @@ export type TaskUncheckedCreateWithoutPullRequestsInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -1683,6 +1726,7 @@ export type TaskUpdateWithoutPullRequestsInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   project?: Prisma.ProjectUpdateOneRequiredWithoutTasksNestedInput
   tab?: Prisma.TabUpdateOneWithoutTasksNestedInput
@@ -1708,6 +1752,7 @@ export type TaskUncheckedUpdateWithoutPullRequestsInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1731,6 +1776,7 @@ export type TaskCreateManyProjectInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -1752,6 +1798,7 @@ export type TaskUpdateWithoutProjectInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tab?: Prisma.TabUpdateOneWithoutTasksNestedInput
   parent?: Prisma.TaskUpdateOneWithoutSubtasksNestedInput
@@ -1776,6 +1823,7 @@ export type TaskUncheckedUpdateWithoutProjectInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1800,6 +1848,7 @@ export type TaskUncheckedUpdateManyWithoutProjectInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1822,6 +1871,7 @@ export type TaskCreateManyTabInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   parentId?: string | null
   epicId?: string | null
@@ -1842,6 +1892,7 @@ export type TaskUpdateWithoutTabInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   project?: Prisma.ProjectUpdateOneRequiredWithoutTasksNestedInput
   parent?: Prisma.TaskUpdateOneWithoutSubtasksNestedInput
@@ -1867,6 +1918,7 @@ export type TaskUncheckedUpdateWithoutTabInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   epicId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1891,6 +1943,7 @@ export type TaskUncheckedUpdateManyWithoutTabInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   epicId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1912,6 +1965,7 @@ export type TaskCreateManyColumnInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -1932,6 +1986,7 @@ export type TaskUpdateWithoutColumnInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   project?: Prisma.ProjectUpdateOneRequiredWithoutTasksNestedInput
   tab?: Prisma.TabUpdateOneWithoutTasksNestedInput
@@ -1957,6 +2012,7 @@ export type TaskUncheckedUpdateWithoutColumnInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1981,6 +2037,7 @@ export type TaskUncheckedUpdateManyWithoutColumnInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2002,6 +2059,7 @@ export type TaskCreateManyParentInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   epicId?: string | null
@@ -2023,6 +2081,7 @@ export type TaskCreateManyEpicInput = {
   startedAt?: Date | string | null
   doneAt?: Date | string | null
   activeSeconds?: number
+  auto?: boolean
   externalKey?: string | null
   tabId?: string | null
   parentId?: string | null
@@ -2043,6 +2102,7 @@ export type TaskUpdateWithoutParentInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   project?: Prisma.ProjectUpdateOneRequiredWithoutTasksNestedInput
   tab?: Prisma.TabUpdateOneWithoutTasksNestedInput
@@ -2068,6 +2128,7 @@ export type TaskUncheckedUpdateWithoutParentInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   epicId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2092,6 +2153,7 @@ export type TaskUncheckedUpdateManyWithoutParentInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   epicId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2112,6 +2174,7 @@ export type TaskUpdateWithoutEpicInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   project?: Prisma.ProjectUpdateOneRequiredWithoutTasksNestedInput
   tab?: Prisma.TabUpdateOneWithoutTasksNestedInput
@@ -2137,6 +2200,7 @@ export type TaskUncheckedUpdateWithoutEpicInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2161,6 +2225,7 @@ export type TaskUncheckedUpdateManyWithoutEpicInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
   externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2231,6 +2296,7 @@ export type TaskSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   startedAt?: boolean
   doneAt?: boolean
   activeSeconds?: boolean
+  auto?: boolean
   externalKey?: boolean
   tabId?: boolean
   parentId?: boolean
@@ -2262,6 +2328,7 @@ export type TaskSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   startedAt?: boolean
   doneAt?: boolean
   activeSeconds?: boolean
+  auto?: boolean
   externalKey?: boolean
   tabId?: boolean
   parentId?: boolean
@@ -2289,6 +2356,7 @@ export type TaskSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   startedAt?: boolean
   doneAt?: boolean
   activeSeconds?: boolean
+  auto?: boolean
   externalKey?: boolean
   tabId?: boolean
   parentId?: boolean
@@ -2316,6 +2384,7 @@ export type TaskSelectScalar = {
   startedAt?: boolean
   doneAt?: boolean
   activeSeconds?: boolean
+  auto?: boolean
   externalKey?: boolean
   tabId?: boolean
   parentId?: boolean
@@ -2323,7 +2392,7 @@ export type TaskSelectScalar = {
   columnId?: boolean
 }
 
-export type TaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "title" | "description" | "status" | "type" | "number" | "position" | "externalRef" | "createdAt" | "updatedAt" | "startedAt" | "doneAt" | "activeSeconds" | "externalKey" | "tabId" | "parentId" | "epicId" | "columnId", ExtArgs["result"]["task"]>
+export type TaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "title" | "description" | "status" | "type" | "number" | "position" | "externalRef" | "createdAt" | "updatedAt" | "startedAt" | "doneAt" | "activeSeconds" | "auto" | "externalKey" | "tabId" | "parentId" | "epicId" | "columnId", ExtArgs["result"]["task"]>
 export type TaskInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   tab?: boolean | Prisma.Task$tabArgs<ExtArgs>
@@ -2395,6 +2464,10 @@ export type $TaskPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
      * Seconds an agent tab linked to this card (or to one of its subtasks) spent working (monitor/recordEvent).
      */
     activeSeconds: number
+    /**
+     * Tagged "automático": eligible for automatic work. On an epic, setAuto propagates to its top-level cards. Never on subtasks.
+     */
+    auto: boolean
     /**
      * chave estável do ticket externo ("linear:<id>", "jira:<key>") para upsert no sync
      */
@@ -2861,6 +2934,7 @@ export interface TaskFieldRefs {
   readonly startedAt: Prisma.FieldRef<"Task", 'DateTime'>
   readonly doneAt: Prisma.FieldRef<"Task", 'DateTime'>
   readonly activeSeconds: Prisma.FieldRef<"Task", 'Int'>
+  readonly auto: Prisma.FieldRef<"Task", 'Boolean'>
   readonly externalKey: Prisma.FieldRef<"Task", 'String'>
   readonly tabId: Prisma.FieldRef<"Task", 'String'>
   readonly parentId: Prisma.FieldRef<"Task", 'String'>

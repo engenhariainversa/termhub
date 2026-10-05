@@ -7,9 +7,9 @@ import type { Machine, Project, Tab } from '../db/repositories/types.js';
 import { applyErrorHandler, HttpError } from '../lib/errors.js';
 import type { Page } from '../tab-chat/reader.js';
 
-const sendInput = vi.fn(async (_ctx: unknown, input: { tab_id: string }) => ({ tab_id: input.tab_id, sent: true }));
+const sendInput = vi.fn(async (_ctx: unknown, input: { tab_id: string }, _origin?: unknown) => ({ tab_id: input.tab_id, sent: true }));
 const sendKey = vi.fn(async (_ctx: unknown, input: { tab_id: string; key: string }) => ({ tab_id: input.tab_id, key: input.key, sent: true }));
-vi.mock('../control/terminals.js', () => ({ sendInput: (...a: unknown[]) => sendInput(...(a as [never, never])), sendKey: (...a: unknown[]) => sendKey(...(a as [never, never])) }));
+vi.mock('../control/terminals.js', () => ({ sendInput: (...a: unknown[]) => sendInput(...(a as [never, never, never])), sendKey: (...a: unknown[]) => sendKey(...(a as [never, never])) }));
 const startAgent = vi.fn(async (..._a: unknown[]) => ({ tab_id: 't9' }));
 vi.mock('../control/agents.js', () => ({ startAgent: (...a: unknown[]) => startAgent(...a) }));
 const readScreen = vi.fn(async (..._a: unknown[]) => ({ tab_id: 't1', lines: 30, text: '', styled: false }));
@@ -222,7 +222,8 @@ describe('POST /tabs/:id/chat/messages', () => {
     const { app, hub, logged } = build();
     const res = await app.inject({ method: 'POST', url: '/tabs/t1/chat/messages', payload: { text: 'segredo do deploy' } });
     expect(res.statusCode).toBe(200);
-    expect(sendInput).toHaveBeenCalledWith(expect.anything(), { tab_id: 't1', text: 'segredo do deploy' });
+    // typed by the person on the phone (TER-851): the tab is told so
+    expect(sendInput).toHaveBeenCalledWith(expect.anything(), { tab_id: 't1', text: 'segredo do deploy' }, expect.objectContaining({ level: 'person_typed', surface: 'app' }));
     expect(hub.poke).toHaveBeenCalledWith('t1');
     expect(logged.join('')).toContain('"textLen":17');
     expect(logged.join('')).not.toContain('segredo');
@@ -260,9 +261,9 @@ describe('POST /tabs/:id/chat/actions', () => {
     expect((await act(app, 'interrupt')).json()).toEqual({ done: true, mode: null });
     expect(sendKey).toHaveBeenCalledWith(expect.anything(), { tab_id: 't1', key: 'Escape' });
     await act(app, 'clear');
-    expect(sendInput).toHaveBeenLastCalledWith(expect.anything(), { tab_id: 't1', text: '/clear' });
+    expect(sendInput).toHaveBeenLastCalledWith(expect.anything(), { tab_id: 't1', text: '/clear' }, null);
     await act(app, 'compact');
-    expect(sendInput).toHaveBeenLastCalledWith(expect.anything(), { tab_id: 't1', text: '/compact' });
+    expect(sendInput).toHaveBeenLastCalledWith(expect.anything(), { tab_id: 't1', text: '/compact' }, null);
   });
 
   it('cycle_mode presses Shift+Tab and answers the mode the footer shows', async () => {

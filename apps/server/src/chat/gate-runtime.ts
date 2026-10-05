@@ -37,8 +37,9 @@ export interface GatedCall {
    * the transport carried one — set only by the MCP route. Used to look up which subagent's turn (if
    * any) is making this call, through `subagentOrigins`. */
   tool_use_id?: string;
-  /** The tool call itself, already scope-checked and argument-validated by the caller. */
-  run(): Promise<unknown>;
+  /** The tool call itself, already scope-checked and argument-validated by the caller. `approval` is
+   *  passed only when it runs a card the person clicked, never under a grant (TER-851). */
+  run(approval?: { actionId: string; approvedAt: Date }): Promise<unknown>;
 }
 
 const PENDING = (tool: string) =>
@@ -301,7 +302,11 @@ async function execute(ctx: ControlContext, call: GatedCall, row: ChatAction): P
     return { ok: false, ...stale };
   }
   try {
-    const value = await call.run();
+    // A row born approved by a grant or a default is the gate letting the call through, not the person
+    // approving this text: only a clicked card (`grant_id` null) makes what is typed theirs (TER-851).
+    const decidedAt = row.decided_at ? new Date(row.decided_at) : null;
+    const approval = row.grant_id === null && decidedAt && Number.isFinite(decidedAt.getTime()) ? { actionId: row.id, approvedAt: decidedAt } : undefined;
+    const value = await call.run(approval);
     await ctx.repos.chatActions.markExecuted(row.id, true, null, Date.now() - started);
     publishStatus(ctx, row, 'executed', null);
     return { ok: true, value };

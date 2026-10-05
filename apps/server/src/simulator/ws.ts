@@ -25,7 +25,7 @@ export function registerSimulatorWs(router: ReturnType<typeof createUpgradeRoute
   const log = deps.log.child({ mod: 'sim-ws' });
   const byTab = new Map<string, Set<WebSocket>>();
 
-  router.add(/^\/ws\/sim\/([a-z0-9]+)\/?$/, async ({ req, socket, head, params, scope }) => {
+  router.add(/^\/ws\/sim\/([a-z0-9]+)\/?$/, async ({ req, socket, head, params, scope, canWrite }) => {
     // ownership: a tab outside the caller's scope is a 404, like a missing one
     const found = await new Scoped(deps.repos, scope).tab(params[0]).catch(() => null);
     if (!found || found.tab.kind !== 'simulator') return rejectUpgrade(socket, 404, 'Not Found');
@@ -39,7 +39,7 @@ export function registerSimulatorWs(router: ReturnType<typeof createUpgradeRoute
         set.delete(ws);
         if (set.size === 0) byTab.delete(tab.id);
       });
-      void handleConnection(ws, tab, machine, deps, log);
+      void handleConnection(ws, tab, machine, !canWrite, deps, log);
     });
   });
 
@@ -65,13 +65,26 @@ export function registerSimulatorWs(router: ReturnType<typeof createUpgradeRoute
   };
 }
 
-async function handleConnection(ws: WebSocket, tab: Tab, machine: Parameters<SimulatorSessionManager['acquire']>[0], deps: Deps, log: FastifyBaseLogger) {
+/** What a read-only viewer (no terminals:write, TER-576) may still send: its own stream controls. */
+const VIEWER_MESSAGES = new Set(['ping', 'pause', 'resume', 'settings']);
+
+async function handleConnection(
+  ws: WebSocket,
+  tab: Tab,
+  machine: Parameters<SimulatorSessionManager['acquire']>[0],
+  readonly: boolean,
+  deps: Deps,
+  log: FastifyBaseLogger,
+) {
   const w = ws as WebSocket & { isAlive?: boolean };
   w.isAlive = true;
   ws.on('pong', () => (w.isAlive = true));
   const send = (msg: object) => {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   };
+  // A read-only viewer is told so before anything else, so the page can disable its controls; the
+  // server drops tap, drag, keys, key, button and rotate from it either way. A writer gets nothing.
+  if (readonly) send({ type: 'readonly' });
 
   if (!tab.simulator_udid) {
     send({ type: 'status', state: 'no_device' });
@@ -150,6 +163,7 @@ async function handleConnection(ws: WebSocket, tab: Tab, machine: Parameters<Sim
     const r = clientMessageSchema.safeParse(parsed);
     if (!r.success) return;
     const m = r.data;
+    if (readonly && !VIEWER_MESSAGES.has(m.type)) return;
     if (m.type === 'pause') {
       wantPaused = true;
       paused = true;

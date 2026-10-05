@@ -88,6 +88,12 @@ To allow more folders on this machine, list them, one absolute path per line, in
 `~/.termhub/file-read-roots` (`#` starts a comment). The server cannot add folders; only this file
 can. File contents are relayed to your browser or phone and never stored or logged.
 
+The project's "Arquivos" page lists its recent Markdown files (since 0.17.0): the `.md` and
+`.markdown` files directly inside a few documentation folders of the project (`docs/superpowers/specs`,
+`docs/superpowers/plans`, `docs/lessons`, `docs/legal`) and the ones the project's tabs mentioned. Each
+entry passes the same checks as above (`.txt` is not listed); a file over 512 KiB is listed but does
+not open. The agent sends only names, sizes and dates, and reads a file only when you click it.
+
 ## macOS: Full Disk Access
 
 macOS's TCC (Transparency, Consent and Control) can block the agent from listing folders such as
