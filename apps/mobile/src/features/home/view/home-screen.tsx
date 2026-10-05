@@ -6,6 +6,7 @@ import { ProjectRow } from '@/features/chat/view/project-row';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { AdConsentCard } from '@/features/permissions/view/ad-consent-card';
 import { usePermissionsStore } from '@/features/permissions/viewmodel/usePermissionsStore';
+import { useTranslation } from '@/i18n';
 import { AppText, Banner, Button, EmptyState, Screen } from '@/ui';
 import { favoriteProjects } from '../model/favorites';
 
@@ -15,6 +16,7 @@ import { favoriteProjects } from '../model/favorites';
  * window size (the route deep links use), so Home keeps the readable column instead of a split.
  */
 export function HomeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const projects = useChatStore((s) => s.projects);
   const loading = useChatStore((s) => s.loadingProjects);
@@ -39,17 +41,17 @@ export function HomeScreen() {
   return (
     <Screen padded={false}>
       <View className="gap-3 px-6 pb-2 pt-4">
-        <AppText variant="title">Home</AppText>
+        <AppText variant="title">{t('Home')}</AppText>
         {error ? <Banner tone="danger" text={error} /> : null}
         <AdConsentCard />
-        {favorites.length > 0 ? <AppText variant="muted">Favoritos</AppText> : null}
+        {favorites.length > 0 ? <AppText variant="muted">{t('Favoritos')}</AppText> : null}
       </View>
       {/* No list at all after a failure: the banner says why, and "nothing pinned" would not be true. */}
       {favorites.length === 0 && !loading && (projects.length > 0 || !error) ? (
         <EmptyState
-          title="Nenhum projeto fixado"
-          hint="Na aba Chats, toque no alfinete de um projeto, ou segure a linha, para fixá-lo aqui."
-          action={<Button label="Ver projetos" variant="secondary" onPress={() => router.navigate('/(tabs)/chats' as Href)} />}
+          title={t('Nenhum projeto fixado')}
+          hint={t('Na aba Chats, toque no alfinete de um projeto, ou segure a linha, para fixá-lo aqui.')}
+          action={<Button label={t('Ver projetos')} variant="secondary" onPress={() => router.navigate('/(tabs)/chats' as Href)} />}
         />
       ) : (
         <FlatList

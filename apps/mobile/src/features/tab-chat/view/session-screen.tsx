@@ -7,6 +7,7 @@ import { Composer } from '@/features/chat/view/composer';
 import { TabQuestionCard } from '@/features/chat/view/tab-question-card';
 import { TabSuggestionCard } from '@/features/chat/view/tab-suggestion-card';
 import type { PickedFile } from '@/features/chat/viewmodel/attachments';
+import { useTranslation } from '@/i18n';
 import { kindFromNameAndMime, type TChatAttachment, type TTabQuestion, type TTabQuestionAnswerBody, type TTabSuggestion } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { AppText, Banner, Button, EmptyState, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
@@ -32,6 +33,7 @@ const entryKey = (e: Entry) => (e.kind === 'row' ? `r:${e.row.id}` : e.kind === 
 
 /** A message row as the chat's bubble: same markdown for the assistant. A row's images are counted. */
 function SessionMessage({ row, tabId }: { row: Extract<Row, { kind: 'message' }>; tabId: string }) {
+  const { t } = useTranslation();
   const message = useMemo(() => ({ id: row.id, conversation_id: '', role: row.role, text: row.text, usage: null, error_code: null, created_at: row.at }), [row]);
   // A Markdown path in the session's answer opens as a preview, read on the tab's machine.
   const fileContext = useMemo(() => ({ tabId }), [tabId]);
@@ -40,7 +42,7 @@ function SessionMessage({ row, tabId }: { row: Extract<Row, { kind: 'message' }>
       {row.text ? <MessageBubble message={message} streamed={undefined} started={false} fileContext={fileContext} /> : null}
       {row.images > 0 ? (
         <AppText variant="muted" className={row.role === 'user' ? 'self-end' : 'self-start'}>
-          {row.images === 1 ? '1 imagem' : `${row.images} imagens`}
+          {t('{{count}} imagens', { count: row.images })}
         </AppText>
       ) : null}
     </View>
@@ -59,6 +61,7 @@ function asChip(file: PickedFile, path: string): TChatAttachment {
  * "Interromper". Nothing of the conversation is kept on the phone.
  */
 export function SessionView({ tabId }: { tabId: string }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const store = useTabChatStore(tabId);
   const status = store((s) => s.status);
@@ -179,7 +182,7 @@ export function SessionView({ tabId }: { tabId: string }) {
               <ActivityIndicator />
             </View>
           ) : entries.length === 0 ? (
-            <View className="flex-1">{status === 'ready' ? <EmptyState title="Nenhuma mensagem ainda" hint="Escreva abaixo para falar com o Claude nesta aba." /> : null}</View>
+            <View className="flex-1">{status === 'ready' ? <EmptyState title={t('Nenhuma mensagem ainda')} hint={t('Escreva abaixo para falar com o Claude nesta aba.')} /> : null}</View>
           ) : (
             <FlatList
               testID="session-thread"
@@ -204,7 +207,7 @@ export function SessionView({ tabId }: { tabId: string }) {
                 <AppText variant="muted" className="flex-1">
                   {why}
                 </AppText>
-                {SCREEN_ONLY.has(availability) ? <Button label="Ver tela" variant="ghost" onPress={() => setScreenOpen(true)} /> : null}
+                {SCREEN_ONLY.has(availability) ? <Button label={t('Ver tela')} variant="ghost" onPress={() => setScreenOpen(true)} /> : null}
               </View>
             ) : null}
             <Composer

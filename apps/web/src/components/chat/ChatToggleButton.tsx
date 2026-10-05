@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useAuth } from '../../lib/auth';
 import { useProjectChat } from '../../lib/project-chat';
 
@@ -7,6 +8,7 @@ import { useProjectChat } from '../../lib/project-chat';
  * on the person.
  */
 export function ChatToggleButton({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
   const { can } = useAuth();
   const { pref, toggle, status } = useProjectChat();
   if (!can('chat')) return null;
@@ -16,9 +18,9 @@ export function ChatToggleButton({ projectId }: { projectId: string }) {
   return (
     <button
       type="button"
-      aria-label="Chat do projeto"
+      aria-label={t('Chat do projeto')}
       aria-pressed={open}
-      title={s.pending > 0 ? 'Chat do projeto — esperando sua confirmação' : s.busy ? 'Chat do projeto — respondendo' : 'Chat do projeto'}
+      title={s.pending > 0 ? t('Chat do projeto — esperando sua confirmação') : s.busy ? t('Chat do projeto — respondendo') : t('Chat do projeto')}
       className={`relative rounded px-2 py-1 text-sm hover:bg-bg-3 ${open ? 'bg-accent/15 text-fg' : 'text-fg-muted hover:text-fg'}`}
       onClick={() => toggle(projectId)}
     >

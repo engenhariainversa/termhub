@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { memo, useState } from 'react';
 import { api } from '../../lib/api';
 import { attachmentStatusText, formatBytes, thumbSize } from '../../lib/attachments';
@@ -15,16 +16,17 @@ const THUMB_MIN = 48;
  * an `attachment_status` event replaces the message object, which is the only time this re-renders.
  */
 export const MessageAttachments = memo(function MessageAttachments({ attachments }: { attachments: ChatAttachment[] }) {
+  const { t } = useTranslation();
   const [viewing, setViewing] = useState<ChatAttachment | null>(null);
   return (
     <>
-      <ul aria-label="Anexos da mensagem" className="mt-2 flex flex-wrap gap-2">
+      <ul aria-label={t('Anexos da mensagem')} className="mt-2 flex flex-wrap gap-2">
         {attachments.map((a) => {
           if (a.kind === 'image') {
             const size = thumbSize(a.meta, THUMB_BOX, THUMB_MIN);
             return (
               <li key={a.id}>
-                <button type="button" className="block overflow-hidden rounded-lg" aria-label={`Abrir imagem ${a.name}`} onClick={() => setViewing(a)}>
+                <button type="button" className="block overflow-hidden rounded-lg" aria-label={t('Abrir imagem {{name}}', { name: a.name })} onClick={() => setViewing(a)}>
                   {/* Sized from meta before it loads, so rows below do not move (TER-197). */}
                   <img src={api.chat.attachments.url(a.id)} alt={a.name} loading="lazy" className="max-h-60 max-w-60 object-cover" style={size ?? undefined} />
                 </button>

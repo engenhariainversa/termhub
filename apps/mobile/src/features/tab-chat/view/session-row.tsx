@@ -1,4 +1,5 @@
 import { Pressable, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import type { TTabSummary } from '@/services/api/contract';
 import { AppText } from '@/ui';
 import { availabilityText } from '../model/availability-text';
@@ -17,6 +18,7 @@ function dotClass(tab: TTabSummary): string {
 /** One tab of the Sessões list: name, machine and its state line — or, for a tab that cannot be read
  * as a conversation, why (it still opens: the screen offers "Ver tela"). */
 export function SessionRow({ tab, onPress }: { tab: TTabSummary; onPress(): void }) {
+  useTranslation();
   const why = availabilityText(tab.availability);
   const line = why ?? stateLine(tab);
   return (

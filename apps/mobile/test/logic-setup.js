@@ -3,6 +3,11 @@
 // none of them may import React Native or expo-router, and every native module they do touch
 // gets an in-memory fake here instead of a real binding.
 
+// i18n spec §5: the suite runs in pt-BR whatever the machine's locale is (`systemLanguages()` in
+// src/i18n reads this instead of `Intl`), so tests keep querying the Portuguese text. A test that
+// renders English calls `setLocale('en')` and sets it back to `null` afterwards.
+process.env.TERMHUB_TEST_LOCALE = 'pt-BR';
+
 // MVVM guard (spec §2): models, viewmodels and services must run without React Native.
 jest.mock('react-native', () => {
   throw new Error('react-native must not be imported by models, viewmodels or services');

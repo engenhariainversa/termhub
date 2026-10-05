@@ -1,3 +1,4 @@
+import { i18n, tk, useTranslation } from '../../i18n';
 import { memo } from 'react';
 import type { ChatAction, ChatDecisionWord, ChatGrant, ChatProjectGrant, ChatStandingGrant, ChatStandingKind } from '../../lib/types';
 import { actionAutoDecision, AutoDecisionBadge } from './AutoDecisionBadge';
@@ -8,25 +9,28 @@ import { ChatReplyButton } from './ChatReplyButton';
 /** How a decided action reads once there is nothing left to click. `pending` has its own buttons
  * instead of a label here. */
 const ACTION_STATUS_LABEL: Record<Exclude<ChatAction['status'], 'pending'>, string> = {
-  approved: 'Autorizado',
-  denied: 'Recusado',
-  expired: 'Expirou sem resposta',
-  executed: 'Executado',
-  failed: 'Falhou',
+  approved: tk('Autorizado'),
+  denied: tk('Recusado'),
+  expired: tk('Expirou sem resposta'),
+  executed: tk('Executado'),
+  failed: tk('Falhou'),
 };
 
 /** Why a `failed` card went stale rather than failing to run (TER-477): the gate refused to run a
  * decision that no longer fits the tab. Read as "Expirou", with the reason. */
 const STALE_REASON: Record<string, string> = {
-  TAB_GONE: 'Expirou: a aba foi fechada',
-  WAITING_PERMISSION: 'Expirou: a aba passou a pedir uma permissão',
-  PROMPT_CHANGED: 'Expirou: a aba está pedindo outra permissão',
+  TAB_GONE: tk('Expirou: a aba foi fechada'),
+  WAITING_PERMISSION: tk('Expirou: a aba passou a pedir uma permissão'),
+  PROMPT_CHANGED: tk('Expirou: a aba está pedindo outra permissão'),
 };
 
 /** The line an expired or stale card reads, or null for any other card (TER-477). */
 export function staleLabel(action: ChatAction): string | null {
-  if (action.status === 'expired') return ACTION_STATUS_LABEL.expired;
-  if (action.status === 'failed') return STALE_REASON[action.error_code ?? ''] ?? null;
+  if (action.status === 'expired') return i18n.t(ACTION_STATUS_LABEL.expired);
+  if (action.status === 'failed') {
+    const reason = STALE_REASON[action.error_code ?? ''];
+    return reason ? i18n.t(reason) : null;
+  }
   return null;
 }
 
@@ -61,20 +65,20 @@ export function standingKindOf(action: ChatAction): ChatStandingKind | null {
 /** Tools whose standing grant trusts the project's tabs themselves (open, close, start an agent). */
 const TAB_LIFECYCLE_TOOLS = new Set(['open_tab', 'close_tab', 'start_agent']);
 
-/** What a call run under a grant adds to its "Executado" line. */
+/** What a call run under a grant adds to its "Executado" line (after a space). */
 function grantedLabel(action: ChatAction): string {
   // TER-627: a default allowance, not a grant the person gave (`default:<kind>:<user>`).
-  if (action.grant_id?.startsWith('default:')) return ' · liberado por padrão';
-  if (isBoardGrantable(action)) return ' · quadro confiado';
-  if (TAB_LIFECYCLE_TOOLS.has(action.tool)) return ' · liberado no projeto';
-  return ' · aba confiada';
+  if (action.grant_id?.startsWith('default:')) return i18n.t('· liberado por padrão');
+  if (isBoardGrantable(action)) return i18n.t('· quadro confiado');
+  if (TAB_LIFECYCLE_TOOLS.has(action.tool)) return i18n.t('· liberado no projeto');
+  return i18n.t('· aba confiada');
 }
 
 export interface ChatActionCardProps {
   action: ChatAction;
   /** This card's decision is in flight (`decidingId` in `ChatPanel`): its buttons are disabled. */
   deciding: boolean;
-  /** The server's pt-BR note for a decision queued behind a busy run (`queuedNotes` in `ChatPanel`). */
+  /** The server's note (in the request's language) for a decision queued behind a busy run (`queuedNotes` in `ChatPanel`). */
   note?: string;
   /** The active grant this card created ("Permitir sempre nesta aba"), if it is still in force. */
   grant?: ChatGrant;
@@ -99,6 +103,7 @@ export interface ChatActionCardProps {
  * that take the id: a streamed delta re-renders the panel, and this card must not follow.
  */
 export const ChatActionCard = memo(function ChatActionCard({ action, deciding, note, grant, projectGrant, standingGrant, revoking, onRevoke, onDecide, onRepropose, onReply }: ChatActionCardProps) {
+  const { t } = useTranslation();
   const standingKind = standingKindOf(action);
   const stale = staleLabel(action);
   const autoDecision = actionAutoDecision(action);
@@ -112,39 +117,39 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
         {onReply && <ChatReplyButton onClick={() => onReply(action)} />}
       </div>
       {/* The subagent whose turn proposed this action (spec 2026-09-26 §4), when there is one. */}
-      {action.subagent && <p className="text-xs text-fg-dim">Pedido pelo subagente «{action.subagent.description}»</p>}
+      {action.subagent && <p className="text-xs text-fg-dim">{t('Pedido pelo subagente «{{name}}»', { name: action.subagent.description })}</p>}
       {action.status === 'pending' ? (
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" className="btn-primary" disabled={deciding} onClick={() => onDecide(action.id, 'approve')}>
-            Autorizar
+            {t('Autorizar')}
           </button>
           {isTabGrantable(action) && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_tab')}>
-              Permitir sempre nesta aba
+              {t('Permitir sempre nesta aba')}
             </button>
           )}
           {isBoardGrantable(action) && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_project')}>
-              Permitir sempre neste projeto
+              {t('Permitir sempre neste projeto')}
             </button>
           )}
           {isTerminalGrantable(action) && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_tab_terminal')}>
-              Liberar teclas e shell nesta aba
+              {t('Liberar teclas e shell nesta aba')}
             </button>
           )}
           {(isTerminalGrantable(action) || isBoardGrantable(action)) && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_project_all')}>
-              Liberar tudo neste projeto
+              {t('Liberar tudo neste projeto')}
             </button>
           )}
           {standingKind && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_project_always')}>
-              Liberar sem prazo: {STANDING_KIND_LABEL[standingKind]} neste projeto
+              {t('Liberar sem prazo: {{kind}} neste projeto', { kind: STANDING_KIND_LABEL[standingKind] })}
             </button>
           )}
           <button type="button" className="btn-danger" disabled={deciding} onClick={() => onDecide(action.id, 'deny')}>
-            Recusar
+            {t('Recusar')}
           </button>
         </div>
       ) : stale ? (
@@ -152,14 +157,14 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
           <span>{stale}</span>
           {onRepropose && (
             <button type="button" className="btn-ghost text-xs" onClick={() => onRepropose(action)}>
-              Propor de novo
+              {t('Propor de novo')}
             </button>
           )}
         </p>
       ) : (
         <p className="mt-1 text-xs text-fg-dim">
-          {ACTION_STATUS_LABEL[action.status]}
-          {action.grant_id ? grantedLabel(action) : ''}
+          {t(ACTION_STATUS_LABEL[action.status])}
+          {action.grant_id ? ` ${grantedLabel(action)}` : ''}
         </p>
       )}
       {/* TER-641: sent without a click on a precedent from memory — apart from the allowance it ran under. */}
@@ -167,28 +172,28 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
       {grant && (
         <p className="mt-1 flex items-center gap-2 text-xs text-fg-dim">
           <span>
-            {grant.tool === 'terminal' ? 'Teclas e shell liberados nesta aba' : 'Permitido nesta aba'} {untilLabel(grant.expires_at)}
+            {grant.tool === 'terminal' ? t('Teclas e shell liberados nesta aba') : t('Permitido nesta aba')} {untilLabel(grant.expires_at)}
           </span>
           <button type="button" className="underline hover:text-fg" disabled={revoking} onClick={() => onRevoke?.(grant.id)}>
-            Revogar
+            {t('Revogar')}
           </button>
         </p>
       )}
       {projectGrant && (
         <p className="mt-1 flex items-center gap-2 text-xs text-fg-dim">
           <span>
-            {projectGrant.scope === 'all' ? 'Tudo liberado neste projeto' : 'Permitido neste projeto'} {untilLabel(projectGrant.expires_at)}
+            {projectGrant.scope === 'all' ? t('Tudo liberado neste projeto') : t('Permitido neste projeto')} {untilLabel(projectGrant.expires_at)}
           </span>
           <button type="button" className="underline hover:text-fg" disabled={revoking} onClick={() => onRevoke?.(projectGrant.id)}>
-            Revogar
+            {t('Revogar')}
           </button>
         </p>
       )}
       {standingGrant && (
         <p className="mt-1 flex items-center gap-2 text-xs text-fg-dim">
-          <span>{standingKindLabel(standingGrant.kind)} liberado neste projeto, sem prazo</span>
+          <span>{t('{{kind}} liberado neste projeto, sem prazo', { kind: standingKindLabel(standingGrant.kind) })}</span>
           <button type="button" className="underline hover:text-fg" disabled={revoking} onClick={() => onRevoke?.(standingGrant.id)}>
-            Revogar
+            {t('Revogar')}
           </button>
         </p>
       )}
