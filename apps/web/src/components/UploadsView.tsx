@@ -3,6 +3,7 @@ import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { UploadEntry, UploadMachineStatus } from '../lib/types';
 import { ConfirmDialog } from './Modal';
+import { formatDate as localDate, formatTime } from '../lib/format';
 
 /**
  * Settings → Arquivos: what is sitting in ~/.cache/termhub/paste/ on every machine (files pasted or
@@ -45,7 +46,7 @@ function formatBytes(n: number): string {
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  return `${localDate(d)} ${formatTime(d, { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 const UNKNOWN_USER = '__unknown__';

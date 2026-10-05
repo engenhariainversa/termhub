@@ -2,6 +2,7 @@ import type { RpcMethod, RpcParams, RpcResult } from '@termhub/agent-protocol';
 import * as ai from './ai.js';
 import * as claude from './claude.js';
 import * as docs from './docs.js';
+import * as fileList from './file-list.js';
 import * as fileRead from './file-read.js';
 import * as fs from './fs.js';
 import * as hooks from './hooks.js';
@@ -42,6 +43,7 @@ export const handlers: Handlers = {
   'docs.read': docs.read,
   'file.paste': paste.pasteFile,
   'file.read': fileRead.read,
+  'file.list': fileList.list,
   'hooks.install': hooks.install,
   'hooks.uninstall': hooks.uninstall,
   'agent.update': update.update,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import type { Device, DeviceEventView, User } from '../lib/types';
 import { ConfirmDialog } from './Modal';
+import { formatDateTime } from '../lib/format';
 
 type ReviewDays = 1 | 3 | 7;
 
@@ -11,7 +12,7 @@ const DAY_OPTIONS: Array<{ value: ReviewDays; label: string }> = [
   { value: 7, label: '7 dias' },
 ];
 
-const fmtDateTime = (iso: string) => new Date(iso).toLocaleString('pt-BR');
+const fmtDateTime = (iso: string) => formatDateTime(iso);
 
 /**
  * Settings → Usuários → Revisão (Task 17): the store-review switch for one account. While
