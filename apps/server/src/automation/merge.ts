@@ -20,7 +20,7 @@ import { epicBranchName, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
 import { CI_CAP, CONFLICT_CAP } from './escalation-text.js';
-import { recordEvent } from './events.js';
+import { claimEvent, recordEvent, settleEvent } from './events.js';
 import { defaultType, escalateDelivery, escalateRun } from './follower.js';
 import { clearMergeWait, noteMergeWait, type MergeWait } from './merge-wait.js';
 import { isPaused } from './pause.js';
@@ -399,13 +399,19 @@ const failingJobs = (row: TaskPullRequest) => {
   return names.length > 0 ? names.join(', ') : 'checks do PR';
 };
 
+/** A claim no colour settled within this long was left by a process that stopped mid-way: it may be taken again. */
+export const CI_CLAIM_STALE_MS = 10 * 60_000;
+
 /**
- * A red CI on the PR's head (spec D21, F-27): asked to fix once per head SHA — the `ci_fix_requested` event
- * of the card says the head was handled, whatever the outcome. Under `fix_attempts` (shared with the conflict
- * fixes): typed into the run that owns the PR when its tab can take it (`[termhub automático] O CI falhou
- * em <jobs>…`, `fix_count` bumped), else a fixer run keyed by the head when the card has no active run. An
- * active run whose tab cannot take a line now (a question, a limit, an exit) is left to the follower and
- * asked again at the next sync. At the cap: escalated, once per head. Only job names are sent, never logs.
+ * A red CI on the PR's head (spec D21, F-27): asked to fix once per head SHA. Pause, drain, `enabled` and
+ * the card's tag are read fresh first; then the card's `ci_fix_requested` event for (PR, SHA) is claimed —
+ * a unique index makes that insert the one claim across colours — before anything is typed, started or
+ * escalated, and settled with the outcome (`via`). Under `fix_attempts` (shared with the conflict fixes):
+ * typed into the run that owns the PR when its tab can take it (`[termhub automático] O CI falhou em
+ * <jobs>…`, then `fix_count` bumped), else a fixer run keyed by the head when the card has no active run.
+ * An active run whose tab cannot take a line now (a question, a limit, an exit), no place for the fixer, or
+ * a stop found right before typing gives the claim back: the next sync asks again. At the cap: escalated,
+ * once per head. Only job names are sent, never logs.
  */
 async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
   const { deps } = c;
@@ -413,48 +419,67 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
   const log = deps.log ?? noopLog;
   const task = c.primary;
   const sha = row.head_sha;
-  if (await repos.automationEvents.hasForTask(task.id, 'ci_fix_requested', { pr: row.number, sha })) return;
-  const handled = (via: 'typed' | 'fixer' | 'escalated', extra: Record<string, string | number> = {}) =>
-    recordEvent(repos, { project_id: c.project.id, task_id: task.id, kind: 'ci_fix_requested', payload: { pr: row.number, sha, url: row.url, via, ...extra } });
 
-  const used = await fixesUsed(repos, task.id);
-  if (used >= c.setup.automation.fix_attempts) {
-    waitOn(c, 'merge_ci_cap');
-    await handled('escalated', { attempts: used });
-    await escalateDelivery(repos, { project_id: c.project.id, task_id: task.id }, CI_CAP, log, { pr: row.number, url: row.url, sha, attempts: used });
-    return;
-  }
-
-  // D24 and the tag (spec §13), read fresh right before anything is typed or started
+  // D24 and the tag (spec §13), read fresh before anything is claimed, typed, started or escalated
   if (await stopped(c)) return;
   const fresh = await repos.tasks.findById(task.id);
   if (!fresh?.auto) return;
-  const jobs = failingJobs(row);
 
-  const owner = (await repos.automationRuns.activeByProject(c.project.id)).find((r) => r.task_id === task.id);
-  if (owner) {
-    if (owner.status !== 'running' || !owner.tab_id || owner.branch !== row.head_ref) return;
-    const tab = await repos.tabs.findById(owner.tab_id);
-    if (!tab || !takesLine(tab) || (await repos.tabQuestions.hasOpenQuestion(tab.id))) return;
-    const user = await repos.users.findById(c.project.owner_id);
-    if (!user) return;
-    if (await stopped(c)) return;
-    const count = await repos.automationRuns.bump(owner.id, 'fix_count');
-    await (deps.type ?? defaultType)(controlContextFor(repos, user), tab.id, serverMessage(`O CI falhou em ${jobs}. Corrija e faça push.`));
-    await repos.automationRuns.noteTyped(owner.id, now(deps));
-    await handled('typed', { run_id: owner.id, count });
-    log.info({ projectId: c.project.id, taskId: task.id, runId: owner.id, pr: row.number }, 'automation: red CI sent to the run that owns the PR');
-    return;
+  const key = { pr: row.number, sha };
+  const about = { project_id: c.project.id, task_id: task.id, kind: 'ci_fix_requested' as const };
+  let claim = await claimEvent(repos, { ...about, payload: { ...key, url: row.url, via: 'pending' } });
+  if (!claim) {
+    // a claim nobody settled (the process stopped mid-way) is taken again once it is stale
+    const stale = await repos.automationEvents.removeStale(task.id, 'ci_fix_requested', { ...key, via: 'pending' }, new Date(now(deps).getTime() - CI_CLAIM_STALE_MS));
+    if (stale === 0) return;
+    claim = await claimEvent(repos, { ...about, payload: { ...key, url: row.url, via: 'pending' } });
+    if (!claim) return;
   }
+  const held = claim;
+  const settle = (via: 'typed' | 'fixer' | 'escalated', extra: Record<string, string | number> = {}) => settleEvent(repos, held, { ...key, url: row.url, via, ...extra });
+  const giveBack = () => repos.automationEvents.remove(held.id);
 
-  const base = row.base_ref ?? c.baseBranch;
-  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${jobs}`, custom: c.setup.automation.prompts.fixer });
-  const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: sha, branch: row.head_ref, base, prompt });
-  // waiting for a place or halted: the next sync asks again. Taken: a fixer already holds this head (the other
-  // colour started it a moment ago), so the head is handled.
-  if (started === 'waiting' || started === 'halted') return;
-  await handled('fixer');
-  if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a red CI');
+  let acted = false;
+  try {
+    const used = await fixesUsed(repos, task.id);
+    if (used >= c.setup.automation.fix_attempts) {
+      waitOn(c, 'merge_ci_cap');
+      acted = true;
+      await settle('escalated', { attempts: used });
+      await escalateDelivery(repos, { project_id: c.project.id, task_id: task.id }, CI_CAP, log, { pr: row.number, url: row.url, sha, attempts: used });
+      return;
+    }
+    const jobs = failingJobs(row);
+
+    const owner = (await repos.automationRuns.activeByProject(c.project.id)).find((r) => r.task_id === task.id);
+    if (owner) {
+      if (owner.status !== 'running' || !owner.tab_id || owner.branch !== row.head_ref) return void (await giveBack());
+      const tab = await repos.tabs.findById(owner.tab_id);
+      if (!tab || !takesLine(tab) || (await repos.tabQuestions.hasOpenQuestion(tab.id))) return void (await giveBack());
+      const user = await repos.users.findById(c.project.owner_id);
+      if (!user || (await stopped(c))) return void (await giveBack());
+      await (deps.type ?? defaultType)(controlContextFor(repos, user), tab.id, serverMessage(`O CI falhou em ${jobs}. Corrija e faça push.`));
+      acted = true;
+      const count = await repos.automationRuns.bump(owner.id, 'fix_count');
+      await repos.automationRuns.noteTyped(owner.id, now(deps));
+      await settle('typed', { run_id: owner.id, count });
+      log.info({ projectId: c.project.id, taskId: task.id, runId: owner.id, pr: row.number }, 'automation: red CI sent to the run that owns the PR');
+      return;
+    }
+
+    const base = row.base_ref ?? c.baseBranch;
+    const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${jobs}`, custom: c.setup.automation.prompts.fixer });
+    const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: sha, branch: row.head_ref, base, prompt });
+    // waiting for a place or halted: the next sync asks again. Taken: a fixer already holds this head's trigger.
+    if (started === 'waiting' || started === 'halted') return void (await giveBack());
+    acted = true;
+    await settle('fixer');
+    if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a red CI');
+  } catch (e) {
+    // nothing reached the tab, the fixer or the person yet: the head is asked again at the next sync
+    if (!acted) await giveBack().catch(() => {});
+    throw e;
+  }
 }
 
 /** Whether a line typed into the tab reaches the agent now: it is on, and not on a limit, a swap or an exit. */

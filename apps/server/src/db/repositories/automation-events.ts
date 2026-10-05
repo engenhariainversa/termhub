@@ -91,13 +91,41 @@ export class AutomationEventsRepository {
     return this.db.automationEvent.count({ where: { runId, kind, createdAt: { gte: since } } });
   }
 
-  /** Whether the card has an event of `kind` whose payload holds every pair of `match` (the red-CI dedupe, F-27). */
-  async hasForTask(taskId: string, kind: AutomationEventKind, match: Record<string, string | number>): Promise<boolean> {
-    const row = await this.db.automationEvent.findFirst({
-      where: { taskId, kind, AND: Object.entries(match).map(([k, v]) => ({ payload: { path: [k], equals: v } })) },
-      select: { id: true },
+  /**
+   * Inserts the event unless a unique index already holds one like it: null then. Only `ci_fix_requested`
+   * has such an index (one per card, PR and head SHA: `automation_events_ci_fix_once`), which makes the row
+   * the red-CI loop's claim across colours (F-27).
+   */
+  async insertOnce(e: AutomationEventInput): Promise<AutomationEvent | null> {
+    try {
+      return await this.insert(e);
+    } catch (err) {
+      if ((err as { code?: string }).code === 'P2002') return null;
+      throw err;
+    }
+  }
+
+  /** Replaces the event's payload (a claim settled with its outcome); null when the row is gone. */
+  async setPayload(id: string, payload: AutomationEventPayload): Promise<AutomationEvent | null> {
+    const { count } = await this.db.automationEvent.updateMany({ where: { id }, data: { payload } });
+    if (count === 0) return null;
+    return map(await this.db.automationEvent.findUniqueOrThrow({ where: { id } }));
+  }
+
+  /** Deletes one event (a claim given back, so a later pass may take it again). */
+  async remove(id: string): Promise<void> {
+    await this.db.automationEvent.deleteMany({ where: { id } });
+  }
+
+  /**
+   * Deletes the card's events of `kind` whose payload holds every pair of `match` and that were written
+   * before `before`: a claim left behind by a process that died before it settled it. The number removed.
+   */
+  async removeStale(taskId: string, kind: AutomationEventKind, match: Record<string, string | number>, before: Date): Promise<number> {
+    const { count } = await this.db.automationEvent.deleteMany({
+      where: { taskId, kind, createdAt: { lt: before }, AND: Object.entries(match).map(([k, v]) => ({ payload: { path: [k], equals: v } })) },
     });
-    return row !== null;
+    return count;
   }
 
   /** Drops events older than `cutoff`; the number removed. */
