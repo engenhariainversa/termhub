@@ -7,7 +7,8 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { User } from '../db/repositories/types.js';
 import type { PushTestKind, PushTestResponse } from '@termhub/mobile-api';
 import { HttpError } from '../lib/errors.js';
-import { confirmationText, deviceRequestText, replyText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
+import { monitorBus, type TabStateChange } from '../monitor/bus.js';
+import { confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { SlidingWindow } from './rate-limit.js';
 import type { MobileSocketRegistry } from './revocation.js';
 
@@ -123,6 +124,10 @@ export class ExpoReceiptFetcher implements PushReceiptFetcher {
   }
 }
 
+/** "Aba terminou": one per tab in this window, and the pause before it is sent (TER-925). */
+export const TAB_FINISHED_WINDOW_MS = 5 * 60_000;
+export const TAB_FINISHED_SETTLE_MS = 5_000;
+
 /** A test push's receipt is read this long after the send, then once more if it was not ready. */
 export const TEST_RECEIPT_AFTER_MS = 15_000;
 export const TEST_RECEIPT_RETRY_MS = 60_000;
@@ -215,6 +220,17 @@ export class MobilePushService {
   /** Test pushes: six per minute per device (TER-913). */
   private readonly tests = new SlidingWindow(60_000, 6);
 
+  /** "Aba terminou" at most once per tab every five minutes (TER-925). */
+  private readonly finished = new SlidingWindow(TAB_FINISHED_WINDOW_MS, 1);
+
+  /** Tabs seen working since their last turn end. In memory: right after a deploy, the first turn end
+   * of a tab already working is not pushed (it was never seen working here). */
+  private readonly working = new Set<string>();
+
+  /** A turn end waits `TAB_FINISHED_SETTLE_MS` before it is pushed: a question card opening right
+   * after it, or the tab working again, cancels it. */
+  private readonly settling = new Map<string, ReturnType<typeof setTimeout>>();
+
   /** The live subscription's unsubscribe, so a second `start()` never subscribes twice. */
   private stop: (() => void) | null = null;
 
@@ -228,8 +244,12 @@ export class MobilePushService {
         this.deps.log.warn({ err: failureLabel(err), userId: event.user_id, conversationId: event.conversation_id, event: event.type }, 'mobile push failed'),
       );
     });
+    const unsubscribeTabs = monitorBus.subscribe((change) => this.onTabState(change));
     const stop = () => {
       unsubscribe();
+      unsubscribeTabs();
+      for (const timer of this.settling.values()) clearTimeout(timer);
+      this.settling.clear();
       if (this.stop === stop) this.stop = null;
     };
     this.stop = stop;
@@ -329,6 +349,51 @@ export class MobilePushService {
       }, delay).unref();
     };
     attempt([TEST_RECEIPT_AFTER_MS, TEST_RECEIPT_RETRY_MS]);
+  }
+
+  /** A tab that was working ended its turn (`waiting_input`) or its agent (`idle`): maybe "aba terminou". */
+  private onTabState({ tab, owner_id }: TabStateChange): void {
+    const pending = this.settling.get(tab.id);
+    if (tab.state === 'working') {
+      if (pending) clearTimeout(pending);
+      this.settling.delete(tab.id);
+      if (this.working.size > 10_000) this.working.clear();
+      this.working.add(tab.id);
+      return;
+    }
+    if (tab.state !== 'waiting_input' && tab.state !== 'idle') {
+      // A permission prompt or background work is still the same turn; an error ends it unannounced.
+      if (tab.state === 'error') this.working.delete(tab.id);
+      return;
+    }
+    if (!this.working.delete(tab.id) || !owner_id || pending) return;
+    const timer = setTimeout(() => {
+      this.settling.delete(tab.id);
+      void this.tabFinished(tab.id, owner_id).catch((err) => this.deps.log.warn({ err: failureLabel(err), userId: owner_id, tabId: tab.id }, 'mobile push failed'));
+    }, TAB_FINISHED_SETTLE_MS);
+    timer.unref();
+    this.settling.set(tab.id, timer);
+  }
+
+  /**
+   * "Aba terminou" (TER-925), only for an owner who turned it on in Ajustes: the tab still stopped, no
+   * question or permission card open on it (that one already said "precisa de você"), at most once per
+   * tab every five minutes. Goes where a reply goes (devices without a live socket; history kind
+   * `reply`, which every app version parses) with `data.tab_id`, so a newer app opens the tab; an older
+   * one opens the project's chat (`conversation_id`) or just the app.
+   */
+  private async tabFinished(tabId: string, ownerId: string): Promise<void> {
+    const { repos } = this.deps;
+    if (!(await repos.users.pushTabFinished(ownerId))) return;
+    const tab = await repos.tabs.findById(tabId);
+    if (!tab || (tab.state !== 'waiting_input' && tab.state !== 'idle')) return;
+    const open = await repos.tabQuestions.findOpenForTab(tabId);
+    if (open && open.kind !== 'suggestion') return;
+    if (!this.finished.take(tabId)) return;
+    const ctx = await this.names(ownerId, tab.project_id, tab.id, tab.machine_id);
+    const conversation = await repos.chat.findLatestActiveForProject(tab.project_id, ownerId);
+    const data = { kind: 'tab_finished', tab_id: tab.id, project_id: tab.project_id, ...(conversation ? { conversation_id: conversation.id } : {}) };
+    await this.deliver(ownerId, 'reply', tabFinishedText(ctx), data, await this.offline(ownerId), `tab:${tab.id}`);
   }
 
   private async handle(event: ChatEvent): Promise<void> {

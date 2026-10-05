@@ -38,6 +38,13 @@ export function deviceRequestText(r: { model: string; city: string | null; count
   return { title: 'Novo aparelho pede acesso', body: `${who} pediu acesso à sua conta. Confira o código e aprove ou recuse na web.` };
 }
 
+/** A tab finished its turn (TER-925, opt-in): which tab, never what it did. */
+export function tabFinishedText(ctx: PushContext): PushText {
+  const tab = ctx.tabName ? `A aba ${ctx.tabName}` : 'Uma aba';
+  const where = ctx.machineName ? ` (${ctx.machineName})` : '';
+  return { title: ctx.projectName ? `${ctx.projectName}: aba terminou` : 'Aba terminou', body: `${tab}${where} terminou e espera você.` };
+}
+
 /** A tab asked something in a project's chat (spec 2026-09-25 §6.1): which tab, never what it asked. */
 export function tabQuestionText(ctx: PushContext, kind: 'choice' | 'permission'): PushText {
   const tab = ctx.tabName ? `A aba ${ctx.tabName}` : 'Uma aba';

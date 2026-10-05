@@ -44,6 +44,7 @@ export type UserMinAggregateOutputType = {
   chatSuggestions: boolean | null
   chatAutodecide: boolean | null
   chatCodexReplies: boolean | null
+  pushTabFinished: boolean | null
   deletionRequestedAt: Date | null
   deletionScheduledAt: Date | null
 }
@@ -68,6 +69,7 @@ export type UserMaxAggregateOutputType = {
   chatSuggestions: boolean | null
   chatAutodecide: boolean | null
   chatCodexReplies: boolean | null
+  pushTabFinished: boolean | null
   deletionRequestedAt: Date | null
   deletionScheduledAt: Date | null
 }
@@ -92,6 +94,7 @@ export type UserCountAggregateOutputType = {
   chatSuggestions: number
   chatAutodecide: number
   chatCodexReplies: number
+  pushTabFinished: number
   deletionRequestedAt: number
   deletionScheduledAt: number
   _all: number
@@ -118,6 +121,7 @@ export type UserMinAggregateInputType = {
   chatSuggestions?: true
   chatAutodecide?: true
   chatCodexReplies?: true
+  pushTabFinished?: true
   deletionRequestedAt?: true
   deletionScheduledAt?: true
 }
@@ -142,6 +146,7 @@ export type UserMaxAggregateInputType = {
   chatSuggestions?: true
   chatAutodecide?: true
   chatCodexReplies?: true
+  pushTabFinished?: true
   deletionRequestedAt?: true
   deletionScheduledAt?: true
 }
@@ -166,6 +171,7 @@ export type UserCountAggregateInputType = {
   chatSuggestions?: true
   chatAutodecide?: true
   chatCodexReplies?: true
+  pushTabFinished?: true
   deletionRequestedAt?: true
   deletionScheduledAt?: true
   _all?: true
@@ -263,6 +269,7 @@ export type UserGroupByOutputType = {
   chatSuggestions: boolean
   chatAutodecide: boolean
   chatCodexReplies: boolean
+  pushTabFinished: boolean
   deletionRequestedAt: Date | null
   deletionScheduledAt: Date | null
   _count: UserCountAggregateOutputType | null
@@ -308,6 +315,7 @@ export type UserWhereInput = {
   chatSuggestions?: Prisma.BoolFilter<"User"> | boolean
   chatAutodecide?: Prisma.BoolFilter<"User"> | boolean
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
+  pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   roleRef?: Prisma.XOR<Prisma.RoleNullableScalarRelationFilter, Prisma.RoleWhereInput> | null
@@ -350,6 +358,7 @@ export type UserOrderByWithRelationInput = {
   chatSuggestions?: Prisma.SortOrder
   chatAutodecide?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
+  pushTabFinished?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrderInput | Prisma.SortOrder
   roleRef?: Prisma.RoleOrderByWithRelationInput
@@ -395,6 +404,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   chatSuggestions?: Prisma.BoolFilter<"User"> | boolean
   chatAutodecide?: Prisma.BoolFilter<"User"> | boolean
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
+  pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   roleRef?: Prisma.XOR<Prisma.RoleNullableScalarRelationFilter, Prisma.RoleWhereInput> | null
@@ -437,6 +447,7 @@ export type UserOrderByWithAggregationInput = {
   chatSuggestions?: Prisma.SortOrder
   chatAutodecide?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
+  pushTabFinished?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.UserCountOrderByAggregateInput
@@ -467,6 +478,7 @@ export type UserScalarWhereWithAggregatesInput = {
   chatSuggestions?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   chatAutodecide?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   chatCodexReplies?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
+  pushTabFinished?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   deletionRequestedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
 }
@@ -490,6 +502,7 @@ export type UserCreateInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -532,6 +545,7 @@ export type UserUncheckedCreateInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -572,6 +586,7 @@ export type UserUpdateInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -614,6 +629,7 @@ export type UserUncheckedUpdateInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -655,6 +671,7 @@ export type UserCreateManyInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
 }
@@ -678,6 +695,7 @@ export type UserUpdateManyMutationInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
@@ -702,6 +720,7 @@ export type UserUncheckedUpdateManyInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
@@ -726,6 +745,7 @@ export type UserCountOrderByAggregateInput = {
   chatSuggestions?: Prisma.SortOrder
   chatAutodecide?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
+  pushTabFinished?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrder
 }
@@ -750,6 +770,7 @@ export type UserMaxOrderByAggregateInput = {
   chatSuggestions?: Prisma.SortOrder
   chatAutodecide?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
+  pushTabFinished?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrder
 }
@@ -774,6 +795,7 @@ export type UserMinOrderByAggregateInput = {
   chatSuggestions?: Prisma.SortOrder
   chatAutodecide?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
+  pushTabFinished?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrder
 }
@@ -1133,6 +1155,7 @@ export type UserCreateWithoutRoleRefInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -1173,6 +1196,7 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -1243,6 +1267,7 @@ export type UserScalarWhereInput = {
   chatSuggestions?: Prisma.BoolFilter<"User"> | boolean
   chatAutodecide?: Prisma.BoolFilter<"User"> | boolean
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
+  pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
 }
@@ -1266,6 +1291,7 @@ export type UserCreateWithoutSessionsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -1307,6 +1333,7 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -1362,6 +1389,7 @@ export type UserUpdateWithoutSessionsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -1403,6 +1431,7 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -1442,6 +1471,7 @@ export type UserCreateWithoutMachinesInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -1483,6 +1513,7 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -1538,6 +1569,7 @@ export type UserUpdateWithoutMachinesInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -1579,6 +1611,7 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -1618,6 +1651,7 @@ export type UserCreateWithoutProjectsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -1659,6 +1693,7 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -1714,6 +1749,7 @@ export type UserUpdateWithoutProjectsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -1755,6 +1791,7 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -1794,6 +1831,7 @@ export type UserCreateWithoutIntegrationsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -1835,6 +1873,7 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -1890,6 +1929,7 @@ export type UserUpdateWithoutIntegrationsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -1931,6 +1971,7 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -1970,6 +2011,7 @@ export type UserCreateWithoutUploadsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -2011,6 +2053,7 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -2066,6 +2109,7 @@ export type UserUpdateWithoutUploadsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -2107,6 +2151,7 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -2146,6 +2191,7 @@ export type UserCreateWithoutApiTokensInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -2187,6 +2233,7 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -2242,6 +2289,7 @@ export type UserUpdateWithoutApiTokensInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -2283,6 +2331,7 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -2322,6 +2371,7 @@ export type UserCreateWithoutChatConversationsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -2363,6 +2413,7 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -2418,6 +2469,7 @@ export type UserUpdateWithoutChatConversationsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -2459,6 +2511,7 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -2498,6 +2551,7 @@ export type UserCreateWithoutChatAttachmentsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -2539,6 +2593,7 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -2594,6 +2649,7 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -2635,6 +2691,7 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -2674,6 +2731,7 @@ export type UserCreateWithoutStandingGrantsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -2715,6 +2773,7 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -2770,6 +2829,7 @@ export type UserUpdateWithoutStandingGrantsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -2811,6 +2871,7 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -2850,6 +2911,7 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -2891,6 +2953,7 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -2946,6 +3009,7 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -2987,6 +3051,7 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -3026,6 +3091,7 @@ export type UserCreateWithoutChatDecisionsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -3067,6 +3133,7 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -3122,6 +3189,7 @@ export type UserUpdateWithoutChatDecisionsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -3163,6 +3231,7 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -3202,6 +3271,7 @@ export type UserCreateWithoutMemoryItemsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -3243,6 +3313,7 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -3287,6 +3358,7 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -3328,6 +3400,7 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -3383,6 +3456,7 @@ export type UserUpdateWithoutMemoryItemsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -3424,6 +3498,7 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -3474,6 +3549,7 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -3515,6 +3591,7 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -3554,6 +3631,7 @@ export type UserCreateWithoutProjectGroupsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -3595,6 +3673,7 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -3650,6 +3729,7 @@ export type UserUpdateWithoutProjectGroupsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -3691,6 +3771,7 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -3730,6 +3811,7 @@ export type UserCreateWithoutDeviceRequestsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -3771,6 +3853,7 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -3826,6 +3909,7 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -3867,6 +3951,7 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -3906,6 +3991,7 @@ export type UserCreateWithoutDevicesInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -3947,6 +4033,7 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -4002,6 +4089,7 @@ export type UserUpdateWithoutDevicesInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -4043,6 +4131,7 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -4082,6 +4171,7 @@ export type UserCreateWithoutNotificationsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
@@ -4123,6 +4213,7 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
@@ -4178,6 +4269,7 @@ export type UserUpdateWithoutNotificationsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
@@ -4219,6 +4311,7 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -4258,6 +4351,7 @@ export type UserCreateManyRoleRefInput = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
 }
@@ -4281,6 +4375,7 @@ export type UserUpdateWithoutRoleRefInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -4321,6 +4416,7 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
@@ -4361,6 +4457,7 @@ export type UserUncheckedUpdateManyWithoutRoleRefInput = {
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
@@ -4560,6 +4657,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
@@ -4603,6 +4701,7 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
@@ -4628,6 +4727,7 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
@@ -4653,11 +4753,12 @@ export type UserSelectScalar = {
   chatSuggestions?: boolean
   chatAutodecide?: boolean
   chatCodexReplies?: boolean
+  pushTabFinished?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatCodexReplies" | "deletionRequestedAt" | "deletionScheduledAt", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatCodexReplies" | "pushTabFinished" | "deletionRequestedAt" | "deletionScheduledAt", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
@@ -4759,6 +4860,10 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
      * "Responder perguntas do Codex pelo chat": off by default, the Codex reply card opens only for users who opt in.
      */
     chatCodexReplies: boolean
+    /**
+     * Push "aba terminou" to the phone (TER-925): opt-in, off by default.
+     */
+    pushTabFinished: boolean
     /**
      * Self-service deletion (TER-720): when the person asked; the account is deactivated from then on.
      */
@@ -5227,6 +5332,7 @@ export interface UserFieldRefs {
   readonly chatSuggestions: Prisma.FieldRef<"User", 'Boolean'>
   readonly chatAutodecide: Prisma.FieldRef<"User", 'Boolean'>
   readonly chatCodexReplies: Prisma.FieldRef<"User", 'Boolean'>
+  readonly pushTabFinished: Prisma.FieldRef<"User", 'Boolean'>
   readonly deletionRequestedAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly deletionScheduledAt: Prisma.FieldRef<"User", 'DateTime'>
 }
