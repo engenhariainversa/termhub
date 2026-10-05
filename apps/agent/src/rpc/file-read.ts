@@ -55,7 +55,8 @@ export function placeIn(file: string, roots: string[]): 'ok' | 'hidden' | 'outsi
   return hidden ? 'hidden' : 'outside';
 }
 
-const allowedType = (p: string) => (FILE_READ_EXTENSIONS as readonly string[]).includes(path.extname(p).toLowerCase());
+/** Whether `p` ends in one of `extensions` (lowercase compare). */
+export const allowedType = (p: string, extensions: readonly string[] = FILE_READ_EXTENSIONS) => extensions.includes(path.extname(p).toLowerCase());
 
 function errno(e: unknown): string | undefined {
   return (e as NodeJS.ErrnoException)?.code;
@@ -76,33 +77,61 @@ export interface FileReadPlaces {
   tmp: string[];
 }
 
-/** A text file the person asked to preview (spec 2026-10-04 file preview). Nothing of its body is logged. */
-export function read(params: RpcParams<'file.read'>): Promise<Result> {
-  return readWithin(params, { home: os.homedir(), tmp: [os.tmpdir(), '/tmp'] });
+/** Every allowed folder, as written and resolved (links followed; a folder that does not exist drops out). */
+export interface AllowedFolders {
+  home: string;
+  lexical: string[];
+  real: string[];
 }
 
-export async function readWithin(params: RpcParams<'file.read'>, places: FileReadPlaces): Promise<Result> {
-  const { home } = places;
-  const roots = lexicalRoots([...params.roots, ...(await configuredRoots())], home, places.tmp);
-  const asked = path.resolve(expandHome(params.path, home));
+/** The folders a path may sit in: `given` (the project folders the server sent), the owner's
+ *  `~/.termhub/file-read-roots`, home and the temp dirs. */
+export async function allowedFolders(given: string[], places: FileReadPlaces): Promise<AllowedFolders> {
+  const lexical = lexicalRoots([...given, ...(await configuredRoots())], places.home, places.tmp);
+  const real = (await Promise.all(lexical.map((r) => realpath(r).catch(() => null)))).filter((r): r is string => r !== null && r !== '/');
+  return { home: places.home, lexical, real };
+}
 
+export type Vetted = { ok: true; asked: string; real: string } | { ok: false; status: 'outside' | 'hidden' | 'type' };
+
+/**
+ * Checks 1 and 2 of `file.read`, shared with `file.list`: the path as written (`~/` expanded) and the file it
+ * resolves to (links followed) must each sit under a folder with no dot segment below it and end in one of
+ * `extensions`. Throws the `realpath` error (missing file, no permission) to the caller. Never opens the file.
+ */
+export async function vetPath(p: string, folders: AllowedFolders, extensions: readonly string[]): Promise<Vetted> {
+  const asked = path.resolve(expandHome(p, folders.home));
   // 1. The path as written: under a folder, no dot segment, an allowed extension.
-  const lexical = placeIn(asked, roots);
-  if (lexical !== 'ok') return refuse(lexical);
-  if (!allowedType(asked)) return refuse('type');
-
+  const lexical = placeIn(asked, folders.lexical);
+  if (lexical !== 'ok') return { ok: false, status: lexical };
+  if (!allowedType(asked, extensions)) return { ok: false, status: 'type' };
   // 2. The file it resolves to, links followed: the same three checks against the folders' real paths,
   //    so a link inside the project that points at ~/.ssh or /etc is refused.
+  const real = await realpath(asked);
+  const resolved = placeIn(real, folders.real);
+  if (resolved !== 'ok') return { ok: false, status: resolved };
+  if (!allowedType(real, extensions)) return { ok: false, status: 'type' };
+  return { ok: true, asked, real };
+}
+
+/** A text file the person asked to preview (spec 2026-10-04 file preview). Nothing of its body is logged. */
+export function read(params: RpcParams<'file.read'>): Promise<Result> {
+  return readWithin(params, machinePlaces());
+}
+
+/** This machine's home and temp dirs. */
+export const machinePlaces = (): FileReadPlaces => ({ home: os.homedir(), tmp: [os.tmpdir(), '/tmp'] });
+
+export async function readWithin(params: RpcParams<'file.read'>, places: FileReadPlaces): Promise<Result> {
+  const folders = await allowedFolders(params.roots, places);
   let real: string;
   try {
-    real = await realpath(asked);
+    const v = await vetPath(params.path, folders, FILE_READ_EXTENSIONS);
+    if (!v.ok) return refuse(v.status);
+    real = v.real;
   } catch (e) {
     return fsRefusal(e);
   }
-  const realRoots = (await Promise.all(roots.map((r) => realpath(r).catch(() => null)))).filter((r): r is string => r !== null && r !== '/');
-  const resolved = placeIn(real, realRoots);
-  if (resolved !== 'ok') return refuse(resolved);
-  if (!allowedType(real)) return refuse('type');
 
   // 3. A regular file, checked before opening (a FIFO would block the open) and again on the handle.
   try {

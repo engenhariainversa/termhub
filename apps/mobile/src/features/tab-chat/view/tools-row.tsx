@@ -1,23 +1,25 @@
 import { memo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { tk, useTranslation } from '@/i18n';
 import { AppText, Icon, type IconName } from '@/ui';
 import type { ToolRow } from '../model/timeline';
 
 export const MONOSPACE = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
 const STATUS: Record<ToolRow['status'], { label: string; icon: IconName; tone: string }> = {
-  running: { label: 'em andamento', icon: { ios: 'circle.dotted', android: 'pending' }, tone: 'accent' },
-  done: { label: 'concluída', icon: { ios: 'checkmark', android: 'check' }, tone: 'muted' },
-  error: { label: 'erro', icon: { ios: 'xmark', android: 'close' }, tone: 'danger' },
+  running: { label: tk('em andamento'), icon: { ios: 'circle.dotted', android: 'pending' }, tone: 'accent' },
+  done: { label: tk('concluída'), icon: { ios: 'checkmark', android: 'check' }, tone: 'muted' },
+  error: { label: tk('erro'), icon: { ios: 'xmark', android: 'close' }, tone: 'danger' },
 };
 
 /** One tool: its mark, name and summary; a tap shows its result's preview in monospace. */
 function ToolLine({ tool }: { tool: ToolRow }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const status = STATUS[tool.status];
   return (
     <View className="gap-1">
-      <Pressable accessibilityRole="button" accessibilityLabel={`${tool.name}: ${status.label}`} onPress={() => setOpen((o) => !o)} className="flex-row items-center gap-2 py-1">
+      <Pressable accessibilityRole="button" accessibilityLabel={`${tool.name}: ${t(status.label)}`} onPress={() => setOpen((o) => !o)} className="flex-row items-center gap-2 py-1">
         <Icon name={status.icon} size={12} tone={status.tone} />
         <Text className="text-sm font-semibold text-app-text">{tool.name}</Text>
         {tool.summary ? (
@@ -40,6 +42,7 @@ function ToolLine({ tool }: { tool: ToolRow }) {
 /** Consecutive tool calls folded in one row (spec 2026-10-01 tab chat §6): "3 ferramentas", opening to
  * one line per tool. A tool alone is its own line, with no count. */
 export const ToolsRow = memo(function ToolsRow({ tools }: { tools: ToolRow[] }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   if (tools.length === 1) {
     return (
@@ -48,17 +51,17 @@ export const ToolsRow = memo(function ToolsRow({ tools }: { tools: ToolRow[] }) 
       </View>
     );
   }
-  const running = tools.some((t) => t.status === 'running');
-  const failed = tools.some((t) => t.status === 'error');
-  const label = `${tools.length} ferramentas`;
+  const running = tools.some((x) => x.status === 'running');
+  const failed = tools.some((x) => x.status === 'error');
+  const label = t('{{count}} ferramentas', { count: tools.length });
   return (
     <View className="self-start gap-1 rounded-xl border border-app-border px-3 py-1">
       <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded: open }} onPress={() => setOpen((o) => !o)} className="flex-row items-center gap-2 py-1">
         <Icon name={open ? { ios: 'chevron.down', android: 'expand_more' } : { ios: 'chevron.right', android: 'chevron_right' }} size={12} tone="muted" />
         <AppText variant="muted">{label}</AppText>
-        {running ? <AppText variant="muted" className="text-app-accent">em andamento</AppText> : failed ? <AppText variant="muted" className="text-app-danger">com erro</AppText> : null}
+        {running ? <AppText variant="muted" className="text-app-accent">{t('em andamento')}</AppText> : failed ? <AppText variant="muted" className="text-app-danger">{t('com erro')}</AppText> : null}
       </Pressable>
-      {open ? tools.map((t) => <ToolLine key={t.id} tool={t} />) : null}
+      {open ? tools.map((x) => <ToolLine key={x.id} tool={x} />) : null}
     </View>
   );
 });

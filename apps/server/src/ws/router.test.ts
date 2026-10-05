@@ -155,6 +155,45 @@ describe('createUpgradeRouter', () => {
     expect(outcome.firstMessage).toBe('abc123');
   });
 
+  describe('canWrite', () => {
+    let cwServer: http.Server;
+    let cwWss: WebSocketServer;
+    let cwPort: number;
+
+    beforeEach(async () => {
+      cwServer = http.createServer();
+      const router = createUpgradeRouter(cwServer, { auth: {} as AuthContext });
+      cwWss = new WebSocketServer({ noServer: true });
+      router.add(/^\/ws\/cw$/, ({ req, socket, head, canWrite }) => {
+        cwWss.handleUpgrade(req, socket, head, (ws) => {
+          cwWss.emit('connection', ws, req);
+          ws.send(String(canWrite));
+        });
+      });
+      cwPort = await listen(cwServer);
+    });
+
+    afterEach(async () => {
+      cwWss.close();
+      await shutdown(cwServer);
+    });
+
+    it('hands the handler canWrite: true for a user with terminals:write', async () => {
+      resolveUserMock.mockResolvedValue({ id: 'u1' });
+      const outcome = await attempt(`ws://127.0.0.1:${cwPort}/ws/cw`);
+      expect(outcome.firstMessage).toBe('true');
+      expect(canAccessMock).toHaveBeenCalledWith(undefined, { id: 'u1' }, 'terminals', 'write');
+    });
+
+    it('still opens for a user with terminals:read only, with canWrite: false', async () => {
+      resolveUserMock.mockResolvedValue({ id: 'u1' });
+      canAccessMock.mockImplementation(async (_r: unknown, _u: unknown, _res: string, action: string) => action === 'read');
+      const outcome = await attempt(`ws://127.0.0.1:${cwPort}/ws/cw`);
+      expect(outcome.opened).toBe(true);
+      expect(outcome.firstMessage).toBe('false');
+    });
+  });
+
   describe('addPublic', () => {
     let pubServer: http.Server;
     let pubWss: WebSocketServer;

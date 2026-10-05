@@ -1,4 +1,5 @@
 import { Pressable, ScrollView, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { AppText, Sheet } from '@/ui';
 import { elapsedLabel, SUBAGENT_STATUS_LABEL } from '../model/subagents';
 import type { SubagentView } from '../model/types';
@@ -6,9 +7,10 @@ import type { SubagentView } from '../model/types';
 /** A raw `Pressable`, not the shared `Button`: several rows can each show "Cancelar", so the
  * accessibility name needs to name which one (spec 2026-09-26 panel §4, lesson from the web review). */
 function CancelButton({ description, onPress }: { description: string; onPress(): void }) {
+  const { t } = useTranslation();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`Cancelar ${description}`} onPress={onPress} className="self-start rounded-xl bg-app-surface2 px-4 py-2">
-      <AppText>Cancelar</AppText>
+    <Pressable accessibilityRole="button" accessibilityLabel={t('Cancelar {{description}}', { description })} onPress={onPress} className="self-start rounded-xl bg-app-surface2 px-4 py-2">
+      <AppText>{t('Cancelar')}</AppText>
     </Pressable>
   );
 }
@@ -32,17 +34,18 @@ export interface SubagentsSheetProps {
  * stays up while this is open (`conversation-screen.tsx`), and `Sheet`'s own backdrop closes it too.
  */
 export function SubagentsSheet({ open, onClose, subagents, cancelFailed, onCancel, now }: SubagentsSheetProps) {
-  const t = now ?? Date.now();
+  const { t } = useTranslation();
+  const at = now ?? Date.now();
   return (
-    <Sheet open={open} onClose={onClose} title="Subagentes">
+    <Sheet open={open} onClose={onClose} title={t('Subagentes')}>
       <ScrollView className="max-h-96">
         <View className="gap-3">
           {subagents.map((s) => (
             <View key={s.id} className="gap-1 rounded-xl bg-app-surface2 px-4 py-3">
               <AppText>{s.description}</AppText>
-              <AppText variant="muted">{`${SUBAGENT_STATUS_LABEL[s.status]} · ${elapsedLabel(s, t)}`}</AppText>
+              <AppText variant="muted">{`${SUBAGENT_STATUS_LABEL[s.status]} · ${elapsedLabel(s, at)}`}</AppText>
               {s.status === 'running' ? <CancelButton description={s.description} onPress={() => onCancel(s.id)} /> : null}
-              {cancelFailed.includes(s.id) ? <AppText className="text-app-danger">Não foi possível cancelar</AppText> : null}
+              {cancelFailed.includes(s.id) ? <AppText className="text-app-danger">{t('Não foi possível cancelar')}</AppText> : null}
             </View>
           ))}
         </View>

@@ -55,6 +55,10 @@ const subtaskItems = z.array(z.object({ title: taskTitle, description: taskDescr
 const precedentInput = { sources: z.array(z.string().regex(MEMORY_REF)).min(1).max(10).optional(), reason: z.string().trim().min(1).max(500).optional() };
 const PRECEDENT_NOTE = 'When you send this on a precedent from memory, pass the search_memory refs you followed in sources and a short reason in the person\'s language: the chat shows it as an automatic decision. Leave both out otherwise.';
 
+/** TER-851: how the concierge relays the person's order so the tab can tell it is theirs. */
+const ON_BEHALF_NOTE =
+  "The tab's session is told who wrote each text: without on_behalf_of, what you send reads as your own words, not the person's. When you relay something the person asked for, pass on_behalf_of with the search_memory refs (message:…, kinds [\"message\"]) of their chat messages that ask for it, at most 24 h old; the tab sees their exact words next to your text. Never write in the person's name (\"<name> aqui…\", \"<name> autorizou…\"): say what to do and let the quote carry the authority.";
+
 /** The object schema a tool's arguments are validated against — by `parseArgs` and by the MCP SDK. */
 export function inputSchemaOf(tool: ToolDef) {
   const schema = z.object(tool.input);
@@ -150,10 +154,17 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'send_input',
-    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. ${PRECEDENT_NOTE}`,
+    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. ${PRECEDENT_NOTE} ${ON_BEHALF_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
-    input: { tab_id: id, text: z.string().max(INPUT_MAX_CHARS), enter: z.boolean().optional(), answering_permission: z.boolean().optional(), ...precedentInput },
-    run: (ctx, a) => sendInput(ctx, a as { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean }),
+    input: {
+      tab_id: id,
+      text: z.string().max(INPUT_MAX_CHARS),
+      enter: z.boolean().optional(),
+      answering_permission: z.boolean().optional(),
+      ...precedentInput,
+      on_behalf_of: z.array(z.string().regex(/^message:[a-z0-9]{1,64}$/)).min(1).max(3).optional(),
+    },
+    run: (ctx, a) => sendInput(ctx, a as { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean; on_behalf_of?: string[] }),
   },
   {
     name: 'send_key',
@@ -326,11 +337,11 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'create_task',
-    description: `Create a card at the top of a column (default the first todo column; an epic defaults to the backlog), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). Returns the card with its ref and url, and the board URL.`,
+    description: `Create a card at the top of a column (default the first todo column; an epic defaults to the backlog), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). auto: true tags it for automatic work (\"automático\"); a card created in an automatic epic is tagged anyway. Returns the card with its ref and url, and the board URL.`,
     scope: 'tasks', resource: 'tasks', action: 'create',
-    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), subtasks: subtaskItems.optional() },
+    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), auto: z.boolean().optional(), subtasks: subtaskItems.optional() },
     run: (ctx, a) =>
-      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; subtasks?: { title: string; description?: string | null }[] }),
+      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; subtasks?: { title: string; description?: string | null }[] }),
   },
   {
     name: 'add_subtasks',
@@ -342,10 +353,10 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'update_task',
     description:
-      'Change the title, description (null clears it), status, type (story, task, bug or spike; a card with subtasks stays a story or task) or epic_id of a card, or the title/description/status of a subtask. Changing the status of a top-level card moves it to the top of the first column of that category (backlog: of its epic backlog).',
+      'Change the title, description (null clears it), status, type (story, task, bug or spike; a card with subtasks stays a story or task) or epic_id of a card, or the title/description/status of a subtask. auto: true marks the card for automatic work (tag "automático"); on an epic it marks or clears every card of the epic. Subtasks never carry the tag. Changing the status of a top-level card moves it to the top of the first column of that category (backlog: of its epic backlog).',
     scope: 'tasks', resource: 'tasks', action: 'update',
-    input: { task_id: id, title: taskTitle.optional(), description: taskDescription.optional(), status: taskStatus.optional(), type: workType.optional(), epic_id: id.optional() },
-    run: (ctx, a) => updateTask(ctx, a as { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string }),
+    input: { task_id: id, title: taskTitle.optional(), description: taskDescription.optional(), status: taskStatus.optional(), type: workType.optional(), epic_id: id.optional(), auto: z.boolean().optional() },
+    run: (ctx, a) => updateTask(ctx, a as { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean }),
   },
   {
     name: 'move_task',
@@ -427,7 +438,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'get_project_setup',
     description:
-      "Read a project's repository setup: the GitHub integration, the repository (owner/repo), the base branch and the deploy workflow (the GitHub Actions workflow whose run on a merge is the deploy; null = not tracked), with the integration's name and login.",
+      "Read a project's repository setup: the GitHub integration, the repository (owner/repo), the base branch and the deploy workflow (the GitHub Actions workflow whose run on a merge is the deploy; null = not tracked), with the integration's name and login. Also returns the `automation` block (agentic board settings: enabled, autonomy level, eligible card types, release/store paths and limits).",
     scope: 'read', resource: 'projects', action: 'read',
     input: { project_id: id },
     run: (ctx, a) => getProjectSetup(ctx, a as { project_id: string }),

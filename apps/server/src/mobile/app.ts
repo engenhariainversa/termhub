@@ -18,12 +18,13 @@ import { progressRoutes } from '../routes/progress.js';
 import { projectAiRoutes } from '../routes/project-ai.js';
 import { mobileSessionRoutes } from '../routes/m-session.js';
 import { filePreviewRoutes } from '../routes/file-preview.js';
+import { fileRecentRoutes } from '../routes/file-recent.js';
 import { mobileTabRoutes } from '../routes/m-tabs.js';
 import { mobileTranscriptionRoutes } from '../routes/m-transcriptions.js';
 import { buildMobileAuthHook, type MobileAuthMode } from './auth.js';
 import { JtiCache } from './dpop.js';
 import { EnrolmentService } from './enrolment.js';
-import { ExpoPushSender, MobilePushService } from './push.js';
+import { ExpoPushSender, ExpoReceiptFetcher, MobilePushService, startPushReceiptSweeper } from './push.js';
 import { MobileSocketRegistry, revokeDevice } from './revocation.js';
 import { SessionService } from './session.js';
 import type { AccountDeletionService } from '../account/deletion.js';
@@ -102,8 +103,11 @@ export async function registerMobileApi(
   const tabWs = registerMobileTabWs(deps.upgrades, { repos: deps.repos, jtis: services.jtis, publicUrl, sockets: services.sockets, hub: deps.tabChat, log: deps.log });
   // Pending actions and finished answers become push notifications while the server runs.
   const stopPush = services.push.start();
+  // Their receipts, ~15 min later: dead tokens and APNs/FCM credential errors (TER-924).
+  const stopReceipts = startPushReceiptSweeper({ repos: deps.repos, receipts: new ExpoReceiptFetcher(mobile.expoPushToken ?? null), log: deps.log });
   fastify.addHook('onClose', async () => {
     stopPush();
+    stopReceipts();
     chatWs.close();
     tabWs.close();
   });
@@ -163,6 +167,7 @@ export async function registerMobileApi(
         await guarded('terminals', (a) => mobileTabRoutes(a, deps.repos, { hub: deps.tabChat }), '/tabs');
         // A file an agent wrote, previewed from its path (spec 2026-10-04 file preview): the web's route.
         await guarded('terminals', (a) => filePreviewRoutes(a, deps.repos), '/file-preview');
+        await guarded('terminals', (a) => fileRecentRoutes(a, deps.repos), '/file-recent');
       }
 
       await mobileRoutes(guardedMobile);

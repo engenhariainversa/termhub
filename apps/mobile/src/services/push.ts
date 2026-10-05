@@ -4,6 +4,7 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import { t } from '@/i18n';
 
 /** Android's channel for every push: the Expo Push Service delivers to `default` when a message names
  * none, and the server never names one. */
@@ -31,7 +32,7 @@ export type NotificationStatus = 'granted' | 'denied' | 'undetermined';
  * prompt once a channel exists (a no-op on iOS). */
 async function ensureChannel(): Promise<void> {
   await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL, {
-    name: 'Notificações',
+    name: t('Notificações'),
     importance: Notifications.AndroidImportance.HIGH,
   });
 }

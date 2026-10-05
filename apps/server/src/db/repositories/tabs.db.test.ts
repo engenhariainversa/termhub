@@ -894,3 +894,65 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.recordEven
     expect(await secondsOf(card.id)).toBeGreaterThanOrEqual(59);
   });
 });
+
+describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.citedTexts (Postgres)', () => {
+  let db: PrismaClient;
+  let repo: TabsRepository;
+  let machineId: string;
+  let projectId: string;
+  let otherProjectId: string;
+
+  beforeAll(() => {
+    db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+    repo = new TabsRepository(db);
+  });
+
+  beforeEach(async () => {
+    machineId = newId();
+    projectId = newId();
+    otherProjectId = newId();
+    await db.machine.create({ data: { id: machineId, name: 'test', type: 'agent' } });
+    for (const id of [projectId, otherProjectId]) {
+      await db.project.create({ data: { id, key: 'K' + id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase(), name: 'p' } });
+      await db.projectMachine.create({ data: { id: newId(), projectId: id, machineId, cwd: '/tmp' } });
+    }
+    return async () => {
+      await db.project.deleteMany({ where: { id: { in: [projectId, otherProjectId] } } });
+      await db.machine.delete({ where: { id: machineId } });
+    };
+  });
+
+  afterAll(async () => {
+    await db?.$disconnect();
+  });
+
+  const tab = async (project: string) => {
+    const id = newId();
+    await db.tab.create({ data: { id, projectId: project, machineId, name: 't', tmuxSession: `th-${id}` } });
+    return id;
+  };
+  const at = (s: number) => new Date(Date.UTC(2026, 9, 4, 10, 0, s));
+
+  it("returns the project's last answers and newest event texts, newest first", async () => {
+    const t1 = await tab(projectId);
+    const t2 = await tab(otherProjectId);
+    await db.tabLastAnswer.create({ data: { tabId: t1, text: 'answer', tool: 'claude', at: at(30) } });
+    await db.tabEvent.createMany({
+      data: [
+        { id: newId(), tabId: t1, kind: 'idle', tool: 'claude', text: 'old', createdAt: at(1) },
+        { id: newId(), tabId: t1, kind: 'working', tool: 'claude', text: null, createdAt: at(2) },
+        { id: newId(), tabId: t1, kind: 'idle', tool: 'claude', text: 'mid', createdAt: at(10) },
+        { id: newId(), tabId: t1, kind: 'idle', tool: 'claude', text: 'new', createdAt: at(20) },
+        { id: newId(), tabId: t2, kind: 'idle', tool: 'claude', text: 'other project', createdAt: at(40) },
+      ],
+    });
+    expect((await repo.citedTexts(projectId)).map((r) => [r.machineId, r.text])).toEqual([
+      [machineId, 'answer'],
+      [machineId, 'new'],
+      [machineId, 'mid'],
+      [machineId, 'old'],
+    ]);
+    // at most `eventsPerTab` events per tab, the newest
+    expect((await repo.citedTexts(projectId, 2)).map((r) => r.text)).toEqual(['answer', 'new', 'mid']);
+  });
+});

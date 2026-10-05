@@ -1,8 +1,9 @@
 /** Helpers for self-service account deletion (TER-720). */
+import { formatDate } from './format';
 
 /** "1 de novembro de 2026": the day the account is deleted for good. */
 export function deletionDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+  return formatDate(iso, { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 // The request ends the session, so the confirmation is read on the login page, after the app has

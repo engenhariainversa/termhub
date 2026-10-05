@@ -28,6 +28,8 @@ export interface TaskInput {
   column_id?: string | null;
   /** creates a subtask of this story or task */
   parent_id?: string | null;
+  /** Tag "automático" on a top-level card. A card in an automatic epic is born automatic whatever this says (the epic rules, spec D2). */
+  auto?: boolean;
 }
 
 /** What `update` changes. `epic_id` is ignored on epics and subtasks (they have none). */
@@ -225,8 +227,9 @@ export class TasksRepository {
     const epicId = type === 'epic' ? null : input.epic_id ? await requireEpic(tx, projectId, input.epic_id) : await defaultEpicId(tx, projectId);
     const to = await placementFor(tx, projectId, { type, epicId }, { column_id: input.column_id, status: input.status ?? (type === 'epic' ? 'backlog' : 'todo') });
     const position = await openSlot(tx, projectId, to, 0);
+    const epicAuto = epicId ? ((await tx.task.findUnique({ where: { id: epicId }, select: { auto: true } }))?.auto ?? false) : false;
     return tx.task.create({
-      data: { id: newId(), projectId, type, title: input.title, description: input.description ?? null, status: to.status, columnId: to.columnId, epicId, position },
+      data: { id: newId(), projectId, type, title: input.title, description: input.description ?? null, status: to.status, columnId: to.columnId, epicId, position, auto: epicAuto || (input.auto ?? false) },
       include: KEY,
     });
   }
@@ -311,8 +314,29 @@ export class TasksRepository {
         await closeGap(tx, cur.projectId, placementOf(cur), cur.position, id);
         place = { status: to.status, columnId: to.columnId, position: await openSlot(tx, cur.projectId, to, 0, id) };
       }
-      const t = await tx.task.update({ where: { id }, data: { ...text, type, epicId, status: place.status, columnId: place.columnId, position: place.position }, include: KEY });
+      // Moving into an automatic epic tags the card; moving out keeps the tag (spec D2).
+      const joinsAutoEpic = type !== 'epic' && epicId !== cur.epicId && epicId !== null && (await tx.task.findUnique({ where: { id: epicId }, select: { auto: true } }))?.auto === true;
+      const t = await tx.task.update({ where: { id }, data: { ...text, type, epicId, ...(joinsAutoEpic ? { auto: true } : {}), status: place.status, columnId: place.columnId, position: place.position }, include: KEY });
       return toTask(t);
+    });
+  }
+
+  /**
+   * Tags or untags a top-level card for automatic work. On an epic it is the whole epic: the epic and every
+   * top-level card in it, cards tagged one by one included (spec D2). Subtasks never carry the tag.
+   */
+  async setAuto(taskId: string, auto: boolean): Promise<{ changed: number }> {
+    return this.db.$transaction(async (tx) => {
+      const found = await tx.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+      if (!found) return { changed: 0 };
+      await lockProject(tx, found.projectId);
+      const cur = await tx.task.findUnique({ where: { id: taskId } });
+      if (!cur) return { changed: 0 };
+      if (cur.parentId) throw new TaskRuleError('AUTO_NOT_FOR_SUBTASK');
+      const own = await tx.task.updateMany({ where: { id: taskId, auto: { not: auto } }, data: { auto } });
+      if (cur.type !== 'epic') return { changed: own.count };
+      const cards = await tx.task.updateMany({ where: { projectId: cur.projectId, epicId: taskId, parentId: null, auto: { not: auto } }, data: { auto } });
+      return { changed: own.count + cards.count };
     });
   }
 
@@ -383,7 +407,11 @@ export class TasksRepository {
     });
   }
 
-  /** A synced ticket becomes a task at the end of the default epic's backlog (spec §5). */
+  /**
+   * A synced ticket becomes a task at the end of the default epic's backlog (spec §5).
+   * Deliberate deviation from spec D2: the card is never born automatic, even when the default epic is
+   * tagged — an imported ticket must not become automatic work by import alone (ruling R-15).
+   */
   /** With `ticketId`, that staging ticket is linked to the new card in the same transaction (no card without its link). */
   async createFromTicket(projectId: string, ticket: { key: string; title: string; description: string | null; ref: Record<string, unknown>; ticketId?: string }): Promise<Task> {
     return this.db.$transaction(async (tx) => {
