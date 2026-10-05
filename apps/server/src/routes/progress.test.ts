@@ -30,10 +30,11 @@ const feedRows = [
 ];
 const projects = [{ id: 'p1', owner_id: 'u1' }, { id: 'p2', owner_id: 'u2' }];
 
-function build(ownerId: string | null = 'u1') {
+function build(ownerId: string | null = 'u1', uses = true) {
   const list = vi.fn(async () => rows);
   const feed = vi.fn(async () => feedRows);
-  const repos = { progress: { list, feed }, projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) } } as unknown as Repositories;
+  const usesAutomation = vi.fn(async () => uses);
+  const repos = { progress: { list, feed, usesAutomation }, projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) } } as unknown as Repositories;
   const app = Fastify();
   applyErrorHandler(app);
   app.addHook('preHandler', async (request) => {
@@ -41,7 +42,7 @@ function build(ownerId: string | null = 'u1') {
     request.user = { id: 'u1', role_id: 'r1' } as never;
   });
   app.register((a) => progressRoutes(a, repos, { now: () => NOW }), { prefix: '/progress' });
-  return { app, list, feed };
+  return { app, list, feed, usesAutomation };
 }
 
 beforeEach(() => {
@@ -49,6 +50,14 @@ beforeEach(() => {
 });
 
 describe('GET /progress', () => {
+  it('runs no automation query for someone who never ran automatic work', async () => {
+    const { app, list, feed } = build('u1', false);
+    const body = (await app.inject({ method: 'GET', url: '/progress' })).json();
+    expect(feed).not.toHaveBeenCalled();
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ automatic: false }));
+    expect(body.feed).toEqual([]);
+  });
+
   it('carries the last 50 automatic events and flags the automatic tab', async () => {
     const { app, feed } = build();
     const body = (await app.inject({ method: 'GET', url: '/progress' })).json();
@@ -63,7 +72,7 @@ describe('GET /progress', () => {
     const { app, list } = build();
     const r = await app.inject({ method: 'GET', url: '/progress' });
     expect(r.statusCode).toBe(200);
-    expect(list).toHaveBeenCalledWith({ owner: 'u1', projectId: null });
+    expect(list).toHaveBeenCalledWith({ owner: 'u1', projectId: null, automatic: true });
     const body = r.json();
     expect(body.generated_at).toBe(NOW.toISOString());
     expect(body.epics.map((e: { ref: string }) => e.ref)).toEqual(['TER-1']);
@@ -90,7 +99,7 @@ describe('GET /progress', () => {
   it('filters by a project of the scope', async () => {
     const { app, list } = build();
     expect((await app.inject({ method: 'GET', url: '/progress?project_id=p1' })).statusCode).toBe(200);
-    expect(list).toHaveBeenCalledWith({ owner: 'u1', projectId: 'p1' });
+    expect(list).toHaveBeenCalledWith({ owner: 'u1', projectId: 'p1', automatic: true });
   });
 
   it('answers 404 for a project of another owner, without reading progress', async () => {

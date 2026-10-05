@@ -1,7 +1,7 @@
 import type { PullRequestBadge } from '@termhub/mobile-api';
 import type { PrismaClient } from '../prisma.js';
 import type { AutomationEvent } from './automation-events.js';
-import type { FeedRow, ProgressEpicRow, ProgressTabRow } from '../../progress/aggregate.js';
+import { FEED_KINDS, type FeedRow, type ProgressEpicRow, type ProgressTabRow } from '../../progress/aggregate.js';
 
 const TAB = { include: { machine: { select: { name: true } } } } as const;
 
@@ -27,7 +27,18 @@ const toTab = (t: TabWithMachine | null, automatic: Set<string>): ProgressTabRow
 export class ProgressRepository {
   constructor(private db: PrismaClient) {}
 
-  async list(opts: { owner: string | null; projectId: string | null }): Promise<ProgressEpicRow[]> {
+  /**
+   * Whether the automatic work ever ran in the owner's projects (a run or an event exists): one indexed read
+   * that lets everyone else's progress poll skip the automation queries (the feed and the tabs' badge).
+   */
+  async usesAutomation(opts: { owner: string | null; projectId: string | null }): Promise<boolean> {
+    const project = { status: { not: 'archived' as const }, ...(opts.owner ? { ownerId: opts.owner } : {}), ...(opts.projectId ? { id: opts.projectId } : {}) };
+    if (await this.db.automationRun.findFirst({ where: { project }, select: { id: true } })) return true;
+    return !!(await this.db.automationEvent.findFirst({ where: { project }, select: { id: true } }));
+  }
+
+  /** `automatic: false` skips the read of which tabs an automatic run started (nobody has one). */
+  async list(opts: { owner: string | null; projectId: string | null; automatic?: boolean }): Promise<ProgressEpicRow[]> {
     const project = { status: { not: 'archived' as const }, ...(opts.owner ? { ownerId: opts.owner } : {}), ...(opts.projectId ? { id: opts.projectId } : {}) };
     const epics = await this.db.task.findMany({
       where: { type: 'epic', project },
@@ -46,7 +57,7 @@ export class ProgressRepository {
     });
     const tabIds = cards.flatMap((c) => [c.tabId, ...c.subtasks.map((s) => s.tabId)]).filter((id): id is string => !!id);
     const automatic = new Set(
-      tabIds.length === 0 ? [] : (await this.db.automationRun.findMany({ where: { tabId: { in: tabIds } }, select: { tabId: true }, distinct: ['tabId'] })).map((r) => r.tabId!),
+      tabIds.length === 0 || opts.automatic === false ? [] : (await this.db.automationRun.findMany({ where: { tabId: { in: tabIds } }, select: { tabId: true }, distinct: ['tabId'] })).map((r) => r.tabId!),
     );
     const byEpic = new Map<string, typeof cards>();
     for (const c of cards) {
@@ -102,7 +113,7 @@ export class ProgressRepository {
   async feed(opts: { owner: string | null; projectId: string | null; limit: number }): Promise<FeedRow[]> {
     const project = { status: { not: 'archived' as const }, ...(opts.owner ? { ownerId: opts.owner } : {}), ...(opts.projectId ? { id: opts.projectId } : {}) };
     const events = await this.db.automationEvent.findMany({
-      where: { project },
+      where: { project, kind: { in: [...FEED_KINDS] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: opts.limit,
       include: { task: { select: { number: true, epic: { select: { title: true } }, project: { select: { key: true } } } } },

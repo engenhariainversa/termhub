@@ -164,13 +164,6 @@ describe('automatic tabs and the feed', () => {
     expect(unknown.reason_text).toBe('O trabalho automático parou e espera você.');
   });
 
-  it('has no path that posts the automation events to the chat: run_started only reaches the feed', async () => {
-    const { readdirSync, readFileSync } = await import('node:fs');
-    const dir = new URL('../chat/', import.meta.url);
-    const files = readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
-    for (const f of files) expect(readFileSync(new URL(f, dir), 'utf8'), f).not.toMatch(/automationBus/);
-  });
-
   it('names the branch a merge landed on', () => {
     expect(feedOf([row('1', 'merged', { base: 'main', branch: 'zzz' })], 'pt-BR')[0].branch).toBe('main');
   });

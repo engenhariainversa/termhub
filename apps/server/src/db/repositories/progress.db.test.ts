@@ -169,6 +169,11 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation feed and autom
     expect(feed.map((f) => f.event.kind)).toEqual(['pr_opened', 'run_started']);
     expect(feed[1]).toMatchObject({ ref: expect.stringMatching(/-\d+$/), epic: 'Épico', machine: 'jarvis', tab_id: auto.id, branch: 'auto/x' });
     expect(await repo.feed({ owner: ownerId, projectId: null, limit: 1 })).toHaveLength(1);
+    // a kind no client has a line for takes no slot of the 50
+    await db.automationEvent.create({ data: { id: newId(), projectId, taskId: card.id, runId: run.id, kind: 'from_the_future', payload: {}, createdAt: new Date('2026-10-05T12:00:00Z') } });
+    expect((await repo.feed({ owner: ownerId, projectId: null, limit: 50 })).map((f) => f.event.kind)).toEqual(['pr_opened', 'run_started']);
+    expect(await repo.usesAutomation({ owner: ownerId, projectId: null })).toBe(true);
+    expect(await repo.usesAutomation({ owner: newId(), projectId: null })).toBe(false);
     expect(await repo.feed({ owner: newId(), projectId: null, limit: 50 })).toEqual([]);
   });
 });

@@ -1,6 +1,8 @@
 import { getAccountUsage, type AiAccountUsage } from '../ai/index.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Tab } from '../db/repositories/types.js';
+import { t } from '../i18n/index.js';
+import { postAutomationLine } from './chat-line.js';
 import { recordEvent } from './events.js';
 import { defaultType, mayType, type FollowerDeps } from './follower.js';
 import { isPaused } from './pause.js';
@@ -56,6 +58,16 @@ async function followSwap(deps: FollowerDeps, run: AutomationRun, tab: Tab, log:
   return true;
 }
 
+/** The account's label for a chat line; null (the machine's default login) when there is none or the read fails. */
+async function accountLabel(repos: FollowerDeps['repos'], accountId: string | null): Promise<string | null> {
+  if (!accountId) return null;
+  try {
+    return (await repos.aiAccounts.findById(accountId))?.label ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A run's tab stopped on a usage limit (spec D16). The account is marked exhausted until its reset (a mark
  * already in force is kept: another run hit it first), the run waits on `quota` and `quota_hit` is
@@ -86,6 +98,13 @@ export async function onRateLimit(deps: FollowerDeps, seen: AutomationRun, tab: 
     kind: 'quota_hit',
     payload: { account_id: accountId, tab_id: tab.id, until: until?.toISOString() ?? null },
   }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: quota_hit not recorded'));
+  const label = await accountLabel(repos, accountId);
+  await postAutomationLine(
+    repos,
+    run.project_id,
+    (locale) => (until ? t(locale, 'Conta {{account}} no limite até {{time}}', { account: label ?? t(locale, 'padrão'), time: until.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) }) : t(locale, 'Conta {{account}} no limite', { account: label ?? t(locale, 'padrão') })),
+    log,
+  );
   log.info({ runId: run.id, tabId: tab.id, accountId, until: until?.toISOString() ?? null }, 'automation: run waits for the usage reset');
 }
 
@@ -148,6 +167,8 @@ export async function resumeAfterReset(deps: FollowerDeps): Promise<void> {
         kind: 'quota_reset',
         payload: { account_id: run.account_id, tab_id: tab.id, typed: typing },
       }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: quota_reset not recorded'));
+      const label = await accountLabel(repos, run.account_id);
+      await postAutomationLine(repos, run.project_id, (locale) => t(locale, 'Conta {{account}} voltou a funcionar', { account: label ?? t(locale, 'padrão') }), log);
       log.info({ runId: run.id, tabId: tab.id, accountId: run.account_id, typed: typing }, 'automation: run resumed after the usage reset');
     } catch (e) {
       log.warn({ runId: run.id, code: errorCode(e) }, 'automation: resume after the usage reset failed');

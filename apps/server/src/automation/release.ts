@@ -3,9 +3,11 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { CiState, ReleaseRun, TaskPullRequest } from '../db/repositories/task-pull-requests.js';
 import type { GithubCiClient } from '../integrations/github-ci.js';
 import { deployOf, latestPerWorkflow, matchesWorkflow, type WorkflowRun } from '../ci/rules.js';
+import { t } from '../i18n/index.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { DEPLOY_FAILED, DEPLOY_FAILED_NOT_PAUSED, RELEASE_FAILED } from './escalation-text.js';
 import { recordEvent } from './events.js';
+import { postAutomationLine } from './chat-line.js';
 import { escalateDelivery } from './follower.js';
 import { pauseAutomation } from './pause.js';
 import { globMatches } from './policy.js';
@@ -145,13 +147,22 @@ export async function followMerged(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPu
     await repos.taskPullRequests.updateCi(c.projectId, w.repo, w.number, patch);
   } else {
     await repos.taskPullRequests.updateCi(c.projectId, w.repo, w.number, patch);
-    if (deployDone && deploy) await recordEvent(repos, { ...about, kind: 'deploy_ok', payload: { ...ids, url: deploy.url, workflow: deployWorkflow } });
+    if (deployDone && deploy) {
+      await recordEvent(repos, { ...about, kind: 'deploy_ok', payload: { ...ids, url: deploy.url, workflow: deployWorkflow } });
+      const card = await repos.tasks.findById(w.task_id);
+      const epic = card?.epic_id ? await repos.tasks.findById(card.epic_id) : undefined;
+      const what = epic?.title ?? card?.ref ?? `#${w.number}`;
+      await postAutomationLine(repos, c.projectId, (locale) => t(locale, 'Deploy concluído ({{epic}}): {{url}}', { epic: what, url: deploy.url ?? '' }), log);
+    }
   }
   if (!reporting) return;
   for (const r of releases) {
     if (!finished(r.state) || r.state === r.previous) continue;
     const payload = { ...ids, url: r.url, workflow: r.workflow, ...(r.version ? { version: r.version } : {}) };
-    if (r.state === 'passed') await recordEvent(repos, { ...about, kind: 'release_ok', payload });
+    if (r.state === 'passed') {
+      await recordEvent(repos, { ...about, kind: 'release_ok', payload });
+      await postAutomationLine(repos, c.projectId, (locale) => (r.version ? t(locale, 'Publicado {{package}} {{version}}', { package: r.workflow, version: r.version }) : t(locale, 'Publicado {{package}}', { package: r.workflow })), log);
+    }
     else {
       await recordEvent(repos, { ...about, kind: 'release_failed', payload });
       await escalateDelivery(repos, about, RELEASE_FAILED, log, payload);

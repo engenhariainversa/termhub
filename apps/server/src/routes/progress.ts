@@ -22,8 +22,11 @@ export async function progressRoutes(app: FastifyInstance, repos: Repositories, 
     const q = query.parse(request.query ?? {});
     if (q.project_id) await scoped(repos, request).project(q.project_id);
     const includeAgents = await canAccess(repos, request.user, 'terminals', 'read');
-    const rows = await repos.progress.list({ owner: request.scope.ownerId, projectId: q.project_id ?? null });
-    const feed = feedOf(await repos.progress.feed({ owner: request.scope.ownerId, projectId: q.project_id ?? null, limit: FEED_LIMIT }), requestLocale(request), includeAgents);
+    const where = { owner: request.scope.ownerId, projectId: q.project_id ?? null };
+    // someone who never ran automatic work pays for no automation query on the poll
+    const automatic = await repos.progress.usesAutomation(where);
+    const rows = await repos.progress.list({ ...where, automatic });
+    const feed = automatic ? feedOf(await repos.progress.feed({ ...where, limit: FEED_LIMIT }), requestLocale(request), includeAgents) : [];
     const aggregated = rows.map((e) => ({ ...aggregateEpic(e, includeAgents), ci_error: ciErrorOf(e.project.id) }));
     const epics = selectEpics(aggregated, q.scope);
     return progressResponse.parse({ epics, feed, generated_at: (deps.now?.() ?? new Date()).toISOString() });

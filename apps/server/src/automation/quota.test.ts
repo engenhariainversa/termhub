@@ -55,6 +55,7 @@ function world(o: { exhausted?: Map<string, Date>; paused?: boolean; enabled?: b
   const task = { id: 't1', project_id: 'p1', ref: 'TER-1', title: 'Card', type: 'task', status: 'doing', tab_id: 'tab1', auto: true, parent_id: null, epic_id: null, column_id: 'c2', ...o.task } as Task;
   const exhausted = o.exhausted ?? new Map<string, Date>();
   const events: AutomationEventInput[] = [];
+  const messages: string[] = [];
   let paused = o.paused ?? false;
   let enabled = o.enabled ?? true;
   const isActive = () => ['queued', 'starting', 'running', 'waiting'].includes(run.status);
@@ -83,6 +84,8 @@ function world(o: { exhausted?: Map<string, Date>; paused?: boolean; enabled?: b
     projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled, resume_max: 3, allowed_tools: null } } })) },
     automationPauses: { state: vi.fn(async () => ({ user: paused ? NOW : null, project: null })) },
     users: { findById: vi.fn(async () => ({ id: 'u1' })) },
+    aiAccounts: { findById: vi.fn(async () => ({ id: 'a1', label: 'pessoal' })) },
+    chat: { findLatestActiveForProject: vi.fn(async () => ({ id: 'c1' })), addMessage: vi.fn(async (m: { text: string }) => (messages.push(m.text), { id: 'm', ...m })) },
     tasks: { findById: vi.fn(async () => task) },
     automationEvents: { insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })) },
   } as unknown as Repositories;
@@ -92,7 +95,7 @@ function world(o: { exhausted?: Map<string, Date>; paused?: boolean; enabled?: b
   const deps: FollowerDeps = { repos, instance: ME, lifecycle: { draining: false }, type, accountUsage, settleMs: 0, now: () => now };
   deps.onRateLimited = (r, t) => onRateLimit(deps, r, t);
   return {
-    run, tab, task, events, repos, deps, type, exhausted, accountUsage,
+    run, tab, task, events, messages, repos, deps, type, exhausted, accountUsage,
     setNow: (d: Date) => (now = d),
     setPaused: (p: boolean) => (paused = p),
     setEnabled: (e: boolean) => (enabled = e),
@@ -109,6 +112,7 @@ describe('a run on a usage limit (spec D16)', () => {
     expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'quota', account_id: 'a1' });
     expect(w.events).toEqual([expect.objectContaining({ kind: 'quota_hit', run_id: w.run.id, payload: { account_id: 'a1', tab_id: 'tab1', until: at(2 * 3600_000).toISOString() } })]);
     expect(w.type).not.toHaveBeenCalled();
+    expect(w.messages).toEqual([expect.stringMatching(/^Conta pessoal no limite até \d{2}:\d{2}$/)]);
   });
 
   it('stops looping: repeated sweeps before the reset mark nothing, record nothing and type nothing', async () => {
