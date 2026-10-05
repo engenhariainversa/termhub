@@ -155,6 +155,31 @@ describe('startDispatcher (fakes)', () => {
     await d.stop();
   });
 
+  it('with a project on automation, a tick clears the expired exhaustions and resumes the runs waiting on them (D16)', async () => {
+    const order: string[] = [];
+    const { repos } = recordingRepos({
+      ...idle(),
+      projectSetup: { listWithAutomation: async () => [{ project_id: 'p1', data: {} }] },
+      projects: { findById: async () => undefined },
+      aiAccountExhaustions: { clearExpired: async () => (order.push('clearExpired'), ['a1']) },
+    });
+    const resumeQuota = vi.fn(async () => void order.push('resumeQuota'));
+    const d = startDispatcher(deps(repos, { resumeQuota }), { schedule: false });
+    await d.tick('t');
+    await d.stop();
+    expect(order).toEqual(['clearExpired', 'resumeQuota']);
+  });
+
+  it('with no project on automation, the quota pass does not run', async () => {
+    const { repos, calls } = recordingRepos(idle());
+    const resumeQuota = vi.fn(async () => {});
+    const d = startDispatcher(deps(repos, { resumeQuota }), { schedule: false });
+    await d.tick('t');
+    await d.stop();
+    expect(calls).not.toContain('aiAccountExhaustions.clearExpired');
+    expect(resumeQuota).not.toHaveBeenCalled();
+  });
+
   it('the instance id is unique per process start, not a colour name', () => {
     const a = dispatcherInstanceId();
     const b = dispatcherInstanceId();

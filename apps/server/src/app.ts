@@ -77,7 +77,8 @@ import { registerTerminalWs } from './terminal/ws.js';
 import { registerAgentWs } from './agent/ws.js';
 import { agents } from './agent/registry.js';
 import { dispatcherInstanceId, startDispatcher } from './automation/dispatcher.js';
-import { followRun, startFollower } from './automation/follower.js';
+import { followRun, startFollower, type FollowerDeps } from './automation/follower.js';
+import { onRateLimit, resumeAfterReset } from './automation/quota.js';
 import { ensureEpicBranch, ensureWorkspace } from './automation/branches.js';
 import { accountPeak } from './automation/placement.js';
 import { startAgent } from './control/agents.js';
@@ -382,7 +383,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // run it; the claim row picks one per card, and a draining instance stops claiming.
   const automationInstance = dispatcherInstanceId();
   // Follows the tabs of the runs this instance drives (spec §8 step 6): resumes, restarts, the PR fallback.
-  const followerDeps = { repos, instance: automationInstance, lifecycle, log: fastify.log };
+  // D16: a run on a usage limit waits for its account's reset (or follows the automatic swap)
+  const followerDeps: FollowerDeps = { repos, instance: automationInstance, lifecycle, log: fastify.log, onRateLimited: (run, tab) => onRateLimit(followerDeps, run, tab) };
   const stopFollower = startFollower(followerDeps);
   const dispatcher = startDispatcher({
     repos,
@@ -390,6 +392,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     lifecycle,
     // a run taken over from a silent instance may have stopped while nobody followed it
     onTakeOver: (run) => void followRun(followerDeps, run.id),
+    resumeQuota: () => resumeAfterReset(followerDeps),
     now: () => new Date(),
     startAgent,
     ensureWorkspace,

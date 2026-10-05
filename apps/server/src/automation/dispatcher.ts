@@ -54,6 +54,9 @@ export interface DispatcherDeps {
   /** Told of each running run this instance took over from a silent one: the follower looks at its tab now
    *  (a stop that happened while nobody followed the run would otherwise wait for the next state change). */
   onTakeOver?: (run: AutomationRun) => void;
+  /** After expired exhaustions are cleared on a tick: resumes the runs whose account's usage reset (spec D16,
+   *  `resumeAfterReset`). */
+  resumeQuota?: () => Promise<void>;
   log?: Log;
 }
 
@@ -328,10 +331,23 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     }
   }
 
+  /** Accounts whose usage reset are free again, and the runs that waited on them go on (spec D16). */
+  async function quotaPass(): Promise<void> {
+    try {
+      const cleared = await repos.aiAccountExhaustions.clearExpired(deps.now());
+      if (cleared.length > 0) log.info({ accounts: cleared.length }, 'automation: exhausted accounts cleared');
+      await deps.resumeQuota?.();
+    } catch (e) {
+      log.warn({ code: errorCode(e) }, 'automation: quota pass failed');
+    }
+  }
+
   async function passOnce(): Promise<void> {
     if (halted()) return;
     await sweep();
     const projects = await repos.projectSetup.listWithAutomation();
+    // D16: only automatic work marks accounts exhausted, so with no project on there is nothing to do
+    if (projects.length > 0) await quotaPass();
     if (!startupDone) {
       startupDone = true;
       await interruptRecordedPauses(projects).catch((e: unknown) => log.warn({ code: errorCode(e) }, 'automation: startup interrupt failed'));

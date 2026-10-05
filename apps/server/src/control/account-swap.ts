@@ -10,11 +10,22 @@ import { applyState } from '../monitor/ingest.js';
 import { sendKeyToSession, sendTextToSession } from '../terminal/session-ops.js';
 import { RESUME_PROMPT, resumeLine } from './agents.js';
 import { activeRunPermission } from '../automation/permission.js';
+import { serverMessage } from '../automation/marker.js';
 import { projectAccountsOn } from '../ai/project-accounts.js';
 import { notifyLimitInChat } from '../chat/tab-limits.js';
 import { ControlError } from './context.js';
 import { offline } from './screen.js';
 import { msg, tk } from '../i18n/index.js';
+
+/**
+ * How the tab's state text starts after a swap, while the resumed session may wait on Claude's "trust this
+ * folder" question (a person's answer): the automation never types into a tab in this state.
+ */
+export const ACCOUNT_SWAP_TEXT = 'Conta trocada';
+export const ACCOUNT_SWAP_AUTO_TEXT = `${ACCOUNT_SWAP_TEXT} automaticamente`;
+
+/** Whether the tab's state is the one a swap left (see ACCOUNT_SWAP_TEXT). */
+export const isAccountSwapState = (stateText: string | null | undefined): boolean => (stateText ?? '').startsWith(ACCOUNT_SWAP_TEXT);
 
 /** An account whose fullest window is at this utilization (0..100) or more is not a candidate. */
 export const SWAP_MAX_UTILIZATION = 90;
@@ -197,7 +208,9 @@ export async function swapAccount(
     // a tab running automatic work keeps its permission profile on the new account (preflight F-12); a
     // failed lookup resumes without it, which only makes the agent ask more
     const permission = await activeRunPermission(repos, tab.id).catch(() => null);
-    const line = resumeLine(to.config_dir, sessionId, RESUME_PROMPT, hasTabMcp ? tab.id : null, prefs.model, permission);
+    // and its prompt says it comes from termhub, as every message typed into an automatic tab (spec D27)
+    const prompt = permission ? serverMessage(RESUME_PROMPT) : RESUME_PROMPT;
+    const line = resumeLine(to.config_dir, sessionId, prompt, hasTabMcp ? tab.id : null, prefs.model, permission);
 
     // Claude waits for the reset on a usage limit (it does not exit): cancel that wait and leave.
     // Already idle means it ended on its own: the tab is at the shell and must not get these keys.
@@ -232,7 +245,7 @@ export async function swapAccount(
     // them until the resumed session's SessionStart (run only once trusted) moves it to working. Should
     // typing fail, the tab already names the account the linked session will be resumed under.
     const updated = (await repos.tabs.setAgentFields(tab.id, { ai_account_id: to.id, rate_limited_at: null })) ?? tab;
-    const text = `${opts.auto ? 'Conta trocada automaticamente' : 'Conta trocada'}: ${from?.label ?? 'conta desconhecida'} → ${to.label}. Se o Claude pedir para confiar na pasta, confirme na aba.`;
+    const text = `${opts.auto ? ACCOUNT_SWAP_AUTO_TEXT : ACCOUNT_SWAP_TEXT}: ${from?.label ?? 'conta desconhecida'} → ${to.label}. Se o Claude pedir para confiar na pasta, confirme na aba.`;
     await applyState(repos, log, updated, 'claude', { kind: 'waiting_input', text, meta: { event: 'AccountSwap', from: from?.id ?? null, to: to.id, auto: opts.auto } });
     await sendTextToSession(machine, session, line, true);
 

@@ -23,6 +23,7 @@ import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { normalizeSetup } from '../setup/schema.js';
 import { DEFAULT_AUTOMATION_TOOLS, RESUME_PROMPT, resumeLine } from './agents.js';
+import { serverMessage } from '../automation/prompts.js';
 import {
   AUTO_SWAP_COOLDOWN_MS,
   AUTO_SWAP_DELAY_MS,
@@ -256,13 +257,14 @@ describe('swapAccount', () => {
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);
   });
 
-  it('a tab running automatic work keeps acceptEdits and the allow list on the new account (F-12)', async () => {
+  it('a tab running automatic work keeps acceptEdits and the allow list on the new account, its prompt marked (F-12, D27)', async () => {
     const { repos, r } = makeRepos();
     repos.automationRuns.activeByTab.mockResolvedValue({ project_id: 'p1' });
     stored = baseTab({ state: 'idle' });
     await drive(swapAccount(r, log, baseTab(), machine(), { auto: false }));
-    const line = resumeLine(null, SID, RESUME_PROMPT, null, undefined, { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS });
+    const line = resumeLine(null, SID, serverMessage(RESUME_PROMPT), null, undefined, { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS });
     expect(line).toContain('--permission-mode acceptEdits');
+    expect(line).toContain('[termhub automático] A conta anterior');
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);
   });
 

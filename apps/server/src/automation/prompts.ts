@@ -1,14 +1,14 @@
 import { LESSONS_REMINDER, ORIGIN_REMINDER, PROMPT_MAX_CHARS } from '../control/agents.js';
 
-/** Starts every message the server types into an automatic tab. */
-export const SERVER_MARKER = '[termhub automático]';
+import { SERVER_MARKER } from './marker.js';
 
-export function serverMessage(text: string): string {
-  return `${SERVER_MARKER} ${text}`;
-}
+export { SERVER_MARKER, serverMessage } from './marker.js';
 
 /** Typed into an automatic tab that is resumed after a stop. */
 export const RESUME_TEXT = 'Continue a tarefa do card de onde parou. Se terminou, abra o PR e chame report_card.';
+
+/** Typed into an automatic tab whose account's usage limit reset (spec D16): the same account goes on. */
+export const QUOTA_RESUME_TEXT = 'O limite da conta foi renovado; continue de onde parou.';
 
 /** The editable middle paragraph of each role's prompt, used when the project has no custom text. */
 export const DEFAULT_IMPLEMENTER_TEXT = 'Leia o card e, se houver, o spec e o plano citados nele. Implemente, rode os testes do projeto e deixe o trabalho commitado.';
