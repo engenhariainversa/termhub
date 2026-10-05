@@ -12,6 +12,7 @@ import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendIn
 import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
 import { addSubtasks, createTask, deleteTask, listTasks, moveTask, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
+import { automationQueue } from '../automation/queue.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
 import { answerTabQuestionTool, listTabQuestions, recordDecision, searchMemory, MEMORY_REF, type MemoryRefKind } from '../control/memory.js';
 import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } from '../control/integrations.js';
@@ -55,6 +56,11 @@ const subtaskItems = z.array(z.object({ title: taskTitle, description: taskDescr
  * automática" with them. */
 const precedentInput = { sources: z.array(z.string().regex(MEMORY_REF)).min(1).max(10).optional(), reason: z.string().trim().min(1).max(500).optional() };
 const PRECEDENT_NOTE = 'When you send this on a precedent from memory, pass the search_memory refs you followed in sources and a short reason in the person\'s language: the chat shows it as an automatic decision. Leave both out otherwise.';
+
+/** TER-851: the agent learns later orders from the person through the chat, so a restriction in its first
+ *  prompt must say who can lift it; and the prompt is the assistant's text, never the person's. */
+const START_AGENT_RESTRICTIONS_NOTE =
+  'Phrase a restriction in the prompt as "until <name> authorizes it (the termhub chat counts)", never as an absolute such as "NÃO faça merge": the agent can tell when a later message carries the person\'s own words. Never write the prompt in the person\'s name.';
 
 /** TER-851: how the concierge relays the person's order so the tab can tell it is theirs. */
 const ON_BEHALF_NOTE =
@@ -215,7 +221,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'start_agent',
-    description: `Open a tab in a project and start Claude Code (account provider claude) or Codex (chatgpt) there under the chosen account, with prompt (max ${PROMPT_MAX_CHARS} chars) as its first message; the session stays interactive and visible in the app. With task_id (needs the tasks:update permission) the task is linked to the tab and moved to the project's agent column (a project setting; default the first doing column) unless it already sits in a doing column; a subtask is marked doing. The prompt cannot start with "-" or contain control characters other than newlines. To follow it, wait with wait_for_state (in one background subagent that ends at the first stop), then read_last_answer; questions and approvals reach the person as chat cards. read_screen only shows what is on screen; send_input answers it otherwise. Gemini and Antigravity accounts are not supported yet. Pick the account with list_ai_accounts (default: true is the machine's own login). machine_id picks the linked machine (required when the project has several). A project whose setup lists AI accounts needs neither: account_id omitted = the first listed account with room on the machine (and, with several machines and no machine_id, that account's machine); model omitted = the project's default model for that CLI (else the CLI's own). The result says which account and model were used; warning flags a full model id an older CLI may not know.`,
+    description: `Open a tab in a project and start Claude Code (account provider claude) or Codex (chatgpt) there under the chosen account, with prompt (max ${PROMPT_MAX_CHARS} chars) as its first message; the session stays interactive and visible in the app. With task_id (needs the tasks:update permission) the task is linked to the tab and moved to the project's agent column (a project setting; default the first doing column) unless it already sits in a doing column; a subtask is marked doing. The prompt cannot start with "-" or contain control characters other than newlines. To follow it, wait with wait_for_state (in one background subagent that ends at the first stop), then read_last_answer; questions and approvals reach the person as chat cards. read_screen only shows what is on screen; send_input answers it otherwise. Gemini and Antigravity accounts are not supported yet. Pick the account with list_ai_accounts (default: true is the machine's own login). machine_id picks the linked machine (required when the project has several). A project whose setup lists AI accounts needs neither: account_id omitted = the first listed account with room on the machine (and, with several machines and no machine_id, that account's machine); model omitted = the project's default model for that CLI (else the CLI's own). The result says which account and model were used; warning flags a full model id an older CLI may not know. ${START_AGENT_RESTRICTIONS_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: {
       project_id: id,
@@ -243,6 +249,14 @@ export const TOOLS: ToolDef[] = [
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id, status: taskStatus.optional(), type: taskType.optional(), epic_id: id.optional() },
     run: (ctx, a) => listTasks(ctx, a as { project_id: string; status?: TaskStatus; type?: TaskType; epic_id?: string }),
+  },
+  {
+    name: 'list_automation_queue',
+    description:
+      "List a project's cards tagged \"automático\" in the order automatic work takes them (board order: column, then position). Each item has the card's ref, title, whether it is eligible now and, when it is not, the reason code and its pt-BR text (automation off, paused, type not allowed, not in a todo column, no description, already has an agent, no machine with the worktree capability, repository not configured). Untagged cards and subtasks are not listed.",
+    scope: 'tasks', resource: 'tasks', action: 'read',
+    input: { project_id: id },
+    run: async (ctx, a) => ({ items: await automationQueue(ctx, (a as { project_id: string }).project_id) }),
   },
   {
     name: 'read_attachment',

@@ -6,10 +6,12 @@ import type { Device } from '../db/repositories/devices.js';
 import type { DeviceRequest } from '../db/repositories/device-requests.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { User } from '../db/repositories/types.js';
+import type { PushTestKind, PushTestResponse } from '@termhub/mobile-api';
+import { HttpError } from '../lib/errors.js';
 import { confirmationText, deviceRequestText, replyText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { SlidingWindow } from './rate-limit.js';
 import type { MobileSocketRegistry } from './revocation.js';
-import { localeOf, type Locale } from '../i18n/index.js';
+import { localeOf, t, tk, type Locale } from '../i18n/index.js';
 
 export interface PushMessage {
   to: string;
@@ -123,6 +125,10 @@ export class ExpoReceiptFetcher implements PushReceiptFetcher {
   }
 }
 
+/** A test push's receipt is read this long after the send, then once more if it was not ready. */
+export const TEST_RECEIPT_AFTER_MS = 15_000;
+export const TEST_RECEIPT_RETRY_MS = 60_000;
+
 /** A receipt is read once the ticket is this old: Expo says they are ready within 15 minutes. */
 export const RECEIPT_AFTER_MS = 15 * 60_000;
 /** A claim whose receipt was not ready yet (or whose sweeper died) is taken again after this. */
@@ -189,6 +195,8 @@ export function startPushReceiptSweeper(deps: PushReceiptSweepDeps): () => void 
 export interface MobilePushDeps {
   repos: Repositories;
   sender: PushSender;
+  /** Reads a test push's receipt a few seconds after it is sent (TER-913). */
+  receipts?: PushReceiptFetcher;
   sockets: MobileSocketRegistry;
   log: FastifyBaseLogger;
   now?: () => Date;
@@ -205,6 +213,9 @@ type Kind = 'confirmation' | 'reply' | 'device_request';
 export class MobilePushService {
   /** "Resposta pronta" at most once per conversation per minute. */
   private readonly replies = new SlidingWindow(60_000, 1);
+
+  /** Test pushes: six per minute per device (TER-913). */
+  private readonly tests = new SlidingWindow(60_000, 6);
 
   /** The live subscription's unsubscribe, so a second `start()` never subscribes twice. */
   private stop: (() => void) | null = null;
@@ -235,6 +246,91 @@ export class MobilePushService {
     } catch (err) {
       this.deps.log.warn({ err: failureLabel(err), userId: user.id, requestId: request.id }, 'mobile push failed');
     }
+  }
+
+  /**
+   * A test push to one of the person's own active devices (TER-913): the text and `data` of a real
+   * push of `kind`, with "[Teste] " before the title and `data.test: true`, its tap landing in the
+   * person's most recently active conversation. It skips the live-socket filter and writes no history
+   * row. Sent after `delaySeconds` (an in-process timer: a deploy in between drops it, fine for a test);
+   * an immediate send answers Expo's ticket. A few seconds later the receipt becomes the device's
+   * `push_test` event. Logs ids, kind and outcome only — never the token.
+   */
+  async testPush(user: User, device: Device, kind: PushTestKind, delaySeconds: number): Promise<PushTestResponse> {
+    if (!device.push_token) throw new HttpError(409, tk('Este aparelho ainda não ativou as notificações.'), 'NO_PUSH_TOKEN');
+    if (!this.tests.take(device.id)) throw new HttpError(429, tk('Muitas notificações de teste. Espere um minuto e tente de novo.'), 'PUSH_TEST_RATE_LIMITED');
+    const message = await this.testMessage(user, device.push_token, kind);
+    const scheduledFor = new Date(this.now().getTime() + delaySeconds * 1000).toISOString();
+    if (delaySeconds === 0) return { scheduled_for: scheduledFor, ticket: await this.sendTest(user, device, kind, message) };
+    setTimeout(() => void this.sendTest(user, device, kind, message), delaySeconds * 1000).unref();
+    return { scheduled_for: scheduledFor, ticket: null };
+  }
+
+  private now(): Date {
+    return this.deps.now?.() ?? new Date();
+  }
+
+  private async testMessage(user: User, to: string, kind: PushTestKind): Promise<PushMessage> {
+    const locale = localeOf(user.locale);
+    const test = (p: PushText): PushText => ({ title: t(locale, '[Teste] {{title}}', { title: p.title }), body: p.body });
+    if (kind === 'device_request') {
+      const text = test(deviceRequestText({ model: t(locale, 'Aparelho de teste'), city: null, country: null }, locale));
+      return { to, ...text, data: { kind: 'device_request', test: true } };
+    }
+    const conversation = await this.deps.repos.chat.findLatestActiveForUser(user.id);
+    const projectId = conversation?.project_id ?? null;
+    const ctx = conversation ? await this.names(user.id, projectId, null, null) : { projectName: t(locale, 'Projeto de teste'), tabName: null, machineName: null };
+    const where = conversation ? { conversation_id: conversation.id, project_id: projectId } : {};
+    if (kind === 'tab_question') return { to, ...test(tabQuestionText({ ...ctx, tabName: t(locale, 'teste') }, 'permission', locale)), data: { kind: 'tab_question', ...where, test: true } };
+    if (kind === 'reply') return { to, ...test(replyText(ctx, locale)), data: { kind: 'reply', ...where, test: true } };
+    return { to, ...test(confirmationText(ctx, locale)), data: { kind: 'confirmation', ...where, test: true } };
+  }
+
+  /** Sends one test push; never throws. Its outcome becomes the device's `push_test` event. */
+  private async sendTest(user: User, device: Device, kind: PushTestKind, message: PushMessage): Promise<PushTestResponse['ticket']> {
+    const record = (outcome: string) =>
+      this.deps.repos.deviceEvents
+        .record({ user_id: user.id, device_id: device.id, kind: 'push_test', actor: 'user', meta: { kind, outcome } })
+        .catch((err) => this.deps.log.warn({ err: failureLabel(err), deviceId: device.id }, 'recording a push test failed'));
+    let result: PushTicketResult | undefined;
+    try {
+      [result] = await this.deps.sender.send([message]);
+    } catch (err) {
+      this.deps.log.warn({ err: failureLabel(err), deviceId: device.id, kind }, 'mobile push test send failed');
+      await record('send_failed');
+      return { status: 'error', error: 'send_failed' };
+    }
+    const error = result?.error;
+    this.deps.log.info({ deviceId: device.id, kind, outcome: error ?? 'ticket_ok' }, 'mobile push test sent');
+    if (error) {
+      if (error === 'DeviceNotRegistered') await this.deps.repos.devices.clearPushTokenIf(device.id, message.to).catch(() => false);
+      await record(error);
+      return { status: 'error', error };
+    }
+    if (result?.id) this.checkTestReceipt(user, device, message.to, result.id, record);
+    return { status: 'ok' };
+  }
+
+  /** The receipt a few seconds later (again after a minute if it is not ready), then the event. */
+  private checkTestReceipt(user: User, device: Device, token: string, ticketId: string, record: (outcome: string) => Promise<unknown>): void {
+    const receipts = this.deps.receipts;
+    if (!receipts) return;
+    const attempt = (delays: number[]) => {
+      const [delay, ...rest] = delays;
+      setTimeout(async () => {
+        try {
+          const receipt = (await receipts.fetch([ticketId])).get(ticketId);
+          if (!receipt) return rest.length ? attempt(rest) : void (await record('receipt_pending'));
+          if (receipt.status === 'ok') return void (await record('delivered_to_provider'));
+          if (receipt.error === 'DeviceNotRegistered') await this.deps.repos.devices.clearPushTokenIf(device.id, token);
+          this.deps.log.warn({ deviceId: device.id, userId: user.id, ticketId, code: receipt.error }, 'mobile push receipt error');
+          await record(receipt.error);
+        } catch (err) {
+          this.deps.log.warn({ err: failureLabel(err), deviceId: device.id }, 'mobile push test receipt failed');
+        }
+      }, delay).unref();
+    };
+    attempt([TEST_RECEIPT_AFTER_MS, TEST_RECEIPT_RETRY_MS]);
   }
 
   private async handle(event: ChatEvent): Promise<void> {
