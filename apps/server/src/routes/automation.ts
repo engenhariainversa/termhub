@@ -6,6 +6,7 @@ import { requestLocale } from '../i18n/index.js';
 import { controlContextForRequest } from '../control/context.js';
 import { automationQueue } from '../automation/queue.js';
 import { listAutomationEvents } from '../automation/events.js';
+import { DEFAULT_FIXER_CI_TEXT, DEFAULT_FIXER_CONFLICT_TEXT, DEFAULT_IMPLEMENTER_TEXT, DEFAULT_INTEGRATOR_TEXT } from '../automation/prompts.js';
 import { automationPauseState, pauseAutomation, resumeAutomation } from '../automation/pause.js';
 
 const id = z.string().min(1).max(64);
@@ -41,6 +42,12 @@ const resumeBody = z.object({ scope });
 /** Mounted on /automation (resource `projects`, action `update`): the pause switch. */
 export async function automationPauseRoutes(app: FastifyInstance, repos: Repositories) {
   app.get('/state', async (request) => automationPauseState(controlContextForRequest(repos, request)));
+  /** The built-in middle paragraph of each role's prompt: the placeholder of the Setup textareas. */
+  app.get('/prompt-defaults', async () => ({
+    implementer: DEFAULT_IMPLEMENTER_TEXT,
+    integrator: DEFAULT_INTEGRATOR_TEXT,
+    fixer: `${DEFAULT_FIXER_CONFLICT_TEXT('a branch base')}\n${DEFAULT_FIXER_CI_TEXT}`,
+  }));
   app.post('/pause', { config: { action: 'update' } }, async (request) => {
     return pauseAutomation(controlContextForRequest(repos, request), pauseBody.parse(request.body));
   });

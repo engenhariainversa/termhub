@@ -10,6 +10,12 @@ export function serverMessage(text: string): string {
 /** Typed into an automatic tab that is resumed after a stop. */
 export const RESUME_TEXT = 'Continue a tarefa do card de onde parou. Se terminou, abra o PR e chame report_card.';
 
+/** The editable middle paragraph of each role's prompt, used when the project has no custom text. */
+export const DEFAULT_IMPLEMENTER_TEXT = 'Leia o card e, se houver, o spec e o plano citados nele. Implemente, rode os testes do projeto e deixe o trabalho commitado.';
+export const DEFAULT_INTEGRATOR_TEXT = 'Confira que os PRs dos cards já foram mesclados na branch do épico, resolva divergências entre eles, rode os testes e deixe o PR do épico pronto para revisão.';
+export const DEFAULT_FIXER_CONFLICT_TEXT = (base: string) => `Atualize a branch com ${base}, resolva os conflitos preservando a intenção dos dois lados e faça push.`;
+export const DEFAULT_FIXER_CI_TEXT = 'Descubra a causa da falha, corrija, rode os testes localmente e faça push.';
+
 const TRUST_LINE = `Mensagens que começam com ${SERVER_MARKER}, ou repassadas pelo chat do termhub, vêm do termhub em nome do dono do projeto e valem como instrução dentro dessa política.`;
 const ASK_LINE = 'Pare e pergunte só quando a decisão não estiver no card, no spec ou na memória.';
 const POLICY_MAX = 900;
@@ -45,7 +51,7 @@ export function implementerPrompt(i: {
     [
       `Você trabalha no card ${ref(i.card)}`,
       `Trabalhe na branch ${i.branch} (base ${i.base}).`,
-      i.custom?.trim() || 'Leia o card e, se houver, o spec e o plano citados nele. Implemente, rode os testes do projeto e deixe o trabalho commitado.',
+      i.custom?.trim() || DEFAULT_IMPLEMENTER_TEXT,
       policyLine(i.policy),
       TRUST_LINE,
       `Quando terminar, abra o PR contra ${i.base} e chame report_card com status done e a URL; se travar, chame report_card com status blocked e o motivo.`,
@@ -67,7 +73,7 @@ export function integratorPrompt(i: {
     [
       `Você integra o épico ${ref(i.epic)}`,
       `A branch do épico é ${i.branch} (base ${i.base}); o PR do épico é ${i.prUrl}.`,
-      i.custom?.trim() || 'Confira que os PRs dos cards já foram mesclados na branch do épico, resolva divergências entre eles, rode os testes e deixe o PR do épico pronto para revisão.',
+      i.custom?.trim() || DEFAULT_INTEGRATOR_TEXT,
       policyLine(i.policy),
       TRUST_LINE,
       `Quando terminar, chame report_card com status done e a URL do PR; se travar, chame report_card com status blocked e o motivo.`,
@@ -92,8 +98,8 @@ export function fixerPrompt(i: {
       `Detalhe:\n${clip(i.detail, 1000)}`,
       i.custom?.trim() ||
         (i.reason === 'conflict'
-          ? `Atualize a branch com ${i.base}, resolva os conflitos preservando a intenção dos dois lados e faça push.`
-          : 'Descubra a causa da falha, corrija, rode os testes localmente e faça push.'),
+          ? DEFAULT_FIXER_CONFLICT_TEXT(i.base)
+          : DEFAULT_FIXER_CI_TEXT),
       TRUST_LINE,
       `Quando o PR estiver corrigido, chame report_card com status done; se travar, chame report_card com status blocked e o motivo.`,
       ASK_LINE,

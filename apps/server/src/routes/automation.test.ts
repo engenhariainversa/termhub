@@ -37,6 +37,17 @@ async function build() {
 }
 
 describe('automation pause and event routes', () => {
+  it('serves the default prompt paragraphs as a read, not an update', async () => {
+    const { app, actions } = await build();
+    expect(actions['GET /automation/prompt-defaults']).toBeUndefined();
+    const res = await app.inject({ method: 'GET', url: '/automation/prompt-defaults' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Record<string, string>;
+    expect(Object.keys(body).sort()).toEqual(['fixer', 'implementer', 'integrator']);
+    expect(body.implementer).toContain('Implemente');
+    expect(body.fixer).toContain('conflitos');
+  });
+
   it('pause and resume need projects:update, not create', async () => {
     const { actions } = await build();
     expect(actions['POST /automation/pause']).toBe('update');
