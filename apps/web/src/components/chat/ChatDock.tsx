@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { memo, useEffect } from 'react';
 import { useData } from '../../lib/data';
 import { useNarrowWindow } from '../../lib/narrow-window';
@@ -34,6 +35,7 @@ const DockPanel = memo(ChatPanel);
  * the viewport, breaking the "still laid out, never 0×0" trick this file's docstring above relies on.
  */
 export function ChatDock() {
+  const { t } = useTranslation();
   const { alive, shownProjectId, pref, setOpen, setWidth, setMaximized } = useProjectChat();
   const { projects } = useData();
   const narrow = useNarrowWindow();
@@ -64,7 +66,7 @@ export function ChatDock() {
       {ids.map((id) => {
         const shown = id === shownProjectId;
         const p = pref(id);
-        const title = `Chat · ${projects.find((x) => x.id === id)?.name ?? 'projeto'}`;
+        const title = t('Chat · {{name}}', { name: projects.find((x) => x.id === id)?.name ?? t('projeto') });
         const docked = shown && !narrow && !p.maximized;
         const place = !shown
           ? 'fixed top-0 -left-[200vw] h-full'
@@ -89,14 +91,14 @@ export function ChatDock() {
                 <button
                   type="button"
                   className="rounded px-2 py-1 text-sm text-fg-dim hover:bg-bg-3 hover:text-fg"
-                  aria-label={p.maximized ? 'Sair da tela cheia' : 'Tela cheia'}
-                  title={p.maximized ? 'Sair da tela cheia' : 'Tela cheia'}
+                  aria-label={p.maximized ? t('Sair da tela cheia') : t('Tela cheia')}
+                  title={p.maximized ? t('Sair da tela cheia') : t('Tela cheia')}
                   onClick={() => setMaximized(id, !p.maximized)}
                 >
                   {p.maximized ? '⤡' : '⤢'}
                 </button>
               )}
-              <button type="button" className="rounded px-2 py-1 text-sm text-fg-dim hover:bg-bg-3 hover:text-fg" aria-label="Fechar chat" title="Fechar" onClick={() => setOpen(id, false)}>
+              <button type="button" className="rounded px-2 py-1 text-sm text-fg-dim hover:bg-bg-3 hover:text-fg" aria-label={t('Fechar chat')} title={t('Fechar')} onClick={() => setOpen(id, false)}>
                 ✕
               </button>
             </header>

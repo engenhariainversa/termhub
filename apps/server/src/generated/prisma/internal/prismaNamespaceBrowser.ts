@@ -100,6 +100,7 @@ export const ModelName = {
   DeviceToken: 'DeviceToken',
   DeviceChallenge: 'DeviceChallenge',
   DeviceEvent: 'DeviceEvent',
+  PushTicket: 'PushTicket',
   UserNotification: 'UserNotification'
 } as const
 
@@ -139,10 +140,12 @@ export const UserScalarFieldEnum = {
   chatSuggestions: 'chatSuggestions',
   chatAutodecide: 'chatAutodecide',
   chatCodexReplies: 'chatCodexReplies',
+  pushTabFinished: 'pushTabFinished',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
   automationPausedAt: 'automationPausedAt',
-  timeZone: 'timeZone'
+  timeZone: 'timeZone',
+  locale: 'locale'
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
@@ -934,6 +937,19 @@ export const DeviceEventScalarFieldEnum = {
 } as const
 
 export type DeviceEventScalarFieldEnum = (typeof DeviceEventScalarFieldEnum)[keyof typeof DeviceEventScalarFieldEnum]
+
+
+export const PushTicketScalarFieldEnum = {
+  id: 'id',
+  ticketId: 'ticketId',
+  deviceId: 'deviceId',
+  pushToken: 'pushToken',
+  kind: 'kind',
+  claimedAt: 'claimedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type PushTicketScalarFieldEnum = (typeof PushTicketScalarFieldEnum)[keyof typeof PushTicketScalarFieldEnum]
 
 
 export const UserNotificationScalarFieldEnum = {

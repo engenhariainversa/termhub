@@ -4,6 +4,7 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import { t } from '@/i18n';
 
 /** Android's channel for every push: the Expo Push Service delivers to `default` when a message names
  * none, and the server never names one. */
@@ -18,7 +19,8 @@ export function configurePush(): void {
       shouldShowList: true,
       // Android hides the heads-up banner of a silent notification.
       shouldPlaySound: true,
-      shouldSetBadge: false,
+      // The server's `badge` is the unread count (TER-923).
+      shouldSetBadge: true,
     }),
   });
 }
@@ -30,7 +32,7 @@ export type NotificationStatus = 'granted' | 'denied' | 'undetermined';
  * prompt once a channel exists (a no-op on iOS). */
 async function ensureChannel(): Promise<void> {
   await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL, {
-    name: 'Notificações',
+    name: t('Notificações'),
     importance: Notifications.AndroidImportance.HIGH,
   });
 }
@@ -71,6 +73,38 @@ function dataString(data: unknown, key: string): string | null {
  * `reply`), or `null` — a `device_request` names none. */
 export const pushConversationId = (data: unknown): string | null => dataString(data, 'conversation_id');
 
+/** The tab an "aba terminou" push names (`data.tab_id`, TER-925), or `null`. */
+export const pushTabId = (data: unknown): string | null => dataString(data, 'tab_id');
+
+/** Where a tapped push goes: the tab it names (its session screen), else its conversation, else
+ * nowhere (the app just opens). */
+export function pushRoute(data: unknown): string | null {
+  const tabId = pushTabId(data);
+  if (tabId) return `/session/${tabId}`;
+  const conversationId = pushConversationId(data);
+  return conversationId ? `/chat/${conversationId}` : null;
+}
+
 /** The history row a push was sent for (`data.notification_id`), or `null` for a push from a server
  * older than that field. */
 export const pushNotificationId = (data: unknown): string | null => dataString(data, 'notification_id');
+
+/** The app icon's number (TER-923): the history's unread count. Never throws. */
+export async function setIconBadge(count: number): Promise<void> {
+  await Notifications.setBadgeCountAsync(Math.max(0, count)).catch(() => false);
+}
+
+/**
+ * Removes from the notification center every delivered push whose history row is `read` (by its
+ * `data.notification_id`), or every one when `read` is `'all'` (the session ended). Never throws.
+ */
+export async function dismissDelivered(read: ReadonlySet<string> | 'all'): Promise<void> {
+  try {
+    for (const n of await Notifications.getPresentedNotificationsAsync()) {
+      const id = pushNotificationId(n.request.content.data);
+      if (read === 'all' || (id && read.has(id))) await Notifications.dismissNotificationAsync(n.request.identifier);
+    }
+  } catch {
+    // A missing native module or an OS error: the center keeps them, nothing else breaks.
+  }
+}

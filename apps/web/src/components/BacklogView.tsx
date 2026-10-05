@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
-import { backlogSections, cardPath, openCount, WORK_TYPES, type BacklogSection } from '../lib/board';
+import { backlogSections, cardPath, openCount, taskTypeLabel, WORK_TYPES, type BacklogSection } from '../lib/board';
 import { useData } from '../lib/data';
-import { TASK_TYPE_LABEL, type Task, type TaskType } from '../lib/types';
+import type { Task, TaskType } from '../lib/types';
+import { useTranslation } from '../i18n';
 import { AutomationBadge } from './AutomationBadge';
 import { TypeBadge } from './TypeBadge';
 
@@ -12,6 +13,7 @@ import { TypeBadge } from './TypeBadge';
  * within the section. Every change goes to the server and reloads — the backlog is not a hot path.
  */
 export function BacklogView({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
   const { setOpenTasks } = useData();
   const navigate = useNavigate();
   const location = useLocation();
@@ -24,7 +26,7 @@ export function BacklogView({ projectId }: { projectId: string }) {
     try {
       setTasks((await api.tasks.list(projectId)).tasks);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Erro ao carregar o backlog');
+      setError(e instanceof ApiError ? e.message : t('Erro ao carregar o backlog'));
     }
   }, [projectId]);
 
@@ -57,10 +59,10 @@ export function BacklogView({ projectId }: { projectId: string }) {
     setDragId(null);
     const from = section.items.findIndex((t) => t.id === id);
     if (!id || from === -1 || from === index) return; // only within the section
-    void run(() => api.tasks.move(id, { status: 'backlog' }, index), 'Erro ao reordenar o backlog');
+    void run(() => api.tasks.move(id, { status: 'backlog' }, index), t('Erro ao reordenar o backlog'));
   };
 
-  if (tasks === null) return <div className="flex h-full items-center justify-center text-sm text-fg-dim">{error ?? 'Carregando o backlog…'}</div>;
+  if (tasks === null) return <div className="flex h-full items-center justify-center text-sm text-fg-dim">{error ?? t('Carregando o backlog…')}</div>;
 
   return (
     <div className="h-full overflow-y-auto p-4">
@@ -68,14 +70,14 @@ export function BacklogView({ projectId }: { projectId: string }) {
         <div className="mb-3 rounded border border-danger/30 bg-danger/10 px-3 py-1 text-xs text-danger">
           {error}{' '}
           <button className="underline" onClick={() => setError(null)}>
-            fechar
+            {t('fechar')}
           </button>
         </div>
       )}
       <div className="mb-4">
         {newEpic === null ? (
           <button className="btn-ghost border border-line text-xs" onClick={() => setNewEpic('')}>
-            + Novo épico
+            {t('+ Novo épico')}
           </button>
         ) : (
           <form
@@ -84,12 +86,12 @@ export function BacklogView({ projectId }: { projectId: string }) {
               e.preventDefault();
               const title = newEpic.trim();
               setNewEpic(null);
-              if (title) void run(() => api.tasks.create(projectId, { title, type: 'epic', status: 'backlog' }), 'Erro ao criar o épico');
+              if (title) void run(() => api.tasks.create(projectId, { title, type: 'epic', status: 'backlog' }), t('Erro ao criar o épico'));
             }}
           >
             <input
               className="input py-1 text-sm"
-              aria-label="Título do épico"
+              aria-label={t('Título do épico')}
               autoFocus
               value={newEpic}
               onChange={(e) => setNewEpic(e.target.value)}
@@ -98,64 +100,64 @@ export function BacklogView({ projectId }: { projectId: string }) {
               }}
             />
             <button type="submit" className="btn-primary text-xs">
-              Criar
+              {t('Criar')}
             </button>
           </form>
         )}
       </div>
-      {sections.length === 0 && <p className="text-sm text-fg-dim">Nenhum épico ainda. Crie um para começar o backlog.</p>}
+      {sections.length === 0 && <p className="text-sm text-fg-dim">{t('Nenhum épico ainda. Crie um para começar o backlog.')}</p>}
       <div className="space-y-4">
         {sections.map((s) => (
           <section key={s.epic.id} aria-label={s.epic.title} className="rounded-lg border border-line bg-bg-2">
             <header className="flex items-center gap-2 border-b border-line px-3 py-2 text-sm">
               <TypeBadge type="epic" />
-              <button className="font-mono text-xs text-fg-muted hover:text-fg" onClick={() => open(s.epic)} title="Abrir o épico">
+              <button className="font-mono text-xs text-fg-muted hover:text-fg" onClick={() => open(s.epic)} title={t('Abrir o épico')}>
                 {s.epic.ref}
               </button>
               <span className="font-medium">{s.epic.title}</span>
               {s.epic.auto && <AutomationBadge />}
               <span className="ml-auto text-xs text-fg-dim">
-                {s.done}/{s.total} feitas
+                {t('{{done}}/{{total}} feitas', { done: s.done, total: s.total })}
               </span>
             </header>
             <ul>
-              {s.items.map((t, i) => (
+              {s.items.map((item, i) => (
                 <li
-                  key={t.id}
+                  key={item.id}
                   draggable
                   onDragStart={(e) => {
                     e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', t.id); // Firefox does not start a drag without this
-                    setDragId(t.id);
+                    e.dataTransfer.setData('text/plain', item.id); // Firefox does not start a drag without this
+                    setDragId(item.id);
                   }}
                   onDragEnd={() => setDragId(null)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => dropOn(e, s, i)}
-                  className={`group flex cursor-grab items-center gap-2 border-b border-line px-3 py-1.5 text-sm last:border-b-0 ${dragId === t.id ? 'opacity-40' : ''}`}
+                  className={`group flex cursor-grab items-center gap-2 border-b border-line px-3 py-1.5 text-sm last:border-b-0 ${dragId === item.id ? 'opacity-40' : ''}`}
                 >
-                  <TypeBadge type={t.type} />
-                  <span className="font-mono text-[11px] text-fg-dim">{t.ref}</span>
-                  <span className="flex-1 break-words">{t.title}</span>
-                  {t.auto && <AutomationBadge />}
-                  {(t.subtasks?.length ?? 0) > 0 && (
+                  <TypeBadge type={item.type} />
+                  <span className="font-mono text-[11px] text-fg-dim">{item.ref}</span>
+                  <span className="flex-1 break-words">{item.title}</span>
+                  {item.auto && <AutomationBadge />}
+                  {(item.subtasks?.length ?? 0) > 0 && (
                     <span className="shrink-0 rounded bg-bg-4 px-1 text-[10px] tabular-nums text-fg-muted">
-                      ✓ {t.subtasks!.filter((x) => x.status === 'done').length}/{t.subtasks!.length}
+                      ✓ {item.subtasks!.filter((x) => x.status === 'done').length}/{item.subtasks!.length}
                     </span>
                   )}
                   <button
                     className="btn-ghost shrink-0 border border-line px-2 py-0.5 text-[11px]"
-                    onClick={() => void run(() => api.tasks.move(t.id, { status: 'todo' }, 0), 'Erro ao enviar para o board')}
+                    onClick={() => void run(() => api.tasks.move(item.id, { status: 'todo' }, 0), t('Erro ao enviar para o board'))}
                   >
-                    Enviar para o board
+                    {t('Enviar para o board')}
                   </button>
-                  <button className="shrink-0 rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-fg" onClick={() => open(t)}>
-                    Abrir
+                  <button className="shrink-0 rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-fg" onClick={() => open(item)}>
+                    {t('Abrir')}
                   </button>
                 </li>
               ))}
             </ul>
-            {s.items.length === 0 && <p className="px-3 py-3 text-xs text-fg-dim">Nada no backlog deste épico.</p>}
-            <BacklogQuickAdd onAdd={(title, type) => void run(() => api.tasks.create(projectId, { title, type, epic_id: s.epic.id, status: 'backlog' }), 'Erro ao criar o item')} />
+            {s.items.length === 0 && <p className="px-3 py-3 text-xs text-fg-dim">{t('Nada no backlog deste épico.')}</p>}
+            <BacklogQuickAdd onAdd={(title, type) => void run(() => api.tasks.create(projectId, { title, type, epic_id: s.epic.id, status: 'backlog' }), t('Erro ao criar o item'))} />
           </section>
         ))}
       </div>
@@ -164,6 +166,7 @@ export function BacklogView({ projectId }: { projectId: string }) {
 }
 
 function BacklogQuickAdd({ onAdd }: { onAdd: (title: string, type: TaskType) => void }) {
+  const { t } = useTranslation();
   const [value, setValue] = useState('');
   const [type, setType] = useState<TaskType>('task');
   const submit = (e: FormEvent) => {
@@ -175,14 +178,14 @@ function BacklogQuickAdd({ onAdd }: { onAdd: (title: string, type: TaskType) => 
   };
   return (
     <form onSubmit={submit} className="flex gap-2 p-2">
-      <select aria-label="Tipo do item" className="input w-auto py-1 text-xs" value={type} onChange={(e) => setType(e.target.value as TaskType)}>
-        {WORK_TYPES.map((t) => (
-          <option key={t} value={t}>
-            {TASK_TYPE_LABEL[t]}
+      <select aria-label={t('Tipo do item')} className="input w-auto py-1 text-xs" value={type} onChange={(e) => setType(e.target.value as TaskType)}>
+        {WORK_TYPES.map((type) => (
+          <option key={type} value={type}>
+            {taskTypeLabel(type)}
           </option>
         ))}
       </select>
-      <input className="input py-1 text-xs" placeholder="+ item (Enter)" value={value} onChange={(e) => setValue(e.target.value)} />
+      <input className="input py-1 text-xs" placeholder={t('+ item (Enter)')} value={value} onChange={(e) => setValue(e.target.value)} />
     </form>
   );
 }

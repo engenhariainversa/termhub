@@ -1,13 +1,14 @@
 import { useState, type ReactNode } from 'react';
+import { tk, useTranslation } from '../i18n';
 import { AUTONOMY_LABEL, autonomyConfirmText, needsAutonomyConfirm } from '../lib/automation';
 import type { AutomationAutonomy, ProjectAutomation } from '../lib/types';
 import { ConfirmDialog } from './Modal';
 
 const TYPE_OPTIONS: { type: ProjectAutomation['types'][number]; label: string }[] = [
-  { type: 'story', label: 'Story' },
-  { type: 'task', label: 'Tarefa' },
-  { type: 'bug', label: 'Bug' },
-  { type: 'spike', label: 'Spike' },
+  { type: 'story', label: tk('Story') },
+  { type: 'task', label: tk('Tarefa') },
+  { type: 'bug', label: tk('Bug') },
+  { type: 'spike', label: tk('Spike') },
 ];
 
 const LEVELS = Object.keys(AUTONOMY_LABEL) as AutomationAutonomy[];
@@ -19,6 +20,7 @@ interface Props {
 
 /** The "Trabalho automático" block of the project Setup: a controlled part of `SetupForm`. */
 export function AutomationSetup({ value, onChange }: Props) {
+  const { t } = useTranslation();
   const [pending, setPending] = useState<ProjectAutomation | null>(null);
 
   /** Turning it on, or raising the level to Deploy or Publicação, waits for a confirmation. */
@@ -35,74 +37,74 @@ export function AutomationSetup({ value, onChange }: Props) {
 
   return (
     <section className="rounded-lg border border-line bg-bg-2 p-4">
-      <h3 className="text-sm font-semibold">Trabalho automático</h3>
-      <p className="mb-3 text-xs text-fg-dim">Os agentes pegam sozinhos os cards marcados como automáticos. Desligado por padrão.</p>
+      <h3 className="text-sm font-semibold">{t('Trabalho automático')}</h3>
+      <p className="mb-3 text-xs text-fg-dim">{t('Os agentes pegam sozinhos os cards marcados como automáticos. Desligado por padrão.')}</p>
       <div className="space-y-3">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" className="accent-accent" checked={value.enabled} onChange={(e) => propose({ ...value, enabled: e.target.checked })} />
-          Ligar trabalho automático neste projeto
+          {t('Ligar trabalho automático neste projeto')}
         </label>
 
-        <Field label="Tipos de card">
+        <Field label={t('Tipos de card')}>
           <div className="flex flex-wrap gap-4">
             {TYPE_OPTIONS.map((o) => (
               <label key={o.type} className="flex items-center gap-2 text-sm text-fg-muted">
                 <input type="checkbox" className="accent-accent" checked={value.types.includes(o.type)} onChange={() => toggleType(o.type)} />
-                {o.label}
+                {t(o.label)}
               </label>
             ))}
           </div>
         </Field>
 
-        <Field label="Até onde os agentes vão sozinhos">
+        <Field label={t('Até onde os agentes vão sozinhos')}>
           <select className="input" value={value.autonomy} onChange={(e) => propose({ ...value, autonomy: e.target.value as AutomationAutonomy })}>
             {LEVELS.map((l) => (
               <option key={l} value={l}>
-                {AUTONOMY_LABEL[l]}
+                {t(AUTONOMY_LABEL[l])}
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-fg-dim">Envio às lojas nunca é automático.</p>
+          <p className="mt-1 text-xs text-fg-dim">{t('Envio às lojas nunca é automático.')}</p>
         </Field>
 
-        <Field label="Caminhos de release" hint="globs, um por linha; mudanças neles exigem o nível Publicação">
-          <ListInput value={value.release_paths} onChange={(v) => set('release_paths', v)} placeholder="apps/mobile/app.json" />
+        <Field label={t('Caminhos de release')} hint={t('globs, um por linha; mudanças neles exigem o nível Publicação')}>
+          <ListInput value={value.release_paths} onChange={(v) => set('release_paths', v)} /* i18n-ignore */ placeholder="apps/mobile/app.json" />
         </Field>
-        <Field label="Caminhos das lojas" hint="globs, um por linha; sempre param para você">
-          <ListInput value={value.store_paths} onChange={(v) => set('store_paths', v)} placeholder="apps/mobile/ios/**" />
+        <Field label={t('Caminhos das lojas')} hint={t('globs, um por linha; sempre param para você')}>
+          <ListInput value={value.store_paths} onChange={(v) => set('store_paths', v)} /* i18n-ignore */ placeholder="apps/mobile/ios/**" />
         </Field>
-        <Field label="Workflows de release" hint="um por linha">
-          <ListInput value={value.release_workflows} onChange={(v) => set('release_workflows', v)} placeholder="publish-agent.yml" />
+        <Field label={t('Workflows de release')} hint={t('um por linha')}>
+          <ListInput value={value.release_workflows} onChange={(v) => set('release_workflows', v)} /* i18n-ignore */ placeholder="publish-agent.yml" />
         </Field>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Padrão da branch do épico" hint="use {ref}">
+          <Field label={t('Padrão da branch do épico')} hint={t('use {ref}')}>
             <input className="input font-mono" value={value.epic_branch_pattern} onChange={(e) => set('epic_branch_pattern', e.target.value)} />
           </Field>
-          <Field label="Pasta dos worktrees">
+          <Field label={t('Pasta dos worktrees')}>
             <input className="input font-mono" value={value.worktrees_dir} onChange={(e) => set('worktrees_dir', e.target.value)} />
           </Field>
-          <Field label="Máximo em paralelo">
-            <NumberInput value={value.max_parallel} min={1} max={100} placeholder="Sem limite" onChange={(v) => set('max_parallel', v)} />
+          <Field label={t('Máximo em paralelo')}>
+            <NumberInput value={value.max_parallel} min={1} max={100} placeholder={t('Sem limite')} onChange={(v) => set('max_parallel', v)} />
           </Field>
-          <Field label="Orçamento diário (USD)">
-            <NumberInput value={value.daily_budget_usd} min={0.01} max={100000} step="any" placeholder="Desligado" onChange={(v) => set('daily_budget_usd', v)} />
+          <Field label={t('Orçamento diário (USD)')}>
+            <NumberInput value={value.daily_budget_usd} min={0.01} max={100000} step="any" placeholder={t('Desligado')} onChange={(v) => set('daily_budget_usd', v)} />
           </Field>
-          <Field label="Retomadas por card">
+          <Field label={t('Retomadas por card')}>
             <NumberInput value={value.resume_max} min={0} max={10} onChange={(v) => set('resume_max', v ?? 0)} />
           </Field>
-          <Field label="Tentativas de correção do CI">
+          <Field label={t('Tentativas de correção do CI')}>
             <NumberInput value={value.fix_attempts} min={0} max={10} onChange={(v) => set('fix_attempts', v ?? 0)} />
           </Field>
-          <Field label="Hora do resumo diário" hint="0 a 23; vazio = sem resumo">
-            <NumberInput value={value.summary_hour} min={0} max={23} placeholder="Sem resumo" onChange={(v) => set('summary_hour', v)} />
+          <Field label={t('Hora do resumo diário')} hint={t('0 a 23; vazio = sem resumo')}>
+            <NumberInput value={value.summary_hour} min={0} max={23} placeholder={t('Sem resumo')} onChange={(v) => set('summary_hour', v)} />
           </Field>
         </div>
       </div>
 
       <ConfirmDialog
         open={pending !== null}
-        title="Trabalho automático"
+        title={t('Trabalho automático')}
         message={pending ? autonomyConfirmText(pending.autonomy) : ''}
         onConfirm={() => {
           if (pending) onChange(pending);

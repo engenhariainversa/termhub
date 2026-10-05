@@ -2,6 +2,7 @@ import type { PrismaClient } from '../prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { mapUser, type User, type UserRole } from './types.js';
+import type { Locale } from '../../i18n/index.js';
 
 export class UsersRepository {
   constructor(private db: PrismaClient) {}
@@ -149,6 +150,11 @@ export class UsersRepository {
     return u?.chatSuggestions ?? true;
   }
 
+  /** The language this person chose (TER-405); null = automatic. */
+  async setLocale(userId: string, locale: Locale | null): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { locale } });
+  }
+
   async setChatSuggestions(userId: string, enabled: boolean): Promise<void> {
     await this.db.user.update({ where: { id: userId }, data: { chatSuggestions: enabled } });
   }
@@ -173,5 +179,15 @@ export class UsersRepository {
 
   async setChatCodexReplies(userId: string, enabled: boolean): Promise<void> {
     await this.db.user.update({ where: { id: userId }, data: { chatCodexReplies: enabled } });
+  }
+
+  /** "Avisar quando uma aba terminar" (TER-925): off unless the person turned it on. */
+  async pushTabFinished(userId: string): Promise<boolean> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { pushTabFinished: true } });
+    return u?.pushTabFinished ?? false;
+  }
+
+  async setPushTabFinished(userId: string, enabled: boolean): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { pushTabFinished: enabled } });
   }
 }

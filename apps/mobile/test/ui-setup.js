@@ -6,6 +6,12 @@
 // time out on a slow CI runner. 2^10 keeps the derivation real but cheap (see `scryptLog2N`).
 process.env.TERMHUB_SCRYPT_LOG2N = '10';
 
+// i18n spec §5: the suite runs in pt-BR whatever the machine's locale is (`systemLanguages()` in
+// src/i18n reads this instead of `Intl`), so tests keep querying the Portuguese text. A test that
+// renders English calls `setLocale('en')` and sets it back to `null` afterwards.
+process.env.TERMHUB_TEST_LOCALE = 'pt-BR';
+
+
 // The gesture handler's own jest setup (its native module has no binding here), and haptics as spies.
 require('react-native-gesture-handler/jestSetup');
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(async () => undefined), ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' } }));
@@ -33,6 +39,7 @@ jest.mock('react-native-mmkv', () => require('./fakes/mmkv'));
 jest.mock('expo-secure-store', () => require('./fakes/secure-store'));
 jest.mock('expo-device', () => require('./fakes/expo-device'));
 jest.mock('expo-application', () => ({ nativeApplicationVersion: '0.1.0', nativeBuildVersion: '1' }));
+jest.mock('expo-updates', () => ({ updateId: null, isEmbeddedLaunch: true }));
 jest.mock('expo-local-authentication', () => require('./fakes/local-auth'));
 jest.mock('expo-notifications', () => require('./fakes/expo-notifications'));
 jest.mock('expo-tracking-transparency', () => require('./fakes/expo-tracking-transparency'));

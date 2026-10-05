@@ -446,6 +446,7 @@ export const ModelName = {
   DeviceToken: 'DeviceToken',
   DeviceChallenge: 'DeviceChallenge',
   DeviceEvent: 'DeviceEvent',
+  PushTicket: 'PushTicket',
   UserNotification: 'UserNotification'
 } as const
 
@@ -462,7 +463,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -4092,6 +4093,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    PushTicket: {
+      payload: Prisma.$PushTicketPayload<ExtArgs>
+      fields: Prisma.PushTicketFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PushTicketFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PushTicketFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload>
+        }
+        findFirst: {
+          args: Prisma.PushTicketFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PushTicketFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload>
+        }
+        findMany: {
+          args: Prisma.PushTicketFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload>[]
+        }
+        create: {
+          args: Prisma.PushTicketCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload>
+        }
+        createMany: {
+          args: Prisma.PushTicketCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PushTicketCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload>[]
+        }
+        delete: {
+          args: Prisma.PushTicketDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload>
+        }
+        update: {
+          args: Prisma.PushTicketUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload>
+        }
+        deleteMany: {
+          args: Prisma.PushTicketDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PushTicketUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PushTicketUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload>[]
+        }
+        upsert: {
+          args: Prisma.PushTicketUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PushTicketPayload>
+        }
+        aggregate: {
+          args: Prisma.PushTicketAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePushTicket>
+        }
+        groupBy: {
+          args: Prisma.PushTicketGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PushTicketGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PushTicketCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PushTicketCountAggregateOutputType> | number
+        }
+      }
+    }
     UserNotification: {
       payload: Prisma.$UserNotificationPayload<ExtArgs>
       fields: Prisma.UserNotificationFieldRefs
@@ -4225,10 +4300,12 @@ export const UserScalarFieldEnum = {
   chatSuggestions: 'chatSuggestions',
   chatAutodecide: 'chatAutodecide',
   chatCodexReplies: 'chatCodexReplies',
+  pushTabFinished: 'pushTabFinished',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
   automationPausedAt: 'automationPausedAt',
-  timeZone: 'timeZone'
+  timeZone: 'timeZone',
+  locale: 'locale'
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
@@ -5022,6 +5099,19 @@ export const DeviceEventScalarFieldEnum = {
 export type DeviceEventScalarFieldEnum = (typeof DeviceEventScalarFieldEnum)[keyof typeof DeviceEventScalarFieldEnum]
 
 
+export const PushTicketScalarFieldEnum = {
+  id: 'id',
+  ticketId: 'ticketId',
+  deviceId: 'deviceId',
+  pushToken: 'pushToken',
+  kind: 'kind',
+  claimedAt: 'claimedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type PushTicketScalarFieldEnum = (typeof PushTicketScalarFieldEnum)[keyof typeof PushTicketScalarFieldEnum]
+
+
 export const UserNotificationScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -5506,6 +5596,7 @@ export type GlobalOmitConfig = {
   deviceToken?: Prisma.DeviceTokenOmit
   deviceChallenge?: Prisma.DeviceChallengeOmit
   deviceEvent?: Prisma.DeviceEventOmit
+  pushTicket?: Prisma.PushTicketOmit
   userNotification?: Prisma.UserNotificationOmit
 }
 

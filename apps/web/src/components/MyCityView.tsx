@@ -8,6 +8,7 @@ import { cityLinkFor, displayLink } from '../lib/public-city';
 import type { Project } from '../lib/types';
 import { NicknameDialog } from './NicknameDialog';
 import { PublishControl } from './PublishControl';
+import { i18n, Trans, useTranslation } from '../i18n';
 
 type CopyStatus = 'idle' | 'copied' | 'failed';
 
@@ -21,6 +22,7 @@ type CopyStatus = 'idle' | 'copied' | 'failed';
  * has now — terminals, not agents, so it never claims a count it cannot see.
  */
 export function MyCityView() {
+  const { t } = useTranslation();
   const { user, publicCityUrl, can } = useAuth();
   const { projects, machines, hiddenLocal, loading } = useData();
   const { openTabs } = useMonitor();
@@ -37,46 +39,46 @@ export function MyCityView() {
   // person's, so their terminals count here too.
   const ownMachines = useMemo(() => new Set([...machines, ...hiddenLocal].filter((m) => user && m.owner_id === user.id).map((m) => m.id)), [machines, hiddenLocal, user]);
   /** the project's open terminals on the machines this person owns: what of it the street shows that the app can count */
-  const terminalsOf = (p: Project) => openTabs.filter((t) => t.project_id === p.id && ownMachines.has(t.machine_id)).length;
+  const terminalsOf = (p: Project) => openTabs.filter((tab) => tab.project_id === p.id && ownMachines.has(tab.machine_id)).length;
 
   const mine = canListProjects && user ? projects.filter((p) => p.owner_id === user.id) : [];
   const onStreet = mine.some((p) => p.is_public && p.status !== 'archived');
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-fg-muted">Sua cidade pública mostra, para quem tiver o link, cada projeto que você publicar e os agentes dele que rodam nas suas máquinas.</p>
+      <p className="text-sm text-fg-muted">{t('Sua cidade pública mostra, para quem tiver o link, cada projeto que você publicar e os agentes dele que rodam nas suas máquinas.')}</p>
 
       <section className="rounded-lg border border-line bg-bg-2 p-4">
-        <h2 className="text-sm font-semibold">Apelido</h2>
+        <h2 className="text-sm font-semibold">{t('Apelido')}</h2>
         {nickname ? (
           <>
             <p className="mt-2 font-mono text-sm">{nickname}</p>
-            <p className="mt-1 text-xs text-fg-dim">O apelido não pode ser trocado: os links que você já compartilhou dependem dele.</p>
+            <p className="mt-1 text-xs text-fg-dim">{t('O apelido não pode ser trocado: os links que você já compartilhou dependem dele.')}</p>
           </>
         ) : (
           <div className="mt-2 flex items-center gap-3">
-            <p className="text-sm text-fg-muted">Você ainda não escolheu um apelido. Ele vira o endereço da sua cidade e não pode ser trocado depois.</p>
+            <p className="text-sm text-fg-muted">{t('Você ainda não escolheu um apelido. Ele vira o endereço da sua cidade e não pode ser trocado depois.')}</p>
             <button type="button" className="btn-primary ml-auto shrink-0 text-xs" onClick={() => setChoosingNickname(true)}>
-              Escolher apelido
+              {t('Escolher apelido')}
             </button>
           </div>
         )}
       </section>
 
       <section className="rounded-lg border border-line bg-bg-2 p-4">
-        <h2 className="text-sm font-semibold">Link da cidade</h2>
+        <h2 className="text-sm font-semibold">{t('Link da cidade')}</h2>
         {link ? (
           <>
             <CityLink url={link} />
             <a href={link} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-xs text-accent hover:underline">
-              Abrir minha cidade para compartilhar
+              {t('Abrir minha cidade para compartilhar')}
             </a>
-            <p className="text-xs text-fg-dim">Imagens para story e post e um vídeo de 10 s com som saem da própria página da cidade, no botão Compartilhar.</p>
-            {!onStreet && <p className="mt-2 text-xs text-warn">Nenhum projeto publicado ainda: quem abrir o link encontra a cidade vazia. Publique um projeto abaixo.</p>}
+            <p className="text-xs text-fg-dim">{t('Imagens para story e post e um vídeo de 10 s com som saem da própria página da cidade, no botão Compartilhar.')}</p>
+            {!onStreet && <p className="mt-2 text-xs text-warn">{t('Nenhum projeto publicado ainda: quem abrir o link encontra a cidade vazia. Publique um projeto abaixo.')}</p>}
           </>
         ) : (
           <p className="mt-2 text-sm text-fg-muted">
-            {nickname ? 'O endereço da cidade pública ainda não foi carregado.' : 'Escolha um apelido para ter o endereço da sua cidade pública.'}
+            {nickname ? t('O endereço da cidade pública ainda não foi carregado.') : t('Escolha um apelido para ter o endereço da sua cidade pública.')}
           </p>
         )}
       </section>
@@ -84,11 +86,11 @@ export function MyCityView() {
       <ShortLinkSection state={short} />
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold">Seus projetos</h2>
+        <h2 className="mb-2 text-sm font-semibold">{t('Seus projetos')}</h2>
         {canListProjects && loading ? (
-          <p className="text-sm text-fg-dim">Carregando…</p>
+          <p className="text-sm text-fg-dim">{t('Carregando…')}</p>
         ) : mine.length === 0 ? (
-          <p className="rounded-lg border border-line bg-bg-2 p-4 text-sm text-fg-muted">Você ainda não tem projetos. Os projetos que você criar aparecem aqui para publicar na sua cidade.</p>
+          <p className="rounded-lg border border-line bg-bg-2 p-4 text-sm text-fg-muted">{t('Você ainda não tem projetos. Os projetos que você criar aparecem aqui para publicar na sua cidade.')}</p>
         ) : (
           <ul className="divide-y divide-line rounded-lg border border-line bg-bg-2">
             {mine.map((p) => (
@@ -100,8 +102,8 @@ export function MyCityView() {
                   </div>
                   <p className="truncate text-xs text-fg-dim">{rowLine(p, terminalsOf(p))}</p>
                 </div>
-                <Link to={`/projects/${p.id}`} className="shrink-0 text-xs text-accent hover:underline" aria-label={`Abrir projeto ${p.name}`}>
-                  abrir →
+                <Link to={`/projects/${p.id}`} className="shrink-0 text-xs text-accent hover:underline" aria-label={t('Abrir projeto {{name}}', { name: p.name })}>
+                  {t('abrir →')}
                 </Link>
                 <PublishControl project={p} />
               </li>
@@ -120,9 +122,9 @@ export function MyCityView() {
  * nobody in it right now — unless it is archived, which the street never shows, whatever its switch.
  */
 function rowLine(p: Project, terminals: number): string {
-  if (p.status === 'archived') return 'arquivado (não aparece na cidade)';
-  if (!p.is_public) return 'não publicado';
-  return `publicado · ${terminals} ${terminals === 1 ? 'terminal' : 'terminais'} agora`;
+  if (p.status === 'archived') return i18n.t('arquivado (não aparece na cidade)');
+  if (!p.is_public) return i18n.t('não publicado');
+  return i18n.t('publicado · {{count}} terminais agora', { count: terminals });
 }
 
 /** Copy-to-clipboard with the button's own feedback, shared by the city link and the short link. */
@@ -144,9 +146,10 @@ function useCopy(): [CopyStatus, (text: string) => Promise<void>] {
   return [status, copy];
 }
 
-const copyLabel = (status: CopyStatus) => (status === 'copied' ? 'Copiado' : status === 'failed' ? 'Não foi possível copiar' : 'Copiar');
+const copyLabel = (status: CopyStatus) => (status === 'copied' ? i18n.t('Copiado') : status === 'failed' ? i18n.t('Não foi possível copiar') : i18n.t('Copiar'));
 
 function CityLink({ url }: { url: string }) {
+  const { t } = useTranslation();
   const [status, copy] = useCopy();
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -155,7 +158,7 @@ function CityLink({ url }: { url: string }) {
         {copyLabel(status)}
       </button>
       <a href={url} target="_blank" rel="noopener noreferrer" className="btn-ghost text-xs">
-        Abrir
+        {t('Abrir')}
       </a>
     </div>
   );
@@ -167,6 +170,7 @@ function CityLink({ url }: { url: string }) {
  * person has a nickname (no city to link to).
  */
 function ShortLinkSection({ state }: { state: CityLinkState }) {
+  const { t } = useTranslation();
   const { link, saving, error, setCustom, restorePartner, clearError } = state;
   const [status, copy] = useCopy();
   const [editing, setEditing] = useState(false);
@@ -194,56 +198,56 @@ function ShortLinkSection({ state }: { state: CityLinkState }) {
   };
 
   return (
-    <section aria-label="Link curto" className="rounded-lg border border-line bg-bg-2 p-4">
-      <h2 className="text-sm font-semibold">Link curto</h2>
+    <section aria-label={t('Link curto')} className="rounded-lg border border-line bg-bg-2 p-4">
+      <h2 className="text-sm font-semibold">{t('Link curto')}</h2>
       {link.short_url ? (
         <>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{`Link curto: ${displayLink(link.short_url)}`}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{t('Link curto: {{link}}', { link: displayLink(link.short_url) })}</span>
             <button type="button" className="btn-ghost text-xs" onClick={() => void copy(link.short_url!)}>
               {copyLabel(status)}
             </button>
           </div>
-          {link.source === 'partner' && <p className="mt-1 text-xs text-fg-dim">Criado pelo TypeToAccess, parceiro do termhub</p>}
+          {link.source === 'partner' && <p className="mt-1 text-xs text-fg-dim">{t('Criado pelo TypeToAccess, parceiro do termhub')}</p>}
           {/* only when there is a partner link to go back to (the server refuses safely otherwise) */}
           {link.source === 'custom' && link.enabled && link.partner_url && (
             <button type="button" className="btn-ghost mt-2 text-xs" disabled={saving} onClick={() => void restorePartner()}>
-              Voltar ao link da parceria
+              {t('Voltar ao link da parceria')}
             </button>
           )}
         </>
       ) : (
-        <p className="mt-2 text-sm text-fg-muted">O link curto ainda não foi criado. Enquanto isso, use o link da cidade acima.</p>
+        <p className="mt-2 text-sm text-fg-muted">{t('O link curto ainda não foi criado. Enquanto isso, use o link da cidade acima.')}</p>
       )}
       {link.enabled &&
         (editing ? (
           <form className="mt-3 space-y-2" onSubmit={(e) => void save(e)}>
             <p className="text-xs text-fg-muted">
-              Crie um link em{' '}
-              <a href="https://typetoaccess.it" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                typetoaccess.it
-              </a>{' '}
-              que leve para {link.city_url} e cole aqui.
+              <Trans
+                i18nKey="Crie um link em <0>typetoaccess.it</0> que leve para {{url}} e cole aqui."
+                values={{ url: link.city_url }}
+                components={[<a key="t" href="https://typetoaccess.it" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline" />]}
+              />
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <input
-                aria-label="Seu link curto"
+                aria-label={t('Seu link curto')}
                 className="input min-w-0 flex-1 text-sm"
-                placeholder="https://77a.it/…"
+                placeholder="https://77a.it/…" /* i18n-ignore */
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
               />
               <button type="submit" className="btn-primary text-xs" disabled={saving || !draft.trim()}>
-                Salvar
+                {t('Salvar')}
               </button>
               <button type="button" className="btn-ghost text-xs" onClick={cancel}>
-                Cancelar
+                {t('Cancelar')}
               </button>
             </div>
           </form>
         ) : (
           <button type="button" className="btn-ghost mt-2 text-xs" onClick={openForm}>
-            Usar meu próprio link curto
+            {t('Usar meu próprio link curto')}
           </button>
         ))}
       {/* outside the form: a failed restore ("Voltar ao link da parceria") is reported here too */}

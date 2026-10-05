@@ -14,6 +14,7 @@ import { emptyFold } from '@/features/chat/model/live';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { useThemeStore } from '@/features/theme/viewmodel/useThemeStore';
+import { setLocale, useLocaleStore } from '@/i18n';
 import { ACCOUNT_DELETION_ACTION_ID } from '@/services/api/contract';
 import { PIN } from '../../../../test/helpers/enrolled-session';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
@@ -40,6 +41,7 @@ afterEach(() => {
     biometricsEnabled: false,
   });
   useThemeStore.setState({ theme: 'system' });
+  setLocale(null);
   useChatStore.setState({ activeProject: undefined, live: emptyFold() });
 });
 
@@ -74,6 +76,24 @@ describe('Ajustes', () => {
     expect(useThemeStore.getState().theme).toBe('dark');
     await fireEvent.press(screen.getByRole('button', { name: 'Claro' }));
     expect(useThemeStore.getState().theme).toBe('light');
+  });
+
+  it('Idioma: each language in its own words; picking one switches the screen at once', async () => {
+    await render(<SettingsScreen />);
+    expect(await screen.findByText('Idioma', undefined, LOAD)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Automático' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Português (Brasil)' })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'English' }));
+    expect(useLocaleStore.getState().choice).toBe('en');
+    expect(await screen.findByText('Settings')).toBeTruthy();
+    expect(screen.getByText('Language')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Automatic' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Português (Brasil)' })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Automatic' }));
+    expect(useLocaleStore.getState().choice).toBeNull();
+    expect(await screen.findByText('Ajustes')).toBeTruthy();
   });
 
   it('"Sair e remover este aparelho" asks first, then calls leave()', async () => {
@@ -168,6 +188,33 @@ describe('Notificações e Privacidade (permission prompts spec §2)', () => {
     expect(await screen.findByText('Desativadas. Para receber avisos, ative nos Ajustes do sistema.')).toBeTruthy();
     await act(async () => fireEvent.press(screen.getByText('Abrir Ajustes do sistema')));
     expect(stores.permissionDeps.openSystemSettings).toHaveBeenCalled();
+  });
+
+  it('granted: sends a test push and shows the OTA line (TER-913)', async () => {
+    stores.permissionDeps.notificationStatus.mockResolvedValueOnce('granted');
+    await render(<SettingsScreen />);
+    expect(await screen.findByText('Feche o app para ver como ela chega.')).toBeTruthy();
+    expect(screen.getByText('OTA: binário')).toBeTruthy();
+    await act(async () => fireEvent.press(screen.getByText('Enviar notificação de teste')));
+    expect(await screen.findByText('Enviada. Ela chega em 10 s. Feche o app para ver como ela chega.')).toBeTruthy();
+  });
+
+  it('granted: the "aba terminou" switch reads and changes the account setting (TER-925)', async () => {
+    stores.permissionDeps.notificationStatus.mockResolvedValueOnce('granted');
+    await render(<SettingsScreen />);
+    const toggle = await screen.findByRole('switch', { name: 'Avisar quando uma aba terminar' });
+    await waitFor(() => expect(toggle.props.disabled).toBeFalsy());
+    expect(toggle.props.value).toBe(false);
+    await act(async () => fireEvent(toggle, 'valueChange', true));
+    await waitFor(() => expect(stores.settings.getState().tabFinished).toBe(true));
+    await act(async () => stores.settings.getState().setTabFinished(false));
+  });
+
+  it('not granted: no test push button', async () => {
+    stores.permissionDeps.notificationStatus.mockResolvedValueOnce('denied');
+    await render(<SettingsScreen />);
+    await screen.findByText('Abrir Ajustes do sistema');
+    expect(screen.queryByText('Enviar notificação de teste')).toBeNull();
   });
 
   it('an undecided permission can be turned on from here', async () => {

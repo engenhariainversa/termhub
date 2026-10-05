@@ -3,6 +3,7 @@ import { agentRpc } from '../agent/errors.js';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError, badRequest } from '../lib/errors.js';
 import { runOnMachineWithInput } from './machine-exec.js';
+import { tk } from '../i18n/index.js';
 
 export { PASTE_DIR, PASTE_MAX_BYTES, safeName } from '@termhub/machine-ops';
 
@@ -35,7 +36,7 @@ export async function saveFileOnMachine(machine: Machine, data: Buffer, original
 
   const r = await runOnMachineWithInput(machine, { file: '/bin/sh', args: ['-c', script] }, script, data);
   if (r.timedOut) throw new HttpError(504, 'A máquina demorou para receber o arquivo');
-  if (r.code !== 0) throw new HttpError(502, machine.type === 'ssh' ? 'Falha ao enviar o arquivo via SSH' : 'Falha ao gravar o arquivo');
+  if (r.code !== 0) throw new HttpError(502, machine.type === 'ssh' ? tk('Falha ao enviar o arquivo via SSH') : tk('Falha ao gravar o arquivo'));
   const path = r.stdout.trim().split('\n').pop() ?? '';
   if (!path.startsWith('/')) throw new HttpError(502, 'Resposta inesperada da máquina');
   return { path, name, bytes: data.length, mime };

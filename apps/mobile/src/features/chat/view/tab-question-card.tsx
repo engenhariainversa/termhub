@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import type { TTabQuestionAnswerBody } from '@/services/api/contract';
+import { useTranslation } from '@/i18n';
 import { AppText, Button } from '@/ui';
 import { AutoDecisionBadge } from './auto-decision-badge';
 import { answerSummary, autoAnswerFailureText, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence } from '../model/tab-question-text';
@@ -34,6 +35,8 @@ const INPUT = 'rounded-xl border border-app-border bg-app-surface px-4 py-3 text
  * recommended one marked, "Outra resposta", or Permitir / Negar / Negar e dizer… — no PIN. Memoised:
  * `onAnswer` and `loadScreen` are the store's own (stable) actions. */
 export const TabQuestionCard = memo(function TabQuestionCard(props: Props) {
+  // Re-renders the card (and the model's composed lines) when the language changes.
+  useTranslation();
   const { question } = props;
   return (
     // The testID disambiguates this card's own controls (e.g. "Enviar" on a permission's deny-text
@@ -49,6 +52,7 @@ export const TabQuestionCard = memo(function TabQuestionCard(props: Props) {
 });
 
 function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: Props & { question: Choice }) {
+  const { t } = useTranslation();
   const items = question.payload.questions;
   const [current, setCurrent] = useState(0);
   // Pre-selected from a similar past decision (chat decision memory spec 2026-09-26 §4.2/§5.1): only
@@ -127,8 +131,8 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
         ))}
         {autoAnswered ? (
           <View className="gap-1">
-            <AppText variant="muted">{`Respondida automaticamente: «${choiceAnswerLabel(question.payload, question.auto_answer!.answer)}» — motivo ${question.auto_answer!.reason}`}</AppText>
-            <Button label="Esquecer o precedente" variant="ghost" disabled={forgettingPrecedent} onPress={() => void forgetPrecedent()} />
+            <AppText variant="muted">{t('Respondida automaticamente: «{{answer}}» — motivo {{reason}}', { answer: choiceAnswerLabel(question.payload, question.auto_answer!.answer), reason: question.auto_answer!.reason })}</AppText>
+            <Button label={t('Esquecer o precedente')} variant="ghost" disabled={forgettingPrecedent} onPress={() => void forgetPrecedent()} />
           </View>
         ) : null}
       </View>
@@ -143,30 +147,33 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
   const counting = auto?.status === 'scheduled';
   if (counting || sending) {
     const description = choiceAnswerDescription(question.payload, auto!.answer);
-    let line = `Resposta automática em ${formatCountdown(seconds)} — «${choiceAnswerLabel(question.payload, auto!.answer)}»${description ? ` (${description})` : ''}. Motivo: ${auto!.reason}`;
+    const lineValues = { time: formatCountdown(seconds), answer: choiceAnswerLabel(question.payload, auto!.answer), description, reason: auto!.reason };
+    let line = description
+      ? t('Resposta automática em {{time}} — «{{answer}}» ({{description}}). Motivo: {{reason}}', lineValues)
+      : t('Resposta automática em {{time}} — «{{answer}}». Motivo: {{reason}}', lineValues);
     if (auto!.by === 'memory') {
       const decisionIds = new Set(auto!.sources.filter((s) => s.kind === 'decision').map((s) => s.id));
       const idx = items.findIndex((_, i) => hint.some((h) => h.question_index === i && decisionIds.has(h.decision_id)));
       const backing = idx === -1 ? undefined : hint.find((h) => h.question_index === idx);
-      if (backing) line += ` Fonte: ${suggestionSourceSentence(items[idx]!, backing)}`;
+      if (backing) line += ` ${t('Fonte: {{source}}', { source: suggestionSourceSentence(items[idx]!, backing) })}`;
     }
     return (
       <View className="gap-2">
         {title}
         {sending ? (
-          <AppText variant="muted">Enviando…</AppText>
+          <AppText variant="muted">{t('Enviando…')}</AppText>
         ) : (
           <View className="gap-2">
             <AppText>{line}</AppText>
             <View className="flex-row gap-2">
               <View className="flex-1">
-                <Button label="Cancelar" variant="secondary" disabled={busy} onPress={() => onCancelAutoAnswer?.(question.id)} />
+                <Button label={t('Cancelar')} variant="secondary" disabled={busy} onPress={() => onCancelAutoAnswer?.(question.id)} />
               </View>
               <View className="flex-1">
-                <Button label="Responder agora" disabled={busy} onPress={() => onAnswer(question.id, auto!.answer)} />
+                <Button label={t('Responder agora')} disabled={busy} onPress={() => onAnswer(question.id, auto!.answer)} />
               </View>
             </View>
-            {seconds <= 0 ? <AppText variant="muted">Enviando…</AppText> : null}
+            {seconds <= 0 ? <AppText variant="muted">{t('Enviando…')}</AppText> : null}
           </View>
         )}
       </View>
@@ -191,7 +198,7 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
     const clear = () => {
       setHint((prev) => prev.filter((s) => s !== h));
       setSelected((prev) => prev.map((s, j) => (j === h.question_index ? [] : s)));
-      setTexts((prev) => prev.map((t, j) => (j === h.question_index ? '' : t)));
+      setTexts((prev) => prev.map((x, j) => (j === h.question_index ? '' : x)));
     };
     // An empty id (a concierge suggestion that cited no decision): forgetting only clears the pre-selection.
     const result = h.decision_id ? onForget?.(h.decision_id) : undefined;
@@ -204,7 +211,7 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
       {items.length > 1 ? (
         <View accessibilityRole="tablist" className="flex-row flex-wrap gap-2">
           {items.map((it, i) => {
-            const label = `${it.header || `Pergunta ${i + 1}`}${hint.some((h) => h.question_index === i) ? ' · sugerida' : ''}`;
+            const label = `${it.header || t('Pergunta {{n}}', { n: i + 1 })}${hint.some((h) => h.question_index === i) ? ` · ${t('sugerida')}` : ''}`;
             const selectedTab = i === current;
             return (
               <Pressable
@@ -228,7 +235,7 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
           <Pressable
             key={oi}
             accessibilityRole={item.multi_select ? 'checkbox' : 'radio'}
-            accessibilityLabel={o.recommended ? `${o.label}, recomendada` : o.label}
+            accessibilityLabel={o.recommended ? t('{{label}}, recomendada', { label: o.label }) : o.label}
             accessibilityHint={o.description || undefined}
             accessibilityState={{ checked, disabled: busy || typing }}
             disabled={busy || typing}
@@ -236,20 +243,20 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
             className={`gap-1 rounded-xl border p-3 ${checked ? 'border-app-accent' : 'border-app-border'}`}
           >
             <AppText>{`${checked ? '●' : '○'} ${o.label}`}</AppText>
-            {o.recommended ? <AppText variant="muted">Recomendada</AppText> : null}
+            {o.recommended ? <AppText variant="muted">{t('Recomendada')}</AppText> : null}
             {o.description ? <AppText variant="muted">{o.description}</AppText> : null}
           </Pressable>
         );
       })}
       <TextInput
-        accessibilityLabel="Outra resposta"
-        placeholder="Outra resposta"
+        accessibilityLabel={t('Outra resposta')}
+        placeholder={t('Outra resposta')}
         value={texts[current]}
         maxLength={2000}
         editable={!busy}
-        onChangeText={(t) => {
+        onChangeText={(value) => {
           touched.current = true;
-          setTexts((prev) => prev.map((x, j) => (j === current ? t : x)));
+          setTexts((prev) => prev.map((x, j) => (j === current ? value : x)));
         }}
         className={INPUT}
       />
@@ -258,17 +265,18 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
           <AppText variant="muted">{suggestionLine(item, currentHint)}</AppText>
           {/* A concierge suggestion that cited no decision (`decision_id: ""`) has nothing to forget. */}
           {!(currentHint.by === 'concierge' && !currentHint.decision_id) ? (
-            <Button label="Esquecer esta decisão" variant="ghost" disabled={busy} onPress={() => forget(currentHint)} />
+            <Button label={t('Esquecer esta decisão')} variant="ghost" disabled={busy} onPress={() => forget(currentHint)} />
           ) : null}
         </View>
       ) : null}
-      <Button label="Responder" onPress={() => onAnswer(question.id, { answers })} disabled={busy || !complete || suggestedUnseen} />
+      <Button label={t('Responder')} onPress={() => onAnswer(question.id, { answers })} disabled={busy || !complete || suggestedUnseen} />
       {auto?.status === 'failed' ? <AppText className="text-app-danger">{autoAnswerFailureText(auto.error_code)}</AppText> : null}
     </View>
   );
 }
 
 function PermissionBody({ question, busy, onAnswer, loadScreen }: Props & { question: Permission }) {
+  const { t } = useTranslation();
   const open = question.status === 'open';
   const codex = question.payload.agent === 'codex';
   const [excerpt, setExcerpt] = useState<string | null>(null);
@@ -279,8 +287,8 @@ function PermissionBody({ question, busy, onAnswer, loadScreen }: Props & { ques
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    void loadScreen(question.id).then((t) => {
-      if (alive) setExcerpt(t);
+    void loadScreen(question.id).then((screen) => {
+      if (alive) setExcerpt(screen);
     });
     return () => {
       alive = false;
@@ -295,23 +303,23 @@ function PermissionBody({ question, busy, onAnswer, loadScreen }: Props & { ques
           <AppText variant="muted">{`«${question.payload.tool_name}»`}</AppText>
         </View>
       ) : null}
-      {open && excerpt !== null ? <Button label="Tela da aba" variant="ghost" onPress={() => setShowing((v) => !v)} /> : null}
+      {open && excerpt !== null ? <Button label={t('Tela da aba')} variant="ghost" onPress={() => setShowing((v) => !v)} /> : null}
       {open && showing && excerpt !== null ? <AppText className="font-mono text-xs">{excerpt}</AppText> : null}
       {open ? (
         <View className="gap-2">
           <View className="flex-row gap-2">
             <View className="flex-1">
-              <Button label="Permitir" onPress={() => onAnswer(question.id, { allow: true })} disabled={busy} />
+              <Button label={t('Permitir')} onPress={() => onAnswer(question.id, { allow: true })} disabled={busy} />
             </View>
             <View className="flex-1">
-              <Button label="Negar" variant="danger" onPress={() => onAnswer(question.id, { allow: false })} disabled={busy} />
+              <Button label={t('Negar')} variant="danger" onPress={() => onAnswer(question.id, { allow: false })} disabled={busy} />
             </View>
           </View>
-          <Button label="Negar e dizer…" variant="secondary" onPress={() => setDenying(true)} disabled={busy} />
+          <Button label={t('Negar e dizer…')} variant="secondary" onPress={() => setDenying(true)} disabled={busy} />
           {denying ? (
             <View className="gap-2">
-              <TextInput accessibilityLabel="O que dizer à aba" value={text} maxLength={2000} editable={!busy} onChangeText={setText} className={INPUT} />
-              <Button label="Enviar" variant="danger" onPress={() => onAnswer(question.id, { allow: false, text: text.trim() })} disabled={busy || !text.trim()} />
+              <TextInput accessibilityLabel={t('O que dizer à aba')} value={text} maxLength={2000} editable={!busy} onChangeText={setText} className={INPUT} />
+              <Button label={t('Enviar')} variant="danger" onPress={() => onAnswer(question.id, { allow: false, text: text.trim() })} disabled={busy || !text.trim()} />
             </View>
           ) : null}
         </View>

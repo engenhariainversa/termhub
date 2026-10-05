@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { useTranslation } from '../i18n';
 
 /**
  * The public city's last line of defence. React unmounts the whole tree for an error nothing
@@ -19,13 +20,18 @@ export class CityErrorBoundary extends Component<{ children: ReactNode }, { fail
 
   render(): ReactNode {
     if (!this.state.failed) return this.props.children;
-    return (
-      <div className="flex min-h-full flex-col items-center justify-center gap-4 px-4 py-8 text-center">
-        <p className="text-sm text-fg-muted">Algo mudou por aqui. Recarregue a página.</p>
-        <button type="button" className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover" onClick={() => window.location.reload()}>
-          Recarregar
-        </button>
-      </div>
-    );
+    return <CityFailed />;
   }
+}
+
+function CityFailed() {
+  const { t } = useTranslation();
+  return (
+    <div className="flex min-h-full flex-col items-center justify-center gap-4 px-4 py-8 text-center">
+      <p className="text-sm text-fg-muted">{t('Algo mudou por aqui. Recarregue a página.')}</p>
+      <button type="button" className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover" onClick={() => window.location.reload()}>
+        {t('Recarregar')}
+      </button>
+    </div>
+  );
 }

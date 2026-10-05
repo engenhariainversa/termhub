@@ -322,6 +322,14 @@ export type DeviceChallenge = Prisma.DeviceChallengeModel
  */
 export type DeviceEvent = Prisma.DeviceEventModel
 /**
+ * Model PushTicket
+ * One Expo push ticket waiting for its receipt (TER-924): APNs/FCM answers come later, through
+ * `getReceipts`. The sweeper reads them ~15 min after the send and deletes the row; Expo keeps a
+ * receipt 24 h, so an older row is dropped unread. `push_token` is the token the push went to, so a
+ * `DeviceNotRegistered` clears only that token, never a newer one.
+ */
+export type PushTicket = Prisma.PushTicketModel
+/**
  * Model UserNotification
  * Everything ever pushed to a person, for the app's Notificações tab (spec §9). Kept 30 days.
  */

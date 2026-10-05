@@ -1,5 +1,6 @@
 import type { PrismaClient } from '../prisma.js';
 import { newId } from '../../lib/ids.js';
+import { LocalizedText, msg } from '../../i18n/index.js';
 
 export const FAVORITES_KEY = 'favorites';
 export const MAX_GROUPS = 50;
@@ -8,8 +9,15 @@ export const MAX_ITEMS = 500;
 export type ProjectGroupRuleCode = 'SYSTEM_GROUP' | 'BAD_ORDER' | 'LIMIT' | 'NOT_FOUND' | 'DUPLICATE';
 
 export class ProjectGroupRuleError extends Error {
-  constructor(readonly code: ProjectGroupRuleCode, message: string) {
-    super(message);
+  /** Non-enumerable, so equality checks on the error (tests, logs) see only code and message. */
+  declare readonly localized: LocalizedText;
+  constructor(
+    readonly code: ProjectGroupRuleCode,
+    message: string | LocalizedText,
+  ) {
+    const localized = message instanceof LocalizedText ? message : new LocalizedText(message);
+    super(localized.toString());
+    Object.defineProperty(this, 'localized', { value: localized, enumerable: false });
     this.name = 'ProjectGroupRuleError';
   }
 }
@@ -77,7 +85,7 @@ export class ProjectGroupsRepository {
         }
         if (await tx.projectGroupItem.findUnique({ where: { groupId_projectId: { groupId: fav.id, projectId } } })) return;
         const agg = await tx.projectGroupItem.aggregate({ where: { groupId: fav.id }, _max: { position: true }, _count: true });
-        if (agg._count >= MAX_ITEMS) throw new ProjectGroupRuleError('LIMIT', `Limite de ${MAX_ITEMS} projetos por grupo`);
+        if (agg._count >= MAX_ITEMS) throw new ProjectGroupRuleError('LIMIT', msg('Limite de {{max}} projetos por grupo', { max: MAX_ITEMS }));
         await tx.projectGroupItem.create({ data: { groupId: fav.id, projectId, position: (agg._max.position ?? -1) + 1 } });
       });
     } catch (e) {
@@ -89,7 +97,7 @@ export class ProjectGroupsRepository {
   async create(userId: string, name: string): Promise<ProjectGroup> {
     await this.ensureFavorites(userId);
     const count = await this.db.projectGroup.count({ where: { userId } });
-    if (count >= MAX_GROUPS) throw new ProjectGroupRuleError('LIMIT', `Limite de ${MAX_GROUPS} grupos`);
+    if (count >= MAX_GROUPS) throw new ProjectGroupRuleError('LIMIT', msg('Limite de {{max}} grupos', { max: MAX_GROUPS }));
     const agg = await this.db.projectGroup.aggregate({ where: { userId }, _max: { position: true } });
     const g = await this.db.projectGroup.create({ data: { id: newId(), userId, name: name.trim(), position: (agg._max.position ?? -1) + 1 }, include: INCLUDE });
     return view(g);
@@ -142,7 +150,7 @@ export class ProjectGroupsRepository {
       for (const [i, c] of changes.entries()) {
         const hidden = groups[i].items.map((it) => it.projectId).filter((id) => !visible(id) && !c.project_ids.includes(id));
         const next = [...c.project_ids, ...hidden];
-        if (next.length > MAX_ITEMS) throw new ProjectGroupRuleError('LIMIT', `Limite de ${MAX_ITEMS} projetos por grupo`);
+        if (next.length > MAX_ITEMS) throw new ProjectGroupRuleError('LIMIT', msg('Limite de {{max}} projetos por grupo', { max: MAX_ITEMS }));
         await tx.projectGroupItem.deleteMany({ where: { groupId: c.id } });
         if (next.length) await tx.projectGroupItem.createMany({ data: next.map((projectId, position) => ({ groupId: c.id, projectId, position })) });
       }

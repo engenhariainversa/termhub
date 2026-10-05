@@ -89,7 +89,16 @@ export type ChatEvent =
   | { type: 'granted_action'; user_id: string; conversation_id: string; action: ChatActionCard }
   /** A tab asked something (spec 2026-09-25 §5.2): the whole card. Pushed to the project's most
    * recently active conversation; its text is the question itself, never a screen. */
-  | { type: 'tab_question'; user_id: string; conversation_id: string; question: TabQuestionView; resurfaced?: true }
+  | {
+      type: 'tab_question';
+      user_id: string;
+      conversation_id: string;
+      question: TabQuestionView;
+      resurfaced?: true;
+      /** The same open card again, changed (a countdown, a suggestion, a cancel, a failed send): every
+       * screen redraws it, but the person was already told about it (TER-919). */
+      update?: true;
+    }
   /** The chat answered it — or the answer could not be typed (`status: 'failed'`). */
   | { type: 'tab_question_answered'; user_id: string; conversation_id: string; question: TabQuestionView }
   /** It left the tab's screen: answered there, replaced, or the tab is gone. An answered card stays answered. */
