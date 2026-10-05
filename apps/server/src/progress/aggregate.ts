@@ -31,6 +31,7 @@ export interface ProgressCardRow {
   tab: ProgressTabRow | null;
   subtasks: ProgressSubtaskRow[];
   pull_requests: PullRequestBadge[];
+  auto: boolean;
 }
 export interface ProgressEpicRow { id: string; ref: string; title: string; project: { id: string; key: string; name: string }; cards: ProgressCardRow[] }
 
@@ -89,6 +90,7 @@ export function aggregateCard(card: ProgressCardRow, includeAgents: boolean): Ca
     estimate: estimateCard({ status: card.status, units, active_seconds: card.active_seconds, started_at: card.started_at, unit_done_at: finished }),
     agents: includeAgents ? agentsOf(card) : null,
     pull_requests: card.pull_requests,
+    auto: card.auto,
   };
 }
 

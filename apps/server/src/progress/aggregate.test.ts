@@ -6,7 +6,7 @@ const at = (min: number) => new Date(Date.UTC(2026, 8, 27, 12, 0) + min * 60_000
 const tab = (id: string, state: ProgressTabRow['state']): ProgressTabRow => ({ id, name: `aba ${id}`, machine_name: 'jarvis', state, state_at: at(0), activity: null, activity_verb: null, rate_limited_at: null });
 const card = (over: Partial<ProgressCardRow> & { id: string }): ProgressCardRow => ({
   ref: `TER-${over.id}`, title: over.id, type: 'story', status: 'doing', position: 0, column_name: 'Fazendo',
-  started_at: null, done_at: null, active_seconds: 0, tab: null, subtasks: [], pull_requests: [], ...over,
+  started_at: null, done_at: null, active_seconds: 0, tab: null, subtasks: [], pull_requests: [], auto: false, ...over,
 });
 const sub = (id: string, status: 'todo' | 'done', extra: { done_at?: Date; tab?: ProgressTabRow } = {}) => ({ id, ref: `TER-${id}`, status, done_at: extra.done_at ?? null, tab: extra.tab ?? null });
 const epic = (cards: ProgressCardRow[], id = 'e1'): ProgressEpicRow => ({ id, ref: `TER-${id}`, title: `Épico ${id}`, project: { id: 'p1', key: 'TER', name: 'termhub' }, cards });

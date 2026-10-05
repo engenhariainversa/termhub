@@ -65,6 +65,8 @@ export const cardProgress = z.object({
   /** null = the caller cannot read terminals */
   agents: z.array(agentOnCard).nullable(),
   pull_requests: z.array(pullRequestBadge).default([]),
+  /** tagged for automatic work (spec 2026-10-04); false from a server that predates it */
+  auto: z.boolean().default(false),
 });
 
 export const epicProgress = z.object({
