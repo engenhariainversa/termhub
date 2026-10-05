@@ -72,6 +72,20 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await claim('blue')).not.toBeNull();
   });
 
+  it('an epic\'s integrator runs (Task 26): one per epic branch head, and their statuses for the cap', async () => {
+    const integrator = (instance: string, sha: string) => runs.claim({ project_id: projectId, task_id: taskId, role: 'integrator', instance, trigger_sha: sha });
+    const results = await Promise.all([integrator('blue', 'e1'), integrator('green', 'e1')]);
+    expect(results.filter((r) => r !== null)).toHaveLength(1);
+    const first = results.find((r) => r !== null)!;
+    expect(await runs.triggeredStatuses(taskId, 'integrator')).toEqual(['queued']);
+    await runs.update(first.id, first.claimed_by, { status: 'blocked', ended_at: new Date() });
+    expect(await integrator('blue', 'e1')).toBeNull();
+    expect(await integrator('blue', 'e2')).not.toBeNull();
+    expect((await runs.triggeredStatuses(taskId, 'integrator')).sort()).toEqual(['blocked', 'queued']);
+    // other roles and queue runs are not counted
+    expect(await runs.triggeredStatuses(taskId, 'fixer')).toEqual([]);
+  });
+
   it('many concurrent claims across two colours still leave one active run', async () => {
     const results = await Promise.all(Array.from({ length: 8 }, (_, i) => claim(i % 2 ? 'blue' : 'green')));
     expect(results.filter((r) => r !== null)).toHaveLength(1);

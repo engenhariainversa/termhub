@@ -100,6 +100,8 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
     automationRuns: {
       // the branches the cards' automatic runs worked on
       branchesOfTask: vi.fn(async (taskId: string) => (taskId === 'c3' ? [] : [BRANCH[taskId]!])),
+      // an epic's integrator runs: one that finished, by default
+      triggeredStatuses: vi.fn(async (): Promise<string[]> => ['done']),
       countTriggered: vi.fn(async (taskId: string, role: string, except: string) => (o.triggered ?? 0) + state.runs.filter((r) => r.task_id === taskId && r.role === role && r.trigger_sha && r.waiting_reason !== except).length),
       claim: vi.fn(async (i: { task_id: string; role: string; trigger_sha?: string }) => {
         if (state.runs.some((r) => r.task_id === i.task_id && r.role === i.role && r.trigger_sha === i.trigger_sha)) return null;
@@ -282,6 +284,77 @@ describe('runMergeExecutor', () => {
       expect(w.gh.pull).not.toHaveBeenCalled();
       expect(w.state.actions).toHaveLength(0);
     }
+  });
+
+  // Spec §10.2 (Task 26): the epic PR — the epic's own branch, which its integrator worked on, into the base branch.
+  describe('the epic PR', () => {
+    const epicPr = (over: Partial<TaskPullRequest> = {}) => pr({ task_id: 'e1', head_ref: EPIC_BRANCH, base_ref: 'main', title: `TER-1: integrate ${EPIC_BRANCH}`, ...over });
+    const onEpicBranch = (w: ReturnType<typeof world>) => vi.mocked(w.repos.automationRuns.branchesOfTask).mockImplementation(async (id: string) => (id === 'e1' ? [EPIC_BRANCH] : [BRANCH[id]!]));
+
+    it('is merged like a card PR, with the base branch rules, and moves the epic to done', async () => {
+      const w = world({ prs: [epicPr()] });
+      onEpicBranch(w);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.compare).toHaveBeenCalledWith('tok', 'acme/app', 'main', 'h1'); // into the base: R1's delivery gate
+      expect(w.gh.merge).toHaveBeenCalledWith('tok', 'acme/app', 7, { sha: 'h1', title: `TER-1: integrate ${EPIC_BRANCH} (#7)`, method: 'squash' });
+      expect(w.repos.tasks.move).toHaveBeenCalledWith('e1', { status: 'done' }, 0);
+      expect(w.state.events).toEqual([expect.objectContaining({ kind: 'merged', task_id: 'e1' })]);
+    });
+
+    it('while the integrator has not finished (none done yet, or one active), it is not touched: no update-branch, no merge, no card', async () => {
+      for (const statuses of [[], ['blocked'], ['running'], ['done', 'running'], ['done', 'queued']]) {
+        const w = world({ prs: [epicPr()] });
+        onEpicBranch(w);
+        vi.mocked(w.repos.automationRuns.triggeredStatuses).mockResolvedValue(statuses);
+        w.gh.compare.mockResolvedValue({ ahead_by: 1, behind_by: 3 }); // behind the base: would be updated if it were a candidate
+        await runMergeExecutor(w.deps, 'p1');
+        expect(w.gh.pull).not.toHaveBeenCalled();
+        expect(w.gh.updateBranch).not.toHaveBeenCalled();
+        expect(w.gh.merge).not.toHaveBeenCalled();
+        expect(w.state.actions).toHaveLength(0);
+      }
+    });
+
+    it('above the level (main deploys) it asks, like a card PR', async () => {
+      const w = world({ setup: setupWith({}, { deploy_workflow: 'deploy.yml' }), prs: [epicPr()] });
+      onEpicBranch(w);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      expect(w.state.actions[0]!.args).toMatchObject({ base: 'main', needed: 'deploy' });
+    });
+
+    it('a card PR from the epic branch is still refused, even when the card\'s run used that branch', async () => {
+      for (const base_ref of ['main', EPIC_BRANCH]) {
+        const w = world({ prs: [pr({ task_id: 'c1', head_ref: EPIC_BRANCH, base_ref })] });
+        vi.mocked(w.repos.automationRuns.branchesOfTask).mockResolvedValue([EPIC_BRANCH]);
+        await runMergeExecutor(w.deps, 'p1');
+        expect(w.gh.pull).not.toHaveBeenCalled();
+        expect(w.state.actions).toHaveLength(0);
+      }
+    });
+
+    it('an epic PR from another head, into the epic branch or another base, or naming a card too, is refused', async () => {
+      const cases: TaskPullRequest[][] = [
+        [epicPr({ head_ref: 'TER-1-other' })],
+        [epicPr({ base_ref: EPIC_BRANCH })],
+        [epicPr({ base_ref: 'release' })],
+        [epicPr(), epicPr({ id: 'pr2', task_id: 'c1' })],
+      ];
+      for (const prs of cases) {
+        const w = world({ prs });
+        vi.mocked(w.repos.automationRuns.branchesOfTask).mockImplementation(async (id: string) => (id === 'e1' ? [EPIC_BRANCH, 'TER-1-other'] : [BRANCH[id]!]));
+        await runMergeExecutor(w.deps, 'p1');
+        expect(w.gh.pull).not.toHaveBeenCalled();
+        expect(w.state.actions).toHaveLength(0);
+      }
+    });
+
+    it('a manual epic\'s PR is left to the person', async () => {
+      const w = world({ prs: [epicPr({ task_id: 'e2', head_ref: epicBranchName('epic/{ref}-{slug}', EPIC2) })] });
+      vi.mocked(w.repos.automationRuns.branchesOfTask).mockResolvedValue([epicBranchName('epic/{ref}-{slug}', EPIC2)]);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.pull).not.toHaveBeenCalled();
+    });
   });
 
   it('automation turned off during the pass stops the merge right before it (setup read fresh)', async () => {

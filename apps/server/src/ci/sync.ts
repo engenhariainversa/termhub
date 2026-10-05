@@ -1,3 +1,4 @@
+import { epicBranchName } from '../automation/branches.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { PullRequestInfo } from '../db/repositories/task-pull-requests.js';
 import { GithubCiError, type GithubCiClient, type GithubPull } from '../integrations/github-ci.js';
@@ -40,10 +41,30 @@ const infoOf = (repo: string, p: GithubPull): PullRequestInfo => ({
   merge_commit_sha: p.merged_at ? p.merge_commit_sha : null,
 });
 
-/** Card ids a PR names: a subtask counts for its parent; epics and unknown numbers count for nothing. */
-async function cardsNamed(repos: Repositories, projectId: string, key: string, pull: GithubPull): Promise<string[]> {
+/** The epic's own branch under the pattern, or null when the pattern cannot give one for it. */
+function ownEpicBranch(pattern: string, epic: { ref: string; title: string }): string | null {
+  try {
+    return epicBranchName(pattern, epic);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Card ids a PR names: a subtask counts for its parent; epics and unknown numbers count for nothing. One
+ * exception, only where automation is on (`epicPattern`): a PR whose head is an automatic epic's own branch
+ * is that epic's PR (agentic board §10.2) and is linked to the epic alone, so the merge executor sees it.
+ */
+async function cardsNamed(repos: Repositories, projectId: string, key: string, pull: GithubPull, epicPattern: string | null): Promise<string[]> {
+  const refs = refsIn([pull.head.ref, pull.title, pull.body], key);
+  if (epicPattern) {
+    for (const n of refsIn([pull.head.ref], key)) {
+      const t = await repos.tasks.findByRef(projectId, n);
+      if (t?.type === 'epic' && t.auto && ownEpicBranch(epicPattern, t) === pull.head.ref) return [t.id];
+    }
+  }
   const ids = new Set<string>();
-  for (const n of refsIn([pull.head.ref, pull.title, pull.body], key)) {
+  for (const n of refs) {
     const t = await repos.tasks.findByRef(projectId, n);
     if (!t || t.type === 'epic') continue;
     ids.add(t.parent_id ?? t.id);
@@ -72,9 +93,10 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
   let result: CiSyncResult;
   try {
     let pulls: number | null = null;
+    const epicPattern = setup.automation?.enabled ? (setup.automation.epic_branch_pattern ?? null) : null;
     const page = await deps.github.listPulls(token, repo.full_name, deps.etags.get(projectId) ?? null);
     if (!page.notModified) {
-      for (const pull of page.pulls) await repos.taskPullRequests.replaceLinks(projectId, infoOf(repo.full_name, pull), await cardsNamed(repos, projectId, project.key, pull));
+      for (const pull of page.pulls) await repos.taskPullRequests.replaceLinks(projectId, infoOf(repo.full_name, pull), await cardsNamed(repos, projectId, project.key, pull, epicPattern));
       if (page.etag) deps.etags.set(projectId, page.etag);
       pulls = page.pulls.length;
     }

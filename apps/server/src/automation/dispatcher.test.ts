@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Repositories } from '../db/repositories/index.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
+import { setupSchema } from '../setup/schema.js';
 import { dispatcherInstanceId, startDispatcher, TICK_MS, TRIGGER_DEBOUNCE_MS, type DispatcherDeps } from './dispatcher.js';
 import { automationBus, dispatchTriggers } from './events.js';
 
@@ -168,6 +169,49 @@ describe('startDispatcher (fakes)', () => {
     await d.tick('t');
     await d.stop();
     expect(order).toEqual(['clearExpired', 'resumeQuota']);
+  });
+
+  // Spec §10.2 (Task 26): the tick also looks at the project's automatic epics that are not done yet.
+  it('a tick hands each automatic, unfinished epic to the integration (and skips the rest)', async () => {
+    const setup = setupSchema.parse({ repo: { integration_id: 'i1', full_name: 'acme/app', base_branch: 'main' }, automation: { enabled: true } });
+    const board = [
+      { id: 'e1', project_id: 'p1', ref: 'TER-1', title: 'A', type: 'epic', status: 'doing', auto: true, parent_id: null, epic_id: null },
+      { id: 'e2', project_id: 'p1', ref: 'TER-2', title: 'B', type: 'epic', status: 'doing', auto: false, parent_id: null, epic_id: null },
+      { id: 'e3', project_id: 'p1', ref: 'TER-3', title: 'C', type: 'epic', status: 'done', auto: true, parent_id: null, epic_id: null },
+      { id: 'c1', project_id: 'p1', ref: 'TER-4', title: 'D', type: 'story', status: 'doing', auto: true, parent_id: null, epic_id: 'e1' },
+    ];
+    const triggeredStatuses = vi.fn(async () => [] as string[]);
+    const { repos } = recordingRepos({
+      ...idle(),
+      automationRuns: { ...idle().automationRuns, triggeredStatuses },
+      projectSetup: { listWithAutomation: async () => [{ project_id: 'p1', data: setup }] },
+      projects: { findById: async () => ({ id: 'p1', owner_id: 'u1' }) },
+      automationPauses: { state: async () => ({ user: null, project: null }) },
+      users: { findById: async () => undefined }, // the queue pass stops here
+      aiAccountExhaustions: { clearExpired: async () => [] },
+      tasks: { listByProject: async () => board },
+      taskPullRequests: { listByTasks: async () => [] },
+    });
+    const d = startDispatcher(deps(repos), { schedule: false });
+    await d.tick('t');
+    await d.stop();
+    expect(triggeredStatuses).toHaveBeenCalledTimes(1);
+    expect(triggeredStatuses).toHaveBeenCalledWith('e1', 'integrator');
+  });
+
+  it('a paused project gets no integration pass', async () => {
+    const { repos, calls } = recordingRepos({
+      ...idle(),
+      projectSetup: { listWithAutomation: async () => [{ project_id: 'p1', data: {} }] },
+      automationRuns: { ...idle().automationRuns, countActive: async () => 0 },
+      projects: { findById: async () => ({ id: 'p1', owner_id: 'u1' }) },
+      automationPauses: { state: async () => ({ user: null, project: new Date() }) },
+      aiAccountExhaustions: { clearExpired: async () => [] },
+    });
+    const d = startDispatcher(deps(repos), { schedule: false });
+    await d.tick('t');
+    await d.stop();
+    expect(calls).not.toContain('tasks.listByProject');
   });
 
   it('with no project on automation, the quota pass does not run', async () => {

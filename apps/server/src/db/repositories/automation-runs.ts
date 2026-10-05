@@ -243,6 +243,12 @@ export class AutomationRunsRepository {
     });
   }
 
+  /** The statuses of the card's server-started runs of a role (an epic's integrator runs, spike R2). */
+  async triggeredStatuses(taskId: string, role: RunRole): Promise<RunStatus[]> {
+    const rows = await this.db.automationRun.findMany({ where: { taskId, role, triggerSha: { not: null } }, select: { status: true } });
+    return rows.map((r) => r.status as RunStatus);
+  }
+
   /** The branches the card's runs worked on: the only PR heads the merge executor merges for it. */
   async branchesOfTask(taskId: string): Promise<string[]> {
     const rows = await this.db.automationRun.findMany({ where: { taskId, branch: { not: null } }, distinct: ['branch'], select: { branch: true } });
