@@ -51,6 +51,8 @@ function viewAsOf(scope: Scope | undefined) {
 
 const viewAsSchema = z.object({ user_id: z.string().min(1).max(64).nullable() });
 const nicknameBodySchema = z.object({ nickname: z.string() });
+/** null = automatic (the browser's language; pt-BR for e-mails and push). */
+const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en']).nullable() });
 
 export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: { onNicknameClaimed?: (user: User) => void } = {}) {
   /** Public user + role summary + flat permission list: what the client needs to gate its UI. */
@@ -100,6 +102,15 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     // started here, after the write, and nothing waits for it — the partner can be slow or down.
     if (!request.user.nickname) opts.onNicknameClaimed?.(claimed);
     return { user: await withRole(claimed) };
+  });
+
+  /** The language this person chose (TER-405): used for API errors, e-mails and push texts. */
+  app.patch('/me/locale', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    const { locale } = localeBodySchema.parse(request.body);
+    await ctx.repos.users.setLocale(request.user.id, locale);
+    request.log.info({ userId: request.user.id, locale }, 'locale: set');
+    return reply.code(204).send();
   });
 
   /**
