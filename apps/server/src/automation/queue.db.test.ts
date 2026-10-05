@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { serializeAutomationDb } from '../../test/automation-db-lock.js';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { controlContextFor } from '../control/context.js';
 import { createRepositories, type Repositories } from '../db/repositories/index.js';
@@ -12,6 +13,7 @@ const keyOf = (id: string) => 'K' + id.replace(/[^a-z0-9]/gi, '').slice(0, 8).to
 
 // Needs a migrated Postgres: TERMHUB_DB_TESTS=1 DATABASE_URL=…
 describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automationQueue (Postgres)', () => {
+  serializeAutomationDb();
   let db: PrismaClient;
   let repos: Repositories;
   let ownerId: string;

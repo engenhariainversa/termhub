@@ -54,6 +54,8 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
     eventSeq: 0,
     events: [] as Array<{ kind: string; task_id?: string | null; payload?: Record<string, unknown> }>,
     messages: [] as string[],
+    /** the cards' runs, as the cleanup reads them */
+    cleanupRuns: [] as Array<Record<string, unknown>>,
   };
   const tasks: Record<string, object> = { e1: EPIC, e2: EPIC2, c1: CARD, c2: LONE, c3: MANUAL };
   const repos = {
@@ -62,7 +64,9 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
     integrations: { findById: vi.fn(async () => ({ id: 'i1', provider: 'github', owner_id: 'u1' })), getSecret: vi.fn(async () => 'tok') },
     automationPauses: { state: vi.fn(async () => ({ user: null, project: state.paused ? new Date() : null })) },
     taskPullRequests: { listWatched: vi.fn(async () => state.prs), setChangedLevel: vi.fn(async () => {}) },
-    tasks: { findById: vi.fn(async (id: string) => tasks[id]), move: vi.fn(async (id: string) => ({ ...tasks[id], status: 'done' })) },
+    machines: { findById: vi.fn(async (id: string) => ({ id, name: 'hulk' })) },
+    projectMachines: { find: vi.fn(async () => ({ cwd: '/repo' })) },
+    tasks: { listByProject: vi.fn(async () => Object.values(tasks)), findById: vi.fn(async (id: string) => tasks[id]), move: vi.fn(async (id: string) => ({ ...tasks[id], status: 'done' })) },
     users: { findById: vi.fn(async (id: string) => ({ id, locale: 'pt-BR' })) },
     chat: {
       findLatestActiveForProject: vi.fn(async () => ({ id: 'conv1', project_id: 'p1' })),
@@ -140,6 +144,17 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
       sumFixCount: vi.fn(async (taskId: string) => state.runs.filter((r) => r.task_id === taskId).reduce((n, r) => n + r.fix_count, 0)),
       bump: vi.fn(async (id: string) => ++state.runs.find((r) => r.id === id)!.fix_count),
       noteTyped: vi.fn(async () => {}),
+      markCleanupDue: vi.fn(async (ids: string[]) => {
+        for (const r of state.cleanupRuns) if (ids.includes(r.task_id as string) && r.cleanup_state === null) r.cleanup_state = 'due';
+        return state.cleanupRuns.filter((r) => ids.includes(r.task_id as string) && r.cleanup_state === 'due');
+      }),
+      settleCleanup: vi.fn(async (id: string, st: string) => {
+        const r = state.cleanupRuns.find((x) => x.id === id)!;
+        if (r.cleanup_state !== 'due') return false;
+        r.cleanup_state = st;
+        return true;
+      }),
+      bumpCleanup: vi.fn(async (id: string) => ++(state.cleanupRuns.find((x) => x.id === id)!.cleanup_attempts as number)),
     },
   } as unknown as Repositories;
 
@@ -174,8 +189,10 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
   const lifecycle = { draining: false };
   // one green reading already seen for h1: the merge happens on this pass (the two-readings rule has its own test)
   const seen = new Map([['p1:acme/app#7', 'h1']]);
-  const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, type, seen, now: () => new Date('2026-10-05T12:00:00Z') };
-  return { state, repos, gh, ci, startFixer, type, lifecycle, seen, deps, pullFor };
+  const removeWorkspace = vi.fn(async (_m: unknown, _i: { repoDir: string; root: string; path: string }) => ({ removed: true, dirty: false }));
+  const closeTab = vi.fn(async (_ctx: unknown, _tabId: string) => {});
+  const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, type, seen, removeWorkspace: removeWorkspace as unknown as MergeDeps['removeWorkspace'], closeTab, now: () => new Date('2026-10-05T12:00:00Z') };
+  return { state, repos, gh, ci, startFixer, type, lifecycle, seen, deps, pullFor, removeWorkspace, closeTab };
 }
 
 const approve = (a: ChatAction) => {
@@ -534,6 +551,103 @@ describe('runMergeExecutor', () => {
     const w = world({ prs: [pr({ draft: true })] });
     await runMergeExecutor(w.deps, 'p1');
     expect(w.gh.merge).not.toHaveBeenCalled();
+  });
+});
+
+const cleanupRun = (over: Record<string, unknown> = {}) => ({
+  id: 'run1', project_id: 'p1', task_id: 'c1', role: 'implementer', status: 'done', tab_id: 'tab1', machine_id: 'm1', worktree_path: '/wt/p1/TER-5', cleanup_state: null, cleanup_attempts: 0, ...over,
+});
+
+describe('cleanup after a merge (spec §7)', () => {
+  const withRun = (over: Record<string, unknown> = {}, tab: { state: string } | null = { state: 'idle' }) => {
+    const w = world();
+    w.state.cleanupRuns.push(cleanupRun(over));
+    if (tab) w.state.tabs.tab1 = { id: 'tab1', state: tab.state, state_text: null, rate_limited_at: null };
+    return w;
+  };
+
+  it('a merged card PR removes the card worktree once and closes the idle tab of its finished run', async () => {
+    const w = withRun();
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.removeWorkspace).toHaveBeenCalledTimes(1);
+    expect(w.removeWorkspace.mock.calls[0]![1]).toEqual({ repoDir: '/repo', root: w.state.setup.automation.worktrees_dir, path: '/wt/p1/TER-5' });
+    expect(w.closeTab).toHaveBeenCalledTimes(1);
+    expect(w.closeTab.mock.calls[0]![1]).toBe('tab1');
+    expect(w.state.cleanupRuns[0]!.cleanup_state).toBe('done');
+    expect(w.state.events.map((e) => e.kind)).toEqual(['worktree_cleanup', 'merged']);
+    expect(w.state.events[0]!.payload).toMatchObject({ outcome: 'removed', path: '/wt/p1/TER-5' });
+    expect(w.state.events[1]!.payload).not.toHaveProperty('worktree_kept');
+  });
+
+  it('a dirty worktree is kept, and the merged event says so', async () => {
+    const w = withRun();
+    w.removeWorkspace.mockResolvedValue({ removed: false, dirty: true });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.state.cleanupRuns[0]!.cleanup_state).toBe('kept');
+    expect(w.state.events.find((e) => e.kind === 'merged')!.payload).toMatchObject({ worktree_kept: true });
+    expect(w.state.events.find((e) => e.kind === 'worktree_cleanup')!.payload).toMatchObject({ outcome: 'kept' });
+  });
+
+  it('a machine that is offline leaves the cleanup due (not an error for the merge)', async () => {
+    const w = withRun();
+    w.removeWorkspace.mockRejectedValue(Object.assign(new Error('offline'), { code: 'MACHINE_OFFLINE' }));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.state.events.map((e) => e.kind)).toEqual(['merged']);
+    expect(w.state.cleanupRuns[0]).toMatchObject({ cleanup_state: 'due', cleanup_attempts: 1 });
+  });
+
+  it('a working tab is never closed, and a run that did not end done keeps its tab', async () => {
+    for (const [status, tabState] of [['done', 'working'], ['done', 'waiting_background'], ['blocked', 'idle'], ['failed', 'idle']] as const) {
+      const w = withRun({ status }, { state: tabState });
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.closeTab).not.toHaveBeenCalled();
+    }
+  });
+
+  it('the epic PR also removes the worktrees of its cards that are still left', async () => {
+    const w = world({ prs: [pr({ task_id: 'e1', head_ref: EPIC_BRANCH, base_ref: 'main', title: 'epic' })] });
+    vi.mocked(w.repos.automationRuns.branchesOfTask).mockImplementation(async (id: string) => (id === 'e1' ? [EPIC_BRANCH] : [BRANCH[id]!]));
+    w.state.cleanupRuns.push(
+      cleanupRun({ id: 'ri', task_id: 'e1', role: 'integrator', tab_id: null, worktree_path: '/wt/p1/TER-1' }),
+      cleanupRun({ id: 'rc', task_id: 'c1', worktree_path: '/wt/p1/TER-5', tab_id: null }),
+      cleanupRun({ id: 'rx', task_id: 'c2', worktree_path: '/wt/p1/TER-6', tab_id: null }), // another epic's card
+    );
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.removeWorkspace.mock.calls.map((c) => c[1].path).sort()).toEqual(['/wt/p1/TER-1', '/wt/p1/TER-5']);
+  });
+
+  it('runs of one card on the same worktree remove it once', async () => {
+    const w = withRun();
+    w.state.cleanupRuns.push(cleanupRun({ id: 'run2', role: 'fixer', tab_id: null }));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.removeWorkspace).toHaveBeenCalledTimes(1);
+    expect(w.state.cleanupRuns.map((r) => r.cleanup_state)).toEqual(['done', 'done']);
+  });
+
+  it('a card with an active run (a fixer working) keeps its worktree until the run ends', async () => {
+    const w = withRun();
+    w.state.cleanupRuns.push(cleanupRun({ id: 'run2', role: 'fixer', status: 'running', tab_id: null }));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.removeWorkspace).not.toHaveBeenCalled();
+    expect(w.state.cleanupRuns.map((r) => r.cleanup_state)).toEqual(['due', 'due']);
+  });
+
+  it('automation off, draining or paused merges nothing and cleans nothing', async () => {
+    for (const mutate of [(w: ReturnType<typeof world>) => (w.state.setup = setupWith({ enabled: false })), (w: ReturnType<typeof world>) => (w.lifecycle.draining = true), (w: ReturnType<typeof world>) => (w.state.paused = true)]) {
+      const w = withRun();
+      mutate(w);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.removeWorkspace).not.toHaveBeenCalled();
+      expect(w.closeTab).not.toHaveBeenCalled();
+      expect(w.state.cleanupRuns[0]!.cleanup_state).toBeNull();
+    }
+  });
+
+  it('a failure while cleaning never fails the merge', async () => {
+    const w = withRun();
+    vi.mocked(w.repos.automationRuns.markCleanupDue).mockRejectedValue(new Error('db'));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.state.events.map((e) => e.kind)).toEqual(['merged']);
   });
 });
 

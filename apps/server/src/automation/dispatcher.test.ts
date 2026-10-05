@@ -47,7 +47,7 @@ function deps(repos: Repositories, over: Partial<DispatcherDeps> = {}): Dispatch
 
 /** No project has automation on: the sweep finds nothing and the list is empty. */
 const idle = () => ({
-  automationRuns: { cancelOrphaned: async () => [], heartbeat: async () => {}, takeOver: async () => [] },
+  automationRuns: { cancelOrphaned: async () => [], heartbeat: async () => {}, takeOver: async () => [], dueCleanups: async () => [] },
   projectSetup: { listWithAutomation: async () => [] },
 });
 
@@ -85,6 +85,37 @@ describe('startDispatcher (fakes)', () => {
     await d.stop();
     expect(calls).toEqual(['automationRuns.cancelOrphaned', 'projectSetup.listWithAutomation']);
     expect(startAgent).not.toHaveBeenCalled();
+  });
+
+  it('a project with automation on retries its due cleanups on a tick, paused or not; a draining instance does not', async () => {
+    const run = { id: 'r1', project_id: 'p1', task_id: 't1', status: 'done', tab_id: null, machine_id: 'm1', worktree_path: '/wt/a', cleanup_state: 'due', cleanup_attempts: 1 };
+    const data = setupSchema.parse({ automation: { enabled: true } });
+    const mk = () =>
+      recordingRepos({
+        ...idle(),
+        projectSetup: { listWithAutomation: async () => [{ project_id: 'p1', data }] },
+        automationRuns: { ...idle().automationRuns, dueCleanups: async () => [run], settleCleanup: async () => true },
+        projects: { findById: async () => ({ id: 'p1', owner_id: 'u1' }) },
+        users: { findById: async () => ({ id: 'u1' }) },
+        machines: { findById: async () => ({ id: 'm1' }) },
+        projectMachines: { find: async () => ({ cwd: '/repo' }) },
+        automationEvents: { insert: async (e: object) => ({ id: 'e', created_at: '', ...e }) },
+        // a paused project: the rest of the pass stops here, the cleanup still ran
+        automationPauses: { state: async () => ({ user: null, project: new Date() }) },
+      });
+    const removeWorkspace = vi.fn(async () => ({ removed: true, dirty: false }));
+    const log = { info: () => {}, warn: () => {} };
+    const { repos } = mk();
+    const d = startDispatcher(deps(repos, { removeWorkspace, log }), { schedule: false });
+    await d.tick('t');
+    await d.stop();
+    expect(removeWorkspace).toHaveBeenCalledTimes(1);
+
+    const draining = mk();
+    const d2 = startDispatcher(deps(draining.repos, { removeWorkspace, log, lifecycle: { draining: true } }), { schedule: false });
+    await d2.tick('t');
+    await d2.stop();
+    expect(removeWorkspace).toHaveBeenCalledTimes(1);
   });
 
   it('ticks that overlap share one pass, plus one more for what arrived meanwhile', async () => {

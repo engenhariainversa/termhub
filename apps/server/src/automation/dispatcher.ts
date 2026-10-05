@@ -10,6 +10,7 @@ import type { Project, Task } from '../db/repositories/types.js';
 import { msg } from '../i18n/index.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import type { ProjectSetupData } from '../setup/schema.js';
+import { cleanupRuns } from './cleanup.js';
 import { cardBranchName, removeWorkspace as removeWorkspaceFn, targetOf, type ensureEpicBranch as ensureEpicBranchFn, type ensureWorkspace as ensureWorkspaceFn } from './branches.js';
 import { automationBus, dispatchTriggers, recordEvent } from './events.js';
 import { SLOT_FREE_REASONS, START_FAILED } from './escalation-text.js';
@@ -376,23 +377,32 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     }
   }
 
-  /** Runs whose card was deleted are cancelled; their worktrees are removed when clean (spec §13). */
+  /**
+   * Runs whose card was deleted are cancelled and their worktrees removed when clean (spec §13). Whatever
+   * cannot be finished now (a machine offline) stays due, like a merged card's, and is retried by `retryCleanups`.
+   */
   async function sweep(): Promise<void> {
     for (const orphan of await repos.automationRuns.cancelOrphaned()) {
-      if (!orphan.machine_id || !orphan.worktree_path) continue;
+      if (orphan.cleanup_state !== 'due') continue;
       try {
-        const [machine, link, setup] = await Promise.all([
-          repos.machines.findById(orphan.machine_id),
-          repos.projectMachines.find(orphan.project_id, orphan.machine_id),
-          repos.projectSetup.get(orphan.project_id),
-        ]);
-        if (!machine || !link) continue;
-        const r = await removeWorkspace(machine, { repoDir: link.cwd, root: setup.data.automation.worktrees_dir, path: orphan.worktree_path });
-        log.info({ runId: orphan.id, machineId: machine.id, removed: r.removed, dirty: r.dirty }, 'automation: worktree of a deleted card');
+        const [project, setup] = await Promise.all([repos.projects.findById(orphan.project_id), repos.projectSetup.get(orphan.project_id)]);
+        if (project) await cleanupRuns({ repos, removeWorkspace, closeTab, log }, project, setup.data, [orphan]);
       } catch (e) {
         log.warn({ runId: orphan.id, machineId: orphan.machine_id, code: errorCode(e) }, 'automation: worktree of a deleted card not removed');
       }
     }
+  }
+
+  /**
+   * Cleanups left due after a merge (machine offline, tab busy): tried again on each tick. A pause does not
+   * stop them (removing a merged card's worktree is not work); automation off does (only projects with it on
+   * are read), and so does a draining instance.
+   */
+  async function retryCleanups(projectId: string, setup: ProjectSetupData): Promise<void> {
+    const due = await repos.automationRuns.dueCleanups(projectId);
+    if (due.length === 0) return;
+    const project = await repos.projects.findById(projectId);
+    if (project) await cleanupRuns({ repos, removeWorkspace, closeTab, log }, project, setup, due);
   }
 
   /**
@@ -435,6 +445,12 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       await interruptRecordedPauses(projects).catch((e: unknown) => log.warn({ code: errorCode(e) }, 'automation: startup interrupt failed'));
     }
     for (const { project_id, data } of projects) {
+      if (halted()) return;
+      try {
+        await retryCleanups(project_id, data);
+      } catch (e) {
+        log.warn({ projectId: project_id, code: errorCode(e) }, 'automation: cleanup retry failed');
+      }
       if (halted()) return;
       try {
         await dispatchProject(project_id, data);

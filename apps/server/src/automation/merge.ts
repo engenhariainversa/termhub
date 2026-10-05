@@ -19,6 +19,7 @@ import type { ProjectSetupData } from '../setup/schema.js';
 import { epicBranchName, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
+import { cleanupRuns, type CleanupDeps } from './cleanup.js';
 import { CI_CAP, CONFLICT_CAP } from './escalation-text.js';
 import { claimEvent, recordEvent, settleEvent } from './events.js';
 import { defaultType, escalateDelivery, escalateRun } from './follower.js';
@@ -44,6 +45,9 @@ export interface MergeDeps {
   startFixer(i: TriggeredRun): Promise<TriggeredStart>;
   /** Types a line into the tab of the run that owns a red PR, as the project's owner. Default: the follower's `defaultType`. */
   type?: (ctx: ControlContext, tabId: string, text: string) => Promise<void>;
+  /** Worktree removal and tab closing after a merge (spec §7); defaults: the real ones. */
+  removeWorkspace?: CleanupDeps['removeWorkspace'];
+  closeTab?: CleanupDeps['closeTab'];
   now?: () => Date;
   log?: Log;
   /** Green readings per PR (`<project>:<repo>#<n>` → head sha): with no `required_checks`, a merge needs two
@@ -532,16 +536,37 @@ async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: '
     } catch (e) {
       log.warn({ taskId: task.id, code: codeOf(e) }, 'automation: merged card not moved to done');
     }
+    const kept = await cleanupAfterMerge(c, task);
     await recordEvent(repos, {
       project_id: c.project.id,
       task_id: task.id,
       kind: 'merged',
-      payload: { pr: row.number, url: row.url, sha: result.sha, level: needed, by, moved_to_done: moved },
+      payload: { pr: row.number, url: row.url, sha: result.sha, level: needed, by, moved_to_done: moved, ...(kept ? { worktree_kept: true } : {}) },
     });
   }
   log.info({ projectId: c.project.id, pr: row.number, by }, 'automation: PR merged');
   await postMergeLine(c, row).catch((e: unknown) => log.warn({ pr: row.number, code: codeOf(e) }, 'automation: merge line not posted'));
   return 'merged';
+}
+
+/**
+ * Spec §7: the merged card's worktree goes (an epic's: its own and any card worktree of its cards that is
+ * left) and its finished runs' idle tabs close. What cannot be done now stays due for the dispatcher's
+ * retries. Never fails the merge. True when a worktree was kept for uncommitted changes.
+ */
+async function cleanupAfterMerge(c: PullCtx, task: Task): Promise<boolean> {
+  const { repos } = c.deps;
+  const log = c.deps.log ?? noopLog;
+  try {
+    const ids = [task.id];
+    if (task.type === 'epic') for (const t of await repos.tasks.listByProject(c.project.id)) if (t.epic_id === task.id) ids.push(t.id);
+    const runs = await repos.automationRuns.markCleanupDue(ids);
+    const r = await cleanupRuns({ repos, removeWorkspace: c.deps.removeWorkspace, closeTab: c.deps.closeTab, log }, c.project, c.setup, runs);
+    return r.kept > 0;
+  } catch (e) {
+    log.warn({ taskId: task.id, code: codeOf(e) }, 'automation: cleanup after a merge failed');
+    return false;
+  }
 }
 
 /** The chat hears of each merge (spec D25), in the owner's most recent project conversation. */

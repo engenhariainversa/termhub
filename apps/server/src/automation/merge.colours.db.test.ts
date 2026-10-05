@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { serializeAutomationDb } from '../../test/automation-db-lock.js';
 
 vi.hoisted(() => {
   // the GitHub integration's token is stored encrypted; config reads the env at import time
@@ -24,6 +25,7 @@ const AHEAD = new Date(Date.now() + 24 * 3600_000);
  * each with its own typing and fixer start — read the same red PR head from one real database at once.
  */
 describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('red CI across colours (Postgres)', () => {
+  serializeAutomationDb();
   let db: PrismaClient;
   let repos: Repositories;
   let ownerId: string;
