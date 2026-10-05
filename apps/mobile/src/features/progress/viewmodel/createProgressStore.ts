@@ -2,12 +2,12 @@
 // user's projects, polled while the tab is focused. Same factory shape as the notifications store.
 import { create } from 'zustand';
 import { sessionEnded } from '@/features/shared/signals';
+import { t } from '@/i18n';
 import type { TEpicProgress } from '@/services/api/contract';
 import type { Auth, MobileApi } from '@/services/api/types';
 
 export const PROGRESS_POLL_MS = 20_000;
 const AUTO_FAILED = 'Não foi possível marcar o card.';
-const LOAD_FAILED = 'Não foi possível carregar o progresso.';
 
 export interface SessionApi {
   auth(): Auth;
@@ -53,7 +53,7 @@ export function createProgressStore(deps: { api: MobileApi; session: () => Sessi
           return;
         }
         if (mine !== generation) return;
-        set({ loading: false, error: LOAD_FAILED });
+        set({ loading: false, error: t('Não foi possível carregar o progresso.') });
       }
     },
     async setAuto(cardId, auto) {

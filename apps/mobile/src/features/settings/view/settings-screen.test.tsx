@@ -20,6 +20,7 @@ import { emptyFold } from '@/features/chat/model/live';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { useThemeStore } from '@/features/theme/viewmodel/useThemeStore';
+import { setLocale, useLocaleStore } from '@/i18n';
 import { ACCOUNT_DELETION_ACTION_ID } from '@/services/api/contract';
 import { PIN } from '../../../../test/helpers/enrolled-session';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
@@ -46,6 +47,7 @@ afterEach(() => {
     biometricsEnabled: false,
   });
   useThemeStore.setState({ theme: 'system' });
+  setLocale(null);
   useChatStore.setState({ activeProject: undefined, live: emptyFold() });
 });
 
@@ -80,6 +82,24 @@ describe('Ajustes', () => {
     expect(useThemeStore.getState().theme).toBe('dark');
     await fireEvent.press(screen.getByRole('button', { name: 'Claro' }));
     expect(useThemeStore.getState().theme).toBe('light');
+  });
+
+  it('Idioma: each language in its own words; picking one switches the screen at once', async () => {
+    await render(<SettingsScreen />);
+    expect(await screen.findByText('Idioma', undefined, LOAD)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Automático' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Português (Brasil)' })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'English' }));
+    expect(useLocaleStore.getState().choice).toBe('en');
+    expect(await screen.findByText('Settings')).toBeTruthy();
+    expect(screen.getByText('Language')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Automatic' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Português (Brasil)' })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Automatic' }));
+    expect(useLocaleStore.getState().choice).toBeNull();
+    expect(await screen.findByText('Ajustes')).toBeTruthy();
   });
 
   it('"Sair e remover este aparelho" asks first, then calls leave()', async () => {

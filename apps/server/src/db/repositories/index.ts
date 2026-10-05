@@ -40,6 +40,7 @@ import { DevicesRepository } from './devices.js';
 import { DeviceSessionsRepository } from './device-sessions.js';
 import { DeviceEventsRepository } from './device-events.js';
 import { UserNotificationsRepository } from './user-notifications.js';
+import { PushTicketsRepository } from './push-tickets.js';
 import { TaskPullRequestsRepository } from './task-pull-requests.js';
 import { AccountDeletionRepository } from './account-deletion.js';
 import { AutomationPausesRepository } from './automation-pauses.js';
@@ -87,6 +88,7 @@ export interface Repositories {
   deviceSessions: DeviceSessionsRepository;
   deviceEvents: DeviceEventsRepository;
   userNotifications: UserNotificationsRepository;
+  pushTickets: PushTicketsRepository;
   taskPullRequests: TaskPullRequestsRepository;
   accountDeletion: AccountDeletionRepository;
   automationPauses: AutomationPausesRepository;
@@ -138,6 +140,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     deviceSessions: new DeviceSessionsRepository(db),
     deviceEvents: new DeviceEventsRepository(db),
     userNotifications: new UserNotificationsRepository(db),
+    pushTickets: new PushTicketsRepository(db),
     taskPullRequests: new TaskPullRequestsRepository(db),
     accountDeletion: new AccountDeletionRepository(db),
     automationPauses: new AutomationPausesRepository(db),
