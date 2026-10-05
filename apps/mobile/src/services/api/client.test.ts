@@ -757,6 +757,7 @@ describe('tab chat (spec 2026-10-01 tab chat §5.4)', () => {
     machine: { id: 'm-jarvis', name: 'jarvis' },
     state: 'working',
     background: false,
+    finished: false,
     state_at: null,
     needs_you: false,
     activity: 'Bash',

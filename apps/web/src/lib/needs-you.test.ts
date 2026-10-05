@@ -118,6 +118,12 @@ describe('tabDotClass', () => {
     expect(tabDotClass(false, tab({ state: 'waiting_background', state_at: T1 }))).toBe('bg-fg-dim');
   });
 
+  it('is green, never orange nor pulsing, once the agent finished with a report (TER-972)', () => {
+    expect(tabNeedsYou(tab({ state: 'finished', state_at: T1 }))).toBe(false);
+    expect(tabDotClass(true, tab({ state: 'finished', state_at: T1 }))).toBe('bg-ok');
+    expect(tabDotClass(false, tab({ state: 'finished', state_at: T1 }))).toBe('bg-fg-dim');
+  });
+
   it('is not orange once the tab has been seen', () => {
     expect(tabDotClass(true, tab({ state: 'waiting_input', state_at: T1, state_seen_at: T1 }))).toBe('bg-ok');
   });

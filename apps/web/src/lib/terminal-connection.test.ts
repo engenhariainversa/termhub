@@ -215,3 +215,67 @@ describe('TerminalConnection', () => {
     });
   });
 });
+
+// TER-576: typing into a terminal requires terminals:write. The server drops input from a read-only
+// socket anyway; the client stops sending it too, whether it knows from the role or from `ready`.
+describe('read-only', () => {
+  const binarySent = (ws: FakeSocket) => ws.sent.filter((d) => typeof d !== 'string');
+  const jsonSent = (ws: FakeSocket, type: string) => ws.sent.filter((d) => typeof d === 'string' && d.includes(`"${type}"`));
+
+  it('stops sending keystrokes, resizes and scrolls once ready says readonly', () => {
+    const readonly: boolean[] = [];
+    const conn = new TerminalConnection('t1', { onData: () => {}, onState: () => {}, onReadonly: (r) => readonly.push(r) }, new ConnectGate());
+    conn.connect({ cols: 80, rows: 24 });
+    const ws = last();
+    ws.open();
+    ws.message({ type: 'ready', readonly: true, scroll: false });
+    expect(conn.readonly).toBe(true);
+    expect(readonly).toEqual([true]);
+    conn.send('ls\r');
+    conn.sendResize(100, 30);
+    conn.sendScroll(-3);
+    expect(binarySent(ws)).toEqual([]);
+    expect(jsonSent(ws, 'resize')).toEqual([]); // not even the one right after ready
+    expect(jsonSent(ws, 'scroll')).toEqual([]);
+  });
+
+  it('a writer (no readonly in ready) still types and resizes', () => {
+    const readonly: boolean[] = [];
+    const conn = new TerminalConnection('t1', { onData: () => {}, onState: () => {}, onReadonly: (r) => readonly.push(r) }, new ConnectGate());
+    conn.connect({ cols: 80, rows: 24 });
+    last().open();
+    last().message({ type: 'ready' });
+    expect(conn.readonly).toBe(false);
+    expect(readonly).toEqual([false]);
+    conn.send('ls\r');
+    expect(binarySent(last())).toHaveLength(1);
+    expect(jsonSent(last(), 'resize')).toHaveLength(1);
+  });
+
+  it('setWritable(false) blocks input on the client side even before the server says so', () => {
+    const { conn } = start();
+    conn.setWritable(false);
+    last().open();
+    last().message({ type: 'ready', scroll: true });
+    expect(conn.readonly).toBe(true);
+    conn.send('x');
+    conn.sendScroll(-3);
+    expect(binarySent(last())).toEqual([]);
+    expect(jsonSent(last(), 'resize')).toEqual([]);
+    expect(jsonSent(last(), 'scroll')).toEqual([]);
+    conn.setWritable(true);
+    conn.send('x');
+    expect(binarySent(last())).toHaveLength(1);
+  });
+
+  it('follows the latest ready: a role granted write since the last connection types again', () => {
+    const { conn } = start();
+    last().open();
+    last().message({ type: 'ready', readonly: true });
+    last().serverClose(1012);
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().message({ type: 'ready' });
+    expect(conn.readonly).toBe(false);
+  });
+});
