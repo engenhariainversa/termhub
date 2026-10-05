@@ -1421,6 +1421,17 @@ export interface Device {
   pin_locked_until: string | null;
   last_seen_at: string | null;
   created_at: string;
+  /** Set once the phone turned notifications on; only its presence matters here. */
+  push_token?: string | null;
+}
+
+/** Which real push a test push imitates (TER-913). */
+export type PushTestKind = 'confirmation' | 'tab_question' | 'reply' | 'device_request';
+
+/** POST /devices/:id/test-push: `ticket` is null for a delayed send (its outcome lands in the trail). */
+export interface PushTestResult {
+  scheduled_for: string;
+  ticket: { status: 'ok' } | { status: 'error'; error: string } | null;
 }
 
 /** One row of the device trail (GET /devices/events), already carrying its pt-BR sentence. */
