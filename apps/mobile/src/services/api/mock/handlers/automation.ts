@@ -1,7 +1,7 @@
 // "Trabalho automático" (spec 2026-10-04): the project's automation block and the tag on a card. Mirrors
 // the server's rule: turning it on, or raising the level to deploy/release, needs a PIN proof over a
 // decision challenge for `automationSetupActionId(project)`, signed `automation_setup`.
-import { automationNeedsConfirm, automationSetupActionId, automationSetupBody, cardAutoBody, type TAutomationSetup } from '../../contract';
+import { automationNeedsConfirm, automationSetupActionId, automationSetupBody, cardAutoBody, pauseBody, resumeBody, type TAutomationSetup } from '../../contract';
 import type { MockRouter } from '../router';
 import { verifyAuth, WireError, type MockState } from '../state';
 import { checkDecisionProof } from './chat';
@@ -53,5 +53,27 @@ export function registerAutomationRoutes(router: MockRouter, state: MockState): 
     const { auto } = cardAutoBody.parse(ctx.body);
     state.cardAuto.set(id, auto);
     return { status: 200, body: { id, auto } };
+  });
+
+  router.route('GET', '/api/m/v1/automation/state', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
+    return { status: 200, body: state.pause };
+  });
+
+  router.route('POST', '/api/m/v1/automation/pause', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const { scope } = pauseBody.parse(ctx.body);
+    const at = new Date(ctx.now()).toISOString();
+    if (scope === 'all') state.pause.paused_at ??= at;
+    else if (!state.pause.projects.some((p) => p.id === scope)) state.pause.projects.push({ id: scope, paused_at: at });
+    return { status: 200, body: { paused_at: scope === 'all' ? state.pause.paused_at : at } };
+  });
+
+  router.route('POST', '/api/m/v1/automation/resume', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const { scope } = resumeBody.parse(ctx.body);
+    if (scope === 'all') state.pause.paused_at = null;
+    else state.pause.projects = state.pause.projects.filter((p) => p.id !== scope);
+    return { status: 204, body: {} };
   });
 }

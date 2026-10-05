@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { FlatList, Linking, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PauseCard } from '@/features/automation/view/pause-card';
 import { relativeTime } from '@/features/shared/relative-time';
 import type { TAgentOnCard, TCardProgress, TEpicProgress } from '@/services/api/contract';
 import { AppText, Button, MAX_READABLE_WIDTH, readableColumn, Sheet } from '@/ui';
@@ -118,7 +119,14 @@ export function ProgressScreen() {
         keyExtractor={(e) => e.id}
         renderItem={({ item }) => <Epic epic={item} />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void useProgressStore.getState().refresh()} />}
-        ListHeaderComponent={error ? <Text className="px-4 pt-4 text-sm text-red-400">{error}</Text> : null}
+        ListHeaderComponent={
+          <>
+            <View className="px-4 pt-4">
+              <PauseCard testID="progress-pause-card" />
+            </View>
+            {error ? <Text className="px-4 pt-4 text-sm text-red-400">{error}</Text> : null}
+          </>
+        }
         ListEmptyComponent={!loading ? <Text className="px-4 pt-8 text-center text-sm text-zinc-500">Nenhum épico em andamento</Text> : null}
       />
     </SafeAreaView>

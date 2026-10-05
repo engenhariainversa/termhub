@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { AppState, Switch, View } from 'react-native';
 import { ACCOUNT_MSG } from '@/features/account/model/messages';
 import { useAccountStore } from '@/features/account/viewmodel/useAccountStore';
+import { PauseCard } from '@/features/automation/view/pause-card';
 import { hostLine } from '@/features/chat/model/copy';
 import { HostSheet } from '@/features/chat/view/host-sheet';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
@@ -155,6 +156,10 @@ export function SettingsScreen() {
           <Button label="Permissões do chat" variant="secondary" onPress={() => router.push('/chat-grants')} />
           {/* chat decision memory spec 2026-09-26 §5.2: "Memória do chat" is reached from here, no PIN. */}
           <Button label="Memória do chat" variant="secondary" onPress={() => router.push('/chat-memory')} />
+        </Section>
+
+        <Section title="Trabalho automático">
+          <PauseCard loadingText="Carregando…" />
         </Section>
 
         <Section title="Aparência">

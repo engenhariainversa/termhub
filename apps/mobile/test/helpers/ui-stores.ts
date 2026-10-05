@@ -9,6 +9,7 @@
 import { createAccountStore } from '@/features/account/viewmodel/createAccountStore';
 import type { PermissionsDeps } from '@/features/permissions/model/permissions.types';
 import { createPermissionsStore } from '@/features/permissions/viewmodel/createPermissionsStore';
+import { createPauseStore } from '@/features/automation/viewmodel/createPauseStore';
 import { createChatGrantsStore } from '@/features/chat-grants/viewmodel/createChatGrantsStore';
 import { createChatMemoryStore } from '@/features/chat/viewmodel/createChatMemoryStore';
 import { createChatStore } from '@/features/chat/viewmodel/createChatStore';
@@ -46,6 +47,7 @@ export const stores = {
   settings: createSettingsStore({ api: ctx.api, session: () => ctx.store.getState() }),
   chatGrants: createChatGrantsStore({ api: ctx.api, session: () => ctx.store.getState() }),
   chatMemory: createChatMemoryStore({ api: ctx.api, session: () => ctx.store.getState() }),
+  pause: createPauseStore({ api: ctx.api, session: () => ctx.store.getState() }),
   progress: createProgressStore({ api: ctx.api, session: () => ctx.store.getState() }),
   permissions: createPermissionsStore(permissionDeps),
   permissionDeps,
