@@ -27,9 +27,9 @@ npm workspaces: `apps/server` (`@termhub/server`), `apps/web` (`@termhub/web`), 
 
 ## Verifying before pushing
 
-- The host that holds this checkout (jarvis) has no Node. Run typecheck/build through Docker, and only push if it passes:
+- The host that holds this checkout (jarvis) has no Node. Run typecheck/build through Docker in `node:22`, the version CI uses, and only push if it passes (`node:20` fails the web office tests, see `docs/lessons/2026-10-04-web-office-tests-fail-on-node-20.md`; in a fresh checkout run `npm ci && npm run prisma:generate && npm run build:packages` first, the same way):
   ```bash
-  docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/w" -w /w node:20 \
+  docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/w" -w /w node:22 \
     sh -c 'npm run typecheck -w @termhub/server && npm run build -w @termhub/web && npm run build -w @termhub/landing'
   rm -rf .npm   # cache the container leaves behind
   ```
