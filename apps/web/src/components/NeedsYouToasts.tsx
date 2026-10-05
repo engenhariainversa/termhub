@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { i18n } from '../i18n';
 import { useData } from '../lib/data';
 import { useMonitor } from '../lib/monitor';
 import { needsYouText, tabNeedsYou } from '../lib/needs-you';
@@ -24,7 +25,7 @@ export function NeedsYouToasts() {
         const project = projectsRef.current.find((p) => p.id === projectId);
         show({
           id: tab.id,
-          title: `${project?.name ?? 'Projeto'} › ${tab.name}`,
+          title: `${project?.name ?? i18n.t('Projeto')} › ${tab.name}`,
           body: needsYouText(tab),
           href: `/projects/${projectId}?tab=${tab.id}`,
         });

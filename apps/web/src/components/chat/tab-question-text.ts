@@ -1,4 +1,5 @@
 import type { ChoiceAnswer, TabQuestion, TabQuestionChoice, TabQuestionItem, TabQuestionPermission, TabQuestionSuggestionItem } from '../../lib/types';
+import { formatDate } from '../../lib/format';
 
 /** What `409 TAB_PROMPT_CHANGED` reads as on a card. */
 export const PROMPT_CHANGED_TEXT = 'A aba já não mostra esta pergunta: nada foi enviado.';
@@ -115,7 +116,7 @@ function suggestionValue(item: TabQuestionItem, hint: TabQuestionSuggestionItem)
 /** "você respondeu «X» a «pergunta» em termhub, 24/09/2026": the past-decision sentence, reused as the
  * countdown's "Fonte:" (spec 2026-09-26 concierge memory §8, controller ruling for `by: 'memory'`). */
 export function suggestionSourceSentence(item: TabQuestionItem, hint: TabQuestionSuggestionItem): string {
-  const date = new Date(hint.source.answered_at).toLocaleDateString('pt-BR');
+  const date = formatDate(hint.source.answered_at);
   const project = hint.source.project_name ?? 'sem projeto';
   return `você respondeu «${suggestionValue(item, hint)}» a «${hint.source.question}» em ${project}, ${date}`;
 }
