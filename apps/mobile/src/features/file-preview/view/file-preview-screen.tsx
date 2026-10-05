@@ -47,11 +47,13 @@ export function FilePreviewScreen() {
   useTranslation();
   const router = useRouter();
   const scheme = useSchemeName();
-  const params = useLocalSearchParams<{ path?: string; project_id?: string; tab_id?: string }>();
-  const query: TFilePreviewQuery = useMemo(
-    () => ({ path: one(params.path) ?? '', project_id: one(params.project_id), tab_id: one(params.tab_id) }),
-    [params.path, params.project_id, params.tab_id],
-  );
+  const params = useLocalSearchParams<{ path?: string; project_id?: string; tab_id?: string; machine_id?: string }>();
+  const query: TFilePreviewQuery = useMemo(() => {
+    const q: TFilePreviewQuery = { path: one(params.path) ?? '', project_id: one(params.project_id), tab_id: one(params.tab_id) };
+    const machineId = one(params.machine_id);
+    if (machineId) q.machine_id = machineId;
+    return q;
+  }, [params.path, params.project_id, params.tab_id, params.machine_id]);
   const store = useMemo(() => createFilePreviewStore({ api, session: () => useSessionStore.getState(), query }), [query]);
   const state = store((s) => s.state);
   const [note, setNote] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export function FilePreviewScreen() {
   const dir = dirOf(query.path);
   const openLink = (url: string) =>
     onFileLink(url, dir, {
-      file: (path) => router.push(filePreviewRoute(path, { projectId: query.project_id, tabId: query.tab_id })),
+      file: (path) => router.push(filePreviewRoute(path, { projectId: query.project_id, tabId: query.tab_id, machineId: query.machine_id })),
       web: openWeb,
     });
   const rules = useMemo(() => fileRules(openWeb), []);

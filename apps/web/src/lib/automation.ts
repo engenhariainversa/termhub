@@ -1,3 +1,4 @@
+import { i18n, tk } from '../i18n';
 import { api } from './api';
 import type { AutomationAutonomy, Task } from './types';
 
@@ -12,23 +13,23 @@ export async function loadIneligibleReasons(projectId: string): Promise<Map<stri
 }
 
 export const AUTONOMY_LABEL: Record<AutomationAutonomy, string> = {
-  pr: 'Só código e PR',
-  merge: 'Merge com CI verde',
-  deploy: 'Deploy',
-  release: 'Publicação (npm, OTA)',
+  pr: tk('Só código e PR'),
+  merge: tk('Merge com CI verde'),
+  deploy: tk('Deploy'),
+  release: tk('Publicação (npm, OTA)'),
 };
 
 const AUTONOMY_ORDER: AutomationAutonomy[] = ['pr', 'merge', 'deploy', 'release'];
 
 const WHAT_THEY_DO: Record<AutomationAutonomy, string> = {
-  pr: 'Os agentes vão pegar os cards marcados e abrir PRs sozinhos; o merge continua com você.',
-  merge: 'Os agentes vão pegar os cards marcados, abrir PRs e fazer merge com CI verde sem perguntar.',
-  deploy: 'Os agentes vão pegar os cards marcados, abrir PRs, fazer merge e deploy sem perguntar.',
-  release: 'Os agentes vão pegar os cards marcados, abrir PRs, fazer merge, deploy e publicar (npm, OTA) sem perguntar.',
+  pr: tk('Os agentes vão pegar os cards marcados e abrir PRs sozinhos; o merge continua com você.'),
+  merge: tk('Os agentes vão pegar os cards marcados, abrir PRs e fazer merge com CI verde sem perguntar.'),
+  deploy: tk('Os agentes vão pegar os cards marcados, abrir PRs, fazer merge e deploy sem perguntar.'),
+  release: tk('Os agentes vão pegar os cards marcados, abrir PRs, fazer merge, deploy e publicar (npm, OTA) sem perguntar.'),
 };
 
 export function autonomyConfirmText(level: AutomationAutonomy): string {
-  return `${WHAT_THEY_DO[level]} Confirmar?`;
+  return i18n.t('{{what}} Confirmar?', { what: i18n.t(WHAT_THEY_DO[level]) });
 }
 
 /** Turning automation on, or raising the level to Deploy or Publicação, asks first. */

@@ -7,7 +7,9 @@ import { b64url, utf8 } from '../crypto/encoding';
 import type { DeviceKey } from '../key/types';
 import {
   ACCOUNT_PENDING_DELETION,
+  pushSettings,
   pushTestResponse,
+  type PushSettings,
   type PushTestBody,
   accountDeletionStatus,
   automationSetupResponse,
@@ -30,6 +32,7 @@ import {
   deviceSelf as deviceSelfSchema,
   emptyResponse,
   filePreviewResponse,
+  fileRecentResponse,
   hostOptionsResponse,
   lessonForgetSchema,
   lessonItemSchema,
@@ -284,6 +287,8 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     revokeSelf: (a: Auth) => empty('POST', '/api/m/v1/devices/self/revoke', { token: a.accessToken }),
     setPushToken: (a: Auth, token: string) => empty('PUT', '/api/m/v1/push-token', { token: a.accessToken, body: { token } }),
     pushTest: (a: Auth, body: PushTestBody) => call('POST', '/api/m/v1/push-test', pushTestResponse, { token: a.accessToken, body }),
+    pushSettings: (a: Auth) => call('GET', '/api/m/v1/push-settings', pushSettings, { token: a.accessToken }),
+    setPushSettings: (a: Auth, body: PushSettings) => call('PUT', '/api/m/v1/push-settings', pushSettings, { token: a.accessToken, body }),
 
     accountDeletion: (a: Auth) => call('GET', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
     requestAccountDeletion: (a: Auth, body: AccountDeletionBody) => call('POST', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken, body }),
@@ -394,6 +399,8 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       if (q.machine_id) p.set('machine_id', q.machine_id);
       return call('GET', `/api/m/v1/file-preview?${p.toString()}`, filePreviewResponse, { token: a.accessToken });
     },
+    fileRecent: (a: Auth, projectId: string) =>
+      call('GET', `/api/m/v1/file-recent?project_id=${encodeURIComponent(projectId)}`, fileRecentResponse, { token: a.accessToken }),
     tabs: (a: Auth) => call('GET', '/api/m/v1/tabs', tabsResponse, { token: a.accessToken }),
     startSession: (a: Auth, body: TStartSessionBody) => call('POST', '/api/m/v1/tabs', startSessionResponse, { token: a.accessToken, body }),
     tabChat: (a: Auth, tabId: string, before?: string) =>

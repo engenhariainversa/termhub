@@ -16,10 +16,13 @@ import { localeOf, t, tk, type Locale } from '../i18n/index.js';
 
 export interface PushMessage {
   to: string;
-  title: string;
-  body: string;
+  /** Absent on a badge-only update (TER-923): nothing is shown, the icon's number changes. */
+  title?: string;
+  body?: string;
   data: Record<string, unknown>;
   collapseId?: string;
+  /** The icon badge (iOS): the person's unread history rows. */
+  badge?: number;
 }
 
 /** One message's ticket: `id` names its receipt (TER-924); `error` is Expo's per-ticket error code. */
@@ -82,7 +85,20 @@ export class ExpoPushSender implements PushSender {
         headers: expoHeaders(this.accessToken),
         signal: AbortSignal.timeout(EXPO_TIMEOUT_MS),
         body: JSON.stringify(
-          chunk.map((m) => ({ to: m.to, title: m.title, body: m.body, data: m.data, sound: 'default', priority: 'high', ...(m.collapseId ? { collapseId: m.collapseId } : {}) })),
+          chunk.map((m) =>
+            m.title === undefined
+              ? { to: m.to, data: m.data, ...(m.badge !== undefined ? { badge: m.badge } : {}) }
+              : {
+                  to: m.to,
+                  title: m.title,
+                  body: m.body,
+                  data: m.data,
+                  sound: 'default',
+                  priority: 'high',
+                  ...(m.collapseId ? { collapseId: m.collapseId } : {}),
+                  ...(m.badge !== undefined ? { badge: m.badge } : {}),
+                },
+          ),
         ),
       });
       if (!res.ok) throw Object.assign(new Error(`Expo push answered ${res.status}`), { code: `EXPO_HTTP_${res.status}` });
@@ -355,6 +371,24 @@ export class MobilePushService {
     attempt([TEST_RECEIPT_AFTER_MS, TEST_RECEIPT_RETRY_MS]);
   }
 
+  /**
+   * The card a history row was about got handled (TER-923): answered, decided or ended, here or on any
+   * other screen. Its rows become read, and the phones get a badge-only push with the new count, so the
+   * icon stops counting it; the app clears the delivered notification when it next looks.
+   */
+  private async handled(userId: string, key: 'action_id' | 'tab_question_id', value: string): Promise<void> {
+    const { repos } = this.deps;
+    if ((await repos.userNotifications.markReadByData(userId, key, value, this.now())) === 0) return;
+    const devices = (await repos.devices.listActiveWithPush(userId)).filter((d): d is Device & { push_token: string } => !!d.push_token);
+    if (devices.length === 0) return;
+    const badge = await repos.userNotifications.countUnread(userId);
+    try {
+      await this.deps.sender.send(devices.map((d) => ({ to: d.push_token, data: { kind: 'badge' }, badge })));
+    } catch (err) {
+      this.deps.log.warn({ err: failureLabel(err), userId, devices: devices.length }, 'mobile badge push failed');
+    }
+  }
+
   /** A tab that was working ended its turn (`waiting_input`, or `finished` with a plain report, TER-972)
    * or its agent (`idle`): maybe "aba terminou". */
   private onTabState({ tab, owner_id }: TabStateChange): void {
@@ -402,6 +436,8 @@ export class MobilePushService {
   }
 
   private async handle(event: ChatEvent): Promise<void> {
+    if (event.type === 'decision' || event.type === 'action_status') return this.handled(event.user_id, 'action_id', event.action_id);
+    if (event.type === 'tab_question_answered' || event.type === 'tab_question_closed') return this.handled(event.user_id, 'tab_question_id', event.question.id);
     if (event.type === 'confirmation') {
       // A card re-published only to name its subagent: the person was already told about it.
       if (event.origin_update) return;
@@ -471,7 +507,9 @@ export class MobilePushService {
     const targets = devices.filter((d): d is Device & { push_token: string } => !!d.push_token);
     if (targets.length === 0) return;
     const pushData = { ...data, notification_id: row.id };
-    const messages: PushMessage[] = targets.map((d) => ({ to: d.push_token, title: text.title, body: text.body, data: pushData, ...(collapseId ? { collapseId } : {}) }));
+    // The icon shows the unread rows, this one included (TER-923).
+    const badge = await this.deps.repos.userNotifications.countUnread(userId);
+    const messages: PushMessage[] = targets.map((d) => ({ to: d.push_token, title: text.title, body: text.body, data: pushData, badge, ...(collapseId ? { collapseId } : {}) }));
     let results: PushTicketResult[];
     try {
       results = await this.deps.sender.send(messages);
