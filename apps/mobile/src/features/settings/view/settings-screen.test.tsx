@@ -170,6 +170,22 @@ describe('Notificações e Privacidade (permission prompts spec §2)', () => {
     expect(stores.permissionDeps.openSystemSettings).toHaveBeenCalled();
   });
 
+  it('granted: sends a test push and shows the OTA line (TER-913)', async () => {
+    stores.permissionDeps.notificationStatus.mockResolvedValueOnce('granted');
+    await render(<SettingsScreen />);
+    expect(await screen.findByText('Feche o app para ver como ela chega.')).toBeTruthy();
+    expect(screen.getByText('OTA: binário')).toBeTruthy();
+    await act(async () => fireEvent.press(screen.getByText('Enviar notificação de teste')));
+    expect(await screen.findByText('Enviada. Ela chega em 10 s. Feche o app para ver como ela chega.')).toBeTruthy();
+  });
+
+  it('not granted: no test push button', async () => {
+    stores.permissionDeps.notificationStatus.mockResolvedValueOnce('denied');
+    await render(<SettingsScreen />);
+    await screen.findByText('Abrir Ajustes do sistema');
+    expect(screen.queryByText('Enviar notificação de teste')).toBeNull();
+  });
+
   it('an undecided permission can be turned on from here', async () => {
     stores.permissionDeps.notificationStatus.mockResolvedValueOnce('undetermined');
     await render(<SettingsScreen />);
