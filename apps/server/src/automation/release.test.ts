@@ -17,7 +17,7 @@ const pr = (over: Partial<TaskPullRequest> = {}): TaskPullRequest => ({
   ci_state: 'passed', ci_summary: { total: 1, passed: 1, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, release_runs: [], changed_level: 'release', synced_at: '', ...over,
 });
 
-function world(o: { enabled?: boolean; auto?: boolean; byCommit?: Record<string, WorkflowRun[]>; headSha?: string | null; ancestor?: boolean; pkg?: string | null; releaseWorkflows?: string[] } = {}) {
+function world(o: { enabled?: boolean; auto?: boolean; byCommit?: Record<string, WorkflowRun[]>; headSha?: string | null; ancestor?: boolean; pkg?: string | null; files?: string[]; pkgs?: Record<string, string>; noOwner?: boolean; releaseWorkflows?: string[] } = {}) {
   const events: AutomationEventInput[] = [];
   const messages: string[] = [];
   const updateCi = vi.fn(async () => {});
@@ -26,7 +26,7 @@ function world(o: { enabled?: boolean; auto?: boolean; byCommit?: Record<string,
     tasks: { findById: vi.fn(async () => ({ id: 't1', ref: 'TER-1', auto: o.auto ?? true })) },
     automationEvents: { insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { id: `e${events.length}`, ...e, created_at: '' })) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
-    users: { findById: vi.fn(async () => ({ id: 'u1', locale: null })) },
+    users: { findById: vi.fn(async () => (o.noOwner ? undefined : { id: 'u1', locale: null })) },
     chat: {
       findLatestActiveForProject: vi.fn(async () => ({ id: 'c1' })),
       addMessage: vi.fn(async (m: { text: string }) => (messages.push(m.text), { id: 'm', ...m })),
@@ -36,9 +36,10 @@ function world(o: { enabled?: boolean; auto?: boolean; byCommit?: Record<string,
     listRuns: vi.fn(async (_t: string, _r: string, sha: string) => o.byCommit?.[sha] ?? []),
     branchSha: vi.fn(async () => (o.headSha === undefined ? 'm2' : o.headSha)),
     isAncestor: vi.fn(async () => o.ancestor ?? true),
-    fileAt: vi.fn(async () => (o.pkg === undefined ? JSON.stringify({ name: '@termhub/agent', version: '0.19.0' }) : o.pkg)),
+    prFiles: vi.fn(async () => o.files ?? []),
+    fileAt: vi.fn(async (_t: string, _r: string, path: string) => (o.pkgs ? (o.pkgs[path] ?? null) : o.pkg === undefined ? JSON.stringify({ name: '@termhub/agent', version: '0.19.0' }) : o.pkg)),
   };
-  const setup = { repo: { deploy_workflow: 'deploy.yml' }, automation: { enabled: o.enabled ?? true, release_workflows: o.releaseWorkflows ?? ['publish-agent.yml'] } } as unknown as ProjectSetupData;
+  const setup = { repo: { deploy_workflow: 'deploy.yml' }, automation: { enabled: o.enabled ?? true, release_workflows: o.releaseWorkflows ?? ['publish-agent.yml'], release_paths: ['apps/agent/**', 'package.json'] } } as unknown as ProjectSetupData;
   const ctx: DeliveryCtx = { projectId: 'p1', ownerId: 'u1', token: 'tok', repo: 'acme/app', setup };
   return { deps: { repos, github }, ctx, events, messages, updateCi, github, setup };
 }
@@ -54,6 +55,39 @@ describe('followMerged: deploy', () => {
     expect(w.events[0].payload).toEqual({ pr: 7, sha: 'm1', url: 'https://github.com/acme/app/actions/runs/1', workflow: 'deploy.yml' });
     expect(w.updateCi).toHaveBeenCalledWith('p1', 'acme/app', 7, { deploy_state: 'passed', deploy_url: 'https://github.com/acme/app/actions/runs/1' });
     expect(pauseAutomation).not.toHaveBeenCalled();
+  });
+
+  it('a failed deploy stores its state last, so a throw before that retries; the event says whether it paused', async () => {
+    const w = world({ byCommit: { m1: [run({ conclusion: 'failure' })] } });
+    const order: string[] = [];
+    pauseAutomation.mockImplementationOnce(async () => (order.push('pause'), { paused_at: 'x' }));
+    w.updateCi.mockImplementation(async () => void order.push('store'));
+    await followMerged(w.deps, w.ctx, pr());
+    expect(order).toEqual(['pause', 'store']);
+    expect(w.events[0].payload).toMatchObject({ paused: true });
+
+    const boom = world({ byCommit: { m1: [run({ conclusion: 'failure' })] } });
+    (boom.deps.repos.automationEvents.insert as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('db down'));
+    await expect(followMerged(boom.deps, boom.ctx, pr())).rejects.toThrow('db down');
+    expect(pauseAutomation).toHaveBeenCalledTimes(2);
+    expect(boom.updateCi).not.toHaveBeenCalled();
+  });
+
+  it('without an owner it cannot pause, and says so instead of claiming it', async () => {
+    const w = world({ noOwner: true, byCommit: { m1: [run({ conclusion: 'failure' })] } });
+    await followMerged(w.deps, w.ctx, pr());
+    expect(pauseAutomation).not.toHaveBeenCalled();
+    expect(w.events[0].payload).toMatchObject({ paused: false });
+    expect(w.events[1].payload).toMatchObject({ reason: 'deploy_failed_not_paused' });
+  });
+
+  it('automation off keeps the plain deploy lookup: no cancelled-follow, no extra GitHub calls', async () => {
+    const w = world({ enabled: false, byCommit: { m1: [run({ conclusion: 'cancelled' })], m2: [run({ id: 2 })] } });
+    await followMerged(w.deps, w.ctx, pr());
+    expect(w.github.branchSha).not.toHaveBeenCalled();
+    expect(w.github.isAncestor).not.toHaveBeenCalled();
+    expect(w.github.listRuns).toHaveBeenCalledTimes(1);
+    expect(w.updateCi).toHaveBeenCalledWith('p1', 'acme/app', 7, { deploy_state: 'none', deploy_url: null });
   });
 
   it('a failed deploy pauses only that project, escalates once and tells the chat', async () => {
@@ -159,6 +193,17 @@ describe('followMerged: release workflows', () => {
     const priv = world({ byCommit: { m1: [publish()] }, pkg: JSON.stringify({ version: '1.0.0', private: true }) });
     await followMerged(priv.deps, priv.ctx, pr({ deploy_state: 'passed' }));
     expect(priv.events[0].payload).not.toHaveProperty('version');
+  });
+
+  it('reads the version from the package.json the PR changed under release_paths, falling back to the root', async () => {
+    const nested = world({ byCommit: { m1: [publish()] }, files: ['apps/agent/package.json', 'apps/web/package.json'], pkgs: { 'package.json': JSON.stringify({ version: '1.0.0', private: true }), 'apps/agent/package.json': JSON.stringify({ name: '@termhub/agent', version: '0.19.1' }) } });
+    await followMerged(nested.deps, nested.ctx, pr({ deploy_state: 'passed' }));
+    expect(nested.events[0].payload).toMatchObject({ version: '0.19.1' });
+    expect(nested.github.fileAt).not.toHaveBeenCalledWith('tok', 'acme/app', 'apps/web/package.json', 'm1');
+
+    const root = world({ byCommit: { m1: [publish()] }, files: ['apps/agent/src/x.ts'] });
+    await followMerged(root.deps, root.ctx, pr({ deploy_state: 'passed' }));
+    expect(root.events[0].payload).toMatchObject({ version: '0.19.0' });
   });
 
   it('a cancelled release is not a failure', async () => {

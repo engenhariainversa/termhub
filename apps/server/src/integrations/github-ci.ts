@@ -33,6 +33,8 @@ export interface GithubCiClient {
   branchSha(token: string, repo: string, branch: string): Promise<string | null>;
   /** Whether `ancestor` is part of `descendant`'s history (or the same commit). */
   isAncestor(token: string, repo: string, ancestor: string, descendant: string): Promise<boolean>;
+  /** The paths a PR changed (first 100 files: enough to find the package a release publishes). */
+  prFiles(token: string, repo: string, number: number): Promise<string[]>;
   /** A text file at a commit; null when it does not exist there. */
   fileAt(token: string, repo: string, path: string, ref: string): Promise<string | null>;
 }
@@ -91,6 +93,11 @@ export function createGithubCiClient(fetchImpl: typeof fetch = fetch): GithubCiC
       if (!res.ok) throw failure(res);
       const { status } = (await res.json()) as { status: string };
       return status === 'ahead' || status === 'identical';
+    },
+    async prFiles(token, repo, number) {
+      const res = await get(token, `/repos/${repo}/pulls/${number}/files?per_page=100`);
+      if (!res.ok) throw failure(res);
+      return ((await res.json()) as Array<{ filename: string }>).map((f) => f.filename);
     },
     async fileAt(token, repo, path, ref) {
       const res = await get(token, `/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`);

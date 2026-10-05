@@ -4,10 +4,11 @@ import type { CiState, ReleaseRun, TaskPullRequest } from '../db/repositories/ta
 import type { GithubCiClient } from '../integrations/github-ci.js';
 import { deployOf, latestPerWorkflow, matchesWorkflow, type WorkflowRun } from '../ci/rules.js';
 import type { ProjectSetupData } from '../setup/schema.js';
-import { DEPLOY_FAILED, RELEASE_FAILED } from './escalation-text.js';
+import { DEPLOY_FAILED, DEPLOY_FAILED_NOT_PAUSED, RELEASE_FAILED } from './escalation-text.js';
 import { recordEvent } from './events.js';
 import { escalateDelivery } from './follower.js';
 import { pauseAutomation } from './pause.js';
+import { globMatches } from './policy.js';
 
 /*
  * After a merge (agentic board D22, §10.5): follow the project's deploy workflow and, for a PR that changed
@@ -20,7 +21,7 @@ const noopLog: Log = { info: () => {}, warn: () => {} };
 
 export interface DeliveryDeps {
   repos: Repositories;
-  github: Pick<GithubCiClient, 'listRuns' | 'branchSha' | 'isAncestor' | 'fileAt'>;
+  github: Pick<GithubCiClient, 'listRuns' | 'branchSha' | 'isAncestor' | 'fileAt' | 'prFiles'>;
   log?: Log;
 }
 export interface DeliveryCtx {
@@ -50,7 +51,7 @@ export function deliveryPending(setup: ProjectSetupData, w: TaskPullRequest): bo
  * by a newer queued run (cancel-in-progress): the merge's code ships with the newest run of the base branch
  * that contains it, so that one is followed instead (is-ancestor).
  */
-function runSource(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPullRequest): (workflow: string) => Promise<WorkflowRun[]> {
+function runSource(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPullRequest, followNewer: boolean): (workflow: string) => Promise<WorkflowRun[]> {
   const { github } = deps;
   const sha = w.merge_commit_sha!;
   let atMerge: Promise<WorkflowRun[]> | undefined;
@@ -64,21 +65,36 @@ function runSource(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPullRequest): (wor
   return async (workflow) => {
     const own = (await (atMerge ??= github.listRuns(c.token, c.repo, sha))).filter((r) => matchesWorkflow(r, workflow));
     const latest = latestPerWorkflow(own);
-    if (latest.length === 0 || latest.some((r) => r.conclusion !== 'cancelled')) return own;
+    // a project that never turned automation on keeps the plain deploy lookup (D3)
+    if (!followNewer || latest.length === 0 || latest.some((r) => r.conclusion !== 'cancelled')) return own;
     const later = await (atHead ??= newer());
     return later ? later.filter((r) => matchesWorkflow(r, workflow)) : own;
   };
 }
 
-/** The `version` of the merged `package.json`; null when there is none, it is private or unreadable. */
-async function versionAt(deps: DeliveryDeps, c: DeliveryCtx, sha: string): Promise<string | null> {
-  try {
-    const text = await deps.github.fileAt(c.token, c.repo, 'package.json', sha);
-    const pkg = text ? (JSON.parse(text) as { version?: unknown; private?: unknown }) : null;
-    return pkg && pkg.private !== true && typeof pkg.version === 'string' ? pkg.version.slice(0, 100) : null;
-  } catch {
-    return null;
+/**
+ * The `version` of the package a release publishes: the `package.json` files the PR changed under
+ * `automation.release_paths` (the first one with a public version), else the root one. Null when none is
+ * readable or public.
+ */
+async function versionAt(deps: DeliveryDeps, c: DeliveryCtx, sha: string, number: number): Promise<string | null> {
+  const read = async (path: string): Promise<string | null> => {
+    try {
+      const text = await deps.github.fileAt(c.token, c.repo, path, sha);
+      const pkg = text ? (JSON.parse(text) as { version?: unknown; private?: unknown }) : null;
+      return pkg && pkg.private !== true && typeof pkg.version === 'string' ? pkg.version.slice(0, 100) : null;
+    } catch {
+      return null;
+    }
+  };
+  const changed = await deps.github.prFiles(c.token, c.repo, number).catch(() => [] as string[]);
+  const globs = c.setup.automation.release_paths;
+  const candidates = changed.filter((f) => f.endsWith('/package.json') && globs.some((g) => globMatches(g, f)));
+  for (const path of [...candidates, 'package.json']) {
+    const v = await read(path);
+    if (v) return v;
   }
+  return null;
 }
 
 /**
@@ -90,7 +106,7 @@ export async function followMerged(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPu
   const { repos } = deps;
   if (!w.merge_commit_sha) return;
   const log = deps.log ?? noopLog;
-  const runsOf = runSource(deps, c, w);
+  const runsOf = runSource(deps, c, w, !!c.setup.automation?.enabled);
   const deployWorkflow = c.setup.repo?.deploy_workflow ?? null;
   const patch: { deploy_state?: CiState; deploy_url?: string | null; release_runs?: ReleaseRun[] } = {};
 
@@ -106,28 +122,32 @@ export async function followMerged(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPu
     for (const workflow of c.setup.automation.release_workflows) {
       const { state, url } = deployOf(await runsOf(workflow), workflow);
       const previous = w.release_runs.find((r) => r.workflow === workflow);
-      releases.push({ workflow, state, url, version: state === 'passed' ? await (version ??= versionAt(deps, c, w.merge_commit_sha)) : (previous?.version ?? null), previous: previous?.state ?? 'none' });
+      releases.push({ workflow, state, url, version: state === 'passed' ? await (version ??= versionAt(deps, c, w.merge_commit_sha, w.number)) : (previous?.version ?? null), previous: previous?.state ?? 'none' });
     }
     patch.release_runs = releases.map(({ workflow, state, url, version }) => ({ workflow, state, url, version }));
   }
-  await repos.taskPullRequests.updateCi(c.projectId, w.repo, w.number, patch);
-
-  if (!c.setup.automation?.enabled) return;
-  // only what the automation delivers: a card tagged automatic
-  const task = await repos.tasks.findById(w.task_id);
-  if (!task?.auto) return;
+  // only what the automation delivers: an automatic card of a project with automation on
+  const reporting = !!c.setup.automation?.enabled && !!(await repos.tasks.findById(w.task_id))?.auto;
   const about = { project_id: c.projectId, task_id: w.task_id };
   const ids = { pr: w.number, sha: w.merge_commit_sha };
+  const deployDone = reporting && !!deploy && finished(deploy.state) && deploy.state !== w.deploy_state;
 
-  if (deploy && finished(deploy.state) && deploy.state !== w.deploy_state) {
+  if (deployDone && deploy?.state === 'failed') {
+    // The safety action comes first and the failed state is stored last: if anything here throws, the next
+    // sync still sees the deploy as unreported and retries (pausing again is a no-op).
     const payload = { ...ids, url: deploy.url, workflow: deployWorkflow };
-    if (deploy.state === 'passed') await recordEvent(repos, { ...about, kind: 'deploy_ok', payload });
-    else {
-      await recordEvent(repos, { ...about, kind: 'deploy_failed', payload });
-      await pauseOnDeployFailure(deps, c).catch((e: unknown) => log.warn({ projectId: c.projectId, err: e instanceof Error ? e.message : String(e) }, 'automation: pause after a failed deploy failed'));
-      await escalateDelivery(repos, about, DEPLOY_FAILED, log, payload);
-    }
+    const paused = await pauseOnDeployFailure(deps, c).catch((e: unknown) => {
+      log.warn({ projectId: c.projectId, err: e instanceof Error ? e.message : String(e) }, 'automation: pause after a failed deploy failed');
+      return false;
+    });
+    await recordEvent(repos, { ...about, kind: 'deploy_failed', payload: { ...payload, paused } });
+    await escalateDelivery(repos, about, paused ? DEPLOY_FAILED : DEPLOY_FAILED_NOT_PAUSED, log, payload);
+    await repos.taskPullRequests.updateCi(c.projectId, w.repo, w.number, patch);
+  } else {
+    await repos.taskPullRequests.updateCi(c.projectId, w.repo, w.number, patch);
+    if (deployDone && deploy) await recordEvent(repos, { ...about, kind: 'deploy_ok', payload: { ...ids, url: deploy.url, workflow: deployWorkflow } });
   }
+  if (!reporting) return;
   for (const r of releases) {
     if (!finished(r.state) || r.state === r.previous) continue;
     const payload = { ...ids, url: r.url, workflow: r.workflow, ...(r.version ? { version: r.version } : {}) };
@@ -140,8 +160,9 @@ export async function followMerged(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPu
 }
 
 /** Pauses this project only (D22): the person resumes it once the deploy is sorted out. */
-async function pauseOnDeployFailure(deps: DeliveryDeps, c: DeliveryCtx): Promise<void> {
+async function pauseOnDeployFailure(deps: DeliveryDeps, c: DeliveryCtx): Promise<boolean> {
   const owner = c.ownerId ? await deps.repos.users.findById(c.ownerId) : undefined;
-  if (!owner) return;
+  if (!owner) return false;
   await pauseAutomation(controlContextFor(deps.repos, owner), { scope: c.projectId, reason: DEPLOY_FAILED });
+  return true;
 }

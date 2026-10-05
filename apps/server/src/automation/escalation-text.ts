@@ -31,6 +31,8 @@ export const REPORTED_BLOCKED = 'reported_blocked';
 
 /** The project's deploy workflow failed on a merge the automation made: automation of the project is paused (spec D22). */
 export const DEPLOY_FAILED = 'deploy_failed';
+/** Same, but the pause could not be applied (owner not found or the write failed): the text must not claim it. */
+export const DEPLOY_FAILED_NOT_PAUSED = 'deploy_failed_not_paused';
 /** A release workflow (npm, OTA…) failed after a merge: nothing is paused, a person looks at it. */
 export const RELEASE_FAILED = 'release_failed';
 
@@ -46,6 +48,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [AGENT_EXITED]: tk('O agente saiu de novo depois de reiniciado; confira a aba.'),
   [REPORTED_BLOCKED]: tk('O agente disse que travou e precisa de você.'),
   [DEPLOY_FAILED]: tk('O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.'),
+  [DEPLOY_FAILED_NOT_PAUSED]: tk('O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.'),
   [RELEASE_FAILED]: tk('Um workflow de publicação falhou depois do merge; confira a execução.'),
   [CONFLICT_CAP]: tk('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
 };
