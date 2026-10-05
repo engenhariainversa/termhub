@@ -468,6 +468,8 @@ model Task {
   doneAt        DateTime? @map("done_at")
   /// Seconds an agent tab linked to this card (or to one of its subtasks) spent working (monitor/recordEvent).
   activeSeconds Int       @default(0) @map("active_seconds")
+  /// Tagged "automático": eligible for automatic work. On an epic, setAuto propagates to its top-level cards. Never on subtasks.
+  auto        Boolean    @default(false)
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   /// chave estável do ticket externo ("linear:<id>", "jira:<key>") para upsert no sync

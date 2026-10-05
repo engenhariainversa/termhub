@@ -15,7 +15,7 @@ const project = (over: Partial<Project> & { id: string; owner_id: string }): Pro
 });
 const task = (over: Partial<Task> & { id: string; project_id: string }): Task => ({
   title: over.id, description: null, status: 'todo', position: 0, external_ref: null, external_key: null, tab_id: null, parent_id: null,
-  type: over.parent_id ? 'subtask' : 'task', number: 1, ref: `P1-${over.id}`, epic_id: over.parent_id ? null : 'e1', column_id: null,
+  type: over.parent_id ? 'subtask' : 'task', number: 1, ref: `P1-${over.id}`, epic_id: over.parent_id ? null : 'e1', column_id: null, auto: false,
   created_at: '2026-09-20T10:00:00.000Z', updated_at: '2026-09-20T10:00:00.000Z', ...over,
 });
 const tree = (t: Task, subtasks: Task[] = []): TaskWithSubtasks => ({ ...t, subtasks, subtask_counts: { done: subtasks.filter((s) => s.status === 'done').length, total: subtasks.length } });
@@ -41,6 +41,7 @@ function ctx() {
       createWithSubtasks: vi.fn(),
       createSubtasks: vi.fn(),
       update: vi.fn(),
+      setAuto: vi.fn(async () => ({ changed: 1 })),
       move: vi.fn(),
       childIds: vi.fn(async () => [] as string[]),
       delete: vi.fn(async () => true),
@@ -160,8 +161,23 @@ describe('updateTask', () => {
 
   it('requires at least one field', async () => {
     const { c, repos } = ctx();
-    await expect(updateTask(c, { task_id: 'k1' })).rejects.toEqual(new ControlError('BAD_REQUEST', 'Informe title, description, status, type ou epic_id'));
+    await expect(updateTask(c, { task_id: 'k1' })).rejects.toEqual(new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id ou auto'));
     expect(repos.tasks.update).not.toHaveBeenCalled();
+  });
+
+  it('auto goes to setAuto (an epic propagates in the repository) and returns the fresh card', async () => {
+    const { c, repos } = ctx();
+    repos.tasks.findById.mockResolvedValueOnce(k1).mockResolvedValueOnce({ ...k1, auto: true });
+    const r = await updateTask(c, { task_id: 'k1', auto: true });
+    expect(repos.tasks.setAuto).toHaveBeenCalledWith('k1', true);
+    expect(repos.tasks.update).not.toHaveBeenCalled();
+    expect(r.task).toMatchObject({ id: 'k1', auto: true });
+  });
+
+  it('a refused tag (a subtask) says why in pt-BR', async () => {
+    const { c, repos } = ctx();
+    repos.tasks.setAuto.mockRejectedValue(new TaskRuleError('AUTO_NOT_FOR_SUBTASK'));
+    await expect(updateTask(c, { task_id: 's1', auto: true })).rejects.toMatchObject({ code: 'AUTO_NOT_FOR_SUBTASK' });
   });
 
   it('clears the description with null', async () => {
