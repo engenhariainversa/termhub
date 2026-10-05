@@ -420,6 +420,19 @@ describe('publishTabQuestions', () => {
     expect(events.map((e) => e.type)).toEqual(['tab_suggestion', 'tab_suggestion_closed', 'tab_suggestion_closed']);
     expect(events[0]).toMatchObject({ user_id: 'u1', conversation_id: 'c1', suggestion: { id: 's1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' } } });
   });
+
+  it('marks a changed open card as an update, and only an open one (TER-919)', async () => {
+    const repos = fakeRepos();
+    const q = row({ id: 'q1' });
+    await publishTabQuestions(asRepos(repos), 'tab_question', [q]);
+    await publishTabQuestions(asRepos(repos), 'tab_question', [q], { update: true });
+    await publishTabQuestions(asRepos(repos), 'tab_question_answered', [{ ...q, status: 'answered' }], { update: true });
+    expect(events.map((e) => [e.type, 'update' in e ? e.update : undefined])).toEqual([
+      ['tab_question', undefined],
+      ['tab_question', true],
+      ['tab_question_answered', undefined],
+    ]);
+  });
 });
 
 describe('expireOrphanTabQuestions', () => {

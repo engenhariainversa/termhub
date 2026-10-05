@@ -217,7 +217,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(repos.tabQuestions.cancelScheduledForUser).toHaveBeenCalledWith('u1');
     // The switch is stored first, so the repeat path cannot schedule a new one behind the cancel.
     expect(repos.users.setChatAutodecide.mock.invocationCallOrder[0]!).toBeLessThan(repos.tabQuestions.cancelScheduledForUser.mock.invocationCallOrder[0]!);
-    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', cancelled);
+    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', cancelled, { update: true });
   });
 
   it('PATCH /memory with autodecide: true (or only enabled) cancels nothing', async () => {

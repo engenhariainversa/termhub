@@ -118,7 +118,7 @@ describe('scheduleAutoAnswer', () => {
       status: 'scheduled',
     });
     expect(r?.auto_answer?.status).toBe('scheduled');
-    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [r]);
+    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [r], { update: true });
   });
 
   it('a row that moved on (closed, or already counting down) schedules nothing and publishes nothing', async () => {
@@ -334,7 +334,7 @@ describe('sendDueAutoAnswers', () => {
     expect(await sendDueAutoAnswers(repos as unknown as Repositories, l, { now, answer })).toBe(0);
     expect(answer).toHaveBeenCalledTimes(1);
     expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'TAB_PROMPT_CHANGED');
-    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [expect.objectContaining({ id: 'q1', auto_answer: expect.objectContaining({ status: 'failed', error_code: 'TAB_PROMPT_CHANGED' }) })]);
+    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [expect.objectContaining({ id: 'q1', auto_answer: expect.objectContaining({ status: 'failed', error_code: 'TAB_PROMPT_CHANGED' }) })], { update: true });
     expect(repos.chatDecisions.bumpAuto).not.toHaveBeenCalled();
     expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', code: 'TAB_PROMPT_CHANGED' }, 'auto answer failed');
   });
@@ -438,7 +438,7 @@ describe('recoverLostAutoAnswers', () => {
     expect(await recoverLostAutoAnswers(repos, l)).toBe(1);
     // The age is measured on the database's clock, the same one that stamped the claim.
     expect(failLostAutoAnswers).toHaveBeenCalledWith('SENDER_LOST', 120_000);
-    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [lost]);
+    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [lost], { update: true });
     expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', code: 'SENDER_LOST' }, 'auto answer sender lost');
   });
 });
@@ -524,7 +524,7 @@ describe('cancelAutoAnswer', () => {
     const view = await cancelAutoAnswer(ctx, 'q1');
     expect(tabQuestions.cancelAutoAnswer).toHaveBeenCalledWith('q1', 'u1');
     expect(view).toMatchObject({ id: 'q1', auto_answer: { status: 'cancelled' } });
-    expect(publishTabQuestions).toHaveBeenCalledWith(ctx.repos, 'tab_question', [cancelled]);
+    expect(publishTabQuestions).toHaveBeenCalledWith(ctx.repos, 'tab_question', [cancelled], { update: true });
   });
 
   it('404 for a foreign or missing row, or a suggestion', async () => {
