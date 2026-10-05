@@ -12,6 +12,7 @@ import { ProjectSettings } from '../components/ProjectSettings';
 import { PublishControl } from '../components/PublishControl';
 import { FullScreenMessage } from '../components/Layout';
 import { PageHeader } from '../components/PageHeader';
+import { PauseAutomationButton } from '../components/PauseAutomationButton';
 import { useChatScope } from '../lib/project-chat';
 import { ChatToggleButton } from '../components/chat/ChatToggleButton';
 
@@ -91,6 +92,7 @@ export function ProjectPage({ card }: Props = {}) {
                 title={status}
               />
             )}
+            <PauseAutomationButton />
             <PublishControl project={project} />
             <ChatToggleButton projectId={project.id} />
           </>

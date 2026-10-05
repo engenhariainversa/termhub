@@ -1537,3 +1537,9 @@ export interface FilePreviewRefused {
   size?: number;
 }
 export type FilePreview = FilePreviewOk | FilePreviewRefused;
+
+/** The automatic work's pause switch (`GET /api/automation/state`): the person's "Pausar tudo" and the projects paused on their own. */
+export interface AutomationPauseState {
+  paused_at: string | null;
+  projects: Array<{ id: string; paused_at: string }>;
+}

@@ -28,6 +28,8 @@ interface MonitorState {
   markSeen: (tabId: string) => Promise<void>;
   reload: () => Promise<void>;
   connected: boolean;
+  /** counts the `automation` frames received: a pause or resume somewhere re-reads the pause state */
+  automationSeq: number;
   /** subscribes to tabs that start needing you; returns the unsubscribe */
   onNeedsYou: (listener: NeedsYouListener) => () => void;
 }
@@ -49,6 +51,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const [openTabsFailed, setOpenTabsFailed] = useState(false);
   const openTabsRead = useRef(false);
   const [connected, setConnected] = useState(false);
+  const [automationSeq, setAutomationSeq] = useState(0);
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const listeners = useRef(new Set<NeedsYouListener>());
@@ -111,6 +114,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
         try {
           msg = JSON.parse(String(ev.data));
         } catch {
+          return;
+        }
+        // automation events (pauses, runs, PRs): only a tick, the pause switch re-reads its own state
+        if (msg.type === 'automation') {
+          setAutomationSeq((n) => n + 1);
           return;
         }
         // tabs opened, renamed and closed only move the open-tab list (the sidebar's agents)
@@ -191,9 +199,10 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       },
       reload,
       connected,
+      automationSeq,
       onNeedsYou,
     }),
-    [items, openTabs, openTabsLoaded, openTabsFailed, reload, connected, onNeedsYou],
+    [items, openTabs, openTabsLoaded, openTabsFailed, reload, connected, automationSeq, onNeedsYou],
   );
 
   return <MonitorContext.Provider value={value}>{children}</MonitorContext.Provider>;
