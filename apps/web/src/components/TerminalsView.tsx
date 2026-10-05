@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useFocusTabFromParam } from '../lib/tab-param';
 import { api, ApiError } from '../lib/api';
 import {
@@ -19,7 +19,8 @@ import {
   type Size,
 } from '../lib/layout';
 import type { Project, Tab, TabKind } from '../lib/types';
-import { TabBar } from './TabBar';
+import { TabBar, type BarTab } from './TabBar';
+import { FileView } from './FileView';
 import { TerminalView } from './Terminal';
 import { SimulatorView } from './SimulatorView';
 import { RateLimitBanner } from './RateLimitBanner';
@@ -34,7 +35,10 @@ import { setTabsOnScreen } from '../lib/visible-tabs';
 import { writeLastMachine } from '../lib/last-machine';
 import {
   closeEditorTab,
+  filePathOf,
+  fileTabId,
   getEditorTabs,
+  isFileTabId,
   onTerminalEnded,
   pinTab,
   previewTab,
@@ -83,9 +87,24 @@ export function TerminalsView({ project, visible }: Props) {
   // Every terminal of the project is listed in the sidebar; only the open tabs (TER-904) are mounted and
   // hold a terminal connection, so the layout works on those alone.
   const editorTabs = useEditorTabs(project.id);
-  const openKey = (editorTabs?.open ?? []).filter((id) => (tabs ?? []).some((t) => t.id === id)).join(',');
-  const tabIds = useMemo(() => (openKey ? openKey.split(',') : []), [openKey]);
+  // File previews (spec 2026-10-04 file preview D14) share the list: they are open whatever the terminal list says.
+  const openIds = (editorTabs?.open ?? []).filter((id) => isFileTabId(id) || (tabs ?? []).some((t) => t.id === id));
+  const openKey = JSON.stringify(openIds);
+  const tabIds = useMemo(() => JSON.parse(openKey) as string[], [openKey]);
   const openTabs = useMemo(() => tabIds.map((id) => (tabs ?? []).find((t) => t.id === id)).filter((t): t is Tab => !!t), [tabIds, tabs]);
+  /** What the bar shows, in its order: terminals and file previews. */
+  const barTabs = useMemo<BarTab[]>(
+    () =>
+      tabIds.flatMap((id): BarTab[] => {
+        if (isFileTabId(id)) {
+          const path = filePathOf(id);
+          return [{ id, kind: 'file', path, name: path.split('/').pop() || path }];
+        }
+        const t = openTabs.find((x) => x.id === id);
+        return t ? [t] : [];
+      }),
+    [tabIds, openTabs],
+  );
   const previewId = editorTabs?.preview ?? null;
 
   // Tabs in a cell or floating while this section is shown: the "needs you" toasts skip them.
@@ -128,7 +147,7 @@ export function TerminalsView({ project, visible }: Props) {
     // The first visit after TER-904 opens what the saved layout had on screen (or the first terminal),
     // so nobody lands on an empty area; from then on the open tabs are remembered per project.
     const saved = loadLayout(project.id, all, area);
-    let open = getEditorTabs(project.id)?.open.filter((id) => all.includes(id));
+    let open = getEditorTabs(project.id)?.open.filter((id) => all.includes(id) || isFileTabId(id));
     if (!open) {
       const onScreen = [...saved.cells, saved.floating?.tabId ?? null].filter((id): id is string => !!id);
       open = seedEditorTabs(project.id, onScreen.length > 0 ? { open: onScreen, preview: null } : { open: all.slice(0, 1), preview: all[0] ?? null }).open;
@@ -168,8 +187,8 @@ export function TerminalsView({ project, visible }: Props) {
 
   const focusedTabId = layout.floating && floatingFocused ? layout.floating.tabId : layout.cells[layout.focusedCell] ?? null;
 
-  // Clears the focused tab's "needs you" dot as soon as the person actually looks at it.
-  useMarkSeenOnFocus(focusedTabId, visible);
+  // Clears the focused tab's "needs you" dot as soon as the person actually looks at it (a file has none).
+  useMarkSeenOnFocus(focusedTabId && !isFileTabId(focusedTabId) ? focusedTabId : null, visible);
 
   // The focused tab's live state (rate_limited_at, state) comes from the monitor push; the REST row
   // (loaded below) is the fallback until a snapshot/push for it arrives.
@@ -242,6 +261,27 @@ export function TerminalsView({ project, visible }: Props) {
   );
   const focusTab = useCallback((tabId: string) => openTab(tabId, 'preview'), [openTab]);
   useFocusTabFromParam(tabs, load, focusTab);
+
+  // ?file=<path> (a path linked in the chat, spec 2026-10-04 file preview): opens it as the preview tab,
+  // once the stored tabs and layout are loaded so they do not replace it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantedFile = searchParams.get('file');
+  const wantedPin = searchParams.get('pin') === '1';
+  const ready = tabs !== null && loadedFor.current === project.id;
+  useEffect(() => {
+    if (!wantedFile || !ready) return;
+    setSearchParams(
+      (p) => {
+        p.delete('file');
+        p.delete('pin');
+        p.delete('machine');
+        return p;
+      },
+      { replace: true },
+    );
+    openTab(fileTabId(wantedFile), wantedPin ? 'pin' : 'preview');
+  }, [wantedFile, wantedPin, ready, openTab, setSearchParams]);
+  const openFile = useCallback((path: string, mode: 'preview' | 'pin') => openTab(fileTabId(path), mode), [openTab]);
 
   /** The tab's ✕ (and ⌘W): only the tab closes; the terminal, its tmux session and its agent keep going. */
   const closeTab = useCallback(
@@ -326,7 +366,7 @@ export function TerminalsView({ project, visible }: Props) {
   useEffect(() => {
     if (!visible) return;
     const onKey = (e: KeyboardEvent) => {
-      const list = openTabs;
+      const list = barTabs;
       const meta = e.metaKey && !e.ctrlKey && !e.altKey;
       const ctrlShift = e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey;
       if ((meta && e.key === 't') || (ctrlShift && e.key === 'T')) {
@@ -346,14 +386,14 @@ export function TerminalsView({ project, visible }: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [visible, openTabs, focusedTabId, newTab, closeTab, dispatch, layout.floating]);
+  }, [visible, barTabs, focusedTabId, newTab, closeTab, dispatch, layout.floating]);
 
   const floatingTab = layout.floating ? openTabs.find((t) => t.id === layout.floating?.tabId) : undefined;
 
   return (
     <div className={`absolute inset-0 flex flex-col ${visible ? '' : 'hidden'}`}>
       <TabBar
-        tabs={openTabs}
+        tabs={barTabs}
         activeId={focusedTabId}
         previewId={previewId}
         onPin={(id) => openTab(id, 'pin')}
@@ -421,13 +461,14 @@ export function TerminalsView({ project, visible }: Props) {
       <div ref={areaRef} className="relative min-h-0 flex-1 overflow-hidden">
         {tabs === null ? (
           <div className="flex h-full items-center justify-center text-sm text-fg-dim">Carregando tabs…</div>
-        ) : tabs.length === 0 || (openTabs.length === 0 && layout.preset === 'single') ? (
+        ) : barTabs.length === 0 && (tabs.length === 0 || layout.preset === 'single') ? (
           // Nothing open (or no terminal yet): the project's office, with its epics in progress and a
-          // plain list of the terminals — the sidebar can be collapsed, or hidden in focus mode (TER-912).
+          // plain list of the terminals — the sidebar can be collapsed, or hidden in focus mode (TER-912). An open
+          // file preview (TER-941) counts as an open tab.
           <OfficeEmptyState project={project} tabs={tabs} machines={projectMachines} reachable={reachable} visible={visible} onOpen={openTab} onNewTerminal={() => void newTab()} />
         ) : shown && area ? (
           <>
-            {openTabs.map((t) => {
+            {barTabs.map((t) => {
               const r = rectOf(t.id);
               const place = placeOf(layout, t.id);
               const isFloating = place?.kind === 'floating';
@@ -449,7 +490,9 @@ export function TerminalsView({ project, visible }: Props) {
                     } else if (isFloating) setFloatingFocused(true);
                   }}
                 >
-                  {t.kind === 'simulator' ? (
+                  {t.kind === 'file' ? (
+                    <FileView projectId={project.id} path={t.path} active={active} onOpenFile={openFile} />
+                  ) : t.kind === 'simulator' ? (
                     <SimulatorView
                       tab={t}
                       machineId={t.machine_id}
@@ -475,7 +518,7 @@ export function TerminalsView({ project, visible }: Props) {
               rects={rects}
               cells={layout.cells}
               focusedCell={layout.focusedCell}
-              tabs={tabs}
+              tabs={[...tabs, ...barTabs.filter((t) => t.kind === 'file')]}
               onFocus={(cell) => {
                 dispatch({ type: 'focus', cell });
                 setFloatingFocused(false);

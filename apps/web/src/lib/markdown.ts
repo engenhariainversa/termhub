@@ -1,4 +1,4 @@
-import { marked } from 'marked';
+import { Marked, marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 marked.setOptions({ gfm: true, breaks: true });
@@ -46,4 +46,74 @@ export interface RenderMarkdownOptions {
 export function renderMarkdown(text: string, options: RenderMarkdownOptions = {}): string {
   const html = marked.parse(text, { async: false }) as string;
   return options.markdownOnly ? DOMPurify.sanitize(html, { ALLOWED_TAGS: MARKDOWN_TAGS, ALLOWED_ATTR: MARKDOWN_ATTR }) : DOMPurify.sanitize(html);
+}
+
+// --- A previewed file (spec 2026-10-04 file preview D12) ---------------------------------------------
+
+/**
+ * Files are documents, not chat lines: GFM without `breaks`, and an image becomes a link that says so
+ * ("imagem: alt") — nothing is fetched until the reader clicks it, which is the consent the card asks for.
+ * A separate instance, so the chat's `marked` keeps its own options.
+ */
+const fileMarked = new Marked({
+  gfm: true,
+  breaks: false,
+  renderer: {
+    image({ href, text }) {
+      const label = `imagem: ${text || href}`;
+      const a = document.createElement('a');
+      a.setAttribute('href', href);
+      a.textContent = label;
+      return a.outerHTML;
+    },
+  },
+});
+
+/** Where a link inside a previewed file goes: another preview for a relative Markdown path, the browser
+ *  (new tab) for http(s), nowhere for anything else. `dir` is the file's own folder as it was asked. */
+export function fileLinkTarget(href: string, dir: string): { kind: 'file'; path: string } | { kind: 'web'; url: string } | null {
+  if (/^https?:\/\//i.test(href)) return { kind: 'web', url: href };
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//') || href.startsWith('#')) return null;
+  const clean = href.split(/[?#]/)[0];
+  if (!/\.(?:md|markdown|txt)$/i.test(clean)) return null;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(clean);
+  } catch {
+    return null;
+  }
+  if (decoded.startsWith('/') || decoded.startsWith('~/')) return { kind: 'file', path: decoded };
+  const parts = (dir ? dir.split('/') : []).concat(decoded.split('/'));
+  const out: string[] = [];
+  for (const p of parts) {
+    if (p === '' && out.length > 0) continue;
+    if (p === '.') continue;
+    if (p === '..' && out.length > 0 && out[out.length - 1] !== '..' && out[out.length - 1] !== '' && out[out.length - 1] !== '~') out.pop();
+    else out.push(p);
+  }
+  return { kind: 'file', path: out.join('/') };
+}
+
+/**
+ * A previewed Markdown file to sanitised HTML: the chat's allowlist (`markdownOnly`), so the file can no
+ * more fetch, script or style anything than an answer can. Then every link is rewritten through DOM APIs:
+ * http(s) opens a new tab without opener or referrer, a relative Markdown path carries `data-file-link`
+ * (the view opens it as another preview), anything else loses its `href`.
+ */
+export function renderFileMarkdown(text: string, dir: string): string {
+  const html = DOMPurify.sanitize(fileMarked.parse(text, { async: false }) as string, { ALLOWED_TAGS: MARKDOWN_TAGS, ALLOWED_ATTR: MARKDOWN_ATTR });
+  if (!html.includes('<a')) return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  for (const a of Array.from(doc.body.querySelectorAll('a'))) {
+    const target = fileLinkTarget(a.getAttribute('href') ?? '', dir);
+    if (!target) {
+      a.removeAttribute('href');
+    } else if (target.kind === 'web') {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer nofollow');
+    } else {
+      a.setAttribute('data-file-link', target.path);
+    }
+  }
+  return doc.body.innerHTML;
 }

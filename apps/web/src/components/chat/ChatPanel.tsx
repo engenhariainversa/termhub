@@ -1096,6 +1096,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
               onOpenReply={openReply}
               onReply={startReply}
               highlighted={highlightId === m.id}
+              projectId={projectId}
             />
           );
         })}

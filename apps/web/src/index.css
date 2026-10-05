@@ -34,6 +34,8 @@ body { @apply bg-bg text-fg antialiased; font-family: ui-sans-serif, system-ui, 
 .prose-termhub ol { @apply my-2 list-decimal pl-5; }
 .prose-termhub li { @apply my-0.5; }
 .prose-termhub a { @apply text-accent underline; }
+/* A Markdown path in an answer: opens its preview (spec 2026-10-04 file preview). */
+.prose-termhub a.md-path { @apply decoration-dotted; }
 .prose-termhub code { @apply rounded bg-bg-3 px-1 py-0.5 font-mono text-[12px]; }
 .prose-termhub pre { @apply my-2 overflow-x-auto rounded-md border border-line bg-bg-2 p-3; }
 .prose-termhub pre code { @apply bg-transparent p-0; }

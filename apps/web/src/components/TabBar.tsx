@@ -4,9 +4,19 @@ import { TAB_STATE_LABEL, type Tab } from '../lib/types';
 import { tabDotClass } from '../lib/needs-you';
 import { useMonitor } from '../lib/monitor';
 
+/** A file preview open in the bar (spec 2026-10-04 file preview D14): same preview, pin and close as a terminal. */
+export interface FileBarTab {
+  id: string;
+  name: string;
+  kind: 'file';
+  /** the path as the answer wrote it */
+  path: string;
+}
+export type BarTab = Tab | FileBarTab;
+
 interface Props {
-  /** the open tabs (TER-904): every terminal of the project is in the sidebar, these are the ones shown here */
-  tabs: Tab[];
+  /** the open tabs (TER-904): every terminal of the project is in the sidebar, these are the ones shown here; file previews too */
+  tabs: BarTab[];
   activeId: string | null;
   /** the preview tab (italic), reused by the next single click in the sidebar; null = all pinned */
   previewId?: string | null;
@@ -95,14 +105,19 @@ export function TabBar({ tabs, activeId, previewId = null, onPin, onSelect, onNe
               onDoubleClick={() => {
                 // like a code editor: a double click pins a preview tab; on a pinned one it renames
                 if (preview && onPin) return onPin(t.id);
+                if (t.kind === 'file') return; // a file tab is named after its file
                 setEditing(t.id);
                 setDraft(t.name);
               }}
               data-preview={preview || undefined}
-              title={`${t.name} — ${t.kind === 'simulator' ? 'simulador iOS' : t.tmux_session}${preview ? ' · prévia (duplo clique fixa)' : ''}${i < 9 ? `  (⌘${i + 1})` : ''}`}
+              title={`${t.kind === 'file' ? t.path : t.name} — ${t.kind === 'file' ? 'arquivo' : t.kind === 'simulator' ? 'simulador iOS' : t.tmux_session}${preview ? ' · prévia (duplo clique fixa)' : ''}${i < 9 ? `  (⌘${i + 1})` : ''}`}
             >
               {(active || shown) && <span className={`absolute inset-x-0 top-0 h-px ${active ? 'bg-accent' : 'bg-accent/40'}`} />}
-              {(() => {
+              {t.kind === 'file' ? (
+                <span className="text-[10px]" aria-hidden>
+                  📄
+                </span>
+              ) : (() => {
                 const monitorTab = tabState(t.id);
                 const st = monitorTab?.state;
                 const base = t.kind === 'simulator' ? (t.alive ? 'simulador conectado' : 'simulador desconectado') : t.alive ? 'sessão tmux ativa' : 'sessão tmux não iniciada';
@@ -150,7 +165,7 @@ export function TabBar({ tabs, activeId, previewId = null, onPin, onSelect, onNe
                   e.stopPropagation();
                   onClose(t.id);
                 }}
-                title="Fechar aba (⌘W) — o terminal continua rodando"
+                title={t.kind === 'file' ? 'Fechar aba (⌘W)' : 'Fechar aba (⌘W) — o terminal continua rodando'}
                 aria-label={`Fechar aba ${t.name}`}
               >
                 ✕

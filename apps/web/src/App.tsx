@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './lib/auth';
+import { NavigatorBridge } from './lib/app-navigate';
+import { FilePage } from './pages/FilePage';
 import { AnalyticsGate } from './components/AnalyticsGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AppShell, FullScreenMessage, Layout } from './components/Layout';
@@ -63,6 +65,7 @@ export function AppRoutes() {
           <Route path="/project/:ref" element={<CardPage />} />
           <Route path="/office" element={<OfficeRoute />} />
           <Route path="/office/:projectId" element={<OfficeRoute />} />
+          <Route path="/files" element={<FilePage />} />
         </Route>
         <Route element={<ChatLayout />}>
           <Route path="/chat" element={<ChatPage />} />
@@ -77,6 +80,7 @@ export function AppRoutes() {
 export function App() {
   return (
     <BrowserRouter>
+      <NavigatorBridge />
       <AuthProvider>
         <AnalyticsGate>
           <AppRoutes />

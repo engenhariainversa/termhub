@@ -64,6 +64,10 @@ vi.mock('../office/scene/OfficeScene', () => ({
     debugHover() {}
   },
 }));
+// a file preview reads its machine through the API: a marker is enough for the tab bar flow (TER-941)
+vi.mock('./FileView', () => ({
+  FileView: ({ path, active }: { path: string; active: boolean }) => <div data-testid={`file-${path}`} data-active={String(active)} />,
+}));
 
 const projectRow = vi.hoisted(() => ({ id: 'p1', key: 'TER', name: 'termhub', status: 'active', machines: [{ machine_id: 'm1', cwd: '/w', position: 0 }] }) as unknown as Project);
 
@@ -98,9 +102,9 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function renderPage() {
+function renderPage(url = '/projects/p1') {
   return render(
-    <MemoryRouter initialEntries={['/projects/p1']}>
+    <MemoryRouter initialEntries={[url]}>
       <Sidebar />
       <main>
         <TerminalsView project={projectRow} visible />
@@ -272,5 +276,36 @@ describe('terminals like a code editor (TER-904)', () => {
     await waitFor(() => expect(tabNames()).toEqual(['Ana']));
     await act(async () => {});
     expect(JSON.parse(localStorage.getItem(editorTabsKey('p1'))!)).toEqual({ open: ['t1'], preview: null });
+  });
+});
+
+describe('file previews in the tab bar (TER-941)', () => {
+  it('?file= opens the path as the preview tab next to the terminals; a double click pins it; ✕ closes it', async () => {
+    localStorage.setItem(editorTabsKey('p1'), JSON.stringify({ open: ['t1'], preview: null }));
+    renderPage('/projects/p1?file=docs%2Fa.md');
+    await waitFor(() => expect(tabNames()).toEqual(['Ana', 'a.md']));
+    expect(within(tabBar()).getByText('a.md')).toHaveClass('italic');
+    expect(screen.getByTestId('file-docs/a.md')).toHaveAttribute('data-active', 'true');
+    expect(mounted()).toEqual(['t1']);
+
+    // the next single click on a terminal reuses the preview tab, as for terminals
+    fireEvent.click(sidebarRow('Bia'));
+    await waitFor(() => expect(tabNames()).toEqual(['Ana', 'Bia']));
+    expect(screen.queryByTestId('file-docs/a.md')).toBeNull();
+  });
+
+  it('pin=1 opens it pinned, and a pinned file tab survives a reload and the terminal list', async () => {
+    localStorage.setItem(editorTabsKey('p1'), JSON.stringify({ open: ['t1'], preview: null }));
+    const first = renderPage('/projects/p1?file=%7E%2Fr.md&pin=1');
+    await waitFor(() => expect(tabNames()).toEqual(['Ana', 'r.md']));
+    expect(within(tabBar()).getByText('r.md')).not.toHaveClass('italic');
+    first.unmount();
+    resetEditorTabsCache();
+    renderPage();
+    await waitFor(() => expect(tabNames()).toEqual(['Ana', 'r.md']));
+
+    fireEvent.click(within(tabBar()).getByRole('button', { name: 'Fechar aba r.md' }));
+    await waitFor(() => expect(tabNames()).toEqual(['Ana']));
+    expect(apiMock.remove).not.toHaveBeenCalled();
   });
 });

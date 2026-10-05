@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { MARKDOWN_TAGS, renderMarkdown } from './markdown';
+import { MARKDOWN_TAGS, fileLinkTarget, renderFileMarkdown, renderMarkdown } from './markdown';
 
 // Parses HTML through the DOM instead of matching substrings, since a
 // substring check like `not.toContain('<script')` also passes for escaped
@@ -146,5 +146,86 @@ describe('renderMarkdown', () => {
 
   it('returns the empty string for empty input', () => {
     expect(renderMarkdown('')).toBe('');
+  });
+});
+
+describe('renderFileMarkdown (a previewed file)', () => {
+  const render = (md: string, dir = 'docs') => parse(renderFileMarkdown(md, dir));
+
+  it('renders headings, tables, lists and code', () => {
+    const el = render('# T\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n- x\n\n```ts\nconst a = 1;\n```');
+    expect(el.querySelector('h1')?.textContent).toBe('T');
+    expect(el.querySelectorAll('td')).toHaveLength(2);
+    expect(el.querySelector('li')?.textContent).toBe('x');
+    expect(el.querySelector('pre > code')?.getAttribute('class')).toBe('language-ts');
+  });
+
+  it('drops scripts, event handlers and javascript: links', () => {
+    const el = render('<script>alert(1)</script><b onclick="alert(1)">x</b>\n\n[y](javascript:alert(1))');
+    expect(el.querySelector('script')).toBeNull();
+    expect(el.querySelector('[onclick]')).toBeNull();
+    expect(el.querySelector('a')?.hasAttribute('href')).toBe(false);
+  });
+
+  it.each([
+    ['<video poster="https://attacker/?d=x"></video>', 'video'],
+    ['<input type="image" src="https://attacker/?d=x">', 'input'],
+    ['<svg><image href="https://attacker/?d=x"></image></svg>', 'svg, image'],
+    ['<iframe src="https://attacker/?d=x"></iframe>', 'iframe'],
+    ['<img src="https://attacker/?d=x">', 'img'],
+    ['<link rel="stylesheet" href="https://attacker/x.css">', 'link'],
+    ['<style>body{background:url(https://attacker/)}</style>', 'style'],
+    ['<object data="https://attacker/x"></object>', 'object'],
+  ])('fetches nothing: %s', (markup, selector) => {
+    expect(render(markup).querySelector(selector)).toBeNull();
+  });
+
+  it('turns an image into a link that only opens on click', () => {
+    const el = render('![gráfico](https://exemplo/g.png)');
+    expect(el.querySelector('img')).toBeNull();
+    const a = el.querySelector('a');
+    expect(a?.textContent).toBe('imagem: gráfico');
+    expect(a?.getAttribute('href')).toBe('https://exemplo/g.png');
+    expect(a?.getAttribute('target')).toBe('_blank');
+  });
+
+  it('escapes markup in an image alt text', () => {
+    const el = render('![<img src=x onerror=alert(1)>](https://exemplo/g.png)');
+    expect(el.querySelector('img')).toBeNull();
+    expect(el.querySelector('[onerror]')).toBeNull();
+  });
+
+  it('opens web links in a new tab without opener or referrer', () => {
+    const a = render('[site](https://termhub.dev)').querySelector('a');
+    expect(a?.getAttribute('target')).toBe('_blank');
+    expect(a?.getAttribute('rel')).toBe('noopener noreferrer nofollow');
+  });
+
+  it('marks a relative Markdown link as another preview, resolved against the file folder', () => {
+    const a = render('[plano](../plans/x.md)', 'docs/superpowers/specs').querySelector('a');
+    expect(a?.getAttribute('data-file-link')).toBe('docs/superpowers/plans/x.md');
+  });
+
+  it('removes the href of a link to anything else', () => {
+    for (const md of ['[a](file:///etc/passwd)', '[b](data:text/html,x)', '[c](mailto:a@b)', '[d](./foto.png)']) {
+      const a = render(md).querySelector('a');
+      expect(a?.hasAttribute('href')).toBe(false);
+      expect(a?.hasAttribute('data-file-link')).toBe(false);
+    }
+  });
+});
+
+describe('fileLinkTarget', () => {
+  it('resolves relative paths and keeps absolute ones', () => {
+    expect(fileLinkTarget('x.md', '/home/u/p/docs')).toEqual({ kind: 'file', path: '/home/u/p/docs/x.md' });
+    expect(fileLinkTarget('./a/b.md', '~/notes')).toEqual({ kind: 'file', path: '~/notes/a/b.md' });
+    expect(fileLinkTarget('../README.md', '')).toEqual({ kind: 'file', path: '../README.md' });
+    expect(fileLinkTarget('/tmp/a.md', 'docs')).toEqual({ kind: 'file', path: '/tmp/a.md' });
+    expect(fileLinkTarget('a%20b.md#sec', 'docs')).toEqual({ kind: 'file', path: 'docs/a b.md' });
+  });
+  it('sends only http(s) to the browser', () => {
+    expect(fileLinkTarget('https://x/a', 'd')).toEqual({ kind: 'web', url: 'https://x/a' });
+    expect(fileLinkTarget('#titulo', 'd')).toBeNull();
+    expect(fileLinkTarget('//evil/a.md', 'd')).toBeNull();
   });
 });
