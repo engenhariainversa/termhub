@@ -171,6 +171,13 @@ the browser (http/https only). Actions: **Compartilhar** (the share sheet also c
 sent). In mock mode, `~/relatorio-termhub-10-dias.md`, `notas.txt`, `~/.ssh/notas.md`,
 `~/grande.md` and `~/antigo/x.md` show each state.
 
+**Arquivos** (TER-953): a project chat's host line (and its "Conta e modelo" sheet) leads to
+`/file-recent` (`features/file-recent`), the project's recent Markdown files across its machines through
+`GET /api/m/v1/file-recent` (spec `docs/superpowers/specs/2026-10-04-recent-md-files-design.md`): chips
+per group (Specs, Planos, Lições, Jurídico, Outros) and Citados, pull-to-refresh, and a notice for each
+machine left out (offline, an agent too old to list files, no termhub agent). A tap opens the preview on
+the machine that listed the file; a file over the preview's limit is listed but does not open.
+
 ## Push notifications
 
 `expo-notifications` (spec §9). The server sends through the Expo Push Service to the token the app registers with `PUT push-token`; `src/services/push.ts` reads that token:

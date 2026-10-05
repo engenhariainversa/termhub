@@ -50,6 +50,7 @@ import type {
   TTabChatPage,
   TFilePreviewQuery,
   TFilePreviewResponse,
+  TFileRecentResponse,
   TTabFileResponse,
   TTabScreenResponse,
   TTabsResponse,
@@ -233,6 +234,9 @@ export interface MobileApi {
   /** A file an agent wrote, read on its machine (spec 2026-10-04 file preview): the body, or why not.
    *  409 `AGENT_OUTDATED` when the machine's agent cannot read files yet. */
   filePreview(auth: Auth, q: TFilePreviewQuery): Promise<TFilePreviewResponse>;
+  /** A project's recent Markdown files across its machines (spec 2026-10-04 recent Markdown files), and
+   *  the machines left out with why. Names, sizes and dates only. */
+  fileRecent(auth: Auth, projectId: string): Promise<TFileRecentResponse>;
   /** The terminal tabs of the person's projects, with each one's state and availability. */
   tabs(auth: Auth): Promise<TTabsResponse>;
   /** Starts Claude Code in a new tab of the project with `prompt` as its first message. */

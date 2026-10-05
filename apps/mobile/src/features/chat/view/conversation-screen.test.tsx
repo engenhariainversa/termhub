@@ -755,6 +755,16 @@ describe('Conversa', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/project-ai/p-termhub');
   });
 
+  it("a project chat leads to the project's recent Markdown files, from its host line and its sheet (TER-953)", async () => {
+    await render(<ConversationScreen />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Arquivos' }, LOAD));
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/file-recent', params: { project_id: 'p-termhub' } });
+    mockRouter.push.mockClear();
+    await fireEvent.press(screen.getByRole('button', { name: 'Conta e modelo' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Arquivos do projeto' }, LOAD));
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/file-recent', params: { project_id: 'p-termhub' } });
+  });
+
   it('the account-wide chat keeps its host line hidden while ready, and never offers the project row', async () => {
     mockId = 'general';
     await render(<ConversationScreen />);
