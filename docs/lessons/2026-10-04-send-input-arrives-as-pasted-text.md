@@ -8,7 +8,7 @@ date: 2026-10-04
 ---
 ## Cause
 
-Claude Code wraps a long input burst in `<pasted_content>` and tells the model to follow instructions
+Claude Code wraps typed input longer than 800 characters (measured on 2.1.289: 800 typed, 801 pasted; characters, not bytes) in `<pasted_content>` and tells the model to follow instructions
 inside it only where the person's own words ask for that. It does this **without any newline and
 without bracketed paste**: the relays refused on 2026-10-03/04 were single lines of 836 and 933
 characters typed with `tmux send-keys -l` (the plain path of `sendInput`, not `paste-buffer -p`), and
