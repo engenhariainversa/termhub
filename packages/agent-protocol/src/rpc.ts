@@ -66,8 +66,10 @@ export type FileReadRefusal = (typeof FILE_READ_REFUSALS)[number];
 
 export const rpcErrorSchema = z.object({
   /** `failed`: the operation ran on the machine and `message` says why it failed, in words meant for the user.
-   *  `refused`: a `tcp` open found nothing listening on the port (ECONNREFUSED). */
-  code: z.enum(['eperm', 'notfound', 'no_tmux', 'timeout', 'invalid', 'internal', 'failed', 'refused']),
+   *  `refused`: a `tcp` open found nothing listening on the port (ECONNREFUSED).
+   *  `worktree_conflict` / `path_outside_root`: `git.worktree.*` only (since agent 0.18.0), so an older
+   *  server, which never calls those methods, never receives them. */
+  code: z.enum(['eperm', 'notfound', 'no_tmux', 'timeout', 'invalid', 'internal', 'failed', 'refused', 'worktree_conflict', 'path_outside_root']),
   message: z.string().max(2000),
   path: z.string().max(4096).optional(),
 });
@@ -75,6 +77,14 @@ export type RpcError = z.infer<typeof rpcErrorSchema>;
 
 const DEFAULT_TIMEOUT = 8_000;
 const def = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(params: P, result: R, timeoutMs = DEFAULT_TIMEOUT) => ({ params, result, timeoutMs });
+
+/**
+ * A branch name for `git.worktree.*`: a plain charset, never a leading `-` (git would read it as an
+ * option), no `..` (git refuses it as a ref anyway). `:` is outside the charset, so it can never
+ * turn into a second refspec half.
+ */
+export const GIT_BRANCH_RE = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]{1,200}$/;
+export const gitBranch = z.string().regex(GIT_BRANCH_RE);
 
 export const RPC = {
   'tmux.list': def(z.object({}), z.object({ sessions: z.array(sessionName) })),
@@ -218,6 +228,31 @@ export const RPC = {
       size: z.number().int().min(0),
     }),
     10_000,
+  ),
+  /**
+   * A git worktree for automatic work (spec 2026-10-04 agentic board, §7; since agent 0.18.0, capability
+   * `worktree`). `repo_dir` is the project's folder on the machine, `root` the expanded `worktrees_dir`,
+   * and `path` must stay under `root` (no `..`, no link out: `path_outside_root`). When `path` is already
+   * a worktree on `branch` it answers `created: false`; on another branch (or a folder in the way,
+   * or `branch` checked out elsewhere) `worktree_conflict`. Otherwise it fetches `origin`, and starts
+   * the branch from `origin/<branch>` when that exists (a branch already pushed is never reset), else
+   * from `origin/<base>`; an existing local branch that differs from the remote is checked out as is.
+   * git runs with an argv, never a shell. 120 s: a fetch can be slow.
+   */
+  'git.worktree.ensure': def(
+    z.object({ repo_dir: machinePath, root: machinePath, path: machinePath, branch: gitBranch, base: gitBranch }),
+    z.object({ path: z.string().max(4096), head: z.string().regex(/^[0-9a-f]{40,64}$/), created: z.boolean() }),
+    120_000,
+  ),
+  /**
+   * Removes a worktree made by `git.worktree.ensure` (the branch stays). A worktree with uncommitted
+   * or untracked changes is kept: `{ removed: false, dirty: true }`. A `path` that no longer exists
+   * answers `{ removed: false, dirty: false }`. Same path guard as `ensure` (since agent 0.18.0).
+   */
+  'git.worktree.remove': def(
+    z.object({ repo_dir: machinePath, root: machinePath, path: machinePath }),
+    z.object({ removed: z.boolean(), dirty: z.boolean() }),
+    30_000,
   ),
   'file.paste': def(z.object({ name: pasteName, data_b64: z.string().min(1).max(28 * 1024 * 1024) }), z.object({ path: z.string() }), 60_000),
   /** Monitor hooks (see @termhub/machine-ops hooks.ts): the agent writes the script, env and config entries under its own $HOME. */

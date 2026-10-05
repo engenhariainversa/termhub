@@ -28,6 +28,11 @@ export function toHttpError(err: unknown): HttpError {
       case 'failed':
         // The operation ran on the machine and reported why it failed (a message meant for the user).
         return new HttpError(502, err.rpcError.message, 'MACHINE_FAILED');
+      case 'worktree_conflict':
+        // `git.worktree.ensure`: the path holds another branch, or the branch is open elsewhere.
+        return new HttpError(409, err.rpcError.message, 'WORKTREE_CONFLICT');
+      case 'path_outside_root':
+        return new HttpError(400, 'Caminho fora da pasta de worktrees', 'PATH_OUTSIDE_ROOT');
       default:
         return new HttpError(502, 'Falha na máquina', 'MACHINE_FAILED');
     }

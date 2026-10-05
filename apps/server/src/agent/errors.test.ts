@@ -33,6 +33,8 @@ describe('toHttpError codes', () => {
     expect(toHttpError(new AgentRpcError({ code: 'no_tmux', message: 'x' }))).toMatchObject({ statusCode: 502, code: 'NO_TMUX' });
     expect(toHttpError(new AgentRpcError({ code: 'invalid', message: 'x' }))).toMatchObject({ statusCode: 400, code: 'MACHINE_INVALID' });
     expect(toHttpError(new AgentRpcError({ code: 'failed', message: 'pasta não existe' }))).toMatchObject({ statusCode: 502, code: 'MACHINE_FAILED', message: 'pasta não existe' });
+    expect(toHttpError(new AgentRpcError({ code: 'worktree_conflict', message: 'outro branch' }))).toMatchObject({ statusCode: 409, code: 'WORKTREE_CONFLICT', message: 'outro branch' });
+    expect(toHttpError(new AgentRpcError({ code: 'path_outside_root', message: 'x' }))).toMatchObject({ statusCode: 400, code: 'PATH_OUTSIDE_ROOT' });
   });
 });
 
