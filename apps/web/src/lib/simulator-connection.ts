@@ -14,6 +14,9 @@ export type ClientMessage =
   | { type: 'resume' }
   | { type: 'ping' };
 
+/** Messages that act on the device (TER-576): only sent when the user holds terminals:write; the server drops them otherwise. */
+const ACTING: ReadonlySet<ClientMessage['type']> = new Set(['tap', 'drag', 'keys', 'key', 'button', 'rotate']);
+
 export interface SimulatorHandlers {
   onFrame: (frame: Blob) => void;
   onStatus: (state: SimState, message?: string, tail?: string[]) => void;
@@ -33,6 +36,8 @@ export class SimulatorConnection {
   private stopped = false;
   private halted = false; // recebeu 'error' do servidor: só reconecta no retryNow()
   state: SimState = 'connecting';
+  /** false when the user lacks terminals:write: the stream still plays, but nothing acts on the device */
+  private writable = true;
 
   constructor(
     private tabId: string,
@@ -124,7 +129,12 @@ export class SimulatorConnection {
     this.open();
   }
 
+  setWritable(writable: boolean) {
+    this.writable = writable;
+  }
+
   send(msg: ClientMessage) {
+    if (!this.writable && ACTING.has(msg.type)) return;
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
   }
 

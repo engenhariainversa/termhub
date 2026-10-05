@@ -25,6 +25,12 @@ it('names an agent waiting on its own background work, never as waiting for you 
   expect(stateLabel('working')).toBe('trabalhando');
 });
 
+it('names an agent that finished with a report as concluído, never as waiting for you (TER-972)', () => {
+  expect(stateLabel('idle', false, true)).toBe('concluído');
+  expect(stateLabel('idle', false, false)).toBe('parado');
+  expect(stateLabel('idle')).toBe('parado');
+});
+
 const p = (over: Partial<TPullRequestBadge>): TPullRequestBadge => ({
   number: 7, url: 'u', title: 't', state: 'open', draft: false, ci_state: 'passed',
   ci_summary: { total: 2, passed: 2, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, ...over,

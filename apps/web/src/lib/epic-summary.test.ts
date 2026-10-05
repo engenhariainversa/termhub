@@ -3,7 +3,7 @@ import { epicsInProgress } from './epic-summary';
 import type { AgentOnCard, CardProgress, EpicProgress, Tab } from './types';
 
 const agent = (tab_id: string, over: Partial<AgentOnCard> = {}): AgentOnCard => ({
-  tab_id, tab_name: tab_id, machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: null, background: false, needs_you: false, activity: null, activity_verb: null, rate_limited: false, ...over,
+  tab_id, tab_name: tab_id, machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: null, background: false, finished: false, needs_you: false, activity: null, activity_verb: null, rate_limited: false, ...over,
 });
 const card = (id: string, status: CardProgress['status'], agents: AgentOnCard[] | null = []): CardProgress => ({ id, status, agents }) as CardProgress;
 const epic = (id: string, cards: CardProgress[]): EpicProgress => ({ id, ref: id, title: id, cards }) as EpicProgress;
@@ -24,10 +24,12 @@ describe('epicsInProgress', () => {
 
   it('lists the agents still at work (background included), not the ones that finished or never reported', () => {
     const [e] = epicsInProgress(
-      [epic('E', [card('a', 'doing', [agent('w'), agent('bg', { background: true }), agent('idle', { state: 'idle' }), agent('silent', { state: null }), agent('err', { state: 'error' })])])],
+      [epic('E', [card('a', 'doing', [agent('w'), agent('bg', { background: true }), agent('idle', { state: 'idle' }), agent('done', { state: 'idle', finished: true }), agent('silent', { state: null }), agent('err', { state: 'error' })])])],
       none,
     );
     expect(e.agents.map((a) => a.tab_id)).toEqual(['w', 'bg']);
+    // an agent that finished with a report is not waiting for you (TER-972)
+    expect(e.waiting).toBe(0);
   });
 
   it('leaves out epics with no card in doing and no agent at work, and keeps the server order', () => {

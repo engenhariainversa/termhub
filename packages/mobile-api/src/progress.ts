@@ -37,12 +37,16 @@ export const agentOnCard = z.object({
   /**
    * An agent that ended its turn while its own background work runs (the tab's `waiting_background`,
    * TER-644) is sent as `working` with `background: true`: an app that predates the flag keeps parsing the
-   * state and shows it at work, never as waiting for the person.
+   * state and shows it at work, never as waiting for the person. One that ended its turn with a report
+   * and asks nothing (the tab's `finished`, TER-972) is sent as `idle` with `finished: true`, so an older
+   * app shows it stopped, never as waiting for the person.
    */
   state: progressTabState.nullable(),
   state_at: z.string().nullable(),
   /** the agent waits on its own subagents, background shells or monitors (TER-644); only with `state: 'working'` */
   background: z.boolean().default(false),
+  /** the agent finished its work with a report and asks nothing (TER-972); only with `state: 'idle'` */
+  finished: z.boolean().default(false),
   needs_you: z.boolean(),
   activity: z.string().nullable(),
   activity_verb: z.string().nullable(),

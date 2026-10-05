@@ -3,6 +3,12 @@ import { createContext, useContext } from 'react';
 export type Lang = 'pt' | 'en';
 export const LANG_KEY = 'termhub:lang';
 
+/** The `<html lang>` / `hreflang` code of each language. */
+export const HTML_LANG: Record<Lang, string> = { pt: 'pt-BR', en: 'en' };
+
+/** Each language's name written in that language, so anyone can find their own in the switch. */
+export const LANG_NAMES: Record<Lang, string> = { pt: 'Português (Brasil)', en: 'English' };
+
 export function detectLang(): Lang {
   // ?lang=pt|en wins (shareable links), then the saved choice, then the browser language
   const q = new URLSearchParams(window.location.search).get('lang');
@@ -187,6 +193,7 @@ const pt = {
     accept: 'Aceitar',
     decline: 'Recusar',
   },
+  lang_switch: { label: 'Idioma' },
   footer: { docs: 'Documentação', security: 'Segurança', brand: 'Marca', deleteAccount: 'Excluir conta', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'feito em Goiânia' },
   // /brand/ — logo, colors and typography for anyone writing about termhub
   brand: {
@@ -613,6 +620,7 @@ const en: typeof pt = {
     accept: 'Accept',
     decline: 'Decline',
   },
+  lang_switch: { label: 'Language' },
   footer: { docs: 'Documentation', security: 'Security', brand: 'Brand', deleteAccount: 'Delete account', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'made in Goiânia' },
   brand: {
     meta: {

@@ -29,9 +29,13 @@ const STATE_LABEL: Record<NonNullable<TAgentOnCard['state']>, string> = {
   error: 'erro',
 };
 
-/** `background`: the agent waits on its own subagents, shells or monitors, sent as `working` (TER-644). */
-export function stateLabel(state: TAgentOnCard['state'], background = false): string {
+/**
+ * `background`: the agent waits on its own subagents, shells or monitors, sent as `working` (TER-644).
+ * `finished`: the agent ended its turn with a report and asks nothing, sent as `idle` (TER-972).
+ */
+export function stateLabel(state: TAgentOnCard['state'], background = false, finished = false): string {
   if (background && state === 'working') return 'aguardando segundo plano';
+  if (finished && state === 'idle') return 'concluído';
   return state ? STATE_LABEL[state] : 'sem sinal';
 }
 
