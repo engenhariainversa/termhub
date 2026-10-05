@@ -4,7 +4,7 @@
 // the app's one instance.
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { messageSent, pushGranted, sessionEnded, sessionStarted } from '@/features/shared/signals';
+import { appForegrounded, messageSent, pushGranted, sessionEnded, sessionStarted } from '@/features/shared/signals';
 import { mmkvStateStorage } from '@/services/storage';
 import type { AdConsent, PermissionsDeps, PermissionsState } from '../model/permissions.types';
 
@@ -45,7 +45,11 @@ export function createPermissionsStore(deps: PermissionsDeps) {
 
         async refreshStatuses() {
           const [notificationStatus, trackingStatus] = await Promise.all([safe(deps.notificationStatus, null), safe(deps.trackingStatus, null)]);
+          const before = get().notificationStatus;
           if (notificationStatus) set({ notificationStatus });
+          // Turned on outside the app (the system settings): register the token now, not at the next
+          // unlock (TER-921). Only a change we saw: a first read at launch is the session start's job.
+          if (notificationStatus === 'granted' && before !== null && before !== 'granted') pushGranted.emit();
           if (trackingStatus) set({ trackingStatus });
         },
 
@@ -114,6 +118,9 @@ export function createPermissionsStore(deps: PermissionsDeps) {
 
   sessionStarted.subscribe(() => {
     void store.getState().syncAdConsent();
+  });
+  appForegrounded.subscribe(() => {
+    void store.getState().refreshStatuses();
   });
   messageSent.subscribe(() => {
     if (store.getState().firstMessageSent) return;

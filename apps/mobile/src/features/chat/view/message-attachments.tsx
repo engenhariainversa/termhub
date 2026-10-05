@@ -1,6 +1,7 @@
 import { memo, useEffect, useReducer, useState } from 'react';
 import { Image, Modal, Pressable, Text, View } from 'react-native';
 import type { TChatAttachment } from '@/services/api/contract';
+import { useTranslation } from '@/i18n';
 import { Icon } from '@/ui';
 import { attachmentStatusText, formatBytes, thumbSize } from '../viewmodel/attachments';
 import { useChatStore } from '../viewmodel/useChatStore';
@@ -45,6 +46,7 @@ const THUMB_MIN = 64;
 type Size = { width: number; height: number };
 
 function AuthImage({ attachment, className, resizeMode, size }: { attachment: TChatAttachment; className: string; resizeMode: 'cover' | 'contain'; size?: Size | null }) {
+  const { t } = useTranslation();
   const [load, dispatch] = useReducer(loadReducer, { attempt: 0, errors: 0 });
   const source = useAttachmentSource(attachment.id, load.attempt);
   const stuck = load.errors >= 2 && load.attempt < load.errors;
@@ -52,8 +54,8 @@ function AuthImage({ attachment, className, resizeMode, size }: { attachment: TC
   const style = size ?? undefined;
   if (stuck) {
     return (
-      <Pressable accessibilityRole="button" accessibilityLabel="Toque para recarregar" onPress={() => dispatch('reload')} className={`${className} items-center justify-center bg-app-surface2`} style={style}>
-        <Text className="text-xs text-app-muted">Toque para recarregar</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={t('Toque para recarregar')} onPress={() => dispatch('reload')} className={`${className} items-center justify-center bg-app-surface2`} style={style}>
+        <Text className="text-xs text-app-muted">{t('Toque para recarregar')}</Text>
       </Pressable>
     );
   }
@@ -67,13 +69,14 @@ function AuthImage({ attachment, className, resizeMode, size }: { attachment: TC
  * The size, the `·` and the status are separate `Text`s, so each reads as exactly its own text.
  */
 export const MessageAttachments = memo(function MessageAttachments({ attachments }: { attachments: TChatAttachment[] }) {
+  const { t } = useTranslation();
   const [viewing, setViewing] = useState<TChatAttachment | null>(null);
   return (
     <View className="mt-2 gap-2">
       {attachments.map((a) => {
         if (a.kind === 'image') {
           return (
-            <Pressable key={a.id} accessibilityRole="button" accessibilityLabel={`Abrir imagem ${a.name}`} onPress={() => setViewing(a)}>
+            <Pressable key={a.id} accessibilityRole="button" accessibilityLabel={t('Abrir imagem {{name}}', { name: a.name })} onPress={() => setViewing(a)}>
               <AuthImage attachment={a} className="h-40 w-40 rounded-lg" resizeMode="cover" size={thumbSize(a.meta, THUMB_BOX, THUMB_MIN)} />
             </Pressable>
           );
@@ -101,7 +104,7 @@ export const MessageAttachments = memo(function MessageAttachments({ attachments
         );
       })}
       <Modal visible={viewing !== null} transparent animationType="fade" onRequestClose={() => setViewing(null)}>
-        <Pressable className="flex-1 items-center justify-center bg-black/95" accessibilityRole="button" accessibilityLabel="Fechar imagem" onPress={() => setViewing(null)}>
+        <Pressable className="flex-1 items-center justify-center bg-black/95" accessibilityRole="button" accessibilityLabel={t('Fechar imagem')} onPress={() => setViewing(null)}>
           {viewing ? <AuthImage attachment={viewing} className="h-full w-full" resizeMode="contain" /> : null}
         </Pressable>
       </Modal>

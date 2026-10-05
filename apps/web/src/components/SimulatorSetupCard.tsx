@@ -2,14 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useData } from '../lib/data';
 import type { Machine, WdaSetupState } from '../lib/types';
+import { Trans, useTranslation } from '../i18n';
 
 const POLL_MS = 3000;
 /** How long to keep polling for the updated agent after "Atualizar agente" (mirrors AgentUpdateCard). */
 const UPDATE_POLL_MAX_MS = 90_000;
-const UPDATING_MESSAGE = 'Atualizando o agente… ele reinicia e reconecta em instantes.';
 
 export function SimulatorSetupCard({ machine }: { machine: Machine }) {
   const { machines, checkStatus } = useData();
+  const { t } = useTranslation();
+  const updatingMessage = t('Atualizando o agente… ele reinicia e reconecta em instantes.');
   // `machine` é um snapshot capturado quando o modal abriu; usamos a versão viva da lista
   // para que `isMac`/`hasWda` reajam ao checkStatus (ex.: capabilities atualizadas após o setup).
   const live = machines.find((m) => m.id === machine.id) ?? machine;
@@ -67,17 +69,17 @@ export function SimulatorSetupCard({ machine }: { machine: Machine }) {
           setOutdatedMessage(e.message);
         } else if (Date.now() - requestedAt > UPDATE_POLL_MAX_MS) {
           updateRequestedAt.current = null;
-          setOutdatedMessage('Ainda reconectando… verifique o agente na máquina.');
+          setOutdatedMessage(t('Ainda reconectando… verifique o agente na máquina.'));
         } else {
           // still the old agent (not restarted yet): keep the "updating" sentence and look again
-          setOutdatedMessage(UPDATING_MESSAGE);
+          setOutdatedMessage(updatingMessage);
           timer.current = setTimeout(() => void load(), POLL_MS);
         }
         return;
       }
-      setError(e instanceof ApiError ? e.message : 'Erro ao consultar o setup');
+      setError(e instanceof ApiError ? e.message : t('Erro ao consultar o setup'));
     }
-  }, [machine.id, checkStatus]);
+  }, [machine.id, checkStatus, t, updatingMessage]);
 
   useEffect(() => {
     if (!isMac) return;
@@ -100,7 +102,7 @@ export function SimulatorSetupCard({ machine }: { machine: Machine }) {
       setSetup((cur) => ({ state: 'running', tail: [], version: cur?.version ?? null }));
       void load();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Erro ao iniciar o setup');
+      setError(e instanceof ApiError ? e.message : t('Erro ao iniciar o setup'));
     } finally {
       setBusy(false);
     }
@@ -112,12 +114,12 @@ export function SimulatorSetupCard({ machine }: { machine: Machine }) {
       await api.machines.updateAgent(machine.id);
       if (cancelledRef.current) return;
       updateRequestedAt.current = Date.now();
-      setOutdatedMessage(UPDATING_MESSAGE);
+      setOutdatedMessage(updatingMessage);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => void load(), POLL_MS * 3);
     } catch (e) {
       if (cancelledRef.current) return;
-      setError(e instanceof ApiError ? e.message : 'Erro ao atualizar o agente');
+      setError(e instanceof ApiError ? e.message : t('Erro ao atualizar o agente'));
     } finally {
       if (!cancelledRef.current) setUpdating(false);
     }
@@ -126,8 +128,8 @@ export function SimulatorSetupCard({ machine }: { machine: Machine }) {
   if (agentBlock === 'offline') {
     return (
       <div className="rounded-md border border-line bg-bg p-2 text-xs text-fg-dim">
-        <p className="mb-0.5 font-medium text-fg-muted">Simulador iOS</p>
-        <p>Conecte o agente para preparar o simulador.</p>
+        <p className="mb-0.5 font-medium text-fg-muted">{t('Simulador iOS')}</p>
+        <p>{t('Conecte o agente para preparar o simulador.')}</p>
       </div>
     );
   }
@@ -135,9 +137,9 @@ export function SimulatorSetupCard({ machine }: { machine: Machine }) {
     return (
       <div className="rounded-md border border-line bg-bg p-2 text-xs">
         <div className="flex items-center gap-2">
-          <p className="font-medium text-fg-muted">Simulador iOS</p>
+          <p className="font-medium text-fg-muted">{t('Simulador iOS')}</p>
           <button type="button" className="btn-ghost ml-auto px-2 py-0.5" onClick={() => void updateAgent()} disabled={updating}>
-            {updating ? '…' : 'Atualizar agente'}
+            {updating ? '…' : t('Atualizar agente')}
           </button>
         </div>
         <p className="mt-1 text-fg-dim">{outdatedMessage}</p>
@@ -149,8 +151,8 @@ export function SimulatorSetupCard({ machine }: { machine: Machine }) {
   if (!isMac) {
     return (
       <div className="rounded-md border border-line bg-bg p-2 text-xs text-fg-dim">
-        <p className="mb-0.5 font-medium text-fg-muted">Simulador iOS</p>
-        <p>Indisponível: precisa ser um Mac com Xcode instalado (detectado no status da máquina).</p>
+        <p className="mb-0.5 font-medium text-fg-muted">{t('Simulador iOS')}</p>
+        <p>{t('Indisponível: precisa ser um Mac com Xcode instalado (detectado no status da máquina).')}</p>
       </div>
     );
   }
@@ -159,19 +161,22 @@ export function SimulatorSetupCard({ machine }: { machine: Machine }) {
   return (
     <div className="rounded-md border border-line bg-bg p-2 text-xs">
       <div className="flex items-center gap-2">
-        <p className="font-medium text-fg-muted">Simulador iOS</p>
+        <p className="font-medium text-fg-muted">{t('Simulador iOS')}</p>
         <span className="text-fg-dim">
-          {state === 'running' && 'preparando…'}
-          {state === 'ok' && `pronto${setup?.version ? ` · WDA ${setup.version}` : ''}`}
-          {state === 'failed' && <span className="text-danger">falhou</span>}
-          {state === 'idle' && 'não preparado'}
+          {state === 'running' && t('preparando…')}
+          {state === 'ok' && (setup?.version ? t('pronto · WDA {{version}}', { version: setup.version }) : t('pronto'))}
+          {state === 'failed' && <span className="text-danger">{t('falhou')}</span>}
+          {state === 'idle' && t('não preparado')}
         </span>
         <button type="button" className="btn-ghost ml-auto px-2 py-0.5" onClick={() => void start()} disabled={busy || state === 'running'}>
-          {state === 'ok' ? 'Atualizar' : state === 'failed' ? 'Tentar de novo' : 'Preparar'}
+          {state === 'ok' ? t('Atualizar') : state === 'failed' ? t('Tentar de novo') : t('Preparar')}
         </button>
       </div>
       <p className="mt-1 text-fg-dim">
-        Clona e compila o WebDriverAgent em <code className="font-mono">~/.termhub/WebDriverAgent</code> (leva alguns minutos na primeira vez).
+        <Trans
+          i18nKey="Clona e compila o WebDriverAgent em <0>~/.termhub/WebDriverAgent</0> (leva alguns minutos na primeira vez)."
+          components={[<code key="c" className="font-mono" />]}
+        />
       </p>
       {error && <p className="mt-1 text-danger">{error}</p>}
       {setup && setup.tail.length > 0 && (state === 'running' || state === 'failed') && (

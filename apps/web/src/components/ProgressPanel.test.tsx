@@ -52,7 +52,7 @@ describe('ProgressPanel', () => {
     expect(screen.getByText('50%')).toBeInTheDocument();
     expect(screen.getByText('3/6 · backlog: 1')).toBeInTheDocument();
     expect(screen.getAllByText('~20–45 min de trabalho')).toHaveLength(2);
-    expect(screen.getByText('1 cards sem estimativa')).toBeInTheDocument();
+    expect(screen.getByText('1 card sem estimativa')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /TER-183/ })).toHaveAttribute('href', '/project/TER-183');
     expect(screen.getByRole('link', { name: /spec.*trabalhando/ })).toHaveAttribute('href', '/projects/p1?tab=t1');
   });

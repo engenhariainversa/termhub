@@ -51,12 +51,20 @@ export function closingScope(next: Interpreted): CloseScope | null {
  * Tells every open screen of each row's conversation owner. Resolves the views it published. A
  * suggestion row goes out on its own events (spec 2026-09-25 tab suggestions §6.2) — `tab_suggestion`
  * when it opens, `tab_suggestion_closed` for anything after — so every close path here also closes it.
+ * `update` marks a still-open card republished because it changed, not because it opened: screens
+ * redraw it, the phone is not pushed again (TER-919).
  */
-export async function publishTabQuestions(repos: Pick<Repositories, 'tabs' | 'chatDecisions'>, type: TabQuestionEventType, rows: TabQuestion[]): Promise<TabQuestionView[]> {
+export async function publishTabQuestions(
+  repos: Pick<Repositories, 'tabs' | 'chatDecisions'>,
+  type: TabQuestionEventType,
+  rows: TabQuestion[],
+  opts: { update?: boolean } = {},
+): Promise<TabQuestionView[]> {
   const views: TabQuestionView[] = [];
   for (const row of rows) {
     const [view] = await describeTabQuestions(repos, [row], row.user_id);
     if (row.kind === 'suggestion') chatBus.publish({ type: type === 'tab_question' ? 'tab_suggestion' : 'tab_suggestion_closed', user_id: row.user_id, conversation_id: row.conversation_id, suggestion: view });
+    else if (type === 'tab_question' && opts.update) chatBus.publish({ type, user_id: row.user_id, conversation_id: row.conversation_id, question: view, update: true });
     else chatBus.publish({ type, user_id: row.user_id, conversation_id: row.conversation_id, question: view });
     views.push(view);
   }
