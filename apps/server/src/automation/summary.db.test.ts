@@ -52,10 +52,18 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('daily summary (Postgres)'
     await ev('deploy_ok', null, {}, '2026-10-04T12:20:00Z'); // another day
     const a = await repos.automationSummaries.activity([projectId], new Date('2026-10-05T03:00:00Z'), new Date('2026-10-06T03:00:00Z'));
     expect(a).toEqual({ cards: 1, merges: 1, deploys: 2 });
-    expect(await repos.automationSummaries.costOfDay([projectId], '2026-10-05')).toBeNull();
+    expect(await repos.automationSummaries.costOfDays([projectId], '2026-10-04', '2026-10-05')).toBeNull();
     await db.$executeRaw`INSERT INTO "tab_usage_days" ("tab_id", "day", "project_id", "cost_usd_estimate", "updated_at") VALUES (${'t-' + projectId}, '2026-10-05'::date, ${projectId}, 2.5, now())`;
-    expect(await repos.automationSummaries.costOfDay([projectId], '2026-10-05')).toBe(2.5);
+    expect(await repos.automationSummaries.costOfDays([projectId], '2026-10-04', '2026-10-05')).toBe(2.5);
     await db.tabUsageDay.deleteMany({ where: { projectId } });
+  });
+
+  it('previousSentAt reads the newest earlier day only', async () => {
+    expect(await repos.automationSummaries.previousSentAt(userId, '2026-10-05')).toBeNull();
+    await repos.automationSummaries.claim(userId, '2026-10-04');
+    await repos.automationSummaries.claim(userId, '2026-10-05');
+    expect((await repos.automationSummaries.previousSentAt(userId, '2026-10-05'))?.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(await repos.automationSummaries.previousSentAt(userId, '2026-10-04')).toBeNull();
   });
 
   it('lists the merge approvals still pending, and none that were decided', async () => {

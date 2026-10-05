@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Repositories } from '../db/repositories/index.js';
 import { setupSchema } from '../setup/schema.js';
-import { dayBounds, sendDueSummaries, summaryMessage } from './summary.js';
+import { sendDueSummaries, summaryMessage } from './summary.js';
 
 const setup = (o: object) => setupSchema.parse({ automation: { enabled: true, ...o } });
 
-function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: number | null }>; zone?: string | null; claimed?: Set<string>; cost?: number | null } = {}) {
+function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: number | null }>; zone?: string | null; claimed?: Set<string>; cost?: number | null; previous?: Date | null } = {}) {
   const projects = o.projects ?? [{ id: 'p1', owner: 'u1', summary_hour: 9 }];
   const claimed = o.claimed ?? new Set<string>();
   const lines: string[] = [];
@@ -23,8 +23,9 @@ function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: 
     automationSummaries: {
       claim,
       release: vi.fn(async (u: string, day: string) => void claimed.delete(`${u}|${day}`)),
-      activity: vi.fn(async () => ({ cards: 3, merges: 2, deploys: 1 })),
-      costOfDay: vi.fn(async () => (o.cost === undefined ? 1.5 : o.cost)),
+      previousSentAt: vi.fn(async () => o.previous ?? null),
+      activity: vi.fn(async (_p: string[], _f: Date, _t: Date) => ({ cards: 3, merges: 2, deploys: 1 })),
+      costOfDays: vi.fn(async (_p: string[], _f: string, _t: string) => (o.cost === undefined ? 1.5 : o.cost)),
       parkedRuns: vi.fn(async () => [{ task_id: 't1', reason: 'trust_prompt' }]),
       pendingCards: vi.fn(async () => [{ project_id: 'p1', number: 12 }]),
     },
@@ -113,6 +114,7 @@ describe('daily summary (TER-894)', () => {
     expect(f.lines[0]).toBe(
       [
         'Resumo do automático — 05/10/2026',
+        'Desde 04/10 06:00',
         'Feitos: 3 cards, 2 merges, 1 deploys',
         'Esperando você: TER-9 (O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.); PR #12 (Merge esperando sua aprovação no chat)',
         'Custo estimado do dia: US$ 1.50',
@@ -121,10 +123,10 @@ describe('daily summary (TER-894)', () => {
   });
 
   it('shows — when nothing was priced and "nada" when nothing waits; english on request', () => {
-    const s = { day: '2026-10-05', cards: 0, merges: 0, deploys: 0, waiting: [], cost: null };
+    const s = { day: '2026-10-05', since: new Date('2026-10-04T09:00:00Z'), zone: 'UTC', cards: 0, merges: 0, deploys: 0, waiting: [], cost: null };
     expect(summaryMessage(s, 'pt-BR')).toContain('Esperando você: nada');
     expect(summaryMessage(s, 'pt-BR')).toContain('Custo estimado do dia: —');
-    expect(summaryMessage(s, 'en')).toBe(['Automatic work summary — 10/05/2026', 'Done: 0 cards, 0 merges, 0 deploys', 'Waiting on you: nothing', 'Estimated cost of the day: —'].join('\n'));
+    expect(summaryMessage(s, 'en')).toBe(['Automatic work summary — 10/05/2026', 'Since 10/04 09:00', 'Done: 0 cards, 0 merges, 0 deploys', 'Waiting on you: nothing', 'Estimated cost of the day: —'].join('\n'));
   });
 
   it('the push text holds counts only', async () => {
@@ -135,9 +137,32 @@ describe('daily summary (TER-894)', () => {
     expect(call[3]).toBe('summary:2026-10-05');
   });
 
-  it('dayBounds: the local day in its zone', () => {
-    expect(dayBounds('America/Sao_Paulo', '2026-10-05')).toEqual({ from: new Date('2026-10-05T03:00:00Z'), to: new Date('2026-10-06T03:00:00Z') });
-    expect(dayBounds('UTC', '2026-10-05')).toEqual({ from: new Date('2026-10-05T00:00:00Z'), to: new Date('2026-10-06T00:00:00Z') });
-    expect(dayBounds('Asia/Tokyo', '2026-10-05').from).toEqual(new Date('2026-10-04T15:00:00Z'));
+  it('covers the period since the previous summary, or 24 h for the first, and sums the days it touches', async () => {
+    const first = fakes({ zone: 'America/Sao_Paulo' });
+    await sendDueSummaries({ repos: first.repos, lifecycle: live }, new Date('2026-10-05T12:00:00Z'));
+    expect(first.repos.automationSummaries.activity).toHaveBeenCalledWith(['p1'], new Date('2026-10-04T12:00:00Z'), new Date('2026-10-05T12:00:00Z'));
+    expect(first.repos.automationSummaries.costOfDays).toHaveBeenCalledWith(['p1'], '2026-10-04', '2026-10-05');
+    expect(first.lines[0]).toContain('Desde 04/10 09:00');
+
+    // three days later: the window starts at the previous send, not at midnight
+    const next = fakes({ zone: 'America/Sao_Paulo', previous: new Date('2026-10-05T12:00:30Z') });
+    await sendDueSummaries({ repos: next.repos, lifecycle: live }, new Date('2026-10-08T12:00:00Z'));
+    expect(next.repos.automationSummaries.activity).toHaveBeenCalledWith(['p1'], new Date('2026-10-05T12:00:30Z'), new Date('2026-10-08T12:00:00Z'));
+    expect(next.repos.automationSummaries.costOfDays).toHaveBeenCalledWith(['p1'], '2026-10-05', '2026-10-08');
+  });
+
+  it('keeps the claim when the message was posted but its publication failed', async () => {
+    const f = fakes();
+    const { chatBus } = await import('../chat/bus.js');
+    const spy = vi.spyOn(chatBus, 'publish').mockImplementationOnce(() => {
+      throw new Error('bus down');
+    });
+    const deps = { repos: f.repos, lifecycle: live, log: { warn: vi.fn() } };
+    const now = new Date('2026-10-05T09:00:00Z');
+    expect(await sendDueSummaries(deps, now)).toBe(0);
+    expect(f.repos.automationSummaries.release).not.toHaveBeenCalled();
+    expect(await sendDueSummaries(deps, now)).toBe(0); // claimed: no second message
+    expect(f.lines).toHaveLength(1);
+    spy.mockRestore();
   });
 });

@@ -51,7 +51,6 @@ function viewAsOf(scope: Scope | undefined) {
 
 const viewAsSchema = z.object({ user_id: z.string().min(1).max(64).nullable() });
 const nicknameBodySchema = z.object({ nickname: z.string() });
-/** null = automatic (the browser's language; pt-BR for e-mails and push). */
 /** An IANA zone name the runtime knows (`America/Sao_Paulo`); the daily summary's clock. */
 const timeZoneBodySchema = z.object({
   time_zone: z.string().min(1).max(64).refine((zone) => {
@@ -64,6 +63,7 @@ const timeZoneBodySchema = z.object({
   }, 'invalid time zone'),
 });
 
+/** null = automatic (the browser's language; pt-BR for e-mails and push). */
 const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en']).nullable() });
 
 export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: { onNicknameClaimed?: (user: User) => void } = {}) {

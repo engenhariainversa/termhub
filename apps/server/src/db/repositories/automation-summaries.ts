@@ -41,6 +41,13 @@ export class AutomationSummariesRepository {
     await this.db.$executeRaw`DELETE FROM "automation_summaries" WHERE "user_id" = ${userId} AND "day" = ${day}::date`;
   }
 
+  /** When the user's previous summary (an earlier day than `day`) was sent; null for the first. */
+  async previousSentAt(userId: string, day: string): Promise<Date | null> {
+    const rows = await this.db.$queryRaw<Array<{ at: Date | null }>>`
+      SELECT MAX("sent_at") AS at FROM "automation_summaries" WHERE "user_id" = ${userId} AND "day" < ${day}::date`;
+    return rows[0]?.at ?? null;
+  }
+
   async activity(projectIds: string[], from: Date, to: Date): Promise<DayActivity> {
     if (projectIds.length === 0) return { cards: 0, merges: 0, deploys: 0 };
     const rows = await this.db.$queryRaw<Array<{ cards: bigint; merges: bigint; deploys: bigint }>>`
@@ -54,11 +61,12 @@ export class AutomationSummariesRepository {
     return { cards: Number(r?.cards ?? 0), merges: Number(r?.merges ?? 0), deploys: Number(r?.deploys ?? 0) };
   }
 
-  /** The estimated cost of the day (`YYYY-MM-DD`) over the projects; null when no row had a priced model. */
-  async costOfDay(projectIds: string[], day: string): Promise<number | null> {
+  /** The estimated cost of the days `fromDay`..`toDay` (inclusive `YYYY-MM-DD`) over the projects; null when no row had a priced model. */
+  async costOfDays(projectIds: string[], fromDay: string, toDay: string): Promise<number | null> {
     if (projectIds.length === 0) return null;
     const rows = await this.db.$queryRaw<Array<{ cost: string | null }>>`
-      SELECT SUM("cost_usd_estimate")::text AS cost FROM "tab_usage_days" WHERE "project_id" = ANY(${projectIds}::text[]) AND "day" = ${day}::date`;
+      SELECT SUM("cost_usd_estimate")::text AS cost FROM "tab_usage_days"
+      WHERE "project_id" = ANY(${projectIds}::text[]) AND "day" >= ${fromDay}::date AND "day" <= ${toDay}::date`;
     const cost = rows[0]?.cost;
     return cost === null || cost === undefined ? null : Number(cost);
   }

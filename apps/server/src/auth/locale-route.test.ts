@@ -5,6 +5,7 @@ import { applyErrorHandler } from '../lib/errors.js';
 import { authRoutes } from './routes.js';
 
 const setLocale = vi.fn();
+const setTimeZone = vi.fn();
 const findById = vi.fn();
 
 function buildApp(user: Record<string, unknown> | null) {
@@ -14,7 +15,7 @@ function buildApp(user: Record<string, unknown> | null) {
     request.user = user as never;
     if (user) request.scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id } as never;
   });
-  const repos = { users: { setLocale }, roles: { findById } } as unknown as Repositories;
+  const repos = { users: { setLocale, setTimeZone }, roles: { findById } } as unknown as Repositories;
   app.register((a) => authRoutes(a, { repos } as never), { prefix: '/auth' });
   return app;
 }
@@ -55,5 +56,26 @@ describe('GET /auth/me', () => {
     const res = await buildApp({ ...user, locale: 'en' }).inject({ url: '/auth/me' });
     expect(res.statusCode).toBe(200);
     expect(res.json().user.locale).toBe('en');
+  });
+});
+
+describe('PATCH /auth/me/time-zone', () => {
+  beforeEach(() => setTimeZone.mockReset().mockResolvedValue(undefined));
+  const send = (app: ReturnType<typeof buildApp>, payload: unknown) => app.inject({ method: 'PATCH', url: '/auth/me/time-zone', payload: payload as never });
+
+  it('stores an IANA zone and answers 204', async () => {
+    expect((await send(buildApp(user), { time_zone: 'America/Sao_Paulo' })).statusCode).toBe(204);
+    expect(setTimeZone).toHaveBeenCalledWith('u1', 'America/Sao_Paulo');
+  });
+
+  it('refuses unknown zones and other shapes', async () => {
+    for (const payload of [{ time_zone: 'Not/AZone' }, { time_zone: '' }, { time_zone: 3 }, {}]) {
+      expect((await send(buildApp(user), payload)).statusCode).toBe(400);
+    }
+    expect(setTimeZone).not.toHaveBeenCalled();
+  });
+
+  it('needs a signed-in user', async () => {
+    expect((await send(buildApp(null), { time_zone: 'UTC' })).statusCode).toBe(401);
   });
 });

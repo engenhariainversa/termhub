@@ -85,5 +85,6 @@
   "nada": "nothing",
   "Custo estimado do dia: {{cost}}": "Estimated cost of the day: {{cost}}",
   "US$ {{value}}": "US$ {{value}}",
-  "Um PR": "A PR"
+  "Um PR": "A PR",
+  "Desde {{since}}": "Since {{since}}"
 }
