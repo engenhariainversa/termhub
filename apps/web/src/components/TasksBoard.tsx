@@ -139,7 +139,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
     try {
       await api.tasks.update(id, { auto });
     } catch (e) {
-      fail(e, 'Erro ao marcar o card para trabalho automático');
+      fail(e, t('Erro ao marcar o card para trabalho automático'));
     }
     await load();
   };

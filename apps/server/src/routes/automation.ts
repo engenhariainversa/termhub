@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { AUTOMATION_EVENTS_PAGE_MAX } from '../db/repositories/index.js';
+import { requestLocale } from '../i18n/index.js';
 import { controlContextForRequest } from '../control/context.js';
 import { automationQueue } from '../automation/queue.js';
 import { listAutomationEvents } from '../automation/events.js';
@@ -14,7 +15,7 @@ const idParam = z.object({ id });
 export async function projectAutomationRoutes(app: FastifyInstance, repos: Repositories) {
   app.get('/:id/automation/queue', async (request) => {
     const { id } = idParam.parse(request.params);
-    return { items: await automationQueue(controlContextForRequest(repos, request), id) };
+    return { items: await automationQueue(controlContextForRequest(repos, request), id, requestLocale(request)) };
   });
 }
 
