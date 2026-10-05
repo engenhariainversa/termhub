@@ -36,5 +36,9 @@
   "Esta aba não tem trabalho automático em andamento": "This tab has no automatic work in progress",
   "O trabalho automático desta aba mudou de instância; chame report_card de novo": "This tab's automatic work moved to another instance; call report_card again",
   "Diga em reason por que o trabalho travou": "Say in reason why the work is stuck",
-  "O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.": "The agent stopped at the folder trust confirmation; confirm it in the tab to continue."
+  "O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.": "The agent stopped at the folder trust confirmation; confirm it in the tab to continue.",
+  "O agente fez uma pergunta que o modo automático não soube responder; responda no card.": "The agent asked a question automatic mode could not answer; answer it on the card.",
+  "O card da pergunta do agente fechou sem resposta; responda na aba para continuar.": "The agent's question card closed without an answer; answer it in the tab to continue.",
+  "Opção recomendada pelo agente": "Option the agent recommended",
+  "O agente fez perguntas demais respondidas automaticamente na última hora; confira a aba e responda no card.": "The agent asked too many questions answered automatically in the last hour; check the tab and answer on the card."
 }

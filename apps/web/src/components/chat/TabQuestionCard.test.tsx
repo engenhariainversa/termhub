@@ -278,6 +278,11 @@ describe('automatic answer countdown (spec 2026-09-26 concierge memory §6/§8)'
     expect(screen.getByText(/0:41/)).toBeInTheDocument();
   });
 
+  it('a countdown on the option the agent recommended (automatic board work) reads its own reason, translated', () => {
+    render(<TabQuestionCard question={card({ auto_answer: auto({ by: 'automation', reason: 'Opção recomendada pelo agente', sources: [] }) } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+    expect(screen.getByText('Resposta automática em 0:42 — «Sim». Motivo: Opção recomendada pelo agente')).toBeInTheDocument();
+  });
+
   it('"Cancelar" calls onCancelAutoAnswer with the question id (the API call and error handling are ChatPanel\'s)', () => {
     const onCancelAutoAnswer = vi.fn();
     render(<TabQuestionCard question={card({ auto_answer: auto() } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} onCancelAutoAnswer={onCancelAutoAnswer} />);

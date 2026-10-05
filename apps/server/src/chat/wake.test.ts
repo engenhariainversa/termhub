@@ -168,4 +168,28 @@ describe('createWaker', () => {
       process.off('unhandledRejection', unhandled);
     }
   });
+
+  it('an automatic wake (agentic board D18) skips "Responder sozinho" and spends its own budget, not the person\'s', async () => {
+    const repos = fakeRepos({ autodecide: false });
+    const chat = fakeChat();
+    const waker = createWaker({ repos: asRepos(repos), chat, maxPerHour: 1, automationMaxPerHour: 2, now: () => 0, log: log() });
+    expect(await waker.wake(row({ id: 'q1' }), 'api', { automatic: true })).toBe(true);
+    expect(await waker.wake(row({ id: 'q2' }), 'api', { automatic: true })).toBe(true);
+    expect(repos.users.chatAutodecide).not.toHaveBeenCalled();
+    // the automation's budget is spent; the person's is untouched (but their switch is off)
+    expect(await waker.wake(row({ id: 'q3' }), 'api', { automatic: true })).toBe(false);
+    expect(chat.wake).toHaveBeenCalledTimes(2);
+    repos.users.chatAutodecide.mockResolvedValue(true);
+    expect(await waker.wake(row({ id: 'q4' }), 'api')).toBe(true);
+  });
+
+  it('with no automation budget configured an automatic wake never happens; a card already counting down is never woken for', async () => {
+    const repos = fakeRepos();
+    const waker = createWaker({ repos: asRepos(repos), chat: fakeChat(), maxPerHour: 12, log: log() });
+    expect(await waker.wake(row(), 'api', { automatic: true })).toBe(false);
+    const withBudget = createWaker({ repos: asRepos(repos), chat: fakeChat(), maxPerHour: 12, automationMaxPerHour: 30, log: log() });
+    const auto: AutoAnswer = { answer: { answers: [] }, by: 'automation', reason: 'x', sources: [], due_at: '', status: 'scheduled' };
+    expect(await withBudget.wake(row({ auto_answer: auto }), 'api', { automatic: true })).toBe(false);
+    expect(repos.tabQuestions.markWoken).not.toHaveBeenCalled();
+  });
 });

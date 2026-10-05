@@ -43,10 +43,24 @@ export const TRUST_WAIT_MS = 3 * 60_000;
 export const NEEDS_PERSON = 'needs_person';
 /** The escalation reason of a run parked on the trust question. */
 export const TRUST_PROMPT = 'trust_prompt';
+/** The escalation reason of a run whose tab asks a question nothing automatic could answer (spec D18 step 4). */
+export const QUESTION_UNANSWERED = 'question_unanswered';
+/** The escalation reason of a run whose question card closed without an answer while the tab still asks it. */
+export const QUESTION_EXPIRED = 'question_expired';
+/** The escalation reason of a run whose questions were answered automatically too often in the last hour. */
+export const ANSWER_CAP = 'answer_cap';
+/**
+ * How long an open question card of an automatic tab may wait with no countdown before the person is
+ * called: the woken chat had this long to answer it (spec D18 step 3 → 4).
+ */
+export const QUESTION_WAIT_MS = 10 * 60_000;
 
 /** The text the feed and the escalation show for each escalation reason known so far (spec §9.3). */
 export const ESCALATION_TEXT: Record<string, string> = {
   [TRUST_PROMPT]: tk('O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.'),
+  [QUESTION_UNANSWERED]: tk('O agente fez uma pergunta que o modo automático não soube responder; responda no card.'),
+  [QUESTION_EXPIRED]: tk('O card da pergunta do agente fechou sem resposta; responda na aba para continuar.'),
+  [ANSWER_CAP]: tk('O agente fez perguntas demais respondidas automaticamente na última hora; confira a aba e responda no card.'),
 };
 
 /** The escalation's text in the reader's language; null for a reason with no text yet. */
@@ -292,6 +306,29 @@ async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: L
   return true;
 }
 
+/**
+ * A question of the run's tab that automatic work left unanswered (spec §9.1, D18 step 4), escalated:
+ * an open card whose countdown failed, or that waited QUESTION_WAIT_MS with no countdown at all (the woken
+ * chat found nothing); or a card that closed `expired`/`failed` with the tab still showing it (no hook since
+ * it closed, the agent neither exited nor moved on). A countdown running, or one the person cancelled (the
+ * card is theirs now), is left alone. True when the run was escalated.
+ */
+async function escalateUnansweredQuestion(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
+  const q = await deps.repos.tabQuestions.latestQuestionForTab(tab.id);
+  // permission prompts are Task 22's
+  if (!q || q.kind !== 'choice') return false;
+  let reason: string | null = null;
+  if (q.status === 'open') {
+    const auto = q.auto_answer?.status;
+    if (auto === 'failed' || (!auto && sinceMs(deps, q.created_at) >= QUESTION_WAIT_MS)) reason = QUESTION_UNANSWERED;
+  } else if ((q.status === 'expired' || q.status === 'failed') && q.closed_at && (tab.state === 'waiting_input' || tab.state === 'working')) {
+    if (Date.parse(tab.state_at ?? '') <= Date.parse(q.closed_at)) reason = QUESTION_EXPIRED;
+  }
+  if (!reason) return false;
+  await wakeOrEscalate(deps.repos, run, reason, log);
+  return true;
+}
+
 /** One handler at a time per run. A change that arrives while a follow still settles joins it: that follow
  *  reads the tab after it anyway. */
 const chains = new Map<string, Promise<void>>();
@@ -344,6 +381,9 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
         run.status = 'running';
         run.waiting_reason = null;
       }
+      // a question nothing automatic answered goes to the person, whatever the tab shows meanwhile (a
+      // Claude question leaves the tab `working` until its notification)
+      if (run.status === 'running' && (await escalateUnansweredQuestion(deps, run, tab, log))) return;
       // `working` and `waiting_background` (lesson TER-615) are the agent's own time
       if (tab.state === 'working' || tab.state === 'waiting_background') return;
       if (run.status === 'waiting') {

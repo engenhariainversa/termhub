@@ -156,6 +156,27 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(startAgent).toHaveBeenCalledTimes(1);
   });
 
+  it("a start makes sure the owner has an active project chat, so the agent's questions become cards (review I1)", async () => {
+    await setSetup({ automation: { max_parallel: 2 } });
+    expect(await repos.chat.findLatestActiveForProject(projectId, ownerId)).toBeUndefined();
+    await card();
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    expect(startAgent).toHaveBeenCalledTimes(1);
+    const first = await repos.chat.findLatestActiveForProject(projectId, ownerId);
+    expect(first).toBeDefined();
+
+    // archived meanwhile: the next start opens a new one (and an existing active one is reused)
+    await repos.chat.archive(first!.id);
+    await card('Outro');
+    await tickOnce(deps);
+    expect(startAgent).toHaveBeenCalledTimes(2);
+    const second = await repos.chat.findLatestActiveForProject(projectId, ownerId);
+    expect(second).toBeDefined();
+    expect(second!.id).not.toBe(first!.id);
+    expect(await db.chatConversation.count({ where: { projectId, userId: ownerId, archivedAt: null, tabId: null } })).toBe(1);
+  });
+
   it('the run knows its tab before the agent line is typed (the tab tools are listed at start, F-8)', async () => {
     const c = await card();
     let seenAtOpen: unknown;

@@ -2,7 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { ChatDecision, DecisionNeighbour } from '../db/repositories/chat-decisions.js';
 import type { MemoryFilter, MemoryHit, MemoryItem, MemoryKind, MemoryTrust } from '../db/repositories/memory-items.js';
 import { checkChoiceAnswer, choiceAnswerBody, type ChoiceAnswer, type ChoicePayload } from '../chat/tab-question-payload.js';
-import { blocklistParts, decisionBacks, scheduleAutoAnswer, type Downgrade } from '../chat/auto-answer.js';
+import { autoAnswerAllowed, blocklistParts, decisionBacks, scheduleAutoAnswer, type Downgrade } from '../chat/auto-answer.js';
 import { embedTag, embedText, labelKey, type SuggestionItem } from '../chat/decision-text.js';
 import { config } from '../config.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
@@ -481,7 +481,8 @@ export async function answerTabQuestionTool(
     const backers = payload.questions.map((item, i) => decisions.filter((d) => decisionBacks(d, item, answer.answers[i]!)));
     const backed = backers.filter((ds) => ds.length > 0).length;
     const parts = blocklistParts(payload, answer);
-    if (!(await ctx.repos.users.chatAutodecide(userId))) downgrade = 'switch_off';
+    // in a tab with a live automatic run, `automation.enabled` stands in for the switch (D18, F-17)
+    if (!(await autoAnswerAllowed(ctx.repos, row))) downgrade = 'switch_off';
     else if (autoStatus === 'cancelled') downgrade = 'cancelled_by_person';
     else if (autoAnswerBlocked(parts)) downgrade = 'blocked';
     else if (payload.questions.length > 1 && backed > 0 && backed < payload.questions.length) downgrade = 'multi_question_partial';

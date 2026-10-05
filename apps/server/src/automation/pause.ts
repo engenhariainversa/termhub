@@ -1,5 +1,6 @@
 import type { ControlContext } from '../control/context.js';
 import type { Repositories } from '../db/repositories/index.js';
+import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import { sendKeyToSession } from '../terminal/session-ops.js';
 import { recordEvent } from './events.js';
 
@@ -13,6 +14,22 @@ export type PauseScope = 'all' | string;
 export async function isPaused(repos: Repositories, ownerId: string | null, projectId: string): Promise<boolean> {
   const { user, project } = await repos.automationPauses.state(ownerId, projectId);
   return user !== null || project !== null;
+}
+
+/**
+ * The tab's active automatic run when automatic work may act in it right now: the tab has an active run,
+ * its project has automation on and is not paused (spec D18, D24, preflight F-17). Null otherwise — a
+ * manual tab, a paused or disabled project — and then the tab is treated as any other: "Responder
+ * sozinho" decides. Read again before every automatic answer is sent, so a pause stops it.
+ */
+export async function automaticRunOfTab(repos: Repositories, tabId: string): Promise<AutomationRun | null> {
+  const run = await repos.automationRuns.activeByTab(tabId);
+  if (!run) return null;
+  const project = await repos.projects.findById(run.project_id);
+  if (!project) return null;
+  if (!(await repos.projectSetup.get(run.project_id)).data.automation.enabled) return null;
+  if (await isPaused(repos, project.owner_id, run.project_id)) return null;
+  return run;
 }
 
 /** The person's projects where automatic work is on: where a global pause or resume is recorded. */

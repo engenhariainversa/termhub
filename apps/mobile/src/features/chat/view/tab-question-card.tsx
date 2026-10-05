@@ -4,7 +4,7 @@ import type { TTabQuestionAnswerBody } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
 import { AppText, Button } from '@/ui';
 import { AutoDecisionBadge } from './auto-decision-badge';
-import { answerSummary, autoAnswerFailureText, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence } from '../model/tab-question-text';
+import { answerSummary, autoAnswerFailureText, autoAnswerReason, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence } from '../model/tab-question-text';
 import type { TabQuestion, TabQuestionSuggestionItem } from '../model/types';
 
 type Props = {
@@ -131,7 +131,7 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
         ))}
         {autoAnswered ? (
           <View className="gap-1">
-            <AppText variant="muted">{t('Respondida automaticamente: «{{answer}}» — motivo {{reason}}', { answer: choiceAnswerLabel(question.payload, question.auto_answer!.answer), reason: question.auto_answer!.reason })}</AppText>
+            <AppText variant="muted">{t('Respondida automaticamente: «{{answer}}» — motivo {{reason}}', { answer: choiceAnswerLabel(question.payload, question.auto_answer!.answer), reason: autoAnswerReason(question.auto_answer!) })}</AppText>
             <Button label={t('Esquecer o precedente')} variant="ghost" disabled={forgettingPrecedent} onPress={() => void forgetPrecedent()} />
           </View>
         ) : null}
@@ -147,7 +147,7 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
   const counting = auto?.status === 'scheduled';
   if (counting || sending) {
     const description = choiceAnswerDescription(question.payload, auto!.answer);
-    const lineValues = { time: formatCountdown(seconds), answer: choiceAnswerLabel(question.payload, auto!.answer), description, reason: auto!.reason };
+    const lineValues = { time: formatCountdown(seconds), answer: choiceAnswerLabel(question.payload, auto!.answer), description, reason: autoAnswerReason(auto!) };
     let line = description
       ? t('Resposta automática em {{time}} — «{{answer}}» ({{description}}). Motivo: {{reason}}', lineValues)
       : t('Resposta automática em {{time}} — «{{answer}}». Motivo: {{reason}}', lineValues);

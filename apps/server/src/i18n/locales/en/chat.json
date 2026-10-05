@@ -65,5 +65,6 @@
   "A sugestão mudou na aba": "The suggestion changed in the tab",
   "Sugestão não encontrada": "Suggestion not found",
   "Enviar para a aba precisa da permissão terminals:write na sua role": "Sending to the tab needs the terminals:write permission in your role",
-  "Não foi possível enviar para a aba": "Could not send to the tab"
+  "Não foi possível enviar para a aba": "Could not send to the tab",
+  "Trabalho automático pausado ou desligado": "Automatic work is paused or turned off"
 }

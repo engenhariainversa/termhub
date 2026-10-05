@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { expireTabLimits } from './tab-limits.js';
+import { automaticRunOfTab } from '../automation/pause.js';
 import { config } from '../config.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { CloseScope, TabQuestion, TabQuestionCloseStatus } from '../db/repositories/tab-questions.js';
@@ -110,7 +111,9 @@ export async function closeTabQuestions(repos: Repositories, tabId: string, stat
  * Once the card is out (published), a fresh `choice` card that got no automatic answer — no repeat
  * countdown from `maybeScheduleRepeat` above — wakes the project's concierge (spec 2026-09-26
  * concierge memory §7, D9b), fire-and-forget (`void`): the hook POST that got us here never waits for
- * a wake turn, and `deps.waker`'s own contract (`createWaker`) never throws.
+ * a wake turn, and `deps.waker`'s own contract (`createWaker`) never throws. In a tab with a live
+ * automatic run (`automaticRunOfTab`) the card goes to `automationAnswer` instead (agentic board spec
+ * D18: repeat, recommended option, wake, escalate), fire-and-forget too.
  */
 export async function openTabQuestion(
   repos: Repositories,
@@ -124,6 +127,19 @@ export async function openTabQuestion(
   const conversation = owner ? await repos.chat.findLatestActiveForProject(tab.project_id, owner) : undefined;
   const { question, closed } = await repos.tabQuestions.open({ tab_id: tab.id, project_id: tab.project_id, conversation_id: conversation?.id ?? null, kind: input.kind, payload: input.payload, tool_use_id: input.tool_use_id, agent_id: deps?.agentId ?? null });
   await publishTabQuestions(repos, 'tab_question_closed', closed);
+  if (!question && input.kind === 'choice') {
+    // No card (no active conversation of the owner's): in a tab with a live automatic run the run is
+    // parked for the person before anything else looks at the tab, so nothing is ever typed into the
+    // question (agentic board review I1). A manual tab keeps the question in the tab, as before.
+    const run = await automaticRunOfTab(repos, tab.id).catch(() => null);
+    if (run) {
+      const log = deps?.log ?? silentLog;
+      // loaded lazily: automation/answers reaches the follower, whose imports lead back here
+      await import('../automation/answers.js')
+        .then(({ questionWithoutCard }) => questionWithoutCard(repos, run, log))
+        .catch((err) => log.warn({ tabId: tab.id, code: failureLabel(err) }, 'automation: question with no card not parked'));
+    }
+  }
   let shown = question;
   if (question?.kind === 'choice') {
     const embedder = deps?.embedder !== undefined ? deps.embedder : defaultEmbedder();
@@ -152,7 +168,19 @@ export async function openTabQuestion(
   }
   if (shown) {
     await publishTabQuestions(repos, 'tab_question', [shown]);
-    if (shown.kind === 'choice' && !shown.auto_answer && deps?.waker) void deps.waker.wake(shown, tab.name);
+    if (shown.kind === 'choice') {
+      const log = deps?.log ?? silentLog;
+      // A tab with a live automatic run answers by the agentic board's own order (spec D18); every
+      // other tab — a manual one, a paused or disabled project — exactly as before.
+      const run = await automaticRunOfTab(repos, tab.id).catch(() => null);
+      if (run) {
+        const card = shown;
+        // loaded lazily: automation/answers reaches the follower, whose imports lead back here
+        void import('../automation/answers.js')
+          .then(({ automationAnswer }) => automationAnswer({ repos, waker: deps?.waker, log }, card, run))
+          .catch((err) => log.warn({ tabQuestionId: card.id, code: failureLabel(err) }, 'automation: question not handled'));
+      } else if (!shown.auto_answer && deps?.waker) void deps.waker.wake(shown, tab.name);
+    }
   }
   return shown;
 }
