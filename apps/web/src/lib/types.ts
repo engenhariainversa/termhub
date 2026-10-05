@@ -1526,3 +1526,30 @@ export interface FilePreviewRefused {
   size?: number;
 }
 export type FilePreview = FilePreviewOk | FilePreviewRefused;
+
+/** A project's recent Markdown files (spec 2026-10-04 recent Markdown files, GET /api/file-recent). */
+export type FileRecentGroup = 'specs' | 'plans' | 'lessons' | 'legal' | 'other';
+export interface FileRecentItem {
+  machine: { id: string; name: string };
+  /** the file as the machine resolved it */
+  path: string;
+  /** relative to the project folder when the file is inside it, else null */
+  rel_path: string | null;
+  name: string;
+  size: number;
+  mtime: string;
+  /** over the preview's size limit: listed, but it will not open */
+  too_large: boolean;
+  group: FileRecentGroup;
+  /** named in an answer or an event of the project's tabs */
+  cited: boolean;
+}
+/** `offline`, `outdated` or `unsupported`; read as a plain string, a newer server may add reasons. */
+export interface FileRecentSkipped {
+  machine: { id: string; name: string };
+  reason: string;
+}
+export interface FileRecentResponse {
+  items: FileRecentItem[];
+  skipped: FileRecentSkipped[];
+}
