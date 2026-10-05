@@ -78,6 +78,8 @@ model User {
   chatAutodecide     Boolean            @default(false) @map("chat_autodecide")
   /// "Responder perguntas do Codex pelo chat": off by default, the Codex reply card opens only for users who opt in.
   chatCodexReplies   Boolean            @default(false) @map("chat_codex_replies")
+  /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
+  pushTabFinished    Boolean            @default(false) @map("push_tab_finished")
   memoryItems        MemoryItem[]
   verifiedMemoryItems MemoryItem[] @relation("MemoryItemVerifier")
   standingGrants     ChatStandingGrant[]
@@ -90,6 +92,8 @@ model User {
   automationPausedAt  DateTime? @map("automation_paused_at") @db.Timestamptz
   /// IANA time zone (e.g. America/Sao_Paulo) for the automation's daily summary hour. Null = the server's.
   timeZone            String?   @map("time_zone")
+  /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
+  locale              String?
 
   @@index([roleId])
   @@index([deletionScheduledAt])

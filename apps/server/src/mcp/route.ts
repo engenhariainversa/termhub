@@ -9,11 +9,12 @@ import type { AttachmentStore } from '../chat/attachments/store.js';
 import { applyGate } from '../chat/gate-runtime.js';
 import { toolUseIdOf } from '../chat/subagent-origin.js';
 import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
-import { HttpError } from '../lib/errors.js';
+import { HttpError, sendError } from '../lib/errors.js';
 import { authenticateToken } from './auth.js';
 import { TokenRateLimiter } from './rate-limit.js';
 import { pinTabArgs, tabInputShape, tabRefusalMessage } from './tab-token.js';
 import { allowedTools, inputSchemaOf, parseArgs, refusalMessage, type ToolDef } from './tools.js';
+import { requestLocale, t } from '../i18n/index.js';
 
 export const MCP_BODY_LIMIT = 256 * 1024;
 
@@ -24,10 +25,8 @@ declare module 'fastify' {
   }
 }
 
-const UNAUTHORIZED = { error: 'Não autenticado', code: 'UNAUTHORIZED' } as const;
-
 type ToolResult = { content: ToolContent[]; isError?: boolean };
-const text = (t: string, isError = false): ToolResult => ({ content: [{ type: 'text', text: t }], ...(isError ? { isError: true } : {}) });
+const text = (s: string, isError = false): ToolResult => ({ content: [{ type: 'text', text: s }], ...(isError ? { isError: true } : {}) });
 /** An id worth auditing: refused calls carry raw, unvalidated arguments, so anything else is dropped. */
 const auditId = (v: unknown) => (typeof v === 'string' && v.length >= 1 && v.length <= 64 ? v : null);
 /** read_attachment's own id rule: a refused call's raw `id` (a file name, say) never reaches the audit. */
@@ -61,12 +60,12 @@ export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositorie
 
   const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = await authenticateToken(repos, request.headers.authorization);
-    if (!auth) return reply.code(401).send(UNAUTHORIZED);
+    if (!auth) return sendError(request, reply, 401, 'Não autenticado', 'UNAUTHORIZED');
     request.mcp = { token: auth.token, ctx: { ...controlContextFor(repos, auth.user, { id: auth.token.id, scopes: auth.token.scopes, gated: auth.token.gated, tab: auth.tab ?? undefined, chat_conversation_id: auth.token.chat_conversation_id }), attachments: deps.attachments, log: request.log } };
     void repos.apiTokens.touchLastUsed(auth.token.id).catch((err) => request.log.warn({ err }, 'mcp: touchLastUsed failed'));
   };
 
-  const notAllowed = async (_request: FastifyRequest, reply: FastifyReply) => reply.code(405).header('allow', 'POST').send({ error: 'Use POST', code: 'METHOD_NOT_ALLOWED' });
+  const notAllowed = async (request: FastifyRequest, reply: FastifyReply) => sendError(request, reply.header('allow', 'POST'), 405, 'Use POST', 'METHOD_NOT_ALLOWED');
   app.get('/mcp', notAllowed);
   app.delete('/mcp', notAllowed);
 
@@ -94,13 +93,16 @@ export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositorie
     if (Array.isArray(request.body)) return reply.code(400).send(BATCH_REJECTED);
 
     const { token, ctx } = request.mcp!;
+    // Refusals and tool errors in the caller's language (their account's choice, else the header, else pt-BR).
+    const locale = requestLocale(request);
     const audit = (tool: string, args: unknown, errorCode: string | null, durationMs: number) =>
       void repos.apiTokens
         .recordEvent({ token_id: token.id, tool: tool.slice(0, 64), ...idsOf(tool, args), ok: errorCode === null, error_code: errorCode, duration_ms: durationMs })
         .catch((err) => request.log.warn({ err }, 'mcp: recordEvent failed'));
 
     server = new McpServer({ name: 'termhub', version: deps.version }, { capabilities: { tools: {} } });
-    const rateLimited = (retryInSeconds: number) => text(`Limite de ${limiter.limit} chamadas por minuto deste token; tente de novo em ${retryInSeconds} s`, true);
+    const rateLimited = (retryInSeconds: number) =>
+      text(t(locale, 'Limite de {{limit}} chamadas por minuto deste token; tente de novo em {{seconds}} s', { limit: limiter.limit, seconds: retryInSeconds }), true);
     // A tab token's calls are validated (by the SDK and the pre-check below) with project_id/tab_id
     // optional: pinTabArgs fills them in before the tool runs (TER-212 D5).
     const tabView = (t: ToolDef): ToolDef => (ctx.token?.tab ? { ...t, input: tabInputShape(t.input) } : t);
@@ -139,11 +141,11 @@ export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositorie
           } catch (e) {
             if (e instanceof ControlError || e instanceof HttpError) {
               errorCode = e.code ?? 'ERROR';
-              out = text(e.message, true);
+              out = text(t(locale, e.localized), true);
             } else {
               errorCode = 'INTERNAL';
               request.log.error({ err: e, tool: tool.name, token_id: token.id }, 'mcp: tool failed');
-              out = text('Erro interno ao executar a ferramenta', true);
+              out = text(t(locale, 'Erro interno ao executar a ferramenta'), true);
             }
           }
         }
@@ -168,7 +170,7 @@ export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositorie
       if (refusal) {
         const rate = limiter.take(token.id);
         audit(name, msg.params.arguments, rate.ok ? refusal : 'RATE_LIMITED', 0);
-        const answer = !rate.ok ? rateLimited(rate.retryInSeconds) : refusal === 'TOOL_NOT_ALLOWED' ? text(ctx.token?.tab ? tabRefusalMessage(name) : refusalMessage(name), true) : null;
+        const answer = !rate.ok ? rateLimited(rate.retryInSeconds) : refusal === 'TOOL_NOT_ALLOWED' ? text(ctx.token?.tab ? tabRefusalMessage(name, locale) : refusalMessage(name, locale), true) : null;
         if (answer) {
           if (closed) return gone();
           return reply.code(200).send({ jsonrpc: '2.0', id: msg.id ?? null, result: answer });

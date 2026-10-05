@@ -1,6 +1,7 @@
 import { CAPABILITY_FILE_READ, CAPABILITY_SIM, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
+import { msg } from '../i18n/index.js';
 import { AgentClosedError, AgentRpcError, AgentTimeoutError } from './connection.js';
 import { AgentOfflineError, agents } from './registry.js';
 
@@ -60,7 +61,7 @@ export function versionAtLeast(a: string, b: string): boolean {
 export function requireAgentVersion(machine: Machine, min: string): void {
   const info = agents.info(machine.id);
   if (info && !versionAtLeast(info.agent_version, min)) {
-    throw new HttpError(409, `Atualize o agente desta máquina (npm i -g @termhub/agent, versão ${min} ou mais nova)`, 'AGENT_OUTDATED');
+    throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova)', { version: min }), 'AGENT_OUTDATED');
   }
 }
 
@@ -80,7 +81,7 @@ export function requireSimCapable(machine: Machine): void {
   if ((agents.info(machine.id)?.os ?? machine.os) !== 'macos') throw new HttpError(400, 'Esta máquina não é um Mac com Xcode', 'NOT_MAC');
   const capabilities = agents.capabilities(machine.id) ?? [];
   if (!capabilities.includes(CAPABILITY_SIM)) {
-    throw new HttpError(409, `Atualize o agente desta máquina (npm i -g @termhub/agent, versão ${SIM_MIN_AGENT_VERSION} ou mais nova) para usar o simulador`, 'AGENT_OUTDATED');
+    throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para usar o simulador', { version: SIM_MIN_AGENT_VERSION }), 'AGENT_OUTDATED');
   }
 }
 
@@ -98,7 +99,7 @@ export function requireTranscriptCapable(machine: Machine): void {
   if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_TRANSCRIPT)) {
     throw new HttpError(
       409,
-      `Atualize o agente desta máquina (npm i -g @termhub/agent, versão ${TRANSCRIPT_MIN_AGENT_VERSION} ou mais nova) para abrir a sessão como chat`,
+      msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para abrir a sessão como chat', { version: TRANSCRIPT_MIN_AGENT_VERSION }),
       'AGENT_OUTDATED',
     );
   }
@@ -106,7 +107,7 @@ export function requireTranscriptCapable(machine: Machine): void {
 
 /** First agent release that advertises `file_read` (`file.read`, spec 2026-10-04 file preview). */
 export const FILE_READ_MIN_AGENT_VERSION = '0.16.0';
-export const FILE_READ_OUTDATED_MESSAGE = `Atualize o agente desta máquina (npm i -g @termhub/agent, versão ${FILE_READ_MIN_AGENT_VERSION} ou mais nova) para ver arquivos`;
+export const FILE_READ_OUTDATED_MESSAGE = msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para ver arquivos', { version: FILE_READ_MIN_AGENT_VERSION });
 
 /** Previewing a file needs an agent machine whose connected agent claims `file_read`: an older agent
  *  drops the RPC, which would read as a timeout. */

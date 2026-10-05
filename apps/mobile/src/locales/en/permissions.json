@@ -12,5 +12,9 @@
   "Ainda não ativadas.": "Not turned on yet.",
   "Abrir Ajustes do sistema": "Open system settings",
   "Medição de anúncios": "Ad measurement",
-  "Usa o identificador de publicidade do aparelho só para medir quais anúncios trouxeram novas pessoas ao termhub.": "Uses this device's advertising identifier only to measure which ads brought new people to termhub."
+  "Usa o identificador de publicidade do aparelho só para medir quais anúncios trouxeram novas pessoas ao termhub.": "Uses this device's advertising identifier only to measure which ads brought new people to termhub.",
+  "Enviar notificação de teste": "Send a test notification",
+  "Feche o app para ver como ela chega.": "Close the app to see how it arrives.",
+  "Avisar quando uma aba terminar": "Notify me when a tab finishes",
+  "Um aviso quando uma aba de projeto termina o trabalho e espera você. Tocar nele abre a aba. Vale para todos os seus aparelhos.": "A notification when a project tab finishes its work and waits for you. Tapping it opens the tab. Applies to all your devices."
 }

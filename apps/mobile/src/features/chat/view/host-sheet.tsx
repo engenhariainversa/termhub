@@ -42,8 +42,8 @@ function ProjectHostSheet({ open, onClose, projectId, host }: { open: boolean; o
         <Pressable accessibilityRole="button" accessibilityLabel={t('Contas e modelo do projeto')} onPress={openProjectAi} className="rounded-xl bg-app-surface2 px-4 py-3">
           <AppText>{t('Contas e modelo do projeto')}</AppText>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Trabalho automático" onPress={openAutomation} className="rounded-xl bg-app-surface2 px-4 py-3">
-          <AppText>Trabalho automático</AppText>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('Trabalho automático')} onPress={openAutomation} className="rounded-xl bg-app-surface2 px-4 py-3">
+          <AppText>{t('Trabalho automático')}</AppText>
         </Pressable>
       </View>
     </Sheet>

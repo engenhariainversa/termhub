@@ -14,8 +14,10 @@ import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { useThemeStore, type ThemePreference } from '@/features/theme/viewmodel/useThemeStore';
 import { setLocale, tk, useLocaleStore, useTranslation, type Locale } from '@/i18n';
 import { diagnosticKey } from '@/services/key';
+import { runningUpdate } from '@/services/updates';
 import { AppText, Button, Screen, Sheet } from '@/ui';
 import { runKeyDiagnostic, type KeyDiagnosticResult } from '../model/key-diagnostic';
+import { updateLabel } from '../model/update-label';
 import { useSettingsStore } from '../viewmodel/useSettingsStore';
 import { KeyDiagnosticSheet } from './key-diagnostic-sheet';
 
@@ -54,6 +56,12 @@ export function SettingsScreen() {
   const device = useSettingsStore((s) => s.device);
   const loadDevice = useSettingsStore((s) => s.loadDevice);
   const server = useSettingsStore((s) => s.server);
+  const pushTest = useSettingsStore((s) => s.pushTest);
+  const sendTestPush = useSettingsStore((s) => s.sendTestPush);
+  const tabFinished = useSettingsStore((s) => s.tabFinished);
+  const pushSettingsError = useSettingsStore((s) => s.pushSettingsError);
+  const loadPushSettings = useSettingsStore((s) => s.loadPushSettings);
+  const setTabFinished = useSettingsStore((s) => s.setTabFinished);
   const biometricsEnabled = useSessionStore((s) => s.biometricsEnabled);
   const enableBiometrics = useSessionStore((s) => s.enableBiometrics);
   const disableBiometrics = useSessionStore((s) => s.disableBiometrics);
@@ -84,12 +92,13 @@ export function SettingsScreen() {
 
   useEffect(() => {
     void loadDevice();
+    void loadPushSettings();
     // Re-reads the general chat's slot for its current machine, without switching what is
     // actually open (`refresh` never touches `activeProject`, `live` or the socket) — unlike
     // `open(null)`, this is safe even while a project's conversation is genuinely the one on
     // screen underneath the tabs.
     void refreshGeneralChat(null);
-  }, [loadDevice, refreshGeneralChat]);
+  }, [loadDevice, loadPushSettings, refreshGeneralChat]);
 
   // The OS statuses, now and whenever the person comes back from the system settings.
   useEffect(() => {
@@ -150,6 +159,24 @@ export function SettingsScreen() {
           <AppText variant="muted">{PERMISSIONS_MSG.notificationStatus[notificationStatus ?? 'undetermined']}</AppText>
           {notificationStatus === 'undetermined' ? <Button label={PERMISSIONS_MSG.pushAccept} variant="secondary" onPress={() => void acceptPush()} /> : null}
           {notificationStatus === 'denied' ? <Button label={PERMISSIONS_MSG.openSettings} variant="secondary" onPress={() => void openSystemSettings()} /> : null}
+          {notificationStatus === 'granted' ? (
+            <>
+              <View className="flex-row items-center justify-between">
+                <AppText>{PERMISSIONS_MSG.tabFinishedSwitch}</AppText>
+                <Switch
+                  accessibilityLabel={PERMISSIONS_MSG.tabFinishedSwitch}
+                  value={tabFinished === true}
+                  disabled={tabFinished === null}
+                  onValueChange={(value) => void setTabFinished(value)}
+                />
+              </View>
+              <AppText variant="muted">{PERMISSIONS_MSG.tabFinishedHint}</AppText>
+              {pushSettingsError ? <AppText className="text-app-danger">{pushSettingsError}</AppText> : null}
+              <Button label={PERMISSIONS_MSG.pushTest} variant="secondary" loading={pushTest.sending} onPress={() => void sendTestPush()} />
+              <AppText variant="muted">{pushTest.note ? `${pushTest.note} ${PERMISSIONS_MSG.pushTestHint}` : PERMISSIONS_MSG.pushTestHint}</AppText>
+              {pushTest.error ? <AppText className="text-app-danger">{pushTest.error}</AppText> : null}
+            </>
+          ) : null}
         </Section>
 
         <Section title={t('Privacidade')}>
@@ -169,8 +196,8 @@ export function SettingsScreen() {
           <Button label={t('Memória do chat')} variant="secondary" onPress={() => router.push('/chat-memory')} />
         </Section>
 
-        <Section title="Trabalho automático">
-          <PauseCard loadingText="Carregando…" />
+        <Section title={t('Trabalho automático')}>
+          <PauseCard loadingText={t('Carregando…')} />
         </Section>
 
         <Section title={t('Idioma')}>
@@ -206,6 +233,7 @@ export function SettingsScreen() {
           <AppText variant="muted">
             {Application.nativeApplicationVersion} ({Application.nativeBuildVersion})
           </AppText>
+          <AppText variant="muted">{updateLabel(runningUpdate().updateId, runningUpdate().isEmbeddedLaunch)}</AppText>
           <AppText variant="muted">{server}</AppText>
         </Section>
 

@@ -171,17 +171,17 @@ export function TaskEditor({
                 checked={Boolean(task.auto)}
                 onChange={(e) => (e.target.checked && task.type === 'epic' ? setConfirmAuto(true) : onSetAuto(e.target.checked))}
               />
-              Trabalho automático
+              {t('Trabalho automático')}
             </label>
             <p className="ml-6 text-xs text-fg-dim">
-              {task.type === 'epic' ? 'Marca todos os cards deste épico (os novos também).' : 'O termhub pega este card sozinho quando ele estiver numa coluna "a fazer".'}
+              {task.type === 'epic' ? t('Marca todos os cards deste épico (os novos também).') : t('O termhub pega este card sozinho quando ele estiver numa coluna "a fazer".')}
             </p>
           </div>
         )}
         <ConfirmDialog
           open={confirmAuto}
-          title="Trabalho automático"
-          message={`Marcar ${epicUntagged} ${epicUntagged === 1 ? 'card' : 'cards'} deste épico para trabalho automático? Os cards novos também serão marcados.`}
+          title={t('Trabalho automático')}
+          message={t('Marcar {{count}} cards deste épico para trabalho automático? Os cards novos também serão marcados.', { count: epicUntagged })}
           onConfirm={() => {
             setConfirmAuto(false);
             onSetAuto(true);

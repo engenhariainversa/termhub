@@ -43,6 +43,18 @@ export const PERMISSIONS_MSG = {
   get openSettings() {
     return t('Abrir Ajustes do sistema');
   },
+  get pushTest() {
+    return t('Enviar notificação de teste');
+  },
+  get pushTestHint() {
+    return t('Feche o app para ver como ela chega.');
+  },
+  get tabFinishedSwitch() {
+    return t('Avisar quando uma aba terminar');
+  },
+  get tabFinishedHint() {
+    return t('Um aviso quando uma aba de projeto termina o trabalho e espera você. Tocar nele abre a aba. Vale para todos os seus aparelhos.');
+  },
   get adsSwitch() {
     return t('Medição de anúncios');
   },

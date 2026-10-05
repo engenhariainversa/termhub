@@ -33,7 +33,18 @@ export interface SettingsState {
   loadingDevice: boolean;
   error: string | null;
   loadDevice(): Promise<void>;
+  /** "Enviar notificação de teste" (TER-913): in flight, then what happened. */
+  pushTest: { sending: boolean; note: string | null; error: string | null };
+  sendTestPush(): Promise<void>;
+  /** "Avisar quando uma aba terminar" (TER-925), per account; `null` until loaded. */
+  tabFinished: boolean | null;
+  pushSettingsError: string | null;
+  loadPushSettings(): Promise<void>;
+  setTabFinished(on: boolean): Promise<void>;
 }
+
+/** Time to close the app before the test push is sent. */
+export const PUSH_TEST_DELAY_SECONDS = 10;
 
 const networkMsg = () => t('Não foi possível falar com o servidor. Tente de novo.');
 
@@ -48,6 +59,33 @@ export function createSettingsStore(deps: SettingsDeps) {
     device: null,
     loadingDevice: false,
     error: null,
+    pushTest: { sending: false, note: null, error: null },
+    tabFinished: null,
+    pushSettingsError: null,
+
+    async loadPushSettings() {
+      const gen = generation;
+      try {
+        const { tab_finished } = await api.pushSettings(session().auth());
+        if (gen === generation) set({ tabFinished: tab_finished, pushSettingsError: null });
+      } catch (e) {
+        if (gen !== generation || session().handleApiError(e)) return;
+        set({ pushSettingsError: e instanceof ApiError ? e.message : networkMsg() });
+      }
+    },
+
+    async setTabFinished(on) {
+      const before = store.getState().tabFinished;
+      set({ tabFinished: on, pushSettingsError: null });
+      try {
+        const { tab_finished } = await api.setPushSettings(session().auth(), { tab_finished: on });
+        set({ tabFinished: tab_finished });
+      } catch (e) {
+        set({ tabFinished: before });
+        if (session().handleApiError(e)) return;
+        set({ pushSettingsError: e instanceof ApiError ? e.message : networkMsg() });
+      }
+    },
 
     async loadDevice() {
       const gen = generation;
@@ -62,11 +100,22 @@ export function createSettingsStore(deps: SettingsDeps) {
         set({ loadingDevice: false, error: e instanceof ApiError ? e.message : networkMsg() });
       }
     },
+
+    async sendTestPush() {
+      set({ pushTest: { sending: true, note: null, error: null } });
+      try {
+        await api.pushTest(session().auth(), { kind: 'confirmation', delay_seconds: PUSH_TEST_DELAY_SECONDS });
+        set({ pushTest: { sending: false, note: t('Enviada. Ela chega em {{seconds}} s.', { seconds: PUSH_TEST_DELAY_SECONDS }), error: null } });
+      } catch (e) {
+        if (session().handleApiError(e)) return set({ pushTest: { sending: false, note: null, error: null } });
+        set({ pushTest: { sending: false, note: null, error: e instanceof ApiError ? e.message : networkMsg() } });
+      }
+    },
   }));
 
   sessionEnded.subscribe(() => {
     generation++;
-    store.setState({ device: null, loadingDevice: false, error: null });
+    store.setState({ device: null, loadingDevice: false, error: null, pushTest: { sending: false, note: null, error: null }, tabFinished: null, pushSettingsError: null });
   });
 
   // The label is copy ("Servidor: …"): it follows a language change.

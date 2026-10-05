@@ -8,16 +8,21 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { User } from '../db/repositories/types.js';
 import type { PushTestKind, PushTestResponse } from '@termhub/mobile-api';
 import { HttpError } from '../lib/errors.js';
-import { confirmationText, deviceRequestText, replyText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
+import { monitorBus, type TabStateChange } from '../monitor/bus.js';
+import { confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { SlidingWindow } from './rate-limit.js';
 import type { MobileSocketRegistry } from './revocation.js';
+import { localeOf, t, tk, type Locale } from '../i18n/index.js';
 
 export interface PushMessage {
   to: string;
-  title: string;
-  body: string;
+  /** Absent on a badge-only update (TER-923): nothing is shown, the icon's number changes. */
+  title?: string;
+  body?: string;
   data: Record<string, unknown>;
   collapseId?: string;
+  /** The icon badge (iOS): the person's unread history rows. */
+  badge?: number;
 }
 
 /** One message's ticket: `id` names its receipt (TER-924); `error` is Expo's per-ticket error code. */
@@ -80,7 +85,20 @@ export class ExpoPushSender implements PushSender {
         headers: expoHeaders(this.accessToken),
         signal: AbortSignal.timeout(EXPO_TIMEOUT_MS),
         body: JSON.stringify(
-          chunk.map((m) => ({ to: m.to, title: m.title, body: m.body, data: m.data, sound: 'default', priority: 'high', ...(m.collapseId ? { collapseId: m.collapseId } : {}) })),
+          chunk.map((m) =>
+            m.title === undefined
+              ? { to: m.to, data: m.data, ...(m.badge !== undefined ? { badge: m.badge } : {}) }
+              : {
+                  to: m.to,
+                  title: m.title,
+                  body: m.body,
+                  data: m.data,
+                  sound: 'default',
+                  priority: 'high',
+                  ...(m.collapseId ? { collapseId: m.collapseId } : {}),
+                  ...(m.badge !== undefined ? { badge: m.badge } : {}),
+                },
+          ),
         ),
       });
       if (!res.ok) throw Object.assign(new Error(`Expo push answered ${res.status}`), { code: `EXPO_HTTP_${res.status}` });
@@ -123,6 +141,12 @@ export class ExpoReceiptFetcher implements PushReceiptFetcher {
     return out;
   }
 }
+
+/** "Aba terminou": one per tab in this window, and the pause before it is sent (TER-925). */
+export const TAB_FINISHED_WINDOW_MS = 5 * 60_000;
+export const TAB_FINISHED_SETTLE_MS = 5_000;
+/** The states a tab's turn ends in (`finished`: a report that asks nothing, TER-972). */
+const TURN_ENDS = new Set<string | null>(['waiting_input', 'finished', 'idle']);
 
 /** A test push's receipt is read this long after the send, then once more if it was not ready. */
 export const TEST_RECEIPT_AFTER_MS = 15_000;
@@ -216,6 +240,17 @@ export class MobilePushService {
   /** Test pushes: six per minute per device (TER-913). */
   private readonly tests = new SlidingWindow(60_000, 6);
 
+  /** "Aba terminou" at most once per tab every five minutes (TER-925). */
+  private readonly finished = new SlidingWindow(TAB_FINISHED_WINDOW_MS, 1);
+
+  /** Tabs seen working since their last turn end. In memory: right after a deploy, the first turn end
+   * of a tab already working is not pushed (it was never seen working here). */
+  private readonly working = new Set<string>();
+
+  /** A turn end waits `TAB_FINISHED_SETTLE_MS` before it is pushed: a question card opening right
+   * after it, or the tab working again, cancels it. */
+  private readonly settling = new Map<string, ReturnType<typeof setTimeout>>();
+
   /** The live subscription's unsubscribe, so a second `start()` never subscribes twice. */
   private stop: (() => void) | null = null;
 
@@ -229,8 +264,12 @@ export class MobilePushService {
         this.deps.log.warn({ err: failureLabel(err), userId: event.user_id, conversationId: event.conversation_id, event: event.type }, 'mobile push failed'),
       );
     });
+    const unsubscribeTabs = monitorBus.subscribe((change) => this.onTabState(change));
     const stop = () => {
       unsubscribe();
+      unsubscribeTabs();
+      for (const timer of this.settling.values()) clearTimeout(timer);
+      this.settling.clear();
       if (this.stop === stop) this.stop = null;
     };
     this.stop = stop;
@@ -240,9 +279,8 @@ export class MobilePushService {
   /** Called by the enrolment service for a real request: goes to every device, live or not. */
   async deviceRequest(user: User, request: DeviceRequest): Promise<void> {
     try {
-      const text = deviceRequestText(request);
       const devices = await this.deps.repos.devices.listActiveWithPush(user.id);
-      await this.deliver(user.id, 'device_request', text, { kind: 'device_request' }, devices);
+      await this.deliver(user.id, 'device_request', (locale) => deviceRequestText(request, locale), { kind: 'device_request' }, devices);
     } catch (err) {
       this.deps.log.warn({ err: failureLabel(err), userId: user.id, requestId: request.id }, 'mobile push failed');
     }
@@ -257,8 +295,8 @@ export class MobilePushService {
    * `push_test` event. Logs ids, kind and outcome only — never the token.
    */
   async testPush(user: User, device: Device, kind: PushTestKind, delaySeconds: number): Promise<PushTestResponse> {
-    if (!device.push_token) throw new HttpError(409, 'Este aparelho ainda não ativou as notificações.', 'NO_PUSH_TOKEN');
-    if (!this.tests.take(device.id)) throw new HttpError(429, 'Muitas notificações de teste. Espere um minuto e tente de novo.', 'PUSH_TEST_RATE_LIMITED');
+    if (!device.push_token) throw new HttpError(409, tk('Este aparelho ainda não ativou as notificações.'), 'NO_PUSH_TOKEN');
+    if (!this.tests.take(device.id)) throw new HttpError(429, tk('Muitas notificações de teste. Espere um minuto e tente de novo.'), 'PUSH_TEST_RATE_LIMITED');
     const message = await this.testMessage(user, device.push_token, kind);
     const scheduledFor = new Date(this.now().getTime() + delaySeconds * 1000).toISOString();
     if (delaySeconds === 0) return { scheduled_for: scheduledFor, ticket: await this.sendTest(user, device, kind, message) };
@@ -271,18 +309,19 @@ export class MobilePushService {
   }
 
   private async testMessage(user: User, to: string, kind: PushTestKind): Promise<PushMessage> {
-    const test = (t: PushText): PushText => ({ title: `[Teste] ${t.title}`, body: t.body });
+    const locale = localeOf(user.locale);
+    const test = (p: PushText): PushText => ({ title: t(locale, '[Teste] {{title}}', { title: p.title }), body: p.body });
     if (kind === 'device_request') {
-      const text = test(deviceRequestText({ model: 'Aparelho de teste', city: null, country: null }));
+      const text = test(deviceRequestText({ model: t(locale, 'Aparelho de teste'), city: null, country: null }, locale));
       return { to, ...text, data: { kind: 'device_request', test: true } };
     }
     const conversation = await this.deps.repos.chat.findLatestActiveForUser(user.id);
     const projectId = conversation?.project_id ?? null;
-    const ctx = conversation ? await this.names(user.id, projectId, null, null) : { projectName: 'Projeto de teste', tabName: null, machineName: null };
+    const ctx = conversation ? await this.names(user.id, projectId, null, null) : { projectName: t(locale, 'Projeto de teste'), tabName: null, machineName: null };
     const where = conversation ? { conversation_id: conversation.id, project_id: projectId } : {};
-    if (kind === 'tab_question') return { to, ...test(tabQuestionText({ ...ctx, tabName: 'teste' }, 'permission')), data: { kind: 'tab_question', ...where, test: true } };
-    if (kind === 'reply') return { to, ...test(replyText(ctx)), data: { kind: 'reply', ...where, test: true } };
-    return { to, ...test(confirmationText(ctx)), data: { kind: 'confirmation', ...where, test: true } };
+    if (kind === 'tab_question') return { to, ...test(tabQuestionText({ ...ctx, tabName: t(locale, 'teste') }, 'permission', locale)), data: { kind: 'tab_question', ...where, test: true } };
+    if (kind === 'reply') return { to, ...test(replyText(ctx, locale)), data: { kind: 'reply', ...where, test: true } };
+    return { to, ...test(confirmationText(ctx, locale)), data: { kind: 'confirmation', ...where, test: true } };
   }
 
   /** Sends one test push; never throws. Its outcome becomes the device's `push_test` event. */
@@ -332,7 +371,73 @@ export class MobilePushService {
     attempt([TEST_RECEIPT_AFTER_MS, TEST_RECEIPT_RETRY_MS]);
   }
 
+  /**
+   * The card a history row was about got handled (TER-923): answered, decided or ended, here or on any
+   * other screen. Its rows become read, and the phones get a badge-only push with the new count, so the
+   * icon stops counting it; the app clears the delivered notification when it next looks.
+   */
+  private async handled(userId: string, key: 'action_id' | 'tab_question_id', value: string): Promise<void> {
+    const { repos } = this.deps;
+    if ((await repos.userNotifications.markReadByData(userId, key, value, this.now())) === 0) return;
+    const devices = (await repos.devices.listActiveWithPush(userId)).filter((d): d is Device & { push_token: string } => !!d.push_token);
+    if (devices.length === 0) return;
+    const badge = await repos.userNotifications.countUnread(userId);
+    try {
+      await this.deps.sender.send(devices.map((d) => ({ to: d.push_token, data: { kind: 'badge' }, badge })));
+    } catch (err) {
+      this.deps.log.warn({ err: failureLabel(err), userId, devices: devices.length }, 'mobile badge push failed');
+    }
+  }
+
+  /** A tab that was working ended its turn (`waiting_input`, or `finished` with a plain report, TER-972)
+   * or its agent (`idle`): maybe "aba terminou". */
+  private onTabState({ tab, owner_id }: TabStateChange): void {
+    const pending = this.settling.get(tab.id);
+    if (tab.state === 'working') {
+      if (pending) clearTimeout(pending);
+      this.settling.delete(tab.id);
+      if (this.working.size > 10_000) this.working.clear();
+      this.working.add(tab.id);
+      return;
+    }
+    if (!TURN_ENDS.has(tab.state)) {
+      // A permission prompt or background work is still the same turn; an error ends it unannounced.
+      if (tab.state === 'error') this.working.delete(tab.id);
+      return;
+    }
+    if (!this.working.delete(tab.id) || !owner_id || pending) return;
+    const timer = setTimeout(() => {
+      this.settling.delete(tab.id);
+      void this.tabFinished(tab.id, owner_id).catch((err) => this.deps.log.warn({ err: failureLabel(err), userId: owner_id, tabId: tab.id }, 'mobile push failed'));
+    }, TAB_FINISHED_SETTLE_MS);
+    timer.unref();
+    this.settling.set(tab.id, timer);
+  }
+
+  /**
+   * "Aba terminou" (TER-925), only for an owner who turned it on in Ajustes: the tab still stopped, no
+   * question or permission card open on it (that one already said "precisa de você"), at most once per
+   * tab every five minutes. Goes where a reply goes (devices without a live socket; history kind
+   * `reply`, which every app version parses) with `data.tab_id`, so a newer app opens the tab; an older
+   * one opens the project's chat (`conversation_id`) or just the app.
+   */
+  private async tabFinished(tabId: string, ownerId: string): Promise<void> {
+    const { repos } = this.deps;
+    if (!(await repos.users.pushTabFinished(ownerId))) return;
+    const tab = await repos.tabs.findById(tabId);
+    if (!tab || !TURN_ENDS.has(tab.state)) return;
+    const open = await repos.tabQuestions.findOpenForTab(tabId);
+    if (open && open.kind !== 'suggestion') return;
+    if (!this.finished.take(tabId)) return;
+    const ctx = await this.names(ownerId, tab.project_id, tab.id, tab.machine_id);
+    const conversation = await repos.chat.findLatestActiveForProject(tab.project_id, ownerId);
+    const data = { kind: 'tab_finished', tab_id: tab.id, project_id: tab.project_id, ...(conversation ? { conversation_id: conversation.id } : {}) };
+    await this.deliver(ownerId, 'reply', (locale) => tabFinishedText(ctx, locale), data, await this.offline(ownerId), `tab:${tab.id}`);
+  }
+
   private async handle(event: ChatEvent): Promise<void> {
+    if (event.type === 'decision' || event.type === 'action_status') return this.handled(event.user_id, 'action_id', event.action_id);
+    if (event.type === 'tab_question_answered' || event.type === 'tab_question_closed') return this.handled(event.user_id, 'tab_question_id', event.question.id);
     if (event.type === 'confirmation') {
       // A card re-published only to name its subagent: the person was already told about it.
       if (event.origin_update) return;
@@ -343,7 +448,7 @@ export class MobilePushService {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, event.tab_id, event.machine_id);
       const data = { kind: 'confirmation', conversation_id: event.conversation_id, project_id: projectId, action_id: event.action_id };
-      await this.deliver(event.user_id, 'confirmation', confirmationText(ctx), data, await this.offline(event.user_id));
+      await this.deliver(event.user_id, 'confirmation', (locale) => confirmationText(ctx, locale), data, await this.offline(event.user_id));
     } else if (event.type === 'tab_question' && event.question.kind !== 'suggestion' && !event.resurfaced && !event.update) {
       // `update`: the same open card republished because it changed (TER-919) — told once is enough.
       // (A suggestion never rides `tab_question` — it has its own events and is never pushed — the
@@ -353,13 +458,14 @@ export class MobilePushService {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, event.question.tab_id, null);
       const data = { kind: 'tab_question', conversation_id: event.conversation_id, project_id: projectId, tab_question_id: event.question.id };
-      await this.deliver(event.user_id, 'confirmation', tabQuestionText(ctx, event.question.kind), data, await this.offline(event.user_id));
+      const questionKind = event.question.kind;
+      await this.deliver(event.user_id, 'confirmation', (locale) => tabQuestionText(ctx, questionKind, locale), data, await this.offline(event.user_id));
     } else if (event.type === 'run_finished' && event.ok) {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, null, null);
       const data = { kind: 'reply', conversation_id: event.conversation_id, project_id: projectId };
       const send = this.replies.take(event.conversation_id);
-      await this.deliver(event.user_id, 'reply', replyText(ctx), data, send ? await this.offline(event.user_id) : [], `reply:${event.conversation_id}`);
+      await this.deliver(event.user_id, 'reply', (locale) => replyText(ctx, locale), data, send ? await this.offline(event.user_id) : [], `reply:${event.conversation_id}`);
     }
   }
 
@@ -391,15 +497,19 @@ export class MobilePushService {
 
   /** The history row first — it exists even when sending fails — then the push, which carries the
    * row's id as `notification_id` so a tap on it can mark that row read. An account waiting out its
-   * deletion (TER-720) is deactivated: it gets neither (TER-920); a cancel brings pushes back. */
-  private async deliver(userId: string, kind: Kind, text: PushText, data: Record<string, unknown>, devices: Device[], collapseId?: string): Promise<void> {
+   * deletion (TER-720) is deactivated: it gets neither (TER-920); a cancel brings pushes back. The
+   * text is written in the recipient's language (`users.locale`, pt-BR when unset). */
+  private async deliver(userId: string, kind: Kind, textFor: (locale: Locale) => PushText, data: Record<string, unknown>, devices: Device[], collapseId?: string): Promise<void> {
     const owner = await this.deps.repos.users.findById(userId);
     if (!owner || isPendingDeletion(owner)) return;
+    const text = textFor(localeOf(owner.locale));
     const row = await this.deps.repos.userNotifications.create({ user_id: userId, kind, title: text.title, body: text.body, data });
     const targets = devices.filter((d): d is Device & { push_token: string } => !!d.push_token);
     if (targets.length === 0) return;
     const pushData = { ...data, notification_id: row.id };
-    const messages: PushMessage[] = targets.map((d) => ({ to: d.push_token, title: text.title, body: text.body, data: pushData, ...(collapseId ? { collapseId } : {}) }));
+    // The icon shows the unread rows, this one included (TER-923).
+    const badge = await this.deps.repos.userNotifications.countUnread(userId);
+    const messages: PushMessage[] = targets.map((d) => ({ to: d.push_token, title: text.title, body: text.body, data: pushData, badge, ...(collapseId ? { collapseId } : {}) }));
     let results: PushTicketResult[];
     try {
       results = await this.deps.sender.send(messages);

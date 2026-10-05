@@ -10,6 +10,7 @@ import { HttpError, badRequest, forbidden, unauthorized } from '../lib/errors.js
 import { MOBILE_TOKEN_RE } from './codes.js';
 import { isPendingDeletion, pendingDeletion } from '../account/deletion.js';
 import { verifyProof, type JtiCache } from './dpop.js';
+import { msg } from '../i18n/index.js';
 
 // The mobile prefix's own authentication: a device access token plus a DPoP proof, and nothing
 // else. It never reads a cookie or the Cloudflare Access header, and a personal API token is
@@ -123,7 +124,7 @@ export function buildMobileAuthHook(deps: MobileAuthDeps) {
 
     if (cfg.resource) {
       const action = cfg.action ?? actionForMethod(request.method);
-      if (!(await canAccess(deps.repos, user, cfg.resource, action))) throw forbidden(`Sem permissão: ${cfg.resource}:${action}`);
+      if (!(await canAccess(deps.repos, user, cfg.resource, action))) throw forbidden(msg('Sem permissão: {{permission}}', { permission: `${cfg.resource}:${action}` }));
     }
   };
 }

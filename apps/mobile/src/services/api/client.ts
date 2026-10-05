@@ -7,6 +7,10 @@ import { b64url, utf8 } from '../crypto/encoding';
 import type { DeviceKey } from '../key/types';
 import {
   ACCOUNT_PENDING_DELETION,
+  pushSettings,
+  pushTestResponse,
+  type PushSettings,
+  type PushTestBody,
   accountDeletionStatus,
   automationSetupResponse,
   cardAutoResponse,
@@ -281,6 +285,9 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     deviceSelf: (a: Auth) => call('GET', '/api/m/v1/devices/self', deviceSelfSchema, { token: a.accessToken }),
     revokeSelf: (a: Auth) => empty('POST', '/api/m/v1/devices/self/revoke', { token: a.accessToken }),
     setPushToken: (a: Auth, token: string) => empty('PUT', '/api/m/v1/push-token', { token: a.accessToken, body: { token } }),
+    pushTest: (a: Auth, body: PushTestBody) => call('POST', '/api/m/v1/push-test', pushTestResponse, { token: a.accessToken, body }),
+    pushSettings: (a: Auth) => call('GET', '/api/m/v1/push-settings', pushSettings, { token: a.accessToken }),
+    setPushSettings: (a: Auth, body: PushSettings) => call('PUT', '/api/m/v1/push-settings', pushSettings, { token: a.accessToken, body }),
 
     accountDeletion: (a: Auth) => call('GET', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
     requestAccountDeletion: (a: Auth, body: AccountDeletionBody) => call('POST', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken, body }),
