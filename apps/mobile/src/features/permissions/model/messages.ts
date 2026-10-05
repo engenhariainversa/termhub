@@ -43,6 +43,12 @@ export const PERMISSIONS_MSG = {
   get openSettings() {
     return t('Abrir Ajustes do sistema');
   },
+  get pushTest() {
+    return t('Enviar notificação de teste');
+  },
+  get pushTestHint() {
+    return t('Feche o app para ver como ela chega.');
+  },
   get adsSwitch() {
     return t('Medição de anúncios');
   },
