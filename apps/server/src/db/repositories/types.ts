@@ -207,6 +207,8 @@ export interface Task {
   epic_id: string | null;
   /** Board column; null in the backlog and on subtasks. */
   column_id: string | null;
+  /** Tagged "automático" (eligible for automatic work); always false on subtasks. */
+  auto: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -405,6 +407,7 @@ export const mapTask = (t: PrismaTask, key: string): Task => ({
   parent_id: t.parentId,
   epic_id: t.epicId,
   column_id: t.columnId,
+  auto: t.auto,
   created_at: t.createdAt.toISOString(),
   updated_at: t.updatedAt.toISOString(),
 });

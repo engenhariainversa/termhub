@@ -338,11 +338,11 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'create_task',
-    description: `Create a card at the top of a column (default the first todo column; an epic defaults to the backlog), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). Returns the card with its ref and url, and the board URL.`,
+    description: `Create a card at the top of a column (default the first todo column; an epic defaults to the backlog), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). auto: true tags it for automatic work (\"automático\"); a card created in an automatic epic is tagged anyway. Returns the card with its ref and url, and the board URL.`,
     scope: 'tasks', resource: 'tasks', action: 'create',
-    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), subtasks: subtaskItems.optional() },
+    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), auto: z.boolean().optional(), subtasks: subtaskItems.optional() },
     run: (ctx, a) =>
-      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; subtasks?: { title: string; description?: string | null }[] }),
+      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; subtasks?: { title: string; description?: string | null }[] }),
   },
   {
     name: 'add_subtasks',
@@ -354,10 +354,10 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'update_task',
     description:
-      'Change the title, description (null clears it), status, type (story, task, bug or spike; a card with subtasks stays a story or task) or epic_id of a card, or the title/description/status of a subtask. Changing the status of a top-level card moves it to the top of the first column of that category (backlog: of its epic backlog).',
+      'Change the title, description (null clears it), status, type (story, task, bug or spike; a card with subtasks stays a story or task) or epic_id of a card, or the title/description/status of a subtask. auto: true marks the card for automatic work (tag "automático"); on an epic it marks or clears every card of the epic. Subtasks never carry the tag. Changing the status of a top-level card moves it to the top of the first column of that category (backlog: of its epic backlog).',
     scope: 'tasks', resource: 'tasks', action: 'update',
-    input: { task_id: id, title: taskTitle.optional(), description: taskDescription.optional(), status: taskStatus.optional(), type: workType.optional(), epic_id: id.optional() },
-    run: (ctx, a) => updateTask(ctx, a as { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string }),
+    input: { task_id: id, title: taskTitle.optional(), description: taskDescription.optional(), status: taskStatus.optional(), type: workType.optional(), epic_id: id.optional(), auto: z.boolean().optional() },
+    run: (ctx, a) => updateTask(ctx, a as { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean }),
   },
   {
     name: 'move_task',

@@ -17,7 +17,8 @@ export type TaskRuleCode =
   | 'COLUMN_NOT_FOUND'
   | 'COLUMN_NOT_DOING'
   | 'COLUMN_LAST_OF_CATEGORY'
-  | 'TOO_MANY_COLUMNS';
+  | 'TOO_MANY_COLUMNS'
+  | 'AUTO_NOT_FOR_SUBTASK';
 
 /** Enforced both here and in the route's zod schema (which uses this constant too). */
 export const MAX_SUBTASKS_PER_CALL = 50;
@@ -40,6 +41,7 @@ const MESSAGES: Record<TaskRuleCode, string> = {
   COLUMN_NOT_DOING: tk('A coluna do agente precisa ser do tipo Fazendo'),
   COLUMN_LAST_OF_CATEGORY: tk('O board precisa de ao menos uma coluna de cada tipo'),
   TOO_MANY_COLUMNS: tk('Limite de 12 colunas'),
+  AUTO_NOT_FOR_SUBTASK: tk('Subtarefas não levam a tag automático; marque o card'),
 };
 
 /** A board rule was broken. `message` is pt-BR and safe to show to the user; replies translate `localized`. */
