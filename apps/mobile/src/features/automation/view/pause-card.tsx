@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { AppText, Button, Sheet } from '@/ui';
 import { PAUSE_MSG, pausedBanner, pausedSince } from '../model/pause';
+import { pauseControlsVisible } from '../viewmodel/createPauseStore';
 import { usePauseStore } from '../viewmodel/usePauseStore';
 
 /**
@@ -12,6 +13,7 @@ import { usePauseStore } from '../viewmodel/usePauseStore';
  */
 export function PauseCard({ testID = 'pause-card', loadingText }: { testID?: string; loadingText?: string }) {
   const state = usePauseStore((s) => s.state);
+  const unavailable = usePauseStore((s) => s.unavailable);
   const busy = usePauseStore((s) => s.busy);
   const error = usePauseStore((s) => s.error);
   const [confirming, setConfirming] = useState(false);
@@ -21,7 +23,8 @@ export function PauseCard({ testID = 'pause-card', loadingText }: { testID?: str
       return () => usePauseStore.getState().stopPolling();
     }, []),
   );
-  if (state === null) return loadingText ? <AppText variant="muted">{loadingText}</AppText> : null;
+  if (state === null) return loadingText && !unavailable ? <AppText variant="muted">{loadingText}</AppText> : null;
+  if (!pauseControlsVisible(state)) return null;
   const since = pausedSince(state);
   return (
     <View testID={testID} className="gap-3">

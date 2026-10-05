@@ -13,11 +13,11 @@ vi.mock('../lib/api', () => ({ api: { automation: { pauseState: () => stateMock(
 vi.mock('../lib/auth', () => ({ useAuth: () => ({ can: () => canUpdate }) }));
 vi.mock('../lib/monitor', () => ({ useMonitor: () => ({ automationSeq: seq }) }));
 
-import { PAUSE_POLL_MS } from '../lib/automation-pause';
+import { PAUSE_FALLBACK_MS } from '../lib/automation-pause';
 import { PauseAutomationButton, PauseBanner } from './PauseAutomationButton';
 
-const running: AutomationPauseState = { paused_at: null, projects: [] };
-const paused: AutomationPauseState = { paused_at: '2026-10-05T13:42:00.000Z', projects: [] };
+const running: AutomationPauseState = { paused_at: null, projects: [], has_automation: true };
+const paused: AutomationPauseState = { paused_at: '2026-10-05T13:42:00.000Z', projects: [], has_automation: true };
 
 beforeEach(() => {
   canUpdate = true;
@@ -61,17 +61,37 @@ describe('PauseAutomationButton', () => {
     expect(screen.queryByRole('button', { name: 'Pausar automático' })).toBeNull();
   });
 
-  it('flips on its own within 5 s when another client pauses', async () => {
+  it('is hidden, and never polls, while no project has automatic work on', async () => {
     vi.useFakeTimers();
+    stateMock.mockResolvedValue({ paused_at: null, projects: [], has_automation: false });
     render(<PauseAutomationButton />);
     await act(async () => {});
-    expect(screen.getByRole('button', { name: 'Pausar automático' })).toBeInTheDocument();
-    stateMock.mockResolvedValue(paused);
+    expect(screen.queryByRole('button', { name: 'Pausar automático' })).toBeNull();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(PAUSE_POLL_MS);
+      await vi.advanceTimersByTimeAsync(PAUSE_FALLBACK_MS * 3);
     });
-    expect(screen.getByRole('button', { name: 'Retomar automático' })).toBeInTheDocument();
-    expect(PAUSE_POLL_MS).toBeLessThan(5000);
+    expect(stateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('flips when an automation frame arrives, with one read for all consumers', async () => {
+    const { rerender } = render(
+      <>
+        <PauseAutomationButton />
+        <PauseBanner />
+      </>,
+    );
+    await screen.findByRole('button', { name: 'Pausar automático' });
+    stateMock.mockClear();
+    stateMock.mockResolvedValue(paused);
+    seq = 1;
+    rerender(
+      <>
+        <PauseAutomationButton />
+        <PauseBanner />
+      </>,
+    );
+    expect(await screen.findByRole('button', { name: 'Retomar automático' })).toBeInTheDocument();
+    expect(stateMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -81,7 +101,7 @@ describe('PauseBanner', () => {
     render(<PauseBanner />);
     expect(await screen.findByText(/^Automático pausado desde \d{2}:\d{2}\.$/)).toBeInTheDocument();
     cleanup();
-    stateMock.mockResolvedValue({ paused_at: null, projects: [{ id: 'p1', paused_at: paused.paused_at }] });
+    stateMock.mockResolvedValue({ paused_at: null, projects: [{ id: 'p1', paused_at: paused.paused_at }], has_automation: true });
     render(<PauseBanner projectId="p2" />);
     await act(async () => {});
     expect(screen.queryByRole('status')).toBeNull();

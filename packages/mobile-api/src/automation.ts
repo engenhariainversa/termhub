@@ -70,6 +70,10 @@ export type AutomationQueueItem = z.infer<typeof automationQueueItem>;
 export const pauseState = z.object({
   paused_at: z.string().nullable(),
   projects: z.array(z.object({ id: z.string(), paused_at: z.string() })),
+  /** The person has a project with automatic work on: otherwise the app hides the switch. */
+  has_automation: z.boolean(),
+  /** The person may pause and resume (`projects:update`). */
+  can_update: z.boolean(),
 });
 export type PauseState = z.infer<typeof pauseState>;
 

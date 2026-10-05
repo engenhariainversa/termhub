@@ -6,6 +6,7 @@ import { normalizeSetup } from '../setup/schema.js';
 import { automationPauseRoutes, projectAutomationEventRoutes } from './automation.js';
 
 async function build() {
+  const setupGet = vi.fn(async () => ({ data: normalizeSetup({}, 2) }));
   const pauseProject = vi.fn(async (_id: string, at: Date) => ({ paused_at: at, fresh: true }));
   const resumeUser = vi.fn(async () => true);
   const userPausedAt = vi.fn(async () => new Date('2026-10-05T09:00:00.000Z') as Date | null);
@@ -16,7 +17,7 @@ async function build() {
       findById: async (id: string) => (id === 'p1' ? { id, owner_id: 'u1' } : id === 'p9' ? { id, owner_id: 'u9' } : undefined),
       list: async () => [{ id: 'p1', owner_id: 'u1' }],
     },
-    projectSetup: { get: async () => ({ data: normalizeSetup({}, 2) }) },
+    projectSetup: { get: setupGet },
     automationPauses: { pauseProject, resumeUser, userPausedAt, pausedProjects },
     automationEvents: { insert: async () => ({ id: 'e1', project_id: 'p1', task_id: null, run_id: null, kind: 'paused', payload: {}, created_at: '' }), listByProject },
   } as unknown as Repositories;
@@ -32,7 +33,7 @@ async function build() {
   await app.register((a) => automationPauseRoutes(a, repos), { prefix: '/automation' });
   await app.register((a) => projectAutomationEventRoutes(a, repos), { prefix: '/projects' });
   await app.ready();
-  return { app, actions, pauseProject, resumeUser, listByProject, userPausedAt, pausedProjects };
+  return { app, actions, pauseProject, resumeUser, listByProject, userPausedAt, pausedProjects, setupGet };
 }
 
 describe('automation pause and event routes', () => {
@@ -46,7 +47,7 @@ describe('automation pause and event routes', () => {
     const { app, pausedProjects } = await build();
     const res = await app.inject({ method: 'GET', url: '/automation/state' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ paused_at: '2026-10-05T09:00:00.000Z', projects: [{ id: 'p1', paused_at: '2026-10-05T08:00:00.000Z' }] });
+    expect(res.json()).toEqual({ paused_at: '2026-10-05T09:00:00.000Z', projects: [{ id: 'p1', paused_at: '2026-10-05T08:00:00.000Z' }], has_automation: false, can_update: false });
     expect(pausedProjects).toHaveBeenCalledWith('u1');
   });
 
@@ -54,7 +55,13 @@ describe('automation pause and event routes', () => {
     const { app, userPausedAt, pausedProjects } = await build();
     userPausedAt.mockResolvedValueOnce(null);
     pausedProjects.mockResolvedValueOnce([]);
-    expect((await app.inject({ method: 'GET', url: '/automation/state' })).json()).toEqual({ paused_at: null, projects: [] });
+    expect((await app.inject({ method: 'GET', url: '/automation/state' })).json()).toEqual({ paused_at: null, projects: [], has_automation: false, can_update: false });
+  });
+
+  it('says whether the person has a project with automatic work on', async () => {
+    const { app, setupGet } = await build();
+    setupGet.mockResolvedValueOnce({ data: normalizeSetup({ automation: { enabled: true } }, 2) });
+    expect((await app.inject({ method: 'GET', url: '/automation/state' })).json().has_automation).toBe(true);
   });
 
   it('pauses a project and answers its timestamp', async () => {

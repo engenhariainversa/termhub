@@ -3,19 +3,29 @@ import { api } from './api';
 import { useMonitor } from './monitor';
 import type { AutomationPauseState } from './types';
 
-/** How often the pause state is re-read while a screen shows it: the global pause is not pushed on the socket. */
-export const PAUSE_POLL_MS = 4_000;
+/**
+ * Slow safety net while the switch is visible: the pushed `automation` frame (and focus) is what keeps it
+ * current. A global pause records its event on every project with automatic work, so the frame arrives
+ * whenever the pause matters.
+ */
+export const PAUSE_FALLBACK_MS = 60_000;
 
 let state: AutomationPauseState | null = null;
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
+let lastFrame = 0;
 
 function publish(next: AutomationPauseState | null) {
   state = next;
   listeners.forEach((l) => l());
 }
 
-/** Reads the state; a failed read keeps the last good one (the next tick retries). */
+/** The switch has something to show: automatic work is on somewhere, or a pause is still active. */
+export function pauseControlsVisible(s: AutomationPauseState | null): boolean {
+  return !!s && (s.has_automation || s.paused_at !== null || s.projects.length > 0);
+}
+
+/** Reads the state; a failed read keeps the last good one. */
 export async function refreshPauseState(): Promise<void> {
   try {
     publish(await api.automation.pauseState());
@@ -24,18 +34,26 @@ export async function refreshPauseState(): Promise<void> {
   }
 }
 
+const onFocus = () => void refreshPauseState();
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   if (listeners.size === 1) {
     void refreshPauseState();
-    timer = setInterval(() => void refreshPauseState(), PAUSE_POLL_MS);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    timer = setInterval(() => {
+      if (pauseControlsVisible(state)) void refreshPauseState();
+    }, PAUSE_FALLBACK_MS);
   }
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0 && timer) {
-      clearInterval(timer);
+    // The last state stays: moving between pages must not blink the button.
+    if (listeners.size === 0) {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+      if (timer) clearInterval(timer);
       timer = null;
-      state = null;
     }
   };
 }
@@ -53,25 +71,17 @@ export function pauseClock(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-/**
- * The automatic work's pause switch, shared by every component showing it: one poll while any is mounted,
- * re-read on a push of an `automation` frame, when the tab regains focus and after an action of this one.
- */
+/** The automatic work's pause switch, shared by every component showing it (one subscription, one refresh per frame). */
 export function useAutomationPause() {
   const current = useSyncExternalStore(subscribe, () => state);
   const { automationSeq } = useMonitor();
   useEffect(() => {
-    if (automationSeq) void refreshPauseState();
+    // Every consumer sees the same frame number: only the first one to run re-reads.
+    if (automationSeq && automationSeq !== lastFrame) {
+      lastFrame = automationSeq;
+      void refreshPauseState();
+    }
   }, [automationSeq]);
-  useEffect(() => {
-    const onFocus = () => void refreshPauseState();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
-    };
-  }, []);
   const pause = useCallback(async (scope: string, interrupt = false) => {
     await api.automation.pause(scope, interrupt);
     await refreshPauseState();

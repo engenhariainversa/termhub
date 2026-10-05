@@ -57,7 +57,7 @@ export function registerAutomationRoutes(router: MockRouter, state: MockState): 
 
   router.route('GET', '/api/m/v1/automation/state', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
-    return { status: 200, body: state.pause };
+    return { status: 200, body: { ...state.pause, has_automation: state.hasAutomation || [...state.automation.values()].some((a) => a.enabled), can_update: true } };
   });
 
   router.route('POST', '/api/m/v1/automation/pause', (ctx) => {
@@ -66,7 +66,7 @@ export function registerAutomationRoutes(router: MockRouter, state: MockState): 
     const at = new Date(ctx.now()).toISOString();
     if (scope === 'all') state.pause.paused_at ??= at;
     else if (!state.pause.projects.some((p) => p.id === scope)) state.pause.projects.push({ id: scope, paused_at: at });
-    return { status: 200, body: { paused_at: scope === 'all' ? state.pause.paused_at : at } };
+    return { status: 200, body: { paused_at: scope === 'all' ? state.pause.paused_at : (state.pause.projects.find((p) => p.id === scope)?.paused_at ?? at) } };
   });
 
   router.route('POST', '/api/m/v1/automation/resume', (ctx) => {

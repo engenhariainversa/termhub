@@ -52,3 +52,20 @@ describe('PauseCard', () => {
     await waitFor(() => expect(usePauseStore.getState().state?.paused_at).toBeNull(), LOAD);
   });
 });
+
+describe('PauseCard visibility', () => {
+  it('is hidden while no project has automatic work on, and never polls on a timer', async () => {
+    const spy = jest.spyOn(stores.api, 'getPauseState').mockResolvedValue({ paused_at: null, projects: [], has_automation: false, can_update: true });
+    await render(<PauseCard />);
+    await waitFor(() => expect(spy).toHaveBeenCalled(), LOAD);
+    await act(async () => {});
+    expect(screen.queryByText('Pausar automático')).toBeNull();
+  });
+
+  it('is hidden without projects:update', async () => {
+    jest.spyOn(stores.api, 'getPauseState').mockResolvedValue({ paused_at: null, projects: [], has_automation: true, can_update: false });
+    await render(<PauseCard />);
+    await act(async () => {});
+    expect(screen.queryByText('Pausar automático')).toBeNull();
+  });
+});

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { pauseClock, pausedSince, useAutomationPause } from '../lib/automation-pause';
+import { pauseClock, pauseControlsVisible, pausedSince, useAutomationPause } from '../lib/automation-pause';
 import { useAuth } from '../lib/auth';
 import { DropdownMenu } from './DropdownMenu';
 
@@ -12,8 +12,8 @@ export function PauseAutomationButton() {
   const { state, pause, resume } = useAutomationPause();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!can('projects', 'update') || state === null) return null;
-  const paused = state.paused_at !== null;
+  if (!can('projects', 'update') || !pauseControlsVisible(state)) return null;
+  const paused = state?.paused_at != null;
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);

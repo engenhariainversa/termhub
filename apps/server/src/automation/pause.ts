@@ -15,7 +15,7 @@ export async function isPaused(repos: Repositories, ownerId: string | null, proj
 }
 
 /** The person's projects where automatic work is on: where a global pause or resume is recorded. */
-async function automatedProjects(repos: Repositories, ownerId: string): Promise<string[]> {
+export async function automatedProjects(repos: Repositories, ownerId: string): Promise<string[]> {
   const projects = await repos.projects.list({ owner: ownerId });
   const out: string[] = [];
   for (const p of projects) if ((await repos.projectSetup.get(p.id)).data.automation.enabled) out.push(p.id);
@@ -62,10 +62,21 @@ export async function resumeAutomation(ctx: ControlContext, i: { scope: PauseSco
 export interface AutomationPauseView {
   paused_at: string | null;
   projects: Array<{ id: string; paused_at: string }>;
+  /** Whether the person has any project with automatic work on: without one the pause switch has nothing to stop and clients hide it. */
+  has_automation: boolean;
+  /** The person may pause and resume (`projects:update`): clients hide the buttons otherwise. */
+  can_update: boolean;
 }
 
 export async function automationPauseState(ctx: ControlContext): Promise<AutomationPauseView> {
   const { repos } = ctx;
-  const [user, projects] = await Promise.all([repos.automationPauses.userPausedAt(ctx.scope.createAs), repos.automationPauses.pausedProjects(ctx.scope.ownerId)]);
-  return { paused_at: user ? user.toISOString() : null, projects: projects.map((p) => ({ id: p.id, paused_at: p.paused_at.toISOString() })) };
+  // The admin's "view as all" has no single owner: the pause switch is about the admin's own projects then.
+  const ownerId = ctx.scope.ownerId ?? ctx.scope.createAs;
+  const [user, projects, automated] = await Promise.all([repos.automationPauses.userPausedAt(ctx.scope.createAs), repos.automationPauses.pausedProjects(ownerId), automatedProjects(repos, ownerId)]);
+  return {
+    paused_at: user ? user.toISOString() : null,
+    projects: projects.map((p) => ({ id: p.id, paused_at: p.paused_at.toISOString() })),
+    has_automation: automated.length > 0,
+    can_update: await ctx.can('projects', 'update'),
+  };
 }

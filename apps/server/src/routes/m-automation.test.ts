@@ -139,6 +139,7 @@ describe('mobile pause routes', () => {
     const pauseUser = vi.fn(async (_id: string, at: Date) => ({ paused_at: at, fresh: false }));
     const resumeUser = vi.fn(async () => false);
     const repos = {
+      projects: { list: vi.fn(async () => []) },
       automationPauses: { pauseUser, resumeUser, userPausedAt: vi.fn(async () => null), pausedProjects: vi.fn(async () => []) },
     } as unknown as Repositories;
     const app = Fastify();
@@ -159,7 +160,7 @@ describe('mobile pause routes', () => {
     const { app, actions, pauseUser, resumeUser } = await buildPause();
     expect(actions['POST /automation/pause']).toBe('update');
     expect(actions['POST /automation/resume']).toBe('update');
-    expect((await app.inject({ method: 'GET', url: '/automation/state' })).json()).toEqual({ paused_at: null, projects: [] });
+    expect((await app.inject({ method: 'GET', url: '/automation/state' })).json()).toEqual({ paused_at: null, projects: [], has_automation: false, can_update: false });
     const paused = await app.inject({ method: 'POST', url: '/automation/pause', payload: { scope: 'all' } });
     expect(paused.statusCode).toBe(200);
     expect(pauseUser).toHaveBeenCalledWith('u1', expect.any(Date));

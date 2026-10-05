@@ -47,7 +47,7 @@ export const stores = {
   settings: createSettingsStore({ api: ctx.api, session: () => ctx.store.getState() }),
   chatGrants: createChatGrantsStore({ api: ctx.api, session: () => ctx.store.getState() }),
   chatMemory: createChatMemoryStore({ api: ctx.api, session: () => ctx.store.getState() }),
-  pause: createPauseStore({ api: ctx.api, session: () => ctx.store.getState() }),
+  pause: createPauseStore({ api: ctx.api, session: () => ctx.store.getState(), events: { subscribe: (fn) => chat.getState().subscribeEvents(fn) } }),
   progress: createProgressStore({ api: ctx.api, session: () => ctx.store.getState() }),
   permissions: createPermissionsStore(permissionDeps),
   permissionDeps,

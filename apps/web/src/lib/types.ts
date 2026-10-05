@@ -1542,4 +1542,7 @@ export type FilePreview = FilePreviewOk | FilePreviewRefused;
 export interface AutomationPauseState {
   paused_at: string | null;
   projects: Array<{ id: string; paused_at: string }>;
+  /** the person has a project with automatic work on: otherwise the switch is hidden */
+  has_automation: boolean;
+  can_update: boolean;
 }
