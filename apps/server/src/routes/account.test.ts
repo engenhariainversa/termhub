@@ -94,7 +94,7 @@ describe('account deletion routes (signed in)', () => {
   it('with an e-mailed code instead of a password', async () => {
     const sent = await t.app.inject({ method: 'POST', url: '/api/account/deletion/code', headers: signedIn });
     expect(sent.statusCode).toBe(200);
-    expect(t.auth.sendLoginCode).toHaveBeenCalledWith('ana@gmail.com', expect.any(String));
+    expect(t.auth.sendLoginCode).toHaveBeenCalledWith('ana@gmail.com', expect.any(String), 'pt-BR');
     const r = await t.app.inject({ method: 'POST', url: '/api/account/deletion', headers: signedIn, payload: { code: '123456' } });
     expect(r.statusCode).toBe(200);
     expect(t.auth.verifyLoginCode).toHaveBeenCalledWith('ana@gmail.com', '123456', expect.any(String));

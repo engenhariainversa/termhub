@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { config } from '../config.js';
 import { HttpError, conflict, notFound } from '../lib/errors.js';
+import { msg, tk } from '../i18n/index.js';
 
 /** Recorded clips are capped at 5 minutes client-side; opus at 48 kbps is ~2 MB, mp4/aac a few more. */
 export const TRANSCRIPTION_MAX_BYTES = 32 * 1024 * 1024;
@@ -171,11 +172,11 @@ async function transcribeWithWhisper(audio: Buffer, mime: string): Promise<Whisp
     });
   } catch (err) {
     const timeout = err instanceof Error && err.name === 'TimeoutError';
-    throw new HttpError(502, timeout ? 'A transcrição demorou demais' : 'Serviço de transcrição indisponível', 'TRANSCRIPTION_UNAVAILABLE');
+    throw new HttpError(502, timeout ? tk('A transcrição demorou demais') : tk('Serviço de transcrição indisponível'), 'TRANSCRIPTION_UNAVAILABLE');
   }
   if (res.status === 422) throw new HttpError(422, 'Não foi possível decodificar o áudio', 'BAD_AUDIO');
   if (res.status === 503) throw new HttpError(503, 'O modelo de transcrição ainda está carregando, tente de novo em instantes', 'TRANSCRIPTION_LOADING');
-  if (!res.ok) throw new HttpError(502, `Serviço de transcrição respondeu ${res.status}`, 'TRANSCRIPTION_UNAVAILABLE');
+  if (!res.ok) throw new HttpError(502, msg('Serviço de transcrição respondeu {{status}}', { status: res.status }), 'TRANSCRIPTION_UNAVAILABLE');
   const body = (await res.json()) as Partial<WhisperResult>;
   if (typeof body.text !== 'string') throw new HttpError(502, 'Resposta inválida do serviço de transcrição', 'TRANSCRIPTION_UNAVAILABLE');
   return { text: body.text.trim(), language: body.language ?? t.language, duration: typeof body.duration === 'number' ? body.duration : 0 };

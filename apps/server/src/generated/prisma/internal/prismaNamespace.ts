@@ -4453,7 +4453,8 @@ export const UserScalarFieldEnum = {
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
   automationPausedAt: 'automationPausedAt',
-  timeZone: 'timeZone'
+  timeZone: 'timeZone',
+  locale: 'locale'
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]

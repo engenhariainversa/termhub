@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { CLOSE } from '@termhub/agent-protocol';
 import type { Repositories } from '../db/repositories/index.js';
-import { HttpError, badRequest, conflict, forbidden } from '../lib/errors.js';
+import { HttpError, badRequest, conflict, forbidden, localizedOf } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
 import { isAdmin } from '../auth/permissions.js';
 import { machineStatus } from '../terminal/machine-exec.js';
@@ -20,6 +20,7 @@ import { newHookToken } from '../monitor/token.js';
 import type { Machine } from '../db/repositories/types.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved, publishTabsRemoved } from '../monitor/tab-events.js';
+import { msg, tk } from '../i18n/index.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const fsQuery = z.object({ path: z.string().max(4096).optional() });
@@ -265,7 +266,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     } catch (err) {
       // Agent failures (offline, outdated, what the machine reported) already carry their own status.
       if (err instanceof HttpError) throw err;
-      throw conflict(err instanceof Error ? err.message : 'Instalação falhou');
+      throw conflict(err instanceof Error ? localizedOf(err) : tk('Instalação falhou'));
     }
     const hook = await repos.machineHooks.upsert(machine.id, hash);
     request.log.info({ machineId: machine.id, claude: report.claude, claudeDirs: report.claude_dirs.length, codex: report.codex, cursor: report.cursor }, 'monitor: hooks installed');
@@ -280,7 +281,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
       await uninstallHooks(machine, await claudeAccountDirs(repos, machine.id));
     } catch (err) {
       if (err instanceof HttpError) throw err;
-      throw conflict(err instanceof Error ? err.message : 'Remoção falhou');
+      throw conflict(err instanceof Error ? localizedOf(err) : tk('Remoção falhou'));
     }
     await repos.machineHooks.delete(machine.id);
     request.log.info({ machineId: machine.id }, 'monitor: hooks removed');
@@ -296,7 +297,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     if (!latest) throw new HttpError(503, 'Versão mais nova do agente ainda desconhecida (npm)', 'AGENT_LATEST_UNKNOWN');
     const info = agents.info(machine.id);
     if (!info) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
-    if (!isOutdated(info.agent_version, latest)) throw conflict(`O agente já está na versão ${info.agent_version}`);
+    if (!isOutdated(info.agent_version, latest)) throw conflict(msg('O agente já está na versão {{version}}', { version: info.agent_version }));
     requireAgentVersion(machine, MIN_SELF_UPDATE_VERSION);
     return runAgentUpdate(machine.id, latest, request.log);
   });

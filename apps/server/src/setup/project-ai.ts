@@ -5,6 +5,7 @@ import { isAgentProvider, type AgentProvider } from '../ai/project-accounts.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { badRequest } from '../lib/errors.js';
 import { aiSchema, type ProjectAi } from './schema.js';
+import { msg } from '../i18n/index.js';
 
 /** One account the project may list: an account of the owner, on a machine linked to the project,
  *  of a provider `start_agent` can launch (spec 2026-09-30 project AI accounts §3). */
@@ -53,9 +54,9 @@ export async function saveProjectAi(repos: Repositories, request: FastifyRequest
   for (const id of ai.accounts) {
     if (allowed.has(id)) continue;
     const found = await s.aiAccount(id).catch(() => null);
-    if (!found) throw badRequest(`Conta de IA inexistente: ${id}`);
-    if (!isAgentProvider(found.account.provider)) throw badRequest(`A conta "${found.account.label}" é ${found.account.provider}: o projeto só usa contas do Claude e do Codex`);
-    throw badRequest(`A conta "${found.account.label}" está na máquina ${found.machine.name}, que não está ligada ao projeto`);
+    if (!found) throw badRequest(msg('Conta de IA inexistente: {{id}}', { id }));
+    if (!isAgentProvider(found.account.provider)) throw badRequest(msg('A conta "{{account}}" é {{provider}}: o projeto só usa contas do Claude e do Codex', { account: found.account.label, provider: found.account.provider }));
+    throw badRequest(msg('A conta "{{account}}" está na máquina {{machine}}, que não está ligada ao projeto', { account: found.account.label, machine: found.machine.name }));
   }
   const current = await repos.projectSetup.get(projectId);
   const saved = await repos.projectSetup.save(projectId, { ...current.data, ai });

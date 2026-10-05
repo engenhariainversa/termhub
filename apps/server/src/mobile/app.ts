@@ -32,6 +32,7 @@ import { mobileAutomationPauseRoutes, mobileAutomationSetupRoutes, mobileCardAut
 import { mobileAccountRoutes } from '../routes/m-account.js';
 import { registerMobileTabWs } from './tab-ws.js';
 import { registerMobileChatWs } from './ws.js';
+import { sendError } from '../lib/errors.js';
 
 export const MOBILE_PREFIX = '/api/m/v1';
 
@@ -181,7 +182,7 @@ export async function registerMobileApi(
       // `routes` stays for tests that want to register extra routes alongside the real ones.
       if (routes) await routes(guardedMobile, m);
       m.get('/health', { config: { mobileAuth: 'none' } }, async () => ({ ok: true }));
-      m.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: 'Rota não encontrada', code: 'NOT_FOUND' }));
+      m.setNotFoundHandler((request, reply) => sendError(request, reply, 404, 'Rota não encontrada', 'NOT_FOUND'));
     },
     { prefix: MOBILE_PREFIX },
   );
