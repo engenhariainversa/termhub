@@ -44,6 +44,7 @@
   "O agente fez uma pergunta que o modo automático não soube responder; responda no card.": "The agent asked a question automatic mode could not answer; answer it on the card.",
   "O card da pergunta do agente fechou sem resposta; responda na aba para continuar.": "The agent's question card closed without an answer; answer it in the tab to continue.",
   "Opção recomendada pelo agente": "Option the agent recommended",
+  "O agente repetiu a mesma pergunta e recebeu a mesma resposta automática várias vezes; confira a aba e responda no card.": "The agent repeated the same question and got the same automatic answer several times; check the tab and answer on the card.",
   "O agente fez perguntas demais respondidas automaticamente na última hora; confira a aba e responda no card.": "The agent asked too many questions answered automatically in the last hour; check the tab and answer on the card.",
   "O agente pediu uma permissão que as regras do projeto não liberam; responda no card.": "The agent asked for a permission the project's rules do not allow; answer it on the card.",
   "O agente parou várias vezes sem terminar e o chat não soube continuar; confira a aba.": "The agent stopped several times without finishing and the chat could not carry on; check the tab.",

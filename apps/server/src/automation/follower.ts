@@ -20,9 +20,9 @@ import { isPaused } from './pause.js';
 import { runPermission } from './permission.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 import { MAX_RESTARTS } from './restart.js';
-import { ANSWER_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT } from './escalation-text.js';
+import { ANSWER_CAP, ANSWER_CYCLE, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
-export { NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
+export { NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
@@ -57,10 +57,10 @@ export const QUESTION_WAIT_MS = 10 * 60_000;
  * tab (spec §9.3). A resume cap waits for an explicit `resume_automation_run`: acting in the tab would
  * only hand it straight back.
  */
-const RESUMES_ON_ANSWER = new Set([QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, PERMISSION_NEEDED]);
+const RESUMES_ON_ANSWER = new Set([QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, PERMISSION_NEEDED]);
 
 /** The reasons about a question card: the chat line answers that card instead of standing alone. */
-const CARD_REASONS = new Set([QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, PERMISSION_NEEDED]);
+const CARD_REASONS = new Set([QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, PERMISSION_NEEDED]);
 
 export interface FollowerDeps {
   repos: Repositories;

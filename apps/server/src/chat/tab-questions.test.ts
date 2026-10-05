@@ -299,7 +299,7 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
       automationRuns: { activeByTab: vi.fn(async () => ((o.run ?? true) ? run : null)), updateActive: vi.fn(async () => true) },
       projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true } } })) },
       automationPauses: { state: vi.fn(async () => ({ user: o.paused ? new Date() : null, project: null })) },
-      automationEvents: { insert: vi.fn(async (e: object) => ({ ...e, id: 'e1', created_at: '' })), countForRun: vi.fn(async () => 0) },
+      automationEvents: { insert: vi.fn(async (e: object) => ({ ...e, id: 'e1', created_at: '' })), countForRun: vi.fn(async () => 0), payloadsForRun: vi.fn(async () => []) },
       tabs: { ...repos.tabs, findById: vi.fn(async () => tab) },
     });
   }

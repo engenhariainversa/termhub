@@ -93,6 +93,12 @@ export class AutomationEventsRepository {
     return this.db.automationEvent.count({ where: { runId, kind, createdAt: { gte: since } } });
   }
 
+  /** The run's events of `kind` since `since` (payloads only: the cycle detector reads its hashes, TER-970). */
+  async payloadsForRun(runId: string, kind: AutomationEventKind, since: Date): Promise<AutomationEventPayload[]> {
+    const rows = await this.db.automationEvent.findMany({ where: { runId, kind, createdAt: { gte: since } }, select: { payload: true }, take: 200 });
+    return rows.map((r) => (r.payload ?? {}) as AutomationEventPayload);
+  }
+
   /**
    * Inserts the event unless a unique index already holds one like it: null then. `ci_fix_requested`
    * (one per card, PR and head SHA: `automation_events_ci_fix_once`, the red-CI loop's claim, F-27) and the

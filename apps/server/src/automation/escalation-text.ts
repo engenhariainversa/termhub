@@ -15,6 +15,8 @@ export const QUESTION_UNANSWERED = 'question_unanswered';
 export const QUESTION_EXPIRED = 'question_expired';
 /** The escalation reason of a run whose questions were answered automatically too often in the last hour. */
 export const ANSWER_CAP = 'answer_cap';
+/** TER-970 (R7): the same question was answered the same way `ANSWER_CYCLE_MAX` times in the last hour: the agent is going round in circles. */
+export const ANSWER_CYCLE = 'answer_cycle';
 /** A permission request the project's rules do not allow (spec §9.2): the person answers it on the card. */
 export const PERMISSION_NEEDED = 'permission_needed';
 /** The reason a run is handed over after `resume_max` resumes that did not move it (also the chat's own
@@ -46,6 +48,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [QUESTION_UNANSWERED]: tk('O agente fez uma pergunta que o modo automático não soube responder; responda no card.'),
   [QUESTION_EXPIRED]: tk('O card da pergunta do agente fechou sem resposta; responda na aba para continuar.'),
   [ANSWER_CAP]: tk('O agente fez perguntas demais respondidas automaticamente na última hora; confira a aba e responda no card.'),
+  [ANSWER_CYCLE]: tk('O agente repetiu a mesma pergunta e recebeu a mesma resposta automática várias vezes; confira a aba e responda no card.'),
   [PERMISSION_NEEDED]: tk('O agente pediu uma permissão que as regras do projeto não liberam; responda no card.'),
   [RESUME_CAP]: tk('O agente parou várias vezes sem terminar e o chat não soube continuar; confira a aba.'),
   [START_FAILED]: tk('O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.'),
@@ -78,5 +81,5 @@ export function escalationReasonText(reason: string, locale: Locale = DEFAULT_LO
  * (it stays active) but frees its `max_parallel` slot, so the dispatcher may start another card. A run
  * waiting on its account's usage limit is not one of them: it goes on by itself once the limit resets.
  */
-export const SLOT_FREE_REASONS: readonly string[] = [NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET];
+export const SLOT_FREE_REASONS: readonly string[] = [NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET];
 
