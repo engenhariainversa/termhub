@@ -139,6 +139,7 @@ export const UserScalarFieldEnum = {
   chatSuggestions: 'chatSuggestions',
   chatAutodecide: 'chatAutodecide',
   chatCodexReplies: 'chatCodexReplies',
+  pushTabFinished: 'pushTabFinished',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
   locale: 'locale'

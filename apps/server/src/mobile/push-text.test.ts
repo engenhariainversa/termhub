@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { confirmationText, deviceRequestText, replyText, tabQuestionText } from './push-text.js';
+import { confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText } from './push-text.js';
 
 describe('push texts', () => {
   it('names the project, tab and machine and never anything else', () => {
@@ -32,5 +32,13 @@ describe('push texts', () => {
     });
     expect(tabQuestionText({ projectName: 'termhub', tabName: 'api', machineName: null }, 'permission', 'en').body).toBe('Tab api asks for permission to continue.');
     expect(tabQuestionText({ projectName: null, tabName: null, machineName: null }, 'choice', 'en').body).toBe('A tab asked a question.');
+  });
+});
+
+describe('tabFinishedText (TER-925)', () => {
+  it('names project, tab and machine when known', () => {
+    expect(tabFinishedText({ projectName: 'termhub', tabName: 'api', machineName: 'jarvis' })).toEqual({ title: 'termhub: aba terminou', body: 'A aba api (jarvis) terminou e espera você.' });
+    expect(tabFinishedText({ projectName: null, tabName: null, machineName: null })).toEqual({ title: 'Aba terminou', body: 'Uma aba terminou e espera você.' });
+    expect(tabFinishedText({ projectName: 'termhub', tabName: 'api', machineName: 'jarvis' }, 'en')).toEqual({ title: 'termhub: tab finished', body: 'Tab api (jarvis) finished and is waiting for you.' });
   });
 });

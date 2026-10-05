@@ -280,6 +280,8 @@ export interface MockState {
   /** The mock user's pending account deletion (TER-720), milliseconds; `null` when none. While set,
    * every authenticated route but the account-deletion ones answers `403 ACCOUNT_PENDING_DELETION`. */
   accountDeletion: { requestedAt: number; scheduledAt: number } | null;
+  /** "Avisar quando uma aba terminar" (TER-925). */
+  pushTabFinished: boolean;
 }
 
 export function createMockState(): MockState {
@@ -319,6 +321,7 @@ export function createMockState(): MockState {
     notes: [],
     lessons: [],
     accountDeletion: null,
+    pushTabFinished: false,
   };
 }
 

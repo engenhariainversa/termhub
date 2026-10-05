@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
+import { monitorBus } from '../monitor/bus.js';
+import type { Tab } from '../db/repositories/types.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Device } from '../db/repositories/devices.js';
 import type { DeviceRequest } from '../db/repositories/device-requests.js';
@@ -12,17 +14,22 @@ const user = { id: 'u1', email: 'ana@example.com' } as unknown as User;
 function setup(opts: { devices?: Device[]; live?: string[]; locale?: 'pt-BR' | 'en' | null; deletionScheduledAt?: string } = {}) {
   const devices = opts.devices ?? [mkDevice('d1', 'ExponentPushToken[a]'), mkDevice('d2', 'ExponentPushToken[b]')];
   const repos = {
-    users: { findById: vi.fn(async (id: string) => ({ ...user, id, locale: opts.locale ?? null, deletion_scheduled_at: opts.deletionScheduledAt ?? null })) },
+    users: { findById: vi.fn(async (id: string) => ({ ...user, id, locale: opts.locale ?? null, deletion_scheduled_at: opts.deletionScheduledAt ?? null })), pushTabFinished: vi.fn(async () => true) },
     devices: { listActiveWithPush: vi.fn(async () => devices), setPushToken: vi.fn(async () => undefined), clearPushTokenIf: vi.fn(async () => true) },
     deviceEvents: { record: vi.fn(async () => undefined) },
-    userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })) },
+    userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })), countUnread: vi.fn(async () => 3), markReadByData: vi.fn(async () => 1) },
     pushTickets: { recordMany: vi.fn(async () => undefined) },
     projects: { findByIdsForOwner: vi.fn(async () => [{ id: 'p1', name: 'termhub' }]) },
-    tabs: { findByIdsForOwner: vi.fn(async () => [{ id: 't1', name: 'api' }]) },
+    tabs: {
+      findByIdsForOwner: vi.fn(async () => [{ id: 't1', name: 'api' }]),
+      findById: vi.fn(async (id: string) => ({ id, project_id: 'p1', machine_id: 'm1', state: 'waiting_input' }) as { id: string; project_id: string; machine_id: string; state: string } | undefined),
+    },
+    tabQuestions: { findOpenForTab: vi.fn(async () => undefined as { kind: string } | undefined) },
     machines: { findByIdsForOwner: vi.fn(async () => [{ id: 'm1', name: 'jarvis' }]) },
     // cp / c9: conversations of project p1; cx: unknown to this user; anything else: the account-wide chat.
     chat: {
       findByIdForUser: vi.fn(async (id: string) => (id === 'cx' ? undefined : { id, user_id: 'u1', project_id: id === 'cp' || id === 'c9' ? 'p1' : null })),
+      findLatestActiveForProject: vi.fn(async () => ({ id: 'cp', user_id: 'u1', project_id: 'p1' }) as { id: string } | undefined),
       findLatestActiveForUser: vi.fn(async () => ({ id: 'cp', user_id: 'u1', project_id: 'p1' }) as { id: string; user_id: string; project_id: string | null } | undefined),
     },
   };
@@ -106,6 +113,7 @@ describe('MobilePushService', () => {
       title: 'termhub precisa de você',
       body: 'O chat do projeto termhub pediu confirmação para agir na aba api (jarvis).',
       data: { kind: 'confirmation', conversation_id: 'cp', project_id: 'p1', action_id: 'a1', notification_id: 'n1' },
+      badge: 3,
     });
     for (const m of messages) {
       expect(m.data).not.toHaveProperty('summary');
@@ -129,6 +137,7 @@ describe('MobilePushService', () => {
       title: 'termhub precisa de você',
       body: 'O chat geral pediu confirmação para agir na aba api (jarvis).',
       data: { kind: 'confirmation', conversation_id: 'c1', project_id: null, action_id: 'a1', notification_id: 'n1' },
+      badge: 3,
     });
     expect(JSON.stringify(t.repos.userNotifications.create.mock.calls)).not.toContain('p-foreign');
     expect(JSON.stringify(t.sent)).not.toContain('p-foreign');
@@ -194,6 +203,7 @@ describe('MobilePushService', () => {
       title: 'Novo aparelho pede acesso',
       body: 'iPhone 15 (São Paulo) pediu acesso à sua conta. Confira o código e aprove ou recuse na web.',
       data: { kind: 'device_request', notification_id: 'n1' },
+      badge: 3,
     });
   });
 
@@ -307,15 +317,16 @@ describe('MobilePushService', () => {
     expect(sent).toHaveLength(1);
   });
 
-  it('answered and closed tab questions push nothing', async () => {
+  it('answered and closed tab questions write no row and show nothing: their rows go read, the badge follows (TER-923)', async () => {
     const { service, sent, repos } = setup();
     stop = service.start();
     const question = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'permission' as const, payload: { tool_name: 'Bash' }, status: 'answered' as const, answer: { allow: true }, error_code: null, created_at: '', answered_at: '', closed_at: null };
     chatBus.publish({ type: 'tab_question_answered', user_id: 'u1', conversation_id: 'cp', question });
     chatBus.publish({ type: 'tab_question_closed', user_id: 'u1', conversation_id: 'cp', question });
     await flush();
-    expect(sent).toEqual([]);
     expect(repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(repos.userNotifications.markReadByData).toHaveBeenCalledWith('u1', 'tab_question_id', 'q1', expect.any(Date));
+    expect(sent.flat().every((m) => m.title === undefined && m.badge === 3 && m.data.kind === 'badge')).toBe(true);
   });
 });
 
@@ -612,5 +623,168 @@ describe('MobilePushService.testPush (TER-913)', () => {
     t.sender.send.mockRejectedValueOnce(new Error('down'));
     expect((await t.service.testPush(user, dev, 'confirmation', 0)).ticket).toEqual({ status: 'error', error: 'send_failed' });
     expect(t.repos.deviceEvents.record).toHaveBeenCalledWith(expect.objectContaining({ meta: { kind: 'confirmation', outcome: 'send_failed' } }));
+  });
+});
+
+describe('badge and handled cards (TER-923)', () => {
+  it('a decided or ended action marks its rows read and sends a badge-only update to every phone with a token', async () => {
+    const t = setup({ live: ['d1'] });
+    t.repos.userNotifications.countUnread.mockResolvedValue(1);
+    stop = t.service.start();
+    chatBus.publish({ type: 'decision', user_id: 'u1', conversation_id: 'cp', action_id: 'a1', status: 'approved' });
+    await flush();
+    expect(t.repos.userNotifications.markReadByData).toHaveBeenCalledWith('u1', 'action_id', 'a1', expect.any(Date));
+    expect(t.sent).toEqual([
+      [
+        { to: 'ExponentPushToken[a]', data: { kind: 'badge' }, badge: 1 },
+        { to: 'ExponentPushToken[b]', data: { kind: 'badge' }, badge: 1 },
+      ],
+    ]);
+    chatBus.publish({ type: 'action_status', user_id: 'u1', conversation_id: 'cp', action_id: 'a2', status: 'expired', error_code: null });
+    await flush();
+    expect(t.repos.userNotifications.markReadByData).toHaveBeenLastCalledWith('u1', 'action_id', 'a2', expect.any(Date));
+  });
+
+  it('nothing to mark read: no push', async () => {
+    const t = setup();
+    t.repos.userNotifications.markReadByData.mockResolvedValue(0);
+    stop = t.service.start();
+    chatBus.publish({ type: 'decision', user_id: 'u1', conversation_id: 'cp', action_id: 'a1', status: 'denied' });
+    await flush();
+    expect(t.sent).toEqual([]);
+  });
+
+  it('ExpoPushSender sends a badge-only message without title, sound or priority', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: [{ status: 'ok', id: 'x' }] }), { status: 200 }));
+    await new ExpoPushSender(null, fetchImpl as never).send([{ to: 'ExponentPushToken[a]', data: { kind: 'badge' }, badge: 0 }]);
+    const body = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body).toEqual([{ to: 'ExponentPushToken[a]', data: { kind: 'badge' }, badge: 0 }]);
+  });
+});
+
+describe('MobilePushService — aba terminou (TER-925)', () => {
+  const state = (id: string, s: Tab['state'], owner: string | null = 'u1') =>
+    monitorBus.publish({ tab: { id, state: s } as Tab, project_id: 'p1', machine_id: 'm1', owner_id: owner });
+
+  afterEach(() => vi.useRealTimers());
+
+  async function finish(t: ReturnType<typeof setup>, id = 't1', end: Tab['state'] = 'waiting_input') {
+    state(id, 'working');
+    state(id, end);
+    await vi.advanceTimersByTimeAsync(5_000);
+  }
+
+  it('a tab that worked and stopped pushes once, naming tab and machine, with tab_id to open it', async () => {
+    vi.useFakeTimers();
+    const t = setup({ live: ['d2'] });
+    stop = t.service.start();
+    await finish(t);
+    expect(t.repos.users.pushTabFinished).toHaveBeenCalledWith('u1');
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith({
+      user_id: 'u1',
+      kind: 'reply',
+      title: 'termhub: aba terminou',
+      body: 'A aba api (jarvis) terminou e espera você.',
+      data: { kind: 'tab_finished', tab_id: 't1', project_id: 'p1', conversation_id: 'cp' },
+    });
+    expect(t.sent).toEqual([[expect.objectContaining({ to: 'ExponentPushToken[a]', collapseId: 'tab:t1', data: expect.objectContaining({ tab_id: 't1', notification_id: 'n1' }) })]]);
+  });
+
+  it('is opt-in: nothing for an owner who did not turn it on', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    t.repos.users.pushTabFinished.mockResolvedValue(false);
+    stop = t.service.start();
+    await finish(t);
+    expect(t.repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(t.sent).toEqual([]);
+  });
+
+  it('at most once per tab every five minutes; another tab is separate; an agent exit (idle) counts', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    stop = t.service.start();
+    await finish(t, 't1');
+    await finish(t, 't1');
+    await finish(t, 't2', 'idle');
+    expect(t.sent).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    await finish(t, 't1');
+    expect(t.sent).toHaveLength(3);
+  });
+
+  it('never for a tab not seen working, one working again within the pause, or one ending in an error', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    stop = t.service.start();
+    state('t1', 'waiting_input');
+    await vi.advanceTimersByTimeAsync(5_000);
+    state('t1', 'working');
+    state('t1', 'waiting_input');
+    state('t1', 'working');
+    await vi.advanceTimersByTimeAsync(5_000);
+    state('t3', 'working');
+    state('t3', 'error');
+    state('t3', 'waiting_input');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(t.sent).toEqual([]);
+  });
+
+  it('a turn that ends with a plain report (finished, TER-972) is pushed too', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    t.repos.tabs.findById.mockResolvedValue({ id: 't1', project_id: 'p1', machine_id: 'm1', state: 'finished' });
+    stop = t.service.start();
+    await finish(t, 't1', 'finished');
+    expect(t.sent).toHaveLength(1);
+  });
+
+  it('a permission prompt or background work in the middle is still the same turn', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    stop = t.service.start();
+    state('t1', 'working');
+    state('t1', 'waiting_permission');
+    state('t1', 'waiting_background');
+    state('t1', 'waiting_input');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(t.sent).toHaveLength(1);
+  });
+
+  it('skips a tab with an open question or permission card (already "precisa de você"), not one with a suggestion', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    stop = t.service.start();
+    t.repos.tabQuestions.findOpenForTab.mockResolvedValueOnce({ kind: 'choice' });
+    await finish(t, 't1');
+    expect(t.sent).toEqual([]);
+    t.repos.tabQuestions.findOpenForTab.mockResolvedValueOnce({ kind: 'suggestion' });
+    await finish(t, 't2');
+    expect(t.sent).toHaveLength(1);
+  });
+
+  it('re-reads the tab: one working again by now, or gone, is not pushed; no owner, nothing', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    stop = t.service.start();
+    t.repos.tabs.findById.mockResolvedValueOnce({ id: 't1', project_id: 'p1', machine_id: 'm1', state: 'working' });
+    await finish(t, 't1');
+    t.repos.tabs.findById.mockResolvedValueOnce(undefined);
+    await finish(t, 't2');
+    state('t4', 'working', null);
+    state('t4', 'waiting_input', null);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(t.sent).toEqual([]);
+  });
+
+  it('stop() cancels a pending one', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    const stopIt = t.service.start();
+    state('t1', 'working');
+    state('t1', 'waiting_input');
+    stopIt();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(t.sent).toEqual([]);
   });
 });
