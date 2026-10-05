@@ -431,6 +431,9 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
         get: (t, k) =>
           k === 'state'
             ? async (...args: Parameters<typeof pauses.state>) => {
+                // only this test's project: a dispatcher also reads the pause of every other project with automation
+                // on in the shared database (left by other test files), whose answers say nothing about this pause
+                if (args[1] !== projectId) return t.state(...args);
                 const start = ++seq;
                 const r = await t.state(...args);
                 steps.push({ kind: 'read', instance, start, end: ++seq, paused: r.user !== null || r.project !== null });
@@ -442,6 +445,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
         get: (t, k) =>
           k === 'claim'
             ? async (...args: Parameters<typeof runs.claim>) => {
+                if (args[0].project_id !== projectId) return t.claim(...args);
                 steps.push({ kind: 'claim', instance, at: ++seq });
                 const slot = (await gate?.before()) ?? false;
                 const run = await t.claim(...args);
