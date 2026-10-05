@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { readableColumn, SHEET_MAX_WIDTH } from './layout';
 import { AppText } from './text';
 
@@ -9,6 +10,7 @@ type Props = { open: boolean; onClose(): void; title: string; children: ReactNod
 const PANEL = readableColumn(SHEET_MAX_WIDTH);
 
 export function Sheet({ open, onClose, title, children }: Props) {
+  const { t } = useTranslation();
   return (
     <Modal transparent animationType="slide" visible={open} onRequestClose={onClose}>
       {/* The sheet rises with the keyboard (the PIN prompt opens the number pad); the avoiding view is
@@ -18,7 +20,7 @@ export function Sheet({ open, onClose, title, children }: Props) {
           className="absolute inset-0 bg-black/50"
           onPress={onClose}
           accessibilityRole="button"
-          accessibilityLabel="Fechar"
+          accessibilityLabel={t('Fechar')}
         />
         <View testID="sheet-panel" style={PANEL} className="rounded-t-3xl bg-app-surface p-6">
           <AppText variant="title">{title}</AppText>

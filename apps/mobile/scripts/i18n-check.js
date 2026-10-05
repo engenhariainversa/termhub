@@ -22,7 +22,7 @@ const ROOT = path.resolve(__dirname, '..');
 const SOURCE_DIRS = ['app', 'src'];
 
 /** Folders (relative to apps/mobile, `/`-separated) the untranslated-copy guard covers. */
-const GUARDED = ['src/i18n', 'src/features/shared', 'src/features/settings/view/settings-screen.tsx'];
+const GUARDED = ['app', 'src'];
 
 /** Attributes whose string value is shown to (or read out for) a person. */
 const TEXT_ATTRIBUTES = new Set([

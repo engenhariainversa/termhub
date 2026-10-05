@@ -1,1 +1,20 @@
-{}
+{
+  "Excluir minha conta": "Delete my account",
+  "Sua conta é desativada agora e excluída de vez em {{days}} dias.": "Your account is deactivated now and permanently deleted in {{days}} days.",
+  "O que é apagado: máquinas, projetos (com cards, notas e tickets), abas, chat e anexos, memória, integrações, contas de IA, tokens de API, aparelhos (este também, no fim) e notificações.": "What is deleted: machines, projects (with cards, notes and tickets), tabs, chat and attachments, memory, integrations, AI accounts, API tokens, devices (this one too, at the end) and notifications.",
+  "O que fica, porque a lei pede: registros de acesso por 6 meses e dados fiscais, quando houver.": "What is kept, because the law requires it: access logs for 6 months and tax records, if any.",
+  "Durante esses {{days}} dias, você pode cancelar a exclusão por este app ou entrando no termhub. Um e-mail confirma o pedido com a data final.": "During these {{days}} days, you can cancel the deletion from this app or by signing in to termhub. An email confirms the request with the final date.",
+  "Confirmar exclusão": "Confirm deletion",
+  "Voltar": "Back",
+  "Exclusão agendada": "Deletion scheduled",
+  "Sua conta será excluída em {{date}}.": "Your account will be deleted on {{date}}.",
+  "Sua conta está marcada para exclusão.": "Your account is scheduled for deletion.",
+  "Até lá ela fica desativada: o chat, os avisos e o resto do termhub param. Se mudar de ideia, cancele a exclusão e tudo volta como estava.": "Until then it stays deactivated: the chat, notifications and the rest of termhub stop. If you change your mind, cancel the deletion and everything goes back to how it was.",
+  "Cancelar exclusão": "Cancel deletion",
+  "Sair e remover este aparelho": "Sign out and remove this device",
+  "Remover este aparelho": "Remove this device",
+  "Este aparelho perde o acesso agora. Para cancelar a exclusão depois, entre no termhub pelo navegador.": "This device loses access now. To cancel the deletion later, sign in to termhub in a browser.",
+  "Remover": "Remove",
+  "Cancelar": "Cancel",
+  "Não foi possível falar com o servidor. Tente de novo.": "Could not reach the server. Try again."
+}

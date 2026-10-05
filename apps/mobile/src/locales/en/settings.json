@@ -25,5 +25,20 @@
   "Remover este aparelho": "Remove this device",
   "Este aparelho perde o acesso agora. Isso não pode ser desfeito.": "This device loses access now. This cannot be undone.",
   "Remover": "Remove",
-  "Cancelar": "Cancel"
+  "Cancelar": "Cancel",
+  "Não foi possível falar com o servidor. Tente de novo.": "Could not reach the server. Try again.",
+  "Servidor: {{host}}": "Server: {{host}}",
+  "A chave criada não é P-256.": "The created key is not P-256.",
+  "A chave não existe depois de criada.": "The key does not exist after being created.",
+  "A chave pública não confere com a criada.": "The public key does not match the created one.",
+  "A impressão digital da chave não tem 43 caracteres.": "The key's thumbprint is not 43 characters long.",
+  "A assinatura não tem 64 bytes.": "The signature is not 64 bytes long.",
+  "Sem chave pública para verificar a assinatura.": "No public key to verify the signature.",
+  "A assinatura não passou na verificação.": "The signature failed verification.",
+  "A chave ainda existe depois de destruída.": "The key still exists after being destroyed.",
+  "Testando…": "Testing…",
+  "A chave do aparelho está funcionando.": "This device's key is working.",
+  "Algo falhou no teste da chave.": "Something failed in the key test.",
+  "{{step}}: ok": "{{step}}: ok",
+  "{{step}}: falhou": "{{step}}: failed"
 }

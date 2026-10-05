@@ -64,6 +64,7 @@ import {
   type TTokenBody,
 } from './contract';
 import { buildProof } from './dpop';
+import { t } from '@/i18n';
 import { ApiError } from './errors';
 import { createChatSocket } from './socket';
 import { createTabSocket } from './tab-socket';
@@ -194,10 +195,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     try {
       json = text ? JSON.parse(text) : {};
     } catch {
-      throw new ApiError(502, 'BAD_RESPONSE', 'Resposta inesperada do servidor');
+      throw new ApiError(502, 'BAD_RESPONSE', t('Resposta inesperada do servidor'));
     }
     const parsed = schema.safeParse(json);
-    if (!parsed.success) throw new ApiError(502, 'BAD_RESPONSE', 'Resposta inesperada do servidor');
+    if (!parsed.success) throw new ApiError(502, 'BAD_RESPONSE', t('Resposta inesperada do servidor'));
     return parsed.data;
   }
 

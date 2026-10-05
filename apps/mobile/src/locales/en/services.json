@@ -1,1 +1,6 @@
-{}
+{
+  "Erro do servidor ({{status}})": "Server error ({{status}})",
+  "Resposta inesperada do servidor": "Unexpected response from the server",
+  "Notificações": "Notifications",
+  "Desbloquear o termhub": "Unlock termhub"
+}

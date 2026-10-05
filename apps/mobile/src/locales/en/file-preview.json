@@ -1,1 +1,21 @@
-{}
+{
+  "Arquivo não encontrado nesta máquina.": "File not found on this machine.",
+  "Este arquivo está fora das pastas que o agente pode ler (o projeto, a sua pasta pessoal e /tmp).": "This file is outside the folders the agent can read (the project, your home folder and /tmp).",
+  "Arquivos em pastas ocultas (como ~/.ssh ou .git) não são abertos.": "Files in hidden folders (like ~/.ssh or .git) are not opened.",
+  "Só arquivos .md, .markdown e .txt podem ser abertos aqui.": "Only .md, .markdown and .txt files can be opened here.",
+  "Este caminho não é um arquivo.": "This path is not a file.",
+  "O arquivo passa de 512 KB, o limite da prévia.": "The file is over 512 KB, the preview limit.",
+  "O arquivo não é texto (UTF-8).": "The file is not text (UTF-8).",
+  "O agente não tem permissão para ler este arquivo.": "The agent is not allowed to read this file.",
+  "Não foi possível abrir este arquivo.": "Could not open this file.",
+  "Não foi possível abrir o arquivo.": "Could not open the file.",
+  "imagem: {{alt}}": "image: {{alt}}",
+  "Não foi possível anexar o arquivo.": "Could not attach the file.",
+  "Voltar": "Back",
+  "Atualizar": "Refresh",
+  "Compartilhar": "Share",
+  "Abrir no GitHub": "Open on GitHub",
+  "Mandar para o chat": "Send to chat",
+  "Nenhum arquivo indicado.": "No file given.",
+  "Abrindo arquivo…": "Opening file…"
+}

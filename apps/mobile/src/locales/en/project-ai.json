@@ -1,1 +1,23 @@
-{}
+{
+  "Contas e modelo do projeto": "Project accounts and model",
+  "Sem contas escolhidas, cada início de agente pede a conta, como hoje.": "With no accounts chosen, each agent start asks for the account, as it does today.",
+  "Use só letras, números, ponto, hífen, dois-pontos ou colchetes.": "Use only letters, numbers, dots, hyphens, colons or brackets.",
+  "Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.": "An older CLI on a machine may not recognize this id. An alias (opus, sonnet, haiku) works in any version.",
+  "Contas e modelo salvos.": "Accounts and model saved.",
+  "Não foi possível falar com o servidor. Tente de novo.": "Could not reach the server. Try again.",
+  "{{label}} (login padrão)": "{{label}} (default login)",
+  "Modelo do {{name}}": "{{name}} model",
+  "Padrão do CLI": "CLI default",
+  "Outro id…": "Other id…",
+  "Id do modelo do {{name}}": "{{name}} model id",
+  "id do modelo": "model id",
+  "Voltar": "Back",
+  "Tentar de novo": "Try again",
+  "Contas do projeto": "Project accounts",
+  "Subir": "Move up",
+  "Descer": "Move down",
+  "Remover": "Remove",
+  "Outras contas das máquinas do projeto": "Other accounts on the project's machines",
+  "Incluir {{name}}": "Include {{name}}",
+  "Salvar": "Save"
+}
