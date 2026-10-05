@@ -39,9 +39,18 @@ jobs:
       - name: Embed (text embeddings for the chat memory; recreated only when its image or config changes)
         run: docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.proxy.yml --profile prod up -d --build --no-deps embed
       - name: Deploy blue-green (build, healthcheck, switch nginx, retire old)
+        id: bluegreen
         run: bash deploy/blue-green.sh
       - name: Conferir migrations aplicadas
         run: docker exec "termhub-app-$(cat "$STATE_FILE")" npx --prefix apps/server prisma migrate status --config apps/server/prisma.config.ts
+      # Smoke test through the proxy; when the app does not answer, roll back one step if safe and fail the job
+      # (deploy/README.md). Runs only after a successful switch. DEPLOY_AUTO_ROLLBACK=0 (repository variable) turns
+      # the rollback off and keeps the smoke test.
+      - name: Smoke test (rollback automático se falhar)
+        if: ${{ !cancelled() && steps.bluegreen.outcome == 'success' }}
+        env:
+          AUTO_ROLLBACK: ${{ vars.DEPLOY_AUTO_ROLLBACK || '1' }}
+        run: bash deploy/post-deploy.sh
       - name: Limpar imagens antigas
         if: always()
         run: docker image prune -f
