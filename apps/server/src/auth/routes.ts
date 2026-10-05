@@ -52,6 +52,18 @@ function viewAsOf(scope: Scope | undefined) {
 const viewAsSchema = z.object({ user_id: z.string().min(1).max(64).nullable() });
 const nicknameBodySchema = z.object({ nickname: z.string() });
 /** null = automatic (the browser's language; pt-BR for e-mails and push). */
+/** An IANA zone name the runtime knows (`America/Sao_Paulo`); the daily summary's clock. */
+const timeZoneBodySchema = z.object({
+  time_zone: z.string().min(1).max(64).refine((zone) => {
+    try {
+      new Intl.DateTimeFormat('en-CA', { timeZone: zone });
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'invalid time zone'),
+});
+
 const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en']).nullable() });
 
 export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: { onNicknameClaimed?: (user: User) => void } = {}) {
@@ -110,6 +122,14 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     const { locale } = localeBodySchema.parse(request.body);
     await ctx.repos.users.setLocale(request.user.id, locale);
     request.log.info({ userId: request.user.id, locale }, 'locale: set');
+    return reply.code(204).send();
+  });
+
+  /** The client's IANA zone, saved with the automation's summary hour (spec D26). */
+  app.patch('/me/time-zone', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    const { time_zone } = timeZoneBodySchema.parse(request.body);
+    await ctx.repos.users.setTimeZone(request.user.id, time_zone);
     return reply.code(204).send();
   });
 

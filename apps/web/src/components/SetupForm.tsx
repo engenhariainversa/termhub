@@ -66,6 +66,11 @@ export function SetupForm({ project }: Props) {
     try {
       const r = await api.setup.save(project.id, data);
       setData(r.setup.data);
+      // the daily summary runs on the person's own clock (spec D26): the zone travels with the hour
+      if (r.setup.data.automation?.summary_hour != null) {
+        const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (zone) void api.auth.setTimeZone(zone).catch(() => {});
+      }
       setSaved(JSON.stringify(r.setup.data));
       setMsg({ ok: true, text: t('Setup salvo.') });
     } catch (e) {

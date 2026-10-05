@@ -388,3 +388,9 @@ export type PushTicket = Prisma.PushTicketModel
  * Everything ever pushed to a person, for the app's Notificações tab (spec §9). Kept 30 days.
  */
 export type UserNotification = Prisma.UserNotificationModel
+/**
+ * Model AutomationSummary
+ * The daily summary of the automatic work, sent once per user and day (agentic board, spec D26): the
+ * timer's claim, inserted with ON CONFLICT DO NOTHING so two colours send it once. `day` is the user's local date.
+ */
+export type AutomationSummary = Prisma.AutomationSummaryModel

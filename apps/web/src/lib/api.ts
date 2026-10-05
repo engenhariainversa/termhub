@@ -121,6 +121,8 @@ export const api = {
     setNickname: (nickname: string) => request<{ user: User }>('PATCH', '/auth/me/nickname', { nickname }),
     /** The language for this account (e-mails, push and the web on every browser); null = automatic. 204. */
     setLocale: (locale: 'pt-BR' | 'en' | null) => request<null>('PATCH', '/auth/me/locale', { locale }),
+    /** The browser's IANA zone, for the automation's daily summary hour. 204. */
+    setTimeZone: (time_zone: string) => request<null>('PATCH', '/auth/me/time-zone', { time_zone }),
     /** The city address and its short link. May create the partner link on the way (the server rate-limits that). */
     cityLink: () => request<CityLink>('GET', '/auth/me/city-link'),
     /** 400 SHORT_LINK_INVALID, 400 SHORT_LINK_MISMATCH (the message says where the link really goes), 502 SHORT_LINK_UNREACHABLE */

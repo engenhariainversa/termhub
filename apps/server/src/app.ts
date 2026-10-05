@@ -73,6 +73,7 @@ import { actionForMethod, type Resource } from './auth/permissions.js';
 import { startTicketSyncScheduler } from './setup/tickets-sync.js';
 import { startCiSyncScheduler } from './ci/scheduler.js';
 import { MERGE_TOOL } from './automation/merge.js';
+import { startSummaryTimer } from './automation/summary.js';
 import { startAgentUpdateScheduler } from './agent/latest-version.js';
 import { registerTerminalWs } from './terminal/ws.js';
 import { registerAgentWs } from './agent/ws.js';
@@ -382,6 +383,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // merge card in the chat merges that PR once (F-19).
   const stopCiSync = startCiSyncScheduler(repos, fastify.log, undefined, { merge: (projectId) => automation.merge(projectId) });
   chat.onApproved(MERGE_TOOL, (action) => automation.mergeApproved(action.id));
+  // The daily summary of the automatic work (spec D26): both colours tick, the claim row sends it once; a draining colour sends nothing.
+  const stopSummaries = startSummaryTimer({ repos, lifecycle, log: fastify.log, push: mobile ? (...a) => mobile.push.automationSummary(...a) : undefined });
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     clearInterval(liveBeat);
@@ -391,6 +394,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     clearTimeout(onlineSweep);
     stopSync();
     stopCiSync();
+    stopSummaries();
     stopAgentUpdates();
     stopTabQuestionExpiry();
     stopStaleWorking();

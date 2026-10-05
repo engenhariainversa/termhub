@@ -94,6 +94,7 @@ model User {
   timeZone            String?   @map("time_zone")
   /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
   locale              String?
+  automationSummaries AutomationSummary[]
 
   @@index([roleId])
   @@index([deletionScheduledAt])
@@ -1505,4 +1506,16 @@ model UserNotification {
   @@index([userId, createdAt])
   @@index([createdAt])
   @@map("user_notifications")
+}
+
+/// The daily summary of the automatic work, sent once per user and day (agentic board, spec D26): the
+/// timer's claim, inserted with ON CONFLICT DO NOTHING so two colours send it once. `day` is the user's local date.
+model AutomationSummary {
+  userId String   @map("user_id")
+  day    DateTime @db.Date
+  sentAt DateTime @default(now()) @map("sent_at") @db.Timestamptz
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day])
+  @@map("automation_summaries")
 }

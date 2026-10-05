@@ -76,3 +76,12 @@ export function tabQuestionText(ctx: PushContext, kind: 'choice' | 'permission',
 export function automationEscalationText(ctx: PushContext, cardRef: string, reason: string, locale: Locale = DEFAULT_LOCALE): PushText {
   return { title: needsYou(locale, ctx), body: t(locale, '{{ref}} parou: {{reason}}', { ref: cardRef, reason }) };
 }
+
+/** The daily summary of the automatic work (spec D26): what was done and how many things wait; counts only. */
+export function automationSummaryText(s: { date: string; cards: number; merges: number; deploys: number; waiting: number }, locale: Locale = DEFAULT_LOCALE): PushText {
+  const done = t(locale, 'Feitos: {{cards}} cards, {{merges}} merges, {{deploys}} deploys', { cards: s.cards, merges: s.merges, deploys: s.deploys });
+  return {
+    title: t(locale, 'Resumo do automático — {{date}}', { date: s.date }),
+    body: s.waiting === 0 ? done : `${done}\n${t(locale, 'Esperando você: {{total}}', { total: s.waiting })}`,
+  };
+}
