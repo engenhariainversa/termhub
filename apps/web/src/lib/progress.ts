@@ -29,11 +29,16 @@ const STATE_LABEL: Record<TabState, string> = {
   idle: 'parado',
   error: 'erro',
   waiting_background: 'aguardando segundo plano',
+  finished: 'concluído',
 };
 
-/** `background`: the agent waits on its own background work (sent as `working`, TER-644). */
-export function stateLabel(state: TabState | null, background = false): string {
+/**
+ * `background`: the agent waits on its own background work (sent as `working`, TER-644).
+ * `finished`: the agent ended its turn with a report and asks nothing (sent as `idle`, TER-972).
+ */
+export function stateLabel(state: TabState | null, background = false, finished = false): string {
   if (background && state === 'working') return STATE_LABEL.waiting_background;
+  if (finished && state === 'idle') return STATE_LABEL.finished;
   return state ? STATE_LABEL[state] : 'sem sinal';
 }
 
@@ -41,12 +46,14 @@ export function stateLabel(state: TabState | null, background = false): string {
 export function withLiveTab(agent: AgentOnCard, live: Tab | undefined): AgentOnCard {
   if (!live) return agent;
   const background = live.state === 'waiting_background';
+  const finished = live.state === 'finished';
   return {
     ...agent,
-    // the shape the server sends (TER-644): still at work, flagged
-    state: background ? 'working' : live.state,
+    // the shape the server sends (TER-644, TER-972): still at work or stopped, flagged
+    state: background ? 'working' : finished ? 'idle' : live.state,
     state_at: live.state_at,
     background,
+    finished,
     needs_you: live.state === 'waiting_input' || live.state === 'waiting_permission',
     activity: live.activity,
     activity_verb: live.activity_verb,

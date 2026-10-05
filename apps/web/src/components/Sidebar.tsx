@@ -39,11 +39,11 @@ function agentsByProject(tabs: Tab[]): Map<string, Tab[]> {
 
 /**
  * Ending a terminal kills its tmux session, so it asks first unless nothing would be lost: the agent in it
- * finished (or failed) its turn. A simulator tab only goes away; the simulator keeps running.
+ * finished (or failed) its turn, `finished` included (TER-972). A simulator tab only goes away; the simulator keeps running.
  */
 export function endNeedsConfirm(tab: Tab): boolean {
   if (tab.kind === 'simulator') return false;
-  return tab.state !== 'idle' && tab.state !== 'error';
+  return tab.state !== 'idle' && tab.state !== 'finished' && tab.state !== 'error';
 }
 
 /** what is being dragged in the sidebar: a project row, or a group header */

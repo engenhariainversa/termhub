@@ -4,11 +4,13 @@ import { AppText } from '@/ui';
 import { availabilityText } from '../model/availability-text';
 import { stateLine } from '../model/state-line';
 
-/** The dot's colour: the accent while it works, the danger tone when it needs the person or failed. */
+/** The dot's colour: the accent while it works, the danger tone when it needs the person or failed, the
+ * ok tone once it finished with a report (TER-972). */
 function dotClass(tab: TTabSummary): string {
   if (tab.availability !== 'ready') return 'bg-app-muted';
   if (tab.needs_you || tab.state === 'error') return 'bg-app-danger';
   if (tab.state === 'working') return 'bg-app-accent';
+  if (tab.state === 'idle' && tab.finished) return 'bg-app-ok';
   return 'bg-app-border';
 }
 
