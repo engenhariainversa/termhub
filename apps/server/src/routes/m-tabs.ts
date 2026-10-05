@@ -26,11 +26,12 @@ import type { TabChatHub } from '../tab-chat/hub.js';
 import { availabilityOf, readPage as defaultReadPage, type AgentView, type Page, type TabChatAvailability } from '../tab-chat/reader.js';
 import { tabSummaryOf } from '../tab-chat/view.js';
 import { saveFileOnMachine } from '../terminal/paste-file.js';
+import { tk } from '../i18n/index.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
 /** The message a tab waiting on a permission answers with: the card is right above the composer. */
-export const WAITING_PERMISSION_MESSAGE = 'Responda a pergunta acima antes de enviar uma mensagem';
+export const WAITING_PERMISSION_MESSAGE = tk('Responda a pergunta acima antes de enviar uma mensagem');
 /** Rows of the pane `cycle_mode` reads the footer from. */
 const MODE_SCREEN_LINES = 30;
 
@@ -54,17 +55,17 @@ function asHttp(err: unknown): unknown {
     case 'WAITING_PERMISSION':
       return new HttpError(409, WAITING_PERMISSION_MESSAGE, err.code);
     case 'MACHINE_OFFLINE':
-      return new HttpError(503, err.message, err.code);
+      return new HttpError(503, err.localized, err.code);
     case 'FORBIDDEN':
-      return new HttpError(403, err.message, err.code);
+      return new HttpError(403, err.localized, err.code);
     case 'NOT_A_TERMINAL':
     case 'TEXT_TOO_LONG':
     case 'PROMPT_TOO_LONG':
     case 'PROMPT_CONTROL_CHARS':
     case 'PROMPT_LOOKS_LIKE_FLAG':
-      return new HttpError(400, err.message, err.code);
+      return new HttpError(400, err.localized, err.code);
     default:
-      return new HttpError(409, err.message, err.code);
+      return new HttpError(409, err.localized, err.code);
   }
 }
 
@@ -151,7 +152,7 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     const { id } = idParam.parse(request.params);
     const { text } = tabMessageBody.parse(request.body);
     const { tab } = await scoped(repos, request).tab(id);
-    await control(() => sendInput(ctxOf(request), { tab_id: tab.id, text }));
+    await control(() => sendInput(ctxOf(request), { tab_id: tab.id, text }, { level: 'person_typed', userId: request.scope.user.id, surface: 'app' }));
     request.log.info({ tabId: tab.id, textLen: text.length }, 'tab chat: message sent');
     deps.hub.poke(tab.id);
     return { sent: true as const };
@@ -169,10 +170,10 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
         await control(() => sendKey(ctx, { tab_id: tab.id, key: 'Escape' }));
         break;
       case 'clear':
-        await control(() => sendInput(ctx, { tab_id: tab.id, text: '/clear' }));
+        await control(() => sendInput(ctx, { tab_id: tab.id, text: '/clear' }, null));
         break;
       case 'compact':
-        await control(() => sendInput(ctx, { tab_id: tab.id, text: '/compact' }));
+        await control(() => sendInput(ctx, { tab_id: tab.id, text: '/compact' }, null));
         break;
       case 'cycle_mode': {
         // An older agent's schema refuses the key: say "update" instead of a bare 400 from the machine.

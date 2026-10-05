@@ -1,6 +1,7 @@
 import { useRouter, type Href } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { AppText, Sheet } from '@/ui';
 import { hostAccountLine } from '../model/copy';
 import type { ChatHostState } from '../model/types';
@@ -24,6 +25,7 @@ export function HostSheet({ open, onClose, project }: { open: boolean; onClose()
 }
 
 function ProjectHostSheet({ open, onClose, projectId, host }: { open: boolean; onClose(): void; projectId: string; host: ChatHostState | null }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const openProjectAi = () => {
     onClose();
@@ -34,14 +36,14 @@ function ProjectHostSheet({ open, onClose, projectId, host }: { open: boolean; o
     router.push(`/project-automation/${encodeURIComponent(projectId)}` as Href);
   };
   return (
-    <Sheet open={open} onClose={onClose} title="Onde o chat roda">
+    <Sheet open={open} onClose={onClose} title={t('Onde o chat roda')}>
       <View className="gap-3">
         {host ? <AppText variant="muted">{hostAccountLine(host)}</AppText> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel="Contas e modelo do projeto" onPress={openProjectAi} className="rounded-xl bg-app-surface2 px-4 py-3">
-          <AppText>Contas e modelo do projeto</AppText>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('Contas e modelo do projeto')} onPress={openProjectAi} className="rounded-xl bg-app-surface2 px-4 py-3">
+          <AppText>{t('Contas e modelo do projeto')}</AppText>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Trabalho automático" onPress={openAutomation} className="rounded-xl bg-app-surface2 px-4 py-3">
-          <AppText>Trabalho automático</AppText>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('Trabalho automático')} onPress={openAutomation} className="rounded-xl bg-app-surface2 px-4 py-3">
+          <AppText>{t('Trabalho automático')}</AppText>
         </Pressable>
       </View>
     </Sheet>
@@ -49,6 +51,7 @@ function ProjectHostSheet({ open, onClose, projectId, host }: { open: boolean; o
 }
 
 function AccountWideHostSheet({ open, onClose }: { open: boolean; onClose(): void }) {
+  const { t } = useTranslation();
   const hostOptions = useChatStore((s) => s.hostOptions);
   const loadHostOptions = useChatStore((s) => s.loadHostOptions);
   const setHost = useChatStore((s) => s.setHost);
@@ -63,7 +66,7 @@ function AccountWideHostSheet({ open, onClose }: { open: boolean; onClose(): voi
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title="Onde o chat roda">
+    <Sheet open={open} onClose={onClose} title={t('Onde o chat roda')}>
       {hostOptions === null ? (
         <ActivityIndicator />
       ) : (
@@ -73,13 +76,13 @@ function AccountWideHostSheet({ open, onClose }: { open: boolean; onClose(): voi
               <View key={machine.id} className="gap-2">
                 <View className="flex-row items-center gap-2">
                   <AppText className="font-semibold">{machine.name}</AppText>
-                  {machine.online ? null : <Text className="text-xs text-app-danger">offline</Text>}
-                  {machine.agent_version ? <AppText variant="muted">agente {machine.agent_version}</AppText> : null}
+                  {machine.online ? null : <Text className="text-xs text-app-danger">{t('offline')}</Text>}
+                  {machine.agent_version ? <AppText variant="muted">{t('agente {{version}}', { version: machine.agent_version })}</AppText> : null}
                 </View>
                 {machine.accounts.map((account) => (
                   <Choice key={account.id} label={account.label} machine={machine.name} onPress={() => choose(machine.id, account.id)} />
                 ))}
-                <Choice label="conta padrão da máquina" machine={machine.name} onPress={() => choose(machine.id)} />
+                <Choice label={t('conta padrão da máquina')} machine={machine.name} onPress={() => choose(machine.id)} />
               </View>
             ))}
           </View>

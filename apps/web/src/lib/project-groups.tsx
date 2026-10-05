@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { i18n } from '../i18n';
 import { api } from './api';
 import { useAuth } from './auth';
 import { useData } from './data';
@@ -7,7 +8,7 @@ import type { ProjectGroup } from './types';
 
 interface ProjectGroupsState {
   groups: ProjectGroup[];
-  /** last failed write, pt-BR; cleared by the next successful one */
+  /** last failed write, in the language on screen; cleared by the next successful one */
   error: string | null;
   reload(): Promise<void>;
   createGroup(name: string): Promise<ProjectGroup | null>;
@@ -20,7 +21,8 @@ interface ProjectGroupsState {
 }
 
 const Ctx = createContext<ProjectGroupsState | null>(null);
-const FAILED = 'Não foi possível salvar os grupos. Tente de novo.';
+/** Read when the write fails, so it is in the language on screen then. */
+const failed = () => i18n.t('Não foi possível salvar os grupos. Tente de novo.');
 
 /** The signed-in user's sidebar groups. Writes show at once and roll back when the server refuses them. */
 export function ProjectGroupsProvider({ children }: { children: ReactNode }) {
@@ -81,7 +83,7 @@ export function ProjectGroupsProvider({ children }: { children: ReactNode }) {
       // browser): restore at once, then re-sync so the next write starts from what the server has
       if (ref.current === next) setGroups(prev);
       void reload();
-      setError(FAILED);
+      setError(failed());
     }
   }, [reload]);
 
@@ -98,7 +100,7 @@ export function ProjectGroupsProvider({ children }: { children: ReactNode }) {
           setError(null);
           return group;
         } catch {
-          setError(FAILED);
+          setError(failed());
           return null;
         }
       },
@@ -122,7 +124,7 @@ export function ProjectGroupsProvider({ children }: { children: ReactNode }) {
         const fav = favorites();
         if (!fav) {
           // Favoritos always exists on the server: it is only missing here when the list failed to load
-          setError(FAILED);
+          setError(failed());
           return reload();
         }
         const project_ids = fav.project_ids.includes(projectId) ? fav.project_ids.filter((id) => id !== projectId) : [...fav.project_ids, projectId];

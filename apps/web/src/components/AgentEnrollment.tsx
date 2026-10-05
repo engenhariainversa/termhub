@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CopyButton } from './MachineForm';
 import { api } from '../lib/api';
 import { track } from '../lib/analytics';
+import { Trans, useTranslation } from '../i18n';
 import type { Machine } from '../lib/types';
 
 const POLL_MS = 3000;
@@ -45,6 +46,8 @@ export function detectClientOs(nav: Pick<Navigator, 'platform' | 'userAgent'> & 
 }
 
 const OS_LABELS: Record<ClientOs, string> = { linux: 'Linux', macos: 'macOS' };
+/** Puts npm's global binaries on the PATH (a shell command: never translated). */
+const PATH_FIX = 'export PATH="$(npm prefix -g)/bin:$PATH"';
 
 /** The `termhub-agent connect` command the user pastes on the target machine. */
 export function enrollCommand(origin: string, token: string): string {
@@ -89,6 +92,7 @@ function StepItem({ index, step }: { index: number; step: Step }) {
 }
 
 export function AgentEnrollment({ machine, token, onConnected }: Props) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<ClientOs>(() => detectClientOs());
   const [online, setOnline] = useState(false);
   const [os, setOs] = useState<string | null>(null);
@@ -143,50 +147,59 @@ export function AgentEnrollment({ machine, token, onConnected }: Props) {
   const origin = window.location.origin;
   const steps: Step[] = [
     {
-      title: tab === 'linux' ? 'Instalar tmux, ferramentas de compilação e o agente' : 'Instalar o tmux e o agente',
+      title: tab === 'linux' ? t('Instalar tmux, ferramentas de compilação e o agente') : t('Instalar o tmux e o agente'),
       command: INSTALL_COMMANDS[tab],
       hint:
         tab === 'linux'
-          ? 'Precisa de Node 20+. Usa apt, dnf ou pacman (com sudo quando não for root): o npm compila o node-pty, por isso o make, o g++ e o python3.'
-          : 'Precisa de Node 20+ e do Homebrew. Se faltarem as Command Line Tools, o comando abre o instalador e para: conclua e rode de novo.',
+          ? t('Precisa de Node 20+. Usa apt, dnf ou pacman (com sudo quando não for root): o npm compila o node-pty, por isso o make, o g++ e o python3.')
+          : t('Precisa de Node 20+ e do Homebrew. Se faltarem as Command Line Tools, o comando abre o instalador e para: conclua e rode de novo.'),
       troubleshoot: (
         <>
-          <p className="font-semibold text-warn">Deu "command not found"?</p>
+          <p className="font-semibold text-warn">{t('Deu "command not found"?')}</p>
           <ul className="mt-1 space-y-1 text-fg">
             <li>
-              Rode o comando acima de novo e veja se o <code className="rounded bg-bg-2 px-1 font-mono text-fg-muted">npm i -g</code> terminou sem erro
-              {tab === 'linux' ? ' (um "gyp ERR!" ou "not found: make" quer dizer que faltam as ferramentas de compilação).' : '.'}
+              {tab === 'linux' ? (
+                <Trans
+                  i18nKey='Rode o comando acima de novo e veja se o <0>npm i -g</0> terminou sem erro (um "gyp ERR!" ou "not found: make" quer dizer que faltam as ferramentas de compilação).'
+                  components={[<code key="c" className="rounded bg-bg-2 px-1 font-mono text-fg-muted" />]}
+                />
+              ) : (
+                <Trans
+                  i18nKey="Rode o comando acima de novo e veja se o <0>npm i -g</0> terminou sem erro."
+                  components={[<code key="c" className="rounded bg-bg-2 px-1 font-mono text-fg-muted" />]}
+                />
+              )}
             </li>
             <li>
-              Usa <span className="font-medium">asdf</span>? Rode{' '}
-              <code className="rounded bg-bg-2 px-1 font-mono text-fg-muted">asdf reshim nodejs</code>
+              <Trans i18nKey="Usa <0>asdf</0>? Rode" components={[<span key="a" className="font-medium" />]} />{' '}
+              <code className="rounded bg-bg-2 px-1 font-mono text-fg-muted">asdf reshim nodejs</code>{/* i18n-ignore */}
             </li>
             <li>
-              Senão, o diretório de binários globais do npm não está no PATH:
+              {t('Senão, o diretório de binários globais do npm não está no PATH:')}
               <code className="mt-0.5 block select-all whitespace-pre-wrap break-all rounded bg-bg-2 px-1.5 py-1 font-mono text-fg-muted">
-                export PATH="$(npm prefix -g)/bin:$PATH"
+                {PATH_FIX}
               </code>
-              <span className="text-fg-dim">(e adicione essa linha ao ~/.zshrc ou ~/.bashrc)</span>
+              <span className="text-fg-dim">{t('(e adicione essa linha ao ~/.zshrc ou ~/.bashrc)')}</span>
             </li>
           </ul>
         </>
       ),
     },
     {
-      title: 'Conectar',
+      title: t('Conectar'),
       command: enrollCommand(origin, token),
-      note: 'Esse token só aparece agora. Se perder, gere outro em Rotacionar token.',
+      note: t('Esse token só aparece agora. Se perder, gere outro em Rotacionar token.'),
     },
     {
-      title: 'Instalar como serviço',
+      title: t('Instalar como serviço'),
       command: 'termhub-agent service install',
-      hint: tab === 'linux' ? 'sobe no boot, sem sudo; rode loginctl enable-linger $USER uma vez para seguir rodando depois do logout' : 'sobe no login, sem sudo',
+      hint: tab === 'linux' ? t('sobe no boot, sem sudo; rode loginctl enable-linger $USER uma vez para seguir rodando depois do logout') : t('sobe no login, sem sudo'),
     },
   ];
 
   return (
     <div className="space-y-3 text-sm">
-      <div role="tablist" aria-label="Sistema da máquina" className="flex gap-1">
+      <div role="tablist" aria-label={t('Sistema da máquina')} className="flex gap-1">
         {(Object.keys(OS_LABELS) as ClientOs[]).map((key) => (
           <button
             key={key}
@@ -210,18 +223,20 @@ export function AgentEnrollment({ machine, token, onConnected }: Props) {
         </ol>
         {tab === 'macos' && (
           <p className="rounded-md border border-line bg-bg p-2 text-[11px] text-fg-dim">
-            Se o projeto estiver em Documents, Desktop ou num disco externo, conceda Acesso Total ao Disco ao node quando o sistema pedir —{' '}
-            <code className="font-mono">termhub-agent doctor</code> mostra o que falta.
+            <Trans
+              i18nKey="Se o projeto estiver em Documents, Desktop ou num disco externo, conceda Acesso Total ao Disco ao node quando o sistema pedir — <0>termhub-agent doctor</0> mostra o que falta."
+              components={[<code key="c" className="font-mono" />]}
+            />
           </p>
         )}
       </div>
       <div className="rounded-md border border-line bg-bg p-2 text-xs">
         {online ? (
           <span className="text-ok">
-            conectado ✓ · {os ?? 'SO ?'} · agente {agentVersion ?? '?'}
+            {t('conectado ✓ · {{os}} · agente {{version}}', { os: os ?? t('SO ?'), version: agentVersion ?? '?' })}
           </span>
         ) : (
-          <span className="text-fg-dim">aguardando conexão…</span>
+          <span className="text-fg-dim">{t('aguardando conexão…')}</span>
         )}
       </div>
     </div>

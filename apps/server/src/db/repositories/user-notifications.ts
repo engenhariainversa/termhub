@@ -70,6 +70,15 @@ export class UserNotificationsRepository {
     return count > 0;
   }
 
+  /**
+   * Marks read every unread row of the user whose `data[key]` is `value` (TER-923): the card it was
+   * about got handled — answered here or on another screen, or it ended. Resolves how many changed.
+   */
+  async markReadByData(userId: string, key: 'action_id' | 'tab_question_id', value: string, now: Date): Promise<number> {
+    const { count } = await this.db.userNotification.updateMany({ where: { userId, readAt: null, data: { path: [key], equals: value } }, data: { readAt: now } });
+    return count;
+  }
+
   /** Whether the notification exists and is the user's own, read or not (makes marking read idempotent). */
   async existsForUser(id: string, userId: string): Promise<boolean> {
     return (await this.db.userNotification.count({ where: { id, userId } })) > 0;

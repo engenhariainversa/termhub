@@ -86,7 +86,10 @@ jobs:
           npm pack -w @termhub/agent --pack-destination /tmp >/dev/null
           tar -xOf /tmp/termhub-agent-*.tgz package/package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const b=JSON.parse(s).bin||{};if(b["termhub-agent"]!=="dist/cli.js"){console.error("bin missing in tarball:",b);process.exit(1)}console.log("bin ok:",b)})'
       # `decide` may have looked before npm showed a version another run had just published: that
-      # version being there already is the outcome we wanted, not a failure. Any other error fails.
+      # version being there already is the outcome we wanted, not a failure. npm holds a CI publish
+      # as "staged" (invisible to `npm view`) until a maintainer approves it with 2FA, and a publish
+      # in that window answers "Cannot publish over previously staged version": the same case. Any
+      # other error fails.
       - name: Publicar (trusted publishing / OIDC)
         id: publish
         env:
@@ -95,7 +98,7 @@ jobs:
           if out=$(npm publish -w @termhub/agent --access public --provenance 2>&1); then
             printf '%s\n' "$out"
             echo 'published=true' >> "$GITHUB_OUTPUT"
-          elif printf '%s' "$out" | grep -qE 'EPUBLISHCONFLICT|cannot publish over the previously published'; then
+          elif printf '%s' "$out" | grep -qiE 'EPUBLISHCONFLICT|cannot publish over (the )?previously (published|staged)'; then
             printf '%s\n' "$out"
             echo "@termhub/agent@${{ needs.decide.outputs.version }} já estava no npm; nada a publicar"
             echo 'published=false' >> "$GITHUB_OUTPUT"

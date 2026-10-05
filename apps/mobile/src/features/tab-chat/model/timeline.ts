@@ -1,5 +1,6 @@
 // The session screen's timeline (spec 2026-10-01 tab chat §6): the items the server read from the
 // session's transcript, merged by id, then folded into the rows the screen draws. Pure: no React.
+import { t, tk } from '@/i18n';
 import type { TTabChatItem } from '@/services/api/contract';
 
 export interface ToolRow {
@@ -16,9 +17,9 @@ export type Row =
   | { kind: 'line'; id: string; text: string };
 
 const NOTICE_TEXT = {
-  compacted: 'Conversa compactada',
-  interrupted: 'Interrompido',
-  truncated: 'Parte do histórico foi omitida por ser grande demais',
+  compacted: tk('Conversa compactada'),
+  interrupted: tk('Interrompido'),
+  truncated: tk('Parte do histórico foi omitida por ser grande demais'),
 } as const;
 
 /**
@@ -92,7 +93,7 @@ export function buildRows(items: TTabChatItem[], working: boolean): Row[] {
         rows.push({ kind: 'line', id: item.id, text: item.text });
         break;
       case 'notice':
-        rows.push({ kind: 'line', id: item.id, text: NOTICE_TEXT[item.notice] });
+        rows.push({ kind: 'line', id: item.id, text: t(NOTICE_TEXT[item.notice]) });
         break;
     }
   }

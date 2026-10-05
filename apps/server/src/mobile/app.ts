@@ -18,12 +18,13 @@ import { progressRoutes } from '../routes/progress.js';
 import { projectAiRoutes } from '../routes/project-ai.js';
 import { mobileSessionRoutes } from '../routes/m-session.js';
 import { filePreviewRoutes } from '../routes/file-preview.js';
+import { fileRecentRoutes } from '../routes/file-recent.js';
 import { mobileTabRoutes } from '../routes/m-tabs.js';
 import { mobileTranscriptionRoutes } from '../routes/m-transcriptions.js';
 import { buildMobileAuthHook, type MobileAuthMode } from './auth.js';
 import { JtiCache } from './dpop.js';
 import { EnrolmentService } from './enrolment.js';
-import { ExpoPushSender, MobilePushService } from './push.js';
+import { ExpoPushSender, ExpoReceiptFetcher, MobilePushService, startPushReceiptSweeper } from './push.js';
 import { MobileSocketRegistry, revokeDevice } from './revocation.js';
 import { SessionService } from './session.js';
 import type { AccountDeletionService } from '../account/deletion.js';
@@ -31,6 +32,7 @@ import { mobileAutomationSetupRoutes, mobileCardAutoRoutes } from '../routes/m-a
 import { mobileAccountRoutes } from '../routes/m-account.js';
 import { registerMobileTabWs } from './tab-ws.js';
 import { registerMobileChatWs } from './ws.js';
+import { sendError } from '../lib/errors.js';
 
 export const MOBILE_PREFIX = '/api/m/v1';
 
@@ -70,7 +72,8 @@ export type GuardedMobile = (resource: Resource, plugin: (a: FastifyInstance) =>
 export function createMobileServices(deps: MobileDeps): MobileServices {
   const sockets = new MobileSocketRegistry();
   const { repos, mailer, log } = deps;
-  const push = new MobilePushService({ repos, sender: new ExpoPushSender(config.mobile?.expoPushToken ?? null), sockets, log });
+  const expoToken = config.mobile?.expoPushToken ?? null;
+  const push = new MobilePushService({ repos, sender: new ExpoPushSender(expoToken), receipts: new ExpoReceiptFetcher(expoToken), sockets, log });
   return {
     jtis: new JtiCache(),
     // A real device request also pushes to the owner's phones (the decoy path never calls the hook).
@@ -103,8 +106,11 @@ export async function registerMobileApi(
   const tabWs = registerMobileTabWs(deps.upgrades, { repos: deps.repos, jtis: services.jtis, publicUrl, sockets: services.sockets, hub: deps.tabChat, log: deps.log });
   // Pending actions and finished answers become push notifications while the server runs.
   const stopPush = services.push.start();
+  // Their receipts, ~15 min later: dead tokens and APNs/FCM credential errors (TER-924).
+  const stopReceipts = startPushReceiptSweeper({ repos: deps.repos, receipts: new ExpoReceiptFetcher(mobile.expoPushToken ?? null), log: deps.log });
   fastify.addHook('onClose', async () => {
     stopPush();
+    stopReceipts();
     chatWs.close();
     tabWs.close();
   });
@@ -141,7 +147,7 @@ export async function registerMobileApi(
             }),
           '/devices',
         );
-        await guarded('devices', (a) => mobilePushTokenRoutes(a, deps.repos), '');
+        await guarded('devices', (a) => mobilePushTokenRoutes(a, deps.repos, services.push), '');
         // Challenge and token renewal: both mobileAuth 'none', /token verifies the device proof itself.
         await guarded('devices', (a) => mobileSessionRoutes(a, deps.repos, { session: services.session, jtis: services.jtis, publicUrl }), '/session');
         // The chat, over the same ChatService as the web; `GET /me` reads under `chat` too (spec §6).
@@ -167,13 +173,14 @@ export async function registerMobileApi(
         await guarded('terminals', (a) => mobileTabRoutes(a, deps.repos, { hub: deps.tabChat }), '/tabs');
         // A file an agent wrote, previewed from its path (spec 2026-10-04 file preview): the web's route.
         await guarded('terminals', (a) => filePreviewRoutes(a, deps.repos), '/file-preview');
+        await guarded('terminals', (a) => fileRecentRoutes(a, deps.repos), '/file-recent');
       }
 
       await mobileRoutes(guardedMobile);
       // `routes` stays for tests that want to register extra routes alongside the real ones.
       if (routes) await routes(guardedMobile, m);
       m.get('/health', { config: { mobileAuth: 'none' } }, async () => ({ ok: true }));
-      m.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: 'Rota não encontrada', code: 'NOT_FOUND' }));
+      m.setNotFoundHandler((request, reply) => sendError(request, reply, 404, 'Rota não encontrada', 'NOT_FOUND'));
     },
     { prefix: MOBILE_PREFIX },
   );

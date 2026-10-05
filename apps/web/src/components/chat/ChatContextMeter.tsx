@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { COMPACT_SHORTCUT, contextLevel, contextShare, contextTitle, formatShare, formatTokens } from '../../lib/chat-context';
 
 const BAR: Record<ReturnType<typeof contextLevel>, string> = { ok: 'bg-accent', warn: 'bg-warn', full: 'bg-danger' };
@@ -21,6 +22,7 @@ export function ChatContextMeter({
   canCompact: boolean;
   onCompact: () => void;
 }) {
+  const { t } = useTranslation();
   const share = tokens === null ? null : contextShare(tokens, window);
   const level = contextLevel(share);
   return (
@@ -28,11 +30,11 @@ export function ChatContextMeter({
       {tokens !== null && (
         <div
           role="meter"
-          aria-label="Contexto da conversa"
+          aria-label={t('Contexto da conversa')}
           aria-valuemin={0}
           aria-valuemax={window ?? undefined}
           aria-valuenow={tokens}
-          aria-valuetext={share === null ? `${formatTokens(tokens)} tokens` : `${formatShare(share)} do contexto`}
+          aria-valuetext={share === null ? t('{{tokens}} tokens', { tokens: formatTokens(tokens) }) : t('{{share}} do contexto', { share: formatShare(share) })}
           title={contextTitle(tokens, window)}
           className={`flex min-w-0 items-center gap-1.5 px-1 text-xs ${TEXT[level]}`}
         >
@@ -51,12 +53,12 @@ export function ChatContextMeter({
       <button
         type="button"
         aria-keyshortcuts={COMPACT_SHORTCUT}
-        title={`Resume a conversa para liberar contexto (${COMPACT_SHORTCUT} ou /compact)`}
+        title={t('Resume a conversa para liberar contexto ({{shortcut}} ou /compact)', { shortcut: COMPACT_SHORTCUT })}
         className={`rounded px-2 py-1 text-xs hover:bg-bg-3 hover:text-fg disabled:opacity-50 ${level === 'ok' ? 'text-fg-dim' : `${TEXT[level]} font-medium`} ${compacting ? 'animate-pulse' : ''}`}
         disabled={!canCompact}
         onClick={onCompact}
       >
-        {compacting ? 'Compactando…' : 'Compactar'}
+        {compacting ? t('Compactando…') : t('Compactar')}
       </button>
     </div>
   );

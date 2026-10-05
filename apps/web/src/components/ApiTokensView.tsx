@@ -4,18 +4,19 @@ import { useAuth } from '../lib/auth';
 import type { ApiToken, ApiTokenScope, CreatedApiToken } from '../lib/types';
 import { ConfirmDialog, Modal } from './Modal';
 import { formatDate } from '../lib/format';
+import { tk, useTranslation } from '../i18n';
 
 const SCOPES: { key: ApiTokenScope; label: string; short: string; hint: string }[] = [
-  { key: 'read', label: 'Ler', short: 'ler', hint: 'máquinas, projetos, abas, contas de IA e a tela dos terminais' },
-  { key: 'tasks', label: 'Tarefas', short: 'tarefas', hint: 'criar, editar, mover e excluir tarefas e subtarefas' },
-  { key: 'terminals', label: 'Terminais', short: 'terminais', hint: 'abrir abas, digitar e iniciar agentes nas suas máquinas' },
-  { key: 'memory', label: 'Memória (gravar anotações)', short: 'memória', hint: 'anotar decisões no chat, para consultar depois' },
+  { key: 'read', label: tk('Ler'), short: tk('ler'), hint: tk('máquinas, projetos, abas, contas de IA e a tela dos terminais') },
+  { key: 'tasks', label: tk('Tarefas'), short: tk('tarefas'), hint: tk('criar, editar, mover e excluir tarefas e subtarefas') },
+  { key: 'terminals', label: tk('Terminais'), short: tk('terminais'), hint: tk('abrir abas, digitar e iniciar agentes nas suas máquinas') },
+  { key: 'memory', label: tk('Memória (gravar anotações)'), short: tk('memória'), hint: tk('anotar decisões no chat, para consultar depois') },
 ];
 const EXPIRY: { value: string; label: string }[] = [
-  { value: '30', label: '30 dias' },
-  { value: '90', label: '90 dias' },
-  { value: '365', label: '1 ano' },
-  { value: '', label: 'Sem validade' },
+  { value: '30', label: tk('30 dias') },
+  { value: '90', label: tk('90 dias') },
+  { value: '365', label: tk('1 ano') },
+  { value: '', label: tk('Sem validade') },
 ];
 
 export type TokenStatus = 'active' | 'expired' | 'revoked';
@@ -34,6 +35,7 @@ const fmtDate = (iso: string | null, empty: string) => (iso ? formatDate(iso) : 
 
 /** Settings → Tokens de API: the signed-in user's own tokens for the MCP endpoint. */
 export function ApiTokensView() {
+  const { t } = useTranslation();
   const { can } = useAuth();
   const [tokens, setTokens] = useState<ApiToken[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function ApiTokensView() {
     try {
       setTokens((await api.apiTokens.list()).tokens);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Erro ao carregar tokens');
+      setError(e instanceof ApiError ? e.message : t('Erro ao carregar tokens'));
     }
   }, []);
 
@@ -55,15 +57,15 @@ export function ApiTokensView() {
   }, [load]);
 
   const revoke = async () => {
-    const t = revoking;
+    const tok = revoking;
     setRevoking(null);
-    if (!t) return;
+    if (!tok) return;
     setError(null);
     try {
-      const r = await api.apiTokens.revoke(t.id);
-      setTokens((list) => (list ?? []).map((x) => (x.id === t.id ? r.api_token : x)));
+      const r = await api.apiTokens.revoke(tok.id);
+      setTokens((list) => (list ?? []).map((x) => (x.id === tok.id ? r.api_token : x)));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Erro ao revogar token');
+      setError(e instanceof ApiError ? e.message : t('Erro ao revogar token'));
     }
   };
 
@@ -71,48 +73,48 @@ export function ApiTokensView() {
     <div className="space-y-4">
       <div className="flex items-start gap-4">
         <p className="flex-1 text-sm text-fg-muted">
-          Tokens pessoais para o terminal global (MCP): um Claude Code com o token consegue agir nas suas máquinas dentro dos escopos escolhidos, nunca além das suas próprias permissões. Trate como senha.
+          {t('Tokens pessoais para o terminal global (MCP): um Claude Code com o token consegue agir nas suas máquinas dentro dos escopos escolhidos, nunca além das suas próprias permissões. Trate como senha.')}
         </p>
         {can('api_tokens', 'create') && (
           <button className="btn-primary shrink-0" onClick={() => setCreating(true)}>
-            Novo token
+            {t('Novo token')}
           </button>
         )}
       </div>
       {error && <p className="text-sm text-danger">{error}</p>}
       {tokens === null ? (
-        <p className="text-sm text-fg-dim">Carregando…</p>
+        <p className="text-sm text-fg-dim">{t('Carregando…')}</p>
       ) : tokens.length === 0 ? (
-        <p className="text-sm text-fg-dim">Nenhum token ainda.</p>
+        <p className="text-sm text-fg-dim">{t('Nenhum token ainda.')}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-fg-dim">
               <tr>
-                <th className="py-1 pr-3 font-normal">Nome</th>
-                <th className="py-1 pr-3 font-normal">Escopos</th>
-                <th className="py-1 pr-3 font-normal">Criado</th>
-                <th className="py-1 pr-3 font-normal">Último uso</th>
-                <th className="py-1 pr-3 font-normal">Validade</th>
+                <th className="py-1 pr-3 font-normal">{t('Nome')}</th>
+                <th className="py-1 pr-3 font-normal">{t('Escopos')}</th>
+                <th className="py-1 pr-3 font-normal">{t('Criado')}</th>
+                <th className="py-1 pr-3 font-normal">{t('Último uso')}</th>
+                <th className="py-1 pr-3 font-normal">{t('Validade')}</th>
                 <th className="py-1 font-normal" />
               </tr>
             </thead>
             <tbody>
-              {tokens.map((t) => {
-                const status = tokenStatus(t);
+              {tokens.map((tok) => {
+                const status = tokenStatus(tok);
                 return (
-                  <tr key={t.id} className={`border-t border-line ${status === 'active' ? '' : 'text-fg-dim'}`}>
-                    <td className="py-1.5 pr-3">{t.name}</td>
-                    <td className="py-1.5 pr-3">{t.scopes.map((s) => SCOPES.find((x) => x.key === s)?.short ?? s).join(', ')}</td>
-                    <td className="py-1.5 pr-3">{fmtDate(t.created_at, '—')}</td>
-                    <td className="py-1.5 pr-3">{fmtDate(t.last_used_at, 'nunca')}</td>
+                  <tr key={tok.id} className={`border-t border-line ${status === 'active' ? '' : 'text-fg-dim'}`}>
+                    <td className="py-1.5 pr-3">{tok.name}</td>
+                    <td className="py-1.5 pr-3">{tok.scopes.map((s) => { const short = SCOPES.find((x) => x.key === s)?.short; return short ? t(short) : s; }).join(', ')}</td>
+                    <td className="py-1.5 pr-3">{fmtDate(tok.created_at, '—')}</td>
+                    <td className="py-1.5 pr-3">{fmtDate(tok.last_used_at, t('nunca'))}</td>
                     <td className="py-1.5 pr-3">
-                      {status === 'revoked' ? 'revogado' : status === 'expired' ? 'expirado' : fmtDate(t.expires_at, 'sem validade')}
+                      {status === 'revoked' ? t('revogado') : status === 'expired' ? t('expirado') : fmtDate(tok.expires_at, t('sem validade'))}
                     </td>
                     <td className="py-1.5 text-right">
                       {status !== 'revoked' && can('api_tokens', 'delete') && (
-                        <button className="btn-ghost px-2 py-0.5 text-xs text-danger" aria-label={`Revogar ${t.name}`} onClick={() => setRevoking(t)}>
-                          Revogar
+                        <button className="btn-ghost px-2 py-0.5 text-xs text-danger" aria-label={t('Revogar {{name}}', { name: tok.name })} onClick={() => setRevoking(tok)}>
+                          {t('Revogar')}
                         </button>
                       )}
                     </td>
@@ -137,9 +139,9 @@ export function ApiTokensView() {
       {created && <CreatedTokenModal created={created} onClose={() => setCreated(null)} />}
       <ConfirmDialog
         open={!!revoking}
-        title="Revogar token"
-        message={`O token "${revoking?.name ?? ''}" para de funcionar na hora. Isso não pode ser desfeito.`}
-        confirmLabel="Revogar"
+        title={t('Revogar token')}
+        message={t('O token "{{name}}" para de funcionar na hora. Isso não pode ser desfeito.', { name: revoking?.name ?? '' })}
+        confirmLabel={t('Revogar')}
         danger
         onConfirm={revoke}
         onCancel={() => setRevoking(null)}
@@ -149,6 +151,7 @@ export function ApiTokensView() {
 }
 
 function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreated: (c: CreatedApiToken) => void }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [scopes, setScopes] = useState<ApiTokenScope[]>([]);
   const [expiry, setExpiry] = useState('90');
@@ -165,40 +168,40 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
       const ordered = SCOPES.map((s) => s.key).filter((k) => scopes.includes(k));
       onCreated(await api.apiTokens.create({ name: name.trim(), scopes: ordered, expires_in_days: expiry ? Number(expiry) : null }));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao criar token');
+      setError(err instanceof ApiError ? err.message : t('Erro ao criar token'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal title="Novo token de API" open onClose={onClose}>
+    <Modal title={t('Novo token de API')} open onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <div>
           <label className="label" htmlFor="api-token-name">
-            Nome
+            {t('Nome')}
           </label>
-          <input id="api-token-name" className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus placeholder="ex.: Claude Code no jarvis" />
+          <input id="api-token-name" className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus placeholder={t('ex.: Claude Code no jarvis')} />
         </div>
         <fieldset className="space-y-1.5">
-          <legend className="label">Escopos</legend>
+          <legend className="label">{t('Escopos')}</legend>
           {SCOPES.map((s) => (
             <label key={s.key} className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" checked={scopes.includes(s.key)} onChange={() => toggle(s.key)} />
               <span>
-                <strong>{s.label}</strong> <span className="text-fg-muted">— {s.hint}</span>
+                <strong>{t(s.label)}</strong> <span className="text-fg-muted">— {t(s.hint)}</span>
               </span>
             </label>
           ))}
         </fieldset>
         <div>
           <label className="label" htmlFor="api-token-expiry">
-            Validade
+            {t('Validade')}
           </label>
           <select id="api-token-expiry" className="input" value={expiry} onChange={(e) => setExpiry(e.target.value)}>
             {EXPIRY.map((o) => (
               <option key={o.label} value={o.value}>
-                {o.label}
+                {t(o.label)}
               </option>
             ))}
           </select>
@@ -206,10 +209,10 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>
-            Cancelar
+            {t('Cancelar')}
           </button>
           <button type="submit" className="btn-primary" disabled={busy || !name.trim() || scopes.length === 0}>
-            {busy ? 'Criando…' : 'Criar token'}
+            {busy ? t('Criando…') : t('Criar token')}
           </button>
         </div>
       </form>
@@ -220,6 +223,7 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
 type CopyState = 'idle' | 'copied' | 'failed';
 
 function CopyField({ label, value }: { label: string; value: string }) {
+  const { t } = useTranslation();
   const [state, setState] = useState<CopyState>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -246,7 +250,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
       <div className="flex gap-2">
         <input ref={inputRef} className="input font-mono text-xs" readOnly value={value} onFocus={(e) => e.currentTarget.select()} />
         <button type="button" className="btn-ghost shrink-0 border border-line" onClick={() => void copy()}>
-          {state === 'copied' ? 'Copiado' : state === 'failed' ? 'Selecione e copie' : 'Copiar'}
+          {state === 'copied' ? t('Copiado') : state === 'failed' ? t('Selecione e copie') : t('Copiar')}
         </button>
       </div>
     </div>
@@ -254,20 +258,21 @@ function CopyField({ label, value }: { label: string; value: string }) {
 }
 
 function CreatedTokenModal({ created, onClose }: { created: CreatedApiToken; onClose: () => void }) {
+  const { t } = useTranslation();
   return (
-    <Modal title="Token criado" open onClose={onClose} width="max-w-2xl" dismissible={false}>
+    <Modal title={t('Token criado')} open onClose={onClose} width="max-w-2xl" dismissible={false}>
       <div className="space-y-3">
-        <p className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">Copie agora: este token não aparece de novo. Se perder, revogue e crie outro.</p>
-        <CopyField label="Token" value={created.token} />
+        <p className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">{t('Copie agora: este token não aparece de novo. Se perder, revogue e crie outro.')}</p>
+        <CopyField label={t('Token')} value={created.token} />
         {created.mcp_url && (
           <>
-            <CopyField label="Conectar o Claude Code" value={mcpAddCommand(created.mcp_url, created.token)} />
-            <p className="text-xs text-fg-dim">Rode no terminal da máquina onde está o Claude Code que vai ser o terminal global.</p>
+            <CopyField label={t('Conectar o Claude Code')} value={mcpAddCommand(created.mcp_url, created.token)} />
+            <p className="text-xs text-fg-dim">{t('Rode no terminal da máquina onde está o Claude Code que vai ser o terminal global.')}</p>
           </>
         )}
         <div className="flex justify-end pt-2">
           <button className="btn-primary" onClick={onClose}>
-            Concluído
+            {t('Concluído')}
           </button>
         </div>
       </div>

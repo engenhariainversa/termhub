@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { AppText, Button, Sheet } from '@/ui';
 import { PERMISSIONS_MSG as MSG } from '../model/messages';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
@@ -8,6 +9,8 @@ import { usePermissionsStore } from '../viewmodel/usePermissionsStore';
  * the one-time OS prompt. Mounted once, globally, by `app/_layout.tsx`; `pushPrimerOpen` opens it, but it only shows
  * while the session is unlocked and no PIN sheet is up (it presents again once those go away). */
 export function PushPrimerSheet() {
+  // Re-renders on a language change; PERMISSIONS_MSG's getters read it.
+  useTranslation();
   const open = usePermissionsStore((s) => s.pushPrimerOpen);
   const unlocked = useSessionStore((s) => s.phase === 'unlocked' && s.pinPrompt === null);
   const acceptPush = usePermissionsStore((s) => s.acceptPush);

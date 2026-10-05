@@ -10,6 +10,7 @@ import { CopyLinkButton } from './share/CopyLinkButton';
 import { clock, RecordingFrame, RecordingResult, useScreenRecorder } from './share/ScreenRecorder';
 import { SharePanel } from './share/SharePanel';
 import { cityPath, restFromUrl, type Rest } from './url';
+import { useTranslation } from '../i18n';
 
 /** A snapshot that could not be read is tried again, backing off the same way the socket does. */
 const RETRY_MIN_MS = 2_000;
@@ -50,6 +51,7 @@ function applyRobot(city: PublicCity | null, frame: CityFrame): PublicCity | nul
  * taken off the street disappears without a reload.
  */
 export function CityPage({ nickname }: { nickname: string }) {
+  const { t } = useTranslation();
   const [city, setCity] = useState<PublicCity | null>(null);
   /** the server said there is no such city: a 404 is final, and nothing here knocks again after it */
   const [missing, setMissing] = useState(false);
@@ -198,8 +200,8 @@ export function CityPage({ nickname }: { nickname: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Esc in the beta form is the person editing a field, not asking the camera to step back
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
       if (e.key === 'Escape') handlers.current.onGoUp();
     };
     window.addEventListener('keydown', onKey);
@@ -222,7 +224,7 @@ export function CityPage({ nickname }: { nickname: string }) {
     return (
       // nothing else to show here, so the card is the page: open, and not something to put away
       <div className="flex min-h-full flex-col items-center justify-center gap-4 px-4 py-8 text-center">
-        <p className="text-sm text-fg-muted">Cidade não encontrada.</p>
+        <p className="text-sm text-fg-muted">{t('Cidade não encontrada.')}</p>
         <div className="w-full max-w-sm">
           <BetaCard ownerName={null} />
         </div>
@@ -241,12 +243,12 @@ export function CityPage({ nickname }: { nickname: string }) {
   // only a building that exists gets a trail: an old link that fell back to the city shows none
   const here = target.kind === 'building' ? (model.buildings.find((b) => b.id === target.projectId) ?? null) : null;
   const trail: Array<{ label: string; go?: () => void }> = [];
-  if (here) trail.push({ label: 'Cidade', go: () => go(null, true) }, { label: here.name });
+  if (here) trail.push({ label: t('Cidade'), go: () => go(null, true) }, { label: here.name });
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center gap-3 border-b border-line bg-bg-2 px-3 py-2 text-xs text-fg-muted">
-        <span className="text-sm font-semibold text-fg">Cidade de {city?.owner_name ?? '…'}</span>
+        <span className="text-sm font-semibold text-fg">{t('Cidade de {{name}}', { name: city?.owner_name ?? '…' })}</span>
         <Trail parts={trail} />
         <span className="ml-auto flex items-center gap-3">
           {failed ? (
@@ -260,7 +262,7 @@ export function CityPage({ nickname }: { nickname: string }) {
               onClick={() => setShareOpen((open) => !open)}
               className="rounded px-2 py-1 hover:bg-bg-3 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Compartilhar
+              {t('Compartilhar')}
             </button>
           )}
           {!failed && recorder.supported && (
@@ -271,14 +273,14 @@ export function CityPage({ nickname }: { nickname: string }) {
               className={`inline-flex items-center gap-1.5 rounded px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50 ${recordingNow ? 'bg-danger/15 text-danger hover:bg-danger/25' : 'hover:bg-bg-3 hover:text-fg'}`}
             >
               <span aria-hidden="true" className={recordingNow ? 'h-2 w-2 rounded-[2px] bg-danger' : 'h-2 w-2 rounded-full bg-danger'} />
-              {recordingNow ? `Parar ${clock(recorder.state.kind === 'recording' ? recorder.state.elapsedMs : 0)}` : 'Gravar'}
+              {recordingNow ? t('Parar {{time}}', { time: clock(recorder.state.kind === 'recording' ? recorder.state.elapsedMs : 0) }) : t('Gravar')}
             </button>
           )}
           <button type="button" aria-expanded={soundOpen} onClick={() => setSoundOpen((open) => !open)} className={`rounded px-2 py-1 hover:bg-bg-3 hover:text-fg ${sound.on ? 'text-fg' : ''}`}>
-            {sound.on ? 'Som ligado' : 'Som desligado'}
+            {sound.on ? t('Som ligado') : t('Som desligado')}
           </button>
           <a className="hidden hover:text-fg sm:inline" href={LANDING_URL}>
-            O que é o termhub?
+            {t('O que é o termhub?')}
           </a>
           <button
             type="button"
@@ -290,14 +292,14 @@ export function CityPage({ nickname }: { nickname: string }) {
             className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-white shadow-md shadow-accent/30 ring-1 ring-accent/60 transition-colors hover:bg-accent-hover"
           >
             <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-            Participar do beta grátis
+            {t('Participar do beta grátis')}
           </button>
         </span>
       </div>
       <div className="relative min-h-0 flex-1">
         <div ref={setHost} className="absolute inset-0 overflow-hidden" />
-        {failed && <Overlay>Seu navegador não conseguiu desenhar a cidade.</Overlay>}
-        {!failed && !city && <Overlay>Carregando a cidade…</Overlay>}
+        {failed && <Overlay>{t('Seu navegador não conseguiu desenhar a cidade.')}</Overlay>}
+        {!failed && !city && <Overlay>{t('Carregando a cidade…')}</Overlay>}
         {betaOpen && (
           // a bottom sheet on a phone (once asked for), a card in the corner from `sm` up; only its
           // own box takes the pointer, so the rest of the scene stays as draggable and clickable
@@ -324,8 +326,8 @@ export function CityPage({ nickname }: { nickname: string }) {
         {recorder.state.kind === 'failed' && (
           <div className="absolute inset-x-0 top-0 z-30 sm:left-auto sm:right-4 sm:top-4 sm:w-[22rem]">
             <div role="status" className="flex items-center justify-between gap-2 rounded-b-xl border border-line bg-bg-2 p-3 text-sm text-fg-muted shadow-xl sm:rounded-lg">
-              Não foi possível gravar a tela.
-              <button type="button" className="rounded px-2 text-fg-muted hover:text-fg" aria-label="Fechar" onClick={recorder.dismiss}>
+              {t('Não foi possível gravar a tela.')}
+              <button type="button" className="rounded px-2 text-fg-muted hover:text-fg" aria-label={t('Fechar')} onClick={recorder.dismiss}>
                 ×
               </button>
             </div>
@@ -344,8 +346,9 @@ export function CityPage({ nickname }: { nickname: string }) {
 
 /** Where the camera stands, as the ladder Esc walks: Cidade › projeto. */
 function Trail({ parts }: { parts: Array<{ label: string; go?: () => void }> }) {
+  const { t } = useTranslation();
   return (
-    <nav aria-label="Trilha" className="flex items-center gap-1">
+    <nav aria-label={t('Trilha')} className="flex items-center gap-1">
       {parts.map((part, i) => (
         <span key={`${i}:${part.label}`} className="flex items-center gap-1">
           {i > 0 && (

@@ -179,7 +179,7 @@ export function ProjectRow({ project: p, section, agents, machines, waiting, exp
                         <span
                           data-dot
                           className={`h-1.5 w-1.5 shrink-0 rounded-full ${tabDotClass(true, tab)}`}
-                          title={tab.state ? TAB_STATE_LABEL[tab.state] : undefined}
+                          title={tab.state ? t(TAB_STATE_LABEL[tab.state]) : undefined}
                           aria-label={needsYou ? t('esperando você') : undefined}
                         />
                         <span className={`min-w-0 truncate ${preview ? 'pr-0.5 italic' : ''}`}>{tab.name}</span>

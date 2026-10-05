@@ -3,6 +3,7 @@
 // the web's copy); the server then answers 401 PIN_REQUIRED and the PIN sheet opens, one PIN entry for the
 // save. Lowering the level or turning off saves at once. Local state, like the project AI screen.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { t } from '@/i18n';
 import { automationSetupActionId, type TAutomationSetup } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { Auth, MobileApi } from '@/services/api/types';
@@ -34,7 +35,7 @@ export interface AutomationView {
   cancelConfirm(): void;
 }
 
-const failure = (e: unknown): string => (e instanceof ApiError ? e.message : AUTOMATION_MSG.network);
+const failure = (e: unknown): string => (e instanceof ApiError ? e.message : t(AUTOMATION_MSG.network));
 
 export function useAutomation(projectId: string, deps: AutomationDeps): AutomationView {
   const { api, session } = deps;
@@ -84,7 +85,7 @@ export function useAutomation(projectId: string, deps: AutomationDeps): Automati
       const done = (res: TAutomationSetup) => {
         setSaved(res);
         setDraft(res);
-        setNotice(AUTOMATION_MSG.saved);
+        setNotice(t(AUTOMATION_MSG.saved));
       };
       try {
         try {
@@ -99,7 +100,7 @@ export function useAutomation(projectId: string, deps: AutomationDeps): Automati
               if (alive.current) done(res);
             },
             'automation_setup',
-            AUTOMATION_MSG.pinTitle,
+            t(AUTOMATION_MSG.pinTitle),
           );
         }
       } catch (e) {

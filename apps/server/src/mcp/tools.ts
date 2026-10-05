@@ -22,6 +22,7 @@ import { recapPendingCards } from '../control/pending.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
+import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 
 export interface ToolDef {
   name: string;
@@ -56,6 +57,15 @@ const subtaskItems = z.array(z.object({ title: taskTitle, description: taskDescr
  * automática" with them. */
 const precedentInput = { sources: z.array(z.string().regex(MEMORY_REF)).min(1).max(10).optional(), reason: z.string().trim().min(1).max(500).optional() };
 const PRECEDENT_NOTE = 'When you send this on a precedent from memory, pass the search_memory refs you followed in sources and a short reason in the person\'s language: the chat shows it as an automatic decision. Leave both out otherwise.';
+
+/** TER-851: the agent learns later orders from the person through the chat, so a restriction in its first
+ *  prompt must say who can lift it; and the prompt is the assistant's text, never the person's. */
+const START_AGENT_RESTRICTIONS_NOTE =
+  'Phrase a restriction in the prompt as "until <name> authorizes it (the termhub chat counts)", never as an absolute such as "NÃO faça merge": the agent can tell when a later message carries the person\'s own words. Never write the prompt in the person\'s name.';
+
+/** TER-851: how the concierge relays the person's order so the tab can tell it is theirs. */
+const ON_BEHALF_NOTE =
+  "The tab's session is told who wrote each text: without on_behalf_of, what you send reads as your own words, not the person's. When you relay something the person asked for, pass on_behalf_of with the search_memory refs (message:…, kinds [\"message\"]) of their chat messages that ask for it, at most 24 h old; the tab sees their exact words next to your text. Never write in the person's name (\"<name> aqui…\", \"<name> autorizou…\"): say what to do and let the quote carry the authority.";
 
 /** The object schema a tool's arguments are validated against — by `parseArgs` and by the MCP SDK. */
 export function inputSchemaOf(tool: ToolDef) {
@@ -152,10 +162,17 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'send_input',
-    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. ${PRECEDENT_NOTE}`,
+    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. ${PRECEDENT_NOTE} ${ON_BEHALF_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
-    input: { tab_id: id, text: z.string().max(INPUT_MAX_CHARS), enter: z.boolean().optional(), answering_permission: z.boolean().optional(), ...precedentInput },
-    run: (ctx, a) => sendInput(ctx, a as { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean }),
+    input: {
+      tab_id: id,
+      text: z.string().max(INPUT_MAX_CHARS),
+      enter: z.boolean().optional(),
+      answering_permission: z.boolean().optional(),
+      ...precedentInput,
+      on_behalf_of: z.array(z.string().regex(/^message:[a-z0-9]{1,64}$/)).min(1).max(3).optional(),
+    },
+    run: (ctx, a) => sendInput(ctx, a as { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean; on_behalf_of?: string[] }),
   },
   {
     name: 'send_key',
@@ -205,7 +222,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'start_agent',
-    description: `Open a tab in a project and start Claude Code (account provider claude) or Codex (chatgpt) there under the chosen account, with prompt (max ${PROMPT_MAX_CHARS} chars) as its first message; the session stays interactive and visible in the app. With task_id (needs the tasks:update permission) the task is linked to the tab and moved to the project's agent column (a project setting; default the first doing column) unless it already sits in a doing column; a subtask is marked doing. The prompt cannot start with "-" or contain control characters other than newlines. To follow it, wait with wait_for_state (in one background subagent that ends at the first stop), then read_last_answer; questions and approvals reach the person as chat cards. read_screen only shows what is on screen; send_input answers it otherwise. Gemini and Antigravity accounts are not supported yet. Pick the account with list_ai_accounts (default: true is the machine's own login). machine_id picks the linked machine (required when the project has several). A project whose setup lists AI accounts needs neither: account_id omitted = the first listed account with room on the machine (and, with several machines and no machine_id, that account's machine); model omitted = the project's default model for that CLI (else the CLI's own). The result says which account and model were used; warning flags a full model id an older CLI may not know.`,
+    description: `Open a tab in a project and start Claude Code (account provider claude) or Codex (chatgpt) there under the chosen account, with prompt (max ${PROMPT_MAX_CHARS} chars) as its first message; the session stays interactive and visible in the app. With task_id (needs the tasks:update permission) the task is linked to the tab and moved to the project's agent column (a project setting; default the first doing column) unless it already sits in a doing column; a subtask is marked doing. The prompt cannot start with "-" or contain control characters other than newlines. To follow it, wait with wait_for_state (in one background subagent that ends at the first stop), then read_last_answer; questions and approvals reach the person as chat cards. read_screen only shows what is on screen; send_input answers it otherwise. Gemini and Antigravity accounts are not supported yet. Pick the account with list_ai_accounts (default: true is the machine's own login). machine_id picks the linked machine (required when the project has several). A project whose setup lists AI accounts needs neither: account_id omitted = the first listed account with room on the machine (and, with several machines and no machine_id, that account's machine); model omitted = the project's default model for that CLI (else the CLI's own). The result says which account and model were used; warning flags a full model id an older CLI may not know. ${START_AGENT_RESTRICTIONS_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: {
       project_id: id,
@@ -480,8 +497,12 @@ export async function allowedTools(ctx: ControlContext, scopes: readonly ApiToke
 }
 
 /** pt-BR answer for a tools/call this token may not make (spec §6: a tool error, not a JSON-RPC error). */
-export function refusalMessage(name: string): string {
-  const tool = TOOLS.find((t) => t.name === name);
-  if (!tool) return `Ferramenta desconhecida: ${name.slice(0, 64)}`;
-  return `Este token não pode usar a ferramenta ${name}: ela precisa do escopo \`${tool.scope}\` e da permissão ${tool.grantText ?? `${tool.resource}:${tool.action}`} na sua role`;
+export function refusalMessage(name: string, locale: Locale = DEFAULT_LOCALE): string {
+  const tool = TOOLS.find((x) => x.name === name);
+  if (!tool) return t(locale, 'Ferramenta desconhecida: {{tool}}', { tool: name.slice(0, 64) });
+  return t(locale, 'Este token não pode usar a ferramenta {{tool}}: ela precisa do escopo `{{scope}}` e da permissão {{grant}} na sua role', {
+    tool: name,
+    scope: tool.scope,
+    grant: tool.grantText ?? `${tool.resource}:${tool.action}`,
+  });
 }
