@@ -4,7 +4,7 @@ const API = 'https://api.github.com';
 
 export class GithubCiError extends Error {
   constructor(
-    public kind: 'auth' | 'not_found' | 'rate_limited' | 'http',
+    public kind: 'auth' | 'not_found' | 'rate_limited' | 'http' | 'forbidden' | 'not_mergeable',
     public status: number,
     public resetAt: Date | null = null,
   ) {
@@ -30,7 +30,7 @@ export interface GithubCiClient {
   listRuns(token: string, repo: string, headSha: string): Promise<WorkflowRun[]>;
 }
 
-function failure(res: Response): GithubCiError {
+export function failure(res: Response): GithubCiError {
   if (res.status === 401) return new GithubCiError('auth', 401);
   if (res.status === 404) return new GithubCiError('not_found', 404);
   if ((res.status === 403 || res.status === 429) && res.headers.get('x-ratelimit-remaining') === '0') {
