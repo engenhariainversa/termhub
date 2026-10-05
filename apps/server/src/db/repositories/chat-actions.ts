@@ -48,6 +48,9 @@ export interface InsertPendingInput {
   tab_id?: string | null;
   tool_use_id?: string | null;
   subagent_id?: string | null;
+  /** Born injected: a card the server asks itself (`automation_merge`), never a concierge proposal the
+   *  model must be told about — its decision is acted on by the server, not re-injected. */
+  injected?: boolean;
 }
 
 export interface InsertApprovedInput extends InsertPendingInput {
@@ -155,9 +158,22 @@ export class ChatActionsRepository {
         tabId: input.tab_id ?? null,
         toolUseId: input.tool_use_id ?? null,
         subagentId: input.subagent_id ?? null,
+        injectedAt: input.injected ? new Date() : null,
       },
     });
     return mapAction(row);
+  }
+
+  /** A row by id, unscoped: for the server's own cards (`automation_merge`), never for a request's id. */
+  async findById(id: string): Promise<ChatAction | undefined> {
+    const row = await this.db.chatAction.findUnique({ where: { id } });
+    return row ? mapAction(row) : undefined;
+  }
+
+  /** The newest row of a key in any of the user's conversations of a project, whatever its status: a server card is asked once per key. */
+  async findLatestByKeyInProject(userId: string, projectId: string, idempotencyKey: string): Promise<ChatAction | undefined> {
+    const row = await this.db.chatAction.findFirst({ where: { idempotencyKey, conversation: { userId, projectId } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    return row ? mapAction(row) : undefined;
   }
 
   /**

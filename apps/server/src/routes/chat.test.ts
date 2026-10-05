@@ -68,6 +68,7 @@ function build(opts: {
     start,
     startAfterDecision,
     resumeAfterDecision,
+    afterDecisions: vi.fn(),
     reset,
     hostFor: opts.hostFor ?? vi.fn(async () => ({ kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null })),
     projectStatuses: vi.fn(async () => [{ project_id: 'p1', busy: true, pending_confirmations: 1 }]),
@@ -376,7 +377,7 @@ it('surfaces a concierge that did not answer as 502', async () => {
 });
 
 it('approves a row the user owns: 200, decided through the repository, and the run is resumed', async () => {
-  const { app, decide, startAfterDecision, resumeAfterDecision, indexActions } = build();
+  const { app, decide, startAfterDecision, resumeAfterDecision, indexActions, service } = build();
   const events: ChatEvent[] = [];
   const unsubscribe = chatBus.subscribe((e) => events.push(e));
   let res;
@@ -396,6 +397,8 @@ it('approves a row the user owns: 200, decided through the repository, and the r
   expect(events).toContainEqual({ type: 'decision', user_id: 'u1', conversation_id: 'c1', action_id: 'act1', status: 'approved' });
   // Memory (spec 2026-09-26 concierge memory §4): the decided row is indexed, fire-and-forget.
   expect(indexActions).toHaveBeenCalledWith('u1', [expect.objectContaining({ id: 'act1', status: 'approved' })]);
+  // The decision hook (agentic board F-19) sees the decided row.
+  expect(service.afterDecisions).toHaveBeenCalledWith([expect.objectContaining({ id: 'act1', status: 'approved' })]);
 });
 
 it('denies a row the user owns: 200, decided as denied, and the run is resumed', async () => {
@@ -572,7 +575,7 @@ it('POST /chat/actions/decisions decides the batch and resumes the conversation 
   const rows: Record<string, typeof pendingAction & { status: string }> = { a1: { ...pendingAction, id: 'a1', status: 'pending' }, a2: { ...pendingAction, id: 'a2', status: 'pending' } };
   const findByIdForUser = vi.fn(async (id: string) => rows[id]);
   const decide = vi.fn(async (id: string, _u: string, status: string) => ({ ...rows[id], status }));
-  const { app, startAfterDecision, indexActions } = build({ findByIdForUser, decide });
+  const { app, startAfterDecision, indexActions, service } = build({ findByIdForUser, decide });
   const res = await app.inject({ method: 'POST', url: '/chat/actions/decisions', payload: { decisions: [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'deny' }] } });
   expect(res.statusCode).toBe(200);
   expect(decide).toHaveBeenCalledWith('a1', 'u1', 'approved');
@@ -581,6 +584,8 @@ it('POST /chat/actions/decisions decides the batch and resumes the conversation 
   expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'denied' }], skipped: [] });
   // Memory (spec 2026-09-26 concierge memory §4): the whole decided batch is indexed, fire-and-forget.
   expect(indexActions).toHaveBeenCalledWith('u1', [expect.objectContaining({ id: 'a1', status: 'approved' }), expect.objectContaining({ id: 'a2', status: 'denied' })]);
+  // The decision hook (agentic board F-19) sees every decided row of the batch.
+  expect(service.afterDecisions).toHaveBeenCalledWith([expect.objectContaining({ id: 'a1', status: 'approved' }), expect.objectContaining({ id: 'a2', status: 'denied' })]);
 });
 
 it('POST /chat/actions/decisions validates the body', async () => {

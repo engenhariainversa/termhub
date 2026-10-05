@@ -81,7 +81,7 @@ describe('setup automation block (TER-879)', () => {
     const s = normalizeSetup({ repo: null }, 2);
     expect(s.automation).toEqual({
       enabled: false, types: ['story', 'task', 'bug'], autonomy: 'pr', release_paths: [], store_paths: [],
-      release_workflows: [], epic_branch_pattern: 'epic/{ref}-{slug}', worktrees_dir: '~/.termhub/worktrees',
+      release_workflows: [], required_checks: [], epic_branch_pattern: 'epic/{ref}-{slug}', worktrees_dir: '~/.termhub/worktrees',
       allowed_tools: null, max_parallel: null, resume_max: 3, fix_attempts: 3, daily_budget_usd: null,
       summary_hour: null, prompts: { implementer: null, integrator: null, fixer: null },
     });

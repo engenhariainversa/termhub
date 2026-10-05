@@ -456,6 +456,7 @@ export const AutomationRunScalarFieldEnum = {
   allowedTools: 'allowedTools',
   lastTypedAt: 'lastTypedAt',
   wokenAt: 'wokenAt',
+  triggerSha: 'triggerSha',
   claimedBy: 'claimedBy',
   heartbeatAt: 'heartbeatAt',
   startedAt: 'startedAt',

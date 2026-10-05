@@ -10,7 +10,7 @@ type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) 
 export interface CiTickState { etags: Map<string, string>; pausedUntil: Map<string, number> }
 
 /** One pass: every project with a repo and work in progress (a card in doing, or a watched PR). */
-export async function ciTick(deps: { repos: Repositories; github: GithubCiClient; log: Log; now?: () => Date }, state: CiTickState): Promise<void> {
+export async function ciTick(deps: { repos: Repositories; github: GithubCiClient; log: Log; now?: () => Date; merge?: (projectId: string) => Promise<void> }, state: CiTickState): Promise<void> {
   const now = deps.now?.() ?? new Date();
   const projects = await deps.repos.projectSetup.listWithRepo().catch(() => []);
   for (const { project_id: projectId, data } of projects) {
@@ -20,7 +20,7 @@ export async function ciTick(deps: { repos: Repositories; github: GithubCiClient
       const watch = { repo: data.repo?.full_name ?? '', includeMerged: !!data.repo?.deploy_workflow };
       const busy = (await deps.repos.tasks.hasDoing(projectId)) || (await deps.repos.taskPullRequests.listWatched(projectId, watch, now)).length > 0;
       if (!busy) continue;
-      await syncProjectCi({ repos: deps.repos, github: deps.github, etags: state.etags, now: () => now }, projectId);
+      await syncProjectCi({ repos: deps.repos, github: deps.github, etags: state.etags, now: () => now, merge: deps.merge }, projectId);
     } catch (e) {
       if (e instanceof GithubCiError && e.kind === 'rate_limited') state.pausedUntil.set(projectId, e.resetAt?.getTime() ?? now.getTime() + DEFAULT_PAUSE_MS);
       deps.log.warn({ projectId, err: (e as Error).message }, 'ci sync failed');
@@ -29,14 +29,19 @@ export async function ciTick(deps: { repos: Repositories; github: GithubCiClient
 }
 
 /** The CI panel's poll (spec 2026-09-26 progress-panel D11); both colours may run it during a switch — writes are idempotent. */
-export function startCiSyncScheduler(repos: Repositories, log: Log, github: GithubCiClient = createGithubCiClient()): () => void {
+export function startCiSyncScheduler(
+  repos: Repositories,
+  log: Log,
+  github: GithubCiClient = createGithubCiClient(),
+  opts: { merge?: (projectId: string) => Promise<void> } = {},
+): () => void {
   const state: CiTickState = { etags: new Map(), pausedUntil: new Map() };
   let running = false;
   const tick = async () => {
     if (running) return; // a slow GitHub never stacks passes
     running = true;
     try {
-      await ciTick({ repos, github, log }, state);
+      await ciTick({ repos, github, log, merge: opts.merge }, state);
     } finally {
       running = false;
     }

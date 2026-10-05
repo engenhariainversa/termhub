@@ -72,6 +72,7 @@ import { purgeMobile } from './mobile/purge.js';
 import { actionForMethod, type Resource } from './auth/permissions.js';
 import { startTicketSyncScheduler } from './setup/tickets-sync.js';
 import { startCiSyncScheduler } from './ci/scheduler.js';
+import { MERGE_TOOL } from './automation/merge.js';
 import { startAgentUpdateScheduler } from './agent/latest-version.js';
 import { registerTerminalWs } from './terminal/ws.js';
 import { registerAgentWs } from './agent/ws.js';
@@ -336,7 +337,6 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
-  const stopCiSync = startCiSyncScheduler(repos, fastify.log);
   const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);
   const stopTabQuestionExpiry = startTabQuestionExpiry(repos, fastify.log);
   // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615).
@@ -378,6 +378,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // run it; the claim row picks one per card. It reads the same `lifecycle` the SIGTERM drain flips, so a
   // draining colour claims, types and takes over nothing.
   const automation = startAutomation({ repos, lifecycle, log: fastify.log, follower: { wakeStopped: (i) => waker.wakeForStoppedTab(i) } });
+  // The CI panel's poll, then the merge executor for projects with automation on (spec §10.1); approving a
+  // merge card in the chat merges that PR once (F-19).
+  const stopCiSync = startCiSyncScheduler(repos, fastify.log, undefined, { merge: (projectId) => automation.merge(projectId) });
+  chat.onApproved(MERGE_TOOL, (action) => automation.mergeApproved(action.id));
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     clearInterval(liveBeat);

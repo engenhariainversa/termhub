@@ -44,6 +44,24 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatActionsRepository (Po
     for (const r of [a, c]) await repo.decide(r.id, userId, 'denied');
   });
 
+  it('a server card (automation_merge) is born injected, never re-injected, and found by its key in the project whatever its status', async () => {
+    const projectId = newId();
+    await db.project.create({ data: { id: projectId, ownerId: userId, key: 'M' + projectId.replace(/[^a-z0-9]/gi, '').slice(0, 6).toUpperCase(), name: 'p' } });
+    const conv = await new ChatRepository(db).getOrCreateForProject(userId, projectId);
+    const key = 'automation_merge:acme/app#7@h1';
+    const row = await repo.insertPending({ conversation_id: conv.id, tool: 'automation_merge', args: { number: 7 }, class: 'irreversible', idempotency_key: key, project_id: projectId, injected: true });
+    expect(row.injected_at).not.toBeNull();
+    await repo.decide(row.id, userId, 'approved');
+    expect(await repo.listToInject(conv.id)).toEqual([]);
+    expect((await repo.findById(row.id))?.status).toBe('approved');
+    expect(await repo.claimApproved(row.id)).toBe(true);
+    expect(await repo.claimApproved(row.id)).toBe(false);
+    expect((await repo.findLatestByKeyInProject(userId, projectId, key))?.id).toBe(row.id);
+    expect(await repo.findLatestByKeyInProject(newId(), projectId, key)).toBeUndefined();
+    expect(await repo.findLatestByKeyInProject(userId, newId(), key)).toBeUndefined();
+    await db.project.delete({ where: { id: projectId } });
+  });
+
   it('finds an open row by its key and does not see a decided one', async () => {
     const row = await pending('k1');
     expect(row.status).toBe('pending');

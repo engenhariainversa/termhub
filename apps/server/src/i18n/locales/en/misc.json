@@ -52,5 +52,15 @@
   "Automático parou aqui: {{reason}}": "Automatic work stopped here: {{reason}}",
   "Automático parou em {{ref}}: {{reason}}": "Automatic work stopped at {{ref}}: {{reason}}",
   "Card da aba {{tab}}": "Card of tab {{tab}}",
-  "Card da aba": "Tab card"
+  "Card da aba": "Tab card",
+  "Merge esperando sua aprovação no chat": "Merge waiting for your approval in the chat",
+  "precisa de build nas lojas": "needs an app store build",
+  "Esperando os checks obrigatórios do PR": "Waiting for the PR's required checks",
+  "Branch base vermelha": "Base branch is red",
+  "Esperando a CI e a entrega da branch base": "Waiting for the base branch's CI and delivery",
+  "Atualizando o PR com a branch base": "Updating the PR with the base branch",
+  "Integração do GitHub sem permissão de escrita": "The GitHub integration has no write permission",
+  "PR com conflito depois das tentativas de correção": "PR still in conflict after the fix attempts",
+  "O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.": "The PR is still in conflict after the fix attempts; resolve the conflict and termhub merges it once CI is green.",
+  "Automático mesclou o PR #{{n}} de {{ref}}: {{url}}": "Automatic work merged PR #{{n}} of {{ref}}: {{url}}"
 }

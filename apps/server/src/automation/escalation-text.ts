@@ -24,6 +24,8 @@ export const RESUME_CAP = 'resume_cap';
 export const START_FAILED = 'start_failed';
 /** The agent exited again after its one restart: the run ends blocked. */
 export const AGENT_EXITED = 'agent_exited';
+/** A PR still in conflict after `fix_attempts` fixer runs (merge executor, spike R2): a person resolves it. */
+export const CONFLICT_CAP = 'conflict_cap';
 /** The agent itself said it is stuck (`report_card blocked`). */
 export const REPORTED_BLOCKED = 'reported_blocked';
 
@@ -38,6 +40,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [START_FAILED]: tk('O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.'),
   [AGENT_EXITED]: tk('O agente saiu de novo depois de reiniciado; confira a aba.'),
   [REPORTED_BLOCKED]: tk('O agente disse que travou e precisa de você.'),
+  [CONFLICT_CAP]: tk('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
 };
 
 /** What a reason with no text of its own shows. */

@@ -115,6 +115,8 @@ export const automationSchema = z.object({
   release_paths: z.array(glob).max(50).default([]),
   store_paths: z.array(glob).max(50).default([]),
   release_workflows: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
+  // spike R1 (TER-964): workflows (name or file) that must pass on the PR head before termhub merges; [] = every run
+  required_checks: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
   epic_branch_pattern: z.string().trim().min(1).max(100).refine((p) => p.includes('{ref}'), 'use {ref}').default('epic/{ref}-{slug}'),
   worktrees_dir: z.string().trim().min(1).max(512).default('~/.termhub/worktrees'),
   allowed_tools: z.array(z.string().trim().min(1).max(200)).max(100).nullable().default(null),

@@ -678,6 +678,16 @@ it("set_project_repo says when deploy is cleared, and never names another owner'
   expect(card.summary).not.toContain('Integração Alheia');
 });
 
+// automation_merge (agentic board D7): the merge executor's own card for a PR above the project's level.
+it('automation_merge names the PR, the repository, why it asks and the project', async () => {
+  const repos = fakeRepos();
+  const args = { project_id: 'p1', repo: 'acme/api', number: 7, head_sha: 'h1', title: 'Board: drag cards', url: 'u', base: 'main', needed: 'deploy' };
+  const [card] = await describeActions(repos, [action({ tool: 'automation_merge', args, project_id: 'p1', class: 'irreversible' })], OWNER);
+  expect(card.summary).toBe('mesclar o PR #7 "Board: drag cards" de `acme/api` (precisa do nível Deploy) no projeto reactivando');
+  const [store] = await describeActions(repos, [action({ tool: 'automation_merge', args: { ...args, needed: 'store' }, project_id: 'p1', class: 'irreversible' })], OWNER);
+  expect(store.summary).toContain('(precisa de build nas lojas)');
+});
+
 it('looks up integrations only when a set_project_repo card needs one', async () => {
   const repos = fakeRepos();
   await describeActions(repos, [action({ tool: 'send_input', args: { tab_id: 't1', text: 'x' }, tab_id: 't1' })], OWNER);

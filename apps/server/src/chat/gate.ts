@@ -69,7 +69,9 @@ const writeTools = new Set([
 // the tab the same owner-scoped way and only for a stopped tab. Never let close_tab through without one.
 // create_integration and set_project_repo change credentials and where the CI panel reads from
 // (spec 2026-09-28 MCP integrations D6): always a card, never covered by a grant.
-const irreversibleTools = new Set(['close_tab', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo']);
+// automation_merge is the card the merge executor asks for a PR above the project's level (agentic board
+// D7): never a concierge tool, never covered by a grant; approving it merges that PR once.
+const irreversibleTools = new Set(['close_tab', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'automation_merge']);
 
 // Keys that interrupt the running process and cannot be undone
 const interruptingKeys = new Set(['C-c', 'Escape']);

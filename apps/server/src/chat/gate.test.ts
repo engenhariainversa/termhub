@@ -144,6 +144,16 @@ it('classifies the integration and repository setup tools: reads are reads, writ
   }
 });
 
+it('automation_merge (the merge executor\'s approval card, agentic board D7) is irreversible and never grantable nor a default', () => {
+  const args = { project_id: 'p1', repo: 'acme/api', number: 7, head_sha: 'h1' };
+  expect(actionClass('automation_merge', args)).toBe('irreversible');
+  expect(grantable('automation_merge', { ...args, tab_id: 't1' })).toBe(false);
+  expect(boardGrantable('automation_merge')).toBe(false);
+  expect(terminalGrantable('automation_merge', { ...args, tab_id: 't1' })).toBe(false);
+  expect(standingKindOf('automation_merge', args)).toBeNull();
+  expect(defaultKindOf('automation_merge', args)).toBeNull();
+});
+
 describe('terminalGrantable', () => {
   it.each([
     ['send_key', { tab_id: 't1', key: 'Enter' }, true],

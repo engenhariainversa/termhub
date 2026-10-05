@@ -81,6 +81,14 @@ describe('github write client', () => {
     expect(await kindOf(createGithubWriteClient(async () => json(405, {})).merge('t', 'a/b', 9, i))).toBe('not_mergeable');
   });
 
+  it('updates a branch behind its base with the head guard; 422 is not updated', async () => {
+    const f = vi.fn(async () => json(202, { message: 'Updating pull request branch.' }));
+    expect(await createGithubWriteClient(f).updateBranch('t', 'a/b', 9, 'h')).toBe(true);
+    expect(call(f)).toMatchObject({ url: 'https://api.github.com/repos/a/b/pulls/9/update-branch', method: 'PUT', body: { expected_head_sha: 'h' } });
+    expect(await createGithubWriteClient(async () => json(422, {})).updateBranch('t', 'a/b', 9, 'h')).toBe(false);
+    expect(await kindOf(createGithubWriteClient(async () => json(403, {})).updateBranch('t', 'a/b', 9, 'h'))).toBe('forbidden');
+  });
+
   it('types write failures', async () => {
     const reset = String(Math.floor(Date.now() / 1000) + 60);
     const merge = (res: Response) => kindOf(createGithubWriteClient(async () => res).openPull('t', 'a/b', { head: 'h', base: 'b', title: 't', body: '', draft: false }));

@@ -25,6 +25,8 @@ export interface GithubWriteClient {
   files(token: string, repo: string, n: number): Promise<PullFiles>;
   /** 409 (head moved) gives `{ merged: false }`; 405 (not mergeable, already merged, method not allowed) throws `not_mergeable`. */
   merge(token: string, repo: string, n: number, i: { sha: string; title: string; method: 'squash' | 'merge' }): Promise<{ merged: boolean; sha: string | null }>;
+  /** Merges the base into a PR that is behind it (GitHub's "Update branch"). False when the head moved or there was nothing to do (422). */
+  updateBranch(token: string, repo: string, n: number, expectedHeadSha: string): Promise<boolean>;
 }
 
 /** Like the CI client's mapping, but a 403 that is not a rate limit on a write means the token is read-only. */
@@ -104,6 +106,12 @@ export function createGithubWriteClient(fetchImpl: typeof fetch = fetch): Github
       if (!res.ok) throw writeFailure(res);
       const body = (await res.json()) as { merged?: boolean; sha?: string };
       return { merged: body.merged !== false, sha: body.sha ?? null };
+    },
+    async updateBranch(token, repo, n, expectedHeadSha) {
+      const res = await call(token, 'PUT', `/repos/${repo}/pulls/${n}/update-branch`, { expected_head_sha: expectedHeadSha });
+      if (res.status === 422) return false;
+      if (!res.ok) throw writeFailure(res);
+      return true;
     },
   };
 }

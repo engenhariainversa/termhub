@@ -15,12 +15,12 @@ const cards: Record<number, { id: string; type: string; parent_id: string | null
   3: { id: 'sub3', type: 'subtask', parent_id: 'card2' },
 };
 
-function setup(over: { integrationOwner?: string | null; projectOwner?: string | null; provider?: string; repo?: object | null } = {}) {
+function setup(over: { integrationOwner?: string | null; projectOwner?: string | null; provider?: string; repo?: object | null; automation?: object } = {}) {
   const replaceLinks = vi.fn(async () => {});
   const updateCi = vi.fn(async () => {});
   const listWatched = vi.fn(async () => [] as unknown[]);
   const repos = {
-    projectSetup: { get: vi.fn(async () => ({ data: { repo: over.repo === undefined ? { integration_id: 'i1', full_name: 'acme/app', deploy_workflow: 'deploy.yml' } : over.repo } })) },
+    projectSetup: { get: vi.fn(async () => ({ data: { repo: over.repo === undefined ? { integration_id: 'i1', full_name: 'acme/app', deploy_workflow: 'deploy.yml' } : over.repo, automation: { enabled: false, ...over.automation } } })) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', key: 'TER', owner_id: over.projectOwner === undefined ? 'u1' : over.projectOwner })) },
     integrations: {
       findById: vi.fn(async () => ({ id: 'i1', provider: over.provider ?? 'github', owner_id: over.integrationOwner === undefined ? 'u1' : over.integrationOwner })),
@@ -115,5 +115,31 @@ describe('syncProjectCi', () => {
     expect(replaceLinks).not.toHaveBeenCalled();
     await syncProjectCi(deps, 'p1');
     expect(ciErrorOf('p1')).toBeNull();
+  });
+
+  // Agentic board §10.1 and Review Focus 5: the merge executor runs after the sync's writes, and only where
+  // the project turned automation on.
+  it('a project with automation off never calls the merge executor', async () => {
+    const { deps } = setup();
+    const merge = vi.fn(async () => {});
+    await syncProjectCi({ ...deps, merge }, 'p1');
+    expect(merge).not.toHaveBeenCalled();
+  });
+
+  it('a project with automation on runs the merge executor after the CI writes', async () => {
+    const { deps, updateCi, listWatched } = setup({ automation: { enabled: true } });
+    listWatched.mockResolvedValue([{ repo: 'acme/app', number: 7, state: 'open', head_sha: 'abc', merge_commit_sha: null }]);
+    const merge = vi.fn(async () => {});
+    await syncProjectCi({ ...deps, merge }, 'p1');
+    expect(merge).toHaveBeenCalledWith('p1');
+    expect(updateCi.mock.invocationCallOrder[0]).toBeLessThan(merge.mock.invocationCallOrder[0]!);
+  });
+
+  it('a failed sync does not run the merge executor', async () => {
+    const { deps, github } = setup({ automation: { enabled: true } });
+    vi.mocked(github.listPulls).mockRejectedValueOnce(new GithubCiError('auth', 401));
+    const merge = vi.fn(async () => {});
+    await expect(syncProjectCi({ ...deps, merge }, 'p1')).rejects.toBeInstanceOf(GithubCiError);
+    expect(merge).not.toHaveBeenCalled();
   });
 });

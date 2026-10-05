@@ -97,6 +97,15 @@ function formatKeys(keys: string[]): string {
  * no single machine and naming one would be misleading. */
 const MACHINE_LINK_TOOLS = new Set(['link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine']);
 
+/** Why an `automation_merge` card asks: the level the PR needs, by name as the Setup shows it. */
+const MERGE_NEED: Record<string, string> = {
+  merge: 'precisa do nível Merge com CI verde',
+  deploy: 'precisa do nível Deploy',
+  release: 'precisa do nível Publicação',
+  store: 'precisa de build nas lojas',
+  files_incomplete: 'a lista de arquivos do PR veio incompleta',
+};
+
 function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<string, Ticket>, integrationById: Map<string, { name: string }>): string {
   const args = (action.args ?? {}) as Record<string, unknown>;
   switch (action.tool) {
@@ -136,6 +145,12 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       return `retomar o trabalho automático${args.project_id ? ' do projeto' : ' de todos os projetos'}`;
     case 'resume_automation_run':
       return 'retomar o trabalho automático de um card';
+    case 'automation_merge': {
+      // The merge executor's own card (agentic board D7): args are the server's, never the concierge's.
+      const n = typeof args.number === 'number' ? `#${args.number}` : 'um PR';
+      const title = asString(args.title);
+      return `mesclar o PR ${n}${title ? ` "${title}"` : ''} de \`${asString(args.repo)}\` (${MERGE_NEED[asString(args.needed)] ?? 'acima do nível do projeto'})`;
+    }
     case 'sync_tickets':
       return 'sincronizar os tickets de todas as fontes';
     case 'import_tickets': {
