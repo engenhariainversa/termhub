@@ -94,6 +94,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
         appVersion: '1', verificationCode: '123456', requestSecretHash: `r-${userId}`, ip: '1.1.1.1', expiresAt: new Date(Date.now() + DAY),
       },
     });
+    await db.automationSummary.create({ data: { userId, day: new Date('2026-10-05') } });
     await db.userNotification.create({ data: { id: newId(), userId, kind: 'answer', title: 't', body: 'b' } });
     await db.session.create({ data: { id: newId(), userId, tokenHash: `s-${userId}`, expiresAt: new Date(Date.now() + DAY) } });
     await db.loginCode.create({ data: { id: newId(), email, codeHash: 'c', expiresAt: new Date(Date.now() + DAY) } });
