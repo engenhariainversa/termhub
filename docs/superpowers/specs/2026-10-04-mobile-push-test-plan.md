@@ -11,6 +11,32 @@ Related: product spec `2026-09-24-mobile-chat-app-design.md` §9 (push and histo
 (a seen wait that comes back), and the test endpoint proposal `2026-10-04-push-test-endpoint-design.md`
 (TER-913).
 
+## 0. Status after the fixes (2026-10-05)
+
+The cards from §6 shipped (server deploy + OTA of the `production` channel), except TER-922, which waits
+for evidence from the phone. Sections 1–5 below describe the code as it was on 2026-10-04; where they
+say "expected to fail today" or "likely today", read this table instead.
+
+| Card | PRs | What changes for the cases |
+|---|---|---|
+| TER-913 | #322, #323, #324, #327 | Test push: web Aparelhos → "Notificação de teste" (kind + delay 0/10/30 s, any of your active devices) and app Ajustes → Notificações → "Enviar notificação de teste" (confirmation in 10 s). Title "[Teste] …", tap opens your latest conversation, no history row. ~15 s later Aparelhos → Atividade shows "entregue à Apple/Google" or the error code (`InvalidCredentials` = APNs/FCM key problem). Ajustes → Versão shows `OTA: <update id>` or `OTA: binário`. |
+| TER-919 | #315 | B-07: one push and one history row per question; countdown, suggestion, "Cancelar", "Responder sozinho" off and a failed send no longer push again. |
+| TER-920 | #313 | X-02: no push and no history row while the deletion is pending; X-03 unchanged. |
+| TER-921 | #316 | R-08: coming back to the app after turning notifications on in the system settings registers the token at once (any screen). |
+| TER-923 | #336, #339 | B-01: the icon shows the unread count. B-05/B-06: answering or ending a card anywhere marks its row read and sends a silent badge update; opening the app removes the handled push from the notification center. Grouping by conversation is not available in Expo Push. |
+| TER-924 | #322 | §4: Expo receipts are read ~15 min after each push; `DeviceNotRegistered` clears the token, every error is logged with its code and shows in Aparelhos as "Notificação não entregue". |
+| TER-925 | #330, #335 | New, opt-in: Ajustes → Notificações → "Avisar quando uma aba terminar" (per account, off by default). A project tab that was working and ends its turn (`waiting_input` or `finished`) or its agent (`idle`) pushes "{projeto}: aba terminou", unless a question card is open on it; at most once per tab every 5 min; not while the app is open in a chat. The tap opens the tab's session screen. P-06b becomes a push when the switch is on. |
+
+New cases for the next run:
+
+| Id | Steps | Expected |
+|---|---|---|
+| T-01 | Web Aparelhos → test push "Pergunta de aba" in 10 s, close the app. | Push "[Teste] … precisa de você"; tap opens the latest chat; Atividade shows "entregue à Apple/Google" within ~20 s. |
+| T-02 | App Ajustes → "Enviar notificação de teste", close the app. | Push in 10 s; nothing new in Notificações. |
+| F-01 | Turn on "Avisar quando uma aba terminar"; in a Claude tab, ask for a short task; close the app. | One push "{projeto}: aba terminou" when it ends; tap → PIN if locked → the tab's session screen. |
+| F-02 | Same as F-01 with the switch off. | No push. |
+| F-03 | A tab that ends with an AskUserQuestion. | Only "precisa de você" (P-03), not "aba terminou". |
+
 ## 1. How it works today (code map)
 
 ### 1.1 Token registration
@@ -254,4 +280,4 @@ A failure that has no card yet becomes a bug card on the board, linked to TER-90
 
 ## 7. Impact on other users
 
-None. This is a test plan and a set of cards. No behavior changes.
+None. This is a test plan and a set of cards. No behavior changes. (The fixes it led to carry their own impact sections in their PRs; see §0.)
