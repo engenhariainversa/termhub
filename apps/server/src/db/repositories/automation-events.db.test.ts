@@ -89,6 +89,14 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation events and pau
     expect(await events.removeStale(taskId, 'ci_fix_requested', { pr: 7, sha: 'h1', via: 'pending' }, past)).toBe(0);
   });
 
+  it('findOnce reads a claim by its payload, and replacePayloadIf moves it once (final review I3)', async () => {
+    const row = (await events.insertOnce({ project_id: projectId, task_id: taskId, kind: 'ci_fix_requested', payload: { pr: 7, sha: 'h1', via: 'fixer' } }))!;
+    expect((await events.findOnce(taskId, 'ci_fix_requested', { pr: 7, sha: 'h1' }))?.id).toBe(row.id);
+    expect(await events.findOnce(taskId, 'ci_fix_requested', { pr: 7, sha: 'h2' })).toBeNull();
+    const moves = await Promise.all([1, 2].map(() => events.replacePayloadIf(row.id, { via: 'fixer' }, { pr: 7, sha: 'h1', via: 'escalated' })));
+    expect(moves.filter((m) => m !== null)).toEqual([expect.objectContaining({ id: row.id, payload: { pr: 7, sha: 'h1', via: 'escalated' } })]);
+  });
+
   it('purges events older than the cutoff only', async () => {
     const old = await events.insert({ project_id: projectId, kind: 'paused' });
     await db.automationEvent.update({ where: { id: old.id }, data: { createdAt: new Date(Date.now() - 31 * 24 * 3600_000) } });

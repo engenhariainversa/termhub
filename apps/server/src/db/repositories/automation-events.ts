@@ -8,6 +8,7 @@ export type AutomationEventKind =
   | 'run_resumed'
   | 'run_done'
   | 'run_blocked'
+  | 'run_cancelled'
   | 'question_answered'
   | 'escalated'
   | 'pr_opened'
@@ -110,6 +111,28 @@ export class AutomationEventsRepository {
   /** Replaces the event's payload (a claim settled with its outcome); null when the row is gone. */
   async setPayload(id: string, payload: AutomationEventPayload): Promise<AutomationEvent | null> {
     const { count } = await this.db.automationEvent.updateMany({ where: { id }, data: { payload } });
+    if (count === 0) return null;
+    return map(await this.db.automationEvent.findUniqueOrThrow({ where: { id } }));
+  }
+
+  /** The card's event of `kind` whose payload holds every pair of `match` (a once-only claim), or null. */
+  async findOnce(taskId: string, kind: AutomationEventKind, match: Record<string, string | number>): Promise<AutomationEvent | null> {
+    const row = await this.db.automationEvent.findFirst({
+      where: { taskId, kind, AND: Object.entries(match).map(([k, v]) => ({ payload: { path: [k], equals: v } })) },
+      orderBy: { createdAt: 'desc' },
+    });
+    return row ? map(row) : null;
+  }
+
+  /**
+   * Replaces the event's payload only while it still holds every pair of `match`: the one caller that moves a
+   * claim from one outcome to the next gets the row, a second one (the other colour) null.
+   */
+  async replacePayloadIf(id: string, match: Record<string, string | number>, payload: AutomationEventPayload): Promise<AutomationEvent | null> {
+    const { count } = await this.db.automationEvent.updateMany({
+      where: { id, AND: Object.entries(match).map(([k, v]) => ({ payload: { path: [k], equals: v } })) },
+      data: { payload },
+    });
     if (count === 0) return null;
     return map(await this.db.automationEvent.findUniqueOrThrow({ where: { id } }));
   }

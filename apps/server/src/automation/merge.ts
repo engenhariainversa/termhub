@@ -22,8 +22,8 @@ import { REASON_TEXT } from './eligibility.js';
 import { cleanupRuns, type CleanupDeps } from './cleanup.js';
 import { CI_CAP, CONFLICT_CAP } from './escalation-text.js';
 import { postAutomationLine } from './chat-line.js';
-import { claimEvent, recordEvent, settleEvent } from './events.js';
-import { defaultType, escalateDelivery, escalateRun } from './follower.js';
+import { claimEvent, publishEvent, recordEvent, settleEvent } from './events.js';
+import { defaultType, endRunsOfMergedCard, escalateDelivery } from './follower.js';
 import { clearMergeWait, noteMergeWait, type MergeWait } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { allows, requiredLevel, type NeededLevel } from './policy.js';
@@ -367,25 +367,42 @@ async function baseState(c: PullCtx, baseBranch: string): Promise<'green' | 'red
   return 'green';
 }
 
-/** A PR GitHub cannot merge cleanly: one fixer run per head (R2), up to `fix_attempts`, then the person. */
+/** A PR GitHub cannot merge cleanly: one fixer run per head (R2), up to `fix_attempts`, then the person. A
+ *  fixer for this very head that ended while the head stayed the same (it never pushed) is not left to stall:
+ *  the person is told once (final review I3). */
 async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promise<void> {
   const { deps } = c;
   const { repos } = deps;
   const log = deps.log ?? noopLog;
   const task = c.primary;
   const used = await fixesUsed(repos, task.id);
-  if (used >= c.setup.automation.fix_attempts) {
-    // the marker takes this head's trigger: the escalation happens once per head, on whichever colour
-    const marker = await repos.automationRuns.claim({ project_id: c.project.id, task_id: task.id, role: 'fixer', instance: deps.instance, trigger_sha: row.head_sha });
-    waitOn(c, 'merge_conflict_cap');
-    if (!marker) return;
-    await repos.automationRuns.update(marker.id, deps.instance, { status: 'blocked', waiting_reason: CONFLICT_CAP, ended_at: now(deps) });
-    await escalateRun(repos, { ...marker, status: 'blocked', waiting_reason: CONFLICT_CAP }, CONFLICT_CAP, log, { extra: { pr: row.number, url: row.url, sha: row.head_sha, attempts: used } });
-    return;
-  }
+  if (used >= c.setup.automation.fix_attempts) return void (await conflictEscalation(c, row, { attempts: used }));
   const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, custom: c.setup.automation.prompts.fixer });
   const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: row.head_sha, branch: row.head_ref, base, prompt });
   if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a conflict');
+  if (started !== 'taken') return;
+  // taken: a run of the card is still on (it may be the fixer itself), or this head's fixer already ended
+  if ((await repos.automationRuns.activeByProject(c.project.id)).some((r) => r.task_id === task.id)) return;
+  await conflictEscalation(c, row, { attempts: used, cause: FIXER_NO_PUSH });
+}
+
+/** Why a PR head was escalated before the cap: its fix ended and the head did not move (no push). */
+export const FIXER_NO_PUSH = 'fixer_no_push';
+
+/** The conflict marker's trigger: apart from the fixer's own (the head SHA), so both can exist for one head. */
+const conflictMarker = (sha: string) => `${CONFLICT_CAP}:${sha}`;
+
+/**
+ * Tells the person a conflict stays on this head (the cap, or a fixer that ended without pushing): once per
+ * head, on whichever colour — a marker run (`blocked`, never active, so a card with a run still on gets it
+ * too) holds the head's marker trigger. The board says why the PR waits on every pass.
+ */
+async function conflictEscalation(c: PullCtx, row: TaskPullRequest, extra: { attempts: number; cause?: string }): Promise<void> {
+  const { repos } = c.deps;
+  waitOn(c, 'merge_conflict_cap');
+  const marker = await repos.automationRuns.insertMarker({ project_id: c.project.id, task_id: c.primary.id, role: 'fixer', instance: c.deps.instance, trigger_sha: conflictMarker(row.head_sha), waiting_reason: CONFLICT_CAP });
+  if (!marker) return;
+  await escalateDelivery(repos, { project_id: c.project.id, task_id: c.primary.id }, CONFLICT_CAP, c.deps.log ?? noopLog, { pr: row.number, url: row.url, sha: row.head_sha, ...extra });
 }
 
 /**
@@ -436,7 +453,7 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
   if (!claim) {
     // a claim nobody settled (the process stopped mid-way) is taken again once it is stale
     const stale = await repos.automationEvents.removeStale(task.id, 'ci_fix_requested', { ...key, via: 'pending' }, new Date(now(deps).getTime() - CI_CLAIM_STALE_MS));
-    if (stale === 0) return;
+    if (stale === 0) return void (await onFixedHeadStillRed(c, row));
     claim = await claimEvent(repos, { ...about, payload: { ...key, url: row.url, via: 'pending' } });
     if (!claim) return;
   }
@@ -485,6 +502,34 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
     if (!acted) await giveBack().catch(() => {});
     throw e;
   }
+}
+
+/** How long after the card's last run ended a red head that did not move counts as "ended without a push":
+ *  past a CI sync or two, so a push made right before the end has been read. */
+export const NO_PUSH_GRACE_MS = 3 * 60_000;
+
+/**
+ * A red head whose fix was already asked (typed into the owning run, or a fixer) — final review I3: once no
+ * run of the card is on and the last one ended NO_PUSH_GRACE_MS ago, the head did not move, so the fix ended
+ * without a push. The person is told once per head: the head's claim goes from `typed`/`fixer` to
+ * `escalated` in one conditional write, which only one colour wins. Already escalated: the board says so.
+ */
+async function onFixedHeadStillRed(c: PullCtx, row: TaskPullRequest): Promise<void> {
+  const { repos } = c.deps;
+  const task = c.primary;
+  const key = { pr: row.number, sha: row.head_sha };
+  const claim = await repos.automationEvents.findOnce(task.id, 'ci_fix_requested', key);
+  const via = claim?.payload.via;
+  if (via === 'escalated') return waitOn(c, 'merge_ci_cap');
+  if (!claim || (via !== 'typed' && via !== 'fixer')) return;
+  if ((await repos.automationRuns.activeByProject(c.project.id)).some((r) => r.task_id === task.id)) return;
+  const ended = await repos.automationRuns.lastEndedAt(task.id);
+  if (!ended || now(c.deps).getTime() - ended.getTime() < NO_PUSH_GRACE_MS) return;
+  waitOn(c, 'merge_ci_cap');
+  const won = await repos.automationEvents.replacePayloadIf(claim.id, { via }, { ...claim.payload, via: 'escalated', cause: FIXER_NO_PUSH });
+  if (!won) return;
+  await publishEvent(repos, won);
+  await escalateDelivery(repos, { project_id: c.project.id, task_id: task.id }, CI_CAP, c.deps.log ?? noopLog, { ...key, url: row.url, cause: FIXER_NO_PUSH });
 }
 
 /** Whether a line typed into the tab reaches the agent now: it is on, and not on a limit, a swap or an exit. */
@@ -537,6 +582,9 @@ async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: '
     } catch (e) {
       log.warn({ taskId: task.id, code: codeOf(e) }, 'automation: merged card not moved to done');
     }
+    // a run still on for the card (it never called report_card, or it is parked on a question) ends here:
+    // nothing is resumed into a merged card's tab, and the cleanup below is not held by it (final review I2)
+    await endRunsOfMergedCard(repos, c.project.id, task.id, { url: row.url, number: row.number }, log);
     const kept = await cleanupAfterMerge(c, task);
     await recordEvent(repos, {
       project_id: c.project.id,

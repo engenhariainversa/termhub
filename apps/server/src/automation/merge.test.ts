@@ -48,7 +48,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
     prs: o.prs ?? [pr()],
     paused: o.paused ?? false,
     actions: [] as ChatAction[],
-    runs: [] as Array<{ id: string; task_id: string; role: string; trigger_sha: string | null; status: string; waiting_reason: string | null; tab_id: string | null; branch: string | null; fix_count: number }>,
+    runs: [] as Array<{ id: string; task_id: string; role: string; trigger_sha: string | null; status: string; waiting_reason: string | null; tab_id: string | null; branch: string | null; fix_count: number; claimed_by?: string; ended_at?: Date | null }>,
     tabs: {} as Record<string, { id: string; state: string | null; state_text: string | null; rate_limited_at: string | null }>,
     openQuestion: false,
     eventSeq: 0,
@@ -121,6 +121,13 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
         state.events = state.events.filter((x) => (x as { id?: string }).id !== id);
       }),
       removeStale: vi.fn(async () => 0),
+      findOnce: vi.fn(async (taskId: string, kind: string, match: Record<string, unknown>) => state.events.find((x) => x.kind === kind && x.task_id === taskId && Object.entries(match).every(([k, v]) => x.payload?.[k] === v)) ?? null),
+      replacePayloadIf: vi.fn(async (id: string, match: Record<string, unknown>, payload: Record<string, unknown>) => {
+        const row = state.events.find((x) => (x as { id?: string }).id === id);
+        if (!row || !Object.entries(match).every(([k, v]) => row.payload?.[k] === v)) return null;
+        row.payload = payload;
+        return row;
+      }),
     },
     tabs: { findById: vi.fn(async (id: string) => state.tabs[id]) },
     tabQuestions: { hasOpenQuestion: vi.fn(async () => state.openQuestion) },
@@ -139,6 +146,23 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
       update: vi.fn(async (id: string, _i: string, patch: { status?: string; waiting_reason?: string }) => {
         Object.assign(state.runs.find((r) => r.id === id)!, patch);
         return true;
+      }),
+      // the conflict escalation's marker: ended at once, one per (card, role, trigger)
+      insertMarker: vi.fn(async (i: { task_id: string; role: string; trigger_sha: string; waiting_reason: string }) => {
+        if (state.runs.some((r) => r.task_id === i.task_id && r.role === i.role && r.trigger_sha === i.trigger_sha)) return null;
+        const r = { id: `r${state.runs.length + 1}`, project_id: 'p1', task_id: i.task_id, role: i.role, trigger_sha: i.trigger_sha, status: 'blocked', waiting_reason: i.waiting_reason, tab_id: null, branch: null, fix_count: 0, claimed_by: 'test', ended_at: new Date('2026-10-05T12:00:00Z') };
+        state.runs.push(r);
+        return r;
+      }),
+      updateActive: vi.fn(async (id: string, _i: string, patch: { status?: string; waiting_reason?: string | null; ended_at?: Date }) => {
+        const r = state.runs.find((x) => x.id === id);
+        if (!r || !['queued', 'starting', 'running', 'waiting'].includes(r.status)) return false;
+        Object.assign(r, patch);
+        return true;
+      }),
+      lastEndedAt: vi.fn(async (taskId: string) => {
+        const ends = state.runs.filter((r) => r.task_id === taskId && r.ended_at).map((r) => r.ended_at!.getTime());
+        return ends.length > 0 ? new Date(Math.max(...ends)) : null;
       }),
       activeByProject: vi.fn(async () => state.runs.filter((r) => ['queued', 'starting', 'running', 'waiting'].includes(r.status))),
       sumFixCount: vi.fn(async (taskId: string) => state.runs.filter((r) => r.task_id === taskId).reduce((n, r) => n + r.fix_count, 0)),
@@ -483,7 +507,8 @@ describe('runMergeExecutor', () => {
     await runMergeExecutor(w.deps, 'p1');
     expect(w.startFixer).not.toHaveBeenCalled();
     expect(w.state.events.filter((e) => e.kind === 'escalated')).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'conflict_cap', pr: 7, sha: 'h1', attempts: 3 }) })]);
-    expect(w.state.runs).toEqual([expect.objectContaining({ role: 'fixer', trigger_sha: 'h1', status: 'blocked', waiting_reason: 'conflict_cap' })]);
+    // the marker has a trigger of its own: the head's fixer trigger stays free (final review I3)
+    expect(w.state.runs).toEqual([expect.objectContaining({ role: 'fixer', trigger_sha: 'conflict_cap:h1', status: 'blocked', waiting_reason: 'conflict_cap' })]);
     expect(mergeWaitOf('c1', new Date('2026-10-05T12:00:00Z'))).toBe('merge_conflict_cap');
   });
 
@@ -1038,5 +1063,82 @@ describe('red CI (spec D21)', () => {
     await runMergeExecutor(w.deps, 'p1');
     expect(w.startFixer).not.toHaveBeenCalled();
     expect(w.state.events.filter((e) => e.kind === 'escalated')).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'conflict_cap', attempts: 3 }) })]);
+  });
+});
+
+describe('runs and fixes that must not stall (final review I2, I3)', () => {
+  const NOW = new Date('2026-10-05T12:00:00Z');
+  const red = (sha: string) => pr({ head_sha: sha, ci_state: 'failed', ci_summary: { total: 1, passed: 0, failed: 1, running: 0, failing: ['ci'] } });
+  const escalations = (w: ReturnType<typeof world>) => w.state.events.filter((e) => e.kind === 'escalated');
+  /** A startFixer that answers like the dispatcher: `taken` once this head's trigger (or an active run) exists. */
+  const realisticFixer = (w: ReturnType<typeof world>) =>
+    w.startFixer.mockImplementation(async (i) => {
+      if (w.state.runs.some((r) => r.task_id === i.taskId && (r.trigger_sha === i.triggerSha || ['queued', 'starting', 'running', 'waiting'].includes(r.status)))) return 'taken';
+      w.state.runs.push({ id: `r${w.state.runs.length + 1}`, task_id: i.taskId, role: 'fixer', trigger_sha: i.triggerSha, status: 'running', waiting_reason: null, tab_id: 'tabf', branch: i.branch, fix_count: 0 });
+      return 'started';
+    });
+
+  it('a merge ends the card\'s run still on (parked on a question) done, so nothing is resumed into it', async () => {
+    const w = world();
+    w.state.runs.push({ id: 'impl', task_id: 'c1', role: 'implementer', trigger_sha: null, status: 'waiting', waiting_reason: 'permission_needed', tab_id: 'tab1', branch: BRANCH.c1!, fix_count: 0, claimed_by: 'blue' });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledTimes(1);
+    expect(w.state.runs.find((r) => r.id === 'impl')).toMatchObject({ status: 'done', waiting_reason: null });
+    expect(w.state.events.find((e) => e.kind === 'run_done')).toMatchObject({ task_id: 'c1', payload: expect.objectContaining({ via: 'merged' }) });
+    expect(w.state.events.some((e) => e.kind === 'pr_opened')).toBe(false);
+  });
+
+  it('a conflict fixer that ended without pushing (the head did not move) is escalated once, and the board says why', async () => {
+    const w = world();
+    realisticFixer(w);
+    w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: false, mergeable_state: 'dirty', head_sha: 'h1', base_ref: EPIC_BRANCH }));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.startFixer).toHaveBeenCalledTimes(1);
+    // while the fixer works nothing is escalated
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([]);
+    // it ends without a push: the same head is still in conflict
+    Object.assign(w.state.runs[0]!, { status: 'done', ended_at: NOW });
+    await runMergeExecutor(w.deps, 'p1');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([expect.objectContaining({ task_id: 'c1', payload: expect.objectContaining({ reason: 'conflict_cap', pr: 7, sha: 'h1', cause: 'fixer_no_push' }) })]);
+    expect(w.state.messages).toHaveLength(1);
+    expect(mergeWaitOf('c1', NOW)).toBe('merge_conflict_cap');
+    // the marker does not count as a fix
+    expect(w.state.runs.filter((r) => r.waiting_reason === 'conflict_cap')).toHaveLength(1);
+  });
+
+  it('the conflict cap escalates even while the card has a run parked for the person (the marker is never active)', async () => {
+    const w = world({ triggered: 3 });
+    w.state.runs.push({ id: 'impl', task_id: 'c1', role: 'implementer', trigger_sha: null, status: 'waiting', waiting_reason: 'resume_cap', tab_id: 'tab1', branch: BRANCH.c1!, fix_count: 0 });
+    w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: false, mergeable_state: 'dirty', head_sha: 'h1', base_ref: EPIC_BRANCH }));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'conflict_cap', attempts: 3 }) })]);
+  });
+
+  it('a red-CI fixer that ended without a push on the same head: escalated once past the grace, the head\'s claim reads escalated', async () => {
+    const w = world({ prs: [red('h1')] });
+    realisticFixer(w);
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.startFixer).toHaveBeenCalledTimes(1);
+    // ended a minute ago: a push may not have been synced yet
+    Object.assign(w.state.runs[0]!, { status: 'done', ended_at: new Date(NOW.getTime() - 60_000) });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([]);
+    Object.assign(w.state.runs[0]!, { ended_at: new Date(NOW.getTime() - 4 * 60_000) });
+    await runMergeExecutor(w.deps, 'p1');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([expect.objectContaining({ task_id: 'c1', payload: expect.objectContaining({ reason: 'ci_cap', pr: 7, sha: 'h1', cause: 'fixer_no_push' }) })]);
+    expect(w.state.events.filter((e) => e.kind === 'ci_fix_requested').map((e) => e.payload?.via)).toEqual(['escalated']);
+    expect(mergeWaitOf('c1', NOW)).toBe('merge_ci_cap');
+    expect(w.startFixer).toHaveBeenCalledTimes(1);
+  });
+
+  it('a red head whose fix is still on (a run of the card active) is not escalated', async () => {
+    const w = world({ prs: [red('h1')] });
+    realisticFixer(w);
+    await runMergeExecutor(w.deps, 'p1');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([]);
   });
 });

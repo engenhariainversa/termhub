@@ -274,7 +274,10 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
     // a third, silent instance left a run behind
     const orphanCard = (await cards(1))[0]!;
     const orphan = (await repos.automationRuns.claim({ project_id: projectId, task_id: orphanCard, role: 'implementer', instance: 'gone' }))!;
-    await repos.automationRuns.update(orphan.id, 'gone', { status: 'running', tab_id: 'tab-gone' });
+    // its tab is still open (a run whose tab was closed is cancelled on its first look: final review I1)
+    const orphanTab = newId();
+    await db.tab.create({ data: { id: orphanTab, projectId, machineId, name: 'auto' } });
+    await repos.automationRuns.update(orphan.id, 'gone', { status: 'running', tab_id: orphanTab });
 
     blue.lifecycle.draining = true; // SIGTERM on blue
     for (const r of (await runsOf()).filter((x) => ids.slice(0, 2).includes(x.taskId!))) await tabState(r.tabId!, 'stop');
