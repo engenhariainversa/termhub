@@ -4,6 +4,7 @@ import { noteHookEvent } from '../chat/tab-questions.js';
 import { cancelTabSuggestion, openCodexReply, scheduleTabSuggestion } from '../chat/tab-suggestions.js';
 import type { Waker } from '../chat/wake.js';
 import { autoSwapOnLimit } from '../control/account-swap.js';
+import { meterTab } from '../automation/usage.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Tab } from '../db/repositories/types.js';
 import { takeInputOrigin } from '../terminal/input-origin.js';
@@ -109,6 +110,9 @@ async function ingestForTab(
   // Claude Code draws its suggested next prompt shortly after the turn ends: look in a few seconds, with the
   // Stop's own message and background count (spec 2026-09-26 TER-203 §4.2).
   if (input.tool === 'claude' && interpreted.meta.event === 'Stop') scheduleTabSuggestion(repos, log, updated.id, { context: interpreted.text, backgroundTasks: interpreted.backgroundTasks ?? 0 });
+  // The turn's tokens, from the new lines of its transcript (agentic board, spec D23): automatic tabs only,
+  // checked inside; a Codex tab is only noted, its card shows "—". Not awaited and never throws.
+  if ((input.tool === 'claude' || input.tool === 'codex') && interpreted.meta.event === 'Stop' && interpreted.meta.subagent !== true) void meterTab({ repos, log }, updated);
   // Codex has no suggestion to read: a Stop that ends in a question opens a reply card, after noteHookEvent
   // (which closed the cards of the turn that just ended). It gets the whole message (`answer`), since the
   // question is at its end and `text` is capped from the start. Not awaited, like Claude's check: it

@@ -1,6 +1,6 @@
 import { setLocale } from '@/i18n';
 import type { TPullRequestBadge } from '@/services/api/contract';
-import { ciLabel, epicCiLine, formatDuration, formatEstimate, stateLabel } from './format';
+import { ciLabel, epicCiLine, formatDuration, formatEstimate, stateLabel, usageLine } from './format';
 
 it('formats durations', () => {
   expect(formatDuration(1200)).toBe('20 min');
@@ -79,4 +79,12 @@ describe('in English', () => {
 
 it('keeps the plural of open PRs in Portuguese, 0 included', () => {
   expect(epicCiLine({ open: 0, failed: 0, running: 0, deployed: 0 })).toBe('PRs: 0 abertos');
+});
+
+it('writes the estimated cost of the automatic tabs; "—" when nothing was priced', () => {
+  expect(usageLine(null)).toBeNull();
+  expect(usageLine({ tokens: 1_234_567, cost_usd: 1.5 })).toBe('custo US$ 1,50 · 1,2 M tokens');
+  expect(usageLine({ tokens: 3_400, cost_usd: 0.004 })).toBe('custo US$ 0,0040 · 3,4 k tokens');
+  expect(usageLine({ tokens: 12, cost_usd: null })).toBe('custo — · 12 tokens');
+  expect(usageLine({ tokens: 0, cost_usd: null })).toBe('custo —');
 });

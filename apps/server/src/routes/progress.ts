@@ -4,7 +4,7 @@ import { progressResponse, progressScope } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import { canAccess } from '../auth/permissions.js';
 import { scoped } from '../auth/scope.js';
-import { aggregateEpic, feedOf, selectEpics } from '../progress/aggregate.js';
+import { aggregateEpic, feedOf, selectEpics, withUsage } from '../progress/aggregate.js';
 import { requestLocale } from '../i18n/index.js';
 import { ciErrorOf } from '../ci/status.js';
 
@@ -27,7 +27,9 @@ export async function progressRoutes(app: FastifyInstance, repos: Repositories, 
     const automatic = await repos.progress.usesAutomation(where);
     const rows = await repos.progress.list({ ...where, automatic });
     const feed = automatic ? feedOf(await repos.progress.feed({ ...where, limit: FEED_LIMIT }), requestLocale(request), includeAgents) : [];
-    const aggregated = rows.map((e) => ({ ...aggregateEpic(e, includeAgents), ci_error: ciErrorOf(e.project.id) }));
+    // what the automatic tabs cost (spec D23); only where automatic work ever ran, so nobody else pays for it
+    const totals = automatic ? await repos.tabUsage.totalsByTask(rows.flatMap((e) => [e.id, ...e.cards.map((c) => c.id)])) : new Map();
+    const aggregated = rows.map((e) => withUsage({ ...aggregateEpic(e, includeAgents), ci_error: ciErrorOf(e.project.id) }, totals));
     const epics = selectEpics(aggregated, q.scope);
     return progressResponse.parse({ epics, feed, generated_at: (deps.now?.() ?? new Date()).toISOString() });
   });

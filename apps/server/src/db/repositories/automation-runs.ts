@@ -266,6 +266,12 @@ export class AutomationRunsRepository {
     return row ? map(row) : null;
   }
 
+  /** The newest run that names the tab, in any status: what makes a tab automatic (its usage is metered). */
+  async latestByTab(tabId: string): Promise<AutomationRun | null> {
+    const row = await this.db.automationRun.findFirst({ where: { tabId }, orderBy: { createdAt: 'desc' } });
+    return row ? map(row) : null;
+  }
+
   /** The `running` and `waiting` runs this instance drives: what its follower looks at again on each sweep. */
   async followedBy(instance: string): Promise<AutomationRun[]> {
     return (await this.db.automationRun.findMany({ where: { claimedBy: instance, status: { in: ['running', 'waiting'] } }, orderBy: { createdAt: 'asc' } })).map(map);

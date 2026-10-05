@@ -398,5 +398,12 @@
   "abrir": "open",
   "abrir aba": "open tab",
   "execução {{id}}": "run {{id}}",
-  "{{ref}} iniciado": "{{ref}} started"
+  "{{ref}} iniciado": "{{ref}} started",
+  "Estimativa em preço de API (equivalente em API); contas de assinatura não pagam por token.": "Estimate at API prices (API equivalent); subscription accounts are not billed per token.",
+  "custo {{cost}} · {{tokens}} tokens": "cost {{cost}} · {{tokens}} tokens",
+  "Custo do épico": "Epic cost",
+  "Custo do card": "Card cost",
+  "Custo estimado: {{cost}}": "Estimated cost: {{cost}}",
+  "conta removida": "removed account",
+  "custo {{cost}}": "cost {{cost}}"
 }

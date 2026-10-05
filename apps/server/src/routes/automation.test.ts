@@ -12,6 +12,13 @@ async function build() {
   const userPausedAt = vi.fn(async () => new Date('2026-10-05T09:00:00.000Z') as Date | null);
   const pausedProjects = vi.fn(async () => [{ id: 'p1', paused_at: new Date('2026-10-05T08:00:00.000Z') }]);
   const listByProject = vi.fn(async () => [{ id: 'e1', project_id: 'p1', task_id: null, run_id: null, kind: 'paused', payload: {}, created_at: '2026-10-05T10:00:00.000Z' }]);
+  const tok = (input: number, output = 0) => ({ input, output, cacheRead: 0, cacheWrite: 0 });
+  const usageSums = vi.fn(async () => [
+    { task_id: 'c1', account_id: 'a1', tokens: tok(100, 10), cost_usd: 0.5 },
+    { task_id: 'c2', account_id: 'a1', tokens: tok(5), cost_usd: null },
+    { task_id: 'e1', account_id: 'gone', tokens: tok(1), cost_usd: 0.25 },
+    { task_id: null, account_id: null, tokens: tok(7), cost_usd: 1 },
+  ]);
   const repos = {
     projects: {
       findById: async (id: string) => (id === 'p1' ? { id, owner_id: 'u1' } : id === 'p9' ? { id, owner_id: 'u9' } : undefined),
@@ -20,6 +27,17 @@ async function build() {
     projectSetup: { get: setupGet },
     automationPauses: { pauseProject, resumeUser, userPausedAt, pausedProjects },
     automationRuns: { activeByProject: async () => [] },
+    tabUsage: { sums: usageSums },
+    tasks: {
+      findByIds: async (ids: string[]) =>
+        [
+          { id: 'c1', project_id: 'p1', ref: 'TER-1', type: 'task', epic_id: 'e1' },
+          { id: 'c2', project_id: 'p1', ref: 'TER-2', type: 'bug', epic_id: 'e1' },
+          { id: 'e1', project_id: 'p1', ref: 'TER-9', type: 'epic', epic_id: null },
+        ].filter((t) => ids.includes(t.id)),
+    },
+    aiAccounts: { findById: async (id: string) => (id === 'a1' ? { id, label: 'Pessoal', machine_id: 'm1' } : undefined) },
+    machines: { findById: async (id: string) => (id === 'm1' ? { id, owner_id: 'u1' } : undefined) },
     automationEvents: { insert: async () => ({ id: 'e1', project_id: 'p1', task_id: null, run_id: null, kind: 'paused', payload: {}, created_at: '' }), listByProject },
   } as unknown as Repositories;
   const app = Fastify();
@@ -34,7 +52,7 @@ async function build() {
   await app.register((a) => automationPauseRoutes(a, repos), { prefix: '/automation' });
   await app.register((a) => projectAutomationEventRoutes(a, repos), { prefix: '/projects' });
   await app.ready();
-  return { app, actions, pauseProject, resumeUser, listByProject, userPausedAt, pausedProjects, setupGet };
+  return { app, actions, pauseProject, resumeUser, listByProject, userPausedAt, pausedProjects, setupGet, usageSums };
 }
 
 describe('automation pause and event routes', () => {
@@ -106,5 +124,35 @@ describe('automation pause and event routes', () => {
     expect(listByProject).toHaveBeenCalledWith('p1', { before: new Date('2026-10-05T10:00:00.000Z'), limit: 20 });
     expect((await app.inject({ method: 'GET', url: '/projects/p9/automation/events' })).statusCode).toBe(404);
     expect((await app.inject({ method: 'GET', url: '/projects/p1/automation/events?before=yesterday' })).statusCode).toBe(400);
+  });
+
+  it('sums usage per card, epic and account; a cost with nothing priced is null', async () => {
+    const { app, usageSums } = await build();
+    const res = await app.inject({ method: 'GET', url: '/projects/p1/automation/usage?from=2026-10-01&to=2026-10-05' });
+    expect(res.statusCode).toBe(200);
+    expect(usageSums).toHaveBeenCalledWith('p1', { from: '2026-10-01', to: '2026-10-05' });
+    const body = res.json();
+    expect(body.total).toMatchObject({ input_tokens: 113, output_tokens: 10, cost_usd: 1.75 });
+    expect(body.cards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ task_id: 'c1', ref: 'TER-1', input_tokens: 100, cost_usd: 0.5 }),
+        expect.objectContaining({ task_id: 'c2', ref: 'TER-2', input_tokens: 5, cost_usd: null }),
+      ]),
+    );
+    expect(body.epics).toEqual([expect.objectContaining({ epic_id: 'e1', ref: 'TER-9', input_tokens: 106, cost_usd: 0.75 })]);
+    expect(body.accounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ account_id: 'a1', label: 'Pessoal', input_tokens: 105, cost_usd: 0.5 }),
+        expect.objectContaining({ account_id: 'gone', label: null, cost_usd: 0.25 }),
+      ]),
+    );
+  });
+
+  it('usage: another owner\'s project is a 404, a day that does not exist a 400', async () => {
+    const { app, usageSums } = await build();
+    expect((await app.inject({ method: 'GET', url: '/projects/p9/automation/usage' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/projects/p1/automation/usage?from=2026-02-30' })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/projects/p1/automation/usage?to=hoje' })).statusCode).toBe(400);
+    expect(usageSums).not.toHaveBeenCalled();
   });
 });

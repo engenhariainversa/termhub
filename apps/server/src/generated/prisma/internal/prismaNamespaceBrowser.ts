@@ -71,6 +71,8 @@ export const ModelName = {
   TaskPullRequest: 'TaskPullRequest',
   AutomationEvent: 'AutomationEvent',
   AutomationRun: 'AutomationRun',
+  TabUsage: 'TabUsage',
+  TabUsageDay: 'TabUsageDay',
   AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
@@ -468,6 +470,34 @@ export const AutomationRunScalarFieldEnum = {
 } as const
 
 export type AutomationRunScalarFieldEnum = (typeof AutomationRunScalarFieldEnum)[keyof typeof AutomationRunScalarFieldEnum]
+
+
+export const TabUsageScalarFieldEnum = {
+  tabId: 'tabId',
+  sessionId: 'sessionId',
+  transcriptOffset: 'transcriptOffset',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TabUsageScalarFieldEnum = (typeof TabUsageScalarFieldEnum)[keyof typeof TabUsageScalarFieldEnum]
+
+
+export const TabUsageDayScalarFieldEnum = {
+  tabId: 'tabId',
+  day: 'day',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  accountId: 'accountId',
+  model: 'model',
+  inputTokens: 'inputTokens',
+  outputTokens: 'outputTokens',
+  cacheReadTokens: 'cacheReadTokens',
+  cacheWriteTokens: 'cacheWriteTokens',
+  costUsdEstimate: 'costUsdEstimate',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TabUsageDayScalarFieldEnum = (typeof TabUsageDayScalarFieldEnum)[keyof typeof TabUsageDayScalarFieldEnum]
 
 
 export const AiAccountExhaustionScalarFieldEnum = {

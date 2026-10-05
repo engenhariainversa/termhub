@@ -6,8 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProgressResponse, Tab } from '../lib/types';
 
 const progressMock = vi.fn();
+const usageMock = vi.fn();
 const live: Record<string, Tab | undefined> = {};
-vi.mock('../lib/api', () => ({ api: { progress: (...a: unknown[]) => progressMock(...a) } }));
+vi.mock('../lib/api', () => ({ api: { progress: (...a: unknown[]) => progressMock(...a), automation: { usage: (...a: unknown[]) => usageMock(...a) } } }));
 vi.mock('../lib/monitor', () => ({ useMonitor: () => ({ tabState: (id: string) => live[id] }) }));
 
 vi.mock('./PauseAutomationButton', () => ({ PauseBanner: () => null }));
@@ -39,6 +40,8 @@ function mount() {
 beforeEach(() => {
   progressMock.mockReset();
   progressMock.mockResolvedValue(response());
+  usageMock.mockReset();
+  usageMock.mockRejectedValue(new Error('none'));
   for (const k of Object.keys(live)) delete live[k];
 });
 afterEach(() => {
@@ -160,6 +163,28 @@ describe('ProgressPanel', () => {
     mount();
     await screen.findByText('Visão gerencial');
     expect(screen.queryByRole('region', { name: 'Automático' })).toBeNull();
+    expect(usageMock).not.toHaveBeenCalled();
+  });
+
+  it('shows the estimated cost per card, epic and account, even with no feed line; "—" when nothing was priced', async () => {
+    const line = (input: number, cost: number | null) => ({ input_tokens: input, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, cost_usd: cost });
+    const r = response();
+    r.epics[0].usage = { tokens: 3000, cost_usd: 1.5 };
+    r.epics[0].cards[0].usage = { tokens: 1000, cost_usd: null };
+    progressMock.mockResolvedValue({ ...r, feed: [] });
+    usageMock.mockResolvedValue({
+      from: null,
+      to: null,
+      total: line(3000, 1.5),
+      cards: [],
+      epics: [],
+      accounts: [{ ...line(3000, 1.5), account_id: 'a1', label: 'pessoal' }],
+    });
+    mount();
+    expect(await screen.findByText('custo — · 1 mil tokens')).toBeInTheDocument();
+    expect(screen.getByText(/custo US\$\s1,50 · 3 mil tokens/)).toBeInTheDocument();
+    expect(await screen.findByText(/Custo estimado: US\$\s1,50 · pessoal US\$\s1,50/)).toBeInTheDocument();
+    expect(usageMock).toHaveBeenCalledWith('p1');
   });
 
   it('badges the tab of an automatic run and writes the failures and escalations in one line', async () => {

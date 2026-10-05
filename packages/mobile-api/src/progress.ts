@@ -57,6 +57,12 @@ export const agentOnCard = z.object({
   automatic: z.boolean().default(false),
 });
 
+/**
+ * Tokens of the automatic tabs and their API-equivalent cost estimate in US$ (agentic board, spec D23).
+ * `cost_usd` null = nothing priced (an unknown model, a Codex tab): shown as "—".
+ */
+export const progressUsage = z.object({ cost_usd: z.number().nullable(), tokens: count });
+
 export const cardProgress = z.object({
   id: z.string(),
   ref: z.string(),
@@ -75,6 +81,8 @@ export const cardProgress = z.object({
   pull_requests: z.array(pullRequestBadge).default([]),
   /** tagged for automatic work (spec 2026-10-04); false from a server that predates it */
   auto: z.boolean().default(false),
+  /** what the card's automatic tabs cost; null when none was metered (or from a server that predates it) */
+  usage: progressUsage.nullable().default(null),
 });
 
 export const epicProgress = z.object({
@@ -91,6 +99,8 @@ export const epicProgress = z.object({
   /** distinct PR numbers across the epic's cards; null when none has a PR */
   ci: z.object({ open: count, failed: count, running: count, deployed: count }).nullable().default(null),
   ci_error: z.string().nullable().default(null),
+  /** the epic's own automatic tabs (its integrator) plus its cards'; null when none was metered */
+  usage: progressUsage.nullable().default(null),
 });
 
 /**
@@ -135,6 +145,7 @@ export const progressResponse = z.object({
 
 export type ProgressScope = z.infer<typeof progressScope>;
 export type ProgressEstimate = z.infer<typeof progressEstimate>;
+export type ProgressUsage = z.infer<typeof progressUsage>;
 export type AgentOnCard = z.infer<typeof agentOnCard>;
 export type PullRequestBadge = z.infer<typeof pullRequestBadge>;
 export type AutomationFeedEvent = z.infer<typeof automationFeedEvent>;

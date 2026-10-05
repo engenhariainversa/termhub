@@ -326,6 +326,13 @@ export interface CardProgress {
   estimate: ProgressEstimate;
   agents: AgentOnCard[] | null;
   pull_requests: PullRequestBadge[];
+  /** what the card's automatic tabs cost (spec D23); null/absent = nothing metered */
+  usage?: ProgressUsage | null;
+}
+/** Tokens and the API-equivalent cost estimate (US$; null = nothing priced, shown as "—"). */
+export interface ProgressUsage {
+  tokens: number;
+  cost_usd: number | null;
 }
 export interface EpicProgress {
   id: string;
@@ -341,6 +348,8 @@ export interface EpicProgress {
   /** distinct PR numbers across the epic's cards; null when none has a PR */
   ci: { open: number; failed: number; running: number; deployed: number } | null;
   ci_error: string | null;
+  /** the epic's own automatic tabs plus its cards'; null/absent = nothing metered */
+  usage?: ProgressUsage | null;
 }
 /** One line of the automatic work's feed (same shape as `@termhub/mobile-api`): the sentence is written from `kind` and these facts. */
 export interface AutomationFeedEvent {
@@ -496,6 +505,25 @@ export interface AutomationQueueItem {
   eligible: boolean;
   reason: string | null;
   reason_text: string | null;
+}
+
+/** Tokens and the API-equivalent cost estimate (US$) of automatic tabs; `cost_usd` null = no priced model. */
+export interface AutomationUsageLine {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  cost_usd: number | null;
+}
+
+/** GET /projects/:id/automation/usage (spec D23). */
+export interface AutomationUsage {
+  from: string | null;
+  to: string | null;
+  total: AutomationUsageLine;
+  cards: Array<AutomationUsageLine & { task_id: string; ref: string }>;
+  epics: Array<AutomationUsageLine & { epic_id: string; ref: string }>;
+  accounts: Array<AutomationUsageLine & { account_id: string; label: string | null }>;
 }
 
 export type AutomationAutonomy = 'pr' | 'merge' | 'deploy' | 'release';

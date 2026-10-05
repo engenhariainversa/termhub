@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { agentOnCard, progressResponse, type PullRequestBadge } from '@termhub/mobile-api';
-import { aggregateCard, aggregateEpic, feedOf, selectEpics, type FeedRow, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
+import { agentOnCard, progressResponse, type EpicProgress, type PullRequestBadge } from '@termhub/mobile-api';
+import { aggregateCard, aggregateEpic, feedOf, selectEpics, withUsage, type FeedRow, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
 
 const at = (min: number) => new Date(Date.UTC(2026, 8, 27, 12, 0) + min * 60_000);
 const tab = (id: string, state: ProgressTabRow['state']): ProgressTabRow => ({ id, name: `aba ${id}`, machine_name: 'jarvis', state, state_at: at(0), activity: null, activity_verb: null, rate_limited_at: null, automatic: false });
@@ -166,5 +166,17 @@ describe('automatic tabs and the feed', () => {
 
   it('names the branch a merge landed on', () => {
     expect(feedOf([row('1', 'merged', { base: 'main', branch: 'zzz' })], 'pt-BR')[0].branch).toBe('main');
+  });
+});
+
+describe('withUsage', () => {
+  const epic = (cards: string[]) => ({ id: 'e1', cards: cards.map((id) => ({ id, usage: null })), usage: null }) as unknown as EpicProgress;
+
+  it('puts each card its totals and the epic its own plus its cards\'; nothing priced stays null', () => {
+    const out = withUsage(epic(['c1', 'c2', 'c3']), new Map([['c1', { tokens: 10, cost_usd: null }], ['c2', { tokens: 5, cost_usd: 0.25 }], ['e1', { tokens: 1, cost_usd: 0.5 }]]));
+    expect(out.cards.map((c) => c.usage)).toEqual([{ tokens: 10, cost_usd: null }, { tokens: 5, cost_usd: 0.25 }, null]);
+    expect(out.usage).toEqual({ tokens: 16, cost_usd: 0.75 });
+    expect(withUsage(epic(['c1']), new Map([['c1', { tokens: 0, cost_usd: null }]])).usage).toEqual({ tokens: 0, cost_usd: null });
+    expect(withUsage(epic(['c9']), new Map([['c1', { tokens: 1, cost_usd: 1 }]])).usage).toBeNull();
   });
 });

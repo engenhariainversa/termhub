@@ -3,6 +3,7 @@
 import { t, tk } from '@/i18n';
 import { formatNumber } from '@/i18n/format';
 import type { TAgentOnCard, TEpicProgress, TProgressEstimate, TPullRequestBadge } from '@/services/api/contract';
+import type { ProgressUsage } from '@/services/api/contract';
 
 const HOUR = 3600;
 
@@ -22,6 +23,31 @@ export function formatEstimate(e: TProgressEstimate): string {
   if (low === high) return t('~{{range}} de trabalho', { range: low });
   const sameUnit = e.low_s < HOUR === e.high_s < HOUR;
   return t('~{{range}} de trabalho', { range: `${sameUnit ? low.replace(/ (min|h)$/, '') : low}–${high}` });
+}
+
+/** "US$ 1,23" / "US$ 1.23"; below a cent, 4 digits; "—" when nothing was priced (an unknown model, a Codex tab). Same as the web. */
+export function formatCost(cost: number | null): string {
+  if (cost === null) return '—';
+  const digits = cost > 0 && cost < 0.01 ? 4 : 2;
+  // i18n-ignore
+  return `US$ ${formatNumber(cost, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+/** "1,2 M" / "3 k": tokens, short. */
+export function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${formatNumber(n / 1_000_000, { maximumFractionDigits: 1 })} M`;
+  if (n >= 1_000) return `${formatNumber(n / 1_000, { maximumFractionDigits: 1 })} k`;
+  return formatNumber(n);
+}
+
+/**
+ * The estimated cost of a card's or epic's automatic tabs (spec D23), "equivalente em API": null when nothing
+ * was metered. A Codex tab has no counts and shows only "custo —".
+ */
+export function usageLine(usage: ProgressUsage | null | undefined): string | null {
+  if (!usage) return null;
+  if (usage.tokens === 0) return t('custo {{cost}}', { cost: formatCost(usage.cost_usd) });
+  return t('custo {{cost}} · {{tokens}} tokens', { cost: formatCost(usage.cost_usd), tokens: formatTokens(usage.tokens) });
 }
 
 const STATE_LABEL: Record<NonNullable<TAgentOnCard['state']>, string> = {

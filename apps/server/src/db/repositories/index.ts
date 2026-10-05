@@ -47,6 +47,7 @@ import { AutomationPausesRepository } from './automation-pauses.js';
 import { AutomationEventsRepository } from './automation-events.js';
 import { AutomationRunsRepository } from './automation-runs.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
+import { TabUsageRepository } from './tab-usage.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -96,6 +97,7 @@ export interface Repositories {
   automationPauses: AutomationPausesRepository;
   automationEvents: AutomationEventsRepository;
   automationRuns: AutomationRunsRepository;
+  tabUsage: TabUsageRepository;
   aiAccountExhaustions: AiAccountExhaustionsRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
@@ -150,6 +152,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     automationPauses: new AutomationPausesRepository(db),
     automationEvents: new AutomationEventsRepository(db),
     automationRuns: new AutomationRunsRepository(db),
+    tabUsage: new TabUsageRepository(db),
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
@@ -185,5 +188,6 @@ export type { TaskPullRequest, PullRequestInfo, PrState, CiState, CiSummary } fr
 export { WATCH_MERGED_FOR_MS } from './task-pull-requests.js';
 export type { PurgedAccount, AccountDeletionLink } from './account-deletion.js';
 export type { PauseState } from './automation-pauses.js';
+export type { UsageCursor, UsageTokens, UsageWrite, UsageSum } from './tab-usage.js';
 export type { AutomationEvent, AutomationEventKind, AutomationEventPayload, AutomationEventInput } from './automation-events.js';
 export { AUTOMATION_EVENT_RETENTION_MS, AUTOMATION_EVENTS_PAGE_MAX } from './automation-events.js';

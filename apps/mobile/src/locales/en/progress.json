@@ -63,5 +63,7 @@
   "abrir": "open",
   "execução {{id}}": "run {{id}}",
   "PR #{{number}}": "PR #{{number}}",
-  "{{ref}} iniciado": "{{ref}} started"
+  "{{ref}} iniciado": "{{ref}} started",
+  "custo {{cost}}": "cost {{cost}}",
+  "custo {{cost}} · {{tokens}} tokens": "cost {{cost}} · {{tokens}} tokens"
 }
