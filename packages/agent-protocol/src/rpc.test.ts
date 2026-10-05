@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { FILE_READ_MAX_BYTES, RPC, RPC_METHODS, TMUX_KEYS, docPath, isWdaPort, rpcErrorSchema, tmuxKey } from './rpc.js';
+import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, RPC, RPC_METHODS, TMUX_KEYS, docPath, isWdaPort, rpcErrorSchema, tmuxKey } from './rpc.js';
 
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.update', 'ai.credential', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'hooks.install',
+      'agent.update', 'ai.credential', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'hooks.install',
       'hooks.uninstall', 'hw.probe', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
@@ -232,5 +232,39 @@ describe('file.read', () => {
     expect(RPC['file.read'].result.safeParse({ status: 'outside' }).success).toBe(true);
     expect(RPC['file.read'].result.safeParse({ status: 'gone' }).success).toBe(false);
     expect(RPC['file.read'].result.safeParse({ ...ok, size: FILE_READ_MAX_BYTES + 1 }).success).toBe(false);
+  });
+});
+
+describe('file.list', () => {
+  const params = { cwd: '/home/u/p', dirs: ['docs/lessons', 'docs/superpowers/specs'], paths: ['~/r.md', '/tmp/x.md'], roots: ['/home/u/p'] };
+  const entry = { path: '/home/u/p/docs/lessons/a.md', asked: '/home/u/p/docs/lessons/a.md', size: 3, mtime_ms: 1, too_large: false };
+  it('takes relative folders under a cwd, cited paths and roots', () => {
+    expect(RPC['file.list'].params.safeParse(params).success).toBe(true);
+    expect(RPC['file.list'].params.safeParse({ ...params, cwd: null, dirs: [] }).success).toBe(true);
+    expect(RPC['file.list'].params.safeParse({ ...params, dirs: ['docs/legal', 'a_b-c/d.e'] }).success).toBe(true);
+  });
+  it.each(['/docs', '~/docs', '../x', 'docs/../x', 'docs/.git', '.hidden', 'docs//x', 'docs/', '', 'docs/./x', 'a\nb', 'a b', 'docs\\x'])(
+    'refuses %j as a folder',
+    (dir) => {
+      expect(RPC['file.list'].params.safeParse({ ...params, dirs: [dir] }).success).toBe(false);
+    },
+  );
+  it('refuses a relative cited path, a relative cwd and too many of anything', () => {
+    for (const bad of [
+      { ...params, paths: ['docs/a.md'] },
+      { ...params, cwd: 'proj' },
+      { ...params, dirs: Array(9).fill('docs') },
+      { ...params, paths: Array(101).fill('/a.md') },
+      { ...params, roots: Array(17).fill('/x') },
+    ]) {
+      expect(RPC['file.list'].params.safeParse(bad).success).toBe(false);
+    }
+  });
+  it('validates the result and caps it at FILE_LIST_MAX_ENTRIES', () => {
+    expect(RPC['file.list'].result.safeParse({ entries: [entry, { ...entry, size: FILE_READ_MAX_BYTES + 1, too_large: true }] }).success).toBe(true);
+    expect(RPC['file.list'].result.safeParse({ entries: Array(FILE_LIST_MAX_ENTRIES).fill(entry) }).success).toBe(true);
+    expect(RPC['file.list'].result.safeParse({ entries: Array(FILE_LIST_MAX_ENTRIES + 1).fill(entry) }).success).toBe(false);
+    expect(RPC['file.list'].result.safeParse({ entries: [{ ...entry, too_large: undefined }] }).success).toBe(false);
+    expect(RPC['file.list'].result.safeParse({ entries: [{ ...entry, size: -1 }] }).success).toBe(false);
   });
 });

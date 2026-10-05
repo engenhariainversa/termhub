@@ -319,6 +319,50 @@ describe('registerTerminalWs', () => {
     expect(createPtySessionMock).not.toHaveBeenCalled();
   });
 
+  // TER-576: terminals:read lets someone watch a terminal; typing into it takes terminals:write.
+  describe('read-only viewer (no terminals:write)', () => {
+    async function connect(grants: string[]) {
+      canAccessMock.mockImplementation(async (_r: unknown, _u: unknown, _res: string, action: string) => grants.includes(action));
+      const writes: string[] = [];
+      const resize = vi.fn();
+      createPtySessionMock.mockResolvedValue({ pid: null, write: (b: Buffer) => writes.push(b.toString()), resize, kill: vi.fn() });
+      const { ws, messages } = await connectClient(port);
+      await waitForMessage(messages, 'ready');
+      return { ws, messages, writes, resize };
+    }
+    const tick = () => new Promise((r) => setTimeout(r, 50));
+
+    it('ready says readonly: true and scroll: false', async () => {
+      const { ws, messages } = await connect(['read']);
+      expect(messages).toContainEqual({ type: 'ready', scroll: false, readonly: true });
+      ws.close();
+    });
+
+    it('drops keystrokes, resize and scroll, but still answers ping', async () => {
+      const { ws, messages, writes, resize } = await connect(['read']);
+      ws.send(Buffer.from('rm -rf /\r'), { binary: true });
+      ws.send(JSON.stringify({ type: 'resize', cols: 100, rows: 40 }));
+      ws.send(JSON.stringify({ type: 'scroll', lines: -3 }));
+      ws.send(JSON.stringify({ type: 'ping' }));
+      await waitForMessage(messages, 'pong');
+      await tick();
+      expect(writes).toEqual([]);
+      expect(resize).not.toHaveBeenCalled();
+      expect(scrollSessionMock).not.toHaveBeenCalled();
+      ws.close();
+    });
+
+    it('a writer still types and resizes', async () => {
+      const { ws, messages, writes, resize } = await connect(['read', 'write']);
+      expect(messages).toContainEqual({ type: 'ready', scroll: true, readonly: false });
+      ws.send(Buffer.from('ls'), { binary: true });
+      ws.send(JSON.stringify({ type: 'resize', cols: 100, rows: 40 }));
+      await vi.waitFor(() => expect(writes).toEqual(['ls']));
+      await vi.waitFor(() => expect(resize).toHaveBeenCalledWith({ type: 'resize', cols: 100, rows: 40 }));
+      ws.close();
+    });
+  });
+
   describe('mouse wheel', () => {
     /** A connected client and the fake session's writes, as text. */
     async function ready(): Promise<{ ws: WebSocket; messages: unknown[]; writes: string[] }> {
@@ -339,14 +383,14 @@ describe('registerTerminalWs', () => {
 
     it('ready says whether the machine can scroll: an agent from 0.12.0 on', async () => {
       const { ws, messages } = await ready();
-      expect(messages).toContainEqual({ type: 'ready', scroll: true });
+      expect(messages).toContainEqual({ type: 'ready', scroll: true, readonly: false });
       ws.close();
     });
 
     it('ready says scroll: false for an older agent, and its scroll messages are ignored', async () => {
       agentInfoMock.mockReturnValue({ agent_version: '0.11.0', os: 'macos', tools: [], connected_at: '' });
       const { ws, messages, writes } = await ready();
-      expect(messages).toContainEqual({ type: 'ready', scroll: false });
+      expect(messages).toContainEqual({ type: 'ready', scroll: false, readonly: false });
       ws.send(scrollMsg(-3));
       ws.send(Buffer.from('a'), { binary: true });
       await vi.waitFor(() => expect(writes).toEqual(['a']));

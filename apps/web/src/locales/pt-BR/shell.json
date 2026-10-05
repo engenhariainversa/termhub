@@ -1,0 +1,14 @@
+{
+  "{{count}} tabs esperando você_one": "{{count}} tab esperando você",
+  "{{count}} tabs esperando você_other": "{{count}} tabs esperando você",
+  "{{count}} tabs esperando você_zero": "{{count}} tabs esperando você",
+  "{{count}} tasks abertas_one": "{{count}} task aberta",
+  "{{count}} tasks abertas_other": "{{count}} tasks abertas",
+  "{{count}} tasks abertas_zero": "{{count}} tasks abertas",
+  "{{count}} usuários._one": "{{count}} usuário.",
+  "{{count}} usuários._other": "{{count}} usuários.",
+  "{{count}} usuários._zero": "{{count}} usuários.",
+  "{{count}} usuários_one": "{{count}} usuário",
+  "{{count}} usuários_other": "{{count}} usuários",
+  "{{count}} usuários_zero": "{{count}} usuários"
+}

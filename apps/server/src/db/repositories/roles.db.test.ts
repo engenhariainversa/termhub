@@ -28,8 +28,12 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('system role grants after 
     expect(await hasGrant('BETA', 'terminals', 'write')).toBe(true);
   });
 
-  it('the roles without the chat keep no terminal write grant', async () => {
-    expect(await hasGrant('AUTHENTICATED', 'terminals', 'write')).toBe(false);
-    expect(await hasGrant('MANAGER', 'terminals', 'write')).toBe(false);
+  // Typing into a terminal takes terminals:write since TER-576: every role that could type
+  // (terminals:update) keeps the keyboard.
+  it('the roles that update terminals may also type into them', async () => {
+    expect(await hasGrant('AUTHENTICATED', 'terminals', 'update')).toBe(true);
+    expect(await hasGrant('AUTHENTICATED', 'terminals', 'write')).toBe(true);
+    expect(await hasGrant('MANAGER', 'terminals', 'update')).toBe(true);
+    expect(await hasGrant('MANAGER', 'terminals', 'write')).toBe(true);
   });
 });

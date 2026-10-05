@@ -21,6 +21,9 @@ export interface ControlContext {
   /** The request's logger, set by the MCP route: best-effort work a tool fires (e.g. `record_lesson`'s
    *  note re-index) logs through it — ids and codes only — instead of falling back to `console`. */
   log?: Pick<FastifyBaseLogger, 'info' | 'warn'>;
+  /** Set by the gate when the call runs a confirmation card the person clicked (`grant_id` null): what
+   *  it types is then text they approved word for word (TER-851 `person_approved`). Never set by a grant. */
+  approval?: { actionId: string; approvedAt: Date };
 }
 
 /** What a control operation knows of the /mcp token it runs under. */
