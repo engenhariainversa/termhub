@@ -80,11 +80,13 @@ describe('startDispatcher (fakes)', () => {
   it('with no project on automation, a tick only runs the sweep and lists the enabled projects', async () => {
     const { repos, calls } = recordingRepos(idle());
     const startAgent = vi.fn();
-    const d = startDispatcher(deps(repos, { startAgent: startAgent as unknown as DispatcherDeps['startAgent'] }), { schedule: false });
+    const room = vi.fn(async () => true);
+    const d = startDispatcher(deps(repos, { startAgent: startAgent as unknown as DispatcherDeps['startAgent'], room }), { schedule: false });
     await d.tick('t');
     await d.stop();
     expect(calls).toEqual(['automationRuns.cancelOrphaned', 'projectSetup.listWithAutomation']);
     expect(startAgent).not.toHaveBeenCalled();
+    expect(room).not.toHaveBeenCalled(); // R6: automation off, no hardware reading
   });
 
   it('a project with automation on retries its due cleanups on a tick, paused or not; a draining instance does not', async () => {

@@ -2,7 +2,7 @@ import { CAPABILITY_WORKTREE, WORKTREE_MIN_AGENT_VERSION } from '@termhub/agent-
 import { versionAtLeast } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
 import { accountsOn } from '../ai/project-accounts.js';
-import { peakUtilization, SWAP_MAX_UTILIZATION } from '../control/account-swap.js';
+import { peakUtilization } from '../control/account-swap.js';
 import { getAccountUsage } from '../ai/index.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Project, ProjectMachine } from '../db/repositories/types.js';
@@ -10,16 +10,33 @@ import type { ProjectSetupData } from '../setup/schema.js';
 import type { IneligibleReason } from './eligibility.js';
 
 /** Why an eligible card found no place this tick (spec §8 step 3). Not an error and not an event. */
-export type WaitingReason = 'no_machine' | 'no_account' | 'machine_offline';
+export type WaitingReason = 'no_machine' | 'no_account' | 'machine_offline' | 'no_room' | 'automation_not_allowed';
+
+/** Spike §2: automatic starts keep more headroom than a person's `start_agent` (`SWAP_MAX_UTILIZATION`). */
+export const AUTOMATIC_MAX_UTILIZATION = 80;
 
 export interface PlacementDeps {
   repos: Repositories;
   now(): Date;
   /** The account's peak utilization in percent (`getAccountUsage` → `peakUtilization`); null = unknown. */
   usage: (accountId: string) => Promise<number | null>;
+  /**
+   * R6: whether the machine has room for one more run (memory, disk under `worktrees_dir`, load; a failed
+   * reading = no room). Without it no room check is made (tests); the app wires the real one.
+   */
+  room?: (machine: Machine, link: ProjectMachine, setup: ProjectSetupData) => Promise<boolean>;
 }
 
-export type Placement = { machine: Machine; account: AiAccount; link: ProjectMachine } | { waiting: WaitingReason };
+/** R6: what this tick already started. At most one start per machine and per account per tick. */
+export interface TickStarts {
+  machines: Set<string>;
+  accounts: Set<string>;
+}
+
+export type Placement =
+  | { machine: Machine; account: AiAccount; link: ProjectMachine }
+  // `later`: every place is taken by a start of this tick; nothing to show, the next tick asks again
+  | { waiting: WaitingReason | 'later' };
 
 /** An agent machine of the project's owner that answers the worktree RPC right now (D10). */
 const capableNow = (m: Machine) => (agents.capabilities(m.id) ?? []).includes(CAPABILITY_WORKTREE);
@@ -27,13 +44,15 @@ const capableNow = (m: Machine) => (agents.capabilities(m.id) ?? []).includes(CA
 const capableButOffline = (m: Machine) => !agents.isOnline(m.id) && m.agent_version !== null && versionAtLeast(m.agent_version, WORKTREE_MIN_AGENT_VERSION);
 
 /**
- * Where an automatic run starts (spec §8 step 3, D10, D14): an online agent machine linked to the project
- * with the worktree capability and Claude installed, under the first Claude account of the project's list
- * (in its order) that is on that machine, is not marked exhausted and has room (peak utilization below
- * `SWAP_MAX_UTILIZATION`; unknown usage counts as room, as for `start_agent`). Unlike `start_agent`, it
- * never falls back to a full account: the card waits instead.
+ * Where an automatic run starts (spec §8 step 3, D10, D14, spike R6): an online agent machine linked to the
+ * project that accepts automatic work (`automation_allowed`), with the worktree capability and Claude
+ * installed, under the first Claude account of the project's list (in its order) that is on that machine, is
+ * not marked exhausted and has room (peak utilization below `AUTOMATIC_MAX_UTILIZATION`; unknown usage
+ * counts as room, as for `start_agent`), on a machine with room (`deps.room`). Unlike `start_agent`, it never
+ * falls back to a full account: the card waits instead. The cheap checks come first, so a machine is only
+ * read (`hw.probe`) when an account would otherwise be chosen on it.
  */
-export async function placeRun(deps: PlacementDeps, project: Project, setup: ProjectSetupData): Promise<Placement> {
+export async function placeRun(deps: PlacementDeps, project: Project, setup: ProjectSetupData, tick?: TickStarts): Promise<Placement> {
   const { repos } = deps;
   if (!project.owner_id) return { waiting: 'no_machine' };
   const links = await repos.projectMachines.listByProject(project.id);
@@ -43,8 +62,10 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
     // ssh and local machines are never chosen (D10); a machine out of the owner's scope neither
     if (machine && machine.type === 'agent' && machine.owner_id === project.owner_id) linked.push({ machine, link });
   }
-  const ready = linked.filter(({ machine }) => capableNow(machine) && machine.capabilities.includes('claude'));
-  if (ready.length === 0) return { waiting: linked.some(({ machine }) => capableButOffline(machine)) ? 'machine_offline' : 'no_machine' };
+  const capable = linked.filter(({ machine }) => capableNow(machine) && machine.capabilities.includes('claude'));
+  if (capable.length === 0) return { waiting: linked.some(({ machine }) => capableButOffline(machine)) ? 'machine_offline' : 'no_machine' };
+  const ready = capable.filter(({ machine }) => machine.automation_allowed);
+  if (ready.length === 0) return { waiting: 'automation_not_allowed' };
 
   const [listed, exhausted] = await Promise.all([repos.aiAccounts.list(project.owner_id), repos.aiAccountExhaustions.activeIds(deps.now())]);
   const { ai } = setup;
@@ -52,13 +73,27 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
     .flatMap(({ machine }) => accountsOn(ai, listed, machine.id, 'claude'))
     .filter((a) => !exhausted.has(a.id))
     .sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
+  let taken = false;
+  let crowded = false;
+  const roomOf = new Map<string, Promise<boolean>>();
   for (const account of candidates) {
+    if (tick && (tick.accounts.has(account.id) || tick.machines.has(account.machine_id))) {
+      taken = true;
+      continue;
+    }
     const peak = await deps.usage(account.id);
-    if (peak !== null && peak >= SWAP_MAX_UTILIZATION) continue;
+    if (peak !== null && peak >= AUTOMATIC_MAX_UTILIZATION) continue;
     const place = ready.find(({ machine }) => machine.id === account.machine_id)!;
+    if (deps.room) {
+      if (!roomOf.has(place.machine.id)) roomOf.set(place.machine.id, deps.room(place.machine, place.link, setup));
+      if (!(await roomOf.get(place.machine.id))) {
+        crowded = true;
+        continue;
+      }
+    }
     return { machine: place.machine, account, link: place.link };
   }
-  return { waiting: 'no_account' };
+  return { waiting: crowded ? 'no_room' : taken ? 'later' : 'no_account' };
 }
 
 /** What the queue shows for a waiting card. */
@@ -66,6 +101,8 @@ export const WAITING_AS_REASON: Record<WaitingReason, IneligibleReason> = {
   no_machine: 'no_capable_machine',
   no_account: 'no_account',
   machine_offline: 'machine_offline',
+  no_room: 'no_room',
+  automation_not_allowed: 'automation_not_allowed',
 };
 
 /**

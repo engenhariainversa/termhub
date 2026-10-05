@@ -32,6 +32,8 @@
   "Repositório não configurado no Setup": "Repository not set up in Setup",
   "Sem conta com folga": "No account with room left",
   "Máquina do agente desligada": "The agent's machine is offline",
+  "Máquina sem folga (memória/disco/carga)": "Machine without room (memory/disk/load)",
+  "Nenhuma máquina aceita trabalho automático": "No machine accepts automatic work",
   "Integração do GitHub sem acesso": "The GitHub integration has no access",
   "Esta aba não tem trabalho automático em andamento": "This tab has no automatic work in progress",
   "Execução automática não encontrada": "Automatic run not found",

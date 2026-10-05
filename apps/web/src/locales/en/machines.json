@@ -404,5 +404,7 @@
   "é este pc": "this is my computer",
   "— a mesma do projeto —": "— the project's own —",
   "— sem dono (só visível em \"todas as máquinas\") —": "— no owner (only visible in \"all machines\") —",
-  "— sem repositório —": "— no repository —"
+  "— sem repositório —": "— no repository —",
+  "Aceita trabalho automático": "Accepts automatic work",
+  "Desmarcada, o termhub nunca inicia sozinho um card do quadro nesta máquina. Abas abertas por você continuam como sempre.": "When unchecked, termhub never starts a board card on this machine by itself. Tabs you open keep working as usual."
 }

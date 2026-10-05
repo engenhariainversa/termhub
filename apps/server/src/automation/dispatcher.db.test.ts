@@ -109,6 +109,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
       closeTab,
       gh: {} as GithubWriteClient,
       usage: vi.fn(async () => 10),
+      room: vi.fn(async () => true),
       ...over,
     } satisfies DispatcherDeps;
     return { deps, startAgent, ensureWorkspace, ensureEpicBranch, removeWorkspace, closeTab };
@@ -294,7 +295,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(startAgent).not.toHaveBeenCalled();
   });
 
-  it('max_parallel 2 starts the first two cards in board order', async () => {
+  it('max_parallel 2 starts the first two cards in board order, one per machine per tick (R6)', async () => {
     await setSetup({ automation: { max_parallel: 2 } });
     await card('A');
     await card('B');
@@ -302,7 +303,74 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     const order = (await automationQueue(ctx(), projectId)).map((i) => i.task_id);
     const { deps, startAgent } = makeDeps();
     await tickOnce(deps);
+    expect(startAgent.mock.calls.map((c) => (c[1] as { task_id: string }).task_id)).toEqual(order.slice(0, 1));
+    expect(await reasonOf(order[1]!)).not.toBe('no_account'); // nothing shown: the next tick starts it
+    await tickOnce(deps);
     expect(startAgent.mock.calls.map((c) => (c[1] as { task_id: string }).task_id)).toEqual(order.slice(0, 2));
+    await tickOnce(deps); // the ceiling holds
+    expect(startAgent).toHaveBeenCalledTimes(2);
+  });
+
+  it('one start per account per tick: two machines, one account each, starts only on the first card of a shared account', async () => {
+    const other = newId();
+    await db.machine.create({ data: { id: other, name: 'm2', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.18.0' } });
+    await repos.projectMachines.link({ project_id: projectId, machine_id: other, cwd: '/home/u/app2' });
+    const second = (await repos.aiAccounts.create({ provider: 'claude', label: 'two', machine_id: other })).id;
+    reg.online.add(other);
+    await setSetup({ automation: { max_parallel: null }, repo: {} });
+    await repos.projectSetup.save(projectId, normalizeSetup({ ...(await repos.projectSetup.get(projectId)).data, ai: { accounts: [accountId, second], models: {} } }, 2));
+    await card('A');
+    await card('B');
+    await card('C');
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    expect(startAgent).toHaveBeenCalledTimes(2); // one per machine/account
+    expect(new Set(startAgent.mock.calls.map((c) => (c[1] as { machine_id: string }).machine_id)).size).toBe(2);
+    await db.automationRun.deleteMany({ where: { projectId } });
+    await db.machine.deleteMany({ where: { id: other } });
+  });
+
+  it('R6: a machine without room (memory, disk or load) starts nothing, and the queue says why', async () => {
+    const c = await card();
+    const room = vi.fn(async () => false);
+    const { deps, startAgent } = makeDeps({ room });
+    await tickOnce(deps);
+    expect(room).toHaveBeenCalledTimes(1);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(await runsOf()).toEqual([]);
+    expect(await reasonOf(c.id)).toBe('no_room');
+    // room again: it starts, and the machine's next reading is asked fresh
+    const startedOn = vi.fn();
+    const ok = makeDeps({ room: async () => true, startedOn });
+    await tickOnce(ok.deps);
+    expect(ok.startAgent).toHaveBeenCalledTimes(1);
+    expect(startedOn).toHaveBeenCalledWith(machineId);
+  });
+
+  it('R6: an account at 80 % or more has no room for an automatic start', async () => {
+    const c = await card();
+    const { deps, startAgent } = makeDeps({ usage: vi.fn(async () => 80) });
+    await tickOnce(deps);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(await reasonOf(c.id)).toBe('no_account');
+    const ok = makeDeps({ usage: vi.fn(async () => 79) });
+    await tickOnce(ok.deps);
+    expect(ok.startAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('R6: a machine that does not accept automatic work is never chosen, and the queue says why', async () => {
+    const c = await card();
+    await db.machine.update({ where: { id: machineId }, data: { automationAllowed: false } });
+    const room = vi.fn(async () => true);
+    const { deps, startAgent } = makeDeps({ room });
+    await tickOnce(deps);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(room).not.toHaveBeenCalled(); // nothing read on a machine that opted out
+    expect(deps.usage).not.toHaveBeenCalled();
+    expect(await reasonOf(c.id)).toBe('automation_not_allowed');
+    await db.machine.update({ where: { id: machineId }, data: { automationAllowed: true } });
+    await tickOnce(deps);
+    expect(startAgent).toHaveBeenCalledTimes(1);
   });
 
   it('no capable machine: no start, no run left, and the queue says why', async () => {
@@ -355,6 +423,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(startAgent).not.toHaveBeenCalled();
     expect(ensureWorkspace).not.toHaveBeenCalled();
     expect(deps.usage).not.toHaveBeenCalled();
+    expect(deps.room).not.toHaveBeenCalled(); // R6: automation off, nothing read from the machine
     expect(await runsOf()).toEqual([]);
     expect(await eventsOf()).toEqual([]);
     expect((await db.projectSetup.findUnique({ where: { projectId } }))!.updatedAt).toEqual(before!.updatedAt);

@@ -11,7 +11,7 @@ vi.mock('../agent/registry.js', async (importOriginal) => {
 });
 
 const project = { id: 'p1', owner_id: 'u1' } as Project;
-const machine = (id: string): Machine => ({ id, type: 'agent', owner_id: 'u1', capabilities: ['claude'], agent_version: '0.18.0' }) as Machine;
+const machine = (id: string, allowed = true): Machine => ({ id, type: 'agent', owner_id: 'u1', capabilities: ['claude'], agent_version: '0.18.0', automation_allowed: allowed }) as Machine;
 const account = (id: string, machineId: string, provider: AiAccount['provider'] = 'claude'): AiAccount => ({ id, provider, label: id, machine_id: machineId, config_dir: null, created_at: '' });
 
 function fakeRepos(i: { machines: Machine[]; accounts: AiAccount[]; exhausted?: string[] }) {
@@ -41,10 +41,50 @@ describe('placeRun', () => {
   it('skips exhausted accounts and those at or above the swap threshold; unknown usage is room', async () => {
     reg.online.set('m1', ['worktree']);
     const repos = fakeRepos({ machines: [machine('m1')], accounts: [account('a1', 'm1'), account('a2', 'm1'), account('a3', 'm1')], exhausted: ['a1'] });
-    const usage = vi.fn(async (id: string) => (id === 'a2' ? 90 : null));
+    const usage = vi.fn(async (id: string) => (id === 'a2' ? 80 : null));
     const p = await placeRun({ repos, now: () => new Date(), usage }, project, setup(['a1', 'a2', 'a3']));
     expect(p).toMatchObject({ account: { id: 'a3' } });
     expect(usage).not.toHaveBeenCalledWith('a1');
+  });
+
+  it('R6: only machines that accept automatic work; none → automation_not_allowed (nothing read)', async () => {
+    reg.online.set('m1', ['worktree']).set('m2', ['worktree']);
+    const repos = fakeRepos({ machines: [machine('m1', false), machine('m2')], accounts: [account('a1', 'm1'), account('a2', 'm2')] });
+    const usage = vi.fn(async () => 10);
+    expect(await placeRun({ repos, now: () => new Date(), usage }, project, setup(['a1', 'a2']))).toMatchObject({ machine: { id: 'm2' } });
+    const off = fakeRepos({ machines: [machine('m1', false)], accounts: [account('a1', 'm1')] });
+    const room = vi.fn(async () => true);
+    usage.mockClear();
+    expect(await placeRun({ repos: off, now: () => new Date(), usage, room }, project, setup(['a1']))).toEqual({ waiting: 'automation_not_allowed' });
+    expect(usage).not.toHaveBeenCalled();
+    expect(room).not.toHaveBeenCalled();
+  });
+
+  it('R6: 80 % is the automatic ceiling for an account', async () => {
+    reg.online.set('m1', ['worktree']);
+    const repos = fakeRepos({ machines: [machine('m1')], accounts: [account('a1', 'm1')] });
+    expect(await placeRun({ repos, now: () => new Date(), usage: async () => 79 }, project, setup(['a1']))).toMatchObject({ account: { id: 'a1' } });
+    expect(await placeRun({ repos, now: () => new Date(), usage: async () => 80 }, project, setup(['a1']))).toEqual({ waiting: 'no_account' });
+  });
+
+  it('R6: a machine without room is skipped for the next one; all crowded → no_room; the room is read once per machine', async () => {
+    reg.online.set('m1', ['worktree']).set('m2', ['worktree']);
+    const repos = fakeRepos({ machines: [machine('m1'), machine('m2')], accounts: [account('a1', 'm1'), account('a2', 'm1'), account('a3', 'm2')] });
+    const room = vi.fn(async (m: Machine) => m.id === 'm2');
+    const deps = { repos, now: () => new Date(), usage: async () => 10, room };
+    expect(await placeRun(deps, project, setup(['a1', 'a2', 'a3']))).toMatchObject({ machine: { id: 'm2' }, account: { id: 'a3' } });
+    expect(room.mock.calls.filter(([m]) => m.id === 'm1')).toHaveLength(1);
+    expect(await placeRun({ ...deps, room: async () => false }, project, setup(['a1', 'a3']))).toEqual({ waiting: 'no_room' });
+  });
+
+  it('R6: one start per machine and per account per tick; all taken → later', async () => {
+    reg.online.set('m1', ['worktree']).set('m2', ['worktree']);
+    const repos = fakeRepos({ machines: [machine('m1'), machine('m2')], accounts: [account('a1', 'm1'), account('a2', 'm2')] });
+    const deps = { repos, now: () => new Date(), usage: async () => 10 };
+    const tick = { machines: new Set(['m1']), accounts: new Set<string>() };
+    expect(await placeRun(deps, project, setup(['a1', 'a2']), tick)).toMatchObject({ account: { id: 'a2' } });
+    expect(await placeRun(deps, project, setup(['a1']), tick)).toEqual({ waiting: 'later' });
+    expect(await placeRun(deps, project, setup(['a2']), { machines: new Set(), accounts: new Set(['a2']) })).toEqual({ waiting: 'later' });
   });
 
   it('never starts on a full account: all full → no_account', async () => {

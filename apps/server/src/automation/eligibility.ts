@@ -14,6 +14,8 @@ export type IneligibleReason =
   // set by the dispatcher when it found no place for an eligible card (spec §8 step 3, D14)
   | 'no_account'
   | 'machine_offline'
+  | 'no_room'
+  | 'automation_not_allowed'
   // set by the merge executor on a card whose green PR is not merged yet (spec §10.1, spike R1)
   | 'merge_needs_approval'
   | 'merge_store'
@@ -37,6 +39,8 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   repo_missing: tk('Repositório não configurado no Setup'),
   no_account: tk('Sem conta com folga'),
   machine_offline: tk('Máquina do agente desligada'),
+  no_room: tk('Máquina sem folga (memória/disco/carga)'),
+  automation_not_allowed: tk('Nenhuma máquina aceita trabalho automático'),
   merge_needs_approval: tk('Merge esperando sua aprovação no chat'),
   merge_store: tk('precisa de build nas lojas'),
   merge_checks_pending: tk('Esperando os checks obrigatórios do PR'),

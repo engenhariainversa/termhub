@@ -51,6 +51,7 @@ const machineBody = z
     is_local: z.boolean().optional(),
     agent_auto_update: z.boolean().optional(),
     claude_auto_swap: z.boolean().optional(),
+    automation_allowed: z.boolean().optional(),
   })
   .superRefine((m, ctx) => {
     if (m.type === 'ssh' && !m.host) ctx.addIssue({ code: 'custom', path: ['host'], message: 'host é obrigatório para SSH' });
