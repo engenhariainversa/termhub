@@ -406,10 +406,10 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
 
     it('an allowed permission left to the person (the card was untagged during the settle) is pushed', async () => {
       const repos = automaticRepos();
-      vi.mocked(repos.automationRuns.activeByTab).mockResolvedValue({ id: 'run1', project_id: 'p1', task_id: 'task1', tab_id: 't1', status: 'running', claimed_by: 'me', allowed_tools: ['Edit'] } as never);
-      repos.tabQuestions.open.mockResolvedValueOnce({ question: row({ id: 'q1', kind: 'permission', payload: { tool_name: 'Edit' }, tool_use_id: null }), closed: [] });
+      vi.mocked(repos.automationRuns.activeByTab).mockResolvedValue({ id: 'run1', project_id: 'p1', task_id: 'task1', tab_id: 't1', status: 'running', claimed_by: 'me', allowed_tools: ['WebFetch'] } as never);
+      repos.tabQuestions.open.mockResolvedValueOnce({ question: row({ id: 'q1', kind: 'permission', payload: { tool_name: 'WebFetch' }, tool_use_id: null }), closed: [] });
       Object.assign(repos, { tasks: { findById: vi.fn(async () => ({ id: 'task1', auto: false })) } });
-      await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Edit' }, tool_use_id: null });
+      await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'WebFetch' }, tool_use_id: null });
       expect(await heldQuestion('q1')).toBe(false);
       expect(repos.automationEvents.insert).not.toHaveBeenCalled();
     }, 10_000);

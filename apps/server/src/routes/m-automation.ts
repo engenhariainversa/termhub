@@ -9,7 +9,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import { msg } from '../i18n/index.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import type { SessionService } from '../mobile/session.js';
-import { automationSchema } from '../setup/schema.js';
+import { automationInputSchema } from '../setup/schema.js';
 import { deviceOf, proofOk } from './m-chat.js';
 import { taskRules } from './tasks.js';
 
@@ -33,7 +33,7 @@ export async function mobileAutomationSetupRoutes(app: FastifyInstance, repos: R
     const { id } = idParam.parse(request.params);
     await scoped(repos, request).project(id);
     const body = automationSetupBody.parse(request.body);
-    const next = automationSchema.parse(body.automation);
+    const next = automationInputSchema.parse(body.automation);
     const current = await repos.projectSetup.get(id);
     if (automationNeedsConfirm(current.data.automation, next)) {
       if (body.challenge === undefined || body.pin_proof === undefined) throw new HttpError(401, msg('Confirme com o PIN para ligar ou ampliar o trabalho automático.'), 'PIN_REQUIRED');

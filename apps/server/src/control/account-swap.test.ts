@@ -262,7 +262,7 @@ describe('swapAccount', () => {
     repos.automationRuns.activeByTab.mockResolvedValue({ project_id: 'p1' });
     stored = baseTab({ state: 'idle' });
     await drive(swapAccount(r, log, baseTab(), machine(), { auto: false }));
-    const line = resumeLine(null, SID, serverMessage(RESUME_PROMPT), null, undefined, { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS });
+    const line = resumeLine(null, SID, serverMessage(RESUME_PROMPT), null, undefined, { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: null });
     expect(line).toContain('--permission-mode acceptEdits');
     expect(line).toContain('[termhub automático] A conta anterior');
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);

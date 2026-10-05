@@ -19,7 +19,7 @@ import { escalateRun } from './follower.js';
 import { interruptRuns, isPaused, type PressEscape } from './pause.js';
 import { clearWaiting, noteWaiting, placeRun, type Placement } from './placement.js';
 import { policyText } from './policy.js';
-import { automationPermission } from './permission.js';
+import { startPermission } from './permission.js';
 import { implementerPrompt } from './prompts.js';
 import { integrateEpic } from './integrator.js';
 import { eligibilityQueue } from './queue.js';
@@ -235,7 +235,8 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       const epic = !work && task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
       const { base, epicBranch } = work ? { base: work.base, epicBranch: null } : targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup);
       branch = work ? work.branch : cardBranchName(repo?.branch_pattern ?? '{ticket}-{slug}', task);
-      const permission = automationPermission(automation);
+      const { permission, dropped } = startPermission(automation, branch);
+      if (dropped > 0) log.warn({ runId: run.id, taskId: task.id, code: 'ALLOWED_TOOL_DROPPED', count: dropped }, 'automation: allow rules too broad for an automatic tab dropped');
       // the profile is stored on the run: restarts and swaps keep it even if the setup changes (F-12)
       if (!(await write(run, { status: 'starting', machine_id: place.machine.id, account_id: place.account.id, branch, allowed_tools: permission.allowedTools }))) return;
       if (epicBranch) {

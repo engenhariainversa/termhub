@@ -14,6 +14,9 @@ import { ControlError, type ControlContext } from './context.js';
 import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
 import { openTab } from './terminals.js';
 import { msg } from '../i18n/index.js';
+import { AUTOMATION_DENIED_TOOLS, runBranchRules, safeAllowedTools } from './automation-tools.js';
+
+export { AUTOMATION_DENIED_TOOLS, branchFetchRules, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
 /** Same ceiling as one typed input: the prompt travels as a single command-line argument. */
 export const PROMPT_MAX_CHARS = 4000;
@@ -106,20 +109,20 @@ function claudeMcpFlags(tabId: string, extraTools: string[] = []): string {
 /**
  * What an automatic tab may do without asking (spec D19, preflight F-6): edits are accepted
  * (`acceptEdits`) and only these commands are pre-allowed; everything else still asks. Never a
- * permission-bypass flag. The pushes are exact rules (no `:*`), so a refspec (`HEAD:main`) or `--force`
- * is not covered, and there is no generic `npm run:*` (it would cover `release:ota`). The server-side
- * check of Task 22 also refuses shell operators before matching these.
+ * permission-bypass flag. No push is listed here: the only pushes pre-allowed are the run's own branch
+ * (`branchPushRules`, TER-968 R5), so `git push origin HEAD:main` asks and is escalated. There is no
+ * generic `npm run:*` (it would cover `release:ota`). The server-side check of Task 22 also refuses shell
+ * operators before matching these.
  */
 export const DEFAULT_AUTOMATION_TOOLS: string[] = [
   'Bash(git status:*)',
   'Bash(git diff:*)',
   'Bash(git add:*)',
   'Bash(git commit:*)',
-  'Bash(git fetch:*)',
+  'Bash(git fetch)',
+  'Bash(git fetch origin)',
   'Bash(git merge:*)',
   'Bash(git log:*)',
-  'Bash(git push -u origin HEAD)',
-  'Bash(git push origin HEAD)',
   'Bash(gh pr create:*)',
   'Bash(gh pr view:*)',
   'Bash(gh pr checks:*)',
@@ -132,10 +135,14 @@ export const DEFAULT_AUTOMATION_TOOLS: string[] = [
   'Bash(npm run typecheck:*)',
 ];
 
-/** How an automatic tab's Claude is started: `acceptEdits` plus a closed allow list (never a bypass). */
+/**
+ * How an automatic tab's Claude is started: `acceptEdits` plus a closed allow list (never a bypass), the
+ * run's own branch pushes (`branch`, null for none) and the fixed deny list.
+ */
 export interface AgentPermission {
   mode: 'acceptEdits';
   allowedTools: string[];
+  branch: string | null;
 }
 
 /**
@@ -150,15 +157,18 @@ function checkAllowedTools(tools: string[]): string[] {
 }
 
 /**
- * An automatic tab's Claude options (spec D19, preflight F-7/F-12): the permission mode, then the allow
- * list — merged with the tab MCP's own tools when the tab has its MCP, so there is one variadic
- * `--allowedTools`. The caller ends the options with `--`.
+ * An automatic tab's Claude options (spec D19, preflight F-7/F-12, TER-968): the permission mode, then the
+ * allow list (less any rule broad enough to reach a push or a denied command, `safeAllowedTools`) plus the
+ * run's own branch pushes — merged with the tab MCP's own tools when the tab has its
+ * MCP, so there is one variadic `--allowedTools` — then the fixed `--disallowedTools`. Both are variadic:
+ * the caller ends the options with `--` (or another option, then `--`).
  */
 function permissionFlags(permission: AgentPermission, mcpTabId: string | null): string {
   if (permission.mode !== 'acceptEdits') throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
-  const tools = checkAllowedTools(permission.allowedTools);
+  const tools = [...safeAllowedTools(checkAllowedTools(permission.allowedTools)).kept, ...runBranchRules(permission.branch)];
   const allow = mcpTabId ? claudeMcpFlags(mcpTabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
-  return `--permission-mode ${permission.mode}${allow ? ` ${allow}` : ''}`;
+  const deny = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => shellQuote(t)).join(' ')}`;
+  return `--permission-mode ${permission.mode}${allow ? ` ${allow}` : ''} ${deny}`;
 }
 
 /** What the MCP URL may look like to be spliced into a TOML string inside a quoted argument (D9):

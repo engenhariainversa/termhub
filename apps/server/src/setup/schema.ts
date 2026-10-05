@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { unsafeAllowedTool } from '../control/automation-tools.js';
+import { tk } from '../i18n/index.js';
 
 /**
  * Setup do projeto (ProjectSetup.data). Versionado: ao mudar o formato, incremente
@@ -131,6 +133,23 @@ export const automationSchema = z.object({
 });
 export type ProjectAutomation = z.infer<typeof automationSchema>;
 
+/** Why a saved allow rule is refused (TER-968): shown to the person on the field. */
+export const UNSAFE_ALLOWED_TOOL = tk('Regra ampla demais para uma aba automática: alcançaria git push, merge, publicação ou outro comando bloqueado. Use uma regra específica, como Bash(npm test:*).');
+
+/**
+ * Flags each `allowed_tools` entry too broad for an automatic tab (`unsafeAllowedTool`). Checked when the
+ * person saves, not when a stored setup is read: a stored list is filtered at launch instead, so a rule
+ * saved before this check never resets the whole automation section to its defaults.
+ */
+function checkAllowedTools(tools: string[] | null, ctx: z.RefinementCtx, path: (string | number)[]): void {
+  tools?.forEach((t, i) => {
+    if (unsafeAllowedTool(t)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [...path, i], message: UNSAFE_ALLOWED_TOOL });
+  });
+}
+
+/** The automation section as the person saves it (the mobile route): `automationSchema` plus the allow-rule check. */
+export const automationInputSchema = automationSchema.superRefine((a, ctx) => checkAllowedTools(a.allowed_tools, ctx, ['allowed_tools']));
+
 export const setupSchema = z.object({
   repo: repoSchema.nullable().default(null),
   tickets: ticketsSchema.nullable().default(null),
@@ -147,6 +166,7 @@ export type ProjectSetupData = z.infer<typeof setupSchema>;
 
 /** What PUT /setup accepts: the same shape, and no source twice. */
 export const setupInputSchema = setupSchema.superRefine((d, ctx) => {
+  checkAllowedTools(d.automation.allowed_tools, ctx, ['automation', 'allowed_tools']);
   const seen = new Set<string>();
   d.ticket_sources.forEach((s, i) => {
     const id = sourceIdentity(s);
