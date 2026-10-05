@@ -30,7 +30,7 @@ function pr(over: Partial<TaskPullRequest> = {}): TaskPullRequest {
   return {
     id: 'pr1', project_id: 'p1', task_id: 'c1', repo: 'acme/app', number: 7, url: 'https://github.com/acme/app/pull/7', title: 'Board: drag cards',
     head_ref: BRANCH[task]!, head_sha: 'h1', base_ref: EPIC_BRANCH, state: 'open', draft: false, merged_at: null, merge_commit_sha: null,
-    ci_state: 'passed', ci_summary: { total: 1, passed: 1, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, changed_level: null, synced_at: '',
+    ci_state: 'passed', ci_summary: { total: 1, passed: 1, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, release_runs: [], changed_level: null, synced_at: '',
     ...over,
   };
 }

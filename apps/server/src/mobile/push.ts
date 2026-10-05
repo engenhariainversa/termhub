@@ -458,8 +458,9 @@ export class MobilePushService {
    */
   private async escalated(e: PublishedAutomationEvent): Promise<void> {
     const reason = typeof e.payload.reason === 'string' ? e.payload.reason : null;
-    if (!reason || !e.run_id) return;
-    const key = `${e.run_id}:${reason}`;
+    if (!reason) return;
+    // an escalation of no run (a failed deploy or release) dedupes on its own event
+    const key = `${e.run_id ?? e.id}:${reason}`;
     if (this.escalations.has(key)) return;
     if (this.escalations.size > 10_000) this.escalations.clear();
     this.escalations.add(key);
@@ -469,7 +470,7 @@ export class MobilePushService {
     const ctx = await this.names(e.owner_id, e.project_id, null, null);
     if (!ctx.projectName) return; // not the owner's project
     const conversation = await repos.chat.findLatestActiveForProject(e.project_id, e.owner_id);
-    const data = { kind: 'automation_escalation', project_id: e.project_id, run_id: e.run_id, ...(conversation ? { conversation_id: conversation.id } : {}) };
+    const data = { kind: 'automation_escalation', project_id: e.project_id, ...(e.run_id ? { run_id: e.run_id } : {}), ...(conversation ? { conversation_id: conversation.id } : {}) };
     await this.deliver(
       e.owner_id,
       'confirmation',

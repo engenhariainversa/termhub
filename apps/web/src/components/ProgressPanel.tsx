@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { PauseBanner } from './PauseAutomationButton';
 import { useMonitor } from '../lib/monitor';
-import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, stateLabel, withLiveTab } from '../lib/progress';
+import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, releaseLabel, stateLabel, withLiveTab } from '../lib/progress';
 import { relativeTime } from '../lib/time';
 import { i18n, useTranslation } from '../i18n';
 import type { AgentOnCard, CardProgress, EpicProgress, ProgressEstimate, ProgressResponse, ProgressScope, PullRequestBadge } from '../lib/types';
@@ -84,6 +84,20 @@ export function PullRequestBadges({ pulls }: { pulls: PullRequestBadge[] }) {
             ) : (
               <span className={tone}>{ciLabel(p)}</span>
             )}
+            {p.state === 'merged' &&
+              (p.release_runs ?? [])
+                .filter((r) => r.state !== 'none' || r.url)
+                .map((r) =>
+                  r.url ? (
+                    <a key={r.workflow} href={r.url} target="_blank" rel="noreferrer" className={CI_TONE[r.state]}>
+                      {releaseLabel(r)}
+                    </a>
+                  ) : (
+                    <span key={r.workflow} className={CI_TONE[r.state]}>
+                      {releaseLabel(r)}
+                    </span>
+                  ),
+                )}
           </span>
         );
       })}

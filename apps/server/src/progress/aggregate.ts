@@ -131,7 +131,7 @@ function ciSummary(cards: CardProgress[]): EpicProgress['ci'] {
   const ci = { open: 0, failed: 0, running: 0, deployed: 0 };
   for (const p of byNumber.values()) {
     if (p.state === 'open') ci.open++;
-    if ((p.state === 'open' && p.ci_state === 'failed') || p.deploy_state === 'failed') ci.failed++;
+    if ((p.state === 'open' && p.ci_state === 'failed') || p.deploy_state === 'failed' || p.release_runs?.some((r) => r.state === 'failed')) ci.failed++;
     if ((p.state === 'open' && p.ci_state === 'running') || p.deploy_state === 'running') ci.running++;
     if (p.deploy_state === 'passed') ci.deployed++;
   }

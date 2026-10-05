@@ -83,6 +83,13 @@ export function ciLabel(p: PullRequestBadge): string {
   return { none: i18n.t('sem CI'), running: i18n.t('CI rodando'), passed: i18n.t('CI verde') }[p.ci_state];
 }
 
+/** One release workflow after a merge: "publicado v1.2.3" / "publicação falhou: <workflow>" (agentic board D22). */
+export function releaseLabel(r: NonNullable<PullRequestBadge['release_runs']>[number]): string {
+  if (r.state === 'passed') return r.version ? i18n.t('publicado v{{version}}', { version: r.version }) : i18n.t('publicado');
+  if (r.state === 'failed') return i18n.t('publicação falhou: {{workflow}}', { workflow: r.workflow });
+  return i18n.t('publicando: {{workflow}}', { workflow: r.workflow });
+}
+
 export function epicCiLine(ci: NonNullable<EpicProgress['ci']>): string {
   const parts = [i18n.t('{{count}} abertos', { count: ci.open })];
   if (ci.failed) parts.push(i18n.t('{{n}} falhou', { n: ci.failed }));

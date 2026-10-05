@@ -29,6 +29,11 @@ export const CONFLICT_CAP = 'conflict_cap';
 /** The agent itself said it is stuck (`report_card blocked`). */
 export const REPORTED_BLOCKED = 'reported_blocked';
 
+/** The project's deploy workflow failed on a merge the automation made: automation of the project is paused (spec D22). */
+export const DEPLOY_FAILED = 'deploy_failed';
+/** A release workflow (npm, OTA…) failed after a merge: nothing is paused, a person looks at it. */
+export const RELEASE_FAILED = 'release_failed';
+
 /** The text the feed, the chat line and the push show for each escalation reason (spec §9.3). */
 export const ESCALATION_TEXT: Record<string, string> = {
   [TRUST_PROMPT]: tk('O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.'),
@@ -40,6 +45,8 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [START_FAILED]: tk('O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.'),
   [AGENT_EXITED]: tk('O agente saiu de novo depois de reiniciado; confira a aba.'),
   [REPORTED_BLOCKED]: tk('O agente disse que travou e precisa de você.'),
+  [DEPLOY_FAILED]: tk('O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.'),
+  [RELEASE_FAILED]: tk('Um workflow de publicação falhou depois do merge; confira a execução.'),
   [CONFLICT_CAP]: tk('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
 };
 
