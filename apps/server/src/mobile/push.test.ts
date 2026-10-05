@@ -277,6 +277,19 @@ describe('MobilePushService', () => {
     expect(sent).toHaveLength(0);
   });
 
+  it('the same open question republished because its card changed (update) is not notified again (TER-919)', async () => {
+    const { service, sent, repos } = setup();
+    stop = service.start();
+    const question = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'choice' as const, payload: { questions: [] }, status: 'open' as const, answer: null, error_code: null, created_at: '', answered_at: null, closed_at: null };
+    chatBus.publish({ type: 'tab_question', user_id: 'u1', conversation_id: 'cp', question } as ChatEvent);
+    await flush();
+    // A countdown, a concierge suggestion, a cancel, the switch turned off, a lost sender: each redraws the card.
+    for (let i = 0; i < 5; i++) chatBus.publish({ type: 'tab_question', user_id: 'u1', conversation_id: 'cp', question, update: true } as ChatEvent);
+    await flush();
+    expect(repos.userNotifications.create).toHaveBeenCalledTimes(1);
+    expect(sent).toHaveLength(1);
+  });
+
   it('answered and closed tab questions push nothing', async () => {
     const { service, sent, repos } = setup();
     stop = service.start();

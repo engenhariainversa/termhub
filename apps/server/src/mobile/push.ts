@@ -249,7 +249,8 @@ export class MobilePushService {
       const ctx = await this.names(event.user_id, projectId, event.tab_id, event.machine_id);
       const data = { kind: 'confirmation', conversation_id: event.conversation_id, project_id: projectId, action_id: event.action_id };
       await this.deliver(event.user_id, 'confirmation', confirmationText(ctx), data, await this.offline(event.user_id));
-    } else if (event.type === 'tab_question' && event.question.kind !== 'suggestion' && !event.resurfaced) {
+    } else if (event.type === 'tab_question' && event.question.kind !== 'suggestion' && !event.resurfaced && !event.update) {
+      // `update`: the same open card republished because it changed (TER-919) — told once is enough.
       // (A suggestion never rides `tab_question` — it has its own events and is never pushed — the
       // kind check only narrows the view's type.)
       // Same channel as a confirmation — the history row keeps that kind, which every app version
