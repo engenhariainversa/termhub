@@ -3,6 +3,7 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import type { ColumnCategory, Task, TaskColumn, TaskStatus, TaskType, TaskWithSubtasks } from '../db/repositories/types.js';
 import { readTicketLink } from '../integrations/ticket-link.js';
 import { ControlError, type ControlContext } from './context.js';
+import { msg } from '../i18n/index.js';
 
 /** Field limits, the same the REST routes enforce (`routes/tasks.ts`). */
 export const TASK_TITLE_MAX = 300;
@@ -82,7 +83,7 @@ export async function rules<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (e) {
-    if (e instanceof TaskRuleError) throw new ControlError(e.code, e.message);
+    if (e instanceof TaskRuleError) throw new ControlError(e.code, e.localized);
     throw e;
   }
 }
@@ -151,16 +152,22 @@ export async function moveTask(
   return { task: taskOut(moved), board_url: boardUrl(task.project_id) };
 }
 
-const subtaskCount = (n: number) => (n === 1 ? '1 subtarefa' : `${n} subtarefas`);
-
 /** Destructive and cascading, so it needs `confirm: true`; the refusal spells out what would go. */
 export async function deleteTask(ctx: ControlContext, input: { task_id: string; confirm?: boolean }): Promise<{ deleted: true; task_id: string; deleted_subtasks: number; board_url: string }> {
   const { task } = await ctx.scoped.task(input.task_id);
   const children = await ctx.repos.tasks.childIds(task.id);
   if (!input.confirm) {
-    const kind = task.parent_id ? 'a subtarefa' : 'a tarefa';
-    const what = children.length ? `${kind} "${task.title}" e ${subtaskCount(children.length)}` : `${kind} "${task.title}"`;
-    throw new ControlError('CONFIRM_REQUIRED', `Isso exclui ${what}; repita com confirm: true para confirmar`);
+    const vars = { title: task.title, count: children.length };
+    throw new ControlError(
+      'CONFIRM_REQUIRED',
+      task.parent_id
+        ? children.length
+          ? msg('Isso exclui a subtarefa "{{title}}" e {{count}} subtarefas; repita com confirm: true para confirmar', vars)
+          : msg('Isso exclui a subtarefa "{{title}}"; repita com confirm: true para confirmar', vars)
+        : children.length
+          ? msg('Isso exclui a tarefa "{{title}}" e {{count}} subtarefas; repita com confirm: true para confirmar', vars)
+          : msg('Isso exclui a tarefa "{{title}}"; repita com confirm: true para confirmar', vars),
+    );
   }
   // Tickets point at tasks by id with no FK: unlink the whole subtree so they show as "não importado" again.
   for (const id of [task.id, ...children]) await ctx.repos.tickets.unlinkTask(id);

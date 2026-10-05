@@ -49,14 +49,15 @@ export function controlContextForRequest(repos: Repositories, request: FastifyRe
 /** An expected failure the caller should see (actionable). `message` is the pt-BR rendering; the
  *  reply translates `localized` with the caller's language (`t(locale, err.localized)`). */
 export class ControlError extends Error {
-  readonly localized: LocalizedText;
+  /** Non-enumerable, so equality checks on the error (tests, logs) see only code and message. */
+  declare readonly localized: LocalizedText;
   constructor(
     readonly code: string,
     message: string | LocalizedText,
   ) {
     const localized = message instanceof LocalizedText ? message : new LocalizedText(message);
     super(localized.toString());
-    this.localized = localized;
+    Object.defineProperty(this, 'localized', { value: localized, enumerable: false });
     this.name = 'ControlError';
   }
 }

@@ -1,6 +1,5 @@
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { CATALOGS } from './catalog.js';
 import { LocalizedText, msg, negotiateLocale, parseLocale, requestLocale, t, tk } from './index.js';
 
 const req = (opts: { user?: { locale: string | null } | null; acceptLanguage?: string } = {}) =>
@@ -20,8 +19,8 @@ describe('t', () => {
   });
 
   it('interpolates {{placeholders}} in both languages', () => {
-    expect(t('pt-BR', 'A máquina {{name}} está desconectada', { name: 'hulk' })).toBe('A máquina hulk está desconectada');
-    expect(t('en', 'A máquina {{name}} está desconectada', { name: 'hulk' })).toBe('Machine hulk is disconnected');
+    expect(t('pt-BR', 'A máquina {{machine}} está desconectada', { machine: 'm1' })).toBe('A máquina m1 está desconectada');
+    expect(t('en', 'A máquina {{machine}} está desconectada', { machine: 'm1' })).toBe('Machine m1 is disconnected');
   });
 
   it('leaves an unknown placeholder as it is', () => {
@@ -29,17 +28,24 @@ describe('t', () => {
   });
 
   it('picks the plural form from count, in both languages', () => {
-    const key = 'Excluir {{count}} cards';
-    expect(CATALOGS.en[`${key}_one`]).toBeDefined();
-    expect(t('pt-BR', key, { count: 1 })).toBe(CATALOGS['pt-BR'][`${key}_one`].replace('{{count}}', '1'));
-    expect(t('en', key, { count: 3 })).toBe(CATALOGS.en[`${key}_other`].replace('{{count}}', '3'));
+    const key = 'Isso exclui a tarefa "{{title}}" e {{count}} subtarefas; repita com confirm: true para confirmar';
+    expect(t('pt-BR', key, { title: 'x', count: 1 })).toBe('Isso exclui a tarefa "x" e 1 subtarefa; repita com confirm: true para confirmar');
+    expect(t('pt-BR', key, { title: 'x', count: 3 })).toBe('Isso exclui a tarefa "x" e 3 subtarefas; repita com confirm: true para confirmar');
+    expect(t('en', key, { title: 'x', count: 1 })).toBe('This deletes the task "x" and 1 subtask; repeat with confirm: true to confirm');
+    expect(t('en', key, { title: 'x', count: 3 })).toBe('This deletes the task "x" and 3 subtasks; repeat with confirm: true to confirm');
+  });
+
+  it('translates a LocalizedText value inside the vars into the same language', () => {
+    const m = msg('Arquivo maior que o limite de {{size}} para {{kind}}', { size: '10 MB', kind: msg('imagem') });
+    expect(t('en', m)).toBe('File larger than the 10 MB limit for image');
+    expect(String(m)).toBe('Arquivo maior que o limite de 10 MB para imagem');
   });
 
   it('translates a LocalizedText with its own vars', () => {
-    const m = msg('A máquina {{name}} está desconectada', { name: 'hulk' });
+    const m = msg('A máquina {{machine}} está desconectada', { machine: 'm1' });
     expect(m).toBeInstanceOf(LocalizedText);
-    expect(String(m)).toBe('A máquina hulk está desconectada');
-    expect(t('en', m)).toBe('Machine hulk is disconnected');
+    expect(String(m)).toBe('A máquina m1 está desconectada');
+    expect(t('en', m)).toBe('Machine m1 is disconnected');
   });
 
   it('tk returns its argument unchanged', () => {

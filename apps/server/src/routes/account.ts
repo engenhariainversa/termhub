@@ -6,6 +6,7 @@ import { VIEW_AS_COOKIE } from '../auth/scope.js';
 import { AccountDeletionService, deletionStatus } from '../account/deletion.js';
 import { HttpError, unauthorized } from '../lib/errors.js';
 import { config } from '../config.js';
+import { msg, tk } from '../i18n/index.js';
 
 /** Re-authentication for the request: the account's password, or a code e-mailed to it. */
 const requestBody = z.union([
@@ -90,9 +91,9 @@ export async function accountRoutes(app: FastifyInstance, deps: AccountRouteDeps
     if (!check.ok) {
       if (check.reason === 'locked') {
         reply.header('retry-after', Math.ceil(check.retryAfterMs / 1000));
-        throw new HttpError(429, `Muitas tentativas. Tente novamente em ${Math.ceil(check.retryAfterMs / 1000)}s.`, 'LOCKED');
+        throw new HttpError(429, msg('Muitas tentativas. Tente novamente em {{seconds}}s.', { seconds: Math.ceil(check.retryAfterMs / 1000) }), 'LOCKED');
       }
-      throw new HttpError(401, 'password' in body ? 'Senha incorreta' : 'Código inválido ou expirado', 'REAUTH_FAILED');
+      throw new HttpError(401, 'password' in body ? tk('Senha incorreta') : tk('Código inválido ou expirado'), 'REAUTH_FAILED');
     }
     if (check.user.id !== user.id) throw unauthorized();
     const updated = await deps.deletion.request(user, 'web');

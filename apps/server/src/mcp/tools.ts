@@ -20,6 +20,7 @@ import { recapPendingCards } from '../control/pending.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
+import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 
 export interface ToolDef {
   name: string;
@@ -459,8 +460,12 @@ export async function allowedTools(ctx: ControlContext, scopes: readonly ApiToke
 }
 
 /** pt-BR answer for a tools/call this token may not make (spec §6: a tool error, not a JSON-RPC error). */
-export function refusalMessage(name: string): string {
-  const tool = TOOLS.find((t) => t.name === name);
-  if (!tool) return `Ferramenta desconhecida: ${name.slice(0, 64)}`;
-  return `Este token não pode usar a ferramenta ${name}: ela precisa do escopo \`${tool.scope}\` e da permissão ${tool.grantText ?? `${tool.resource}:${tool.action}`} na sua role`;
+export function refusalMessage(name: string, locale: Locale = DEFAULT_LOCALE): string {
+  const tool = TOOLS.find((x) => x.name === name);
+  if (!tool) return t(locale, 'Ferramenta desconhecida: {{tool}}', { tool: name.slice(0, 64) });
+  return t(locale, 'Este token não pode usar a ferramenta {{tool}}: ela precisa do escopo `{{scope}}` e da permissão {{grant}} na sua role', {
+    tool: name,
+    scope: tool.scope,
+    grant: tool.grantText ?? `${tool.resource}:${tool.action}`,
+  });
 }

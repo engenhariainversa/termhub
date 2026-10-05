@@ -4,6 +4,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import { HttpError, badRequest } from '../lib/errors.js';
 import { verifyProof, type JtiCache } from '../mobile/dpop.js';
 import { DeviceLockedError, PinInvalidError, deviceNotFound, deviceRevoked, type SessionService } from '../mobile/session.js';
+import { requestLocale, t } from '../i18n/index.js';
 
 export interface MobileSessionDeps {
   session: SessionService;
@@ -58,7 +59,7 @@ export async function mobileSessionRoutes(app: FastifyInstance, repos: Repositor
       return tokenResponse.parse(result);
     } catch (err) {
       if (err instanceof DeviceLockedError) reply.header('retry-after', Math.ceil(err.retryAfterMs / 1000));
-      if (err instanceof PinInvalidError) return reply.code(401).send({ error: err.message, code: err.code, failures: err.failures });
+      if (err instanceof PinInvalidError) return reply.code(401).send({ error: t(requestLocale(request), err.localized), code: err.code, failures: err.failures });
       throw err;
     }
   });

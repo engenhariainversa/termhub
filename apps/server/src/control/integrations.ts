@@ -4,6 +4,7 @@ import { readMachineSecret, type SecretSource } from '../integrations/machine-se
 import { encryptionAvailable } from '../lib/crypto.js';
 import { repoSchema, setupInputSchema, type ProjectSetupData } from '../setup/schema.js';
 import { ControlError, type ControlContext } from './context.js';
+import { msg } from '../i18n/index.js';
 
 /** The config keys that may leave the server: who the integration logs in as, and Jira's site (spec D7). */
 const PUBLIC_CONFIG_KEYS = ['login', 'baseUrl', 'email'] as const;
@@ -52,8 +53,8 @@ export async function createIntegration(
     throw new ControlError(
       'INTEGRATION_TEST_FAILED',
       status
-        ? `O GitHub recusou o token do gh da máquina ${machine.name} (HTTP ${status}); nada foi salvo`
-        : `Não consegui falar com o GitHub para testar o token da máquina ${machine.name}; nada foi salvo`,
+        ? msg('O GitHub recusou o token do gh da máquina {{machine}} (HTTP {{status}}); nada foi salvo', { machine: machine.name, status })
+        : msg('Não consegui falar com o GitHub para testar o token da máquina {{machine}}; nada foi salvo', { machine: machine.name }),
     );
   }
   const account = test.account ?? null;
@@ -96,7 +97,10 @@ export async function setProjectRepo(
   const { project } = await ctx.scoped.project(input.project_id);
   const integration = await ctx.scoped.integration(input.integration_id);
   if (integration.provider !== 'github' || project.owner_id === null || integration.owner_id !== project.owner_id) {
-    throw new ControlError('INTEGRATION_NOT_ALLOWED', `A integração ${integration.name} não serve para o repositório do projeto ${project.name}: precisa ser do GitHub e do mesmo dono do projeto`);
+    throw new ControlError(
+      'INTEGRATION_NOT_ALLOWED',
+      msg('A integração {{integration}} não serve para o repositório do projeto {{project}}: precisa ser do GitHub e do mesmo dono do projeto', { integration: integration.name, project: project.name }),
+    );
   }
   const fullName = input.full_name.trim();
   if (!validRepo(fullName)) throw new ControlError('INVALID_REPO', 'Repositório inválido: use o formato dono/repositorio (ex.: acme/api)');
@@ -110,7 +114,7 @@ export async function setProjectRepo(
   });
   if (!repo.success) throw new ControlError('INVALID_REPO', 'Branch base ou workflow de deploy inválido');
   const next = setupInputSchema.safeParse({ ...current.data, repo: repo.data });
-  if (!next.success) throw new ControlError('INVALID_SETUP', `O setup salvo do projeto ${project.name} está inválido; abra-o na tela Setup e salve de novo`);
+  if (!next.success) throw new ControlError('INVALID_SETUP', msg('O setup salvo do projeto {{project}} está inválido; abra-o na tela Setup e salve de novo', { project: project.name }));
   const saved = await ctx.repos.projectSetup.save(project.id, next.data);
   return { project_id: project.id, repo: saved.data.repo!, integration: integrationOut(integration), updated_at: saved.updated_at };
 }

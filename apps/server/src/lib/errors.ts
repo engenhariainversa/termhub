@@ -18,7 +18,8 @@ export function localizedOf(err: unknown): LocalizedText {
  * read it); the reply is translated from `localized` with the request's language.
  */
 export class HttpError extends Error {
-  readonly localized: LocalizedText;
+  /** Non-enumerable, so equality checks on the error (tests, logs) see only code and message. */
+  declare readonly localized: LocalizedText;
   constructor(
     public statusCode: number,
     message: Message,
@@ -26,7 +27,7 @@ export class HttpError extends Error {
   ) {
     const localized = asLocalized(message);
     super(localized.toString());
-    this.localized = localized;
+    Object.defineProperty(this, 'localized', { value: localized, enumerable: false });
   }
 }
 
@@ -37,7 +38,7 @@ export const forbidden = (message: Message = tk('Sem permissão')) => new HttpEr
 export const conflict = (message: Message = tk('Conflito')) => new HttpError(409, message, 'CONFLICT');
 
 /** Sends `{ error, code, ...extra }` with `error` translated into the request's language. */
-export function sendError(request: FastifyRequest, reply: FastifyReply, status: number, message: Message, code: string, extra: Record<string, unknown> = {}) {
+export function sendError(request: FastifyRequest, reply: FastifyReply, status: number, message: Message, code?: string, extra: Record<string, unknown> = {}) {
   return reply.code(status).send({ error: t(requestLocale(request), message), code, ...extra });
 }
 

@@ -34,6 +34,7 @@ const CALLEES: Record<string, number> = {
   'new TaskRuleError': 1,
   'new ProjectRuleError': 1,
   'new ProjectGroupRuleError': 1,
+  sendError: 3,
 };
 const CALL_RE = new RegExp(
   `(?<![\\w.$])(${Object.keys(CALLEES)
@@ -131,10 +132,11 @@ export function scanSource(src: string, file: string): { usages: Usage[]; proble
       continue;
     }
     const after = src[skipSpace(src, end)];
-    if (after !== ',' && after !== ')') {
+    if (after === '+') {
       problems.push(`${where}: ${callee}() with a message built from parts; use one literal key with {{placeholders}}`);
       continue;
     }
+    if (after !== ',' && after !== ')') continue; // an expression that starts with a literal (`'x' in y ? …`): not a key
     usages.push({ key: unescape(body), file: where, line: lineOf(i) });
   }
   return { usages, problems };

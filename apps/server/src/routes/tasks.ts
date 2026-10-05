@@ -44,7 +44,7 @@ export async function taskRules<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (e) {
-    if (e instanceof TaskRuleError) throw CONFLICTS.has(e.code) ? conflict(e.message) : badRequest(e.message);
+    if (e instanceof TaskRuleError) throw CONFLICTS.has(e.code) ? conflict(e.localized) : badRequest(e.localized);
     throw e;
   }
 }

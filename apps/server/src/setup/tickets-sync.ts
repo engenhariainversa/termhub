@@ -2,6 +2,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import { getProvider, type IntegrationProvider } from '../integrations/index.js';
 import { providerIdOf, ticketLinkJson } from '../integrations/ticket-link.js';
 import { sourceIdentity, type TicketSource } from './schema.js';
+import { tk } from '../i18n/index.js';
 
 export interface SourceSyncResult {
   provider: IntegrationProvider;
@@ -48,8 +49,8 @@ export async function syncSource(repos: Repositories, projectId: string, source:
   const base = { provider: source.provider, integration_id: source.integration_id, scope: source.scope };
   const integration = await repos.integrations.findById(source.integration_id);
   const secret = await repos.integrations.getSecret(source.integration_id);
-  if (!integration || !secret) return { ...base, error: 'Integração de tickets não encontrada' };
-  if (integration.provider !== source.provider) return { ...base, error: 'Provedor da fonte não bate com a integração' };
+  if (!integration || !secret) return { ...base, error: tk('Integração de tickets não encontrada') };
+  if (integration.provider !== source.provider) return { ...base, error: tk('Provedor da fonte não bate com a integração') };
 
   let page;
   try {

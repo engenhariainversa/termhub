@@ -12,7 +12,8 @@ export type Locale = 'pt-BR' | 'en';
 export const LOCALES: readonly Locale[] = ['pt-BR', 'en'];
 export const DEFAULT_LOCALE: Locale = 'pt-BR';
 
-export type Vars = Record<string, string | number>;
+/** Interpolation values; a LocalizedText value is translated into the same language (a label inside a message). */
+export type Vars = Record<string, string | number | LocalizedText>;
 
 /** A message whose language is decided later (an HttpError or ControlError translated at reply time). */
 export class LocalizedText {
@@ -50,16 +51,20 @@ function lookup(locale: Locale, key: string, vars: Vars | undefined): string | u
   return catalog[key];
 }
 
-function interpolate(text: string, vars: Vars | undefined): string {
+function interpolate(locale: Locale, text: string, vars: Vars | undefined): string {
   if (!vars) return text;
-  return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (whole, name: string) => (name in vars ? String(vars[name]) : whole));
+  return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (whole, name: string) => {
+    if (!(name in vars)) return whole;
+    const v = vars[name];
+    return v instanceof LocalizedText ? t(locale, v) : String(v);
+  });
 }
 
 /** Translates a pt-BR key (or a LocalizedText, whose own vars are used) into `locale`. */
 export function t(locale: Locale, text: string | LocalizedText, vars?: Vars): string {
   if (text instanceof LocalizedText) return t(locale, text.text, text.vars);
   const found = lookup(locale, text, vars) ?? (locale !== DEFAULT_LOCALE ? lookup(DEFAULT_LOCALE, text, vars) : undefined) ?? text;
-  return interpolate(found, vars);
+  return interpolate(locale, found, vars);
 }
 
 /** A stored or sent value narrowed to a Locale; anything else (null included) is null = automatic. */

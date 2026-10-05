@@ -1,0 +1,18 @@
+{
+  "Prova inválida": "Invalid proof",
+  "Prova repetida": "Repeated proof",
+  "Cabeçalho X-Termhub-App inválido": "Invalid X-Termhub-App header",
+  "Atualize o app do termhub para continuar": "Update the termhub app to continue",
+  "Este aparelho foi removido da conta": "This device was removed from the account",
+  "Sessão expirada.": "Session expired.",
+  "Muitos pedidos; tente de novo em alguns minutos": "Too many requests; try again in a few minutes",
+  "O código expirou; peça um novo": "The code has expired; ask for a new one",
+  "Revogue um aparelho antes": "Revoke a device first",
+  "O pedido ainda não foi aprovado": "The request has not been approved yet",
+  "Este pedido já foi encerrado": "This request is already closed",
+  "A chave do aparelho não confere": "The device key does not match",
+  "Pedido não encontrado": "Request not found",
+  "Este aparelho já está cadastrado": "This device is already registered",
+  "Aparelho não encontrado": "Device not found",
+  "Desafio inválido ou expirado": "Invalid or expired challenge"
+}

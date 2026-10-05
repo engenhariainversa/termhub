@@ -9,7 +9,7 @@ import { createRepositories, type Repositories } from './db/repositories/index.j
 import { createMailer } from './email/mailer.js';
 import { createAccessAllowlist } from './cloudflare/access.js';
 import { AuthService, authRoutes, buildAuthHook, type AuthContext } from './auth/index.js';
-import { applyErrorHandler } from './lib/errors.js';
+import { applyErrorHandler, sendError } from './lib/errors.js';
 import { machineRoutes } from './routes/machines.js';
 import { projectRoutes } from './routes/projects.js';
 import { projectGroupRoutes } from './routes/project-groups.js';
@@ -291,7 +291,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await api.register((a) => publicCityRoutes(a, repos), { prefix: '/public' });
       api.get('/health', { config: { public: true } }, async () => ({ ok: true }));
       await api.register((a) => readyRoutes(a, { ping: () => repos.ping(), lifecycle }));
-      api.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: 'Rota não encontrada', code: 'NOT_FOUND' }));
+      api.setNotFoundHandler((request, reply) => sendError(request, reply, 404, 'Rota não encontrada', 'NOT_FOUND'));
     },
     { prefix: '/api' },
   );
