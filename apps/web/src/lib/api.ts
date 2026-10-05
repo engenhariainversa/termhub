@@ -1,5 +1,6 @@
 import { currentLocale, i18n } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem } from './types';
+import type { FileRecentResponse } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -103,6 +104,8 @@ export const api = {
     if (q.tab_id) p.set('tab_id', q.tab_id);
     return request<FilePreview>('GET', `/file-preview?${p}`);
   },
+  /** A project's recent Markdown files on its machines (spec 2026-10-04 recent Markdown files). */
+  fileRecent: (projectId: string) => request<FileRecentResponse>('GET', `/file-recent?${new URLSearchParams({ project_id: projectId })}`),
   auth: {
     config: () => request<AuthConfig>('GET', '/auth/config'),
     me: () => request<{ user: User; view_as: ViewAs }>('GET', '/auth/me'),
