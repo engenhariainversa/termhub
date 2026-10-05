@@ -35,6 +35,8 @@ export interface TaskOut {
   epic_id: string | null;
   column_id: string | null;
   tab_id: string | null;
+  /** tagged "automático" (eligible for automatic work) */
+  auto: boolean;
   /** the external ticket this card came from (Linear/Jira/GitHub), or null */
   ticket: { key: string; url: string; state: string; provider: string } | null;
   created_at: string;
@@ -70,7 +72,7 @@ export function boardUrl(projectId: string): string {
 
 export const taskOut = (t: Task): TaskOut => ({
   id: t.id, project_id: t.project_id, type: t.type, ref: t.ref, url: cardUrl(t.ref), title: t.title, description: t.description, status: t.status,
-  position: t.position, parent_id: t.parent_id, epic_id: t.epic_id, column_id: t.column_id, tab_id: t.tab_id,
+  position: t.position, parent_id: t.parent_id, epic_id: t.epic_id, column_id: t.column_id, tab_id: t.tab_id, auto: t.auto,
   ticket: (() => { const l = readTicketLink(t.external_ref); return l ? { key: l.key, url: l.url, state: l.state, provider: l.provider } : null; })(),
   created_at: t.created_at, updated_at: t.updated_at,
 });
@@ -108,11 +110,11 @@ export async function listTasks(
 
 export async function createTask(
   ctx: ControlContext,
-  input: { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; subtasks?: SubtaskIn[] },
+  input: { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; subtasks?: SubtaskIn[] },
 ): Promise<{ task: TaskTreeOut; board_url: string }> {
   await ctx.scoped.project(input.project_id);
   const task = await rules(() =>
-    ctx.repos.tasks.createWithSubtasks(input.project_id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id }, input.subtasks ?? []),
+    ctx.repos.tasks.createWithSubtasks(input.project_id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id, auto: input.auto }, input.subtasks ?? []),
   );
   return { task: outTree(task), board_url: boardUrl(input.project_id) };
 }
@@ -125,15 +127,24 @@ export async function addSubtasks(ctx: ControlContext, input: { task_id: string;
 
 export async function updateTask(
   ctx: ControlContext,
-  input: { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string },
+  input: { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean },
 ): Promise<{ task: TaskOut; board_url: string }> {
   const { task } = await ctx.scoped.task(input.task_id);
-  if ([input.title, input.description, input.status, input.type, input.epic_id].every((v) => v === undefined)) {
-    throw new ControlError('BAD_REQUEST', 'Informe title, description, status, type ou epic_id');
+  const fields = [input.title, input.description, input.status, input.type, input.epic_id];
+  if (fields.every((v) => v === undefined) && input.auto === undefined) {
+    throw new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id ou auto');
   }
-  const updated = await rules(() =>
-    ctx.repos.tasks.update(task.id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id }),
-  );
+  let updated: Task | undefined = task;
+  if (fields.some((v) => v !== undefined)) {
+    updated = await rules(() =>
+      ctx.repos.tasks.update(task.id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id }),
+    );
+  }
+  if (updated && input.auto !== undefined) {
+    // After the fields, so an epic change and the tag in one call end up consistent.
+    await rules(() => ctx.repos.tasks.setAuto(task.id, input.auto!));
+    updated = await ctx.repos.tasks.findById(task.id);
+  }
   if (!updated) throw new ControlError('NOT_FOUND', 'Tarefa não encontrada');
   return { task: taskOut(updated), board_url: boardUrl(task.project_id) };
 }

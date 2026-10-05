@@ -6,10 +6,13 @@ import type { Waker } from '../chat/wake.js';
 import { autoSwapOnLimit } from '../control/account-swap.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Tab } from '../db/repositories/types.js';
+import { takeInputOrigin } from '../terminal/input-origin.js';
+import { buildOriginNote } from '../terminal/origin-note.js';
 import { monitorBus } from './bus.js';
 import { claudeSessionOf, interpretHookEvent, isRateLimit, type HookTool, type Interpreted } from './state.js';
 
-export type IngestResult = { ok: true; tab: Tab } | { ok: false; reason: 'unknown_session' | 'ignored' };
+/** `origin_note`: what the hook prints back for a prompt termhub typed (TER-851), when one matched. */
+export type IngestResult = ({ ok: true; tab: Tab } | { ok: false; reason: 'unknown_session' | 'ignored' }) & { origin_note?: string };
 
 /**
  * A hook fired on a machine: find the tab by its tmux session, interpret the payload, store
@@ -28,6 +31,8 @@ export async function ingestHookEvent(
 ): Promise<IngestResult> {
   const tab = await repos.tabs.findByTmuxSession(input.machineId, input.session);
   if (!tab) return { ok: false, reason: 'unknown_session' };
+  // Taken before anything else reads the event: the prompt is compared in memory and dropped here.
+  const originNote = input.tool === 'claude' ? originNoteFor(repos, log, tab, input.event) : null;
   const result = await ingestForTab(repos, log, tab, input, waker);
   // A Claude hook means the session's transcript moved: an open tab chat reads it now, after the tab
   // row (session id, state) is updated (spec 2026-10-01 tab chat §5.3). Every event, even one the wait
@@ -39,7 +44,29 @@ export async function ingestHookEvent(
       log.warn({ tabId: tab.id, err: err instanceof Error ? err.message : String(err) }, 'monitor: tab event listener failed');
     }
   }
-  return result;
+  const note = await originNote;
+  return note ? { ...result, origin_note: note } : result;
+}
+
+/**
+ * The origin note for a Claude `UserPromptSubmit` whose prompt is a text termhub typed into this tab
+ * (TER-851, spec §5.3). Only this machine's tab is looked at (the caller resolved it from the machine's
+ * token). Never throws and never logs the prompt: a failure is the same as no note (D4).
+ */
+async function originNoteFor(repos: Repositories, log: FastifyBaseLogger, tab: Tab, event: unknown): Promise<string | null> {
+  if (!event || typeof event !== 'object') return null;
+  const { hook_event_name: name, prompt } = event as Record<string, unknown>;
+  if (name !== 'UserPromptSubmit' || typeof prompt !== 'string') return null;
+  const origin = takeInputOrigin(tab.id, prompt);
+  if (!origin) return null;
+  try {
+    const note = await buildOriginNote(origin, repos);
+    log.info({ tabId: tab.id, level: origin.level, noted: note !== null }, 'monitor: prompt origin');
+    return note;
+  } catch (err) {
+    log.warn({ tabId: tab.id, level: origin.level, err: err instanceof Error ? err.name : 'unknown' }, 'monitor: prompt origin note failed');
+    return null;
+  }
 }
 
 async function ingestForTab(
