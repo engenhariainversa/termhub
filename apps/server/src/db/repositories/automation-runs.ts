@@ -32,6 +32,10 @@ export interface AutomationRun {
   woken_at: Date | null;
   /** the PR head a server-started run answers (a conflict fixer, spike R2); null = a run from the queue */
   trigger_sha: string | null;
+  /** worktree and tab cleanup (spec §7): null = not asked; due = to do; done | kept (dirty) | gave_up = settled */
+  cleanup_state: CleanupState | null;
+  /** how many cleanup passes could not finish (machine offline, tab still busy) */
+  cleanup_attempts: number;
   /** the server instance (colour) driving the run */
   claimed_by: string;
   heartbeat_at: Date;
@@ -40,17 +44,11 @@ export interface AutomationRun {
   created_at: Date;
 }
 
+export type CleanupState = 'due' | 'done' | 'kept' | 'gave_up';
+
 export type AutomationRunPatch = Partial<
   Pick<AutomationRun, 'status' | 'waiting_reason' | 'tab_id' | 'machine_id' | 'account_id' | 'branch' | 'worktree_path' | 'started_at' | 'ended_at' | 'allowed_tools'>
 >;
-
-/** An active run whose card was deleted, cancelled by the sweep: where its worktree may still be. */
-export interface OrphanedRun {
-  id: string;
-  project_id: string;
-  machine_id: string | null;
-  worktree_path: string | null;
-}
 
 /** A stored allow list, or null when absent or not a list of strings. */
 const toolsOf = (v: unknown): string[] | null => (Array.isArray(v) && v.every((t) => typeof t === 'string') ? (v as string[]) : null);
@@ -75,6 +73,8 @@ const map = (r: Row): AutomationRun => ({
   last_typed_at: r.lastTypedAt,
   woken_at: r.wokenAt,
   trigger_sha: r.triggerSha,
+  cleanup_state: r.cleanupState as CleanupState | null,
+  cleanup_attempts: r.cleanupAttempts,
   claimed_by: r.claimedBy,
   heartbeat_at: r.heartbeatAt,
   started_at: r.startedAt,
@@ -308,12 +308,44 @@ export class AutomationRunsRepository {
 
   /**
    * The sweep: active runs whose card was deleted (`task_id` nulled by the foreign key) become
-   * `cancelled`. Returns where their worktrees are, so the dispatcher can remove the clean ones.
+   * `cancelled`, and those that left a worktree are marked for cleanup (`due`). Returns the cancelled runs.
    */
-  async cancelOrphaned(): Promise<OrphanedRun[]> {
-    return this.db.$queryRaw<OrphanedRun[]>`
-      UPDATE "automation_runs" SET "status" = 'cancelled', "ended_at" = now()
+  async cancelOrphaned(): Promise<AutomationRun[]> {
+    const rows = await this.db.$queryRaw<RawRow[]>`
+      UPDATE "automation_runs" SET "status" = 'cancelled', "ended_at" = now(),
+        "cleanup_state" = CASE WHEN "worktree_path" IS NOT NULL THEN 'due' ELSE "cleanup_state" END
       WHERE "task_id" IS NULL AND "status" IN ('queued', 'starting', 'running', 'waiting')
-      RETURNING "id", "project_id", "machine_id", "worktree_path"`;
+      RETURNING *`;
+    return rows.map(mapRaw);
+  }
+
+  /**
+   * The cards' PR merged: their runs that have a worktree or a tab are marked `due` (once: a settled run
+   * stays settled). Returns every run of those cards still due, the ones marked earlier included.
+   */
+  async markCleanupDue(taskIds: string[]): Promise<AutomationRun[]> {
+    if (taskIds.length === 0) return [];
+    await this.db.automationRun.updateMany({
+      where: { taskId: { in: taskIds }, cleanupState: null, OR: [{ worktreePath: { not: null } }, { tabId: { not: null } }] },
+      data: { cleanupState: 'due' },
+    });
+    return (await this.db.automationRun.findMany({ where: { taskId: { in: taskIds }, cleanupState: 'due' }, orderBy: { createdAt: 'asc' } })).map(map);
+  }
+
+  /** The runs of a project whose cleanup is still to do. */
+  async dueCleanups(projectId: string): Promise<AutomationRun[]> {
+    return (await this.db.automationRun.findMany({ where: { projectId, cleanupState: 'due' }, orderBy: { createdAt: 'asc' } })).map(map);
+  }
+
+  /** Settles a due cleanup: true for the one caller that moved it out of `due` (two colours may race). */
+  async settleCleanup(id: string, state: Exclude<CleanupState, 'due'>): Promise<boolean> {
+    const { count } = await this.db.automationRun.updateMany({ where: { id, cleanupState: 'due' }, data: { cleanupState: state } });
+    return count === 1;
+  }
+
+  /** One more unfinished cleanup pass; returns the new count. */
+  async bumpCleanup(id: string): Promise<number> {
+    const row = await this.db.automationRun.update({ where: { id }, data: { cleanupAttempts: { increment: 1 } }, select: { cleanupAttempts: true } });
+    return row.cleanupAttempts;
   }
 }

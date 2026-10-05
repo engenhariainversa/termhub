@@ -239,7 +239,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     await db.task.delete({ where: { id: taskId } });
 
     const swept = await runs.cancelOrphaned();
-    expect(swept.filter((s) => s.id === run.id || s.id === done.id)).toEqual([{ id: run.id, project_id: projectId, machine_id: machineId, worktree_path: '/w/ter-1' }]);
+    expect(swept.filter((s) => s.id === run.id || s.id === done.id)).toEqual([expect.objectContaining({ id: run.id, project_id: projectId, machine_id: machineId, worktree_path: '/w/ter-1', cleanup_state: 'due' })]);
     const rows = await db.automationRun.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' } });
     expect(rows.map((r) => [r.id, r.taskId, r.status])).toEqual([
       [run.id, null, 'cancelled'],
@@ -247,6 +247,22 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     ]);
     expect(rows[0]!.endedAt).not.toBeNull();
     expect((await runs.cancelOrphaned()).some((s) => s.id === run.id)).toBe(false);
+  });
+
+  it('cleanup: marked due once per card, settled by one caller, listed per project, bounded by attempts', async () => {
+    const run = (await claim('blue'))!;
+    await runs.update(run.id, 'blue', { status: 'running', machine_id: machineId, worktree_path: '/w/ter-1', tab_id: null });
+    await db.automationRun.update({ where: { id: run.id }, data: { status: 'done' } });
+    const bare = await db.automationRun.create({ data: { id: newId(), projectId, taskId, role: 'fixer', status: 'done', claimedBy: 'blue' } });
+    expect((await runs.markCleanupDue([taskId])).map((r) => r.id)).toEqual([run.id]); // the run with nothing to clean is not marked
+    expect((await runs.markCleanupDue([]))).toEqual([]);
+    expect((await runs.dueCleanups(projectId)).map((r) => r.id)).toEqual([run.id]);
+    expect(await runs.bumpCleanup(run.id)).toBe(1);
+    expect(await runs.settleCleanup(run.id, 'kept')).toBe(true);
+    expect(await runs.settleCleanup(run.id, 'done')).toBe(false); // already settled by the other colour
+    expect((await runs.markCleanupDue([taskId])).length).toBe(0); // settled stays settled
+    expect(await runs.dueCleanups(projectId)).toEqual([]);
+    expect((await db.automationRun.findUnique({ where: { id: bare.id } }))!.cleanupState).toBeNull();
   });
 
   it('runs go with their project', async () => {

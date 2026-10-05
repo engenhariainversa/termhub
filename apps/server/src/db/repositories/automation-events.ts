@@ -1,7 +1,7 @@
 import type { PrismaClient } from '../prisma.js';
 import { newId } from '../../lib/ids.js';
 
-/** What the automatic work did (agentic board). `ci_fix_requested` ({ pr, sha }) lets the red-CI loop
+/** What the automatic work did (agentic board). `worktree_cleanup` ({ outcome: removed | kept | gave_up, path }) closes the loop after a merge. `ci_fix_requested` ({ pr, sha }) lets the red-CI loop
  * ask for a fix once per commit. */
 export type AutomationEventKind =
   | 'run_started'
@@ -22,7 +22,8 @@ export type AutomationEventKind =
   | 'paused'
   | 'resumed'
   | 'budget_hit'
-  | 'ci_fix_requested';
+  | 'ci_fix_requested'
+  | 'worktree_cleanup';
 
 /** Flat on purpose: ids, URLs, counts and reasons — never terminal content, transcripts or prompts. */
 export type AutomationEventPayload = Record<string, string | number | boolean | null>;

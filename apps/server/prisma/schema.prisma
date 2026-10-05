@@ -615,6 +615,9 @@ model AutomationRun {
   wokenAt       DateTime? @map("woken_at") @db.Timestamptz
   /// the PR head a server-started run (conflict fixer) answers: one run per (card, role, trigger_sha), any status (spike R2)
   triggerSha    String?   @map("trigger_sha")
+  /// null until the card's PR merged (or the card was deleted); then due | done | kept | gave_up (worktree and tab cleanup, spec §7)
+  cleanupState    String?   @map("cleanup_state")
+  cleanupAttempts Int       @default(0) @map("cleanup_attempts")
   claimedBy     String    @map("claimed_by")
   heartbeatAt   DateTime  @default(now()) @map("heartbeat_at") @db.Timestamptz
   startedAt     DateTime? @map("started_at") @db.Timestamptz

@@ -458,6 +458,8 @@ export const AutomationRunScalarFieldEnum = {
   lastTypedAt: 'lastTypedAt',
   wokenAt: 'wokenAt',
   triggerSha: 'triggerSha',
+  cleanupState: 'cleanupState',
+  cleanupAttempts: 'cleanupAttempts',
   claimedBy: 'claimedBy',
   heartbeatAt: 'heartbeatAt',
   startedAt: 'startedAt',

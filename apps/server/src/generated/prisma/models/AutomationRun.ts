@@ -36,12 +36,14 @@ export type AutomationRunAvgAggregateOutputType = {
   resumeCount: number | null
   fixCount: number | null
   restartCount: number | null
+  cleanupAttempts: number | null
 }
 
 export type AutomationRunSumAggregateOutputType = {
   resumeCount: number | null
   fixCount: number | null
   restartCount: number | null
+  cleanupAttempts: number | null
 }
 
 export type AutomationRunMinAggregateOutputType = {
@@ -62,6 +64,8 @@ export type AutomationRunMinAggregateOutputType = {
   lastTypedAt: Date | null
   wokenAt: Date | null
   triggerSha: string | null
+  cleanupState: string | null
+  cleanupAttempts: number | null
   claimedBy: string | null
   heartbeatAt: Date | null
   startedAt: Date | null
@@ -87,6 +91,8 @@ export type AutomationRunMaxAggregateOutputType = {
   lastTypedAt: Date | null
   wokenAt: Date | null
   triggerSha: string | null
+  cleanupState: string | null
+  cleanupAttempts: number | null
   claimedBy: string | null
   heartbeatAt: Date | null
   startedAt: Date | null
@@ -113,6 +119,8 @@ export type AutomationRunCountAggregateOutputType = {
   lastTypedAt: number
   wokenAt: number
   triggerSha: number
+  cleanupState: number
+  cleanupAttempts: number
   claimedBy: number
   heartbeatAt: number
   startedAt: number
@@ -126,12 +134,14 @@ export type AutomationRunAvgAggregateInputType = {
   resumeCount?: true
   fixCount?: true
   restartCount?: true
+  cleanupAttempts?: true
 }
 
 export type AutomationRunSumAggregateInputType = {
   resumeCount?: true
   fixCount?: true
   restartCount?: true
+  cleanupAttempts?: true
 }
 
 export type AutomationRunMinAggregateInputType = {
@@ -152,6 +162,8 @@ export type AutomationRunMinAggregateInputType = {
   lastTypedAt?: true
   wokenAt?: true
   triggerSha?: true
+  cleanupState?: true
+  cleanupAttempts?: true
   claimedBy?: true
   heartbeatAt?: true
   startedAt?: true
@@ -177,6 +189,8 @@ export type AutomationRunMaxAggregateInputType = {
   lastTypedAt?: true
   wokenAt?: true
   triggerSha?: true
+  cleanupState?: true
+  cleanupAttempts?: true
   claimedBy?: true
   heartbeatAt?: true
   startedAt?: true
@@ -203,6 +217,8 @@ export type AutomationRunCountAggregateInputType = {
   lastTypedAt?: true
   wokenAt?: true
   triggerSha?: true
+  cleanupState?: true
+  cleanupAttempts?: true
   claimedBy?: true
   heartbeatAt?: true
   startedAt?: true
@@ -316,6 +332,8 @@ export type AutomationRunGroupByOutputType = {
   lastTypedAt: Date | null
   wokenAt: Date | null
   triggerSha: string | null
+  cleanupState: string | null
+  cleanupAttempts: number
   claimedBy: string
   heartbeatAt: Date
   startedAt: Date | null
@@ -365,6 +383,8 @@ export type AutomationRunWhereInput = {
   lastTypedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
   wokenAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
   triggerSha?: Prisma.StringNullableFilter<"AutomationRun"> | string | null
+  cleanupState?: Prisma.StringNullableFilter<"AutomationRun"> | string | null
+  cleanupAttempts?: Prisma.IntFilter<"AutomationRun"> | number
   claimedBy?: Prisma.StringFilter<"AutomationRun"> | string
   heartbeatAt?: Prisma.DateTimeFilter<"AutomationRun"> | Date | string
   startedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
@@ -393,6 +413,8 @@ export type AutomationRunOrderByWithRelationInput = {
   lastTypedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   wokenAt?: Prisma.SortOrderInput | Prisma.SortOrder
   triggerSha?: Prisma.SortOrderInput | Prisma.SortOrder
+  cleanupState?: Prisma.SortOrderInput | Prisma.SortOrder
+  cleanupAttempts?: Prisma.SortOrder
   claimedBy?: Prisma.SortOrder
   heartbeatAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -424,6 +446,8 @@ export type AutomationRunWhereUniqueInput = Prisma.AtLeast<{
   lastTypedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
   wokenAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
   triggerSha?: Prisma.StringNullableFilter<"AutomationRun"> | string | null
+  cleanupState?: Prisma.StringNullableFilter<"AutomationRun"> | string | null
+  cleanupAttempts?: Prisma.IntFilter<"AutomationRun"> | number
   claimedBy?: Prisma.StringFilter<"AutomationRun"> | string
   heartbeatAt?: Prisma.DateTimeFilter<"AutomationRun"> | Date | string
   startedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
@@ -452,6 +476,8 @@ export type AutomationRunOrderByWithAggregationInput = {
   lastTypedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   wokenAt?: Prisma.SortOrderInput | Prisma.SortOrder
   triggerSha?: Prisma.SortOrderInput | Prisma.SortOrder
+  cleanupState?: Prisma.SortOrderInput | Prisma.SortOrder
+  cleanupAttempts?: Prisma.SortOrder
   claimedBy?: Prisma.SortOrder
   heartbeatAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -486,6 +512,8 @@ export type AutomationRunScalarWhereWithAggregatesInput = {
   lastTypedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"AutomationRun"> | Date | string | null
   wokenAt?: Prisma.DateTimeNullableWithAggregatesFilter<"AutomationRun"> | Date | string | null
   triggerSha?: Prisma.StringNullableWithAggregatesFilter<"AutomationRun"> | string | null
+  cleanupState?: Prisma.StringNullableWithAggregatesFilter<"AutomationRun"> | string | null
+  cleanupAttempts?: Prisma.IntWithAggregatesFilter<"AutomationRun"> | number
   claimedBy?: Prisma.StringWithAggregatesFilter<"AutomationRun"> | string
   heartbeatAt?: Prisma.DateTimeWithAggregatesFilter<"AutomationRun"> | Date | string
   startedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"AutomationRun"> | Date | string | null
@@ -510,6 +538,8 @@ export type AutomationRunCreateInput = {
   lastTypedAt?: Date | string | null
   wokenAt?: Date | string | null
   triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -538,6 +568,8 @@ export type AutomationRunUncheckedCreateInput = {
   lastTypedAt?: Date | string | null
   wokenAt?: Date | string | null
   triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -562,6 +594,8 @@ export type AutomationRunUpdateInput = {
   lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -590,6 +624,8 @@ export type AutomationRunUncheckedUpdateInput = {
   lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -616,6 +652,8 @@ export type AutomationRunCreateManyInput = {
   lastTypedAt?: Date | string | null
   wokenAt?: Date | string | null
   triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -640,6 +678,8 @@ export type AutomationRunUpdateManyMutationInput = {
   lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -666,6 +706,8 @@ export type AutomationRunUncheckedUpdateManyInput = {
   lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -702,6 +744,8 @@ export type AutomationRunCountOrderByAggregateInput = {
   lastTypedAt?: Prisma.SortOrder
   wokenAt?: Prisma.SortOrder
   triggerSha?: Prisma.SortOrder
+  cleanupState?: Prisma.SortOrder
+  cleanupAttempts?: Prisma.SortOrder
   claimedBy?: Prisma.SortOrder
   heartbeatAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -713,6 +757,7 @@ export type AutomationRunAvgOrderByAggregateInput = {
   resumeCount?: Prisma.SortOrder
   fixCount?: Prisma.SortOrder
   restartCount?: Prisma.SortOrder
+  cleanupAttempts?: Prisma.SortOrder
 }
 
 export type AutomationRunMaxOrderByAggregateInput = {
@@ -733,6 +778,8 @@ export type AutomationRunMaxOrderByAggregateInput = {
   lastTypedAt?: Prisma.SortOrder
   wokenAt?: Prisma.SortOrder
   triggerSha?: Prisma.SortOrder
+  cleanupState?: Prisma.SortOrder
+  cleanupAttempts?: Prisma.SortOrder
   claimedBy?: Prisma.SortOrder
   heartbeatAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -758,6 +805,8 @@ export type AutomationRunMinOrderByAggregateInput = {
   lastTypedAt?: Prisma.SortOrder
   wokenAt?: Prisma.SortOrder
   triggerSha?: Prisma.SortOrder
+  cleanupState?: Prisma.SortOrder
+  cleanupAttempts?: Prisma.SortOrder
   claimedBy?: Prisma.SortOrder
   heartbeatAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -769,6 +818,7 @@ export type AutomationRunSumOrderByAggregateInput = {
   resumeCount?: Prisma.SortOrder
   fixCount?: Prisma.SortOrder
   restartCount?: Prisma.SortOrder
+  cleanupAttempts?: Prisma.SortOrder
 }
 
 export type AutomationRunCreateNestedManyWithoutProjectInput = {
@@ -872,6 +922,8 @@ export type AutomationRunCreateWithoutProjectInput = {
   lastTypedAt?: Date | string | null
   wokenAt?: Date | string | null
   triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -898,6 +950,8 @@ export type AutomationRunUncheckedCreateWithoutProjectInput = {
   lastTypedAt?: Date | string | null
   wokenAt?: Date | string | null
   triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -953,6 +1007,8 @@ export type AutomationRunScalarWhereInput = {
   lastTypedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
   wokenAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
   triggerSha?: Prisma.StringNullableFilter<"AutomationRun"> | string | null
+  cleanupState?: Prisma.StringNullableFilter<"AutomationRun"> | string | null
+  cleanupAttempts?: Prisma.IntFilter<"AutomationRun"> | number
   claimedBy?: Prisma.StringFilter<"AutomationRun"> | string
   heartbeatAt?: Prisma.DateTimeFilter<"AutomationRun"> | Date | string
   startedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
@@ -977,6 +1033,8 @@ export type AutomationRunCreateWithoutTaskInput = {
   lastTypedAt?: Date | string | null
   wokenAt?: Date | string | null
   triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -1003,6 +1061,8 @@ export type AutomationRunUncheckedCreateWithoutTaskInput = {
   lastTypedAt?: Date | string | null
   wokenAt?: Date | string | null
   triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -1054,6 +1114,8 @@ export type AutomationRunCreateManyProjectInput = {
   lastTypedAt?: Date | string | null
   wokenAt?: Date | string | null
   triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -1078,6 +1140,8 @@ export type AutomationRunUpdateWithoutProjectInput = {
   lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1104,6 +1168,8 @@ export type AutomationRunUncheckedUpdateWithoutProjectInput = {
   lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1129,6 +1195,8 @@ export type AutomationRunUncheckedUpdateManyWithoutProjectInput = {
   lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1154,6 +1222,8 @@ export type AutomationRunCreateManyTaskInput = {
   lastTypedAt?: Date | string | null
   wokenAt?: Date | string | null
   triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -1178,6 +1248,8 @@ export type AutomationRunUpdateWithoutTaskInput = {
   lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1204,6 +1276,8 @@ export type AutomationRunUncheckedUpdateWithoutTaskInput = {
   lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1229,6 +1303,8 @@ export type AutomationRunUncheckedUpdateManyWithoutTaskInput = {
   lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1257,6 +1333,8 @@ export type AutomationRunSelect<ExtArgs extends runtime.Types.Extensions.Interna
   lastTypedAt?: boolean
   wokenAt?: boolean
   triggerSha?: boolean
+  cleanupState?: boolean
+  cleanupAttempts?: boolean
   claimedBy?: boolean
   heartbeatAt?: boolean
   startedAt?: boolean
@@ -1285,6 +1363,8 @@ export type AutomationRunSelectCreateManyAndReturn<ExtArgs extends runtime.Types
   lastTypedAt?: boolean
   wokenAt?: boolean
   triggerSha?: boolean
+  cleanupState?: boolean
+  cleanupAttempts?: boolean
   claimedBy?: boolean
   heartbeatAt?: boolean
   startedAt?: boolean
@@ -1313,6 +1393,8 @@ export type AutomationRunSelectUpdateManyAndReturn<ExtArgs extends runtime.Types
   lastTypedAt?: boolean
   wokenAt?: boolean
   triggerSha?: boolean
+  cleanupState?: boolean
+  cleanupAttempts?: boolean
   claimedBy?: boolean
   heartbeatAt?: boolean
   startedAt?: boolean
@@ -1341,6 +1423,8 @@ export type AutomationRunSelectScalar = {
   lastTypedAt?: boolean
   wokenAt?: boolean
   triggerSha?: boolean
+  cleanupState?: boolean
+  cleanupAttempts?: boolean
   claimedBy?: boolean
   heartbeatAt?: boolean
   startedAt?: boolean
@@ -1348,7 +1432,7 @@ export type AutomationRunSelectScalar = {
   createdAt?: boolean
 }
 
-export type AutomationRunOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "taskId" | "role" | "status" | "waitingReason" | "tabId" | "machineId" | "accountId" | "branch" | "worktreePath" | "resumeCount" | "fixCount" | "restartCount" | "allowedTools" | "lastTypedAt" | "wokenAt" | "triggerSha" | "claimedBy" | "heartbeatAt" | "startedAt" | "endedAt" | "createdAt", ExtArgs["result"]["automationRun"]>
+export type AutomationRunOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "taskId" | "role" | "status" | "waitingReason" | "tabId" | "machineId" | "accountId" | "branch" | "worktreePath" | "resumeCount" | "fixCount" | "restartCount" | "allowedTools" | "lastTypedAt" | "wokenAt" | "triggerSha" | "cleanupState" | "cleanupAttempts" | "claimedBy" | "heartbeatAt" | "startedAt" | "endedAt" | "createdAt", ExtArgs["result"]["automationRun"]>
 export type AutomationRunInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   task?: boolean | Prisma.AutomationRun$taskArgs<ExtArgs>
@@ -1408,6 +1492,11 @@ export type $AutomationRunPayload<ExtArgs extends runtime.Types.Extensions.Inter
      * the PR head a server-started run (conflict fixer) answers: one run per (card, role, trigger_sha), any status (spike R2)
      */
     triggerSha: string | null
+    /**
+     * null until the card's PR merged (or the card was deleted); then due | done | kept | gave_up (worktree and tab cleanup, spec §7)
+     */
+    cleanupState: string | null
+    cleanupAttempts: number
     claimedBy: string
     heartbeatAt: Date
     startedAt: Date | null
@@ -1856,6 +1945,8 @@ export interface AutomationRunFieldRefs {
   readonly lastTypedAt: Prisma.FieldRef<"AutomationRun", 'DateTime'>
   readonly wokenAt: Prisma.FieldRef<"AutomationRun", 'DateTime'>
   readonly triggerSha: Prisma.FieldRef<"AutomationRun", 'String'>
+  readonly cleanupState: Prisma.FieldRef<"AutomationRun", 'String'>
+  readonly cleanupAttempts: Prisma.FieldRef<"AutomationRun", 'Int'>
   readonly claimedBy: Prisma.FieldRef<"AutomationRun", 'String'>
   readonly heartbeatAt: Prisma.FieldRef<"AutomationRun", 'DateTime'>
   readonly startedAt: Prisma.FieldRef<"AutomationRun", 'DateTime'>
