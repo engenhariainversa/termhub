@@ -100,6 +100,7 @@ export interface Machine {
   agent_auto_update: boolean;
   /** a tab whose Claude hits a usage limit resumes on another Claude account of this machine, on its own */
   claude_auto_swap: boolean;
+  automation_allowed: boolean;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */
