@@ -1458,6 +1458,17 @@ export interface Device {
   pin_locked_until: string | null;
   last_seen_at: string | null;
   created_at: string;
+  /** Set once the phone turned notifications on; only its presence matters here. */
+  push_token?: string | null;
+}
+
+/** Which real push a test push imitates (TER-913). */
+export type PushTestKind = 'confirmation' | 'tab_question' | 'reply' | 'device_request';
+
+/** POST /devices/:id/test-push: `ticket` is null for a delayed send (its outcome lands in the trail). */
+export interface PushTestResult {
+  scheduled_for: string;
+  ticket: { status: 'ok' } | { status: 'error'; error: string } | null;
 }
 
 /** One row of the device trail (GET /devices/events), already carrying its pt-BR sentence. */
@@ -1523,4 +1534,30 @@ export interface AutomationPauseState {
   /** the person has a project with automatic work on: otherwise the switch is hidden */
   has_automation: boolean;
   can_update: boolean;
+}
+/** A project's recent Markdown files (spec 2026-10-04 recent Markdown files, GET /api/file-recent). */
+export type FileRecentGroup = 'specs' | 'plans' | 'lessons' | 'legal' | 'other';
+export interface FileRecentItem {
+  machine: { id: string; name: string };
+  /** the file as the machine resolved it */
+  path: string;
+  /** relative to the project folder when the file is inside it, else null */
+  rel_path: string | null;
+  name: string;
+  size: number;
+  mtime: string;
+  /** over the preview's size limit: listed, but it will not open */
+  too_large: boolean;
+  group: FileRecentGroup;
+  /** named in an answer or an event of the project's tabs */
+  cited: boolean;
+}
+/** `offline`, `outdated` or `unsupported`; read as a plain string, a newer server may add reasons. */
+export interface FileRecentSkipped {
+  machine: { id: string; name: string };
+  reason: string;
+}
+export interface FileRecentResponse {
+  items: FileRecentItem[];
+  skipped: FileRecentSkipped[];
 }

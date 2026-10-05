@@ -1,4 +1,4 @@
-import { filePathOfLink, findMdPaths, linkifyMarkdown } from './md-paths';
+import { filePathOfLink, filePreviewRoute, findMdPaths, linkifyMarkdown } from './md-paths';
 
 // The same table as the web (apps/web/src/lib/md-paths.test.ts): both clients link the same paths.
 const CASES: [string, string[]][] = [
@@ -38,5 +38,17 @@ describe('linkifyMarkdown', () => {
     const url = /\((termhub-file:[^)]+)\)/.exec(md)?.[1] ?? '';
     expect(filePathOfLink(url)).toBe('docs/lições/ação.md');
     expect(filePathOfLink('https://x')).toBeNull();
+  });
+});
+
+describe('filePreviewRoute', () => {
+  it('carries the tab, else the project, and the machine when one is given', () => {
+    expect(filePreviewRoute('docs/a.md', { projectId: 'p1' })).toEqual({ pathname: '/file-preview', params: { path: 'docs/a.md', project_id: 'p1' } });
+    expect(filePreviewRoute('docs/a.md', { projectId: 'p1', tabId: 't1' })).toEqual({ pathname: '/file-preview', params: { path: 'docs/a.md', tab_id: 't1' } });
+    expect(filePreviewRoute('docs/a.md', { projectId: 'p1', machineId: 'm1' })).toEqual({
+      pathname: '/file-preview',
+      params: { path: 'docs/a.md', project_id: 'p1', machine_id: 'm1' },
+    });
+    expect(filePreviewRoute('docs/a.md', { projectId: 'p1', machineId: null }).params).not.toHaveProperty('machine_id');
   });
 });

@@ -180,4 +180,14 @@ export class UsersRepository {
   async setChatCodexReplies(userId: string, enabled: boolean): Promise<void> {
     await this.db.user.update({ where: { id: userId }, data: { chatCodexReplies: enabled } });
   }
+
+  /** "Avisar quando uma aba terminar" (TER-925): off unless the person turned it on. */
+  async pushTabFinished(userId: string): Promise<boolean> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { pushTabFinished: true } });
+    return u?.pushTabFinished ?? false;
+  }
+
+  async setPushTabFinished(userId: string, enabled: boolean): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { pushTabFinished: enabled } });
+  }
 }

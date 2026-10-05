@@ -30,9 +30,10 @@ function Agent({ agent }: { agent: TAgentOnCard }) {
 
 /** "automático": the card is tagged for automatic work. */
 function AutoBadge() {
+  const { t } = useTranslation();
   return (
-    <Text accessibilityLabel="automático" className="rounded bg-indigo-400/20 px-1 text-[10px] text-indigo-300">
-      automático
+    <Text accessibilityLabel={t('automático')} className="rounded bg-indigo-400/20 px-1 text-[10px] text-indigo-300">
+      {t('automático')}
     </Text>
   );
 }
@@ -66,7 +67,7 @@ function Epic({ epic }: { epic: TEpicProgress }) {
       {open &&
         epic.cards.map((c) => (
           <View key={c.id} className="mt-3 gap-1">
-            <Pressable onLongPress={() => setMenuFor(c)} accessibilityLabel={`${c.ref} ${c.title}`} accessibilityHint="Segure para o trabalho automático" className="flex-row items-center gap-2">
+            <Pressable onLongPress={() => setMenuFor(c)} accessibilityLabel={`${c.ref} ${c.title}`} accessibilityHint={t('Segure para o trabalho automático')} className="flex-row items-center gap-2">
               <Text className="flex-1 text-sm text-white">{`${c.ref} ${c.title}`}</Text>
               {c.auto ? <AutoBadge /> : null}
             </Pressable>
@@ -81,11 +82,11 @@ function Epic({ epic }: { epic: TEpicProgress }) {
             ))}
           </View>
         ))}
-      <Sheet open={menuFor !== null} onClose={() => setMenuFor(null)} title="Trabalho automático">
+      <Sheet open={menuFor !== null} onClose={() => setMenuFor(null)} title={t('Trabalho automático')}>
         <View className="gap-4">
           {menuFor ? <AppText variant="muted">{`${menuFor.ref} ${menuFor.title}`}</AppText> : null}
-          <Button label={menuFor?.auto ? 'Tirar do trabalho automático' : 'Marcar como automático'} onPress={toggleAuto} />
-          <Button label="Cancelar" variant="ghost" onPress={() => setMenuFor(null)} />
+          <Button label={menuFor?.auto ? t('Tirar do trabalho automático') : t('Marcar como automático')} onPress={toggleAuto} />
+          <Button label={t('Cancelar')} variant="ghost" onPress={() => setMenuFor(null)} />
         </View>
       </Sheet>
     </View>

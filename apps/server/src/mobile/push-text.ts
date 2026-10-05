@@ -47,6 +47,19 @@ export function deviceRequestText(r: { model: string; city: string | null; count
   };
 }
 
+/** A tab finished its turn (TER-925, opt-in): which tab, never what it did. */
+export function tabFinishedText(ctx: PushContext, locale: Locale = DEFAULT_LOCALE): PushText {
+  const tab = ctx.tabName
+    ? ctx.machineName
+      ? msg('A aba {{tab}} ({{machine}})', { tab: ctx.tabName, machine: ctx.machineName })
+      : msg('A aba {{tab}}', { tab: ctx.tabName })
+    : msg('Uma aba');
+  return {
+    title: ctx.projectName ? t(locale, '{{project}}: aba terminou', { project: ctx.projectName }) : t(locale, 'Aba terminou'),
+    body: t(locale, '{{tab}} terminou e espera você.', { tab }),
+  };
+}
+
 /** A tab asked something in a project's chat (spec 2026-09-25 §6.1): which tab, never what it asked. */
 export function tabQuestionText(ctx: PushContext, kind: 'choice' | 'permission', locale: Locale = DEFAULT_LOCALE): PushText {
   const tab = ctx.tabName ? msg('A aba {{tab}}', { tab: ctx.tabName }) : msg('Uma aba');
