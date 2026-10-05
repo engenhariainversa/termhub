@@ -5,6 +5,7 @@ import type { ApiTokenScope } from '../auth/api-tokens.js';
 import { canAccess, type Action, type Resource } from '../auth/permissions.js';
 import { Scoped, type Scope } from '../auth/scope.js';
 import type { AttachmentStore } from '../chat/attachments/store.js';
+import { LocalizedText } from '../i18n/index.js';
 
 /** What every control operation runs with: the data scope of one user and their grants. */
 export interface ControlContext {
@@ -48,13 +49,18 @@ export function controlContextForRequest(repos: Repositories, request: FastifyRe
   return { repos, scope, scoped: new Scoped(repos, scope), can: (resource, action) => canAccess(repos, scope.user, resource, action) };
 }
 
-/** An expected failure the caller should see (pt-BR, actionable). */
+/** An expected failure the caller should see (actionable). `message` is the pt-BR rendering; the
+ *  reply translates `localized` with the caller's language (`t(locale, err.localized)`). */
 export class ControlError extends Error {
+  /** Non-enumerable, so equality checks on the error (tests, logs) see only code and message. */
+  declare readonly localized: LocalizedText;
   constructor(
     readonly code: string,
-    message: string,
+    message: string | LocalizedText,
   ) {
-    super(message);
+    const localized = message instanceof LocalizedText ? message : new LocalizedText(message);
+    super(localized.toString());
+    Object.defineProperty(this, 'localized', { value: localized, enumerable: false });
     this.name = 'ControlError';
   }
 }

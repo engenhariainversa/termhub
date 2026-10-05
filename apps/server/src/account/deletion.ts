@@ -6,6 +6,7 @@ import { accountDeletedMail, deletionCancelledMail, deletionLinkMail, deletionRe
 import { isAdmin } from '../auth/permissions.js';
 import { generateToken, hashToken } from '../auth/tokens.js';
 import { HttpError } from '../lib/errors.js';
+import { localeOf } from '../i18n/index.js';
 
 /** Decision D-12 (TER-721): a deletion waits 30 days, during which signing in can cancel it. */
 export const DELETION_GRACE_DAYS = 30;
@@ -77,7 +78,7 @@ export class AccountDeletionService {
     this.deps.log.info({ userId: user.id, source, scheduledAt: updated.deletion_scheduled_at }, 'account deletion: requested');
     // Only a fresh request sends the e-mail: asking twice must not repeat it.
     if (!user.deletion_scheduled_at && updated.deletion_scheduled_at) {
-      await this.mail(deletionRequestedMail(updated.email, { scheduledAt: new Date(updated.deletion_scheduled_at), appUrl: this.deps.appUrl }), user.id);
+      await this.mail(deletionRequestedMail(updated.email, { scheduledAt: new Date(updated.deletion_scheduled_at), appUrl: this.deps.appUrl }, localeOf(user.locale)), user.id);
     }
     return updated;
   }
@@ -87,7 +88,7 @@ export class AccountDeletionService {
     const cancelled = await this.deps.repos.accountDeletion.cancel(user.id);
     if (cancelled) {
       this.deps.log.info({ userId: user.id }, 'account deletion: cancelled');
-      await this.mail(deletionCancelledMail(user.email, { appUrl: this.deps.appUrl }), user.id);
+      await this.mail(deletionCancelledMail(user.email, { appUrl: this.deps.appUrl }, localeOf(user.locale)), user.id);
     }
     return cancelled;
   }
@@ -109,7 +110,7 @@ export class AccountDeletionService {
     for (const id of machine_ids) this.deps.disconnectMachine(id);
     this.deps.ownerGone(userId, machine_ids);
     await this.deps.access.remove(user.email).catch((err: unknown) => this.deps.log.warn({ err: errText(err), userId }, 'account deletion: cloudflare access removal failed'));
-    if (opts.notify !== false) await this.mail(accountDeletedMail(user.email), userId);
+    if (opts.notify !== false) await this.mail(accountDeletedMail(user.email, localeOf(user.locale)), userId);
     return true;
   }
 
@@ -144,7 +145,7 @@ export class AccountDeletionService {
     const token = generateToken(32);
     await this.deps.repos.accountDeletion.createLink(email, hashToken(token), new Date(now.getTime() + DELETION_LINK_TTL_MS));
     const link = `${this.deps.pageUrl}${this.deps.pageUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
-    await this.mail(deletionLinkMail(email, { link, ttlMinutes: Math.round(DELETION_LINK_TTL_MS / 60000) }), user.id);
+    await this.mail(deletionLinkMail(email, { link, ttlMinutes: Math.round(DELETION_LINK_TTL_MS / 60000) }, localeOf(user.locale)), user.id);
   }
 
   /** Spends a link and requests the deletion of its account. Undefined = invalid, used or expired. */

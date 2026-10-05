@@ -7,6 +7,7 @@ import { loginCodeMail } from '../email/templates.js';
 import { verifyPassword } from './password.js';
 import { generateToken, hashToken, safeEqual } from './tokens.js';
 import { API_TOKEN_EVENT_RETENTION_DAYS } from './api-tokens.js';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/index.js';
 
 export type LoginResult =
   | { ok: true; user: User }
@@ -74,7 +75,8 @@ export class AuthService {
    * Envia um código de 6 dígitos. Sempre responde "ok" para e-mails desconhecidos
    * (não revela quem está cadastrado) — mas só envia de fato se o usuário existir.
    */
-  async sendLoginCode(rawEmail: string, ip: string): Promise<SendCodeResult> {
+  /** `fallbackLocale`: the request's language, used when the account has no language of its own. */
+  async sendLoginCode(rawEmail: string, ip: string, fallbackLocale: Locale = DEFAULT_LOCALE): Promise<SendCodeResult> {
     const email = rawEmail.trim().toLowerCase();
     const locked = await this.checkLock(email, ip);
     if (locked > 0) return { ok: false, reason: 'rate_limited', retryAfterMs: locked };
@@ -94,7 +96,7 @@ export class AuthService {
     await this.repos.loginCodes.invalidateAll(email);
     await this.repos.loginCodes.create(email, this.hashCode(email, code), new Date(Date.now() + ttl));
     try {
-      await this.mailer.send(loginCodeMail(email, code, Math.round(ttl / 60000)));
+      await this.mailer.send(loginCodeMail(email, code, Math.round(ttl / 60000), user.locale ?? fallbackLocale));
     } catch {
       return { ok: false, reason: 'send_failed' };
     }
