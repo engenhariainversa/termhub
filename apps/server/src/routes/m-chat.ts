@@ -42,6 +42,7 @@ import type { StandingGrantKind } from '../chat/gate.js';
 import { indexActions as indexActionsWrite } from '../memory/index-items.js';
 import { HttpError, conflict, notFound, unauthorized } from '../lib/errors.js';
 import { DeviceLockedError, PinInvalidError, deviceRevoked, type SessionService } from '../mobile/session.js';
+import { requestLocale, t } from '../i18n/index.js';
 
 const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
@@ -88,7 +89,7 @@ async function proofOk(deps: MobileChatDeps, request: FastifyRequest, reply: Fas
   }
   if (pin.code === 'PIN_INVALID') {
     const err = new PinInvalidError(pin.failures);
-    await reply.code(401).send({ error: err.message, code: err.code, failures: err.failures });
+    await reply.code(401).send({ error: t(requestLocale(request), err.localized), code: err.code, failures: err.failures });
     return false;
   }
   throw deviceRevoked();
@@ -196,7 +197,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     try {
       await repos.projectGroups.setFavorite(user.id, project.id, favorite);
     } catch (e) {
-      if (e instanceof ProjectGroupRuleError) throw new HttpError(400, e.message, e.code);
+      if (e instanceof ProjectGroupRuleError) throw new HttpError(400, e.localized, e.code);
       throw e;
     }
     return reply.code(204).send();

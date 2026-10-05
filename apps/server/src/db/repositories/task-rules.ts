@@ -1,4 +1,5 @@
 import type { TaskType } from './types.js';
+import { LocalizedText, tk } from '../../i18n/index.js';
 
 /** Rules the board repositories enforce. Routes answer 409 for EPIC_HAS_CHILDREN and COLUMN_LAST_OF_CATEGORY, 400 for the rest. */
 export type TaskRuleCode =
@@ -25,31 +26,35 @@ export const MAX_COLUMNS = 12;
 export const COLUMN_NAME_MAX = 40;
 
 const MESSAGES: Record<TaskRuleCode, string> = {
-  PARENT_NOT_FOUND: 'Tarefa pai não encontrada neste projeto',
-  PARENT_IS_SUBTASK: 'Uma subtarefa não pode ter subtarefas',
-  SUBTASK_CANNOT_MOVE: 'Subtarefas não ficam em colunas; mude o status ou reordene',
-  NOT_A_SUBTASK: 'Só subtarefas são reordenadas aqui; use mover para tarefas do quadro',
-  TOO_MANY_SUBTASKS: 'No máximo 50 subtarefas por vez',
-  EPIC_REQUIRED: 'Escolha um épico',
-  EPIC_NOT_FOUND: 'Épico não encontrado',
-  PARENT_TYPE: 'Subtarefa só pode ficar em uma história ou tarefa',
-  HAS_SUBTASKS: 'Tire as subtarefas antes de mudar para bug ou spike',
-  TYPE_LOCKED: 'Épico e subtarefa não mudam de tipo',
-  EPIC_HAS_CHILDREN: 'Este épico ainda tem cards',
-  COLUMN_NOT_FOUND: 'Coluna não encontrada',
-  COLUMN_NOT_DOING: 'A coluna do agente precisa ser do tipo Fazendo',
-  COLUMN_LAST_OF_CATEGORY: 'O board precisa de ao menos uma coluna de cada tipo',
-  TOO_MANY_COLUMNS: 'Limite de 12 colunas',
-  AUTO_NOT_FOR_SUBTASK: 'Subtarefas não levam a tag automático; marque o card',
+  PARENT_NOT_FOUND: tk('Tarefa pai não encontrada neste projeto'),
+  PARENT_IS_SUBTASK: tk('Uma subtarefa não pode ter subtarefas'),
+  SUBTASK_CANNOT_MOVE: tk('Subtarefas não ficam em colunas; mude o status ou reordene'),
+  NOT_A_SUBTASK: tk('Só subtarefas são reordenadas aqui; use mover para tarefas do quadro'),
+  TOO_MANY_SUBTASKS: tk('No máximo 50 subtarefas por vez'),
+  EPIC_REQUIRED: tk('Escolha um épico'),
+  EPIC_NOT_FOUND: tk('Épico não encontrado'),
+  PARENT_TYPE: tk('Subtarefa só pode ficar em uma história ou tarefa'),
+  HAS_SUBTASKS: tk('Tire as subtarefas antes de mudar para bug ou spike'),
+  TYPE_LOCKED: tk('Épico e subtarefa não mudam de tipo'),
+  EPIC_HAS_CHILDREN: tk('Este épico ainda tem cards'),
+  COLUMN_NOT_FOUND: tk('Coluna não encontrada'),
+  COLUMN_NOT_DOING: tk('A coluna do agente precisa ser do tipo Fazendo'),
+  COLUMN_LAST_OF_CATEGORY: tk('O board precisa de ao menos uma coluna de cada tipo'),
+  TOO_MANY_COLUMNS: tk('Limite de 12 colunas'),
+  AUTO_NOT_FOR_SUBTASK: tk('Subtarefas não levam a tag automático; marque o card'),
 };
 
-/** A board rule was broken. `message` is pt-BR and safe to show to the user. */
+/** A board rule was broken. `message` is pt-BR and safe to show to the user; replies translate `localized`. */
 export class TaskRuleError extends Error {
+  /** Non-enumerable, so equality checks on the error (tests, logs) see only code and message. */
+  declare readonly localized: LocalizedText;
   constructor(
     readonly code: TaskRuleCode,
-    message: string = MESSAGES[code],
+    message: string | LocalizedText = MESSAGES[code],
   ) {
-    super(message);
+    const localized = message instanceof LocalizedText ? message : new LocalizedText(message);
+    super(localized.toString());
+    Object.defineProperty(this, 'localized', { value: localized, enumerable: false });
     this.name = 'TaskRuleError';
   }
 }

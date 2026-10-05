@@ -40,5 +40,7 @@
   "A chave do aparelho está funcionando.": "This device's key is working.",
   "Algo falhou no teste da chave.": "Something failed in the key test.",
   "{{step}}: ok": "{{step}}: ok",
-  "{{step}}: falhou": "{{step}}: failed"
+  "{{step}}: falhou": "{{step}}: failed",
+  "Enviada. Ela chega em {{seconds}} s.": "Sent. It arrives in {{seconds}} s.",
+  "OTA: binário": "OTA: built-in"
 }

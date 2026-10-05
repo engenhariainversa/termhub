@@ -49,7 +49,8 @@ function buildApp(opts: { mobile?: unknown } = {}) {
     findByPushToken: vi.fn(async () => undefined as Device | undefined),
   };
   const deviceEvents = { record: vi.fn(async () => undefined) };
-  const repos = { devices, deviceEvents } as unknown as Repositories;
+  const users = { pushTabFinished: vi.fn(async () => false), setPushTabFinished: vi.fn(async () => undefined) };
+  const repos = { devices, deviceEvents, users } as unknown as Repositories;
   const push = { testPush: vi.fn(async () => ({ scheduled_for: '2026-10-05T00:00:10.000Z', ticket: null })) };
 
   const app = Fastify();
@@ -60,7 +61,7 @@ function buildApp(opts: { mobile?: unknown } = {}) {
   app.register((a) => mobileDeviceRoutes(a, repos, { enrolment: enrolment as never, revoke }), { prefix: '/devices' });
   app.register((a) => mobilePushTokenRoutes(a, repos, push), { prefix: '' });
 
-  return { app, enrolment, revoke, devices, deviceEvents, push };
+  return { app, enrolment, revoke, devices, deviceEvents, push, users };
 }
 
 describe('POST /devices/requests', () => {
@@ -203,5 +204,26 @@ describe('POST /push-test (TER-913)', () => {
     const { app, push } = buildApp({ mobile: deviceMobile });
     expect((await app.inject({ method: 'POST', url: '/push-test', payload: { delay_seconds: 121 } })).statusCode).toBe(400);
     expect(push.testPush).not.toHaveBeenCalled();
+  });
+});
+
+describe('/push-settings (TER-925)', () => {
+  it('reads and changes "aba terminou" for the calling account', async () => {
+    const { app, users } = buildApp({ mobile: deviceMobile });
+    const r = await app.inject({ method: 'GET', url: '/push-settings' });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ tab_finished: false });
+    expect(users.pushTabFinished).toHaveBeenCalledWith('u1');
+    const w = await app.inject({ method: 'PUT', url: '/push-settings', payload: { tab_finished: true } });
+    expect(w.statusCode).toBe(200);
+    expect(w.json()).toEqual({ tab_finished: true });
+    expect(users.setPushTabFinished).toHaveBeenCalledWith('u1', true);
+  });
+
+  it('400 on a bad body, 401 without a device session', async () => {
+    const { app, users } = buildApp({ mobile: deviceMobile });
+    expect((await app.inject({ method: 'PUT', url: '/push-settings', payload: { tab_finished: 'yes' } })).statusCode).toBe(400);
+    expect(users.setPushTabFinished).not.toHaveBeenCalled();
+    expect((await buildApp().app.inject({ method: 'GET', url: '/push-settings' })).statusCode).toBe(401);
   });
 });

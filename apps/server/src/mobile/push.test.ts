@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
+import { monitorBus } from '../monitor/bus.js';
+import type { Tab } from '../db/repositories/types.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Device } from '../db/repositories/devices.js';
 import type { DeviceRequest } from '../db/repositories/device-requests.js';
@@ -9,20 +11,25 @@ import { ExpoPushSender, ExpoReceiptFetcher, MobilePushService, sweepPushReceipt
 const mkDevice = (id: string, token: string): Device => ({ id, user_id: 'u1', push_token: token, status: 'active' }) as unknown as Device;
 const user = { id: 'u1', email: 'ana@example.com' } as unknown as User;
 
-function setup(opts: { devices?: Device[]; live?: string[]; deletionScheduledAt?: string } = {}) {
+function setup(opts: { devices?: Device[]; live?: string[]; locale?: 'pt-BR' | 'en' | null; deletionScheduledAt?: string } = {}) {
   const devices = opts.devices ?? [mkDevice('d1', 'ExponentPushToken[a]'), mkDevice('d2', 'ExponentPushToken[b]')];
   const repos = {
-    users: { findById: vi.fn(async (id: string) => ({ ...user, id, deletion_scheduled_at: opts.deletionScheduledAt ?? null })) },
+    users: { findById: vi.fn(async (id: string) => ({ ...user, id, locale: opts.locale ?? null, deletion_scheduled_at: opts.deletionScheduledAt ?? null })), pushTabFinished: vi.fn(async () => true) },
     devices: { listActiveWithPush: vi.fn(async () => devices), setPushToken: vi.fn(async () => undefined), clearPushTokenIf: vi.fn(async () => true) },
     deviceEvents: { record: vi.fn(async () => undefined) },
     userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })), countUnread: vi.fn(async () => 3), markReadByData: vi.fn(async () => 1) },
     pushTickets: { recordMany: vi.fn(async () => undefined) },
     projects: { findByIdsForOwner: vi.fn(async () => [{ id: 'p1', name: 'termhub' }]) },
-    tabs: { findByIdsForOwner: vi.fn(async () => [{ id: 't1', name: 'api' }]) },
+    tabs: {
+      findByIdsForOwner: vi.fn(async () => [{ id: 't1', name: 'api' }]),
+      findById: vi.fn(async (id: string) => ({ id, project_id: 'p1', machine_id: 'm1', state: 'waiting_input' }) as { id: string; project_id: string; machine_id: string; state: string } | undefined),
+    },
+    tabQuestions: { findOpenForTab: vi.fn(async () => undefined as { kind: string } | undefined) },
     machines: { findByIdsForOwner: vi.fn(async () => [{ id: 'm1', name: 'jarvis' }]) },
     // cp / c9: conversations of project p1; cx: unknown to this user; anything else: the account-wide chat.
     chat: {
       findByIdForUser: vi.fn(async (id: string) => (id === 'cx' ? undefined : { id, user_id: 'u1', project_id: id === 'cp' || id === 'c9' ? 'p1' : null })),
+      findLatestActiveForProject: vi.fn(async () => ({ id: 'cp', user_id: 'u1', project_id: 'p1' }) as { id: string } | undefined),
       findLatestActiveForUser: vi.fn(async () => ({ id: 'cp', user_id: 'u1', project_id: 'p1' }) as { id: string; user_id: string; project_id: string | null } | undefined),
     },
   };
@@ -68,6 +75,18 @@ afterEach(() => {
 });
 
 describe('MobilePushService', () => {
+  it("writes the push and its history row in the recipient's language", async () => {
+    const t = setup({ locale: 'en' });
+    stop = t.service.start();
+    chatBus.publish(confirmation);
+    await flush();
+    expect(t.repos.users.findById).toHaveBeenCalledWith('u1');
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'termhub needs you', body: 'The chat of project termhub asked for confirmation to act in tab api (jarvis).' }),
+    );
+    expect(t.sent[0][0]).toMatchObject({ title: 'termhub needs you' });
+  });
+
   it('turns a confirmation into one history row and a push to devices without a live socket, naming the conversation’s project', async () => {
     const t = setup({ live: ['d2'] });
     stop = t.service.start();
@@ -640,5 +659,132 @@ describe('badge and handled cards (TER-923)', () => {
     await new ExpoPushSender(null, fetchImpl as never).send([{ to: 'ExponentPushToken[a]', data: { kind: 'badge' }, badge: 0 }]);
     const body = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, { body: string }])[1].body);
     expect(body).toEqual([{ to: 'ExponentPushToken[a]', data: { kind: 'badge' }, badge: 0 }]);
+  });
+});
+
+describe('MobilePushService — aba terminou (TER-925)', () => {
+  const state = (id: string, s: Tab['state'], owner: string | null = 'u1') =>
+    monitorBus.publish({ tab: { id, state: s } as Tab, project_id: 'p1', machine_id: 'm1', owner_id: owner });
+
+  afterEach(() => vi.useRealTimers());
+
+  async function finish(t: ReturnType<typeof setup>, id = 't1', end: Tab['state'] = 'waiting_input') {
+    state(id, 'working');
+    state(id, end);
+    await vi.advanceTimersByTimeAsync(5_000);
+  }
+
+  it('a tab that worked and stopped pushes once, naming tab and machine, with tab_id to open it', async () => {
+    vi.useFakeTimers();
+    const t = setup({ live: ['d2'] });
+    stop = t.service.start();
+    await finish(t);
+    expect(t.repos.users.pushTabFinished).toHaveBeenCalledWith('u1');
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith({
+      user_id: 'u1',
+      kind: 'reply',
+      title: 'termhub: aba terminou',
+      body: 'A aba api (jarvis) terminou e espera você.',
+      data: { kind: 'tab_finished', tab_id: 't1', project_id: 'p1', conversation_id: 'cp' },
+    });
+    expect(t.sent).toEqual([[expect.objectContaining({ to: 'ExponentPushToken[a]', collapseId: 'tab:t1', data: expect.objectContaining({ tab_id: 't1', notification_id: 'n1' }) })]]);
+  });
+
+  it('is opt-in: nothing for an owner who did not turn it on', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    t.repos.users.pushTabFinished.mockResolvedValue(false);
+    stop = t.service.start();
+    await finish(t);
+    expect(t.repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(t.sent).toEqual([]);
+  });
+
+  it('at most once per tab every five minutes; another tab is separate; an agent exit (idle) counts', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    stop = t.service.start();
+    await finish(t, 't1');
+    await finish(t, 't1');
+    await finish(t, 't2', 'idle');
+    expect(t.sent).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    await finish(t, 't1');
+    expect(t.sent).toHaveLength(3);
+  });
+
+  it('never for a tab not seen working, one working again within the pause, or one ending in an error', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    stop = t.service.start();
+    state('t1', 'waiting_input');
+    await vi.advanceTimersByTimeAsync(5_000);
+    state('t1', 'working');
+    state('t1', 'waiting_input');
+    state('t1', 'working');
+    await vi.advanceTimersByTimeAsync(5_000);
+    state('t3', 'working');
+    state('t3', 'error');
+    state('t3', 'waiting_input');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(t.sent).toEqual([]);
+  });
+
+  it('a turn that ends with a plain report (finished, TER-972) is pushed too', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    t.repos.tabs.findById.mockResolvedValue({ id: 't1', project_id: 'p1', machine_id: 'm1', state: 'finished' });
+    stop = t.service.start();
+    await finish(t, 't1', 'finished');
+    expect(t.sent).toHaveLength(1);
+  });
+
+  it('a permission prompt or background work in the middle is still the same turn', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    stop = t.service.start();
+    state('t1', 'working');
+    state('t1', 'waiting_permission');
+    state('t1', 'waiting_background');
+    state('t1', 'waiting_input');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(t.sent).toHaveLength(1);
+  });
+
+  it('skips a tab with an open question or permission card (already "precisa de você"), not one with a suggestion', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    stop = t.service.start();
+    t.repos.tabQuestions.findOpenForTab.mockResolvedValueOnce({ kind: 'choice' });
+    await finish(t, 't1');
+    expect(t.sent).toEqual([]);
+    t.repos.tabQuestions.findOpenForTab.mockResolvedValueOnce({ kind: 'suggestion' });
+    await finish(t, 't2');
+    expect(t.sent).toHaveLength(1);
+  });
+
+  it('re-reads the tab: one working again by now, or gone, is not pushed; no owner, nothing', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    stop = t.service.start();
+    t.repos.tabs.findById.mockResolvedValueOnce({ id: 't1', project_id: 'p1', machine_id: 'm1', state: 'working' });
+    await finish(t, 't1');
+    t.repos.tabs.findById.mockResolvedValueOnce(undefined);
+    await finish(t, 't2');
+    state('t4', 'working', null);
+    state('t4', 'waiting_input', null);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(t.sent).toEqual([]);
+  });
+
+  it('stop() cancels a pending one', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    const stopIt = t.service.start();
+    state('t1', 'working');
+    state('t1', 'waiting_input');
+    stopIt();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(t.sent).toEqual([]);
   });
 });
