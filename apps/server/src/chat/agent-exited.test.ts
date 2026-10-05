@@ -20,9 +20,10 @@ const machine = { id: 'm1', owner_id: 'u1', name: 'jarvis', type: 'agent' } as M
 const account = { id: 'a1', machine_id: 'm1', provider: 'claude', config_dir: '~/.claude_b', label: 'B' } as AiAccount;
 const log = () => ({ info: vi.fn(), warn: vi.fn() });
 
-function repos(opts: { conversation?: boolean; liveToken?: boolean; accounts?: AiAccount[] } = {}) {
+function repos(opts: { conversation?: boolean; liveToken?: boolean; accounts?: AiAccount[]; activeRun?: boolean } = {}) {
   const open = vi.fn(async () => ({ question: { id: 'q1' }, closed: [{ id: 'old' }] }));
   const r = {
+    automationRuns: { activeByTab: vi.fn(async () => (opts.activeRun ? { id: 'run1' } : null)) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
     chat: { findLatestActiveForProject: vi.fn(async () => (opts.conversation === false ? undefined : { id: 'c1' })) },
     aiAccounts: { list: vi.fn(async () => opts.accounts ?? [account]) },
@@ -55,7 +56,29 @@ describe('resumeCommandFor (TER-643)', () => {
   });
 });
 
+describe('resumeCommandFor an automatic tab (preflight F-12)', () => {
+  const auto = { permission: { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)'] }, prompt: '[termhub automático] continue' };
+
+  it('resumes the session with the run\'s permission profile and the given message', async () => {
+    const line = await resumeCommandFor(repos().r, tab(), machine, auto);
+    expect(line).toBe(`CLAUDE_CONFIG_DIR="$HOME"/'.claude_b' claude --permission-mode acceptEdits --allowedTools 'Bash(git status:*)' --resume ${SID} -- '[termhub automático] continue'`);
+  });
+
+  it('with no session id, continues the last one with the profile and the message', async () => {
+    const line = await resumeCommandFor(repos({ liveToken: true }).r, tab({ agent_session_id: null }), machine, auto);
+    expect(line).toContain('--permission-mode acceptEdits --mcp-config "$HOME"/');
+    expect(line).toMatch(/'Bash\(git status:\*\)' --continue -- '\[termhub automático\] continue'$/);
+  });
+});
+
 describe('notifyAgentExited (TER-643)', () => {
+  it('opens no card for a tab with an active automatic run: the follower restarts it', async () => {
+    const { r, open } = repos({ activeRun: true });
+    await notifyAgentExited(r, log(), tab(), machine, AT);
+    expect(open).not.toHaveBeenCalled();
+    expect(closeTabQuestions).toHaveBeenCalledWith(r, 'tab1abc', 'expired');
+  });
+
   it('opens a resume card in the owner\'s chat and announces it, with what it closed', async () => {
     const { r, open } = repos();
     const l = log();

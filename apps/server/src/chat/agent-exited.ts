@@ -1,7 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { isClaudeSessionId } from '@termhub/machine-ops';
 import { swapPreferences } from '../control/account-swap.js';
-import { continueLine, resumeLine } from '../control/agents.js';
+import { continueLine, resumeLine, type AgentPermission } from '../control/agents.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, Tab } from '../db/repositories/types.js';
 import { failureLabel } from './service.js';
@@ -20,14 +20,19 @@ export const EXITED_RESUME_PROMPT = 'O processo anterior desta sessão foi encer
  * The line that brings the tab's agent back, under the account it ran with: a Claude session whose id the
  * hooks reported resumes by id (with the tab's memory MCP while its token lives, and the project's model);
  * otherwise the CLI's own "last session" (`claude --continue`, `codex resume --last`).
+ * `auto`: the tab runs automatic work (preflight F-12) — the line keeps the run's permission profile and the
+ * tab's MCP, and starts with the given message (the server's marked one) instead of EXITED_RESUME_PROMPT.
  */
-export async function resumeCommandFor(repos: Repositories, tab: Tab, machine: Machine): Promise<string> {
+export async function resumeCommandFor(repos: Repositories, tab: Tab, machine: Machine, auto?: { permission: AgentPermission; prompt: string } | null): Promise<string> {
   const codex = tab.state_tool === 'codex';
   const account = tab.ai_account_id ? (await repos.aiAccounts.list(machine.owner_id)).find((a) => a.id === tab.ai_account_id && a.machine_id === machine.id) : undefined;
   const configDir = account?.config_dir ?? null;
-  if (codex || !tab.agent_session_id || !isClaudeSessionId(tab.agent_session_id)) return continueLine(codex ? 'chatgpt' : 'claude', configDir);
+  const sessionId = !codex && tab.agent_session_id && isClaudeSessionId(tab.agent_session_id) ? tab.agent_session_id : null;
+  if (codex || (!sessionId && !auto)) return continueLine(codex ? 'chatgpt' : 'claude', configDir);
   const [hasTabMcp, prefs] = await Promise.all([repos.apiTokens.hasLiveForTab(tab.id).catch(() => false), swapPreferences(repos, tab, machine).catch(() => ({ model: undefined }))]);
-  return resumeLine(configDir, tab.agent_session_id, EXITED_RESUME_PROMPT, hasTabMcp ? tab.id : null, prefs.model);
+  const mcpTabId = hasTabMcp ? tab.id : null;
+  if (sessionId) return resumeLine(configDir, sessionId, auto?.prompt ?? EXITED_RESUME_PROMPT, mcpTabId, prefs.model, auto?.permission);
+  return continueLine('claude', configDir, auto ? { ...auto, mcpTabId } : null);
 }
 
 /**
@@ -35,10 +40,18 @@ export async function resumeCommandFor(repos: Repositories, tab: Tab, machine: M
  * the tab `idle`. A card in the project owner's most recently active conversation says so and offers the
  * line that resumes it (a suggestion card: editable, Enviar / Dispensar); opening it expires whatever the
  * dead process had left open. `lastAt` is the tab's last state change before the exit. A project nobody
- * chats in gets no card. Never throws; logs ids only.
+ * chats in gets no card, and neither does a tab with an active automatic run (its follower restarts it).
+ * Never throws; logs ids only.
  */
 export async function notifyAgentExited(repos: Repositories, log: Log, tab: Tab, machine: Machine, lastAt: string | null): Promise<void> {
   try {
+    // A tab running automatic work is restarted by the run's follower (spec D15, preflight F-12): no card
+    // offering a line without the run's permission profile. What the dead process left open still expires.
+    if (await repos.automationRuns.activeByTab(tab.id)) {
+      await closeTabQuestions(repos, tab.id, 'expired');
+      log.info({ tabId: tab.id, machineId: machine.id }, 'agent exited in an automatic run: the follower restarts it');
+      return;
+    }
     const owner = (await repos.projects.findById(tab.project_id))?.owner_id;
     const conversation = owner ? await repos.chat.findLatestActiveForProject(tab.project_id, owner) : undefined;
     if (!conversation) {

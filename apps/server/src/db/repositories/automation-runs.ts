@@ -22,6 +22,8 @@ export interface AutomationRun {
   worktree_path: string | null;
   resume_count: number;
   fix_count: number;
+  /** agent restarts after an exit (spec D15: one, then the run is blocked) */
+  restart_count: number;
   /** the server instance (colour) driving the run */
   claimed_by: string;
   heartbeat_at: Date;
@@ -57,6 +59,7 @@ const map = (r: Row): AutomationRun => ({
   worktree_path: r.worktreePath,
   resume_count: r.resumeCount,
   fix_count: r.fixCount,
+  restart_count: r.restartCount,
   claimed_by: r.claimedBy,
   heartbeat_at: r.heartbeatAt,
   started_at: r.startedAt,
@@ -115,6 +118,18 @@ export class AutomationRunsRepository {
   }
 
   /**
+   * `update`, only while the run is still active: the one write that ends (or parks) a run. Two paths that
+   * end the same run at once — the agent's `report_card` and the PR fallback — write once between them.
+   */
+  async updateActive(id: string, instance: string, patch: AutomationRunPatch): Promise<boolean> {
+    const { count } = await this.db.automationRun.updateMany({
+      where: { id, claimedBy: instance, status: active },
+      data: { status: patch.status, waitingReason: patch.waiting_reason, endedAt: patch.ended_at },
+    });
+    return count === 1;
+  }
+
+  /**
    * Releases a claim that never started (no place for it, or the card changed after the claim): the row
    * goes away, so the card is free again and no event or history is left per tick. Only the claiming
    * instance releases, and only before the run started.
@@ -130,9 +145,9 @@ export class AutomationRunsRepository {
   }
 
   /** Increments the counter and returns its new value. */
-  async bump(id: string, field: 'resume_count' | 'fix_count'): Promise<number> {
-    const key = field === 'resume_count' ? 'resumeCount' : 'fixCount';
-    const row = await this.db.automationRun.update({ where: { id }, data: { [key]: { increment: 1 } }, select: { resumeCount: true, fixCount: true } });
+  async bump(id: string, field: 'resume_count' | 'fix_count' | 'restart_count'): Promise<number> {
+    const key = field === 'resume_count' ? 'resumeCount' : field === 'fix_count' ? 'fixCount' : 'restartCount';
+    const row = await this.db.automationRun.update({ where: { id }, data: { [key]: { increment: 1 } }, select: { resumeCount: true, fixCount: true, restartCount: true } });
     return row[key];
   }
 

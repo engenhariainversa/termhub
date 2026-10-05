@@ -119,7 +119,7 @@ beforeEach(() => {
 
 const NOTE = 'O agente está subindo com o prompt. Chame wait_for_state para saber quando ele terminar ou parar (num único subagente em segundo plano, que termina na primeira parada), e read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat.';
 const MCP_URL = 'https://termhub.dev/mcp';
-const MCP_FLAGS = `--mcp-config "$HOME"/'.termhub/tabs/abc/mcp.json' --allowedTools 'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy'`;
+const MCP_FLAGS = `--mcp-config "$HOME"/'.termhub/tabs/abc/mcp.json' --allowedTools 'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy' 'mcp__termhub_tab__report_card' 'mcp__termhub_tab__get_card'`;
 /** What the line of an account without a config dir starts with: the CLI's variable cleared in the tab's shell (TER-499). */
 const CLEAR_CLAUDE = 'command -v unset >/dev/null 2>&1 && unset CLAUDE_CONFIG_DIR; ';
 const CLEAR_CODEX = 'command -v unset >/dev/null 2>&1 && unset CODEX_HOME; ';
@@ -220,6 +220,26 @@ describe('launchLine with a model (TER-589)', () => {
   it('refuses a model the shell could read, before anything is typed', () => {
     for (const bad of ['opus; id', '$(id)', "o'pus", '-p', ''])
       expect(() => launchLine('claude', null, 'x', null, bad), bad).toThrow(new ControlError('INVALID_MODEL', 'Modelo inválido: use um apelido (opus, sonnet, haiku) ou o id do modelo'));
+  });
+});
+
+describe('resume and continue lines of an automatic tab (preflight F-12)', () => {
+  const SID = '123e4567-e89b-12d3-a456-426614174000';
+  const permission = { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)', 'Bash(npm test:*)'] };
+
+  it('resumeLine keeps acceptEdits and the allow list, merged with the tab MCP\'s tools, ended by --', () => {
+    expect(resumeLine(null, SID, 'x', null, null, permission)).toBe(`${CLEAR_CLAUDE}claude --permission-mode acceptEdits --allowedTools 'Bash(git status:*)' 'Bash(npm test:*)' --resume ${SID} -- 'x'`);
+    expect(resumeLine('/c', SID, 'x', 'abc', 'opus', permission)).toBe(`CLAUDE_CONFIG_DIR='/c' claude --model 'opus' --permission-mode acceptEdits ${MCP_FLAGS} 'Bash(git status:*)' 'Bash(npm test:*)' --resume ${SID} -- 'x'`);
+    expect(() => resumeLine(null, SID, 'x', null, null, { mode: 'acceptEdits', allowedTools: ['--dangerously-skip-permissions'] })).toThrow(ControlError);
+    expect(() => resumeLine(null, SID, 'x', null, null, { mode: 'bypassPermissions' as 'acceptEdits', allowedTools: [] })).toThrow(ControlError);
+  });
+
+  it('continueLine of an automatic Claude tab carries the profile, the MCP and a first message; Codex is unchanged', () => {
+    expect(continueLine('claude', null, { permission, prompt: '[termhub automático] x', mcpTabId: null })).toBe(
+      `${CLEAR_CLAUDE}claude --permission-mode acceptEdits --allowedTools 'Bash(git status:*)' 'Bash(npm test:*)' --continue -- '[termhub automático] x'`,
+    );
+    expect(continueLine('claude', null, { permission, prompt: 'x', mcpTabId: 'abc' })).toContain(`${MCP_FLAGS} 'Bash(git status:*)' 'Bash(npm test:*)' --continue -- 'x'`);
+    expect(continueLine('chatgpt', '/home/u/.codex_b', { permission, prompt: 'x', mcpTabId: null })).toBe(`CODEX_HOME='/home/u/.codex_b' codex --no-alt-screen resume --last`);
   });
 });
 
@@ -730,7 +750,7 @@ describe('linkTabTask', () => {
 describe('automation launch: permission flags, cwd and setup command (TER-870)', () => {
   const PERMISSION = { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)', 'Bash(npm test:*)'] };
   const TOOLS = `'Bash(git status:*)' 'Bash(npm test:*)'`;
-  const TAB_TOOLS = `'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy'`;
+  const TAB_TOOLS = `'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy' 'mcp__termhub_tab__report_card' 'mcp__termhub_tab__get_card'`;
   const WORKTREE = '/home/u/.termhub/worktrees/P1-7';
 
   it('the default allow list is the closed F-6 list: exact pushes, no generic npm run', () => {

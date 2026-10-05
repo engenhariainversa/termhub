@@ -15,6 +15,7 @@ import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, T
 import { automationQueue } from '../automation/queue.js';
 import { policyText } from '../automation/policy.js';
 import { listAutomationEvents } from '../automation/events.js';
+import { getRunCard, reportCard, tabHasActiveRun } from '../automation/follower.js';
 import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { AUTOMATION_EVENTS_PAGE_MAX } from '../db/repositories/automation-events.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
@@ -272,6 +273,33 @@ export const TOOLS: ToolDef[] = [
       const { automation, repo } = await getProjectSetup(ctx, a as { project_id: string });
       return { enabled: automation.enabled, autonomy: automation.autonomy, text: policyText(automation, repo?.deploy_workflow ?? null) };
     },
+  },
+  {
+    name: 'report_card',
+    description:
+      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. Call it once, at the end.",
+    // Preflight F-8: scope `read` and no grant check — a documented exception, not a widening: `allowedIf`
+    // admits only a tab token whose own tab has an active run, and the tool writes that run's status only.
+    scope: 'read', resource: 'tasks', action: 'read',
+    allowedIf: tabHasActiveRun,
+    grantText: 'de uma aba com trabalho automático em andamento',
+    strict: true,
+    input: {
+      status: z.enum(['done', 'blocked']),
+      pr_url: z.string().trim().url().max(500).optional(),
+      reason: z.string().trim().min(1).max(500).optional(),
+    },
+    run: (ctx, a) => reportCard(ctx, a as { status: 'done' | 'blocked'; pr_url?: string; reason?: string }),
+  },
+  {
+    name: 'get_card',
+    description:
+      "Only in a tab running automatic work (agentic board): read your run's card — ref, title, description, status, its subtasks and the branch you work on. Read-only; no arguments.",
+    scope: 'read', resource: 'tasks', action: 'read',
+    allowedIf: tabHasActiveRun,
+    grantText: 'de uma aba com trabalho automático em andamento',
+    input: {},
+    run: (ctx) => getRunCard(ctx),
   },
   {
     name: 'pause_automation',

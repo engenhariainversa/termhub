@@ -4760,6 +4760,7 @@ export const AutomationRunScalarFieldEnum = {
   worktreePath: 'worktreePath',
   resumeCount: 'resumeCount',
   fixCount: 'fixCount',
+  restartCount: 'restartCount',
   claimedBy: 'claimedBy',
   heartbeatAt: 'heartbeatAt',
   startedAt: 'startedAt',

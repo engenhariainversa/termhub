@@ -149,6 +149,18 @@ function checkAllowedTools(tools: string[]): string[] {
   return tools;
 }
 
+/**
+ * An automatic tab's Claude options (spec D19, preflight F-7/F-12): the permission mode, then the allow
+ * list — merged with the tab MCP's own tools when the tab has its MCP, so there is one variadic
+ * `--allowedTools`. The caller ends the options with `--`.
+ */
+function permissionFlags(permission: AgentPermission, mcpTabId: string | null): string {
+  if (permission.mode !== 'acceptEdits') throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
+  const tools = checkAllowedTools(permission.allowedTools);
+  const allow = mcpTabId ? claudeMcpFlags(mcpTabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
+  return `--permission-mode ${permission.mode}${allow ? ` ${allow}` : ''}`;
+}
+
 /** What the MCP URL may look like to be spliced into a TOML string inside a quoted argument (D9):
  *  no whitespace, quote, backslash or control byte. */
 const MCP_URL_RE = /^https?:\/\/[^\s'"\\\x00-\x1f\x7f]+$/;
@@ -190,13 +202,9 @@ export function launchLine(
   const { clear, prefix } = accountEnv(configEnv, configDir);
   // Claude only: automation runs only Claude accounts; Codex gets the plain line.
   if (permission && provider === 'claude') {
-    if (permission.mode !== 'acceptEdits') throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
-    const tools = checkAllowedTools(permission.allowedTools);
-    const mode = `--permission-mode ${permission.mode}`;
     if (mcp && !MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
-    const allow = mcp ? claudeMcpFlags(mcp.tabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
     // `--allowedTools` is variadic: `--` always ends the options, so the prompt is never read as a tool.
-    return `${clear}${prefix}${binary} ${mode}${allow ? ` ${allow}` : ''} -- ${shellQuote(prompt)}`;
+    return `${clear}${prefix}${binary} ${permissionFlags(permission, mcp?.tabId ?? null)} -- ${shellQuote(prompt)}`;
   }
   if (!mcp) return `${clear}${prefix}${binary} ${shellQuote(prompt)}`;
   if (!MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
@@ -239,12 +247,15 @@ export const RESUME_PROMPT = 'A conta anterior atingiu o limite de uso. Continue
  * The id is a uuid, checked here too: it is the one value of the line that is not quoted. `mcpTabId` is
  * set when the tab still has a live tab token: its config file is still on the machine, so the resumed
  * session keeps the memory MCP (spec 2026-09-27 agent tab MCP D11). `model`: the project's default (TER-589).
+ * `permission`: the tab runs automatic work (an active run, preflight F-12) — the resumed session keeps
+ * `acceptEdits` and the allow list it was started with.
  */
-export function resumeLine(configDir: string | null, sessionId: string, prompt: string, mcpTabId?: string | null, model?: string | null): string {
+export function resumeLine(configDir: string | null, sessionId: string, prompt: string, mcpTabId?: string | null, model?: string | null, permission?: AgentPermission | null): string {
   if (!isClaudeSessionId(sessionId)) throw new ControlError('NO_SESSION', 'A sessão do Claude desta aba não é válida');
   const { clear, prefix } = accountEnv('CLAUDE_CONFIG_DIR', configDir);
   const quoted = shellQuote(checkPrompt(prompt));
   const claude = `claude${modelFlag('claude', model)}`;
+  if (permission) return `${clear}${prefix}${claude} ${permissionFlags(permission, mcpTabId ?? null)} --resume ${sessionId} -- ${quoted}`;
   if (!mcpTabId) return `${clear}${prefix}${claude} --resume ${sessionId} ${quoted}`;
   return `${clear}${prefix}${claude} ${claudeMcpFlags(mcpTabId)} --resume ${sessionId} -- ${quoted}`;
 }
@@ -254,9 +265,11 @@ export function resumeLine(configDir: string | null, sessionId: string, prompt: 
  * unknown: Claude's last session in the tab's directory (`--continue`), Codex's last one (`resume --last`),
  * under the tab's account. A Claude tab whose session id is known resumes it by id instead (`resumeLine`).
  */
-export function continueLine(provider: AiProvider, configDir: string | null): string {
+export function continueLine(provider: AiProvider, configDir: string | null, auto?: { permission: AgentPermission; prompt: string; mcpTabId: string | null } | null): string {
   const { binary, configEnv, flags } = launcher(provider);
   const { clear, prefix } = accountEnv(configEnv, configDir);
+  // An automatic Claude tab (preflight F-12): its permission profile, its MCP and a first message.
+  if (auto && provider === 'claude') return `${clear}${prefix}${binary}${flags} ${permissionFlags(auto.permission, auto.mcpTabId)} --continue -- ${shellQuote(checkPrompt(auto.prompt))}`;
   return provider === 'chatgpt' ? `${clear}${prefix}${binary}${flags} resume --last` : `${clear}${prefix}${binary}${flags} --continue`;
 }
 

@@ -9,6 +9,7 @@ import { monitorBus } from '../monitor/bus.js';
 import { applyState } from '../monitor/ingest.js';
 import { sendKeyToSession, sendTextToSession } from '../terminal/session-ops.js';
 import { RESUME_PROMPT, resumeLine } from './agents.js';
+import { activeRunPermission } from '../automation/permission.js';
 import { projectAccountsOn } from '../ai/project-accounts.js';
 import { notifyLimitInChat } from '../chat/tab-limits.js';
 import { ControlError } from './context.js';
@@ -193,7 +194,10 @@ export async function swapAccount(
     // a tab started with its memory MCP keeps it: the config file is still on the machine while the
     // token lives (spec 2026-09-27 agent tab MCP D11); a failed lookup just resumes without it
     const hasTabMcp = await repos.apiTokens.hasLiveForTab(tab.id).catch(() => false);
-    const line = resumeLine(to.config_dir, sessionId, RESUME_PROMPT, hasTabMcp ? tab.id : null, prefs.model);
+    // a tab running automatic work keeps its permission profile on the new account (preflight F-12); a
+    // failed lookup resumes without it, which only makes the agent ask more
+    const permission = await activeRunPermission(repos, tab.id).catch(() => null);
+    const line = resumeLine(to.config_dir, sessionId, RESUME_PROMPT, hasTabMcp ? tab.id : null, prefs.model, permission);
 
     // Claude waits for the reset on a usage limit (it does not exit): cancel that wait and leave.
     // Already idle means it ended on its own: the tab is at the shell and must not get these keys.

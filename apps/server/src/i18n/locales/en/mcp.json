@@ -3,7 +3,8 @@
   "Limite de {{limit}} chamadas por minuto deste token; tente de novo em {{seconds}} s": "This token's limit of {{limit}} calls per minute was reached; try again in {{seconds}} s",
   "Erro interno ao executar a ferramenta": "Internal error while running the tool",
   "O token desta aba só age em nome da própria aba": "This tab's token only acts on behalf of its own tab",
-  "O token desta aba só usa as ferramentas permitidas ({{tools}}); {{tool}} não está disponível aqui": "This tab's token only uses the allowed tools ({{tools}}); {{tool}} is not available here",
+  "O token desta aba só usa as ferramentas permitidas ({{tools}}, e report_card e get_card numa aba com trabalho automático); {{tool}} não está disponível aqui": "This tab's token only uses the allowed tools ({{tools}}, plus report_card and get_card in a tab running automatic work); {{tool}} is not available here",
+  "{{tool}} só está disponível numa aba com trabalho automático em andamento": "{{tool}} is only available in a tab running automatic work",
   "Ferramenta desconhecida: {{tool}}": "Unknown tool: {{tool}}",
   "Este token não pode usar a ferramenta {{tool}}: ela precisa do escopo `{{scope}}` e da permissão {{grant}} na sua role": "This token cannot use the tool {{tool}}: it needs the `{{scope}}` scope and the {{grant}} permission in your role"
 }

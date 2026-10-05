@@ -70,6 +70,22 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await db.automationRun.count({ where: { taskId } })).toBe(2);
   });
 
+  it('updateActive ends a run once: a second end, or one under another instance, writes nothing', async () => {
+    const run = (await claim('blue'))!;
+    await runs.update(run.id, 'blue', { status: 'running' });
+    expect(await runs.updateActive(run.id, 'green', { status: 'done', ended_at: new Date() })).toBe(false);
+    expect(await runs.updateActive(run.id, 'blue', { status: 'done', ended_at: new Date() })).toBe(true);
+    expect(await runs.updateActive(run.id, 'blue', { status: 'blocked', waiting_reason: 'x' })).toBe(false);
+    expect(await runs.findById(run.id)).toMatchObject({ status: 'done', waiting_reason: null });
+  });
+
+  it('restart_count starts at 0 and is bumped on its own', async () => {
+    const run = (await claim('blue'))!;
+    expect(run.restart_count).toBe(0);
+    expect(await runs.bump(run.id, 'restart_count')).toBe(1);
+    expect(await runs.findById(run.id)).toMatchObject({ restart_count: 1, resume_count: 0, fix_count: 0 });
+  });
+
   it('runs on different cards do not collide', async () => {
     const other = newId();
     await db.task.create({ data: { id: other, projectId, title: 'other' } });
