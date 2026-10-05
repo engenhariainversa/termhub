@@ -4,8 +4,8 @@ import { FlatList, Linking, Pressable, RefreshControl, Text, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { relativeTime } from '@/features/shared/relative-time';
 import { useTranslation } from '@/i18n';
-import type { TAgentOnCard, TEpicProgress } from '@/services/api/contract';
-import { MAX_READABLE_WIDTH, readableColumn } from '@/ui';
+import type { TAgentOnCard, TCardProgress, TEpicProgress } from '@/services/api/contract';
+import { AppText, Button, MAX_READABLE_WIDTH, readableColumn, Sheet } from '@/ui';
 import { ciLabel, epicCiLine, formatEstimate, stateLabel } from '../model/format';
 import { useProgressStore } from '../viewmodel/useProgressStore';
 
@@ -27,9 +27,25 @@ function Agent({ agent }: { agent: TAgentOnCard }) {
   );
 }
 
+/** "automático": the card is tagged for automatic work. */
+function AutoBadge() {
+  const { t } = useTranslation();
+  return (
+    <Text accessibilityLabel={t('automático')} className="rounded bg-indigo-400/20 px-1 text-[10px] text-indigo-300">
+      {t('automático')}
+    </Text>
+  );
+}
+
 function Epic({ epic }: { epic: TEpicProgress }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [menuFor, setMenuFor] = useState<TCardProgress | null>(null);
+  const toggleAuto = () => {
+    const card = menuFor;
+    setMenuFor(null);
+    if (card) void useProgressStore.getState().setAuto(card.id, !card.auto);
+  };
   const waiting = epic.agents?.needs_you ?? 0;
   return (
     <View className="mx-4 my-2 rounded-xl bg-zinc-900 p-4">
@@ -50,7 +66,10 @@ function Epic({ epic }: { epic: TEpicProgress }) {
       {open &&
         epic.cards.map((c) => (
           <View key={c.id} className="mt-3 gap-1">
-            <Text className="text-sm text-white">{`${c.ref} ${c.title}`}</Text>
+            <Pressable onLongPress={() => setMenuFor(c)} accessibilityLabel={`${c.ref} ${c.title}`} accessibilityHint={t('Segure para o trabalho automático')} className="flex-row items-center gap-2">
+              <Text className="flex-1 text-sm text-white">{`${c.ref} ${c.title}`}</Text>
+              {c.auto ? <AutoBadge /> : null}
+            </Pressable>
             <Bar percent={c.percent} />
             <Text className="text-xs text-zinc-400">{`${c.units.done}/${c.units.total} · ${formatEstimate(c.estimate)}`}</Text>
             {c.agents?.map((a) => <Agent key={a.tab_id} agent={a} />)}
@@ -62,6 +81,13 @@ function Epic({ epic }: { epic: TEpicProgress }) {
             ))}
           </View>
         ))}
+      <Sheet open={menuFor !== null} onClose={() => setMenuFor(null)} title={t('Trabalho automático')}>
+        <View className="gap-4">
+          {menuFor ? <AppText variant="muted">{`${menuFor.ref} ${menuFor.title}`}</AppText> : null}
+          <Button label={menuFor?.auto ? t('Tirar do trabalho automático') : t('Marcar como automático')} onPress={toggleAuto} />
+          <Button label={t('Cancelar')} variant="ghost" onPress={() => setMenuFor(null)} />
+        </View>
+      </Sheet>
     </View>
   );
 }

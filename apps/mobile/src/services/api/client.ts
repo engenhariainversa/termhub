@@ -12,6 +12,8 @@ import {
   type PushSettings,
   type PushTestBody,
   accountDeletionStatus,
+  automationSetupResponse,
+  cardAutoResponse,
   canonicalHtu,
   challengeResponse,
   decisionChallengesResponse,
@@ -58,6 +60,7 @@ import {
   type TDecisionChallengesBody,
   type TMobileDecisionBody,
   type TMobileMessageBody,
+  type TAutomationSetup,
   type TProjectAi,
   type TSetHostBody,
   type TStartSessionBody,
@@ -320,6 +323,12 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     getProjectAi: (a: Auth, projectId: string) => call('GET', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/ai`, projectAiResponse, { token: a.accessToken }),
     saveProjectAi: (a: Auth, projectId: string, ai: TProjectAi) =>
       call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/ai`, projectAiResponse, { token: a.accessToken, body: { ai } }),
+    getAutomationSetup: (a: Auth, projectId: string) =>
+      call('GET', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, { token: a.accessToken }).then((r) => r.automation),
+    saveAutomationSetup: (a: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }) =>
+      call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, { token: a.accessToken, body: { automation, ...proof } }).then((r) => r.automation),
+    setCardAuto: (a: Auth, taskId: string, auto: boolean) =>
+      call('PUT', `/api/m/v1/tasks/${encodeURIComponent(taskId)}/auto`, cardAutoResponse, { token: a.accessToken, body: { auto } }).then((r) => r.auto),
     cancelSubagent: (a: Auth, id: string) =>
       call('POST', `/api/m/v1/chat/subagents/${encodeURIComponent(id)}/cancel`, cancelSubagentResponse, { token: a.accessToken }).then((r) => r.subagent),
     // The name and project ride in the query (the body is the file itself); `uploadCall` signs the proof

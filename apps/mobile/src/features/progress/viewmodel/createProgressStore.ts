@@ -7,6 +7,7 @@ import type { TEpicProgress } from '@/services/api/contract';
 import type { Auth, MobileApi } from '@/services/api/types';
 
 export const PROGRESS_POLL_MS = 20_000;
+const AUTO_FAILED = 'Não foi possível marcar o card.';
 
 export interface SessionApi {
   auth(): Auth;
@@ -20,6 +21,8 @@ export interface ProgressState {
   /** A pull-to-refresh is in flight — only `refresh()` sets it, so the poll never shows the spinner. */
   refreshing: boolean;
   error: string | null;
+  /** Tags or untags a card for automatic work (long-press on a card). True once the server confirmed it. */
+  setAuto(cardId: string, auto: boolean): Promise<boolean>;
   load(): Promise<void>;
   refresh(): Promise<void>;
   startPolling(): void;
@@ -51,6 +54,16 @@ export function createProgressStore(deps: { api: MobileApi; session: () => Sessi
         }
         if (mine !== generation) return;
         set({ loading: false, error: t('Não foi possível carregar o progresso.') });
+      }
+    },
+    async setAuto(cardId, auto) {
+      try {
+        const now = await deps.api.setCardAuto(deps.session().auth(), cardId, auto);
+        set((s) => ({ epics: s.epics.map((e) => ({ ...e, cards: e.cards.map((c) => (c.id === cardId ? { ...c, auto: now } : c)) })), error: null }));
+        return true;
+      } catch (err) {
+        if (!deps.session().handleApiError(err)) set({ error: AUTO_FAILED });
+        return false;
       }
     },
     async refresh() {

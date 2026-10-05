@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
-import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLessonItem, TNotificationRow, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
+import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLessonItem, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
  * `transport.ts`. `error` is pt-BR text; `extra` carries `attempts_left` / `retry_after`, spread
@@ -245,6 +245,10 @@ export interface MockState {
   /** The projects' AI accounts and models (spec 2026-09-30 project AI accounts §8), by project id; a
    * project with no entry has none chosen and no model set. */
   projectAi: Map<string, TProjectAi>;
+  /** project id -> the saved automation block (absent = the server's default, off at `pr`) */
+  automation: Map<string, TAutomationSetup>;
+  /** card id -> tagged for automatic work */
+  cardAuto: Map<string, boolean>;
   /** Oldest first (push order); `GET chat` lists a conversation's own, `subagentView`'d. */
   subagents: MockSubagent[];
   attachments: Map<string, MockAttachment>;
@@ -302,6 +306,8 @@ export function createMockState(): MockState {
     tabSuggestions: [],
     tabLimits: [],
     projectAi: new Map(),
+    automation: new Map(),
+    cardAuto: new Map(),
     subagents: [],
     attachments: new Map(),
     transcriptions: new Map(),

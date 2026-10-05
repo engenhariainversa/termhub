@@ -12,6 +12,7 @@ import en_filePreview from '@/locales/en/file-preview.json';
 import en_home from '@/locales/en/home.json';
 import en_notifications from '@/locales/en/notifications.json';
 import en_permissions from '@/locales/en/permissions.json';
+import en_automation from '@/locales/en/automation.json';
 import en_progress from '@/locales/en/progress.json';
 import en_projectAi from '@/locales/en/project-ai.json';
 import en_session from '@/locales/en/session.json';
@@ -29,6 +30,7 @@ import pt_filePreview from '@/locales/pt-BR/file-preview.json';
 import pt_home from '@/locales/pt-BR/home.json';
 import pt_notifications from '@/locales/pt-BR/notifications.json';
 import pt_permissions from '@/locales/pt-BR/permissions.json';
+import pt_automation from '@/locales/pt-BR/automation.json';
 import pt_progress from '@/locales/pt-BR/progress.json';
 import pt_projectAi from '@/locales/pt-BR/project-ai.json';
 import pt_session from '@/locales/pt-BR/session.json';
@@ -51,6 +53,7 @@ export const EN_AREAS: Record<string, Catalog> = {
   'home': en_home,
   'notifications': en_notifications,
   'permissions': en_permissions,
+  'automation': en_automation,
   'progress': en_progress,
   'project-ai': en_projectAi,
   'session': en_session,
@@ -72,6 +75,7 @@ export const PT_AREAS: Record<string, Catalog> = {
   'home': pt_home,
   'notifications': pt_notifications,
   'permissions': pt_permissions,
+  'automation': pt_automation,
   'progress': pt_progress,
   'project-ai': pt_projectAi,
   'session': pt_session,

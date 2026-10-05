@@ -70,7 +70,7 @@ export interface MobileChatDeps {
 }
 
 /** The device the mobile auth hook authenticated for this request (every route here is `mobileAuth: 'device'`). */
-function deviceOf(request: FastifyRequest): Device {
+export function deviceOf(request: FastifyRequest): Device {
   const mobile = request.mobile;
   if (!mobile || !('device' in mobile)) throw unauthorized();
   return mobile.device;
@@ -79,7 +79,7 @@ function deviceOf(request: FastifyRequest): Device {
 /** Consumes the decision challenge bound to one action and checks the PIN proof over it. Answers the
  * way `POST /session/token` does on failure (sent here, so the caller just stops) and returns false;
  * true when the proof is good. */
-async function proofOk(deps: MobileChatDeps, request: FastifyRequest, reply: FastifyReply, device: Device, actionId: string, decision: PinDecision, proof: { challenge: string; pin_proof: string }): Promise<boolean> {
+export async function proofOk(deps: Pick<MobileChatDeps, 'session'>, request: FastifyRequest, reply: FastifyReply, device: Device, actionId: string, decision: PinDecision, proof: { challenge: string; pin_proof: string }): Promise<boolean> {
   if (!(await deps.session.consumeDecisionChallenge(device, proof.challenge, actionId))) throw new HttpError(400, 'Desafio inválido ou expirado', 'CHALLENGE_INVALID');
   const pin = await deps.session.checkPin(device, decisionProofMessage(proof.challenge, actionId, decision), proof.pin_proof, { ip: request.ip });
   if (pin.ok) return true;

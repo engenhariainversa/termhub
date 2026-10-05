@@ -28,6 +28,7 @@ import { ExpoPushSender, ExpoReceiptFetcher, MobilePushService, startPushReceipt
 import { MobileSocketRegistry, revokeDevice } from './revocation.js';
 import { SessionService } from './session.js';
 import type { AccountDeletionService } from '../account/deletion.js';
+import { mobileAutomationSetupRoutes, mobileCardAutoRoutes } from '../routes/m-automation.js';
 import { mobileAccountRoutes } from '../routes/m-account.js';
 import { registerMobileTabWs } from './tab-ws.js';
 import { registerMobileChatWs } from './ws.js';
@@ -160,6 +161,9 @@ export async function registerMobileApi(
         await guarded('tasks', (a) => progressRoutes(a, deps.repos), '/progress');
         // The project's AI accounts and default models, the same endpoint as the web's (TER-589).
         await guarded('projects', (a) => projectAiRoutes(a, deps.repos), '/projects');
+        // "Trabalho automático" of the project Setup (PIN to turn on) and the tag on a Progresso card (spec 2026-10-04).
+        await guarded('projects', (a) => mobileAutomationSetupRoutes(a, deps.repos, { session: services.session }), '/projects');
+        await guarded('tasks', (a) => mobileCardAutoRoutes(a, deps.repos), '/tasks');
         // Voice dictation, over the same TranscriptionService as the web (`routes/transcriptions.ts`).
         await guarded('terminals', (a) => mobileTranscriptionRoutes(a, { transcriptions: deps.transcriptions }), '/transcriptions');
         // The person's own account: no role grant needed to delete it (device auth only).
