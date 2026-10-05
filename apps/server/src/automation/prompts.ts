@@ -7,6 +7,9 @@ export { SERVER_MARKER, serverMessage } from './marker.js';
 /** Typed into an automatic tab that is resumed after a stop. */
 export const RESUME_TEXT = 'Continue a tarefa do card de onde parou. Se terminou, abra o PR e chame report_card.';
 
+/** Typed into an automatic tab whose account's usage limit reset (spec D16): the same account goes on. */
+export const QUOTA_RESUME_TEXT = 'O limite da conta foi renovado; continue de onde parou.';
+
 /** The editable middle paragraph of each role's prompt, used when the project has no custom text. */
 export const DEFAULT_IMPLEMENTER_TEXT = 'Leia o card e, se houver, o spec e o plano citados nele. Implemente, rode os testes do projeto e deixe o trabalho commitado.';
 export const DEFAULT_INTEGRATOR_TEXT = 'Confira que os PRs dos cards já foram mesclados na branch do épico, resolva divergências entre eles, rode os testes e deixe o PR do épico pronto para revisão.';

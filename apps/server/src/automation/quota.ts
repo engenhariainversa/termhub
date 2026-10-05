@@ -1,11 +1,10 @@
 import { getAccountUsage, type AiAccountUsage } from '../ai/index.js';
-import { RESUME_PROMPT } from '../control/agents.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Tab } from '../db/repositories/types.js';
 import { recordEvent } from './events.js';
 import { defaultType, mayType, noteTyped, type FollowerDeps } from './follower.js';
 import { isPaused } from './pause.js';
-import { serverMessage } from './prompts.js';
+import { QUOTA_RESUME_TEXT, serverMessage } from './prompts.js';
 
 /** How long an account waits when its usage gives no reset ahead (spec D16). */
 export const QUOTA_FALLBACK_MS = 60 * 60_000;
@@ -100,7 +99,7 @@ function cleared(run: AutomationRun, tab: Tab, exhausted: Set<string>, now: Date
 /**
  * The dispatcher's tick (spec D16): every run this instance drives that waits on `quota`. A run whose tab
  * the swap moved to another account takes it and runs again, nothing typed. A run whose account is clear
- * again — never one still in `activeIds` — is resumed in its tab with the marked message, once, after the
+ * again — never one still in `activeIds` — is resumed in its tab with the marked QUOTA_RESUME_TEXT, once, after the
  * same checks as any resume (automation on, card still tagged, not paused right before typing), and
  * `quota_reset` is recorded. A tab that already left the limit (a person typed, the agent exited) is not
  * typed into: the run just goes back to the follower.
@@ -132,7 +131,14 @@ export async function resumeAfterReset(deps: FollowerDeps): Promise<void> {
       if (typing) {
         // the limit screen stays until the agent reacts: the follower must not read it as a new limit
         noteTyped(run.id, tab, now);
-        await (deps.type ?? defaultType)(ready.ctx, tab.id, serverMessage(RESUME_PROMPT));
+        try {
+          await (deps.type ?? defaultType)(ready.ctx, tab.id, serverMessage(QUOTA_RESUME_TEXT));
+        } catch (e) {
+          // nothing reached the tab: back to waiting on quota (the account stays clear), tried again next tick —
+          // never left running on the old limit screen, which would be read as a new limit and mark a healthy account
+          await repos.automationRuns.updateActive(run.id, run.claimed_by, { status: 'waiting', waiting_reason: QUOTA_WAITING });
+          throw e;
+        }
       }
       await recordEvent(repos, {
         project_id: run.project_id,

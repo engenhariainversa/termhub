@@ -17,6 +17,16 @@ import { ControlError } from './context.js';
 import { offline } from './screen.js';
 import { msg, tk } from '../i18n/index.js';
 
+/**
+ * How the tab's state text starts after a swap, while the resumed session may wait on Claude's "trust this
+ * folder" question (a person's answer): the automation never types into a tab in this state.
+ */
+export const ACCOUNT_SWAP_TEXT = 'Conta trocada';
+export const ACCOUNT_SWAP_AUTO_TEXT = `${ACCOUNT_SWAP_TEXT} automaticamente`;
+
+/** Whether the tab's state is the one a swap left (see ACCOUNT_SWAP_TEXT). */
+export const isAccountSwapState = (stateText: string | null | undefined): boolean => (stateText ?? '').startsWith(ACCOUNT_SWAP_TEXT);
+
 /** An account whose fullest window is at this utilization (0..100) or more is not a candidate. */
 export const SWAP_MAX_UTILIZATION = 90;
 /** How long the waiting Claude gets to end after `/exit` (its SessionEnd hook turns the tab idle). */
@@ -235,7 +245,7 @@ export async function swapAccount(
     // them until the resumed session's SessionStart (run only once trusted) moves it to working. Should
     // typing fail, the tab already names the account the linked session will be resumed under.
     const updated = (await repos.tabs.setAgentFields(tab.id, { ai_account_id: to.id, rate_limited_at: null })) ?? tab;
-    const text = `${opts.auto ? 'Conta trocada automaticamente' : 'Conta trocada'}: ${from?.label ?? 'conta desconhecida'} → ${to.label}. Se o Claude pedir para confiar na pasta, confirme na aba.`;
+    const text = `${opts.auto ? ACCOUNT_SWAP_AUTO_TEXT : ACCOUNT_SWAP_TEXT}: ${from?.label ?? 'conta desconhecida'} → ${to.label}. Se o Claude pedir para confiar na pasta, confirme na aba.`;
     await applyState(repos, log, updated, 'claude', { kind: 'waiting_input', text, meta: { event: 'AccountSwap', from: from?.id ?? null, to: to.id, auto: opts.auto } });
     await sendTextToSession(machine, session, line, true);
 

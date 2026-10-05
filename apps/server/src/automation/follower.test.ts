@@ -8,7 +8,7 @@ import type { AutomationEventInput } from '../db/repositories/automation-events.
 import type { Tab, Task } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
-import { followRun, getRunCard, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
+import { escalationText, followRun, getRunCard, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
 import { automationBus } from './events.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 
@@ -414,5 +414,60 @@ describe('get_card and the tab tools\' condition', () => {
     const card = await getRunCard(tabCtx(w.repos));
     expect(card).toMatchObject({ id: 't1', ref: 'TER-1', title: 'Card', description: 'd', branch: 'TER-1-card', subtasks: [{ ref: 'TER-2', title: 'Sub', status: 'todo' }] });
     await expect(getRunCard(tabCtx(w.repos, 'other-tab'))).rejects.toMatchObject({ code: 'NO_RUN' });
+  });
+});
+
+describe('Claude\'s trust question (never answered by the automation)', () => {
+  const NOW = new Date('2026-10-05T12:00:00.000Z');
+  const ago = (ms: number) => new Date(NOW.getTime() - ms);
+  const swapText = 'Conta trocada automaticamente: A → B. Se o Claude pedir para confiar na pasta, confirme na aba.';
+
+  it('after an account swap, the tab is never typed into; past the wait the run is parked for the person and escalated once', async () => {
+    const w = world({ tab: { state: 'waiting_input', state_text: swapText, state_at: ago(2 * 60_000).toISOString() } });
+    await followRun(w.deps, w.run.id); // well past PR_GRACE_MS, still inside TRUST_WAIT_MS
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run.status).toBe('running');
+    expect(w.events).toEqual([]);
+
+    w.setNow(new Date(NOW.getTime() + TRUST_WAIT_MS));
+    await followRun(w.deps, w.run.id);
+    await sweepRuns(w.deps);
+    await sweepRuns(w.deps);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'needs_person' });
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', run_id: w.run.id, payload: { reason: 'trust_prompt', tab_id: 'tab1' } })]);
+
+    // the person confirmed: the resumed session works, and the run is followed again
+    Object.assign(w.tab, { state: 'working', state_text: null, state_at: new Date(NOW.getTime() + TRUST_WAIT_MS + 1000).toISOString() });
+    await followRun(w.deps, w.run.id);
+    expect(w.run).toMatchObject({ status: 'running', waiting_reason: null });
+    expect(w.type).not.toHaveBeenCalled();
+  });
+
+  it('a first start with no hook at all (trust question of a new worktree) is parked after the wait, never typed into', async () => {
+    const w = world({ run: { started_at: ago(60_000) }, tab: { state: null, state_text: null, state_at: null } as Partial<Tab> });
+    await sweepRuns(w.deps);
+    expect(w.run.status).toBe('running');
+    expect(w.events).toEqual([]);
+
+    w.setNow(new Date(ago(60_000).getTime() + TRUST_WAIT_MS));
+    await sweepRuns(w.deps);
+    await sweepRuns(w.deps);
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'needs_person' });
+    expect(w.kinds()).toEqual(['escalated']);
+    expect(w.events[0]!.payload).toEqual({ reason: 'trust_prompt', tab_id: 'tab1' });
+    expect(w.type).not.toHaveBeenCalled();
+
+    // confirmed: SessionStart moved the tab, and the follower takes the run back
+    Object.assign(w.tab, { state: 'working', state_at: new Date(NOW.getTime() + TRUST_WAIT_MS).toISOString() });
+    await sweepRuns(w.deps);
+    expect(w.run).toMatchObject({ status: 'running', waiting_reason: null });
+    expect(w.type).not.toHaveBeenCalled();
+  });
+
+  it('the escalation has a text in both languages', () => {
+    expect(escalationText('trust_prompt')).toBe('O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.');
+    expect(escalationText('trust_prompt', 'en')).toBe('The agent stopped at the folder trust confirmation; confirm it in the tab to continue.');
+    expect(escalationText('resume_cap')).toBeNull();
   });
 });

@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AiAccountUsage } from '../ai/index.js';
 import type { ControlContext } from '../control/context.js';
-import { RESUME_PROMPT } from '../control/agents.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { AutomationEventInput } from '../db/repositories/automation-events.js';
 import type { Tab, Task } from '../db/repositories/types.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
 import { followRun, sweepRuns, type FollowerDeps } from './follower.js';
-import { serverMessage } from './prompts.js';
+import { QUOTA_RESUME_TEXT, serverMessage } from './prompts.js';
 import { onRateLimit, QUOTA_FALLBACK_MS, resetAt, resumeAfterReset } from './quota.js';
 
 const ME = 'instance-me';
@@ -155,7 +154,7 @@ describe('a run on a usage limit (spec D16)', () => {
     await resumeAfterReset(w.deps);
     expect(w.type).toHaveBeenCalledTimes(1);
     expect(w.type.mock.calls[0]![1]).toBe('tab1');
-    expect(w.type.mock.calls[0]![2]).toBe(serverMessage(RESUME_PROMPT));
+    expect(w.type.mock.calls[0]![2]).toBe(serverMessage(QUOTA_RESUME_TEXT));
     expect(w.run).toMatchObject({ status: 'running', waiting_reason: null });
     expect(w.kinds()).toEqual(['quota_hit', 'quota_reset']);
     // the limit screen is still there until the agent reacts: neither a new limit nor a second resume
@@ -164,6 +163,24 @@ describe('a run on a usage limit (spec D16)', () => {
     expect(w.type).toHaveBeenCalledTimes(1);
     expect(w.kinds()).toEqual(['quota_hit', 'quota_reset']);
     expect(w.run.status).toBe('running');
+  });
+
+  it('a resume that could not be typed goes back to waiting on quota, marks nothing and is tried again', async () => {
+    const w = world();
+    await followRun(w.deps, w.run.id);
+    w.setNow(at(2 * 3600_000 + 1000));
+    w.type.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'MACHINE_OFFLINE' }));
+    await resumeAfterReset(w.deps);
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'quota' });
+    expect(w.kinds()).toEqual(['quota_hit']);
+    // the follower 10 min later does not read the old screen as a new limit
+    w.setNow(at(2 * 3600_000 + 11 * 60_000));
+    await sweepRuns(w.deps);
+    expect(w.repos.aiAccountExhaustions.mark).toHaveBeenCalledTimes(1);
+    await resumeAfterReset(w.deps);
+    expect(w.type).toHaveBeenCalledTimes(2);
+    expect(w.run).toMatchObject({ status: 'running', waiting_reason: null });
+    expect(w.kinds()).toEqual(['quota_hit', 'quota_reset']);
   });
 
   it('a new limit after the resume parks it again (never a resume into the limit)', async () => {

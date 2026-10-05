@@ -1,12 +1,13 @@
 import type { AiAccountUsage } from '../ai/index.js';
 import { AGENT_EXITED_TEXT, EXITED_RESUME_PROMPT, resumeCommandFor } from '../chat/agent-exited.js';
+import { isAccountSwapState } from '../control/account-swap.js';
 import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
 import { taskOut, type TaskOut } from '../control/tasks.js';
 import { sendInput } from '../control/terminals.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun, AutomationRunPatch } from '../db/repositories/automation-runs.js';
 import type { Tab, Task } from '../db/repositories/types.js';
-import { msg } from '../i18n/index.js';
+import { DEFAULT_LOCALE, msg, t, tk, type Locale } from '../i18n/index.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
 import { CI_POLL_MS } from '../ci/scheduler.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
@@ -32,6 +33,27 @@ export const PR_GRACE_MS = CI_POLL_MS + 30_000;
 export const FOLLOW_SWEEP_MS = 30_000;
 /** A message typed into a tab whose state then never moved is typed again after this long (it got lost). */
 export const RETYPE_AFTER_MS = 10 * 60_000;
+/**
+ * Claude's "trust this folder" question comes before any hook (a first start in a new worktree) or right
+ * after an account swap (trust is per account). Its answer is the person's: past this long the run is
+ * parked for them instead of being typed into.
+ */
+export const TRUST_WAIT_MS = 3 * 60_000;
+/** `automation_runs.waiting_reason` of a run parked on something only a person can do in the tab. */
+export const NEEDS_PERSON = 'needs_person';
+/** The escalation reason of a run parked on the trust question. */
+export const TRUST_PROMPT = 'trust_prompt';
+
+/** The text the feed and the escalation show for each escalation reason known so far (spec §9.3). */
+export const ESCALATION_TEXT: Record<string, string> = {
+  [TRUST_PROMPT]: tk('O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.'),
+};
+
+/** The escalation's text in the reader's language; null for a reason with no text yet. */
+export function escalationText(reason: string, locale: Locale = DEFAULT_LOCALE): string | null {
+  const key = ESCALATION_TEXT[reason];
+  return key ? t(locale, key) : null;
+}
 
 export interface FollowerDeps {
   repos: Repositories;
@@ -101,6 +123,17 @@ export async function wakeOrEscalate(repos: Repositories, run: AutomationRun, re
   actedOn.delete(run.id);
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, reason }, 'automation: run waits for a person');
   await escalateRun(repos, run, reason, log);
+}
+
+/**
+ * The tab waits on Claude's trust question (spec §9.3): the run is parked for the person — nothing is typed
+ * into the tab — and given back to the follower once the tab reports a state of its own again.
+ */
+async function parkForTrust(repos: Repositories, run: AutomationRun, log: Log): Promise<void> {
+  if (!(await writeRun(repos, run, { status: 'waiting', waiting_reason: NEEDS_PERSON }))) return;
+  actedOn.delete(run.id);
+  log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id }, 'automation: run waits on the trust question');
+  await escalateRun(repos, run, TRUST_PROMPT, log);
 }
 
 /**
@@ -182,8 +215,11 @@ export async function mayType(deps: FollowerDeps, run: AutomationRun, log: Log):
   return { ctx: controlContextFor(repos, owner), setup: setup.data, task };
 }
 
+/** Milliseconds since `at` (an ISO string or a date); NaN when unknown. */
+const sinceMs = (deps: FollowerDeps, at: string | Date | null | undefined) => (deps.now?.() ?? new Date()).getTime() - (at instanceof Date ? at.getTime() : Date.parse(at ?? ''));
+
 /** Whether the stop is younger than PR_GRACE_MS: a PR opened just before it may not be linked yet. */
-const inGrace = (deps: FollowerDeps, tab: Tab) => (deps.now?.() ?? new Date()).getTime() - Date.parse(tab.state_at ?? '') < PR_GRACE_MS;
+const inGrace = (deps: FollowerDeps, tab: Tab) => sinceMs(deps, tab.state_at) < PR_GRACE_MS;
 
 /**
  * `waiting_input` after a Stop (preflight F-13): end on an open PR, resume, or hand over past the cap.
@@ -194,6 +230,12 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
   // a usage limit first: never resume into it (D16, Task 19)
   if (rateLimited(tab)) {
     await deps.onRateLimited?.(run, tab);
+    return false;
+  }
+  // after an account swap the resumed session may wait on the trust question: never typed into (an Enter
+  // would answer it for the person); past TRUST_WAIT_MS the run is parked for them
+  if (isAccountSwapState(tab.state_text)) {
+    if (sinceMs(deps, tab.state_at) >= TRUST_WAIT_MS) await parkForTrust(repos, run, log);
     return false;
   }
   // a question card waits for its own answer (spec §9.1, Task 21)
@@ -292,7 +334,20 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
         return;
       }
       const tab = await deps.repos.tabs.findById(run.tab_id);
-      if (!tab?.state_at) return;
+      if (!tab) return;
+      if (!tab.state_at) {
+        // start watchdog: no hook at all since the start — Claude waits on the trust question of a new
+        // worktree (it comes before any hook). Parked for the person, never typed into.
+        if (run.status === 'running' && sinceMs(deps, run.started_at ?? run.created_at) >= TRUST_WAIT_MS) await parkForTrust(deps.repos, run, log);
+        return;
+      }
+      if (run.status === 'waiting' && run.waiting_reason === NEEDS_PERSON && !isAccountSwapState(tab.state_text)) {
+        // the person answered: the tab reports its own state again, and the run is followed as before
+        if (!(await writeRun(deps.repos, run, { status: 'running', waiting_reason: null }))) return;
+        log.info({ runId, tabId: tab.id }, 'automation: run followed again after the trust question');
+        run.status = 'running';
+        run.waiting_reason = null;
+      }
       // `working` and `waiting_background` (lesson TER-615) are the agent's own time
       if (tab.state === 'working' || tab.state === 'waiting_background') return;
       if (run.status === 'waiting') {
