@@ -91,6 +91,15 @@ export class AutomationEventsRepository {
     return this.db.automationEvent.count({ where: { runId, kind, createdAt: { gte: since } } });
   }
 
+  /** Whether the card has an event of `kind` whose payload holds every pair of `match` (the red-CI dedupe, F-27). */
+  async hasForTask(taskId: string, kind: AutomationEventKind, match: Record<string, string | number>): Promise<boolean> {
+    const row = await this.db.automationEvent.findFirst({
+      where: { taskId, kind, AND: Object.entries(match).map(([k, v]) => ({ payload: { path: [k], equals: v } })) },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
   /** Drops events older than `cutoff`; the number removed. */
   async purgeBefore(cutoff: Date): Promise<number> {
     const { count } = await this.db.automationEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });

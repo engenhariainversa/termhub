@@ -243,6 +243,12 @@ export class AutomationRunsRepository {
     });
   }
 
+  /** The fixes typed into the card's own runs (red CI, spec D21): the part of the fix cap no fixer run counts. */
+  async sumFixCount(taskId: string): Promise<number> {
+    const { _sum } = await this.db.automationRun.aggregate({ where: { taskId }, _sum: { fixCount: true } });
+    return _sum.fixCount ?? 0;
+  }
+
   /** The statuses of the card's server-started runs of a role (an epic's integrator runs, spike R2). */
   async triggeredStatuses(taskId: string, role: RunRole): Promise<RunStatus[]> {
     const rows = await this.db.automationRun.findMany({ where: { taskId, role, triggerSha: { not: null } }, select: { status: true } });

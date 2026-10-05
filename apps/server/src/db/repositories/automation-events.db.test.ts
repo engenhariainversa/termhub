@@ -61,6 +61,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation events and pau
     expect(await db.automationEvent.count({ where: { projectId } })).toBe(0);
   });
 
+  it('finds a card\'s event by kind and payload pairs (the red-CI dedupe)', async () => {
+    await events.insert({ project_id: projectId, task_id: taskId, kind: 'ci_fix_requested', payload: { pr: 7, sha: 'h1', via: 'fixer' } });
+    expect(await events.hasForTask(taskId, 'ci_fix_requested', { pr: 7, sha: 'h1' })).toBe(true);
+    expect(await events.hasForTask(taskId, 'ci_fix_requested', { pr: 7, sha: 'h2' })).toBe(false);
+    expect(await events.hasForTask(taskId, 'ci_fix_requested', { pr: 8, sha: 'h1' })).toBe(false);
+    // the number is matched as a number, not as its text
+    expect(await events.hasForTask(taskId, 'ci_fix_requested', { pr: '7', sha: 'h1' })).toBe(false);
+    expect(await events.hasForTask(taskId, 'escalated', { pr: 7, sha: 'h1' })).toBe(false);
+    expect(await events.hasForTask(newId(), 'ci_fix_requested', { pr: 7, sha: 'h1' })).toBe(false);
+  });
+
   it('purges events older than the cutoff only', async () => {
     const old = await events.insert({ project_id: projectId, kind: 'paused' });
     await db.automationEvent.update({ where: { id: old.id }, data: { createdAt: new Date(Date.now() - 31 * 24 * 3600_000) } });
