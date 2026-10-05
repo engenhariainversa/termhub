@@ -62,9 +62,27 @@ export interface DispatcherDeps {
   log?: Log;
 }
 
+/** A run the server starts by itself on a card (spike R2): a conflict fixer on the PR's own branch. */
+export interface TriggeredRun {
+  projectId: string;
+  taskId: string;
+  role: 'fixer';
+  /** the PR head the run answers: one run per (card, role, trigger_sha), in any status */
+  triggerSha: string;
+  branch: string;
+  base: string;
+  prompt: string;
+}
+
+/** `started`; `taken`: the card has an active run, or this trigger already had its run; `waiting`: no place
+ *  (or the ceiling) now, nothing written; `halted`: draining, paused, automation off, or the card is gone. */
+export type TriggeredStart = 'started' | 'taken' | 'waiting' | 'halted';
+
 export interface Dispatcher {
   /** One pass over every project with automatic work on. Concurrent calls share the pass in progress. */
   tick(reason: string): Promise<void>;
+  /** Starts a server-triggered run (the merge executor's conflict fixer), like a claimed card from the queue. */
+  startTriggered(i: TriggeredRun): Promise<TriggeredStart>;
   /** Heartbeat of this instance's runs, then the takeover of runs whose instance went silent. */
   heartbeat(): Promise<void>;
   /** Resolves when the starts in flight have settled (tests, shutdown). */
@@ -192,15 +210,27 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     }
   }
 
-  /** Prepare and start one claimed run (spec §8 steps 4–5). Only the preparation and the start itself count as a failed start. */
-  async function launch(ctx: ControlContext, project: Project, setup: ProjectSetupData, run: AutomationRun, task: Task, place: Extract<Placement, { machine: unknown }>): Promise<void> {
+  /**
+   * Prepare and start one claimed run (spec §8 steps 4–5). Only the preparation and the start itself count as a
+   * failed start. `work` is a server-triggered run's own branch, base and prompt (a fixer works on the PR's
+   * branch, which exists already); without it, the card's implementer run.
+   */
+  async function launch(
+    ctx: ControlContext,
+    project: Project,
+    setup: ProjectSetupData,
+    run: AutomationRun,
+    task: Task,
+    place: Extract<Placement, { machine: unknown }>,
+    work?: { branch: string; base: string; prompt: string },
+  ): Promise<void> {
     const { automation, repo, runner } = setup;
     let branch: string | null = null;
     let tabId: string;
     try {
-      const epic = task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
-      const { base, epicBranch } = targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup);
-      branch = cardBranchName(repo?.branch_pattern ?? '{ticket}-{slug}', task);
+      const epic = !work && task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
+      const { base, epicBranch } = work ? { base: work.base, epicBranch: null } : targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup);
+      branch = work ? work.branch : cardBranchName(repo?.branch_pattern ?? '{ticket}-{slug}', task);
       const permission = automationPermission(automation);
       // the profile is stored on the run: restarts and swaps keep it even if the setup changes (F-12)
       if (!(await write(run, { status: 'starting', machine_id: place.machine.id, account_id: place.account.id, branch, allowed_tools: permission.allowedTools }))) return;
@@ -210,14 +240,16 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       }
       const ws = await deps.ensureWorkspace(place.machine, { repoDir: place.link.cwd, root: automation.worktrees_dir, projectId: project.id, ref: task.ref, branch, base });
       if (!(await write(run, { worktree_path: ws.path }))) return;
-      const prompt = implementerPrompt({
-        card: { ref: task.ref, url: cardUrl(task.ref), title: task.title },
-        branch,
-        base,
-        policy: policyText(automation, repo?.deploy_workflow ?? null),
-        custom: automation.prompts.implementer,
-        description: task.description,
-      });
+      const prompt =
+        work?.prompt ??
+        implementerPrompt({
+          card: { ref: task.ref, url: cardUrl(task.ref), title: task.title },
+          branch,
+          base,
+          policy: policyText(automation, repo?.deploy_workflow ?? null),
+          custom: automation.prompts.implementer,
+          description: task.description,
+        });
       // the agent's questions become cards in the owner's project chat (spec §9.1, §9.3): make sure it
       // has one, or a question would have nowhere to go (review I1)
       if (project.owner_id) await repos.chat.getOrCreateForProject(project.owner_id, project.id);
@@ -298,6 +330,32 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       });
       inflight.add(p);
     }
+  }
+
+  async function startTriggered(i: TriggeredRun): Promise<TriggeredStart> {
+    if (halted()) return 'halted';
+    const project = await repos.projects.findById(i.projectId);
+    if (!project?.owner_id || (await isPaused(repos, project.owner_id, project.id))) return 'halted';
+    const [owner, setup, task] = await Promise.all([repos.users.findById(project.owner_id), repos.projectSetup.get(project.id), repos.tasks.findById(i.taskId)]);
+    if (!owner || !setup.data.automation.enabled || !task || task.project_id !== project.id) return 'halted';
+    const max = setup.data.automation.max_parallel;
+    if (max !== null && (await repos.automationRuns.countOccupyingSlots(project.id, SLOT_FREE_REASONS)) >= max) return 'waiting';
+    const run = await repos.automationRuns.claim({ project_id: project.id, task_id: task.id, role: i.role, instance, trigger_sha: i.triggerSha });
+    if (!run) return 'taken';
+    const place = await placeRun(deps, project, setup.data);
+    if ('waiting' in place) {
+      // no row is kept: the next CI sync asks again (the trigger is still free)
+      await release(run);
+      return 'waiting';
+    }
+    starting.add(task.id);
+    const p = launch(controlContextFor(repos, owner), project, setup.data, run, task, place, { branch: i.branch, base: i.base, prompt: i.prompt }).finally(() => {
+      starting.delete(task.id);
+      inflight.delete(p);
+    });
+    inflight.add(p);
+    log.info({ runId: run.id, taskId: task.id, role: i.role }, 'automation: triggered run claimed');
+    return 'started';
   }
 
   /** Runs whose card was deleted are cancelled; their worktrees are removed when clean (spec §13). */
@@ -440,6 +498,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
 
   return {
     tick,
+    startTriggered,
     heartbeat,
     settle,
     async stop() {

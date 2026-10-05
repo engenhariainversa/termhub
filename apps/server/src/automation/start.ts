@@ -1,9 +1,11 @@
 import { startAgent } from '../control/agents.js';
 import type { Repositories } from '../db/repositories/index.js';
+import { createGithubCiClient } from '../integrations/github-ci.js';
 import { createGithubWriteClient } from '../integrations/github-write.js';
 import { ensureEpicBranch, ensureWorkspace } from './branches.js';
 import { dispatcherInstanceId, startDispatcher, type Dispatcher, type DispatcherDeps } from './dispatcher.js';
 import { followRun, startFollower, type FollowerDeps } from './follower.js';
+import { mergeApproved, runMergeExecutor, type MergeDeps } from './merge.js';
 import { accountPeak } from './placement.js';
 import { onRateLimit, resumeAfterReset } from './quota.js';
 
@@ -13,6 +15,10 @@ export interface Automation {
   instance: string;
   dispatcher: Dispatcher;
   followerDeps: FollowerDeps;
+  /** The merge executor of one project (spec §10.1): the CI sync calls it after its writes. */
+  merge(projectId: string): Promise<void>;
+  /** The decision hook of an approved `automation_merge` card (F-19). */
+  mergeApproved(actionId: string): Promise<void>;
   /** Stops the follower and the dispatcher (bounded wait for the starts in flight). */
   stop(): Promise<void>;
 }
@@ -32,6 +38,7 @@ export function startAutomation(o: {
   schedule?: boolean;
   dispatcher?: Partial<Omit<DispatcherDeps, 'repos' | 'instance' | 'lifecycle'>>;
   follower?: Partial<Omit<FollowerDeps, 'repos' | 'instance' | 'lifecycle'>>;
+  merge?: Partial<Omit<MergeDeps, 'repos' | 'instance' | 'lifecycle'>>;
 }): Automation {
   const { repos, lifecycle, log } = o;
   const instance = o.instance ?? dispatcherInstanceId();
@@ -57,10 +64,23 @@ export function startAutomation(o: {
     },
     { schedule: o.schedule },
   );
+  const gh = createGithubWriteClient();
+  const mergeDeps: MergeDeps = {
+    repos,
+    instance,
+    lifecycle,
+    gh,
+    ci: createGithubCiClient(),
+    startFixer: (i) => dispatcher.startTriggered(i),
+    log,
+    ...o.merge,
+  };
   return {
     instance,
     dispatcher,
     followerDeps,
+    merge: (projectId) => runMergeExecutor(mergeDeps, projectId),
+    mergeApproved: (actionId) => mergeApproved(mergeDeps, actionId),
     async stop() {
       stopFollower();
       await dispatcher.stop();

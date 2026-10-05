@@ -251,6 +251,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
 
     // Every open tab must see the decision, not only the one that clicked it.
     chatBus.publish({ type: 'decision', user_id: user.id, conversation_id: action.conversation_id, action_id: action.id, status });
+    // The server's own cards (a merge above the level) act on approval here (agentic board F-19).
+    deps.service.afterDecisions([action]);
     // Memory (spec 2026-09-26 concierge memory §4): best effort, fire-and-forget, never on the request's
     // critical path — a slow or failing embed service must not delay the decision's own response.
     void indexActions(user.id, [action]);
@@ -307,6 +309,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     const { decisions } = batchBody.parse(request.body);
     const user = request.scope.user;
     const { decided, skipped } = await decideMany(repos, user.id, decisions);
+    deps.service.afterDecisions(decided);
     void indexActions(user.id, decided);
     try {
       // The start of the run, never its end, as in the single decision above.

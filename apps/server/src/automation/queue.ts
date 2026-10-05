@@ -3,6 +3,7 @@ import { agents } from '../agent/registry.js';
 import type { ControlContext } from '../control/context.js';
 import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 import { eligibilityOf, REASON_TEXT, type IneligibleReason } from './eligibility.js';
+import { mergeWaitOf } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { WAITING_AS_REASON, waitingReasonOf } from './placement.js';
 
@@ -23,6 +24,9 @@ export interface QueueItem {
 export async function automationQueue(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<QueueItem[]> {
   const now = new Date();
   return (await eligibilityQueue(ctx, projectId, locale)).map((item) => {
+    // a card past `todo` whose PR the merge executor holds says why it is not merged yet
+    const merge = item.reason === 'not_in_todo' ? mergeWaitOf(item.task_id, now) : null;
+    if (merge) return { ...item, reason: merge, reason_text: t(locale, REASON_TEXT[merge]) };
     const waiting = item.eligible ? waitingReasonOf(item.task_id, now) : null;
     if (!waiting) return item;
     const reason = WAITING_AS_REASON[waiting];

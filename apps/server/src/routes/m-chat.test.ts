@@ -91,6 +91,7 @@ function build(opts: {
     conversationFor: opts.conversationFor ?? vi.fn(async () => ({ id: 'c1', user_id: 'u1', review_mode: false, machine_id: 'm1', ai_account_id: null, cli_session_id: null })),
     start,
     resumeAfterDecision,
+    afterDecisions: vi.fn(),
     reset: opts.reset ?? vi.fn(async () => ({ id: 'c_new', project_id: 'p1' })),
     hostFor: vi.fn(async () => ({ kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null })),
     projectStatuses: vi.fn(async () => opts.projectStatuses ?? [{ project_id: 'p1', busy: true, pending_confirmations: 2 }]),
@@ -525,7 +526,7 @@ describe('POST /chat/messages', () => {
 
 describe('POST /chat/actions/:id/decision', () => {
   it('deny: decides, publishes the event and resumes, with no PIN involvement', async () => {
-    const { app, decide, resumeAfterDecision, session, indexActions } = build();
+    const { app, decide, resumeAfterDecision, session, indexActions, service } = build();
     const events: ChatEvent[] = [];
     const unsubscribe = chatBus.subscribe((e) => events.push(e));
     let res;
@@ -538,6 +539,7 @@ describe('POST /chat/actions/:id/decision', () => {
     expect(decide).toHaveBeenCalledWith('act1', 'u1', 'denied');
     expect(events).toContainEqual({ type: 'decision', user_id: 'u1', conversation_id: 'c1', action_id: 'act1', status: 'denied' });
     expect(resumeAfterDecision.mock.calls[0][1]).toMatchObject({ id: 'act1', status: 'denied' });
+    expect(service.afterDecisions).toHaveBeenCalledWith([expect.objectContaining({ id: 'act1', status: 'denied' })]);
     expect(res.json()).toEqual({ action: expect.objectContaining({ id: 'act1', status: 'denied' }), queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
     expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
     expect(session.checkPin).not.toHaveBeenCalled();
@@ -1120,7 +1122,7 @@ describe('POST /chat/actions/decisions (batch)', () => {
 
   it('proves the approval, decides both, resumes once and answers queued', async () => {
     const decide = decideById();
-    const { app, session, resumeAfterDecision, indexActions } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const { app, session, resumeAfterDecision, indexActions, service } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
     const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }, { id: 'a2', decision: 'deny' }]);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'denied' }], skipped: [], queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
@@ -1137,6 +1139,8 @@ describe('POST /chat/actions/decisions (batch)', () => {
       expect.objectContaining({ id: 'a1', status: 'approved' }),
       expect.objectContaining({ id: 'a2', status: 'denied' }),
     ]);
+    // The decision hook (agentic board F-19) sees every decided row of the batch.
+    expect(service.afterDecisions).toHaveBeenCalledWith([expect.objectContaining({ id: 'a1', status: 'approved' }), expect.objectContaining({ id: 'a2', status: 'denied' })]);
   });
 
   it('a wrong PIN on the second approval is 401 and decides nothing', async () => {

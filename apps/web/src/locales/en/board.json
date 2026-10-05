@@ -358,5 +358,7 @@
   "último envio: {{when}}": "last sent: {{when}}",
   "≠ {{status}} aqui": "≠ {{status}} here",
   "▮_ Abrir terminal para esta task": "▮_ Open a terminal for this task",
-  "▮_ Ir para o terminal": "▮_ Go to the terminal"
+  "▮_ Ir para o terminal": "▮_ Go to the terminal",
+  "Checks obrigatórios": "Required checks",
+  "workflows, um por linha; vazio = todas as execuções do PR passam": "workflows, one per line; empty = every run of the PR passes"
 }

@@ -54,6 +54,24 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await db.automationRun.count({ where: { taskId } })).toBe(1);
   });
 
+  it('a triggered run (spike R2): one per (card, role, PR head), never again after it ended, a new head gets its own', async () => {
+    const fixer = (instance: string, sha: string) => runs.claim({ project_id: projectId, task_id: taskId, role: 'fixer', instance, trigger_sha: sha });
+    const results = await Promise.all([fixer('blue', 'h1'), fixer('green', 'h1')]);
+    const won = results.filter((r) => r !== null);
+    expect(won).toHaveLength(1);
+    expect(won[0]).toMatchObject({ role: 'fixer', trigger_sha: 'h1' });
+    await runs.update(won[0]!.id, won[0]!.claimed_by, { status: 'blocked', ended_at: new Date() });
+    // ended blocked: the same head never makes another run
+    expect(await fixer('blue', 'h1')).toBeNull();
+    const next = await fixer('blue', 'h2');
+    expect(next).toMatchObject({ trigger_sha: 'h2' });
+    expect(await runs.countTriggered(taskId, 'fixer', 'conflict_cap')).toBe(2);
+    await runs.update(next!.id, 'blue', { status: 'blocked', waiting_reason: 'conflict_cap', ended_at: new Date() });
+    expect(await runs.countTriggered(taskId, 'fixer', 'conflict_cap')).toBe(1);
+    // queue runs carry no trigger and are not limited by it
+    expect(await claim('blue')).not.toBeNull();
+  });
+
   it('many concurrent claims across two colours still leave one active run', async () => {
     const results = await Promise.all(Array.from({ length: 8 }, (_, i) => claim(i % 2 ? 'blue' : 'green')));
     expect(results.filter((r) => r !== null)).toHaveLength(1);

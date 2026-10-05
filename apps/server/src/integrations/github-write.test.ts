@@ -39,8 +39,10 @@ describe('github write client', () => {
   });
 
   it('reads mergeability', async () => {
-    const f = vi.fn(async () => json(200, { mergeable: null, mergeable_state: 'unknown', head: { sha: 'h' }, base: { ref: 'main' } }));
-    expect(await createGithubWriteClient(f).pull('t', 'a/b', 9)).toEqual({ mergeable: null, mergeable_state: 'unknown', head_sha: 'h', base_ref: 'main' });
+    const f = vi.fn(async () => json(200, { mergeable: null, mergeable_state: 'unknown', head: { sha: 'h', ref: 'TER-1-x', repo: { full_name: 'fork/b' } }, base: { ref: 'main' } }));
+    expect(await createGithubWriteClient(f).pull('t', 'a/b', 9)).toEqual({ mergeable: null, mergeable_state: 'unknown', head_sha: 'h', head_ref: 'TER-1-x', head_repo: 'fork/b', base_ref: 'main' });
+    const gone = async () => json(200, { mergeable: true, mergeable_state: 'clean', head: { sha: 'h', ref: 'x', repo: null }, base: { ref: 'main' } });
+    expect((await createGithubWriteClient(gone).pull('t', 'a/b', 9)).head_repo).toBeNull();
     expect(call(f).url).toBe('https://api.github.com/repos/a/b/pulls/9');
   });
 
@@ -79,6 +81,20 @@ describe('github write client', () => {
     expect(call(f)).toMatchObject({ url: 'https://api.github.com/repos/a/b/pulls/9/merge', method: 'PUT', body: { sha: 'h', commit_title: 'T', merge_method: 'squash' } });
     expect(await createGithubWriteClient(async () => json(409, {})).merge('t', 'a/b', 9, i)).toEqual({ merged: false, sha: null });
     expect(await kindOf(createGithubWriteClient(async () => json(405, {})).merge('t', 'a/b', 9, i))).toBe('not_mergeable');
+  });
+
+  it('compares the head with the base branch', async () => {
+    const f = vi.fn(async () => json(200, { ahead_by: 2, behind_by: 3, files: [] }));
+    expect(await createGithubWriteClient(f).compare('t', 'a/b', 'main', 'h1')).toEqual({ ahead_by: 2, behind_by: 3 });
+    expect(call(f).url).toBe('https://api.github.com/repos/a/b/compare/main...h1?per_page=1');
+  });
+
+  it('updates a branch behind its base with the head guard; 422 is not updated', async () => {
+    const f = vi.fn(async () => json(202, { message: 'Updating pull request branch.' }));
+    expect(await createGithubWriteClient(f).updateBranch('t', 'a/b', 9, 'h')).toBe(true);
+    expect(call(f)).toMatchObject({ url: 'https://api.github.com/repos/a/b/pulls/9/update-branch', method: 'PUT', body: { expected_head_sha: 'h' } });
+    expect(await createGithubWriteClient(async () => json(422, {})).updateBranch('t', 'a/b', 9, 'h')).toBe(false);
+    expect(await kindOf(createGithubWriteClient(async () => json(403, {})).updateBranch('t', 'a/b', 9, 'h'))).toBe('forbidden');
   });
 
   it('types write failures', async () => {

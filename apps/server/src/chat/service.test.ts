@@ -4018,3 +4018,30 @@ describe('a reply to a card of the thread (TER-849)', () => {
     expect(vi.mocked(runner.run)).not.toHaveBeenCalled();
   });
 });
+
+// Agentic board F-19: the server's own cards act on approval through the decision hook, never by injection.
+describe('ChatService.afterDecisions', () => {
+  const service = () => new ChatService({ repos: {} as Repositories, agents: {} as never, runnerFor: () => ({}) as RunnerClient, indexMessage: async () => {} });
+  const row = (over: Partial<ChatAction>) => ({ id: 'a1', tool: 'automation_merge', status: 'approved', ...over }) as ChatAction;
+
+  it('runs the hook of each approved row of its tool, once per row, and never for a denial or another tool', async () => {
+    const s = service();
+    const hook = vi.fn(async () => {});
+    s.onApproved('automation_merge', hook);
+    s.afterDecisions([row({ id: 'a1' }), row({ id: 'a2', status: 'denied' }), row({ id: 'a3', tool: 'close_tab' })]);
+    await vi.waitFor(() => expect(hook).toHaveBeenCalledTimes(1));
+    expect(hook).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
+  });
+
+  it('a failing hook never throws into the decision', async () => {
+    const s = service();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const hook = vi.fn(async () => {
+      throw new Error('boom');
+    });
+    s.onApproved('automation_merge', hook);
+    expect(() => s.afterDecisions([row({})])).not.toThrow();
+    await vi.waitFor(() => expect(errors).toHaveBeenCalledWith('chat: approval hook failed', expect.objectContaining({ action_id: 'a1', tool: 'automation_merge' })));
+    errors.mockRestore();
+  });
+});

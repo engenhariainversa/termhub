@@ -313,6 +313,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     }
 
     chatBus.publish({ type: 'decision', user_id: user.id, conversation_id: action.conversation_id, action_id: action.id, status });
+    // The server's own cards (a merge above the level) act on approval here (agentic board F-19).
+    deps.chat.afterDecisions([action]);
     void indexActions(user.id, [action]);
     const actionId = action.id;
     // Same rule as the web route: the approval is already decided and published, so a grant that fails
@@ -400,6 +402,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     if (toDecide.length === 0) throw conflict('Estas ações já foram decididas');
     const result = await decideMany(repos, user.id, toDecide);
     const decided = result.decided;
+    deps.chat.afterDecisions(decided);
     void indexActions(user.id, decided);
     const skippedIds = new Set(firstSkipped.map((s) => s.id));
     const skipped = [...firstSkipped, ...result.skipped.filter((s) => !skippedIds.has(s.id))];

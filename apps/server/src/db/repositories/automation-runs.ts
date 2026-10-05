@@ -30,6 +30,8 @@ export interface AutomationRun {
   last_typed_at: Date | null;
   /** when the chat was woken for a tab that keeps stopping (one wake per run); null = never */
   woken_at: Date | null;
+  /** the PR head a server-started run answers (a conflict fixer, spike R2); null = a run from the queue */
+  trigger_sha: string | null;
   /** the server instance (colour) driving the run */
   claimed_by: string;
   heartbeat_at: Date;
@@ -72,6 +74,7 @@ const map = (r: Row): AutomationRun => ({
   allowed_tools: toolsOf(r.allowedTools),
   last_typed_at: r.lastTypedAt,
   woken_at: r.wokenAt,
+  trigger_sha: r.triggerSha,
   claimed_by: r.claimedBy,
   heartbeat_at: r.heartbeatAt,
   started_at: r.startedAt,
@@ -94,11 +97,15 @@ const active = { in: [...ACTIVE_RUN_STATUSES] };
 export class AutomationRunsRepository {
   constructor(private db: PrismaClient) {}
 
-  /** A new `queued` run on the card, or null when the card already has an active run ("already taken"). */
-  async claim(i: { project_id: string; task_id: string; role: RunRole; instance: string }): Promise<AutomationRun | null> {
+  /**
+   * A new `queued` run on the card, or null when the card already has an active run ("already taken") or,
+   * with `trigger_sha`, when a run of this role was already made for that trigger, in any status (spike R2:
+   * the server never starts two runs for the same PR head, and never recreates one that ended).
+   */
+  async claim(i: { project_id: string; task_id: string; role: RunRole; instance: string; trigger_sha?: string | null }): Promise<AutomationRun | null> {
     try {
       const row = await this.db.automationRun.create({
-        data: { id: newId(), projectId: i.project_id, taskId: i.task_id, role: i.role, status: 'queued', claimedBy: i.instance },
+        data: { id: newId(), projectId: i.project_id, taskId: i.task_id, role: i.role, status: 'queued', claimedBy: i.instance, triggerSha: i.trigger_sha ?? null },
       });
       return map(row);
     } catch (e) {
@@ -224,6 +231,22 @@ export class AutomationRunsRepository {
           AND "ended_at" > now() - make_interval(secs => CAST(${backoffMs / 1000} AS double precision))
       ) AS "recent"`;
     return { consecutive, recent: hit?.recent === true };
+  }
+
+  /**
+   * The card's server-started runs of a role that count against its cap (`fix_attempts`, spike R2): runs
+   * whose trigger is set, minus the markers written when the cap was reached (`exceptReason`).
+   */
+  async countTriggered(taskId: string, role: RunRole, exceptReason: string): Promise<number> {
+    return this.db.automationRun.count({
+      where: { taskId, role, triggerSha: { not: null }, OR: [{ waitingReason: null }, { waitingReason: { not: exceptReason } }] },
+    });
+  }
+
+  /** The branches the card's runs worked on: the only PR heads the merge executor merges for it. */
+  async branchesOfTask(taskId: string): Promise<string[]> {
+    const rows = await this.db.automationRun.findMany({ where: { taskId, branch: { not: null } }, distinct: ['branch'], select: { branch: true } });
+    return rows.map((r) => r.branch!).filter((b) => b.length > 0);
   }
 
   async activeByTab(tabId: string): Promise<AutomationRun | null> {

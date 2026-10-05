@@ -101,6 +101,11 @@ export class TaskPullRequestsRepository {
     });
   }
 
+  /** The level the merge executor computed for the PR's files (spec D6): `pr`…`release`, or `store`. */
+  async setChangedLevel(projectId: string, repo: string, number: number, level: string): Promise<void> {
+    await this.db.taskPullRequest.updateMany({ where: { projectId, repo, number }, data: { changedLevel: level } });
+  }
+
   async listByTasks(taskIds: string[]): Promise<TaskPullRequest[]> {
     if (taskIds.length === 0) return [];
     return (await this.db.taskPullRequest.findMany({ where: { taskId: { in: taskIds } }, orderBy: [{ number: 'desc' }] })).map(map);

@@ -13,7 +13,16 @@ export type IneligibleReason =
   | 'repo_missing'
   // set by the dispatcher when it found no place for an eligible card (spec §8 step 3, D14)
   | 'no_account'
-  | 'machine_offline';
+  | 'machine_offline'
+  // set by the merge executor on a card whose green PR is not merged yet (spec §10.1, spike R1)
+  | 'merge_needs_approval'
+  | 'merge_store'
+  | 'merge_checks_pending'
+  | 'merge_base_red'
+  | 'merge_base_pending'
+  | 'merge_updating'
+  | 'merge_no_write'
+  | 'merge_conflict_cap';
 
 /** What the card shows when it is tagged but does not run (spec §5). `not_in_todo` is not shown: backlog, doing and done are not "waiting". */
 export const REASON_TEXT: Record<IneligibleReason, string> = {
@@ -27,6 +36,14 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   repo_missing: tk('Repositório não configurado no Setup'),
   no_account: tk('Sem conta com folga'),
   machine_offline: tk('Máquina do agente desligada'),
+  merge_needs_approval: tk('Merge esperando sua aprovação no chat'),
+  merge_store: tk('precisa de build nas lojas'),
+  merge_checks_pending: tk('Esperando os checks obrigatórios do PR'),
+  merge_base_red: tk('Branch base vermelha'),
+  merge_base_pending: tk('Esperando a CI e a entrega da branch base'),
+  merge_updating: tk('Atualizando o PR com a branch base'),
+  merge_no_write: tk('Integração do GitHub sem permissão de escrita'),
+  merge_conflict_cap: tk('PR com conflito depois das tentativas de correção'),
 };
 
 export interface EligibilityInput {

@@ -10,6 +10,8 @@ export interface CiSyncDeps {
   /** last ETag of the pulls list, per project (in memory: a restart costs one full list) */
   etags: Map<string, string>;
   now?: () => Date;
+  /** The merge executor (agentic board §10.1), run after the sync's writes — only for a project with automation on. */
+  merge?: (projectId: string) => Promise<void>;
 }
 export type CiSyncResult = { skipped: 'no_repo' | 'not_allowed' } | { pulls: number | null; checked: number };
 
@@ -52,7 +54,8 @@ async function cardsNamed(repos: Repositories, projectId: string, key: string, p
 /** One project's CI sync (spec 2026-09-26 progress-panel §5.5). */
 export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promise<CiSyncResult> {
   const { repos } = deps;
-  const repo = (await repos.projectSetup.get(projectId)).data.repo;
+  const setup = (await repos.projectSetup.get(projectId)).data;
+  const repo = setup.repo;
   if (!repo?.integration_id || !repo.full_name) {
     setCiError(projectId, null);
     return { skipped: 'no_repo' };
@@ -66,6 +69,7 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
     return { skipped: 'not_allowed' };
   }
 
+  let result: CiSyncResult;
   try {
     let pulls: number | null = null;
     const page = await deps.github.listPulls(token, repo.full_name, deps.etags.get(projectId) ?? null);
@@ -89,9 +93,12 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
       }
     }
     setCiError(projectId, null);
-    return { pulls, checked: seen.size };
+    result = { pulls, checked: seen.size };
   } catch (e) {
     if (e instanceof GithubCiError) setCiError(projectId, MESSAGES[e.kind](e.status));
     throw e;
   }
+  // A project that never turned automation on gets nothing more than the sync (spec D3).
+  if (setup.automation?.enabled && deps.merge) await deps.merge(projectId);
+  return result;
 }

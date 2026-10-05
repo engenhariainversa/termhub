@@ -10,6 +10,7 @@ import { ControlError, type ControlContext } from '../control/context.js';
 import { readScreen } from '../control/screen.js';
 import type { ChatAction, ChatActionClass } from '../db/repositories/chat-actions.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
+import type { Repositories } from '../db/repositories/index.js';
 import type { Tab } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { chatBus } from './bus.js';
@@ -349,16 +350,24 @@ async function ask(ctx: ControlContext, call: GatedCall, conversationId: string,
     actionNotRecorded();
   }
   row = await bindLateOrigin(ctx, call, conversationId, row);
-  // Enriched the same way, and only in this one place, as `GET /api/chat`'s trail — the browser
-  // must never resolve a machine/project/tab name or build the sentence itself. Scoped to the calling
-  // user: the model on a gated token could name someone else's task/tab/project id in `call.args`
-  // (exactly what a prompt injected into a terminal screen would aim for), and this card must never
-  // confirm that a foreign id exists, let alone show its name, before the call that would 404 on it.
-  const [card] = await describeActions(ctx.repos, [row], ctx.scope.user.id);
+  await publishCard(ctx.repos, ctx.scope.user.id, row);
+  return { ok: false, code: 'CONFIRMATION_PENDING', message: PENDING(call.tool) };
+}
+
+/**
+ * Puts a pending card in front of the person (every open screen, and the phone's push). Enriched the same
+ * way, and only in this one place, as `GET /api/chat`'s trail — the browser must never resolve a
+ * machine/project/tab name or build the sentence itself. Scoped to the person the card is for: the model
+ * on a gated token could name someone else's task/tab/project id in `call.args` (exactly what a prompt
+ * injected into a terminal screen would aim for), and this card must never confirm that a foreign id
+ * exists, let alone show its name, before the call that would 404 on it.
+ */
+async function publishCard(repos: Repositories, userId: string, row: ChatAction): Promise<void> {
+  const [card] = await describeActions(repos, [row], userId);
   chatBus.publish({
     type: 'confirmation',
-    user_id: ctx.scope.user.id,
-    conversation_id: conversationId,
+    user_id: userId,
+    conversation_id: row.conversation_id,
     action_id: row.id,
     tool: row.tool,
     args: row.args,
@@ -370,7 +379,42 @@ async function ask(ctx: ControlContext, call: GatedCall, conversationId: string,
     subagent: card.subagent,
     created_at: row.created_at,
   });
-  return { ok: false, code: 'CONFIRMATION_PENDING', message: PENDING(call.tool) };
+}
+
+/**
+ * A card the server asks by itself, for automatic work (agentic board D7: a merge above the project's
+ * level). It is the gate's pending card — same row, same class rules, same publish as `ask()` — in the
+ * owner's most recent conversation of the project (opened when there is none), but it is never a
+ * concierge proposal: the row is born injected (the model is never told to repeat a call it never made)
+ * and its approval is acted on by the server (`ChatService.onApproved`). Asked once per `key`, whatever
+ * became of the earlier card: null when the key was already asked.
+ */
+export async function askForAutomation(
+  repos: Repositories,
+  ownerId: string,
+  projectId: string,
+  payload: { tool: string; args: Record<string, unknown>; key: string },
+): Promise<ChatAction | null> {
+  if (await repos.chatActions.findLatestByKeyInProject(ownerId, projectId, payload.key)) return null;
+  const conversation = (await repos.chat.findLatestActiveForProject(projectId, ownerId)) ?? (await repos.chat.getOrCreateForProject(ownerId, projectId));
+  let row: ChatAction;
+  try {
+    row = await repos.chatActions.insertPending({
+      conversation_id: conversation.id,
+      tool: payload.tool,
+      args: payload.args,
+      class: actionClass(payload.tool, payload.args) === 'irreversible' ? 'irreversible' : 'write',
+      idempotency_key: payload.key,
+      project_id: projectId,
+      injected: true,
+    });
+  } catch (e) {
+    // the other colour asked the same key in the same instant: its card is the one
+    if (await repos.chatActions.findOpenByKey(conversation.id, payload.key)) return null;
+    throw e;
+  }
+  await publishCard(repos, ownerId, row);
+  return row;
 }
 
 /**

@@ -411,6 +411,8 @@ export class ChatService {
   /** Decisions whose `markInjectedMany` failed in this process — see `drainNextDecision`. In memory on
    * purpose: the row itself is untouched, so a restart tries it again with a healthy database. */
   private unmarkable = new Set<string>();
+  /** Server work run when a person approves one of the server's own cards, by tool (`onApproved`). */
+  private approvedHooks = new Map<string, (action: ChatAction) => Promise<void>>();
   /** Who this process is in `chat_live_runs` (spec 2026-09-26 panel §3): a random id per process. */
   readonly instanceId = randomUUID();
   /** Set by `suspendAll` (a graceful shutdown): a run that ends now leaves its turns open for the
@@ -707,6 +709,32 @@ export class ChatService {
     const gone = await this.deps.repos.chatSubagents.setStatus(subagentId, 'interrupted', { from: ['running', 'stopping'] });
     if (gone) chatBus.publish({ type: 'subagent', user_id: user.id, conversation_id: conversationId, subagent: toSubagentView(gone) });
     throw new HttpError(409, 'O processo deste subagente já terminou', 'SUBAGENT_GONE');
+  }
+
+  /**
+   * Registers what the server does when a person approves a card of `tool` that the server asked itself
+   * (agentic board F-19: `automation_merge` → `mergeApproved`). Such cards are born injected, so the
+   * concierge never hears of them: this hook is their only effect.
+   */
+  onApproved(tool: string, fn: (action: ChatAction) => Promise<void>): void {
+    this.approvedHooks.set(tool, fn);
+  }
+
+  /**
+   * The decision hook, called by every path that decides cards — the web's single and batch routes, the
+   * phone's single and batch routes — right after the rows are decided. Approved rows with a hook run it
+   * in the background; a failure is logged by code and never turns the decision into an error (the hook
+   * owner retries on its own: the merge executor picks an approved card up on its next pass).
+   */
+  afterDecisions(actions: ChatAction[]): void {
+    for (const action of actions) {
+      if (action.status !== 'approved') continue;
+      const hook = this.approvedHooks.get(action.tool);
+      if (!hook) continue;
+      void Promise.resolve()
+        .then(() => hook(action))
+        .catch((err: unknown) => console.error('chat: approval hook failed', { action_id: action.id, tool: action.tool, error: failureLabel(err) }));
+    }
   }
 
   /**

@@ -186,4 +186,44 @@ describe('startDispatcher (fakes)', () => {
     expect(a).not.toBe(b);
     expect(a).toContain(`-${process.pid}-`);
   });
+
+  // Spike R2 (TER-965): the merge executor's conflict fixer goes through the same claim as the queue.
+  describe('startTriggered', () => {
+    const fixer = { projectId: 'p1', taskId: 'c1', role: 'fixer' as const, triggerSha: 'h1', branch: 'TER-5-x', base: 'main', prompt: 'p' };
+    const base = (over: { paused?: boolean; enabled?: boolean; claim?: unknown } = {}) => ({
+      projects: { findById: async () => ({ id: 'p1', owner_id: 'u1' }) },
+      automationPauses: { state: async () => ({ user: null, project: over.paused ? new Date() : null }) },
+      users: { findById: async () => ({ id: 'u1' }) },
+      projectSetup: { get: async () => ({ data: { automation: { enabled: over.enabled ?? true, max_parallel: null } } }) },
+      tasks: { findById: async () => ({ id: 'c1', project_id: 'p1' }) },
+      automationRuns: { claim: async () => over.claim ?? null, release: async () => true },
+      projectMachines: { listByProject: async () => [] },
+    });
+
+    it('draining, paused or automation off: halted, nothing claimed', async () => {
+      const draining = recordingRepos(base());
+      expect(await startDispatcher(deps(draining.repos, { lifecycle: { draining: true } }), { schedule: false }).startTriggered(fixer)).toBe('halted');
+      expect(draining.calls).toEqual([]);
+      for (const over of [{ paused: true }, { enabled: false }]) {
+        const { repos, calls } = recordingRepos(base(over));
+        expect(await startDispatcher(deps(repos), { schedule: false }).startTriggered(fixer)).toBe('halted');
+        expect(calls).not.toContain('automationRuns.claim');
+      }
+    });
+
+    it('claims with the PR head as the trigger; a trigger already used (or an active run) is taken', async () => {
+      const claim = vi.fn(async () => null);
+      const { repos } = recordingRepos({ ...base(), automationRuns: { claim, release: async () => true } });
+      expect(await startDispatcher(deps(repos), { schedule: false }).startTriggered(fixer)).toBe('taken');
+      expect(claim).toHaveBeenCalledWith({ project_id: 'p1', task_id: 'c1', role: 'fixer', instance: 'test', trigger_sha: 'h1' });
+    });
+
+    it('no machine for it now: the claim is let go (the trigger stays free) and it waits', async () => {
+      const release = vi.fn(async () => true);
+      const { repos } = recordingRepos({ ...base(), automationRuns: { claim: async () => ({ id: 'r1', task_id: 'c1' }), release } });
+      expect(await startDispatcher(deps(repos), { schedule: false }).startTriggered(fixer)).toBe('waiting');
+      expect(release).toHaveBeenCalledWith('r1', 'test');
+    });
+  });
 });
+
