@@ -17,7 +17,7 @@ function titleOf(prompt: SessionState['pinPrompt']): string {
   // The chat store names the kind in `title`; this is the fallback when it could not.
   if (prompt?.decision === 'approve_project_always') return t('Liberar sem prazo neste projeto');
   if (prompt?.decision === 'delete_account') return t('Excluir minha conta');
-  if (prompt?.decision === 'automation_setup') return 'Trabalho automático';
+  if (prompt?.decision === 'automation_setup') return t('Trabalho automático');
   const n = prompt?.actionIds?.length ?? 1;
   return n > 1 ? t('Autorizar {{n}} ações', { n }) : t('Autorizar esta ação');
 }
