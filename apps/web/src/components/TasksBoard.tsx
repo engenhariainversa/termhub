@@ -7,6 +7,8 @@ import { useMonitor } from '../lib/monitor';
 import { readLastMachine, writeLastMachine } from '../lib/last-machine';
 import { cardTitle, ticketKey } from '../lib/ticket-link';
 import { COLUMN_CATEGORY_LABEL, PROVIDER_LABEL, TASK_TYPE_LABEL, type ColumnCategory, type Task, type TaskColumn, type TaskPatchInput, type TaskType } from '../lib/types';
+import { loadIneligibleReasons, untaggedUnderEpic } from '../lib/automation';
+import { AutomationBadge } from './AutomationBadge';
 import { MachinePicker } from './MachinePicker';
 import { TaskEditor, type PlaceTarget } from './TaskEditor';
 import { TypeBadge } from './TypeBadge';
@@ -39,10 +41,12 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [pickingMachineFor, setPickingMachineFor] = useState<string | null>(null);
+  const [reasons, setReasons] = useState<Map<string, string>>(new Map());
 
   const load = useCallback(async () => {
     try {
-      const r = await api.tasks.list(projectId);
+      const [r, why] = await Promise.all([api.tasks.list(projectId), loadIneligibleReasons(projectId)]);
+      setReasons(why);
       setTasks(r.tasks);
       setColumns([...r.columns].sort((a, b) => a.position - b.position));
       // a remembered epic that no longer exists would otherwise filter every card out with no visible cause
@@ -111,6 +115,16 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
     } catch (e) {
       fail(e, 'Erro ao salvar o card');
     }
+  };
+
+  /** Tags or untags a card; an epic reaches its cards too, so the board reloads (the tag and the reasons). */
+  const setAuto = async (id: string, auto: boolean) => {
+    try {
+      await api.tasks.update(id, { auto });
+    } catch (e) {
+      fail(e, 'Erro ao marcar o card para trabalho automático');
+    }
+    await load();
   };
 
   /** Moves locally (reindexing both columns) and persists. `position` is the server position. */
@@ -287,6 +301,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
                       next={next}
                       onMoveNext={next ? () => void move(task.id, next.id, 0) : undefined}
                       terminalHref={task.tab_id ? `/projects/${projectId}?tab=${task.tab_id}` : null}
+                      autoReason={reasons.get(task.id) ?? null}
                     />
                   </li>
                 ))}
@@ -309,6 +324,8 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
           onLinkTab={(tabId) => void linkTab(editing.id, tabId)}
           onDetachTerminal={() => void detachTerminal(editing.id)}
           onClose={closeCard}
+          epicUntagged={editing.type === 'epic' ? untaggedUnderEpic(editing, loaded) : 0}
+          onSetAuto={(auto) => void setAuto(editing.id, auto)}
           onSave={(patch) => void update(editing.id, patch)}
           onPlace={(target) => void place(editing.id, target)}
           onDelete={() => void remove(editing.id)}
@@ -410,13 +427,15 @@ interface CardProps {
   next?: TaskColumn;
   onMoveNext?: () => void;
   terminalHref: string | null;
+  /** why a tagged card cannot be taken yet (tooltip of the badge's warning dot) */
+  autoReason: string | null;
 }
 
 /** Visible on hover, on keyboard focus (anywhere in the card) and always on touch (no hover). */
 const CARD_ACTION = 'invisible shrink-0 rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-fg group-hover:visible group-focus-within:visible focus:visible [@media(hover:none)]:visible';
 
 /** Renaming happens in the card editor's "Título" field; the board card only opens it (spec §7). */
-function TaskCard({ task, epicTitle, dragging, onDragStart, onDragEnd, onOpen, next, onMoveNext, terminalHref }: CardProps) {
+function TaskCard({ task, epicTitle, dragging, onDragStart, onDragEnd, onOpen, next, onMoveNext, terminalHref, autoReason }: CardProps) {
   // A native drag can still leave a trailing click on the source element once it is dropped; this
   // flag outlives the drag by one tick so that stray click does not also open the card.
   const draggedRef = useRef(false);
@@ -462,6 +481,7 @@ function TaskCard({ task, epicTitle, dragging, onDragStart, onDragEnd, onOpen, n
           <span className="mr-1.5 font-mono text-[10px] text-fg-dim">{task.ref}</span>
           {cardTitle(task.title, task.external_ref)}
         </span>
+        {task.auto && <AutomationBadge reason={autoReason} />}
         {total > 0 && (
           <span className="shrink-0 rounded bg-bg-4 px-1 text-[10px] tabular-nums text-fg-muted" title={`${done} de ${total} subtarefas concluídas`}>
             ✓ {done}/{total}

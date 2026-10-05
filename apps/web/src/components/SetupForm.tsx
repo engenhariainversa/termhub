@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useData } from '../lib/data';
 import { machineLabel } from '../lib/machine-labels';
+import { AutomationSetup } from './AutomationSetup';
 import { ProjectAiCard } from './ProjectAiCard';
 import {
   APPROVAL_LABEL,
@@ -362,6 +363,8 @@ export function SetupForm({ project }: Props) {
           ))}
         </ul>
       </Card>
+
+      {data.automation && <AutomationSetup value={data.automation} onChange={(next) => patch('automation', next)} />}
 
       <div className="sticky bottom-0 flex items-center gap-3 border-t border-line bg-bg pb-6 pt-3">
         <button type="button" className="btn-primary" onClick={() => void save()} disabled={busy || !dirty || anyDuplicate}>

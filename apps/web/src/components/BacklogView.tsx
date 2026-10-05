@@ -4,6 +4,7 @@ import { api, ApiError } from '../lib/api';
 import { backlogSections, cardPath, openCount, WORK_TYPES, type BacklogSection } from '../lib/board';
 import { useData } from '../lib/data';
 import { TASK_TYPE_LABEL, type Task, type TaskType } from '../lib/types';
+import { AutomationBadge } from './AutomationBadge';
 import { TypeBadge } from './TypeBadge';
 
 /**
@@ -112,6 +113,7 @@ export function BacklogView({ projectId }: { projectId: string }) {
                 {s.epic.ref}
               </button>
               <span className="font-medium">{s.epic.title}</span>
+              {s.epic.auto && <AutomationBadge />}
               <span className="ml-auto text-xs text-fg-dim">
                 {s.done}/{s.total} feitas
               </span>
@@ -134,6 +136,7 @@ export function BacklogView({ projectId }: { projectId: string }) {
                   <TypeBadge type={t.type} />
                   <span className="font-mono text-[11px] text-fg-dim">{t.ref}</span>
                   <span className="flex-1 break-words">{t.title}</span>
+                  {t.auto && <AutomationBadge />}
                   {(t.subtasks?.length ?? 0) > 0 && (
                     <span className="shrink-0 rounded bg-bg-4 px-1 text-[10px] tabular-nums text-fg-muted">
                       ✓ {t.subtasks!.filter((x) => x.status === 'done').length}/{t.subtasks!.length}

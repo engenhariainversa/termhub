@@ -16,7 +16,7 @@ vi.mock('../setup/tickets-sync.js', () => ({
   forgetSync: vi.fn(),
 }));
 
-function build(saved: unknown[], ai?: unknown) {
+function build(saved: unknown[], ai?: unknown, automation?: unknown) {
   const app = Fastify();
   applyErrorHandler(app);
   app.addHook('preHandler', async (request) => {
@@ -30,7 +30,7 @@ function build(saved: unknown[], ai?: unknown) {
     integrations: { findById: vi.fn(async (id: string) => ({ id, owner_id: 'u1', provider: 'github', config: {} })) },
     machines: { findById: vi.fn() },
     projectSetup: {
-      get: vi.fn(async () => ({ data: { ticket_sources: saved, ...(ai ? { ai } : {}) } })),
+      get: vi.fn(async () => ({ data: { ticket_sources: saved, ...(ai ? { ai } : {}), ...(automation ? { automation } : {}) } })),
       save,
     },
     tickets: { pruneSource },
@@ -90,5 +90,25 @@ describe('full setup PUT and the ai block (TER-589)', () => {
       expect(res.statusCode).toBe(200);
       expect((save.mock.calls[0][1] as { ai: unknown }).ai).toEqual(stored);
     }
+  });
+});
+
+describe('setup PUT and the automation block', () => {
+  const stored = { enabled: true, autonomy: 'merge', max_parallel: 2 };
+
+  it('keeps the stored block when the body omits it (older clients)', async () => {
+    const { app, save } = build([], undefined, stored);
+    const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect((save.mock.calls[0][1] as { automation: unknown }).automation).toEqual(stored);
+  });
+
+  it('replaces it when the body sends one', async () => {
+    const { app, save } = build([], undefined, stored);
+    const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { automation: { enabled: false } } });
+    expect(res.statusCode).toBe(200);
+    const sent = (save.mock.calls[0][1] as { automation: { enabled: boolean; autonomy: string } }).automation;
+    expect(sent.enabled).toBe(false);
+    expect(sent.autonomy).toBe('pr');
   });
 });

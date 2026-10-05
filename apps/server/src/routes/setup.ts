@@ -39,6 +39,10 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
     const before = stored.ticket_sources;
     // The ai block has its own endpoint (TER-589): a form loaded before it, or before the phone's edit, keeps it.
     if (stored.ai) data.ai = stored.ai;
+    // An older client (the phone app, a form loaded before the deploy) omits the block: its zod default
+    // would reset the stored one, so keep it. A client that sends the block is the one that edits it.
+    const sentAutomation = typeof request.body === 'object' && request.body !== null && 'automation' in request.body;
+    if (stored.automation && !sentAutomation) data.automation = stored.automation;
     const kept = new Set(data.ticket_sources.map(sourceIdentity));
     const saved = await repos.projectSetup.save(id, data);
     for (const gone of before.filter((b) => !kept.has(sourceIdentity(b)))) {
