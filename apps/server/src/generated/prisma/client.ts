@@ -138,6 +138,12 @@ export type Task = Prisma.TaskModel
  */
 export type TaskPullRequest = Prisma.TaskPullRequestModel
 /**
+ * Model AutomationEvent
+ * What the automatic work did, for the activity feed and the daily summary (agentic board). Holds ids,
+ * URLs, counts and reasons only — never terminal content or prompts. Kept 30 days (hourly purge).
+ */
+export type AutomationEvent = Prisma.AutomationEventModel
+/**
  * Model Note
  * 
  */

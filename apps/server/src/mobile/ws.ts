@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { MOBILE_API_VERSION } from '@termhub/mobile-api';
 import { canAccess } from '../auth/permissions.js';
 import { chatBus } from '../chat/bus.js';
+import { automationBus } from '../automation/events.js';
 import { rejectUpgrade, type createUpgradeRouter } from '../ws/router.js';
 import type { MobileSocketRegistry } from './revocation.js';
 import { authenticateMobileUpgrade, type MobileUpgradeDeps } from './ws-auth.js';
@@ -15,8 +16,8 @@ export interface MobileChatWsDeps extends MobileUpgradeDeps {
 /**
  * `/ws/m/chat`: the phone's server → client chat stream. A public upgrade route that authenticates
  * itself like the REST prefix does — `Authorization: Bearer thb_mob_…` plus a DPoP proof over
- * `GET <publicUrl>/ws/m/chat` bound to that token — then pushes `hello` and the user's own chat
- * events. Registered in the device's socket registry so a revoke closes it with 4401.
+ * `GET <publicUrl>/ws/m/chat` bound to that token — then pushes `hello`, the user's own chat
+ * events and the automation events of their own projects. Registered in the device's socket registry so a revoke closes it with 4401.
  * Never log a token or a proof.
  */
 export function registerMobileChatWs(router: ReturnType<typeof createUpgradeRouter>, deps: MobileChatWsDeps): WebSocketServer {
@@ -28,6 +29,8 @@ export function registerMobileChatWs(router: ReturnType<typeof createUpgradeRout
     if (!who) return;
     const { user, deviceId } = who;
     if (!(await canAccess(deps.repos, user, 'chat', 'read'))) return rejectUpgrade(socket, 403, 'Forbidden');
+    // Automation events (agentic board) name projects and cards: only for someone who may read projects.
+    const seesAutomation = await canAccess(deps.repos, user, 'projects', 'read');
 
     wss.handleUpgrade(req, socket, head, async (ws) => {
       // Closed after the upgrade so the app reads a close code, not an opaque HTTP failure.
@@ -64,10 +67,21 @@ export function registerMobileChatWs(router: ReturnType<typeof createUpgradeRout
       if (!active) return ws.close(4401, 'device revoked');
 
       ws.send(JSON.stringify({ type: 'hello', protocol: MOBILE_API_VERSION, server_time: new Date().toISOString() }));
-      unsubscribe = chatBus.subscribe((event) => {
+      const offChat = chatBus.subscribe((event) => {
         if (event.user_id !== user.id) return;
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
       });
+      // `{ type: 'automation', event }`: pauses, runs and PRs of the user's own projects (an older app drops it).
+      const offAutomation = seesAutomation
+        ? automationBus.subscribe(({ owner_id, ...event }) => {
+            if (owner_id !== user.id) return;
+            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'automation', event }));
+          })
+        : () => {};
+      unsubscribe = () => {
+        offChat();
+        offAutomation();
+      };
       log.info({ userId: user.id, deviceId }, 'mobile chat connected');
     });
   });

@@ -2,6 +2,7 @@ import { CAPABILITY_WORKTREE } from '@termhub/agent-protocol';
 import { agents } from '../agent/registry.js';
 import type { ControlContext } from '../control/context.js';
 import { eligibilityOf, REASON_TEXT, type IneligibleReason } from './eligibility.js';
+import { isPaused } from './pause.js';
 
 export interface QueueItem {
   task_id: string;
@@ -17,7 +18,7 @@ export interface QueueItem {
  * priority), each with its eligibility. Untagged cards and subtasks are not in the queue.
  */
 export async function automationQueue(ctx: ControlContext, projectId: string): Promise<QueueItem[]> {
-  await ctx.scoped.project(projectId);
+  const { project: row } = await ctx.scoped.project(projectId);
   const { repos } = ctx;
   const [cards, columns, setup, links] = await Promise.all([
     repos.tasks.listByProject(projectId),
@@ -36,7 +37,7 @@ export async function automationQueue(ctx: ControlContext, projectId: string): P
   }
   const project = {
     automation,
-    paused: false, // Task 9 wires the pause state in
+    paused: await isPaused(repos, row.owner_id, projectId),
     repo_ready: Boolean(repo?.full_name && repo.integration_id),
     capable_machines: capable,
   };

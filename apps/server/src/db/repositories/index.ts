@@ -42,6 +42,8 @@ import { DeviceEventsRepository } from './device-events.js';
 import { UserNotificationsRepository } from './user-notifications.js';
 import { TaskPullRequestsRepository } from './task-pull-requests.js';
 import { AccountDeletionRepository } from './account-deletion.js';
+import { AutomationPausesRepository } from './automation-pauses.js';
+import { AutomationEventsRepository } from './automation-events.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -87,6 +89,8 @@ export interface Repositories {
   userNotifications: UserNotificationsRepository;
   taskPullRequests: TaskPullRequestsRepository;
   accountDeletion: AccountDeletionRepository;
+  automationPauses: AutomationPausesRepository;
+  automationEvents: AutomationEventsRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
 }
@@ -136,6 +140,8 @@ export function createRepositories(db: PrismaClient): Repositories {
     userNotifications: new UserNotificationsRepository(db),
     taskPullRequests: new TaskPullRequestsRepository(db),
     accountDeletion: new AccountDeletionRepository(db),
+    automationPauses: new AutomationPausesRepository(db),
+    automationEvents: new AutomationEventsRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
 }
@@ -169,3 +175,6 @@ export type { UserNotification, UserNotificationCreateInput } from './user-notif
 export type { TaskPullRequest, PullRequestInfo, PrState, CiState, CiSummary } from './task-pull-requests.js';
 export { WATCH_MERGED_FOR_MS } from './task-pull-requests.js';
 export type { PurgedAccount, AccountDeletionLink } from './account-deletion.js';
+export type { PauseState } from './automation-pauses.js';
+export type { AutomationEvent, AutomationEventKind, AutomationEventPayload, AutomationEventInput } from './automation-events.js';
+export { AUTOMATION_EVENT_RETENTION_MS, AUTOMATION_EVENTS_PAGE_MAX } from './automation-events.js';

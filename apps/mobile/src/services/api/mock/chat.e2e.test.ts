@@ -138,7 +138,8 @@ it('streams a busy window, deltas and the final message for a normal reply', asy
 
   await jest.advanceTimersByTimeAsync(5000);
 
-  const own = collected.events.filter((e) => e.type !== 'hello');
+  // `hello` and `automation` are not chat-bound: they carry no user or conversation id.
+  const own = collected.events.filter((e): e is Exclude<TChatEvent, { type: 'hello' | 'automation' }> => e.type !== 'hello' && e.type !== 'automation');
   const messages = own.filter((e): e is Extract<TChatEvent, { type: 'message' }> => e.type === 'message');
   const deltas = own.filter((e): e is Extract<TChatEvent, { type: 'delta' }> => e.type === 'delta');
   expect(messages).toHaveLength(3); // user row, empty assistant row, final assistant row

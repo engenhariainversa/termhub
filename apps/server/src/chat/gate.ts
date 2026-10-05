@@ -29,6 +29,7 @@ const readTools = new Set([
   'list_tasks',
   'list_automation_queue',
   'get_automation_policy',
+  'list_automation_events',
   'list_tickets',
   'get_ticket',
   'read_attachment',
@@ -53,6 +54,8 @@ const writeTools = new Set([
   'set_project_machine_cwd',
   'sync_tickets',
   'import_tickets',
+  // Lifting the brake lets automatic work start again: the person says so on a card.
+  'resume_automation',
 ]);
 
 // close_tab stays irreversible. control/terminals.ts skips its per-token ownership check for a gated
@@ -93,6 +96,12 @@ export function actionClass(tool: string, args: unknown): ActionClass {
   if (tool === 'send_key') {
     const key = (args as { key?: string } | undefined)?.key;
     return typeof key === 'string' && interruptingKeys.has(key) ? 'irreversible' : 'write';
+  }
+
+  // pause_automation is the brake: on its own it only stops new work, so it never waits for a card. With
+  // interrupt it also sends Escape to the tabs running automatic work, which is the person's call.
+  if (tool === 'pause_automation') {
+    return (args as { interrupt?: unknown } | undefined)?.interrupt === true ? 'write' : 'self_mediated';
   }
 
   // unlink_project_machine only closes tabs (irreversible) when confirm: true; otherwise it either

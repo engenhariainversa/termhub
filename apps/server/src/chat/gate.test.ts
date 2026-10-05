@@ -48,6 +48,16 @@ it('treats an interrupting key as irreversible and an ordinary one as a write', 
   expect(actionClass('send_key', { tab_id: 't1', key: 'Enter' })).toBe('write');
 });
 
+it('pause_automation is the brake: self-mediated alone, a write with interrupt (it sends Escape); resume asks', () => {
+  expect(actionClass('pause_automation', {})).toBe('self_mediated');
+  expect(actionClass('pause_automation', { project_id: 'p1', interrupt: false })).toBe('self_mediated');
+  expect(actionClass('pause_automation', { project_id: 'p1', interrupt: true })).toBe('write');
+  expect(actionClass('resume_automation', { project_id: 'p1' })).toBe('write');
+  expect(actionClass('list_automation_events', { project_id: 'p1' })).toBe('read');
+  expect(defaultKindOf('pause_automation', { interrupt: true })).toBeNull();
+  expect(defaultKindOf('resume_automation', {})).toBeNull();
+});
+
 it('keys on the arguments, so a different command is a different question', () => {
   const a = idempotencyKeyFor('c1', 'send_input', { tab_id: 't1', text: 'npm test' });
   expect(idempotencyKeyFor('c1', 'send_input', { text: 'npm test', tab_id: 't1' })).toBe(a); // key order cannot matter
@@ -207,10 +217,11 @@ describe('defaultKindOf (TER-627)', () => {
     ['unlink_project_machine', { project_id: 'p1', machine_id: 'm1' }, null],
     ['sync_tickets', {}, null],
     ['import_tickets', {}, null],
+    ['resume_automation', {}, null],
   ])('%s %j → %s', (tool, args, expected) => expect(defaultKindOf(tool, args)).toBe(expected));
 
   it('every MCP tool is a read, self-mediated, a default kind, or on the list that always asks: a new tool is placed on purpose', () => {
-    const alwaysAsks = new Set(['run_command', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets']);
+    const alwaysAsks = new Set(['run_command', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation']);
     const sample: Record<string, Record<string, unknown>> = {
       open_tab: { project_id: 'p1' }, start_agent: { project_id: 'p1' }, link_tab_task: { tab_id: 't1', task_id: 'k1' }, close_tab: { tab_id: 't1' },
       send_input: { tab_id: 't1', text: 'x' }, send_key: { tab_id: 't1', key: 'Enter' },

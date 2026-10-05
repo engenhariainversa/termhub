@@ -415,6 +415,7 @@ export const ModelName = {
   TaskColumn: 'TaskColumn',
   Task: 'Task',
   TaskPullRequest: 'TaskPullRequest',
+  AutomationEvent: 'AutomationEvent',
   Note: 'Note',
   Integration: 'Integration',
   ProjectSetup: 'ProjectSetup',
@@ -461,7 +462,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "userNotification"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1794,6 +1795,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.TaskPullRequestCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.TaskPullRequestCountAggregateOutputType> | number
+        }
+      }
+    }
+    AutomationEvent: {
+      payload: Prisma.$AutomationEventPayload<ExtArgs>
+      fields: Prisma.AutomationEventFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.AutomationEventFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.AutomationEventFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload>
+        }
+        findFirst: {
+          args: Prisma.AutomationEventFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.AutomationEventFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload>
+        }
+        findMany: {
+          args: Prisma.AutomationEventFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload>[]
+        }
+        create: {
+          args: Prisma.AutomationEventCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload>
+        }
+        createMany: {
+          args: Prisma.AutomationEventCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.AutomationEventCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload>[]
+        }
+        delete: {
+          args: Prisma.AutomationEventDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload>
+        }
+        update: {
+          args: Prisma.AutomationEventUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload>
+        }
+        deleteMany: {
+          args: Prisma.AutomationEventDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.AutomationEventUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.AutomationEventUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload>[]
+        }
+        upsert: {
+          args: Prisma.AutomationEventUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationEventPayload>
+        }
+        aggregate: {
+          args: Prisma.AutomationEventAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAutomationEvent>
+        }
+        groupBy: {
+          args: Prisma.AutomationEventGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationEventGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.AutomationEventCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationEventCountAggregateOutputType> | number
         }
       }
     }
@@ -4151,7 +4226,9 @@ export const UserScalarFieldEnum = {
   chatAutodecide: 'chatAutodecide',
   chatCodexReplies: 'chatCodexReplies',
   deletionRequestedAt: 'deletionRequestedAt',
-  deletionScheduledAt: 'deletionScheduledAt'
+  deletionScheduledAt: 'deletionScheduledAt',
+  automationPausedAt: 'automationPausedAt',
+  timeZone: 'timeZone'
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
@@ -4263,6 +4340,7 @@ export const ProjectScalarFieldEnum = {
   isPublic: 'isPublic',
   agentColumnId: 'agentColumnId',
   lastTerminalAt: 'lastTerminalAt',
+  automationPausedAt: 'automationPausedAt',
   createdAt: 'createdAt'
 } as const
 
@@ -4423,6 +4501,19 @@ export const TaskPullRequestScalarFieldEnum = {
 } as const
 
 export type TaskPullRequestScalarFieldEnum = (typeof TaskPullRequestScalarFieldEnum)[keyof typeof TaskPullRequestScalarFieldEnum]
+
+
+export const AutomationEventScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  runId: 'runId',
+  kind: 'kind',
+  payload: 'payload',
+  createdAt: 'createdAt'
+} as const
+
+export type AutomationEventScalarFieldEnum = (typeof AutomationEventScalarFieldEnum)[keyof typeof AutomationEventScalarFieldEnum]
 
 
 export const NoteScalarFieldEnum = {
@@ -5384,6 +5475,7 @@ export type GlobalOmitConfig = {
   taskColumn?: Prisma.TaskColumnOmit
   task?: Prisma.TaskOmit
   taskPullRequest?: Prisma.TaskPullRequestOmit
+  automationEvent?: Prisma.AutomationEventOmit
   note?: Prisma.NoteOmit
   integration?: Prisma.IntegrationOmit
   projectSetup?: Prisma.ProjectSetupOmit

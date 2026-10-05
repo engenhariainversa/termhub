@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { tabLimitSchema } from './project-ai.js';
 import { chatAttachment } from './attachments.js';
+import { automationEventSchema } from './automation.js';
 
 /** Mirrors `ChatNotice` in `apps/server/src/db/repositories/chat.ts` (TER-588): the usage limit an answer
  *  hit, or the account that took over. Account labels are null for the machine's default login. */
@@ -376,6 +377,9 @@ export const chatEventSchema = z.discriminatedUnion('type', [
     conversation_id: z.string(),
     message_id: z.string(),
   }),
+  /** An automation event of one of the user's projects (agentic board): pauses, runs, PRs. Not chat-bound,
+   * so it carries no user or conversation id. A new event, so an older app drops it. */
+  z.object({ type: z.literal('automation'), event: automationEventSchema }),
   z.object({
     type: z.literal('message_removed'),
     user_id: z.string(),
