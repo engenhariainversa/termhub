@@ -126,6 +126,13 @@ export class TabUsageRepository {
     return new Map(rows.map((r) => [r.task_id, { tokens: Number(r.tokens), cost_usd: r.cost === null ? null : Number(r.cost) }]));
   }
 
+  /** The project's estimated cost on one day (`YYYY-MM-DD`, the owner's zone): the budget's meter. Unpriced rows count 0. */
+  async costOfDay(projectId: string, day: string): Promise<number> {
+    const rows = await this.db.$queryRaw<Array<{ cost: string | null }>>`
+      SELECT SUM("cost_usd_estimate")::text AS cost FROM "tab_usage_days" WHERE "project_id" = ${projectId} AND "day" = ${day}::date`;
+    return Number(rows[0]?.cost ?? 0);
+  }
+
   /** A project's usage per card and account, from `from` to `to` (inclusive `YYYY-MM-DD`; open when absent). */
   async sums(projectId: string, range: { from?: string; to?: string } = {}): Promise<UsageSum[]> {
     const rows = await this.db.$queryRaw<

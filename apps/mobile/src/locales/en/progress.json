@@ -65,5 +65,6 @@
   "PR #{{number}}": "PR #{{number}}",
   "{{ref}} iniciado": "{{ref}} started",
   "custo {{cost}}": "cost {{cost}}",
-  "custo {{cost}} · {{tokens}} tokens": "cost {{cost}} · {{tokens}} tokens"
+  "custo {{cost}} · {{tokens}} tokens": "cost {{cost}} · {{tokens}} tokens",
+  "Gasto do automático em 80% do orçamento diário": "Automatic work spending at 80% of the daily budget"
 }

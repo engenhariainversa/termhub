@@ -28,6 +28,8 @@ export const AGENT_EXITED = 'agent_exited';
 export const CONFLICT_CAP = 'conflict_cap';
 /** A PR whose CI is still red after `fix_attempts` fixes (spec D21, shared with the conflict fixes): a person looks at it. */
 export const CI_CAP = 'ci_cap';
+/** R8: the card's estimated cost passed `card_budget_usd`; the run is parked, not resumed. */
+export const CARD_BUDGET = 'card_budget';
 /** The agent itself said it is stuck (`report_card blocked`). */
 export const REPORTED_BLOCKED = 'reported_blocked';
 
@@ -48,6 +50,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [RESUME_CAP]: tk('O agente parou várias vezes sem terminar e o chat não soube continuar; confira a aba.'),
   [START_FAILED]: tk('O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.'),
   [AGENT_EXITED]: tk('O agente saiu de novo depois de reiniciado; confira a aba.'),
+  [CARD_BUDGET]: tk('Orçamento do card estourado; o agente não foi retomado. Confira a aba e retome quando quiser.'),
   [REPORTED_BLOCKED]: tk('O agente disse que travou e precisa de você.'),
   [DEPLOY_FAILED]: tk('O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.'),
   [DEPLOY_FAILED_NOT_PAUSED]: tk('O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.'),
@@ -75,5 +78,5 @@ export function escalationReasonText(reason: string, locale: Locale = DEFAULT_LO
  * (it stays active) but frees its `max_parallel` slot, so the dispatcher may start another card. A run
  * waiting on its account's usage limit is not one of them: it goes on by itself once the limit resets.
  */
-export const SLOT_FREE_REASONS: readonly string[] = [NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, PERMISSION_NEEDED, RESUME_CAP];
+export const SLOT_FREE_REASONS: readonly string[] = [NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET];
 

@@ -109,4 +109,13 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('tab usage (Postgres)', ()
     expect(await usage.ownerTimeZone(projectId)).toBe('America/Sao_Paulo');
     expect(await usage.ownerTimeZone('nope')).toBeNull();
   });
+
+  it('sums the project\'s cost on one day (unpriced rows count 0), in the same owner-zone day the meter writes', async () => {
+    await usage.record(write({ tab_id: `t-${projectId}-a`, day: '2026-10-04', cost_usd: 1.25 }));
+    await usage.record(write({ tab_id: `t-${projectId}-b`, day: '2026-10-04', cost_usd: null }));
+    await usage.record(write({ tab_id: `t-${projectId}-c`, day: '2026-10-05', cost_usd: 4 }));
+    expect(await usage.costOfDay(projectId, '2026-10-04')).toBe(1.25);
+    expect(await usage.costOfDay(projectId, '2026-10-05')).toBe(4);
+    expect(await usage.costOfDay(projectId, '2026-10-06')).toBe(0);
+  });
 });

@@ -111,6 +111,9 @@ export function AutomationSetup({ value, onChange }: Props) {
           <Field label={t('Orçamento diário (USD)')}>
             <NumberInput value={value.daily_budget_usd} min={0.01} max={100000} step="any" placeholder={t('Desligado')} onChange={(v) => set('daily_budget_usd', v)} />
           </Field>
+          <Field label={t('Orçamento por card (USD)')}>
+            <NumberInput value={value.card_budget_usd} min={0.01} max={100000} step="any" placeholder={t('Desligado')} onChange={(v) => set('card_budget_usd', v)} />
+          </Field>
           <Field label={t('Retomadas por card')}>
             <NumberInput value={value.resume_max} min={0} max={10} onChange={(v) => set('resume_max', v ?? 0)} />
           </Field>

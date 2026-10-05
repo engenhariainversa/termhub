@@ -22,6 +22,7 @@ export type AutomationEventKind =
   | 'paused'
   | 'resumed'
   | 'budget_hit'
+  | 'budget_warning'
   | 'ci_fix_requested'
   | 'worktree_cleanup';
 
@@ -93,9 +94,9 @@ export class AutomationEventsRepository {
   }
 
   /**
-   * Inserts the event unless a unique index already holds one like it: null then. Only `ci_fix_requested`
-   * has such an index (one per card, PR and head SHA: `automation_events_ci_fix_once`), which makes the row
-   * the red-CI loop's claim across colours (F-27).
+   * Inserts the event unless a unique index already holds one like it: null then. `ci_fix_requested`
+   * (one per card, PR and head SHA: `automation_events_ci_fix_once`, the red-CI loop's claim, F-27) and the
+   * budget notices (one per project, kind and day: `automation_events_budget_once`) have such an index.
    */
   async insertOnce(e: AutomationEventInput): Promise<AutomationEvent | null> {
     try {

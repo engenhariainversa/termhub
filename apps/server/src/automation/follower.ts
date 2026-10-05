@@ -20,8 +20,9 @@ import { isPaused } from './pause.js';
 import { runPermission } from './permission.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 import { MAX_RESTARTS } from './restart.js';
-import { ANSWER_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, TRUST_PROMPT } from './escalation-text.js';
-export { NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, PERMISSION_NEEDED, RESUME_CAP, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
+import { ANSWER_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT } from './escalation-text.js';
+import { budgetReached, cardOverBudget } from './budget.js';
+export { NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
@@ -365,6 +366,8 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
   if (inGrace(deps, tab)) return false;
   const ready = await mayAct(deps, run, log);
   if (!ready) return false;
+  // R8: past a budget nothing is resumed (a card over its own is escalated, even while paused: D24)
+  if (await holdForBudget(deps, run, ready.setup.automation, log)) return false;
   if (run.resume_count >= ready.setup.automation.resume_max) {
     // paused: the chat is not woken (it could type), but the person still learns (D24, §9.3)
     if (ready.paused) {
@@ -388,6 +391,20 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
   return true;
 }
 
+/**
+ * Spike R8 (TER-971): whether the server must hold back from typing into the run's tab for a budget. A card
+ * past `card_budget_usd` parks the run and tells the person (CARD_BUDGET); a day at `daily_budget_usd` only
+ * holds the typing, and the run goes on once the owner's day turns. Both are off by default and read nothing
+ * then. True: nothing is typed.
+ */
+export async function holdForBudget(deps: Pick<FollowerDeps, 'repos' | 'now'>, run: AutomationRun, automation: ProjectSetupData['automation'], log: Log): Promise<boolean> {
+  if (await cardOverBudget(deps.repos, run.task_id, automation)) {
+    await parkAndEscalate(deps.repos, run, CARD_BUDGET, log);
+    return true;
+  }
+  return budgetReached(deps.repos, run.project_id, automation, deps.now?.() ?? new Date(), log);
+}
+
 /** The agent exited without a hook (`idle` with AGENT_EXITED_TEXT): restart it once in the same tab.
  *  Returns true when the restart line was typed. */
 async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
@@ -400,6 +417,7 @@ async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: L
   if (inGrace(deps, tab)) return false;
   const ready = await mayAct(deps, run, log);
   if (!ready) return false;
+  if (await holdForBudget(deps, run, ready.setup.automation, log)) return false;
   if (run.restart_count >= MAX_RESTARTS) {
     // ended and told even while paused: nothing is typed (D24, §9.3)
     await finishBlocked(repos, run, AGENT_EXITED, null, log);

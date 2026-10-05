@@ -63,6 +63,12 @@ function flatPayload(payload: AutomationEventPayload | undefined): AutomationEve
   return out;
 }
 
+/** Tells the owner's sockets of an event already written (a claimed once-only row). */
+export async function publishEvent(repos: Repositories, row: AutomationEvent): Promise<void> {
+  const project = await repos.projects.findById(row.project_id);
+  if (project?.owner_id) automationBus.publish({ ...row, owner_id: project.owner_id });
+}
+
 /**
  * Writes one automation event and pushes it to the project owner's sockets. Events hold ids, URLs,
  * counts and reasons only — never terminal content, transcripts or prompts (spec D27).

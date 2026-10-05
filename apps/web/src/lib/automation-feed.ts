@@ -52,6 +52,8 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       return t('Automático retomado');
     case 'budget_hit':
       return t('Limite de gasto do automático atingido');
+    case 'budget_warning':
+      return t('Gasto do automático em 80% do orçamento diário');
     case 'ci_fix_requested':
       return t('{{ref}}: correção do CI pedida', { ref });
     case 'worktree_cleanup':

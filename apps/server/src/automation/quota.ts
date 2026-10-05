@@ -4,7 +4,7 @@ import type { Tab } from '../db/repositories/types.js';
 import { t } from '../i18n/index.js';
 import { postAutomationLine } from './chat-line.js';
 import { recordEvent } from './events.js';
-import { defaultType, mayType, type FollowerDeps } from './follower.js';
+import { defaultType, holdForBudget, mayType, type FollowerDeps } from './follower.js';
 import { isPaused } from './pause.js';
 import { QUOTA_RESUME_TEXT, serverMessage } from './prompts.js';
 
@@ -143,6 +143,8 @@ export async function resumeAfterReset(deps: FollowerDeps): Promise<void> {
       if (!cleared(run, tab, exhausted, now)) continue;
       const ready = await mayType(deps, run, log);
       if (!ready) continue;
+      // R8: a budget reached holds the resume (the account is clear, the run waits on `quota` and is looked at again)
+      if (await holdForBudget(deps, run, ready.setup.automation, log)) continue;
       const typing = tab.state === 'waiting_input';
       // D24: the last check before anything is typed
       if (typing && (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id))) continue;
