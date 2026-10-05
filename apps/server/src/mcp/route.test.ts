@@ -669,13 +669,13 @@ describe('tab token (TER-212)', () => {
     const { app } = build({ token: tabToken(), grants, tabs });
     const names: string[] = (await rpc(app, { jsonrpc: '2.0', id: 2, method: 'tools/list' })).json().result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('search_memory');
-    expect(names.every((n) => ['search_memory', 'record_lesson'].includes(n))).toBe(true);
+    expect(names.every((n) => ['search_memory', 'record_lesson', 'get_automation_policy'].includes(n))).toBe(true);
   });
 
   it('also lists the real record_lesson once the owner has notes:update (TER-205)', async () => {
     const { app } = build({ token: tabToken(), grants: [...grants, 'notes:update'], tabs });
     const names: string[] = (await rpc(app, { jsonrpc: '2.0', id: 2, method: 'tools/list' })).json().result.tools.map((t: { name: string }) => t.name);
-    expect(names.sort()).toEqual(['record_lesson', 'search_memory']);
+    expect(names.sort()).toEqual(['get_automation_policy', 'record_lesson', 'search_memory']);
   });
 
   it('refuses list_tabs as a pt-BR tool error, audited as TOOL_NOT_ALLOWED', async () => {

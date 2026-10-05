@@ -10,12 +10,14 @@ const tab = { id: 'tab1', project_id: 'p1' };
 
 describe('constants', () => {
   it('pins the allowlist, scopes, excluded kinds and TTL of the spec (D2, D3, D6)', () => {
-    expect(TAB_TOKEN_TOOLS).toEqual(['search_memory', 'record_lesson']);
+    expect(TAB_TOKEN_TOOLS).toEqual(['search_memory', 'record_lesson', 'get_automation_policy']);
     expect(TAB_TOKEN_SCOPES).toEqual(['read', 'memory']);
     expect(TAB_EXCLUDED_KINDS).toEqual(['message', 'action']);
     expect(TAB_TOKEN_TTL_MS).toBe(30 * 24 * 60 * 60 * 1000);
   });
 });
+
+it('a tab token lists get_automation_policy', () => expect(TAB_TOKEN_TOOLS).toContain('get_automation_policy'));
 
 describe('tabTokenName', () => {
   it('names the token after the tab', () => {
