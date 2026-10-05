@@ -448,11 +448,11 @@ describe('answerPermissionAutomatically (spec §9.2)', () => {
     expect(merge.sendAnswer).not.toHaveBeenCalled();
   });
 
-  it('paused, disabled, untagged, or the tab\'s run changed right before sending: nothing is sent and the run is not touched', async () => {
+  it('paused, disabled, untagged, or the tab\'s run changed right before sending: nothing is sent, the run is not touched, the card is left to the person (`left`: pushed as any other)', async () => {
     for (const o of [{ paused: true }, { enabled: false }, { tagged: false }, { liveRun: 'other' as const }, { liveRun: 'none' as const }]) {
       const q = permissionCard();
       const w = permissionWorld(q, o);
-      expect(await answerPermissionAutomatically(w.pdeps, q, w.run)).toBe('escalated');
+      expect(await answerPermissionAutomatically(w.pdeps, q, w.run)).toBe('left');
       expect(w.sendAnswer).not.toHaveBeenCalled();
       expect(w.repos.automationRuns.updateActive).not.toHaveBeenCalled();
       expect(w.events).toEqual([]);

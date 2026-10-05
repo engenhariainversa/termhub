@@ -11,8 +11,8 @@ import { HttpError } from '../lib/errors.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
 import { automationEscalationText, confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
-import { escalationReasonText } from '../automation/follower.js';
-import { automaticRunOfTab } from '../automation/pause.js';
+import { escalationReasonText } from '../automation/escalation-text.js';
+import { heldQuestion } from '../automation/question-hold.js';
 import { SlidingWindow } from './rate-limit.js';
 import type { MobileSocketRegistry } from './revocation.js';
 import { localeOf, t, tk, type Locale } from '../i18n/index.js';
@@ -254,8 +254,8 @@ export class MobilePushService {
    * after it, or the tab working again, cancels it. */
   private readonly settling = new Map<string, ReturnType<typeof setTimeout>>();
 
-  /** Escalations already pushed, by run and reason (D25: once each). In memory: the event is published
-   * only in the process that recorded it, so one escalation reaches one service. */
+  /** Escalations already pushed, by run and reason (D25: once per episode — a run's keys go when it
+   * resumes). In memory: the event is published only in the process that recorded it. */
   private readonly escalations = new Set<string>();
 
   /** The live subscription's unsubscribe, so a second `start()` never subscribes twice. */
@@ -273,8 +273,9 @@ export class MobilePushService {
     });
     const unsubscribeTabs = monitorBus.subscribe((change) => this.onTabState(change));
     const unsubscribeAutomation = automationBus.subscribe((e) => {
-      if (e.kind !== 'escalated') return;
-      void this.escalated(e).catch((err) => this.deps.log.warn({ err: failureLabel(err), userId: e.owner_id, runId: e.run_id }, 'mobile push failed'));
+      const fail = (err: unknown) => this.deps.log.warn({ err: failureLabel(err), userId: e.owner_id, runId: e.run_id }, 'mobile push failed');
+      if (e.kind === 'escalated') void this.escalated(e).catch(fail);
+      else if (e.kind === 'run_resumed' && e.run_id) void this.runResumed(e.owner_id, e.run_id).catch(fail);
     });
     const stop = () => {
       unsubscribe();
@@ -388,7 +389,7 @@ export class MobilePushService {
    * other screen. Its rows become read, and the phones get a badge-only push with the new count, so the
    * icon stops counting it; the app clears the delivered notification when it next looks.
    */
-  private async handled(userId: string, key: 'action_id' | 'tab_question_id', value: string): Promise<void> {
+  private async handled(userId: string, key: 'action_id' | 'tab_question_id' | 'run_id', value: string): Promise<void> {
     const { repos } = this.deps;
     if ((await repos.userNotifications.markReadByData(userId, key, value, this.now())) === 0) return;
     const devices = (await repos.devices.listActiveWithPush(userId)).filter((d): d is Device & { push_token: string } => !!d.push_token);
@@ -450,8 +451,10 @@ export class MobilePushService {
   /**
    * Automatic work stopped on a card and waits for the person (agentic board spec §9.3, D25: the only
    * automation event pushed besides the daily summary): "<projeto> precisa de você" / "<ref> parou:
-   * <motivo>", once per run and reason, to devices without a live socket. The tap opens the project's
-   * chat, where the escalation's line is. Names come from ids, owner-scoped; the reason is a code.
+   * <motivo>", once per run and reason until the run resumes, to every device of the owner: an
+   * escalation is rare and the person must learn it even with the app open elsewhere (like a device
+   * request). The tap opens the project's chat, where the escalation's line is. Names come from ids,
+   * owner-scoped; the reason is a code.
    */
   private async escalated(e: PublishedAutomationEvent): Promise<void> {
     const reason = typeof e.payload.reason === 'string' ? e.payload.reason : null;
@@ -472,9 +475,15 @@ export class MobilePushService {
       'confirmation',
       (locale) => automationEscalationText(ctx, ref ?? t(locale, 'Um card'), escalationReasonText(reason, locale), locale),
       data,
-      await this.offline(e.owner_id),
+      await repos.devices.listActiveWithPush(e.owner_id),
       `escalation:${key}`,
     );
+  }
+
+  /** The run went on: its escalation may be pushed again next time, and its rows are handled (TER-923). */
+  private async runResumed(ownerId: string, runId: string): Promise<void> {
+    for (const key of this.escalations) if (key.startsWith(`${runId}:`)) this.escalations.delete(key);
+    await this.handled(ownerId, 'run_id', runId);
   }
 
   private async handle(event: ChatEvent): Promise<void> {
@@ -497,9 +506,10 @@ export class MobilePushService {
       // kind check only narrows the view's type.)
       // Same channel as a confirmation — the history row keeps that kind, which every app version
       // parses — with its own `data.kind` so a newer app can tell them apart.
-      // A tab under automatic work: automation answers it or escalates, and only the escalation is
-      // pushed (agentic board D25). Paused or off, it is any other tab.
-      if (await automaticRunOfTab(this.deps.repos, event.question.tab_id).catch(() => null)) return;
+      // A tab under automatic work (agentic board D25): the card waits for automation's verdict and is
+      // pushed unless automation took it over (an answer, a wake, or an escalation pushed on its own).
+      const held = heldQuestion(event.question.id);
+      if (held && (await held)) return;
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, event.question.tab_id, null);
       const data = { kind: 'tab_question', conversation_id: event.conversation_id, project_id: projectId, tab_question_id: event.question.id };

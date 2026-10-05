@@ -134,9 +134,15 @@ export class AutomationRunsRepository {
    * `update`, only while the run is still active: the one write that ends (or parks) a run. Two paths that
    * end the same run at once — the agent's `report_card` and the PR fallback — write once between them.
    */
-  async updateActive(id: string, instance: string, patch: AutomationRunPatch): Promise<boolean> {
+  async updateActive(id: string, instance: string, patch: AutomationRunPatch, opts: { unlessWaitingFor?: string } = {}): Promise<boolean> {
     const { count } = await this.db.automationRun.updateMany({
-      where: { id, claimedBy: instance, status: active },
+      where: {
+        id,
+        claimedBy: instance,
+        status: active,
+        // a run already parked for this same reason is not parked (nor escalated) again
+        ...(opts.unlessWaitingFor ? { NOT: { status: 'waiting', waitingReason: opts.unlessWaitingFor } } : {}),
+      },
       data: { status: patch.status, waitingReason: patch.waiting_reason, endedAt: patch.ended_at },
     });
     return count === 1;

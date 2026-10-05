@@ -50,8 +50,9 @@ function world(o: {
       activeByTab: vi.fn(async (id: string) => (id === run.tab_id && isActive() ? { ...run } : null)),
       findById: vi.fn(async () => ({ ...run })),
       followedBy: vi.fn(async (instance: string) => (instance === run.claimed_by && ['running', 'waiting'].includes(run.status) ? [{ ...run }] : [])),
-      updateActive: vi.fn(async (_id: string, instance: string, patch: Partial<AutomationRun>) => {
+      updateActive: vi.fn(async (_id: string, instance: string, patch: Partial<AutomationRun>, opts?: { unlessWaitingFor?: string }) => {
         if (instance !== run.claimed_by || !isActive()) return false;
+        if (opts?.unlessWaitingFor && run.status === 'waiting' && run.waiting_reason === opts.unlessWaitingFor) return false;
         Object.assign(run, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)));
         return true;
       }),
@@ -84,6 +85,8 @@ function world(o: {
     },
     chat: {
       findLatestActiveForProject: vi.fn(async () => (o.conversation === undefined ? { id: 'cp' } : (o.conversation ?? undefined))),
+      getOrCreateForProject: vi.fn(async () => ({ id: 'c-new' })),
+      findByIdForUser: vi.fn(async (id: string) => ({ id, archived_at: id === 'c-archived' ? '2026-10-01T00:00:00.000Z' : null })),
       addMessage: vi.fn(async (m: { conversation_id: string; text: string }) => ({ id: `m${++seq}`, role: 'assistant', created_at: '', ...m })),
     },
   } as unknown as Repositories;
@@ -778,11 +781,42 @@ describe('escalation to the person: the chat line, the slot, the resume (spec §
     ]);
   });
 
-  it('no active project chat: no line, the escalation is still recorded (the push follows the event)', async () => {
+  it('no active project chat: one is opened for the line, so the person is always told (review I3)', async () => {
     const w = world({ run: { resume_count: 3 }, conversation: null });
     await followRun(w.deps, w.run.id);
     expect(w.kinds()).toEqual(['escalated']);
-    expect(w.repos.chat.addMessage).not.toHaveBeenCalled();
+    expect(w.repos.chat.getOrCreateForProject).toHaveBeenCalledWith('u1', 'p1');
+    expect(lines(w)).toEqual([expect.objectContaining({ conversation_id: 'c-new', text: expect.stringContaining('Automático parou em TER-1:') })]);
+  });
+
+  it('the line never answers an older answered card, nor one in an archived conversation: it stands alone (review M1)', async () => {
+    const { escalate } = await import('./answers.js');
+    for (const card of [
+      { id: 'q1', tab_id: 'tab1', conversation_id: 'c-card', user_id: 'u1', kind: 'choice', status: 'answered' },
+      { id: 'q2', tab_id: 'tab1', conversation_id: 'c-archived', user_id: 'u1', kind: 'choice', status: 'open' },
+      { id: 'q3', tab_id: 'tab1', conversation_id: 'c-card', user_id: 'other', kind: 'choice', status: 'open' },
+    ]) {
+      const w = world({ question: card as unknown as TabQuestion });
+      await escalate({ repos: w.repos }, { ...w.run }, QUESTION_UNANSWERED);
+      expect(lines(w)).toEqual([expect.objectContaining({ conversation_id: 'cp', text: expect.stringContaining('Automático parou em TER-1:') })]);
+    }
+  });
+
+  it('question_expired answers the card that closed unanswered', async () => {
+    const card = { id: 'q4', tab_id: 'tab1', conversation_id: 'c-card', user_id: 'u1', kind: 'choice', status: 'expired' } as unknown as TabQuestion;
+    const w = world({ question: card });
+    const { escalate } = await import('./answers.js');
+    await escalate({ repos: w.repos }, { ...w.run }, QUESTION_EXPIRED);
+    expect(lines(w)[0]).toMatchObject({ conversation_id: 'c-card', reply_to: { card: { kind: 'tab_question', id: 'q4' } } });
+  });
+
+  it('a run already parked for the same reason is not escalated again (no second event, no second push)', async () => {
+    const w = world({ run: { status: 'waiting', waiting_reason: QUESTION_UNANSWERED } });
+    const { escalate } = await import('./answers.js');
+    expect(await escalate({ repos: w.repos }, { ...w.run }, QUESTION_UNANSWERED)).toBe(false);
+    expect(w.events).toEqual([]);
+    expect(await escalate({ repos: w.repos }, { ...w.run }, PERMISSION_NEEDED)).toBe(true);
+    expect(w.kinds()).toEqual(['escalated']);
   });
 
   it('the line is in the owner\'s language', async () => {
@@ -840,6 +874,14 @@ describe('escalation to the person: the chat line, the slot, the resume (spec §
     // running already: nothing to do
     await expect(resumeAutomationRun(owned(w), { run_id: w.run.id })).resolves.toEqual({ ok: true, resumed: false });
     expect(resumeWaiting).toHaveBeenCalledTimes(1);
+  });
+
+  it('resume_automation_run leaves a run waiting on its account limit alone (review M4)', async () => {
+    const w = world({ run: { status: 'waiting', waiting_reason: 'quota' } });
+    const resumeWaiting = vi.fn(async () => true);
+    Object.assign(w.repos.automationRuns, { resumeWaiting });
+    await expect(resumeAutomationRun(owned(w), { run_id: w.run.id })).resolves.toEqual({ ok: true, resumed: false });
+    expect(resumeWaiting).not.toHaveBeenCalled();
   });
 
   it('resume_automation_run: another owner\'s run is not found, an ended one is refused', async () => {

@@ -7,7 +7,7 @@ import { sendInput } from '../control/terminals.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun, AutomationRunPatch } from '../db/repositories/automation-runs.js';
 import type { Tab, Task } from '../db/repositories/types.js';
-import { DEFAULT_LOCALE, localeOf, msg, t, tk, type Locale } from '../i18n/index.js';
+import { localeOf, msg, t } from '../i18n/index.js';
 import { chatBus } from '../chat/bus.js';
 import type { AutomationEventPayload } from '../db/repositories/automation-events.js';
 import type { StoppedTabWake } from '../chat/wake.js';
@@ -20,6 +20,9 @@ import { isPaused } from './pause.js';
 import { runPermission } from './permission.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 import { MAX_RESTARTS } from './restart.js';
+import { ANSWER_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, TRUST_PROMPT } from './escalation-text.js';
+export { NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, PERMISSION_NEEDED, RESUME_CAP, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
+
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
 
@@ -42,67 +45,11 @@ export const RETYPE_AFTER_MS = 10 * 60_000;
  * parked for them instead of being typed into.
  */
 export const TRUST_WAIT_MS = 3 * 60_000;
-/** `automation_runs.waiting_reason` of a run parked on something only a person can do in the tab. */
-export const NEEDS_PERSON = 'needs_person';
-/** The escalation reason of a run parked on the trust question. */
-export const TRUST_PROMPT = 'trust_prompt';
-/** The escalation reason of a run whose tab asks a question nothing automatic could answer (spec D18 step 4). */
-export const QUESTION_UNANSWERED = 'question_unanswered';
-/** The escalation reason of a run whose question card closed without an answer while the tab still asks it. */
-export const QUESTION_EXPIRED = 'question_expired';
-/** The escalation reason of a run whose questions were answered automatically too often in the last hour. */
-export const ANSWER_CAP = 'answer_cap';
-/** A permission request the project's rules do not allow (spec §9.2): the person answers it on the card. */
-export const PERMISSION_NEEDED = 'permission_needed';
 /**
  * How long an open question card of an automatic tab may wait with no countdown before the person is
  * called: the woken chat had this long to answer it (spec D18 step 3 → 4).
  */
 export const QUESTION_WAIT_MS = 10 * 60_000;
-
-/** The reason a run is handed over after `resume_max` resumes that did not move it (also the chat's own
- *  `escalate_automation_run`, which comes after that wake). */
-export const RESUME_CAP = 'resume_cap';
-/** A card whose start failed MAX_START_FAILURES times in a row: its tag was removed (dispatcher). */
-export const START_FAILED = 'start_failed';
-/** The agent exited again after its one restart: the run ends blocked. */
-export const AGENT_EXITED = 'agent_exited';
-/** The agent itself said it is stuck (`report_card blocked`). */
-export const REPORTED_BLOCKED = 'reported_blocked';
-
-/** The text the feed, the chat line and the push show for each escalation reason (spec §9.3). */
-export const ESCALATION_TEXT: Record<string, string> = {
-  [TRUST_PROMPT]: tk('O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.'),
-  [QUESTION_UNANSWERED]: tk('O agente fez uma pergunta que o modo automático não soube responder; responda no card.'),
-  [QUESTION_EXPIRED]: tk('O card da pergunta do agente fechou sem resposta; responda na aba para continuar.'),
-  [ANSWER_CAP]: tk('O agente fez perguntas demais respondidas automaticamente na última hora; confira a aba e responda no card.'),
-  [PERMISSION_NEEDED]: tk('O agente pediu uma permissão que as regras do projeto não liberam; responda no card.'),
-  [RESUME_CAP]: tk('O agente parou várias vezes sem terminar e o chat não soube continuar; confira a aba.'),
-  [START_FAILED]: tk('O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.'),
-  [AGENT_EXITED]: tk('O agente saiu de novo depois de reiniciado; confira a aba.'),
-  [REPORTED_BLOCKED]: tk('O agente disse que travou e precisa de você.'),
-};
-
-/** What a reason with no text of its own shows. */
-export const ESCALATION_FALLBACK = tk('O trabalho automático parou e espera você.');
-
-/** The escalation's text in the reader's language; null for a reason with no text of its own. */
-export function escalationText(reason: string, locale: Locale = DEFAULT_LOCALE): string | null {
-  const key = ESCALATION_TEXT[reason];
-  return key ? t(locale, key) : null;
-}
-
-/** `escalationText`, or the generic text for a reason with none. */
-export function escalationReasonText(reason: string, locale: Locale = DEFAULT_LOCALE): string {
-  return escalationText(reason, locale) ?? t(locale, ESCALATION_FALLBACK);
-}
-
-/**
- * The `waiting_reason`s of a run parked for the person (an escalation, TER-888): such a run keeps its card
- * (it stays active) but frees its `max_parallel` slot, so the dispatcher may start another card. A run
- * waiting on its account's usage limit is not one of them: it goes on by itself once the limit resets.
- */
-export const SLOT_FREE_REASONS: readonly string[] = [NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, PERMISSION_NEEDED, RESUME_CAP];
 
 /**
  * The reasons a run goes back to `running` by itself once the person answered the card or acted in the
@@ -162,15 +109,15 @@ function errorCode(e: unknown): string {
  * when another instance took the run over in between. A tab tool (`report_card`) may reach either colour,
  * so it writes on behalf of whoever holds the run. Only an active run is written: a run ends once.
  */
-function writeRun(repos: Repositories, run: AutomationRun, patch: Pick<AutomationRunPatch, 'status' | 'waiting_reason' | 'ended_at'>): Promise<boolean> {
-  return repos.automationRuns.updateActive(run.id, run.claimed_by, patch);
+function writeRun(repos: Repositories, run: AutomationRun, patch: Pick<AutomationRunPatch, 'status' | 'waiting_reason' | 'ended_at'>, opts?: { unlessWaitingFor?: string }): Promise<boolean> {
+  return opts ? repos.automationRuns.updateActive(run.id, run.claimed_by, patch, opts) : repos.automationRuns.updateActive(run.id, run.claimed_by, patch);
 }
 
 /**
  * The escalation's line in the owner's project chat (spec §9.3), in the owner's language. About a question
  * card (CARD_REASONS, the tab's newest card): "Automático parou aqui: <motivo>", posted as a reply to that
  * card in its conversation. Otherwise: "Automático parou em <ref>: <motivo>" in the project's most recently
- * active conversation (none: no line; the push still goes). `detail` — the chat's or the agent's own words —
+ * active conversation, opened when there is none. `detail` — the chat's or the agent's own words —
  * replaces the reason's text here only; it is never put in an event. Never throws.
  */
 async function postEscalationLine(repos: Repositories, run: AutomationRun, reason: string, detail: string | null, log: Log): Promise<void> {
@@ -182,10 +129,19 @@ async function postEscalationLine(repos: Repositories, run: AutomationRun, reaso
     if (!owner) return;
     const locale = localeOf(owner.locale);
     const why = detail?.trim() || escalationReasonText(reason, locale);
-    const card = CARD_REASONS.has(reason) && run.tab_id ? await repos.tabQuestions.latestQuestionForTab(run.tab_id) : undefined;
+    const latest = CARD_REASONS.has(reason) && run.tab_id ? await repos.tabQuestions.latestQuestionForTab(run.tab_id) : undefined;
+    // the card the escalation is about: still open (or, for question_expired, the one that closed unanswered),
+    // the owner's, in a conversation still on screen — never an older answered card
+    const about =
+      latest &&
+      latest.user_id === ownerId &&
+      (latest.kind === 'choice' || latest.kind === 'permission') &&
+      (latest.status === 'open' || (reason === QUESTION_EXPIRED && (latest.status === 'expired' || latest.status === 'failed')));
+    const cardConversation = about ? await repos.chat.findByIdForUser(latest.conversation_id, ownerId) : undefined;
+    const card = cardConversation && !cardConversation.archived_at ? latest : undefined;
     let conversationId: string;
     let message;
-    if (card && card.user_id === ownerId && (card.kind === 'choice' || card.kind === 'permission')) {
+    if (card) {
       const tab = await repos.tabs.findById(card.tab_id);
       conversationId = card.conversation_id;
       message = await repos.chat.addMessage({
@@ -195,8 +151,8 @@ async function postEscalationLine(repos: Repositories, run: AutomationRun, reaso
         reply_to: { id: null, role: 'assistant', excerpt: tab?.name ? t(locale, 'Card da aba {{tab}}', { tab: tab.name }) : t(locale, 'Card da aba'), card: { kind: 'tab_question', id: card.id } },
       });
     } else {
-      const conversation = await repos.chat.findLatestActiveForProject(run.project_id, ownerId);
-      if (!conversation) return;
+      // no active project chat (never opened, or archived): one is opened, so the person always has the line
+      const conversation = (await repos.chat.findLatestActiveForProject(run.project_id, ownerId)) ?? (await repos.chat.getOrCreateForProject(ownerId, run.project_id));
       conversationId = conversation.id;
       message = await repos.chat.addMessage({ conversation_id: conversationId, role: 'assistant', text: t(locale, 'Automático parou em {{ref}}: {{reason}}', { ref: task?.ref ?? 'card', reason: why }) });
     }
@@ -220,17 +176,24 @@ export async function escalateRun(
   opts: { detail?: string | null; extra?: AutomationEventPayload } = {},
 ): Promise<void> {
   await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'escalated', payload: { reason, tab_id: run.tab_id, ...opts.extra } }).catch((e: unknown) =>
-    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: escalation not recorded'),
+    // without the event there is no push, and a run parked on a question is not resumed by itself (only by
+    // resume_automation_run); the chat line below still tells the person
+    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: escalation not recorded: no push, no automatic resume'),
   );
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, reason }, 'automation: run escalated');
   await postEscalationLine(repos, run, reason, opts.detail ?? null, log);
 }
 
-/** Parks the run (so it is not resumed again, and its slot is free: SLOT_FREE_REASONS) and escalates it. */
-export async function wakeOrEscalate(repos: Repositories, run: AutomationRun, reason: string, log: Log = noopLog, detail: string | null = null): Promise<void> {
-  if (!(await writeRun(repos, run, { status: 'waiting', waiting_reason: reason }))) return;
+/**
+ * Parks the run (so it is not resumed again, and its slot is free: SLOT_FREE_REASONS) and escalates it. A run
+ * already parked for the same reason, taken over by another instance or ended is left alone: false then (no
+ * new escalation, so no push of its own).
+ */
+export async function wakeOrEscalate(repos: Repositories, run: AutomationRun, reason: string, log: Log = noopLog, detail: string | null = null): Promise<boolean> {
+  if (!(await writeRun(repos, run, { status: 'waiting', waiting_reason: reason }, { unlessWaitingFor: reason }))) return false;
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, reason }, 'automation: run waits for a person');
   await escalateRun(repos, run, reason, log, { detail });
+  return true;
 }
 const parkAndEscalate = wakeOrEscalate;
 
@@ -243,13 +206,13 @@ const parkAndEscalate = wakeOrEscalate;
 async function wakeStoppedOrEscalate(deps: FollowerDeps, run: AutomationRun, log: Log, stop: { tab: Tab; task: Task; ownerId: string }): Promise<void> {
   const { repos } = deps;
   const reason = RESUME_CAP;
-  if (!deps.wakeStopped) return parkAndEscalate(repos, run, reason, log);
+  if (!deps.wakeStopped) return void (await parkAndEscalate(repos, run, reason, log));
   const now = deps.now?.() ?? new Date();
   if (run.woken_at) {
     // woken already: the chat has until QUESTION_WAIT_MS to move the tab; the tab stopping again, or silence, hands it over
     const stoppedAgain = Date.parse(stop.tab.state_at ?? '') > run.woken_at.getTime();
     if (!stoppedAgain && now.getTime() - run.woken_at.getTime() < QUESTION_WAIT_MS) return;
-    return parkAndEscalate(repos, run, reason, log);
+    return void (await parkAndEscalate(repos, run, reason, log));
   }
   if (!(await repos.automationRuns.claimWake(run.id, run.claimed_by, now))) return;
   const woke = await deps
@@ -670,7 +633,7 @@ export async function escalateAutomationRun(ctx: ControlContext, i: { run_id: st
 
 /**
  * The tool `resume_automation_run` (spec §9.3): the person hands a parked run back to automatic work. A
- * `waiting` run of the caller's own projects (404 otherwise) goes back to `running` with a fresh budget of
+ * run of the caller's own projects (404 otherwise) parked for the person (SLOT_FREE_REASONS) goes back to `running` with a fresh budget of
  * resumes and wakes; the follower takes it on its next look. A running run is left as is; an ended one is
  * refused. Nothing is typed here: while paused, the run stays still (D24).
  */
@@ -680,6 +643,9 @@ export async function resumeAutomationRun(ctx: ControlContext, i: { run_id: stri
   await ctx.scoped.project(run.project_id);
   if (run.status !== 'running' && run.status !== 'waiting') throw new ControlError('RUN_ENDED', msg('Esta execução automática já terminou'));
   if (run.status === 'running') return { ok: true, resumed: false };
+  // only a run parked for the person: one waiting on its account's limit goes on by itself (typing into a
+  // limited tab would only hit the limit again)
+  if (!SLOT_FREE_REASONS.includes(run.waiting_reason ?? '')) return { ok: true, resumed: false };
   if (!(await ctx.repos.automationRuns.resumeWaiting(run.id, { fresh: true }))) return { ok: true, resumed: false };
   await recordEvent(ctx.repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_resumed', payload: { tab_id: run.tab_id, by: 'person', reason: run.waiting_reason } }).catch(
     (e: unknown) => (ctx.log ?? noopLog).warn({ runId: run.id, code: errorCode(e) }, 'automation: run_resumed not recorded'),

@@ -6,6 +6,7 @@ import { monitorBus } from '../monitor/bus.js';
 import type { Interpreted } from '../monitor/state.js';
 import { chatBus, type ChatEvent } from './bus.js';
 import { suggestFor } from './decision-memory.js';
+import { heldQuestion, resetQuestionHolds } from '../automation/question-hold.js';
 import type { TabQuestionSuggestion } from './decision-text.js';
 import type { Embedder } from './embeddings.js';
 import { closingScope, expireOrphanTabQuestions, noteHookEvent, openTabQuestion, publishTabQuestions, startTabQuestionExpiry } from './tab-questions.js';
@@ -291,9 +292,9 @@ describe('openTabQuestion', () => {
 describe('openTabQuestion in a tab with an automatic run (agentic board D18)', () => {
   /** `fakeRepos` plus the automation side: the tab's active run, its project's setup, the pauses, and
    *  what `automationAnswer` writes (runs, events). */
-  function automaticRepos(o: { run?: boolean; paused?: boolean; enabled?: boolean } = {}) {
+  function automaticRepos(o: { run?: boolean; paused?: boolean; enabled?: boolean; waiting?: boolean } = {}) {
     const repos = fakeRepos({ opened: row({ id: 'q1' }) });
-    const run = { id: 'run1', project_id: 'p1', task_id: 'task1', tab_id: 't1', status: 'running', claimed_by: 'me' };
+    const run = { id: 'run1', project_id: 'p1', task_id: 'task1', tab_id: 't1', status: o.waiting ? 'waiting' : 'running', waiting_reason: o.waiting ? 'question_unanswered' : null, claimed_by: 'me' };
     return Object.assign(repos, {
       automationRuns: { activeByTab: vi.fn(async () => ((o.run ?? true) ? run : null)), updateActive: vi.fn(async () => true) },
       projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true } } })) },
@@ -333,7 +334,7 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
     const waker = { wake: vi.fn(async () => true) };
     expect(await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' }, { waker })).toBeNull();
     // awaited inside openTabQuestion: parked before the hook POST returns
-    expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'question_unanswered' });
+    expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'question_unanswered' }, { unlessWaitingFor: 'question_unanswered' });
     expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: 'question_unanswered', tab_id: 't1' } }));
     expect(waker.wake).not.toHaveBeenCalled();
   });
@@ -358,7 +359,7 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
     Object.assign(repos, { tasks: { findById: vi.fn(async () => ({ id: 'task1', auto: true })) } });
     const waker = { wake: vi.fn(async () => true) };
     await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null }, { waker });
-    await vi.waitFor(() => expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'permission_needed' }));
+    await vi.waitFor(() => expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'permission_needed' }, { unlessWaitingFor: 'permission_needed' }));
     expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', payload: { reason: 'permission_needed', tab_id: 't1' } }));
     expect(waker.wake).not.toHaveBeenCalled();
   });
@@ -382,7 +383,56 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
     repos.tabQuestions.open.mockResolvedValueOnce({ question: null, closed: [] });
     repos.chat.findLatestActiveForProject.mockResolvedValueOnce(undefined);
     expect(await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null })).toBeNull();
-    expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'permission_needed' });
+    expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'permission_needed' }, { unlessWaitingFor: 'permission_needed' });
+  });
+
+  describe("the card's own push waits for automation's verdict (D25, review I2)", () => {
+    afterEach(() => resetQuestionHolds());
+
+    it('a card automation took over (a recommended countdown) is held: no card push', async () => {
+      vi.mocked(suggestFor).mockResolvedValueOnce(null);
+      const repos = automaticRepos();
+      await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' }, { waker: { wake: vi.fn(async () => true) } });
+      expect(await heldQuestion('q1')).toBe(true);
+    });
+
+    it('a permission escalated (Bash, no command known) is held: the escalation is pushed instead', async () => {
+      const repos = automaticRepos();
+      repos.tabQuestions.open.mockResolvedValueOnce({ question: row({ id: 'q1', kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null }), closed: [] });
+      Object.assign(repos, { tasks: { findById: vi.fn(async () => ({ id: 'task1', auto: true })) } });
+      await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null });
+      expect(await heldQuestion('q1')).toBe(true);
+    });
+
+    it('an allowed permission left to the person (the card was untagged during the settle) is pushed', async () => {
+      const repos = automaticRepos();
+      vi.mocked(repos.automationRuns.activeByTab).mockResolvedValue({ id: 'run1', project_id: 'p1', task_id: 'task1', tab_id: 't1', status: 'running', claimed_by: 'me', allowed_tools: ['Edit'] } as never);
+      repos.tabQuestions.open.mockResolvedValueOnce({ question: row({ id: 'q1', kind: 'permission', payload: { tool_name: 'Edit' }, tool_use_id: null }), closed: [] });
+      Object.assign(repos, { tasks: { findById: vi.fn(async () => ({ id: 'task1', auto: false })) } });
+      await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Edit' }, tool_use_id: null });
+      expect(await heldQuestion('q1')).toBe(false);
+      expect(repos.automationEvents.insert).not.toHaveBeenCalled();
+    }, 10_000);
+
+    it('automation that throws lets the card be pushed', async () => {
+      vi.mocked(suggestFor).mockResolvedValueOnce(null);
+      const plain = { questions: [{ ...payload.questions[0]!, options: payload.questions[0]!.options.map((op) => ({ ...op, recommended: false })) }] };
+      const repos = automaticRepos();
+      repos.tabQuestions.open.mockResolvedValueOnce({ question: row({ id: 'q1', payload: plain }), closed: [] });
+      vi.mocked(repos.automationRuns.updateActive).mockRejectedValue(new Error('db down'));
+      // no waker: automation goes straight to the escalation, whose write throws
+      await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload: plain, tool_use_id: 'toolu_1' });
+      expect(await heldQuestion('q1')).toBe(false);
+    });
+
+    it('a run already waiting for the person, or a manual tab, holds nothing: the card is pushed at once', async () => {
+      for (const o of [{ waiting: true }, { run: false }]) {
+        vi.mocked(suggestFor).mockResolvedValueOnce(null);
+        const repos = automaticRepos(o);
+        await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' }, { waker: { wake: vi.fn(async () => true) } });
+        expect(heldQuestion('q1')).toBeNull();
+      }
+    });
   });
 
   it('a manual tab (no run), or a paused or disabled project, behaves exactly as before: the plain wake, nothing scheduled', async () => {

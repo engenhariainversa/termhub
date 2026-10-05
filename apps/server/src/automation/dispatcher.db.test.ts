@@ -268,6 +268,16 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(startAgent).toHaveBeenCalledTimes(1);
   });
 
+  it('updateActive with unlessWaitingFor parks a run once per reason (no second escalation of the same episode)', async () => {
+    const c = await card('Once');
+    const run = (await repos.automationRuns.claim({ project_id: projectId, task_id: c.id, role: 'implementer', instance: 'me' }))!;
+    await repos.automationRuns.update(run.id, 'me', { status: 'running' });
+    const park = (reason: string) => repos.automationRuns.updateActive(run.id, 'me', { status: 'waiting', waiting_reason: reason }, { unlessWaitingFor: reason });
+    expect(await park('question_unanswered')).toBe(true);
+    expect(await park('question_unanswered')).toBe(false);
+    expect(await park('permission_needed')).toBe(true);
+  });
+
   it('max_parallel 1: a run waiting on its account limit (not an escalation) still holds its slot', async () => {
     await setSetup({ automation: { max_parallel: 1 } });
     const busy = await card('Busy');
