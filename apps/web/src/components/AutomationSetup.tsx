@@ -144,6 +144,8 @@ function ListInput({ value, onChange, placeholder }: { value: string[]; onChange
 
 /** Empty = null (the field's "off"). */
 function NumberInput({ value, onChange, min, max, step, placeholder }: { value: number | null; onChange: (v: number | null) => void; min: number; max: number; step?: string; placeholder?: string }) {
+  // every field but the budget is an integer: a decimal is ignored, never sent to the server
+  const integer = step !== 'any';
   return (
     <input
       type="number"
@@ -151,11 +153,12 @@ function NumberInput({ value, onChange, min, max, step, placeholder }: { value: 
       value={value ?? ''}
       min={min}
       max={max}
-      step={step}
+      step={step ?? 1}
       placeholder={placeholder}
       onChange={(e) => {
         const n = e.target.value === '' ? null : Number(e.target.value);
-        onChange(n === null || Number.isNaN(n) ? null : n);
+        if (n !== null && (Number.isNaN(n) || (integer && !Number.isInteger(n)))) return;
+        onChange(n);
       }}
     />
   );
