@@ -4,6 +4,7 @@ import type { ControlContext } from '../control/context.js';
 import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 import { eligibilityOf, REASON_TEXT, type IneligibleReason } from './eligibility.js';
 import { isPaused } from './pause.js';
+import { WAITING_AS_REASON, waitingReasonOf } from './placement.js';
 
 export interface QueueItem {
   task_id: string;
@@ -16,9 +17,21 @@ export interface QueueItem {
 
 /**
  * The tagged cards of a project in board order (column position, then card position: the order is the
- * priority), each with its eligibility. Untagged cards and subtasks are not in the queue.
+ * priority), each with its eligibility. Untagged cards and subtasks are not in the queue. An eligible card
+ * the dispatcher found no place for shows why it waits (`no_account`, …) instead.
  */
 export async function automationQueue(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<QueueItem[]> {
+  const now = new Date();
+  return (await eligibilityQueue(ctx, projectId, locale)).map((item) => {
+    const waiting = item.eligible ? waitingReasonOf(item.task_id, now) : null;
+    if (!waiting) return item;
+    const reason = WAITING_AS_REASON[waiting];
+    return { ...item, eligible: false, reason, reason_text: t(locale, REASON_TEXT[reason]) };
+  });
+}
+
+/** The queue as the eligibility rules read it (spec §5), without the dispatcher's waiting reasons: what the dispatcher walks. */
+export async function eligibilityQueue(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<QueueItem[]> {
   const { project: row } = await ctx.scoped.project(projectId);
   const { repos } = ctx;
   const [cards, columns, setup, links, runs] = await Promise.all([

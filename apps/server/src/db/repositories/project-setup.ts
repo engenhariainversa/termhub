@@ -39,6 +39,12 @@ export class ProjectSetupRepository {
       .filter((r) => r.sources.length > 0);
   }
 
+  /** Projects with automatic work on (`automation.enabled`), and their setup: what the dispatcher walks. */
+  async listWithAutomation(): Promise<{ project_id: string; data: ProjectSetupData }[]> {
+    const rows = await this.db.projectSetup.findMany();
+    return rows.map((r) => ({ project_id: r.projectId, data: normalizeSetup(r.data, r.version) })).filter((r) => r.data.automation.enabled);
+  }
+
   /** Projects whose setup names a repository and the integration to read it with (CI panel). */
   async listWithRepo(): Promise<{ project_id: string; data: ProjectSetupData }[]> {
     const rows = await this.db.projectSetup.findMany();

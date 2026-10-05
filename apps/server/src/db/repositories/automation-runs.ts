@@ -92,9 +92,13 @@ export class AutomationRunsRepository {
     }
   }
 
-  async update(id: string, patch: AutomationRunPatch): Promise<void> {
-    await this.db.automationRun.update({
-      where: { id },
+  /**
+   * Writes the patch while `instance` still drives the run: after a takeover by another instance the row
+   * is theirs, and this one's late writes are dropped. False when nothing was written.
+   */
+  async update(id: string, instance: string, patch: AutomationRunPatch): Promise<boolean> {
+    const { count } = await this.db.automationRun.updateMany({
+      where: { id, claimedBy: instance },
       data: {
         status: patch.status,
         waitingReason: patch.waiting_reason,
@@ -107,6 +111,22 @@ export class AutomationRunsRepository {
         endedAt: patch.ended_at,
       },
     });
+    return count === 1;
+  }
+
+  /**
+   * Releases a claim that never started (no place for it, or the card changed after the claim): the row
+   * goes away, so the card is free again and no event or history is left per tick. Only the claiming
+   * instance releases, and only before the run started.
+   */
+  async release(id: string, instance: string): Promise<boolean> {
+    const { count } = await this.db.automationRun.deleteMany({ where: { id, claimedBy: instance, status: { in: ['queued', 'starting'] } } });
+    return count === 1;
+  }
+
+  async findById(id: string): Promise<AutomationRun | null> {
+    const row = await this.db.automationRun.findUnique({ where: { id } });
+    return row ? map(row) : null;
   }
 
   /** Increments the counter and returns its new value. */
@@ -116,22 +136,49 @@ export class AutomationRunsRepository {
     return row[key];
   }
 
-  /** Refreshes `heartbeat_at` on every active run this instance drives. */
+  /** Refreshes `heartbeat_at` on every active run this instance drives (the database's clock, like `takeOver`). */
   async heartbeat(instance: string): Promise<void> {
-    await this.db.automationRun.updateMany({ where: { claimedBy: instance, status: active }, data: { heartbeatAt: new Date() } });
+    await this.db.$executeRaw`
+      UPDATE "automation_runs" SET "heartbeat_at" = now()
+      WHERE "claimed_by" = ${instance} AND "status" IN ('queued', 'starting', 'running', 'waiting')`;
   }
 
   /**
-   * Moves the active runs whose heartbeat is older than `staleBefore` to `instance`. One conditional
-   * UPDATE: when two instances race, the second re-checks each row after the first committed, sees the
-   * fresh heartbeat and skips it, so every run comes back to one caller only.
+   * Moves the active runs whose heartbeat is older than `staleMs` to `instance`. Ages are measured on the
+   * database's clock, the one `heartbeat` writes with, so two hosts with skewed clocks agree. One
+   * conditional UPDATE: when two instances race, the second re-checks each row after the first committed,
+   * sees the fresh heartbeat and skips it, so every run comes back to one caller only.
    */
-  async takeOver(instance: string, staleBefore: Date): Promise<AutomationRun[]> {
+  async takeOver(instance: string, staleMs: number): Promise<AutomationRun[]> {
     const rows = await this.db.$queryRaw<RawRow[]>`
       UPDATE "automation_runs" SET "claimed_by" = ${instance}, "heartbeat_at" = now()
-      WHERE "status" IN ('queued', 'starting', 'running', 'waiting') AND "heartbeat_at" < ${staleBefore}
+      WHERE "status" IN ('queued', 'starting', 'running', 'waiting')
+        AND "claimed_by" <> ${instance}
+        AND "heartbeat_at" < now() - make_interval(secs => CAST(${staleMs / 1000} AS double precision))
       RETURNING *`;
     return rows.map(mapRaw);
+  }
+
+  /**
+   * The card's failed starts, read from the database so both colours agree (the dispatcher's retry rule):
+   * `consecutive` = failed runs since the last run that did not fail (newest first), `recent` = one of them
+   * ended less than `backoffMs` ago on the database's clock.
+   */
+  async startFailures(taskId: string, backoffMs: number): Promise<{ consecutive: number; recent: boolean }> {
+    const rows = await this.db.automationRun.findMany({ where: { taskId }, orderBy: { createdAt: 'desc' }, take: 20, select: { status: true } });
+    let consecutive = 0;
+    for (const r of rows) {
+      if (r.status !== 'failed') break;
+      consecutive++;
+    }
+    if (consecutive === 0) return { consecutive, recent: false };
+    const [hit] = await this.db.$queryRaw<Array<{ recent: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM "automation_runs"
+        WHERE "task_id" = ${taskId} AND "status" = 'failed'
+          AND "ended_at" > now() - make_interval(secs => CAST(${backoffMs / 1000} AS double precision))
+      ) AS "recent"`;
+    return { consecutive, recent: hit?.recent === true };
   }
 
   async activeByTab(tabId: string): Promise<AutomationRun | null> {

@@ -10,7 +10,10 @@ export type IneligibleReason =
   | 'no_description'
   | 'has_agent'
   | 'no_capable_machine'
-  | 'repo_missing';
+  | 'repo_missing'
+  // set by the dispatcher when it found no place for an eligible card (spec §8 step 3, D14)
+  | 'no_account'
+  | 'machine_offline';
 
 /** What the card shows when it is tagged but does not run (spec §5). `not_in_todo` is not shown: backlog, doing and done are not "waiting". */
 export const REASON_TEXT: Record<IneligibleReason, string> = {
@@ -22,6 +25,8 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   has_agent: tk('Já tem um agente'),
   no_capable_machine: tk('Nenhuma máquina com agente 0.18 ligada ao projeto'),
   repo_missing: tk('Repositório não configurado no Setup'),
+  no_account: tk('Sem conta com folga'),
+  machine_offline: tk('Máquina do agente desligada'),
 };
 
 export interface EligibilityInput {

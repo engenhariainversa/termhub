@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { dispatchTriggers } from '../automation/events.js';
 import { z } from 'zod';
 import { automationNeedsConfirm, automationSetupActionId, automationSetupBody, cardAutoBody, pauseBody, resumeBody } from '@termhub/mobile-api';
 import { automationPauseState, pauseAutomation, resumeAutomation } from '../automation/pause.js';
@@ -40,6 +41,7 @@ export async function mobileAutomationSetupRoutes(app: FastifyInstance, repos: R
       if (!ok) return reply;
     }
     const saved = await repos.projectSetup.save(id, { ...current.data, automation: next });
+    if (saved.data.automation.enabled) dispatchTriggers.poke('setup_saved');
     return { automation: saved.data.automation };
   });
 }
@@ -52,6 +54,7 @@ export async function mobileCardAutoRoutes(app: FastifyInstance, repos: Reposito
     const { auto } = cardAutoBody.parse(request.body);
     await scoped(repos, request).task(id);
     await taskRules(() => repos.tasks.setAuto(id, auto));
+    if (auto) dispatchTriggers.poke('tag_set');
     const task = await repos.tasks.findById(id);
     if (!task) throw notFound('Task não encontrada');
     return { id: task.id, auto: task.auto };

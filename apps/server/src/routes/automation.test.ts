@@ -19,6 +19,7 @@ async function build() {
     },
     projectSetup: { get: setupGet },
     automationPauses: { pauseProject, resumeUser, userPausedAt, pausedProjects },
+    automationRuns: { activeByProject: async () => [] },
     automationEvents: { insert: async () => ({ id: 'e1', project_id: 'p1', task_id: null, run_id: null, kind: 'paused', payload: {}, created_at: '' }), listByProject },
   } as unknown as Repositories;
   const app = Fastify();

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { dispatchTriggers } from '../automation/events.js';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { MAX_SUBTASKS_PER_CALL, TaskRuleError, type TaskRuleCode } from '../db/repositories/tasks.js';
@@ -84,6 +85,7 @@ export async function taskRoutes(app: FastifyInstance, repos: Repositories) {
     let task = Object.keys(fields).length > 0 ? await taskRules(() => repos.tasks.update(id, fields)) : await repos.tasks.findById(id);
     if (task && auto !== undefined) {
       await taskRules(() => repos.tasks.setAuto(id, auto));
+      if (auto) dispatchTriggers.poke('tag_set');
       task = await repos.tasks.findById(id);
     }
     if (!task) throw notFound('Task não encontrada');

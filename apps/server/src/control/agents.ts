@@ -395,6 +395,22 @@ export function withSetup(setupCommand: string | null | undefined, line: string)
 }
 
 /**
+ * Marks an error thrown by `startAgent` after its tab was opened with that tab's id (non-enumerable, so the
+ * error's shape and message are unchanged): `LAUNCH_FAILED` = the tab is open but nothing runs in it;
+ * `TASK_LINK_FAILED` = the agent runs but the card is not linked to it.
+ */
+function withTabId<E>(e: E, tabId: string): E {
+  if (e !== null && typeof e === 'object') Object.defineProperty(e, 'tab_id', { value: tabId, enumerable: false, configurable: true });
+  return e;
+}
+
+/** The tab a failed `startAgent` left open, if it got that far. */
+export function tabIdOfError(e: unknown): string | null {
+  const id = (e as { tab_id?: unknown } | null)?.tab_id;
+  return typeof id === 'string' ? id : null;
+}
+
+/**
  * Opens a tab in the project and starts the account's CLI there with the prompt (spec §4.4). Everything
  * that can be checked is checked before the tab exists; once it does, a failure keeps the tab and names it.
  * `internal` is for server callers only (see `StartAgentInternal`); without it nothing changes.
@@ -440,17 +456,25 @@ export async function startAgent(
   // The line is typed right after `tmux new-session`: the shell may still be starting, but bash and zsh
   // keep typeahead (they never flush the tty on startup), so the text is waiting when the prompt appears.
   const reason = (e: unknown) => (e instanceof Error ? localizedOf(e) : msg('erro desconhecido'));
-  const mcp = await tabMcp(ctx, machine, account.provider, tab);
-  const line = withSetup(
-    internal?.setupCommand,
-    mcp.installed
-      ? launchLine(account.provider, account.config_dir, prompt, { tabId: tab.tab_id, url: mcp.url }, model, permission)
-      : launchLine(account.provider, account.config_dir, prompt, null, model, permission),
-  );
+  // From here on the tab exists: every failure carries its id, so a server caller can close or keep it.
+  const tagged = (e: unknown) => withTabId(e, tab.tab_id);
+  let line: string;
+  let mcp: Awaited<ReturnType<typeof tabMcp>>;
+  try {
+    mcp = await tabMcp(ctx, machine, account.provider, tab);
+    line = withSetup(
+      internal?.setupCommand,
+      mcp.installed
+        ? launchLine(account.provider, account.config_dir, prompt, { tabId: tab.tab_id, url: mcp.url }, model, permission)
+        : launchLine(account.provider, account.config_dir, prompt, null, model, permission),
+    );
+  } catch (e) {
+    throw tagged(e);
+  }
   try {
     await sendTextToSession(machine, tab.tmux_session as string, line, true);
   } catch (e) {
-    throw new ControlError('LAUNCH_FAILED', msg('A aba {{tab}} foi aberta, mas o agente não foi iniciado: {{reason}}. Veja a tela com read_screen ou feche a aba com close_tab.', { tab: tab.tab_id, reason: reason(e) }));
+    throw tagged(new ControlError('LAUNCH_FAILED', msg('A aba {{tab}} foi aberta, mas o agente não foi iniciado: {{reason}}. Veja a tela com read_screen ou feche a aba com close_tab.', { tab: tab.tab_id, reason: reason(e) })));
   }
   // which account runs this tab: a later swap must not pick it again (spec 2026-09-26 account swap);
   // best effort, the agent is already running
@@ -459,7 +483,7 @@ export async function startAgent(
     try {
       await attachTask(ctx, task.id, tab.tab_id);
     } catch (e) {
-      throw new ControlError('TASK_LINK_FAILED', msg('A aba {{tab}} foi aberta e o agente iniciado, mas a tarefa não foi vinculada: {{reason}}. Veja a tela com read_screen ou feche a aba com close_tab.', { tab: tab.tab_id, reason: reason(e) }));
+      throw tagged(new ControlError('TASK_LINK_FAILED', msg('A aba {{tab}} foi aberta e o agente iniciado, mas a tarefa não foi vinculada: {{reason}}. Veja a tela com read_screen ou feche a aba com close_tab.', { tab: tab.tab_id, reason: reason(e) })));
     }
   }
 
