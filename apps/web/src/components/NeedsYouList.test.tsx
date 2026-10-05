@@ -100,6 +100,12 @@ describe('groupMachineItems', () => {
     expect(groups[0].working).toBe(1);
   });
 
+  it('buckets a finished tab with the ones that ended their turn, never as waiting for you (TER-972)', () => {
+    const [g] = groupMachineItems([item({ id: 'a', state: 'finished', state_at: T1 }, m1)]);
+    expect(g).toMatchObject({ waiting: [], seen: [], working: 0 });
+    expect(g.finished.map((i) => i.tab.id)).toEqual(['a']);
+  });
+
   it('a tab that never reported (state null) falls into the "working" count, like before', () => {
     const [g] = groupMachineItems([item({ id: 'a', state: null }, m1)]);
     expect(g).toMatchObject({ waiting: [], seen: [], finished: [], working: 1 });

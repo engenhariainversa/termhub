@@ -20,6 +20,7 @@ describe('buildCityModel: desks', () => {
       tab('p', { state: 'waiting_permission', state_at: AT }),
       tab('z', { state: 'idle', state_at: AT }),
       tab('e', { state: 'error', state_at: AT }),
+      tab('f', { state: 'finished', state_at: AT }),
       tab('n'),
     ])]);
     expect(desks(c).map((d) => [d.id, d.pose, d.marker, d.dimmed, d.screenOn])).toEqual([
@@ -28,6 +29,8 @@ describe('buildCityModel: desks', () => {
       ['p', 'raise', 'permission', false, false],
       ['z', 'sleep', null, false, false],
       ['e', 'shake', 'error', false, false],
+      // done with a report (TER-972): at rest, no hand up, not counted as needing you
+      ['f', 'sit', null, false, false],
       ['n', 'sit', null, true, false],
     ]);
     const m = buildCityModel(c, none);
