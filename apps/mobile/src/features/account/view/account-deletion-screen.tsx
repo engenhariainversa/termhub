@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
+import { useTranslation } from '@/i18n';
 import { AppText, Button, Screen, Sheet } from '@/ui';
 import { ACCOUNT_MSG, deletionDate } from '../model/messages';
 import { useAccountStore } from '../viewmodel/useAccountStore';
@@ -12,6 +13,8 @@ import { useAccountStore } from '../viewmodel/useAccountStore';
  * polls: the date is read once, when it is not known yet.
  */
 export function AccountDeletionScreen() {
+  // Re-renders on a language change; ACCOUNT_MSG's getters read it.
+  useTranslation();
   const scheduledAt = useAccountStore((s) => s.scheduledAt);
   const cancelling = useAccountStore((s) => s.cancelling);
   const error = useAccountStore((s) => s.error);

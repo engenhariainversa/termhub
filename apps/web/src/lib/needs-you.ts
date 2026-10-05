@@ -1,3 +1,4 @@
+import { i18n } from '../i18n';
 import { NEEDS_YOU, type Machine, type MonitorItem, type Tab } from './types';
 
 /** The tab fields the "needs you" rule reads (see server monitor/state.ts needsYou — same rule). */
@@ -33,13 +34,15 @@ export function tabDotClass(alive: boolean, tab: NeedsYouTab | null | undefined)
   if (tab?.state === 'error') return 'bg-danger';
   // waiting on its own background work (TER-644): neutral, not the "needs you" orange
   if (tab?.state === 'waiting_background') return alive ? 'bg-fg-muted' : 'bg-fg-dim';
+  // done, with a report and no question (TER-972): green, never pulsing
+  if (tab?.state === 'finished') return alive ? 'bg-ok' : 'bg-fg-dim';
   return alive ? 'bg-ok' : 'bg-fg-dim';
 }
 
 /** What the alert says: the tool's own message, or a line for the state. */
 export function needsYouText(tab: Tab): string {
   if (tab.state_text) return tab.state_text;
-  return tab.state === 'waiting_permission' ? 'está pedindo permissão' : 'terminou e está esperando você';
+  return tab.state === 'waiting_permission' ? i18n.t('está pedindo permissão') : i18n.t('terminou e está esperando você');
 }
 
 /**
@@ -75,5 +78,7 @@ export function emptyMonitorHint(machines: Machine[]): string | null {
   if (agents.length === 0) return null;
   const withoutHooks = agents.filter((m) => m.hooks_installed_at === null);
   if (withoutHooks.length === 0) return null;
-  return `Nenhuma tab reportou estado ainda. Instale os hooks do monitor em ${withoutHooks.map((m) => m.name).join(', ')} (✎ na máquina, na página Máquinas) para que as tabs apareçam aqui.`;
+  return i18n.t('Nenhuma tab reportou estado ainda. Instale os hooks do monitor em {{machines}} (✎ na máquina, na página Máquinas) para que as tabs apareçam aqui.', {
+    machines: withoutHooks.map((m) => m.name).join(', '),
+  });
 }

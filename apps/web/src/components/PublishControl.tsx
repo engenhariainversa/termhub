@@ -4,6 +4,7 @@ import { useData } from '../lib/data';
 import { ApiError } from '../lib/api';
 import type { Project } from '../lib/types';
 import { NicknameDialog } from './NicknameDialog';
+import { useTranslation } from '../i18n';
 
 /**
  * Publishes the project on its owner's public city: one building, whose robots are the project's
@@ -16,6 +17,7 @@ import { NicknameDialog } from './NicknameDialog';
  * nickname claimed): this component reacts to its 403/409 codes and never re-implements those rules.
  */
 export function PublishControl({ project }: { project: Project }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { updateProject } = useData();
   const [confirming, setConfirming] = useState(false);
@@ -32,7 +34,7 @@ export function PublishControl({ project }: { project: Project }) {
     } catch (err) {
       const code = (err as { code?: string } | null | undefined)?.code;
       if (code === 'NICKNAME_REQUIRED') setNeedsNickname(true);
-      else setError(err instanceof ApiError ? err.message : next ? 'Erro ao publicar' : 'Erro ao despublicar');
+      else setError(err instanceof ApiError ? err.message : next ? t('Erro ao publicar') : t('Erro ao despublicar'));
     } finally {
       setBusy(false);
     }
@@ -65,8 +67,8 @@ export function PublishControl({ project }: { project: Project }) {
         // hear "off" for exactly as long as the switch has not actually flipped, same as the visible
         // knob below (which was already gated on `project.is_public` alone).
         aria-checked={project.is_public}
-        aria-label="Publicar"
-        title={project.is_public ? 'Deixar de publicar' : 'Publicar na cidade pública'}
+        aria-label={t('Publicar')}
+        title={project.is_public ? t('Deixar de publicar') : t('Publicar na cidade pública')}
         disabled={busy}
         onClick={onToggle}
         className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${project.is_public ? 'bg-accent' : 'bg-fg-dim/40'}`}
@@ -76,16 +78,16 @@ export function PublishControl({ project }: { project: Project }) {
       {confirming && (
         <div className="absolute right-0 top-full z-10 mt-2 w-72 rounded-lg border border-line bg-bg-2 p-3 text-xs shadow-lg">
           <p className="text-fg-muted">
-            Publicar deixa visível, para quem tiver o link, o nome do projeto e cada agente (aba) dele que roda nas suas máquinas, com o que cada um está fazendo, além do seu nome e apelido.
+            {t('Publicar deixa visível, para quem tiver o link, o nome do projeto e cada agente (aba) dele que roda nas suas máquinas, com o que cada um está fazendo, além do seu nome e apelido.')}
           </p>
-          <p className="mt-2 text-fg-muted">Agentes em máquinas de outras pessoas não aparecem.</p>
+          <p className="mt-2 text-fg-muted">{t('Agentes em máquinas de outras pessoas não aparecem.')}</p>
           {error && <p className="mt-2 text-danger">{error}</p>}
           <div className="mt-3 flex justify-end gap-2">
             <button type="button" className="btn-ghost" onClick={() => setConfirming(false)}>
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button type="button" className="btn-primary" disabled={busy} onClick={confirmPublish}>
-              Publicar
+              {t('Publicar')}
             </button>
           </div>
         </div>

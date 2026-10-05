@@ -1,0 +1,10 @@
+{
+  "{{count}} ações aguardando sua confirmação_one": "{{count}} ação aguardando sua confirmação",
+  "{{count}} ações aguardando sua confirmação_other": "{{count}} ações aguardando sua confirmação",
+  "{{count}} pendentes_one": "{{count}} pendente",
+  "{{count}} pendentes_other": "{{count}} pendentes",
+  "{{count}} pendentes_zero": "{{count}} pendentes",
+  "{{count}} permissões ativas_one": "{{count}} permissão ativa",
+  "{{count}} permissões ativas_other": "{{count}} permissões ativas",
+  "{{count}} permissões ativas_zero": "{{count}} permissões ativas"
+}

@@ -4,6 +4,7 @@
 // diagnostic can never disturb the real session (ruling: "the diagnostic never touches the
 // enrolled key").
 import { p256 } from '@noble/curves/nist.js';
+import { t } from '@/i18n';
 import { utf8 } from '@/services/crypto/encoding';
 import { jwkThumbprint, jwkToUncompressed } from '@/services/key/jwk';
 import type { DeviceKey, P256Jwk } from '@/services/key/types';
@@ -45,35 +46,35 @@ export async function runKeyDiagnostic(key: DeviceKey): Promise<KeyDiagnosticRes
 
   await step('create', async () => {
     created = await key.create();
-    if (created.kty !== 'EC' || created.crv !== 'P-256') throw new Error('A chave criada não é P-256.');
+    if (created.kty !== 'EC' || created.crv !== 'P-256') throw new Error(t('A chave criada não é P-256.'));
   });
 
   await step('exists', async () => {
-    if (!(await key.exists())) throw new Error('A chave não existe depois de criada.');
+    if (!(await key.exists())) throw new Error(t('A chave não existe depois de criada.'));
   });
 
   await step('publicJwk', async () => {
     const pub = await key.publicJwk();
-    if (!created || pub.x !== created.x || pub.y !== created.y) throw new Error('A chave pública não confere com a criada.');
+    if (!created || pub.x !== created.x || pub.y !== created.y) throw new Error(t('A chave pública não confere com a criada.'));
   });
 
   await step('thumbprint', async () => {
     // RFC 7638 over the key the platform hands back: 32 bytes of SHA-256, 43 base64url chars.
-    if (!/^[A-Za-z0-9_-]{43}$/.test(jwkThumbprint(await key.publicJwk()))) throw new Error('A impressão digital da chave não tem 43 caracteres.');
+    if (!/^[A-Za-z0-9_-]{43}$/.test(jwkThumbprint(await key.publicJwk()))) throw new Error(t('A impressão digital da chave não tem 43 caracteres.'));
   });
 
   await step('sign+verify', async () => {
     const sig = await key.sign(MESSAGE);
-    if (sig.length !== 64) throw new Error('A assinatura não tem 64 bytes.');
-    if (!created) throw new Error('Sem chave pública para verificar a assinatura.');
+    if (sig.length !== 64) throw new Error(t('A assinatura não tem 64 bytes.'));
+    if (!created) throw new Error(t('Sem chave pública para verificar a assinatura.'));
     if (!p256.verify(sig, MESSAGE, jwkToUncompressed(created), { prehash: true })) {
-      throw new Error('A assinatura não passou na verificação.');
+      throw new Error(t('A assinatura não passou na verificação.'));
     }
   });
 
   await step('destroy', async () => {
     await key.destroy();
-    if (await key.exists()) throw new Error('A chave ainda existe depois de destruída.');
+    if (await key.exists()) throw new Error(t('A chave ainda existe depois de destruída.'));
   });
 
   return { ok: steps.every((s) => s.ok), steps };

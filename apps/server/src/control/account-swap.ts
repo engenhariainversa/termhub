@@ -13,6 +13,7 @@ import { projectAccountsOn } from '../ai/project-accounts.js';
 import { notifyLimitInChat } from '../chat/tab-limits.js';
 import { ControlError } from './context.js';
 import { offline } from './screen.js';
+import { msg, tk } from '../i18n/index.js';
 
 /** An account whose fullest window is at this utilization (0..100) or more is not a candidate. */
 export const SWAP_MAX_UTILIZATION = 90;
@@ -142,7 +143,7 @@ export async function swapAccount(
   }
   // an agent moving between instances (a deploy) gets a few seconds to attach before it is called offline
   if (!(await agents.awaitAgent(machine))) throw offline();
-  if (!machine.capabilities.includes('claude')) throw new ControlError('TOOL_MISSING', `claude não foi detectado em ${machine.name}`);
+  if (!machine.capabilities.includes('claude')) throw new ControlError('TOOL_MISSING', msg('claude não foi detectado em {{machine}}', { machine: machine.name }));
   if (swapping.has(tab.id)) throw new ControlError('SWAP_IN_PROGRESS', 'Já existe uma troca de conta em andamento nesta aba');
   swapping.add(tab.id);
   try {
@@ -153,7 +154,7 @@ export async function swapAccount(
     if (opts.accountId) {
       const chosen = owned.find((a) => a.id === opts.accountId);
       if (!chosen) throw new ControlError('ACCOUNT_NOT_FOUND', 'Conta não encontrada');
-      if (chosen.machine_id !== machine.id) throw new ControlError('ACCOUNT_OTHER_MACHINE', `A conta "${chosen.label}" é de outra máquina`);
+      if (chosen.machine_id !== machine.id) throw new ControlError('ACCOUNT_OTHER_MACHINE', msg('A conta "{{account}}" é de outra máquina', { account: chosen.label }));
       if (chosen.provider !== 'claude') throw new ControlError('PROVIDER_UNSUPPORTED', 'Só contas do Claude podem assumir esta sessão');
       if (chosen.id === tab.ai_account_id) throw new ControlError('SAME_ACCOUNT', 'Esta aba já roda nessa conta');
       pool = [chosen];
@@ -184,8 +185,8 @@ export async function swapAccount(
       throw new ControlError(
         'NO_CANDIDATE',
         ranked.length === 0
-          ? 'Nenhuma outra conta do Claude desta máquina tem limite disponível'
-          : 'Nenhuma outra conta do Claude desta máquina pôde assumir a sessão (mesma conta, pasta ausente ou conflito)',
+          ? tk('Nenhuma outra conta do Claude desta máquina tem limite disponível')
+          : tk('Nenhuma outra conta do Claude desta máquina pôde assumir a sessão (mesma conta, pasta ausente ou conflito)'),
       );
     }
     // built before the tab is touched: every check that can fail runs first (spec §5)
@@ -218,7 +219,7 @@ export async function swapAccount(
       const relinked = await linkClaudeSession(machine, { transcriptPath: movedTo ?? transcriptPath, sessionId, configDir: to.config_dir });
       log.info({ tabId: tab.id, machineId: machine.id, accountId: to.id, status: relinked }, 'account swap: relink after exit');
       if (relinked !== 'linked') {
-        throw new ControlError('RELINK_FAILED', `O Claude saiu, mas a sessão não pôde ser preparada na conta ${to.label} (${relinked}). Retome a sessão na aba.`);
+        throw new ControlError('RELINK_FAILED', msg('O Claude saiu, mas a sessão não pôde ser preparada na conta {{account}} ({{status}}). Retome a sessão na aba.', { account: to.label, status: relinked }));
       }
     }
     // Recorded before the line is typed, so the resumed session's first hooks (or a fast StopFailure)

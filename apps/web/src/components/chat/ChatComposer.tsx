@@ -1,3 +1,4 @@
+import { i18n, tk, useTranslation } from '../../i18n';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Paperclip } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
@@ -45,7 +46,7 @@ export interface ChatComposerProps {
 }
 
 /** The preview's heading for a card being answered (TER-849). */
-const CARD_HEADING: Record<ReplyCardKind, string> = { action: 'Respondendo à confirmação', tab_question: 'Respondendo à pergunta da aba' };
+const CARD_HEADING: Record<ReplyCardKind, string> = { action: tk('Respondendo à confirmação'), tab_question: tk('Respondendo à pergunta da aba') };
 
 const MIN_ROWS = 1;
 const MAX_ROWS = 8;
@@ -82,9 +83,9 @@ function formatClock(totalSeconds: number): string {
 type PrimaryRole = 'dictate' | 'send' | 'stop';
 
 const PRIMARY_LABEL: Record<PrimaryRole, string> = {
-  dictate: 'Ditar',
-  send: 'Enviar',
-  stop: 'Parar',
+  dictate: tk('Ditar'),
+  send: tk('Enviar'),
+  stop: tk('Parar'),
 };
 
 /** One file in the box, from the moment it was picked until the message that carries it is sent. */
@@ -160,7 +161,7 @@ function useAttachmentDrafts(projectId: string | null | undefined, statuses: Rea
       } catch (e) {
         // Aborted by ✕: the chip is already gone, nothing to report.
         if (e instanceof ApiError && e.code === 'ABORTED') return;
-        patch(draft.key, { phase: 'failed', controller: null, error: e instanceof ApiError ? e.message : 'Não foi possível enviar o arquivo' });
+        patch(draft.key, { phase: 'failed', controller: null, error: e instanceof ApiError ? e.message : i18n.t('Não foi possível enviar o arquivo') });
       }
     },
     [patch, projectId],
@@ -188,7 +189,7 @@ function useAttachmentDrafts(projectId: string | null | undefined, statuses: Rea
       const list = [...files];
       if (list.length === 0) return;
       const room = MAX_ATTACHMENTS_PER_MESSAGE - latest.current.length;
-      setNotice(list.length > room ? `No máximo ${MAX_ATTACHMENTS_PER_MESSAGE} anexos por mensagem` : null);
+      setNotice(list.length > room ? i18n.t('No máximo {{max}} anexos por mensagem', { max: MAX_ATTACHMENTS_PER_MESSAGE }) : null);
       const next: DraftAttachment[] = list.slice(0, Math.max(0, room)).map((file) => {
         const check = checkFile(file.name, file.type, file.size);
         const refused = 'refused' in check;
@@ -287,6 +288,7 @@ function useAttachmentDrafts(projectId: string | null | undefined, statuses: Rea
  * way it can only send what the button itself would send.
  */
 export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedReason, status, notice, projectId, attachmentStatuses }: ChatComposerProps) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
@@ -391,9 +393,9 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
   const line = blockedReason
     ? { text: blockedReason, danger: false }
     : uploading
-      ? { text: 'enviando anexo…', danger: false }
+      ? { text: t('enviando anexo…'), danger: false }
       : busy
-        ? { text: 'transcrevendo…', danger: false }
+        ? { text: t('transcrevendo…'), danger: false }
         : status
           ? { text: status, danger: true }
           : notice
@@ -427,7 +429,7 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
           multiple
           hidden
           accept={ACCEPT_ATTRIBUTE}
-          aria-label="Arquivos para anexar"
+          aria-label={t('Arquivos para anexar')}
           onChange={(e) => {
             if (e.target.files) attachments.add(e.target.files);
             // The same file picked twice must fire again.
@@ -437,15 +439,15 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
         {replyTo && (
           <div className="mb-2 flex items-start gap-2 rounded-lg border-l-2 border-accent bg-bg-3 px-2.5 py-1.5 text-xs">
             <div className="min-w-0 flex-1">
-              <div className="font-medium text-accent">{replyTo.card ? CARD_HEADING[replyTo.card] : replyTo.role === 'assistant' ? 'Respondendo a Concierge' : 'Respondendo a você'}</div>
+              <div className="font-medium text-accent">{replyTo.card ? t(CARD_HEADING[replyTo.card]) : replyTo.role === 'assistant' ? t('Respondendo a Concierge') : t('Respondendo a você')}</div>
               <div className="truncate text-fg-dim">{replyTo.excerpt}</div>
             </div>
-            <button type="button" aria-label="Cancelar resposta" onClick={onCancelReply} className="rounded px-1 text-fg-dim hover:text-fg">
+            <button type="button" aria-label={t('Cancelar resposta')} onClick={onCancelReply} className="rounded px-1 text-fg-dim hover:text-fg">
               ✕
             </button>
           </div>
         )}
-        <ul aria-label="Anexos" className={`flex flex-wrap gap-2 ${attachments.drafts.length > 0 ? 'mb-2' : ''}`}>
+        <ul aria-label={t('Anexos')} className={`flex flex-wrap gap-2 ${attachments.drafts.length > 0 ? 'mb-2' : ''}`}>
           {attachments.drafts.map((d) => (
             <AttachmentChip
               key={d.key}
@@ -472,7 +474,7 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
           className="block w-full resize-none overflow-y-auto overscroll-contain border-0 bg-transparent px-0 py-1 text-base text-fg placeholder:text-fg-dim focus:outline-none"
           rows={MIN_ROWS}
           value={text}
-          placeholder="Pergunte ou peça algo às suas máquinas"
+          placeholder={t('Pergunte ou peça algo às suas máquinas')}
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => {
             // Files only; a text paste stays the browser's.
@@ -504,8 +506,8 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
             <button
               type="button"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-fg-dim transition-colors hover:bg-bg-3 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Anexar arquivo"
-              title="Anexar arquivo"
+              aria-label={t('Anexar arquivo')}
+              title={t('Anexar arquivo')}
               disabled={attachments.drafts.length >= MAX_ATTACHMENTS_PER_MESSAGE}
               onClick={() => fileInputRef.current?.click()}
             >
@@ -526,8 +528,8 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
             <button
               type="button"
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label={PRIMARY_LABEL[role]}
-              title={PRIMARY_LABEL[role]}
+              aria-label={t(PRIMARY_LABEL[role])}
+              title={t(PRIMARY_LABEL[role])}
               disabled={disabled}
               onClick={role === 'stop' ? dictation.stop : role === 'send' ? () => void send() : dictation.start}
             >
@@ -556,12 +558,13 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
  * anything, so a cancel button there would be a promise the product cannot keep.
  */
 function RecordingStatus({ dictation }: { dictation: Dictation }) {
+  const { t } = useTranslation();
   return (
     <>
       <span className="h-2 w-2 animate-pulse rounded-full bg-attention" aria-hidden="true" />
       <span className="font-mono text-xs text-fg">{formatClock(dictation.seconds)}</span>
       <button type="button" className="rounded-md px-2 py-1 text-xs text-fg-muted transition-colors hover:bg-bg-3 hover:text-fg" onClick={dictation.cancel}>
-        cancelar
+        {t('cancelar')}
       </button>
     </>
   );

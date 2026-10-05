@@ -345,3 +345,33 @@ describe('decideWait — a main thread waiting on its own background work (TER-6
     expect(rearmOf(current({ state: 'working', seenAgeMs: 30_000 }), [row('working', 'PreToolUse', 500), row('waiting_input', 'Stop', 60_000)], event({ kind: 'waiting_background', name: 'Stop' }), outcome)).toBeNull();
   });
 });
+
+describe('decideWait — a turn that ended with a report (TER-972)', () => {
+  const finished = [row('finished', 'Stop', 500), row('working', 'UserPromptSubmit', 30_000)];
+
+  it('drops the idle_prompt that follows that Stop: the report asked nothing, the tab stays finished', () => {
+    expect(decideWait(current({ state: 'finished' }), finished, reminder)).toEqual({ action: 'drop', reason: 'reminder_after_finished' });
+    expect(decideWait(current({ state: 'finished', seen: true }), finished, reminder)).toEqual({ action: 'drop', reason: 'reminder_after_finished' });
+  });
+
+  it('drops the tool calls of a subagent left running: the main thread ended its turn', () => {
+    for (const id of ['a1', null]) {
+      expect(decideWait(current({ state: 'finished' }), finished, event({ kind: 'working', name: 'PreToolUse', subagent: { id } }))).toEqual({ action: 'drop', reason: 'subagent_during_wait' });
+    }
+  });
+
+  it('records what moves it on: a new prompt, the main thread at work, a question, a permission prompt, the session end', () => {
+    expect(decideWait(current({ state: 'finished' }), finished, event({ kind: 'working', name: 'UserPromptSubmit' }))).toEqual(NEW);
+    expect(decideWait(current({ state: 'finished' }), finished, event({ kind: 'working', name: 'PreToolUse' }))).toEqual(NEW);
+    expect(decideWait(current({ state: 'finished' }), finished, event({ kind: 'waiting_input', name: 'Stop' }))).toEqual(NEW);
+    expect(decideWait(current({ state: 'finished' }), finished, event({ kind: 'waiting_permission', name: 'PermissionRequest' }))).toEqual(NEW);
+    expect(decideWait(current({ state: 'finished' }), finished, event({ kind: 'idle', name: 'SessionEnd' }))).toEqual(NEW);
+  });
+
+  it('a finished Stop is no wait to re-arm', () => {
+    const history = [row('working', 'PreToolUse', 500), row('waiting_input', 'Stop', 60_000)];
+    const outcome = decideWait(current({ state: 'working', seenAgeMs: 30_000 }), history, event({ kind: 'finished', name: 'Stop' }));
+    expect(outcome).toEqual(NEW);
+    expect(rearmOf(current({ state: 'working', seenAgeMs: 30_000 }), history, event({ kind: 'finished', name: 'Stop' }), outcome)).toBeNull();
+  });
+});

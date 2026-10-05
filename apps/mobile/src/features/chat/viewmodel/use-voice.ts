@@ -7,6 +7,7 @@
 import { AudioQuality, IOSOutputFormat, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, type RecordingOptions } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
+import { t } from '@/i18n';
 import { api as appApi } from '@/services/api';
 import type { Auth, MobileApi } from '@/services/api/types';
 
@@ -35,8 +36,9 @@ const POLL_TIMEOUT_MS = 12 * 60 * 1000;
 const LEVEL_MS = 100;
 /** The level's range in dBFS: quieter than `QUIET_DB` is the room, not speech. */
 const QUIET_DB = -50;
-const MIC_DENIED = 'Permissão do microfone negada';
-const MIC_UNAVAILABLE = 'Não foi possível acessar o microfone';
+/** Read when the error is raised, so it is in the language the app shows then. */
+const micDenied = () => t('Permissão do microfone negada');
+const micUnavailable = () => t('Não foi possível acessar o microfone');
 
 // --- the microphone -------------------------------------------------------------------------------
 
@@ -125,7 +127,7 @@ export function useRecorder(): Recorder {
     let sessionOpened = false;
     try {
       const permission = await requestRecordingPermissionsAsync();
-      if (!permission.granted) throw new Error(MIC_DENIED);
+      if (!permission.granted) throw new Error(micDenied());
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       sessionOpened = true;
       await recorder.prepareToRecordAsync();
@@ -133,7 +135,8 @@ export function useRecorder(): Recorder {
     } catch (err) {
       opening.current = false;
       if (sessionOpened) void releaseSession();
-      const message = err instanceof Error && err.message === MIC_DENIED ? MIC_DENIED : MIC_UNAVAILABLE;
+      const denied = micDenied();
+      const message = err instanceof Error && err.message === denied ? denied : micUnavailable();
       setError(message);
       throw new Error(message);
     }
@@ -279,14 +282,14 @@ export function useVoice(onText: (text: string) => void, deps: VoiceDeps = appDe
         setState('transcribing');
         const deadline = Date.now() + POLL_TIMEOUT_MS;
         while (job.status === 'pending') {
-          if (Date.now() > deadline) throw new Error('A transcrição demorou demais');
+          if (Date.now() > deadline) throw new Error(t('A transcrição demorou demais'));
           await wait(POLL_MS);
           // Unmounted meanwhile: the server finishes the job on its own; there is no box to put the text in.
           if (!alive.current) return;
           job = await api.transcription(auth(), job.id);
         }
         if (!alive.current) return;
-        if (job.status === 'error') throw new Error(job.error || 'Falha ao transcrever o áudio');
+        if (job.status === 'error') throw new Error(job.error || t('Falha ao transcrever o áudio'));
         // Whisper answers an empty string for a clip it heard nothing in: said, not delivered.
         const text = (job.text ?? '').trim();
         setError(null);
@@ -294,10 +297,10 @@ export function useVoice(onText: (text: string) => void, deps: VoiceDeps = appDe
           setNotice(null);
           onTextRef.current(text);
         } else {
-          setNotice('Nenhuma fala reconhecida');
+          setNotice(t('Nenhuma fala reconhecida'));
         }
       } catch (err) {
-        setError(err instanceof Error && err.message !== 'LOCKED' ? err.message : 'Falha ao transcrever o áudio');
+        setError(err instanceof Error && err.message !== 'LOCKED' ? err.message : t('Falha ao transcrever o áudio'));
       } finally {
         setState('idle');
       }
@@ -311,7 +314,7 @@ export function useVoice(onText: (text: string) => void, deps: VoiceDeps = appDe
     void recorderRef.current.stop().then((clip) => {
       if (!clip || clip.seconds < MIN_CLIP_S) {
         // Too short to be speech. Not an error — the person let go too early — but not silence either.
-        setNotice('Gravação muito curta');
+        setNotice(t('Gravação muito curta'));
         setState('idle');
         return;
       }
@@ -341,7 +344,7 @@ export function useVoice(onText: (text: string) => void, deps: VoiceDeps = appDe
       (err: unknown) => {
         if (stateRef.current !== 'starting') return;
         setState('idle');
-        setError(err instanceof Error ? err.message : MIC_UNAVAILABLE);
+        setError(err instanceof Error ? err.message : micUnavailable());
       },
     );
   }, [setState]);

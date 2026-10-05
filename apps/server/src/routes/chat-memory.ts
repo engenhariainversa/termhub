@@ -10,6 +10,7 @@ import { notFound } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
 import { indexProjectNote } from '../memory/note.js';
 import { excerpt } from '../memory/text.js';
+import { requestLocale, t } from '../i18n/index.js';
 
 const listQuery = z.object({ q: z.string().trim().max(200).optional(), cursor: z.string().max(500).optional() });
 const notesQuery = z.object({ cursor: z.string().max(500).optional() });
@@ -148,7 +149,7 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
       // every open screen hears it. After the switch is stored, so nothing new is scheduled behind it;
       // one already claimed (`sent`) is the sender's, which re-reads the switch and fails AUTODECIDE_OFF.
       const cancelled = await repos.tabQuestions.cancelScheduledForUser(userId);
-      if (cancelled.length > 0) await publishTabQuestions(repos, 'tab_question', cancelled);
+      if (cancelled.length > 0) await publishTabQuestions(repos, 'tab_question', cancelled, { update: true });
     }
     return memory(userId);
   });
@@ -227,6 +228,6 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
       return { ok: true };
     }
     await repos.memoryItems.hideSource(id, ownerId);
-    return { ok: true, note: 'O arquivo continua no repositório; apague-o por um PR para sumir de vez' };
+    return { ok: true, note: t(requestLocale(request), 'O arquivo continua no repositório; apague-o por um PR para sumir de vez') };
   });
 }

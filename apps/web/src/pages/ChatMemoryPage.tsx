@@ -1,15 +1,17 @@
+import { i18n, tk, Trans, useTranslation } from '../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import type { ChatDecision, ChatMemory, ConciergeNote, LessonItem } from '../lib/types';
+import { formatDate } from '../lib/format';
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
+const fmtDate = (iso: string) => formatDate(iso);
 
-/** "Lições" (spec 2026-09-27 failure lessons §6/§8): pt-BR labels for the two enums the list shows —
- *  binding clarifications, verbatim. */
-const EVIDENCE_LABEL: Record<LessonItem['evidence'], string> = { observed: 'observada', fixed: 'corrigida', confirmed: 'confirmada' };
+/** "Lições" (spec 2026-09-27 failure lessons §6/§8): labels for the two enums the list shows —
+ *  binding clarifications, verbatim (pt-BR keys, translated where shown). */
+const EVIDENCE_LABEL: Record<LessonItem['evidence'], string> = { observed: tk('observada'), fixed: tk('corrigida'), confirmed: tk('confirmada') };
 function originText(l: LessonItem): string {
-  return l.origin === 'file' ? `arquivo ${l.path ?? ''}` : 'anotação do projeto';
+  return l.origin === 'file' ? i18n.t('arquivo {{path}}', { path: l.path ?? '' }) : i18n.t('anotação do projeto');
 }
 
 /** "Abrir origem": the PR link when `pr` is set, else the card (the web's `/project/<ref>` route),
@@ -33,6 +35,7 @@ function answerText(d: ChatDecision): string {
  * decisão" on a card — a card still pointing at a row removed here simply stops offering it.
  */
 export function ChatMemoryPage() {
+  const { t } = useTranslation();
   const [memory, setMemory] = useState<ChatMemory | null>(null);
   const [decisions, setDecisions] = useState<ChatDecision[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -108,7 +111,7 @@ export function ChatMemoryPage() {
       setCursor(page.next_cursor);
     } catch (e) {
       if (genRef.current !== myGen) return;
-      setError(e instanceof ApiError ? e.message : 'Não foi possível carregar a memória do chat');
+      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível carregar a memória do chat'));
     }
   }, []);
 
@@ -121,8 +124,8 @@ export function ChatMemoryPage() {
       void loadFirstPage(q);
       return;
     }
-    const t = setTimeout(() => void loadFirstPage(q), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => void loadFirstPage(q), 300);
+    return () => clearTimeout(timer);
   }, [q, loadFirstPage]);
 
   const loadMore = async () => {
@@ -137,7 +140,7 @@ export function ChatMemoryPage() {
       setCursor(page.next_cursor);
     } catch (e) {
       if (genRef.current !== myGen) return;
-      setError(e instanceof ApiError ? e.message : 'Não foi possível carregar mais decisões');
+      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível carregar mais decisões'));
     } finally {
       if (genRef.current === myGen) setLoadingMore(false);
     }
@@ -154,14 +157,14 @@ export function ChatMemoryPage() {
       setMemory(next);
     } catch (e) {
       if (!mountedRef.current) return;
-      setError(e instanceof ApiError ? e.message : 'Não foi possível alterar a sugestão de respostas');
+      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível alterar a sugestão de respostas'));
     } finally {
       if (mountedRef.current) setSwitching(false);
     }
   };
 
   const forget = async (d: ChatDecision) => {
-    if (!window.confirm(`Esquecer a decisão sobre «${d.question}»?`)) return;
+    if (!window.confirm(t('Esquecer a decisão sobre «{{question}}»?', { question: d.question }))) return;
     setForgettingId(d.id);
     setError(null);
     try {
@@ -170,7 +173,7 @@ export function ChatMemoryPage() {
       setDecisions((prev) => (prev ?? []).filter((x) => x.id !== d.id));
     } catch (e) {
       if (!mountedRef.current) return;
-      setError(e instanceof ApiError ? e.message : 'Não foi possível esquecer a decisão');
+      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível esquecer a decisão'));
     } finally {
       if (mountedRef.current) setForgettingId(null);
     }
@@ -189,7 +192,7 @@ export function ChatMemoryPage() {
       setMemory(next);
     } catch (e) {
       if (!mountedRef.current) return;
-      setError(e instanceof ApiError ? e.message : 'Não foi possível alterar a resposta automática');
+      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível alterar a resposta automática'));
     } finally {
       if (mountedRef.current) setAutodeciding(false);
     }
@@ -207,7 +210,7 @@ export function ChatMemoryPage() {
       setMemory(next);
     } catch (e) {
       if (!mountedRef.current) return;
-      setError(e instanceof ApiError ? e.message : 'Não foi possível alterar as respostas do Codex');
+      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível alterar as respostas do Codex'));
     } finally {
       if (mountedRef.current) setCodexSwitching(false);
     }
@@ -222,7 +225,7 @@ export function ChatMemoryPage() {
       },
       (e) => {
         if (!mountedRef.current) return;
-        setNotesError(e instanceof ApiError ? e.message : 'Não foi possível carregar as anotações do concierge');
+        setNotesError(e instanceof ApiError ? e.message : i18n.t('Não foi possível carregar as anotações do concierge'));
       },
     );
     // mountedRef alone guards this: no search or toggle ever races a note's own state.
@@ -239,14 +242,14 @@ export function ChatMemoryPage() {
       setNotesCursor(page.next_cursor);
     } catch (e) {
       if (!mountedRef.current) return;
-      setNotesError(e instanceof ApiError ? e.message : 'Não foi possível carregar mais anotações');
+      setNotesError(e instanceof ApiError ? e.message : i18n.t('Não foi possível carregar mais anotações'));
     } finally {
       if (mountedRef.current) setLoadingMoreNotes(false);
     }
   };
 
   const forgetNote = async (n: ConciergeNote) => {
-    if (!window.confirm(`Esquecer a anotação sobre «${n.question}»?`)) return;
+    if (!window.confirm(t('Esquecer a anotação sobre «{{question}}»?', { question: n.question }))) return;
     setForgettingNoteId(n.id);
     setNotesError(null);
     try {
@@ -255,7 +258,7 @@ export function ChatMemoryPage() {
       setNotes((prev) => (prev ?? []).filter((x) => x.id !== n.id));
     } catch (e) {
       if (!mountedRef.current) return;
-      setNotesError(e instanceof ApiError ? e.message : 'Não foi possível esquecer a anotação');
+      setNotesError(e instanceof ApiError ? e.message : i18n.t('Não foi possível esquecer a anotação'));
     } finally {
       if (mountedRef.current) setForgettingNoteId(null);
     }
@@ -272,7 +275,7 @@ export function ChatMemoryPage() {
       setLessonsCursor(page.next_cursor);
     } catch (e) {
       if (lessonsGenRef.current !== myGen) return;
-      setLessonsError(e instanceof ApiError ? e.message : 'Não foi possível carregar as lições');
+      setLessonsError(e instanceof ApiError ? e.message : i18n.t('Não foi possível carregar as lições'));
     }
   }, []);
 
@@ -283,8 +286,8 @@ export function ChatMemoryPage() {
       void loadLessonsFirstPage(lessonsQ);
       return;
     }
-    const t = setTimeout(() => void loadLessonsFirstPage(lessonsQ), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => void loadLessonsFirstPage(lessonsQ), 300);
+    return () => clearTimeout(timer);
   }, [lessonsQ, loadLessonsFirstPage]);
 
   const loadMoreLessons = async () => {
@@ -299,14 +302,14 @@ export function ChatMemoryPage() {
       setLessonsCursor(page.next_cursor);
     } catch (e) {
       if (lessonsGenRef.current !== myGen) return;
-      setLessonsError(e instanceof ApiError ? e.message : 'Não foi possível carregar mais lições');
+      setLessonsError(e instanceof ApiError ? e.message : i18n.t('Não foi possível carregar mais lições'));
     } finally {
       if (lessonsGenRef.current === myGen) setLoadingMoreLessons(false);
     }
   };
 
   /** "Verificar" / "Desfazer verificação": one handler, the direction decided by the row's own current
-   *  state — matches the pt-BR button that was actually shown. */
+   *  state — matches the button that was actually shown. */
   const toggleLessonVerified = async (l: LessonItem) => {
     setVerifyingLessonId(l.id);
     setLessonsError(null);
@@ -316,14 +319,14 @@ export function ChatMemoryPage() {
       setLessons((prev) => (prev ?? []).map((x) => (x.id === updated.id ? updated : x)));
     } catch (e) {
       if (!mountedRef.current) return;
-      setLessonsError(e instanceof ApiError ? e.message : 'Não foi possível verificar a lição');
+      setLessonsError(e instanceof ApiError ? e.message : i18n.t('Não foi possível verificar a lição'));
     } finally {
       if (mountedRef.current) setVerifyingLessonId(null);
     }
   };
 
   const forgetLesson = async (l: LessonItem) => {
-    if (!window.confirm('Esquecer esta lição?')) return;
+    if (!window.confirm(t('Esquecer esta lição?'))) return;
     setForgettingLessonId(l.id);
     setLessonsError(null);
     setLessonsNote(null);
@@ -334,7 +337,7 @@ export function ChatMemoryPage() {
       if (r.note) setLessonsNote(r.note);
     } catch (e) {
       if (!mountedRef.current) return;
-      setLessonsError(e instanceof ApiError ? e.message : 'Não foi possível esquecer a lição');
+      setLessonsError(e instanceof ApiError ? e.message : i18n.t('Não foi possível esquecer a lição'));
     } finally {
       if (mountedRef.current) setForgettingLessonId(null);
     }
@@ -342,23 +345,23 @@ export function ChatMemoryPage() {
 
   return (
     <div className="w-full min-w-0 flex-1 overflow-y-auto px-4 py-6">
-      <h2 className="text-lg font-semibold text-fg">Memória do chat</h2>
+      <h2 className="text-lg font-semibold text-fg">{t('Memória do chat')}</h2>
       <p className="mt-1 text-sm text-fg-muted">
-        O que o concierge lembra das suas respostas anteriores, para sugerir a mesma resposta quando uma aba perguntar de novo.
+        {t('O que o concierge lembra das suas respostas anteriores, para sugerir a mesma resposta quando uma aba perguntar de novo.')}
       </p>
 
       {memory?.available === false ? (
-        <p className="mt-4 text-sm text-fg-dim">Sugestões indisponíveis neste servidor</p>
+        <p className="mt-4 text-sm text-fg-dim">{t('Sugestões indisponíveis neste servidor')}</p>
       ) : (
         memory && (
           <>
             <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-line bg-bg-2 p-3">
-              <span className="text-sm text-fg">Sugerir respostas com base nas minhas decisões</span>
+              <span className="text-sm text-fg">{t('Sugerir respostas com base nas minhas decisões')}</span>
               <button
                 type="button"
                 role="switch"
                 aria-checked={memory.enabled}
-                aria-label="Sugerir respostas com base nas minhas decisões"
+                aria-label={t('Sugerir respostas com base nas minhas decisões')}
                 disabled={switching}
                 onClick={() => void toggle()}
                 className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${memory.enabled ? 'bg-accent' : 'bg-fg-dim/40'}`}
@@ -368,12 +371,12 @@ export function ChatMemoryPage() {
             </div>
             <div className="mt-3 rounded-lg border border-line bg-bg-2 p-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-fg">Responder sozinho quando houver precedente</span>
+                <span className="text-sm text-fg">{t('Responder sozinho quando houver precedente')}</span>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={memory.autodecide}
-                  aria-label="Responder sozinho quando houver precedente"
+                  aria-label={t('Responder sozinho quando houver precedente')}
                   disabled={autodeciding}
                   onClick={() => void toggleAutodecide()}
                   className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${memory.autodecide ? 'bg-accent' : 'bg-fg-dim/40'}`}
@@ -382,7 +385,7 @@ export function ChatMemoryPage() {
                 </button>
               </div>
               <p className="mt-1 text-xs text-fg-dim">
-                Quando a resposta repetir uma decisão sua recente, o concierge espera 60 segundos antes de responder por você, dando tempo de cancelar.
+                {t('Quando a resposta repetir uma decisão sua recente, o concierge espera 60 segundos antes de responder por você, dando tempo de cancelar.')}
               </p>
             </div>
           </>
@@ -393,12 +396,12 @@ export function ChatMemoryPage() {
       {memory && (
         <div className="mt-3 rounded-lg border border-line bg-bg-2 p-3">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-fg">Responder perguntas do Codex pelo chat</span>
+            <span className="text-sm text-fg">{t('Responder perguntas do Codex pelo chat')}</span>
             <button
               type="button"
               role="switch"
               aria-checked={memory.codex_replies}
-              aria-label="Responder perguntas do Codex pelo chat"
+              aria-label={t('Responder perguntas do Codex pelo chat')}
               disabled={codexSwitching}
               onClick={() => void toggleCodexReplies()}
               className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${memory.codex_replies ? 'bg-accent' : 'bg-fg-dim/40'}`}
@@ -406,23 +409,23 @@ export function ChatMemoryPage() {
               <span className={`absolute left-0 top-0.5 h-4 w-4 rounded-full transition-transform ${memory.codex_replies ? 'translate-x-[18px] bg-white' : 'translate-x-0.5 bg-fg-muted'}`} />
             </button>
           </div>
-          <p className="mt-1 text-xs text-fg-dim">Quando o Codex termina o turno com uma pergunta, abre um card no chat para você responder sem ir até a aba.</p>
+          <p className="mt-1 text-xs text-fg-dim">{t('Quando o Codex termina o turno com uma pergunta, abre um card no chat para você responder sem ir até a aba.')}</p>
         </div>
       )}
 
       <div className="mt-4">
         <label className="label" htmlFor="chat-memory-search">
-          Buscar
+          {t('Buscar')}
         </label>
-        <input id="chat-memory-search" className="input mt-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder="pergunta, resposta ou projeto" />
+        <input id="chat-memory-search" className="input mt-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('pergunta, resposta ou projeto')} />
       </div>
 
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
       {decisions === null ? (
-        <p className="mt-4 text-sm text-fg-dim">Carregando…</p>
+        <p className="mt-4 text-sm text-fg-dim">{t('Carregando…')}</p>
       ) : decisions.length === 0 ? (
-        <p className="mt-4 text-sm text-fg-dim">Nenhuma decisão lembrada ainda.</p>
+        <p className="mt-4 text-sm text-fg-dim">{t('Nenhuma decisão lembrada ainda.')}</p>
       ) : (
         <ul className="mt-4 space-y-2">
           {decisions.map((d) => (
@@ -430,10 +433,15 @@ export function ChatMemoryPage() {
               <p className="whitespace-pre-wrap text-fg">{d.question}</p>
               <p className="mt-1 text-fg-muted">{`→ ${answerText(d)}`}</p>
               <p className="mt-1 text-xs text-fg-dim">
-                {`${d.project_name ?? 'sem projeto'} · ${fmtDate(d.created_at)} · sugerida ${d.suggested_count}× · aceita ${d.accepted_count}×`}
+                {t('{{project}} · {{date}} · sugerida {{suggested}}× · aceita {{accepted}}×', {
+                  project: d.project_name ?? t('sem projeto'),
+                  date: fmtDate(d.created_at),
+                  suggested: d.suggested_count,
+                  accepted: d.accepted_count,
+                })}
               </p>
               <button type="button" className="btn-ghost mt-2 text-xs text-danger" disabled={forgettingId === d.id} onClick={() => void forget(d)}>
-                Esquecer
+                {t('Esquecer')}
               </button>
             </li>
           ))}
@@ -442,28 +450,28 @@ export function ChatMemoryPage() {
 
       {cursor && (
         <button type="button" className="btn-ghost mt-4" disabled={loadingMore} onClick={() => void loadMore()}>
-          {loadingMore ? 'Carregando…' : 'Carregar mais'}
+          {loadingMore ? t('Carregando…') : t('Carregar mais')}
         </button>
       )}
 
-      <h3 className="mt-8 text-base font-semibold text-fg">Anotações do concierge</h3>
-      <p className="mt-1 text-sm text-fg-muted">Decisões que o concierge registrou por conta própria, com o motivo que deu para cada uma.</p>
+      <h3 className="mt-8 text-base font-semibold text-fg">{t('Anotações do concierge')}</h3>
+      <p className="mt-1 text-sm text-fg-muted">{t('Decisões que o concierge registrou por conta própria, com o motivo que deu para cada uma.')}</p>
 
       {notesError && <p className="mt-3 text-sm text-danger">{notesError}</p>}
 
       {notes === null ? (
-        <p className="mt-4 text-sm text-fg-dim">Carregando…</p>
+        <p className="mt-4 text-sm text-fg-dim">{t('Carregando…')}</p>
       ) : notes.length === 0 ? (
-        <p className="mt-4 text-sm text-fg-dim">Nenhuma anotação ainda.</p>
+        <p className="mt-4 text-sm text-fg-dim">{t('Nenhuma anotação ainda.')}</p>
       ) : (
         <ul className="mt-4 space-y-2">
           {notes.map((n) => (
             <li key={n.id} className="rounded-lg border border-line bg-bg-2 p-3 text-sm">
               <p className="whitespace-pre-wrap text-fg">{n.question}</p>
               <p className="mt-1 text-fg-muted">{`→ ${n.decision}`}</p>
-              <p className="mt-1 text-xs text-fg-dim">{`${n.reason} · ${n.project_name ?? 'sem projeto'} · ${fmtDate(n.created_at)}`}</p>
+              <p className="mt-1 text-xs text-fg-dim">{`${n.reason} · ${n.project_name ?? t('sem projeto')} · ${fmtDate(n.created_at)}`}</p>
               <button type="button" className="btn-ghost mt-2 text-xs text-danger" disabled={forgettingNoteId === n.id} onClick={() => void forgetNote(n)}>
-                Esquecer
+                {t('Esquecer')}
               </button>
             </li>
           ))}
@@ -472,25 +480,25 @@ export function ChatMemoryPage() {
 
       {notesCursor && (
         <button type="button" className="btn-ghost mt-4" disabled={loadingMoreNotes} onClick={() => void loadMoreNotes()}>
-          {loadingMoreNotes ? 'Carregando…' : 'Carregar mais anotações'}
+          {loadingMoreNotes ? t('Carregando…') : t('Carregar mais anotações')}
         </button>
       )}
 
-      <h3 className="mt-8 text-base font-semibold text-fg">Lições</h3>
+      <h3 className="mt-8 text-base font-semibold text-fg">{t('Lições')}</h3>
       <p className="mt-1 text-sm text-fg-muted">
-        Erros que já aconteceram — de arquivos <code>docs/lessons</code> e de anotações do projeto — para o concierge não repetir.
+        <Trans i18nKey="Erros que já aconteceram — de arquivos <0>docs/lessons</0> e de anotações do projeto — para o concierge não repetir." components={[<code key="c" />]} />
       </p>
 
       <div className="mt-4">
         <label className="label" htmlFor="chat-memory-lessons-search">
-          Buscar lições
+          {t('Buscar lições')}
         </label>
         <input
           id="chat-memory-lessons-search"
           className="input mt-1"
           value={lessonsQ}
           onChange={(e) => setLessonsQ(e.target.value)}
-          placeholder="sintoma, projeto ou arquivo"
+          placeholder={t('sintoma, projeto ou arquivo')}
         />
       </div>
 
@@ -498,9 +506,9 @@ export function ChatMemoryPage() {
       {lessonsNote && <p className="mt-3 text-sm text-fg-dim">{lessonsNote}</p>}
 
       {lessons === null ? (
-        <p className="mt-4 text-sm text-fg-dim">Carregando…</p>
+        <p className="mt-4 text-sm text-fg-dim">{t('Carregando…')}</p>
       ) : lessons.length === 0 ? (
-        <p className="mt-4 text-sm text-fg-dim">Nenhuma lição ainda.</p>
+        <p className="mt-4 text-sm text-fg-dim">{t('Nenhuma lição ainda.')}</p>
       ) : (
         <ul className="mt-4 space-y-2">
           {lessons.map((l) => {
@@ -510,29 +518,29 @@ export function ChatMemoryPage() {
                 <p className="whitespace-pre-wrap text-fg">{l.title}</p>
                 <p className="mt-1 text-fg-muted">{l.excerpt}</p>
                 <p className="mt-1 text-xs text-fg-dim">
-                  {`${l.project?.name ?? 'sem projeto'} · ${originText(l)} · ${EVIDENCE_LABEL[l.evidence]} · ${fmtDate(l.created_at)}`}
+                  {`${l.project?.name ?? t('sem projeto')} · ${originText(l)} · ${t(EVIDENCE_LABEL[l.evidence])} · ${fmtDate(l.created_at)}`}
                   {l.verified && (
                     <>
                       {' · '}
-                      <span className="text-ok">verificada</span>
+                      <span className="text-ok">{t('verificada')}</span>
                     </>
                   )}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <button type="button" className="btn-ghost text-xs" disabled={verifyingLessonId === l.id} onClick={() => void toggleLessonVerified(l)}>
-                    {l.verified ? 'Desfazer verificação' : 'Verificar'}
+                    {l.verified ? t('Desfazer verificação') : t('Verificar')}
                   </button>
                   <button type="button" className="btn-ghost text-xs text-danger" disabled={forgettingLessonId === l.id} onClick={() => void forgetLesson(l)}>
-                    Esquecer
+                    {t('Esquecer')}
                   </button>
                   {href &&
                     (href.startsWith('http') ? (
                       <a href={href} target="_blank" rel="noreferrer" className="btn-ghost text-xs">
-                        Abrir origem
+                        {t('Abrir origem')}
                       </a>
                     ) : (
                       <Link to={href} className="btn-ghost text-xs">
-                        Abrir origem
+                        {t('Abrir origem')}
                       </Link>
                     ))}
                 </div>
@@ -544,7 +552,7 @@ export function ChatMemoryPage() {
 
       {lessonsCursor && (
         <button type="button" className="btn-ghost mt-4" disabled={loadingMoreLessons} onClick={() => void loadMoreLessons()}>
-          {loadingMoreLessons ? 'Carregando…' : 'Carregar mais lições'}
+          {loadingMoreLessons ? t('Carregando…') : t('Carregar mais lições')}
         </button>
       )}
     </div>

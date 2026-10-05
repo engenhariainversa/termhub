@@ -1,5 +1,5 @@
 // The permissions store (permission prompts spec §3.2) over fake OS services.
-import { messageSent, pushGranted, sessionEnded, sessionStarted } from '@/features/shared/signals';
+import { appForegrounded, messageSent, pushGranted, sessionEnded, sessionStarted } from '@/features/shared/signals';
 import type { PermissionsDeps } from '../model/permissions.types';
 import { createPermissionsStore, MAX_PUSH_PRIMER_DISMISSALS, showAdCard } from './createPermissionsStore';
 
@@ -216,4 +216,47 @@ it('native failures leave the state as it was and never throw', async () => {
 
 it('exposes the platform it was built for', () => {
   expect(createPermissionsStore(fakeDeps({ platform: 'android' })).getState().platform).toBe('android');
+});
+
+describe('notifications turned on outside the app (TER-921)', () => {
+  it('back in the foreground, a status that became granted emits pushGranted once', async () => {
+    const deps = fakeDeps({ notificationStatus: jest.fn(async () => 'denied') });
+    const store = createPermissionsStore(deps);
+    await store.getState().refreshStatuses();
+    const granted = jest.fn();
+    const off = pushGranted.subscribe(granted);
+    deps.notificationStatus.mockImplementation(async () => 'granted');
+    appForegrounded.emit();
+    await flush();
+    expect(store.getState().notificationStatus).toBe('granted');
+    expect(granted).toHaveBeenCalledTimes(1);
+    // Already granted: coming back again registers nothing new.
+    appForegrounded.emit();
+    await flush();
+    expect(granted).toHaveBeenCalledTimes(1);
+    off();
+  });
+
+  it('the first read (status not known yet) never emits: the session start registers', async () => {
+    const deps = fakeDeps({ notificationStatus: jest.fn(async () => 'granted') });
+    const store = createPermissionsStore(deps);
+    const granted = jest.fn();
+    const off = pushGranted.subscribe(granted);
+    await store.getState().refreshStatuses();
+    expect(granted).not.toHaveBeenCalled();
+    off();
+  });
+
+  it('still denied or undetermined emits nothing', async () => {
+    const deps = fakeDeps({ notificationStatus: jest.fn(async () => 'undetermined') });
+    const store = createPermissionsStore(deps);
+    await store.getState().refreshStatuses();
+    const granted = jest.fn();
+    const off = pushGranted.subscribe(granted);
+    deps.notificationStatus.mockImplementation(async () => 'denied');
+    appForegrounded.emit();
+    await flush();
+    expect(granted).not.toHaveBeenCalled();
+    off();
+  });
 });

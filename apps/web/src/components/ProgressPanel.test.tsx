@@ -23,7 +23,7 @@ const response = (): ProgressResponse => ({
       id: 'c1', ref: 'TER-183', title: 'Painel de progresso', type: 'story', status: 'doing', column_name: 'Fazendo',
       units: { done: 3, total: 5 }, percent: 60, started_at: null, done_at: null, active_seconds: 1800,
       estimate: { kind: 'range', low_s: 1200, high_s: 2700, basis: 'agent_time', samples: 3 },
-      agents: [{ tab_id: 't1', tab_name: 'spec', machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: '2026-09-27T11:50:00.000Z', background: false, needs_you: false, activity: 'coding', activity_verb: 'Coding', rate_limited: false }],
+      agents: [{ tab_id: 't1', tab_name: 'spec', machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: '2026-09-27T11:50:00.000Z', background: false, finished: false, needs_you: false, activity: 'coding', activity_verb: 'Coding', rate_limited: false }],
       pull_requests: [],
     }],
     ci: null, ci_error: null,
@@ -52,7 +52,7 @@ describe('ProgressPanel', () => {
     expect(screen.getByText('50%')).toBeInTheDocument();
     expect(screen.getByText('3/6 · backlog: 1')).toBeInTheDocument();
     expect(screen.getAllByText('~20–45 min de trabalho')).toHaveLength(2);
-    expect(screen.getByText('1 cards sem estimativa')).toBeInTheDocument();
+    expect(screen.getByText('1 card sem estimativa')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /TER-183/ })).toHaveAttribute('href', '/project/TER-183');
     expect(screen.getByRole('link', { name: /spec.*trabalhando/ })).toHaveAttribute('href', '/projects/p1?tab=t1');
   });

@@ -1,18 +1,20 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
 import { useMonitor } from '../lib/monitor';
 import { useData } from '../lib/data';
 import { ApiError } from '../lib/api';
 import { emptyMonitorHint, tabNeedsYou } from '../lib/needs-you';
 import { NEEDS_YOU, TAB_STATE_LABEL, type MonitorItem, type TabState } from '../lib/types';
+import { i18n, useTranslation } from '../i18n';
 
 function since(iso: string | null, now: number): string {
   if (!iso) return '';
   const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
-  if (s < 60) return `há ${s} s`;
+  if (s < 60) return i18n.t('há {{n}} s', { n: s });
   const m = Math.round(s / 60);
-  if (m < 60) return `há ${m} min`;
-  return `há ${Math.round(m / 60)} h`;
+  if (m < 60) return i18n.t('há {{n}} min', { n: m });
+  return i18n.t('há {{n}} h', { n: Math.round(m / 60) });
 }
 
 function stateStyle(state: TabState | null): string {
@@ -26,13 +28,17 @@ function stateStyle(state: TabState | null): string {
       return 'bg-bg-4 text-fg-muted';
     case 'error':
       return 'bg-danger/15 text-danger';
+    // done, asking nothing (TER-972): falls through to the green of a healthy tab
+    case 'finished':
     default:
       return 'bg-ok/15 text-ok';
   }
 }
 
 function Item({ item, now }: { item: MonitorItem; now: number }) {
+  const { t } = useTranslation();
   const { reply } = useMonitor();
+  const { can } = useAuth();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +46,8 @@ function Item({ item, now }: { item: MonitorItem; now: number }) {
   // The highlight follows "needs you" (drops once seen); the quick-reply form follows the raw
   // state — the tool is still actually waiting for an answer either way, seen or not.
   const waiting = tabNeedsYou(tab);
-  const canReply = !!tab.state && NEEDS_YOU.includes(tab.state);
+  // Replying types into the terminal: it takes terminals:write (TER-576), like typing in the tab itself.
+  const canReply = !!tab.state && NEEDS_YOU.includes(tab.state) && can('terminals', 'write');
 
   const send = async (e: FormEvent, value = text) => {
     e.preventDefault();
@@ -50,7 +57,7 @@ function Item({ item, now }: { item: MonitorItem; now: number }) {
       await reply(tab.id, value);
       setText('');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Não foi possível enviar');
+      setError(err instanceof ApiError ? err.message : t('Não foi possível enviar'));
     } finally {
       setSending(false);
     }
@@ -61,7 +68,7 @@ function Item({ item, now }: { item: MonitorItem; now: number }) {
       {/* narrow: the state and the time on the first line, project › tab on a line of its own;
           from sm up, everything on one line as before */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-semibold ${stateStyle(tab.state)}`}>{tab.state ? TAB_STATE_LABEL[tab.state] : '—'}</span>
+        <span className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-semibold ${stateStyle(tab.state)}`}>{tab.state ? t(TAB_STATE_LABEL[tab.state]) : '—'}</span>
         <span data-testid="needs-you-where" className="order-last flex w-full min-w-0 items-center gap-2 sm:order-none sm:w-auto sm:flex-1">
           <Link to={`/projects/${project.id}`} className="max-w-[60%] shrink-0 truncate font-medium hover:underline">
             {project.name}
@@ -78,19 +85,20 @@ function Item({ item, now }: { item: MonitorItem; now: number }) {
         <form className="mt-2 flex items-center gap-2" onSubmit={send}>
           <input
             className="min-w-0 flex-1 rounded border border-line bg-bg px-2 py-1 text-xs outline-none focus:border-accent"
-            placeholder={tab.state === 'waiting_permission' ? 'Resposta (Enter aceita)…' : 'Responder…'}
-            aria-label={tab.state === 'waiting_permission' ? 'Resposta (ou só Enter para aceitar)' : 'Responder no terminal'}
+            placeholder={tab.state === 'waiting_permission' ? t('Resposta (Enter aceita)…') : t('Responder…')}
+            aria-label={tab.state === 'waiting_permission' ? t('Resposta (ou só Enter para aceitar)') : t('Responder no terminal')}
             value={text}
             disabled={sending}
             onChange={(e) => setText(e.target.value)}
           />
           {tab.state === 'waiting_permission' && (
             <button type="button" className="rounded bg-bg-3 px-2 py-1 text-xs hover:bg-bg-4 disabled:opacity-50" disabled={sending} onClick={(e) => void send(e, 'y')}>
+              {/* i18n-ignore: the key sent to the terminal */}
               y
             </button>
           )}
           <button type="submit" className="rounded bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50" disabled={sending}>
-            {sending ? '…' : 'Enviar ⏎'}
+            {sending ? '…' : t('Enviar ⏎')}
           </button>
         </form>
       )}
@@ -112,7 +120,7 @@ export interface MachineGroup {
 
 /**
  * One accordion per machine, split into three buckets, in this render order: waiting (needs you,
- * highlighted) → seen (still waiting_*, but already looked at) → finished (idle/error). The ones
+ * highlighted) → seen (still waiting_*, but already looked at) → finished (idle/finished/error). The ones
  * with someone waiting open (and sort first); the rest collapsed. Pure — unit-tested directly.
  */
 export function groupMachineItems(items: MonitorItem[]): MachineGroup[] {
@@ -126,7 +134,7 @@ export function groupMachineItems(items: MonitorItem[]): MachineGroup[] {
     const st = item.tab.state;
     if (tabNeedsYou(item.tab)) g.waiting.push(item);
     else if (st && NEEDS_YOU.includes(st)) g.seen.push(item); // waiting_*, already seen
-    else if (st === 'idle' || st === 'error') g.finished.push(item);
+    else if (st === 'idle' || st === 'finished' || st === 'error') g.finished.push(item);
     else g.working += 1;
   }
   const oldestWaiting = (g: MachineGroup) => (g.waiting.length ? Math.min(...g.waiting.map((i) => new Date(i.tab.state_at ?? 0).getTime())) : Number.POSITIVE_INFINITY);
@@ -144,14 +152,15 @@ function readOpen(): Record<string, boolean> {
 }
 
 function MachineSection({ group, now, open, onToggle }: { group: MachineGroup; now: number; open: boolean; onToggle: () => void }) {
+  const { t } = useTranslation();
   const { statuses } = useData();
   const { machine, waiting, seen, finished, working } = group;
   const st = statuses[machine.id] ?? 'checking';
   const summary = [
-    waiting.length ? `${waiting.length} esperando` : null,
-    seen.length ? `${seen.length} ${seen.length === 1 ? 'visto' : 'vistos'}` : null,
-    finished.length ? `${finished.length} terminou` : null,
-    working ? `${working} trabalhando` : null,
+    waiting.length ? t('{{n}} esperando', { n: waiting.length }) : null,
+    seen.length ? t('{{count}} vistos', { count: seen.length }) : null,
+    finished.length ? t('{{n}} terminou', { n: finished.length }) : null,
+    working ? t('{{n}} trabalhando', { n: working }) : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -169,7 +178,7 @@ function MachineSection({ group, now, open, onToggle }: { group: MachineGroup; n
         {waiting.length > 0 && <span className="shrink-0 rounded bg-accent/15 px-1.5 text-[11px] font-semibold text-accent">{waiting.length}</span>}
         {/* narrow: under the name, aligned with it; from sm up, on the right as before */}
         <span data-testid="needs-you-summary" className="w-full truncate pl-8 text-xs text-fg-dim sm:ml-auto sm:w-auto sm:pl-0">
-          {summary || 'sem atividade'}
+          {summary || t('sem atividade')}
         </span>
       </button>
       {open && hasContent && (
@@ -185,13 +194,14 @@ function MachineSection({ group, now, open, onToggle }: { group: MachineGroup; n
           ))}
         </ul>
       )}
-      {open && !hasContent && <p className="border-t border-line px-3 py-2 text-xs text-fg-dim">Nenhuma tab esperando você aqui.</p>}
+      {open && !hasContent && <p className="border-t border-line px-3 py-2 text-xs text-fg-dim">{t('Nenhuma tab esperando você aqui.')}</p>}
     </li>
   );
 }
 
 /** Home: one accordion per machine; machines with someone waiting come first and start open. */
 export function NeedsYouList({ now }: { now: number }) {
+  const { t } = useTranslation();
   const { items, needsYou, connected } = useMonitor();
   const { machines } = useData();
   const [open, setOpen] = useState<Record<string, boolean>>(readOpen);
@@ -202,7 +212,7 @@ export function NeedsYouList({ now }: { now: number }) {
     return (
       <section className="mb-6">
         <div className="mb-2 flex items-center gap-2">
-          <h2 className="text-sm font-semibold">Precisando de você</h2>
+          <h2 className="text-sm font-semibold">{t('Precisando de você')}</h2>
         </div>
         <p className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">{hint}</p>
       </section>
@@ -221,9 +231,9 @@ export function NeedsYouList({ now }: { now: number }) {
   return (
     <section className="mb-6">
       <div className="mb-2 flex items-center gap-2">
-        <h2 className="text-sm font-semibold">Precisando de você</h2>
-        <span className="text-xs text-fg-dim">{needsYou.length === 0 ? 'ninguém esperando' : `${needsYou.length} esperando`}</span>
-        {!connected && <span className="ml-auto text-[11px] text-warn">reconectando…</span>}
+        <h2 className="text-sm font-semibold">{t('Precisando de você')}</h2>
+        <span className="text-xs text-fg-dim">{needsYou.length === 0 ? t('ninguém esperando') : t('{{n}} esperando', { n: needsYou.length })}</span>
+        {!connected && <span className="ml-auto text-[11px] text-warn">{t('reconectando…')}</span>}
       </div>
       <ul className="space-y-2">
         {groups.map((g) => (

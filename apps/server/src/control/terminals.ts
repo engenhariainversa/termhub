@@ -3,15 +3,18 @@ import { requireAgentVersion } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
 import { captureScreen } from '../agent/screen.js';
 import type { Machine, Tab, TabState } from '../db/repositories/types.js';
-import { HttpError } from '../lib/errors.js';
+import { HttpError, localizedOf } from '../lib/errors.js';
 import { nextTerminalName } from '../lib/tab-names.js';
 import { killTmuxSession } from '../terminal/machine-exec.js';
 import { removeTabMcp } from '../terminal/tab-mcp.js';
+import { recordInputOrigin, type InputOrigin } from '../terminal/input-origin.js';
 import { ensureSession, INPUT_MAX_CHARS, sendKeyToSession, sendTextToSession, TERMINAL_RPC_MIN_AGENT_VERSION } from '../terminal/session-ops.js';
 import { ControlError, type ControlContext } from './context.js';
+import { deriveInputOrigin, verifyOnBehalfOf } from './input-origin.js';
 import { assertTerminal, clamp, offline, SCREEN_DEFAULT_LINES, SCREEN_MAX_LINES, waitForState } from './screen.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved } from '../monitor/tab-events.js';
+import { msg } from '../i18n/index.js';
 
 export { INPUT_MAX_CHARS };
 
@@ -67,7 +70,7 @@ export async function openTab(
   if (ctx.token) {
     const open = await ctx.repos.tabs.countOpenByToken(ctx.token.id);
     if (open >= MAX_TABS_PER_TOKEN) {
-      throw new ControlError('TAB_LIMIT', `Este token já tem ${open} abas abertas (limite de ${MAX_TABS_PER_TOKEN}): feche alguma com close_tab antes de abrir outra`);
+      throw new ControlError('TAB_LIMIT', msg('Este token já tem {{open}} abas abertas (limite de {{max}}): feche alguma com close_tab antes de abrir outra', { open, max: MAX_TABS_PER_TOKEN }));
     }
   }
 
@@ -85,20 +88,40 @@ export async function openTab(
     const code = e instanceof ControlError || e instanceof HttpError ? (e.code ?? 'SESSION_FAILED') : 'SESSION_FAILED';
     throw new ControlError(
       code,
-      `A aba ${tab.id} foi criada, mas a sessão tmux não subiu: ${e instanceof Error ? e.message : 'erro desconhecido'}. Se não for usá-la, feche-a com close_tab.`,
+      msg('A aba {{tab}} foi criada, mas a sessão tmux não subiu: {{reason}}. Se não for usá-la, feche-a com close_tab.', {
+        tab: tab.id,
+        reason: e instanceof Error ? localizedOf(e) : msg('erro desconhecido'),
+      }),
     );
   }
 }
 
-/** Types text into the tab. `enter` defaults to true: the point is almost always to submit it. */
-export async function sendInput(ctx: ControlContext, input: { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean }): Promise<{ tab_id: string; sent: true }> {
-  if (input.text.length > INPUT_MAX_CHARS) throw new ControlError('TEXT_TOO_LONG', `Texto longo demais: ${input.text.length} caracteres, máximo ${INPUT_MAX_CHARS}`);
+/**
+ * Types text into the tab. `enter` defaults to true: the point is almost always to submit it.
+ *
+ * Records who wrote the text (TER-851) so the tab's hook can tell the session: `origin` when the caller
+ * knows it (a termhub screen), derived from `ctx` otherwise, `null` for termhub's own keystrokes that
+ * are not a prompt (`/clear`, an answer typed into a question dialog).
+ */
+export async function sendInput(
+  ctx: ControlContext,
+  input: { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean; on_behalf_of?: string[] },
+  origin?: InputOrigin | null,
+): Promise<{ tab_id: string; sent: true }> {
+  if (input.text.length > INPUT_MAX_CHARS) throw new ControlError('TEXT_TOO_LONG', msg('Texto longo demais: {{length}} caracteres, máximo {{max}}', { length: input.text.length, max: INPUT_MAX_CHARS }));
+  const onBehalfOf = await verifyOnBehalfOf(ctx, input.on_behalf_of);
   const { tab, machine, cwd, session } = await terminal(ctx, input.tab_id);
   if (tab.state === 'waiting_permission' && !input.answering_permission) {
-    throw new ControlError('WAITING_PERMISSION', `Esta aba está esperando uma permissão: "${tab.state_text ?? 'pergunta não registrada'}". Se a sua resposta é para essa pergunta, repita com answering_permission: true.`);
+    throw new ControlError(
+      'WAITING_PERMISSION',
+      msg('Esta aba está esperando uma permissão: "{{question}}". Se a sua resposta é para essa pergunta, repita com answering_permission: true.', {
+        question: tab.state_text ?? msg('pergunta não registrada'),
+      }),
+    );
   }
   await ensureSession(machine, session, cwd);
   const enter = input.enter ?? true;
+  if (origin !== null) recordInputOrigin(tab.id, input.text, origin ?? deriveInputOrigin(ctx, onBehalfOf));
   // An embedded newline means a multi-line prompt: paste it so the TUI reads the newline as part
   // of the text, not as Enter submitting a half-typed line (spec: bracketed paste).
   if (input.text.includes('\n')) {
@@ -134,14 +157,17 @@ export async function runCommand(
   if (tab.state === 'waiting_permission') {
     throw new ControlError(
       'WAITING_PERMISSION',
-      `Esta aba está esperando uma permissão: "${tab.state_text ?? 'pergunta não registrada'}". Responda com send_input (answering_permission: true) ou send_key antes de rodar um comando.`,
+      msg('Esta aba está esperando uma permissão: "{{question}}". Responda com send_input (answering_permission: true) ou send_key antes de rodar um comando.', {
+        question: tab.state_text ?? msg('pergunta não registrada'),
+      }),
     );
   }
-  if (input.command.length > INPUT_MAX_CHARS) throw new ControlError('TEXT_TOO_LONG', `Comando longo demais: ${input.command.length} caracteres, máximo ${INPUT_MAX_CHARS}`);
+  if (input.command.length > INPUT_MAX_CHARS) throw new ControlError('TEXT_TOO_LONG', msg('Comando longo demais: {{length}} caracteres, máximo {{max}}', { length: input.command.length, max: INPUT_MAX_CHARS }));
   const timeoutMs = clamp(input.timeout_seconds, RUN_DEFAULT_SECONDS, RUN_MAX_SECONDS) * 1000;
   const lines = clamp(input.lines, SCREEN_DEFAULT_LINES, SCREEN_MAX_LINES);
 
   await ensureSession(machine, session, cwd);
+  recordInputOrigin(tab.id, input.command, deriveInputOrigin(ctx));
   await sendTextToSession(machine, session, input.command, true);
 
   const deadline = Date.now() + timeoutMs;

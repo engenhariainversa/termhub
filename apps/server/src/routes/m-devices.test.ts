@@ -50,6 +50,7 @@ function buildApp(opts: { mobile?: unknown } = {}) {
   };
   const deviceEvents = { record: vi.fn(async () => undefined) };
   const repos = { devices, deviceEvents } as unknown as Repositories;
+  const push = { testPush: vi.fn(async () => ({ scheduled_for: '2026-10-05T00:00:10.000Z', ticket: null })) };
 
   const app = Fastify();
   applyErrorHandler(app);
@@ -57,9 +58,9 @@ function buildApp(opts: { mobile?: unknown } = {}) {
     if (opts.mobile !== undefined) request.mobile = opts.mobile as never;
   });
   app.register((a) => mobileDeviceRoutes(a, repos, { enrolment: enrolment as never, revoke }), { prefix: '/devices' });
-  app.register((a) => mobilePushTokenRoutes(a, repos), { prefix: '' });
+  app.register((a) => mobilePushTokenRoutes(a, repos, push), { prefix: '' });
 
-  return { app, enrolment, revoke, devices, deviceEvents };
+  return { app, enrolment, revoke, devices, deviceEvents, push };
 }
 
 describe('POST /devices/requests', () => {
@@ -185,5 +186,22 @@ describe('PUT /push-token', () => {
     const calls = devices.setPushToken.mock.calls;
     expect(calls[0]).toEqual(['d2', null]);
     expect(calls[1]).toEqual(['d1', goodToken]);
+  });
+});
+
+describe('POST /push-test (TER-913)', () => {
+  it('sends a test push to the calling device and answers 202', async () => {
+    const { app, push } = buildApp({ mobile: deviceMobile });
+    const r = await app.inject({ method: 'POST', url: '/push-test', payload: { kind: 'tab_question', delay_seconds: 10 } });
+    expect(r.statusCode).toBe(202);
+    expect(r.json()).toEqual({ scheduled_for: '2026-10-05T00:00:10.000Z', ticket: null });
+    expect(push.testPush).toHaveBeenCalledWith(user, device, 'tab_question', 10);
+  });
+
+  it('401 without a device session; 400 for a delay over 120 s', async () => {
+    expect((await buildApp().app.inject({ method: 'POST', url: '/push-test', payload: {} })).statusCode).toBe(401);
+    const { app, push } = buildApp({ mobile: deviceMobile });
+    expect((await app.inject({ method: 'POST', url: '/push-test', payload: { delay_seconds: 121 } })).statusCode).toBe(400);
+    expect(push.testPush).not.toHaveBeenCalled();
   });
 });

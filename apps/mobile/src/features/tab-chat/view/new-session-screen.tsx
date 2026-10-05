@@ -1,6 +1,7 @@
 import { useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { TAB_MESSAGE_MAX_CHARS } from '@/services/api/contract';
 import { AppText, Button, Screen } from '@/ui';
@@ -28,6 +29,7 @@ function Choice({ label, selected, onPress }: { label: string; selected: boolean
  * the server picks. On success the route becomes the new session, so "Voltar" goes back to the list.
  */
 export function NewSessionScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const projects = useChatStore((s) => s.projects);
   const loadProjects = useChatStore((s) => s.loadProjects);
@@ -75,33 +77,33 @@ export function NewSessionScreen() {
   return (
     <Screen padded={false}>
       <View className="flex-row items-center gap-2 border-b border-app-border px-2 py-2">
-        <Button label="Voltar" variant="ghost" onPress={goBack} />
+        <Button label={t('Voltar')} variant="ghost" onPress={goBack} />
         <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
-          Nova sessão
+          {t('Nova sessão')}
         </AppText>
       </View>
       <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerClassName="gap-5 px-6 py-4">
         <View className="gap-2">
-          <AppText variant="label">Projeto</AppText>
+          <AppText variant="label">{t('Projeto')}</AppText>
           {projects.map((p) => (
             <Choice key={p.id} label={p.name} selected={p.id === projectId} onPress={() => setProjectId(p.id)} />
           ))}
         </View>
         {machines.length > 1 ? (
           <View className="gap-2">
-            <AppText variant="label">Máquina</AppText>
+            <AppText variant="label">{t('Máquina')}</AppText>
             {machines.map((m) => (
               <Choice key={m.id} label={m.name} selected={m.id === machineId} onPress={() => setMachineId(m.id)} />
             ))}
           </View>
         ) : null}
         <View className="gap-1.5">
-          <AppText variant="label">Primeira mensagem</AppText>
+          <AppText variant="label">{t('Primeira mensagem')}</AppText>
           <TextInput
             value={prompt}
             onChangeText={setPrompt}
-            accessibilityLabel="Primeira mensagem"
-            placeholder="O que o Claude deve fazer?"
+            accessibilityLabel={t('Primeira mensagem')}
+            placeholder={t('O que o Claude deve fazer?')}
             multiline
             textAlignVertical="top"
             style={{ minHeight: 110 }}
@@ -109,7 +111,7 @@ export function NewSessionScreen() {
           />
           {tooLong ? <Text className="text-sm text-app-danger">{TAB_CHAT_MSG.tooLong}</Text> : null}
         </View>
-        <Button label="Iniciar" onPress={() => void submit()} disabled={!canStart} loading={starting} />
+        <Button label={t('Iniciar')} onPress={() => void submit()} disabled={!canStart} loading={starting} />
         {startError && !tooLong ? <Text className="text-sm text-app-danger">{startError}</Text> : null}
       </ScrollView>
     </Screen>

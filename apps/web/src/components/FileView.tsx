@@ -8,19 +8,22 @@ import { formatBytes } from '../lib/attachments';
 import { renderFileMarkdown } from '../lib/markdown';
 import type { FilePreview, FilePreviewOk } from '../lib/types';
 import { handleCopyClick } from './chat/ChatTurn';
+import { formatDateTime } from '../lib/format';
+import { tk, useTranslation } from '../i18n';
 
 /** Why a file has no preview, in the words the screen shows (spec 2026-10-04 file preview D8). */
 export const REFUSAL_TEXT: Record<string, string> = {
-  missing: 'Arquivo não encontrado nesta máquina.',
-  outside: 'Este arquivo está fora das pastas que o agente pode ler (o projeto, a sua pasta pessoal e /tmp).',
-  hidden: 'Arquivos em pastas ocultas (como ~/.ssh ou .git) não são abertos.',
-  type: 'Só arquivos .md, .markdown e .txt podem ser abertos aqui.',
-  not_file: 'Este caminho não é um arquivo.',
-  too_large: 'O arquivo passa de 512 KB, o limite da prévia.',
-  binary: 'O arquivo não é texto (UTF-8).',
-  eperm: 'O agente não tem permissão para ler este arquivo.',
+  missing: tk('Arquivo não encontrado nesta máquina.'),
+  outside: tk('Este arquivo está fora das pastas que o agente pode ler (o projeto, a sua pasta pessoal e /tmp).'),
+  hidden: tk('Arquivos em pastas ocultas (como ~/.ssh ou .git) não são abertos.'),
+  type: tk('Só arquivos .md, .markdown e .txt podem ser abertos aqui.'),
+  not_file: tk('Este caminho não é um arquivo.'),
+  too_large: tk('O arquivo passa de 512 KB, o limite da prévia.'),
+  binary: tk('O arquivo não é texto (UTF-8).'),
+  eperm: tk('O agente não tem permissão para ler este arquivo.'),
 };
-const refusalText = (status: string) => REFUSAL_TEXT[status] ?? 'Não foi possível abrir este arquivo.';
+/** The pt-BR key of the refusal; shown through `t()`. */
+const refusalText = (status: string) => REFUSAL_TEXT[status] ?? tk('Não foi possível abrir este arquivo.');
 
 /** The folder of the path as it was asked, so relative links inside the file resolve from there. */
 export function dirOf(path: string): string {
@@ -49,6 +52,7 @@ interface Props {
  * `renderFileMarkdown`, the chat's sanitiser with links rewritten, so the file can fetch nothing.
  */
 export function FileView({ projectId, path, machineId = null, active, onOpenFile }: Props) {
+  const { t } = useTranslation();
   const [load, setLoad] = useState<Load | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -61,9 +65,9 @@ export function FileView({ projectId, path, machineId = null, active, onOpenFile
       setLoad({ phase: 'done', file });
     } catch (e) {
       const outdated = e instanceof ApiError && e.code === 'AGENT_OUTDATED';
-      setLoad({ phase: 'error', message: e instanceof ApiError ? e.message : 'Erro ao abrir o arquivo', outdated });
+      setLoad({ phase: 'error', message: e instanceof ApiError ? e.message : t('Erro ao abrir o arquivo'), outdated });
     }
-  }, [path, projectId, machineId]);
+  }, [path, projectId, machineId, t]);
 
   useEffect(() => {
     if (active && load === null) void fetchFile();
@@ -85,9 +89,9 @@ export function FileView({ projectId, path, machineId = null, active, onOpenFile
     if (!ok) return;
     try {
       await navigator.clipboard.writeText(ok.content);
-      flash('Copiado.');
+      flash(t('Copiado.'));
     } catch {
-      flash('Não foi possível copiar.');
+      flash(t('Não foi possível copiar.'));
     }
   };
 
@@ -107,7 +111,7 @@ export function FileView({ projectId, path, machineId = null, active, onOpenFile
     // The project's chat opens beside the file; outside a project, the account chat is its own page.
     if (projectId) {
       chat.setOpen(projectId, true);
-      flash('Anexado à caixa do chat do projeto.');
+      flash(t('Anexado à caixa do chat do projeto.'));
     } else navigate('/chat');
   };
 
@@ -129,7 +133,7 @@ export function FileView({ projectId, path, machineId = null, active, onOpenFile
         </span>
         {ok && (
           <span className="text-fg-dim">
-            {ok.machine.name} · {formatBytes(ok.size)} · {new Date(ok.mtime).toLocaleString('pt-BR')}
+            {ok.machine.name} · {formatBytes(ok.size)} · {formatDateTime(ok.mtime)}
           </span>
         )}
         {note && (
@@ -138,29 +142,29 @@ export function FileView({ projectId, path, machineId = null, active, onOpenFile
           </span>
         )}
         <button className="btn-ghost text-xs" onClick={() => void fetchFile()} disabled={load?.phase === 'loading'}>
-          Atualizar
+          {t('Atualizar', { context: 'refresh' })}
         </button>
         {ok && (
           <>
             <button className="btn-ghost text-xs" onClick={() => void copy()}>
-              Copiar
+              {t('Copiar')}
             </button>
             <button className="btn-ghost text-xs" onClick={download}>
-              Baixar
+              {t('Baixar')}
             </button>
             {ok.github_url && (
               <a className="btn-ghost text-xs" href={ok.github_url} target="_blank" rel="noopener noreferrer">
-                Abrir no GitHub
+                {t('Abrir no GitHub')}
               </a>
             )}
             <button className="btn-ghost text-xs" onClick={toChat}>
-              Mandar para o chat
+              {t('Mandar para o chat')}
             </button>
           </>
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
-        {(load === null || load.phase === 'loading') && <p className="text-sm text-fg-dim">Abrindo arquivo…</p>}
+        {(load === null || load.phase === 'loading') && <p className="text-sm text-fg-dim">{t('Abrindo arquivo…')}</p>}
         {load?.phase === 'error' && (
           <div className={`rounded border px-3 py-2 text-sm ${load.outdated ? 'border-warn/30 bg-warn/10 text-warn' : 'border-danger/30 bg-danger/10 text-danger'}`}>
             {load.message}
@@ -168,7 +172,7 @@ export function FileView({ projectId, path, machineId = null, active, onOpenFile
         )}
         {load?.phase === 'done' && load.file.status !== 'ok' && (
           <div className="rounded border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-warn">
-            {refusalText(load.file.status)}
+            {t(refusalText(load.file.status))}
             {load.file.machine && <span className="text-fg-dim"> ({load.file.machine.name})</span>}
           </div>
         )}

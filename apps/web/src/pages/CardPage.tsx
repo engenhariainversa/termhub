@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import { FullScreenMessage } from '../components/Layout';
 import { ProjectPage } from './ProjectPage';
+import { useTranslation } from '../i18n';
 
 type Resolved = { projectId: string; taskId: string } | 'missing' | 'error' | null;
 
@@ -13,6 +14,7 @@ type Resolved = { projectId: string; taskId: string } | 'missing' | 'error' | nu
  * remount the board.
  */
 export function CardPage() {
+  const { t } = useTranslation();
   const { ref = '' } = useParams<{ ref: string }>();
   const [card, setCard] = useState<Resolved>(null);
 
@@ -31,8 +33,8 @@ export function CardPage() {
     };
   }, [ref]);
 
-  if (card === null) return <FullScreenMessage>Carregando…</FullScreenMessage>;
-  if (card === 'missing') return <FullScreenMessage>Card não encontrado</FullScreenMessage>;
-  if (card === 'error') return <FullScreenMessage>Erro ao abrir o card</FullScreenMessage>;
+  if (card === null) return <FullScreenMessage>{t('Carregando…')}</FullScreenMessage>;
+  if (card === 'missing') return <FullScreenMessage>{t('Card não encontrado')}</FullScreenMessage>;
+  if (card === 'error') return <FullScreenMessage>{t('Erro ao abrir o card')}</FullScreenMessage>;
   return <ProjectPage card={card} />;
 }

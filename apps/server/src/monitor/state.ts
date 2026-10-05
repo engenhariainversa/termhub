@@ -3,6 +3,7 @@ import { isClaudeSessionId, isClaudeTranscriptPath } from '@termhub/machine-ops'
 import { QUESTION_MAX, parseAskUserQuestion, parseCodexUserInput, parsePermissionTool, sliceUnits, toolUseIdOf, type TabQuestionInput } from '../chat/tab-question-payload.js';
 import type { Tab, TabActivity, TabState } from '../db/repositories/types.js';
 import { activityOf } from './activity.js';
+import { classifyTurnEnd } from './turn-end.js';
 
 /** Tools whose hooks we understand (the hook script names itself). */
 export const HOOK_TOOLS = ['claude', 'codex', 'cursor'] as const;
@@ -176,9 +177,10 @@ function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
       const text = cap(raw);
       // A turn that ends with background work still running (a subagent, a `run_in_background` shell, a
       // Monitor) is not a wait for the person: the agent waits on that work, and its notification starts
-      // the next turn (TER-644). The next Stop with nothing left running is the real end of the work.
+      // the next turn (TER-644). The next Stop with nothing left running is the real end of the work:
+      // `finished` when its whole last message is a report that asks nothing, else a wait (TER-972).
       const background = runningBackgroundTasks(ev.background_tasks);
-      if (background === 0) return withAnswer({ kind: 'waiting_input', text, meta: { event: name } }, raw);
+      if (background === 0) return withAnswer({ kind: classifyTurnEnd(raw), text, meta: { event: name } }, raw);
       return withAnswer({ kind: 'waiting_background', text, meta: { event: name, background_tasks: background }, backgroundTasks: background }, raw);
     }
     case 'StopFailure': {
@@ -388,8 +390,14 @@ export function interpretHookEvent(tool: HookTool, raw: unknown): Interpreted | 
   return INTERPRETERS[tool](raw);
 }
 
-/** States in which the tool is waiting for the person (the "needs you" list). `waiting_background` is not one. */
+/**
+ * States in which the tool is waiting for the person (the "needs you" list). `waiting_background` is not one,
+ * nor is `finished`: the agent reported and asks nothing (TER-972).
+ */
 export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission'];
+
+/** States in which the agent is back at its prompt, its turn over: a wait for the person, or a report (TER-972). */
+export const AT_PROMPT: readonly TabState[] = ['waiting_input', 'finished'];
 
 /** States in which the agent is still at its task: working, or waiting on background work of its own (TER-644). */
 export const STILL_WORKING: readonly TabState[] = ['working', 'waiting_background'];

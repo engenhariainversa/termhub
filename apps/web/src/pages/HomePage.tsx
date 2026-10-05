@@ -13,6 +13,7 @@ import { ProjectCards } from '../components/ProjectCards';
 import { PageFrame } from '../components/PageHeader';
 import { MachineForm } from '../components/MachineForm';
 import { ProjectForm } from '../components/ProjectForm';
+import { Trans, useTranslation } from '../i18n';
 
 /** on steps 1 and 2 the account is re-read this often (a machine or project added from elsewhere) */
 const WAIT_MS = 15_000;
@@ -23,6 +24,7 @@ const WAIT_MS = 15_000;
  * steps. Contas de IA, Hardware and Waitlist live in Configurações.
  */
 export function HomePage() {
+  const { t } = useTranslation();
   const { user, can } = useAuth();
   const { machines, projects, loading, refresh, machinesError, projectsError, machinesReadable, projectsReadable } = useData();
   const { openTabs, openTabsLoaded, openTabsFailed, reload: reloadTabs } = useMonitor();
@@ -48,48 +50,47 @@ export function HomePage() {
 
   useEffect(() => {
     if (step !== 1 && step !== 2) return;
-    const t = setInterval(() => void refresh(), WAIT_MS);
-    return () => clearInterval(t);
+    const timer = setInterval(() => void refresh(), WAIT_MS);
+    return () => clearInterval(timer);
   }, [step, refresh]);
 
   let body: ReactNode;
   if (step === 'loading') {
-    body = <p className="text-sm text-fg-muted">Carregando…</p>;
+    body = <p className="text-sm text-fg-muted">{t('Carregando…')}</p>;
   } else if (step === 1) {
     body = (
-      <StepCard step={1} icon={Laptop} title="Conecte sua primeira máquina">
+      <StepCard step={1} icon={Laptop} title={t('Conecte sua primeira máquina')}>
         <p>
-          Os terminais rodam nas suas máquinas: o seu computador ou um servidor. Um agente leve roda nela e conecta ao termhub, sem SSH e sem portas
-          abertas.
+          {t('Os terminais rodam nas suas máquinas: o seu computador ou um servidor. Um agente leve roda nela e conecta ao termhub, sem SSH e sem portas abertas.')}
         </p>
         {can('machines', 'create') ? (
           <button type="button" className="btn-primary mt-4" onClick={() => setMachineForm({ machine: null })}>
-            Conectar máquina
+            {t('Conectar máquina')}
           </button>
         ) : (
-          <p className="mt-3 text-fg">Peça a um administrador para conectar uma máquina à sua conta.</p>
+          <p className="mt-3 text-fg">{t('Peça a um administrador para conectar uma máquina à sua conta.')}</p>
         )}
-        <p className="mt-3 text-xs text-fg-dim">Esta página avança sozinha assim que a máquina aparecer.</p>
+        <p className="mt-3 text-xs text-fg-dim">{t('Esta página avança sozinha assim que a máquina aparecer.')}</p>
       </StepCard>
     );
   } else if (step === 2) {
     body = (
-      <StepCard step={2} icon={FolderPlus} title="Crie seu primeiro projeto">
-        <p>Um projeto junta os terminais, as tarefas e as notas de um trabalho, numa pasta de uma das suas máquinas.</p>
+      <StepCard step={2} icon={FolderPlus} title={t('Crie seu primeiro projeto')}>
+        <p>{t('Um projeto junta os terminais, as tarefas e as notas de um trabalho, numa pasta de uma das suas máquinas.')}</p>
         {can('projects', 'create') ? (
           <button type="button" className="btn-primary mt-4" onClick={() => setProjectFormOpen(true)}>
-            Criar projeto
+            {t('Criar projeto')}
           </button>
         ) : (
-          <p className="mt-3 text-fg">Peça a um administrador para criar um projeto para você ou compartilhar um com a sua conta.</p>
+          <p className="mt-3 text-fg">{t('Peça a um administrador para criar um projeto para você ou compartilhar um com a sua conta.')}</p>
         )}
       </StepCard>
     );
   } else if (step === 3) {
     body = (
-      <StepCard step={3} icon={SquareTerminal} title="Abra seu primeiro terminal">
-        <p>Entre num projeto e abra um terminal na aba Terminais. Dali você roda o Claude Code, o Codex ou o que quiser.</p>
-        <ul aria-label="Projetos" className="mt-4 space-y-1.5 text-left">
+      <StepCard step={3} icon={SquareTerminal} title={t('Abra seu primeiro terminal')}>
+        <p>{t('Entre num projeto e abra um terminal na aba Terminais. Dali você roda o Claude Code, o Codex ou o que quiser.')}</p>
+        <ul aria-label={t('Projetos')} className="mt-4 space-y-1.5 text-left">
           {starterProjects(projects).map((p) => (
             <li key={p.id}>
               <Link to={`/projects/${p.id}`} className="flex items-center gap-2 rounded-md border border-line bg-bg-3 px-3 py-2 text-fg hover:border-accent/50">
@@ -106,8 +107,8 @@ export function HomePage() {
     body = (
       <>
         {readFailed && (
-          <div role="status" aria-label="Aviso de carregamento" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-fg">
-            <span className="min-w-0 flex-1">Não foi possível carregar tudo: algumas listas podem estar incompletas.</span>
+          <div role="status" aria-label={t('Aviso de carregamento')} className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-fg">
+            <span className="min-w-0 flex-1">{t('Não foi possível carregar tudo: algumas listas podem estar incompletas.')}</span>
             <button
               type="button"
               className="shrink-0 font-medium text-accent hover:underline"
@@ -116,7 +117,7 @@ export function HomePage() {
                 void reloadTabs();
               }}
             >
-              Tentar de novo
+              {t('Tentar de novo')}
             </button>
           </div>
         )}
@@ -134,7 +135,7 @@ export function HomePage() {
   }
 
   return (
-    <PageFrame title="Início">
+    <PageFrame title={t('Início')}>
       {body}
       {machineForm && <MachineForm key={machineForm.machine?.id ?? 'new'} open machine={machineForm.machine} onClose={() => setMachineForm(null)} />}
       {projectFormOpen && <ProjectForm open onClose={() => setProjectFormOpen(false)} />}
@@ -144,6 +145,7 @@ export function HomePage() {
 
 /** A required step: a centred card saying where the account is ("Passo N de 3"). */
 function StepCard({ step, icon: Icon, title, children }: { step: 1 | 2 | 3; icon: LucideIcon; title: string; children: ReactNode }) {
+  const { t } = useTranslation();
   return (
     <section className="mx-auto mt-4 max-w-md rounded-xl border border-line bg-bg-2 p-6 text-center sm:mt-10">
       <div className="mb-3 flex items-center justify-center gap-1.5" aria-hidden="true">
@@ -151,7 +153,7 @@ function StepCard({ step, icon: Icon, title, children }: { step: 1 | 2 | 3; icon
           <span key={n} className={`h-1.5 w-6 rounded-full ${n <= step ? 'bg-accent' : 'bg-bg-4'}`} />
         ))}
       </div>
-      <p className="text-xs font-medium text-fg-muted">Passo {step} de 3</p>
+      <p className="text-xs font-medium text-fg-muted">{t('Passo {{step}} de 3', { step })}</p>
       <span className="mx-auto mt-3 flex h-11 w-11 items-center justify-center rounded-full bg-accent/15 text-accent">
         <Icon size={22} aria-hidden="true" />
       </span>
@@ -163,6 +165,7 @@ function StepCard({ step, icon: Icon, title, children }: { step: 1 | 2 | 3; icon
 
 /** The optional steps still missing; "Dispensar" hides it for good (per user, per browser). */
 function NextStepsCard({ userId, steps, onInstallHooks }: { userId: string; steps: NextStep[]; onInstallHooks: (m: Machine) => void }) {
+  const { t } = useTranslation();
   const [dismissed, setDismissed] = useState(() => loadNextStepsDismissed(userId));
   if (dismissed || steps.length === 0) return null;
   return (
@@ -170,7 +173,7 @@ function NextStepsCard({ userId, steps, onInstallHooks }: { userId: string; step
       <div className="flex items-center gap-2">
         <ListChecks size={16} aria-hidden="true" className="shrink-0 text-accent" />
         <h2 id="next-steps-title" className="flex-1 text-sm font-semibold">
-          Próximos passos
+          {t('Próximos passos')}
         </h2>
         <button
           type="button"
@@ -181,7 +184,7 @@ function NextStepsCard({ userId, steps, onInstallHooks }: { userId: string; step
           }}
         >
           <X size={12} aria-hidden="true" />
-          Dispensar
+          {t('Dispensar')}
         </button>
       </div>
       <ul className="mt-2 space-y-2 text-sm">
@@ -196,16 +199,28 @@ function NextStepsCard({ userId, steps, onInstallHooks }: { userId: string; step
 }
 
 function NextStepItem({ step, onInstallHooks }: { step: NextStep; onInstallHooks: (m: Machine) => void }) {
+  const { t } = useTranslation();
   if (step.kind === 'hooks') {
     const [first, ...rest] = step.machines;
     return (
       <>
         <span className="min-w-0 flex-1">
-          Instale os hooks do monitor em <span className="text-fg">{first.name}</span>
-          {rest.length > 0 && ` e mais ${rest.length}`}: sem eles, as tabs não aparecem em “Precisando de você”.
+          {rest.length > 0 ? (
+            <Trans
+              i18nKey="Instale os hooks do monitor em <0>{{name}}</0> e mais {{more}}: sem eles, as tabs não aparecem em “Precisando de você”."
+              values={{ name: first.name, more: rest.length }}
+              components={[<span key="m" className="text-fg" />]}
+            />
+          ) : (
+            <Trans
+              i18nKey="Instale os hooks do monitor em <0>{{name}}</0>: sem eles, as tabs não aparecem em “Precisando de você”."
+              values={{ name: first.name }}
+              components={[<span key="m" className="text-fg" />]}
+            />
+          )}
         </span>
         <button type="button" className="btn-ghost border border-line px-2 py-0.5 text-xs" onClick={() => onInstallHooks(first)}>
-          Instalar hooks
+          {t('Instalar hooks')}
         </button>
       </>
     );
@@ -213,27 +228,31 @@ function NextStepItem({ step, onInstallHooks }: { step: NextStep; onInstallHooks
   if (step.kind === 'city') {
     return (
       <Link to="/settings/city" className="min-w-0 flex-1 font-medium text-accent hover:underline">
-        {step.hasNickname ? 'Publique sua cidade: escolha os projetos que aparecem nela' : 'Escolha seu apelido e publique sua cidade'}{' '}
+        {step.hasNickname ? t('Publique sua cidade: escolha os projetos que aparecem nela') : t('Escolha seu apelido e publique sua cidade')}{' '}
         <span aria-hidden="true">→</span>
       </Link>
     );
   }
   return (
     <span className="min-w-0 flex-1">
-      Fixe um projeto em <span className="text-fg">Favoritos</span>: use o alfinete na linha do projeto, na sidebar.
+      <Trans
+        i18nKey="Fixe um projeto em <0>Favoritos</0>: use o alfinete na linha do projeto, na sidebar."
+        components={[<span key="f" className="text-fg" />]}
+      />
     </span>
   );
 }
 
 function Dashboard() {
+  const { t } = useTranslation();
   const { statuses, projects } = useData();
   const [items, setItems] = useState<DashboardItem[] | null>(null);
   const [error, setError] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 15_000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -255,16 +274,18 @@ function Dashboard() {
       <NeedsYouList now={now} />
       <div className="mb-5 flex items-end gap-4">
         <div>
-          <h2 className="text-lg font-semibold">O que estou fazendo</h2>
+          <h2 className="text-lg font-semibold">{t('O que estou fazendo')}</h2>
           <p className="text-sm text-fg-muted">
-            {items ? `${items.length} projeto(s) ativo(s) · ${totalDoing} em andamento · ${totalOpen} aberta(s)` : 'Carregando…'}
+            {items
+              ? t('{{projects}} projeto(s) ativo(s) · {{doing}} em andamento · {{open}} aberta(s)', { projects: items.length, doing: totalDoing, open: totalOpen })
+              : t('Carregando…')}
           </p>
         </div>
       </div>
 
-      {error && <p className="text-sm text-danger">Não foi possível carregar o dashboard.</p>}
+      {error && <p className="text-sm text-danger">{t('Não foi possível carregar o dashboard.')}</p>}
       {items && items.length === 0 && (
-        <p className="text-sm text-fg-dim">Nenhum projeto ativo. Clique em "+ novo" no topo da sidebar.</p>
+        <p className="text-sm text-fg-dim">{t('Nenhum projeto ativo. Clique em "+ novo" no topo da sidebar.')}</p>
       )}
 
       {items && <ProjectCards items={items} statuses={statuses} />}

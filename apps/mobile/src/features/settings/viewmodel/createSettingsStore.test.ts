@@ -3,6 +3,7 @@
 // `MockTransport` with an enrolled session, same as the other feature stores' tests.
 import { sessionEnded } from '@/features/shared/signals';
 import { enrol, setupSession } from '../../../../test/helpers/enrolled-session';
+import { ApiError } from '@/services/api/errors';
 import { createSettingsStore } from './createSettingsStore';
 
 async function setup() {
@@ -49,4 +50,27 @@ it('resets on sessionEnded', async () => {
   sessionEnded.emit();
 
   expect(store.getState().device).toBeNull();
+});
+
+describe('sendTestPush (TER-913)', () => {
+  it('asks for a confirmation test push in 10 s and says so', async () => {
+    const { store, api } = await setup();
+    const spy = jest.spyOn(api, 'pushTest').mockResolvedValue({ scheduled_for: '2026-10-05T00:00:10.000Z', ticket: null });
+    await store.getState().sendTestPush();
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ accessToken: expect.any(String) }), { kind: 'confirmation', delay_seconds: 10 });
+    expect(store.getState().pushTest).toEqual({ sending: false, note: 'Enviada. Ela chega em 10 s.', error: null });
+  });
+
+  it('shows the server\'s message on a refusal', async () => {
+    const { store, api } = await setup();
+    jest.spyOn(api, 'pushTest').mockRejectedValue(new ApiError(429, 'PUSH_TEST_RATE_LIMITED', 'Muitas notificações de teste. Espere um minuto e tente de novo.'));
+    await store.getState().sendTestPush();
+    expect(store.getState().pushTest).toEqual({ sending: false, note: null, error: 'Muitas notificações de teste. Espere um minuto e tente de novo.' });
+  });
+
+  it('round-trips through the mock server (the session start registered a mock token)', async () => {
+    const { store } = await setup();
+    await store.getState().sendTestPush();
+    expect(store.getState().pushTest).toEqual({ sending: false, note: 'Enviada. Ela chega em 10 s.', error: null });
+  });
 });
