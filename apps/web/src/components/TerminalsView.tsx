@@ -26,6 +26,7 @@ import { RateLimitBanner } from './RateLimitBanner';
 import { PaneLayer, PANE_HEADER_HEIGHT } from './PaneLayer';
 import { FloatingWindow, FLOATING_TITLE_HEIGHT } from './FloatingWindow';
 import { MachinePicker } from './MachinePicker';
+import { OfficeEmptyState } from './OfficeEmptyState';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/data';
 import { useMarkSeenOnFocus, useMonitor } from '../lib/monitor';
@@ -420,28 +421,10 @@ export function TerminalsView({ project, visible }: Props) {
       <div ref={areaRef} className="relative min-h-0 flex-1 overflow-hidden">
         {tabs === null ? (
           <div className="flex h-full items-center justify-center text-sm text-fg-dim">Carregando tabs…</div>
-        ) : tabs.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-fg-muted">
-            <p>Nenhum terminal aberto neste projeto.</p>
-            <button className="btn-primary" onClick={() => void newTab()}>
-              Abrir terminal <kbd className="ml-1 rounded bg-black/30 px-1 text-[10px]">⌘T</kbd>
-            </button>
-          </div>
-        ) : openTabs.length === 0 && layout.preset === 'single' ? (
-          // Nothing open: the terminals are in the sidebar, but it can be collapsed (or hidden in focus mode).
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-sm text-fg-muted">
-            <p>Nenhuma aba aberta. Escolha um terminal na lateral ou aqui:</p>
-            <ul className="flex flex-wrap justify-center gap-2" aria-label="Terminais do projeto">
-              {tabs.map((t) => (
-                <li key={t.id}>
-                  <button type="button" className="btn-ghost text-xs" onClick={() => openTab(t.id, 'preview')} onDoubleClick={() => openTab(t.id, 'pin')}>
-                    {t.name}
-                    {projectMachines.length > 1 && <span className="text-fg-dim"> · {machineById(t.machine_id)?.name ?? ''}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+        ) : tabs.length === 0 || (openTabs.length === 0 && layout.preset === 'single') ? (
+          // Nothing open (or no terminal yet): the project's office, with its epics in progress and a
+          // plain list of the terminals — the sidebar can be collapsed, or hidden in focus mode (TER-912).
+          <OfficeEmptyState project={project} tabs={tabs} machines={projectMachines} reachable={reachable} visible={visible} onOpen={openTab} onNewTerminal={() => void newTab()} />
         ) : shown && area ? (
           <>
             {openTabs.map((t) => {

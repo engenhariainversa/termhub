@@ -17,9 +17,10 @@ const apiMock = vi.hoisted(() => ({
   remove: vi.fn(async (_id: string) => ({ ok: true, killed: true })),
   rename: vi.fn(async () => ({})),
   createTab: vi.fn(),
+  progress: vi.fn(async () => ({ epics: [], generated_at: '' })),
 }));
 vi.mock('../lib/api', () => ({
-  api: { projects: { tabs: apiMock.projectTabs, createTab: apiMock.createTab }, tabs: { remove: apiMock.remove, rename: apiMock.rename } },
+  api: { projects: { tabs: apiMock.projectTabs, createTab: apiMock.createTab }, tabs: { remove: apiMock.remove, rename: apiMock.rename }, progress: apiMock.progress },
   ApiError: class ApiError extends Error {},
 }));
 vi.mock('../lib/auth', () => ({
@@ -53,6 +54,16 @@ vi.mock('./Terminal', () => ({
   TerminalView: ({ tabId, active }: { tabId: string; active: boolean }) => <div data-testid={`terminal-${tabId}`} data-active={String(active)} />,
 }));
 vi.mock('./RateLimitBanner', () => ({ RateLimitBanner: () => null }));
+// no WebGL in jsdom: the office drawn when no tab is open (TER-912) is a stand-in here
+vi.mock('../office/scene/OfficeScene', () => ({
+  OfficeScene: class {
+    async mount() {}
+    destroy() {}
+    setModel() {}
+    focus() {}
+    debugHover() {}
+  },
+}));
 
 const projectRow = vi.hoisted(() => ({ id: 'p1', key: 'TER', name: 'termhub', status: 'active', machines: [{ machine_id: 'm1', cwd: '/w', position: 0 }] }) as unknown as Project);
 
