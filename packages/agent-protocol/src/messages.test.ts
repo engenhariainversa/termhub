@@ -3,6 +3,8 @@ import {
   agentMessage,
   CAPABILITY_CLAUDE_STREAM_INPUT,
   CAPABILITY_FILE_LIST,
+  CAPABILITY_WORKTREE,
+  WORKTREE_MIN_AGENT_VERSION,
   CAPABILITY_FILE_READ,
   CAPABILITY_TRANSCRIPT,
   CAPABILITY_SIM,
@@ -157,4 +159,9 @@ it('names the file read capability once', () => {
 
 it('names the file list capability once', () => {
   expect(CAPABILITY_FILE_LIST).toBe('file_list');
+});
+
+it('names the worktree capability once, with the agent version that ships it', () => {
+  expect(CAPABILITY_WORKTREE).toBe('worktree');
+  expect(WORKTREE_MIN_AGENT_VERSION).toBe('0.18.0');
 });

@@ -20,7 +20,7 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   not_in_todo: tk('Fora da coluna A fazer'),
   no_description: tk('Sem descrição'),
   has_agent: tk('Já tem um agente'),
-  no_capable_machine: tk('Nenhuma máquina com agente 0.17 ligada ao projeto'),
+  no_capable_machine: tk('Nenhuma máquina com agente 0.18 ligada ao projeto'),
   repo_missing: tk('Repositório não configurado no Setup'),
 };
 

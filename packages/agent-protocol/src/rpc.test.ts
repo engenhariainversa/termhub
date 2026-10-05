@@ -4,7 +4,7 @@ import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, RPC, RPC_METHODS, TMUX_KEYS
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.update', 'ai.credential', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'hooks.install',
+      'agent.update', 'ai.credential', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
       'hooks.uninstall', 'hw.probe', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
@@ -41,6 +41,23 @@ describe('rpc catalog', () => {
   });
   it('accepts refused as an rpc error code', () => {
     expect(rpcErrorSchema.safeParse({ code: 'refused', message: 'nothing listening' }).success).toBe(true);
+    expect(rpcErrorSchema.safeParse({ code: 'worktree_conflict', message: 'x' }).success).toBe(true);
+    expect(rpcErrorSchema.safeParse({ code: 'path_outside_root', message: 'x' }).success).toBe(true);
+  });
+  it('validates git.worktree params: branch names and machine paths', () => {
+    const ok = { repo_dir: '~/code/app', root: '~/.termhub/worktrees', path: '~/.termhub/worktrees/p1/TER-1', branch: 'TER-1-slug', base: 'epic/TER-2' };
+    const ensure = RPC['git.worktree.ensure'];
+    expect(ensure.timeoutMs).toBe(180_000);
+    expect(ensure.params.safeParse(ok).success).toBe(true);
+    for (const branch of ['--upload-pack=x', '-b', 'a..b', 'a b', 'a:b', 'a;rm', '', 'x'.repeat(201)]) {
+      expect(ensure.params.safeParse({ ...ok, branch }).success, branch).toBe(false);
+      expect(ensure.params.safeParse({ ...ok, base: branch }).success, branch).toBe(false);
+    }
+    expect(ensure.params.safeParse({ ...ok, path: 'relative/dir' }).success).toBe(false);
+    expect(ensure.result.safeParse({ path: '/x', head: 'a'.repeat(40), created: true }).success).toBe(true);
+    const remove = RPC['git.worktree.remove'];
+    expect(remove.params.safeParse({ repo_dir: ok.repo_dir, root: ok.root, path: ok.path }).success).toBe(true);
+    expect(remove.result.safeParse({ removed: false, dirty: true }).success).toBe(true);
   });
   it('validates agent.update versions', () => {
     expect(RPC['agent.update'].params.safeParse({ version: '0.2.1' }).success).toBe(true);
