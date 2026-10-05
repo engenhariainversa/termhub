@@ -17,10 +17,15 @@ describe('feedLine', () => {
     expect(feedLine(ev({ kind: 'deploy_failed', paused: false }))).toBe('Deploy falhou (Épico)');
     expect(feedLine(ev({ kind: 'release_ok', workflow: 'npm', version: '1.2.0' }))).toBe('Publicado npm 1.2.0');
     expect(feedLine(ev({ kind: 'escalated', reason_text: 'Confirme na aba.' }))).toBe('TER-9 precisa de você: Confirme na aba.');
+    // TER-975: changes to what automatic work may do
+    expect(feedLine(ev({ kind: 'automation_on' }))).toBe('Automático ligado no projeto');
+    expect(feedLine(ev({ kind: 'tagged' }))).toBe('TER-9: marcado como automático');
+    expect(feedLine(ev({ kind: 'machine_opt_out' }))).toBe('jarvis deixou de aceitar trabalho automático');
+    expect(feedLine(ev({ kind: 'machine_opt_in', machine: null }))).toBe('Uma máquina passou a aceitar trabalho automático');
   });
 
   it('has a line for every kind the server records and none for an unknown one', () => {
-    const kinds = ['run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed', 'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup'];
+    const kinds = ['run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed', 'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup', 'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out'];
     for (const kind of kinds) expect(feedLine(ev({ kind }))).toBeTruthy();
     expect(feedLine(ev({ kind: 'from_the_future' }))).toBeNull();
   });

@@ -17,11 +17,12 @@ async function build(stored: unknown = {}) {
     data = next;
     return { project_id: 'p1', version: 2, data, updated_at: 'now' };
   });
-  const setAuto = vi.fn(async () => {});
+  const setAuto = vi.fn(async () => ({ changed: 1 }));
   const repos = {
     projects: { findById: vi.fn(async (id: string) => (id === 'p1' ? { id, owner_id: 'u1' } : undefined)) },
     tasks: { findById: vi.fn(async () => ({ id: 't1', project_id: 'p1', auto: true })), setAuto },
     projectSetup: { get: vi.fn(async () => ({ project_id: 'p1', version: 2, data, updated_at: null })), save },
+    automationEvents: { insert: vi.fn(async (e: object) => ({ id: 'ev', created_at: '', ...e })) },
   } as unknown as Repositories;
   const session = {
     consumeDecisionChallenge: vi.fn(async (_d: Device, challenge: string, actionId: string) => challenge === 'c1' && actionId === ACTION),

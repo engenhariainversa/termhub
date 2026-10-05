@@ -48,7 +48,8 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
    it once per worktree and accept each (this is not confirmed in code, see the end of this file).
 3. Machine switch. In Máquinas, "Aceita trabalho automático" must be unchecked for jarvis: it is the
    production host, and the automation must never start cards there. Check it on every machine that
-   should not run cards, and on the others make sure it is checked.
+   should not run cards, and on the others make sure it is checked. The chat can flip it too
+   (`set_machine_automation`, section 4a): unchecking runs at once, checking asks you first.
 4. Optional: `SMOKE_API_TOKEN` in jarvis's `.env` turns on the authenticated step of the deploy smoke test
    (`deploy/README.md`). Without it the step is skipped; rollback still works.
 5. GitHub ruleset on `main` (requires the maintainer's explicit approval, do not apply without it):
@@ -92,9 +93,32 @@ Notes:
   native binary (CLAUDE.md, "Mobile OTA updates"); `apps/mobile/**` in `release_paths` alone would let them
   through as an OTA.
 - Saving with `enabled` checked, or raising the level to Deploy or Publicação, asks for confirmation. Read
-  the text it shows before confirming.
+  the text it shows before confirming. Through the chat the rule is stricter (section 4a).
 - Setting `release_workflows` makes the base branch count as "pending" while those workflows run, so merges
   go one delivery at a time.
+
+## 4a. Doing it from the chat (MCP)
+
+The chat's assistant (and any MCP client with the `terminals` scope and the matching permission) can do
+what the Setup screen, the machine form and the board do for automatic work:
+
+| Tool | What it does | Asks you first |
+| --- | --- | --- |
+| `update_task` / `create_task` with `auto` | tags or untags a card; on an epic, every card of the epic (same rule as the board) | no: it is "mexer no quadro", covered by the chat's defaults unless you restricted it |
+| `set_automation_policy` | reads the Setup (only `project_id`), or changes `enabled`, `autonomy`, `release_paths`, `store_paths`, `release_workflows`, `required_checks`, `max_parallel` | turning it on, raising the level (any raise, `pr` to `merge` included), changing a path, workflow or check list, raising `max_parallel` or lifting its cap |
+| `set_machine_automation` | flips a machine's "Aceita trabalho automático" | checking it (`accept: true`) |
+
+What never asks is a brake: turning automation off, lowering the level, lowering `max_parallel`,
+unchecking a machine, `pause_automation`. A call that mixes a brake with a widening asks. No chat grant
+("Permitir sempre", "Liberar sem prazo") and no default covers the calls that ask: each one is a card you
+approve. The tool checks the rule again when it runs, so a call that reaches it without your approval
+changes nothing. Other Setup fields (card types, budgets, prompts, `worktrees_dir`) stay on the Setup
+screen.
+
+Every change, from the chat, an MCP client, the web or the app, is an automation event with `via`
+(`chat`, `mcp`, `web`, `app`): `automation_on`, `automation_off`, `setup_changed` (with the changed
+`fields`), `tagged` / `untagged` (with how many `cards`), `machine_opt_in` / `machine_opt_out` (on every
+project linked to the machine). They show in the feed and in `list_automation_events`.
 
 ## 5. First card, end to end
 
@@ -113,7 +137,8 @@ Notes:
   left as they are. "Retomar automático" lifts it (it asks first).
 - "Pausar e interromper as abas" (the arrow next to the button): the same, and the automatic tabs are
   interrupted.
-- Chat: say "pausar tudo" to the chat agent. Same effect as the button.
+- Chat: say "pausar tudo" to the chat agent. Same effect as the button. To turn a project off (not just
+  pause it), ask the chat: it calls `set_automation_policy` with `enabled: false`, without a card.
 - Per project: unchecking `enabled` in Setup stops new cards for that project only. Runs already active stay
   active: nothing is typed into them while it is off, and they are followed (resumed, merged) again as soon
   as `enabled` is checked again. To stop a card for good, remove its tag or close its tab (below).

@@ -13,9 +13,10 @@ import { describeActions } from '../db/repositories/chat-actions-view.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Tab } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
+import { automationCallIsBrake } from '../automation/setup-tools.js';
 import { chatBus } from './bus.js';
 import { boardProjectOf } from './board-project.js';
-import { actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, gateDecision, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
+import { type ActionClass, actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, gateDecision, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
 import { SCREEN_STATE_LINES, claudeScreenState } from '../monitor/screen-state.js';
 import { STALE_WORKING_MS } from '../monitor/stale-working.js';
 import { permissionDialogVisible } from './permission-dialog.js';
@@ -623,9 +624,21 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
   return grantId;
 }
 
+/**
+ * `actionClass`, plus what only the current state can tell (TER-975): a `set_automation_policy` change is a
+ * brake or a widening only against the Setup it changes. A brake goes through like `pause_automation`; a
+ * widening keeps the static `write`, which no grant or default covers, so the person is always asked. Only
+ * on a gated token: anyone else's call runs unmediated anyway.
+ */
+async function classOf(ctx: ControlContext, call: GatedCall): Promise<ActionClass> {
+  const cls = actionClass(call.tool, call.args);
+  if (call.token.gated && cls === 'write' && call.tool === 'set_automation_policy' && (await automationCallIsBrake(ctx, call.args))) return 'self_mediated';
+  return cls;
+}
+
 /** The gate itself: run the call, or answer why it did not run. */
 export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<GateOutcome> {
-  const cls = actionClass(call.tool, call.args);
+  const cls = await classOf(ctx, call);
   // Reads are never gated, whatever the token; and a person's own MCP session acts unmediated —
   // they are the one calling, and asking them to confirm their own keystroke is nonsense. A
   // self-mediated call (spec 2026-09-26 concierge memory D13) is let through the same way even on a

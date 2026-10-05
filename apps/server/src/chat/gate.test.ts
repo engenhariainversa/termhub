@@ -58,6 +58,23 @@ it('pause_automation is the brake: self-mediated alone, a write with interrupt (
   expect(defaultKindOf('resume_automation', {})).toBeNull();
 });
 
+it('set_automation_policy reads without a field; with one it is a write no grant or default may cover (TER-975)', () => {
+  expect(actionClass('set_automation_policy', { project_id: 'p1' })).toBe('read');
+  expect(actionClass('set_automation_policy', { project_id: 'p1', enabled: false })).toBe('write');
+  expect(actionClass('set_automation_policy', { project_id: 'p1', max_parallel: null })).toBe('write');
+  expect(standingKindOf('set_automation_policy', { project_id: 'p1', enabled: true })).toBeNull();
+  expect(defaultKindOf('set_automation_policy', { project_id: 'p1', enabled: true })).toBeNull();
+  expect(boardGrantable('set_automation_policy')).toBe(false);
+});
+
+it('set_machine_automation: refusing is a brake, accepting asks and no grant or default covers it (TER-975)', () => {
+  expect(actionClass('set_machine_automation', { machine_id: 'm1', accept: false })).toBe('self_mediated');
+  expect(actionClass('set_machine_automation', { machine_id: 'm1', accept: true })).toBe('write');
+  expect(actionClass('set_machine_automation', { machine_id: 'm1' })).toBe('write');
+  expect(standingKindOf('set_machine_automation', { machine_id: 'm1', accept: true })).toBeNull();
+  expect(defaultKindOf('set_machine_automation', { machine_id: 'm1', accept: true })).toBeNull();
+});
+
 it('keys on the arguments, so a different command is a different question', () => {
   const a = idempotencyKeyFor('c1', 'send_input', { tab_id: 't1', text: 'npm test' });
   expect(idempotencyKeyFor('c1', 'send_input', { text: 'npm test', tab_id: 't1' })).toBe(a); // key order cannot matter
@@ -234,7 +251,7 @@ describe('defaultKindOf (TER-627)', () => {
   it('every MCP tool is a read, self-mediated, a default kind, or on the list that always asks: a new tool is placed on purpose', () => {
     // report_card is a tab tool (agentic board F-8): only a tab with an active run lists it, never the concierge;
     // unclassified, it would ask like any unknown tool
-    const alwaysAsks = new Set(['run_command', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation', 'resume_automation_run', 'report_card']);
+    const alwaysAsks = new Set(['run_command', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation', 'resume_automation_run', 'report_card', 'set_machine_automation']);
     const sample: Record<string, Record<string, unknown>> = {
       open_tab: { project_id: 'p1' }, start_agent: { project_id: 'p1' }, link_tab_task: { tab_id: 't1', task_id: 'k1' }, close_tab: { tab_id: 't1' },
       send_input: { tab_id: 't1', text: 'x' }, send_key: { tab_id: 't1', key: 'Enter' },

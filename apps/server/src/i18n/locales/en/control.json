@@ -93,5 +93,7 @@
   "Ferramenta permitida inválida": "Invalid allowed tool",
   "Modo de permissão inválido": "Invalid permission mode",
   "Pasta de trabalho inválida: use um caminho absoluto, sem \"..\"": "Invalid working folder: use an absolute path, without \"..\"",
-  "O comando de preparo tem quebras de linha ou caracteres de controle; use uma linha só": "The setup command has line breaks or control characters; use a single line"
+  "O comando de preparo tem quebras de linha ou caracteres de controle; use uma linha só": "The setup command has line breaks or control characters; use a single line",
+  "Ligar o trabalho automático ou ampliar o que ele pode fazer precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.": "Turning automatic work on or widening what it may do needs the person to confirm in the chat. Nothing was changed: propose the call again.",
+  "Valor inválido no Setup do trabalho automático: {{issue}}": "Invalid value in the automatic work setup: {{issue}}"
 }
