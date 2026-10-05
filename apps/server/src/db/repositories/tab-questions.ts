@@ -17,9 +17,10 @@ export type TabQuestionCloseStatus = 'answered_in_tab' | 'expired';
  * `leavesQueue`: the agent has no dialog pending any more, so it also leaves the tab's permission queue.
  */
 export type CloseScope = { agent: string | null; leavesQueue: boolean } | 'all';
-/** How a `choice` question got its `answer`: a click on the card, or the countdown sending it by
- * itself (spec 2026-09-26 concierge memory §3.2). */
-export type AnsweredVia = 'card' | 'auto';
+/** How a question got its `answer`: a click on the card, the countdown sending it by itself (spec
+ * 2026-09-26 concierge memory §3.2), or an automatic tab's permission allowed by the project's rules
+ * (`'automation'`, agentic board spec §9.2 — never sent to clients as such: `ANSWERED_VIA_VIEW`). */
+export type AnsweredVia = 'card' | 'auto' | 'automation';
 
 /** Who scheduled an automatic answer (see `AutoAnswer`). */
 export type AutoAnswerBy = 'memory' | 'concierge' | 'automation';

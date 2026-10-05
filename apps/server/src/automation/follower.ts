@@ -49,6 +49,8 @@ export const QUESTION_UNANSWERED = 'question_unanswered';
 export const QUESTION_EXPIRED = 'question_expired';
 /** The escalation reason of a run whose questions were answered automatically too often in the last hour. */
 export const ANSWER_CAP = 'answer_cap';
+/** A permission request the project's rules do not allow (spec §9.2): the person answers it on the card. */
+export const PERMISSION_NEEDED = 'permission_needed';
 /**
  * How long an open question card of an automatic tab may wait with no countdown before the person is
  * called: the woken chat had this long to answer it (spec D18 step 3 → 4).
@@ -61,6 +63,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [QUESTION_UNANSWERED]: tk('O agente fez uma pergunta que o modo automático não soube responder; responda no card.'),
   [QUESTION_EXPIRED]: tk('O card da pergunta do agente fechou sem resposta; responda na aba para continuar.'),
   [ANSWER_CAP]: tk('O agente fez perguntas demais respondidas automaticamente na última hora; confira a aba e responda no card.'),
+  [PERMISSION_NEEDED]: tk('O agente pediu uma permissão que as regras do projeto não liberam; responda no card.'),
 };
 
 /** The escalation's text in the reader's language; null for a reason with no text yet. */
@@ -311,12 +314,20 @@ async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: L
  * an open card whose countdown failed, or that waited QUESTION_WAIT_MS with no countdown at all (the woken
  * chat found nothing); or a card that closed `expired`/`failed` with the tab still showing it (no hook since
  * it closed, the agent neither exited nor moved on). A countdown running, or one the person cancelled (the
- * card is theirs now), is left alone. True when the run was escalated.
+ * card is theirs now), is left alone. A `permission` card still open after QUESTION_WAIT_MS escalates as
+ * PERMISSION_NEEDED (spec §9.2). True when the run was escalated.
  */
 async function escalateUnansweredQuestion(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
   const q = await deps.repos.tabQuestions.latestQuestionForTab(tab.id);
-  // permission prompts are Task 22's
-  if (!q || q.kind !== 'choice') return false;
+  if (!q) return false;
+  // a permission card nothing answered (answerPermissionAutomatically escalates at once; this catches one it never
+  // reached: a pause when it opened, a crash, a send that failed silently) waits for the person too
+  if (q.kind === 'permission') {
+    if (q.status !== 'open' || sinceMs(deps, q.created_at) < QUESTION_WAIT_MS) return false;
+    await wakeOrEscalate(deps.repos, run, PERMISSION_NEEDED, log);
+    return true;
+  }
+  if (q.kind !== 'choice') return false;
   let reason: string | null = null;
   if (q.status === 'open') {
     const auto = q.auto_answer?.status;
@@ -394,7 +405,7 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
       }
       const stopped = tab.state === 'waiting_input';
       const exited = tab.state === 'idle' && tab.state_text === AGENT_EXITED_TEXT;
-      // permissions are Task 22's
+      // a permission prompt is answerPermissionAutomatically's (answers.ts), or escalated above once it waited too long
       if (!stopped && !exited) return;
       // taken before anything is typed: a state the agent reaches in reaction is always newer than it
       const now = deps.now?.() ?? new Date();

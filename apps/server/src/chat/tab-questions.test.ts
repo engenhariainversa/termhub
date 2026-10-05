@@ -338,7 +338,7 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
     expect(waker.wake).not.toHaveBeenCalled();
   });
 
-  it('a choice with no card in a manual tab (or a permission with none) parks nothing, as before', async () => {
+  it('a choice with no card in a manual tab (or a permission queued behind an open card) parks nothing, as before', async () => {
     for (const [o, input] of [
       [{ run: false }, { kind: 'choice' as const, payload, tool_use_id: 'toolu_1' }],
       [{}, { kind: 'permission' as const, payload: { tool_name: 'Bash' }, tool_use_id: null }],
@@ -349,6 +349,40 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
       expect(repos.automationRuns.updateActive).not.toHaveBeenCalled();
       expect(repos.automationEvents.insert).not.toHaveBeenCalled();
     }
+  });
+
+  it('a permission card goes to answerPermissionAutomatically: a Bash request (no command known) escalates the run', async () => {
+    const repos = automaticRepos();
+    const perm = row({ id: 'q1', kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null });
+    repos.tabQuestions.open.mockResolvedValueOnce({ question: perm, closed: [] });
+    Object.assign(repos, { tasks: { findById: vi.fn(async () => ({ id: 'task1', auto: true })) } });
+    const waker = { wake: vi.fn(async () => true) };
+    await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null }, { waker });
+    await vi.waitFor(() => expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'permission_needed' }));
+    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', payload: { reason: 'permission_needed', tab_id: 't1' } }));
+    expect(waker.wake).not.toHaveBeenCalled();
+  });
+
+  it('a permission card in a manual tab, or a paused or disabled project, is left to the person exactly as before', async () => {
+    for (const o of [{ run: false }, { paused: true }, { enabled: false }]) {
+      const repos = automaticRepos(o);
+      const perm = row({ id: 'q1', kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null });
+      repos.tabQuestions.open.mockResolvedValueOnce({ question: perm, closed: [] });
+      const waker = { wake: vi.fn(async () => true) };
+      expect(await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null }, { waker })).toEqual(perm);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(repos.automationRuns.updateActive).not.toHaveBeenCalled();
+      expect(repos.automationEvents.insert).not.toHaveBeenCalled();
+      expect(waker.wake).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a permission with no card because there is no conversation parks the run as permission_needed', async () => {
+    const repos = automaticRepos();
+    repos.tabQuestions.open.mockResolvedValueOnce({ question: null, closed: [] });
+    repos.chat.findLatestActiveForProject.mockResolvedValueOnce(undefined);
+    expect(await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null })).toBeNull();
+    expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'permission_needed' });
   });
 
   it('a manual tab (no run), or a paused or disabled project, behaves exactly as before: the plain wake, nothing scheduled', async () => {
