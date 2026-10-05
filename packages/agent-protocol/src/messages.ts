@@ -59,6 +59,10 @@ export const CAPABILITY_CLAUDE_STREAM_INPUT = 'claude.stream_input';
  *  requires it before either: an older agent drops the RPC and refuses the key. */
 export const CAPABILITY_TRANSCRIPT = 'transcript';
 
+/** The agent answers `file.read` (spec 2026-10-04 file preview, TER-941). The server requires it before
+ *  the call: an older agent drops an unknown RPC, which would read as a timeout. */
+export const CAPABILITY_FILE_READ = 'file_read';
+
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
 export function streamUserMessageLine(text: string, uuid: string): string {

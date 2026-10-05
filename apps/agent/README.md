@@ -74,6 +74,20 @@ time the new agent starts.
   filesystem access to `$HOME`/`Documents`/`Desktop` (and every volume under `/Volumes` on
   macOS).
 
+## File preview
+
+termhub can show a Markdown file an agent wrote (a report, a spec) when you click its path in the
+chat. The agent reads it only on that click, and only when all of these hold (since 0.16.0):
+
+- it is inside the project's folder on this machine, your home, or the temp dir (`/tmp`);
+- no folder or file below that folder starts with a dot (`~/.ssh`, `.git`, `.env.md` are refused);
+- a symbolic link is followed only when what it points at passes the same checks;
+- it ends in `.md`, `.markdown` or `.txt`, is UTF-8 text and at most 512 KiB.
+
+To allow more folders on this machine, list them, one absolute path per line, in
+`~/.termhub/file-read-roots` (`#` starts a comment). The server cannot add folders; only this file
+can. File contents are relayed to your browser or phone and never stored or logged.
+
 ## macOS: Full Disk Access
 
 macOS's TCC (Transparency, Consent and Control) can block the agent from listing folders such as

@@ -42,6 +42,20 @@ export const TEXT_MAX_CHARS = 4000;
 /** A shrunk transcript line larger than this travels as a stub (`termhub_dropped`). */
 export const TRANSCRIPT_LINE_MAX_BYTES = 65_536;
 
+/**
+ * The largest file `file.read` returns (spec 2026-10-04 file preview). The body travels base64 in one
+ * control frame (`MAX_FRAME`, 1 MiB): 512 KiB is ~683 KiB encoded, with room for the envelope. A bigger
+ * file answers `too_large` with its size and no body.
+ */
+export const FILE_READ_MAX_BYTES = 512 * 1024;
+/** The only extensions `file.read` opens, compared lowercase on the resolved file. */
+export const FILE_READ_EXTENSIONS = ['.md', '.markdown', '.txt'] as const;
+/** Why `file.read` answered without a body. `outside`: not under an allowed folder (or a link leaves
+ *  it); `hidden`: a dot-folder or dot-file below the folder; `type`: not one of FILE_READ_EXTENSIONS;
+ *  `not_file`: a directory, socket, …; `binary`: not UTF-8 text; `eperm`: the agent's user cannot read it. */
+export const FILE_READ_REFUSALS = ['missing', 'outside', 'hidden', 'type', 'not_file', 'too_large', 'binary', 'eperm'] as const;
+export type FileReadRefusal = (typeof FILE_READ_REFUSALS)[number];
+
 export const rpcErrorSchema = z.object({
   /** `failed`: the operation ran on the machine and `message` says why it failed, in words meant for the user.
    *  `refused`: a `tcp` open found nothing listening on the port (ECONNREFUSED). */
@@ -124,6 +138,28 @@ export const RPC = {
    * the file). `start`/`end` are the byte range covered, on line boundaries. `missing`: no such
    * transcript, here or in the account's other project dirs (since agent 0.15.0).
    */
+  /**
+   * One text file the person asked to preview (spec 2026-10-04 file preview, TER-941). `path` is absolute
+   * or `~/…`; `roots` are the project folders on this machine. The agent adds its own allowed folders
+   * (home, the temp dirs and `file_read_roots` from its config) and checks, on the resolved file: under
+   * a folder (the link target too), no dot segment below it, an allowed extension, a regular file of at
+   * most FILE_READ_MAX_BYTES, valid UTF-8. Any refusal is a `status`, never a thrown error, so the
+   * screen can say why (since agent 0.16.0).
+   */
+  'file.read': def(
+    z.object({ path: machinePath, roots: z.array(machinePath).max(16) }),
+    z.discriminatedUnion('status', [
+      z.object({
+        status: z.literal('ok'),
+        path: z.string().max(4096),
+        size: z.number().int().min(0).max(FILE_READ_MAX_BYTES),
+        mtime_ms: z.number().min(0),
+        content_b64: z.string().max(Math.ceil(FILE_READ_MAX_BYTES / 3) * 4),
+      }),
+      z.object({ status: z.enum(FILE_READ_REFUSALS), size: z.number().int().min(0).optional() }),
+    ]),
+    10_000,
+  ),
   'transcript.read': def(
     z.object({
       transcript_path: machinePath,

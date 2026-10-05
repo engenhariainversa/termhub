@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { RPC, RPC_METHODS, TMUX_KEYS, docPath, isWdaPort, rpcErrorSchema, tmuxKey } from './rpc.js';
+import { FILE_READ_MAX_BYTES, RPC, RPC_METHODS, TMUX_KEYS, docPath, isWdaPort, rpcErrorSchema, tmuxKey } from './rpc.js';
 
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.update', 'ai.credential', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.paste', 'fs.list', 'fs.mkdir', 'hooks.install',
+      'agent.update', 'ai.credential', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'hooks.install',
       'hooks.uninstall', 'hw.probe', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
@@ -213,4 +213,24 @@ describe('transcript.read', () => {
 it('BTab is a key a terminal tool may press', () => {
   expect(TMUX_KEYS).toContain('BTab');
   expect(tmuxKey.safeParse('BTab').success).toBe(true);
+});
+
+describe('file.read', () => {
+  const ok = { status: 'ok', path: '/home/u/p/a.md', size: 3, mtime_ms: 1, content_b64: 'YWJj' };
+  it('takes an absolute or ~ path and up to 16 roots', () => {
+    expect(RPC['file.read'].params.safeParse({ path: '~/r.md', roots: ['/home/u/p'] }).success).toBe(true);
+    expect(RPC['file.read'].params.safeParse({ path: '/tmp/r.md', roots: [] }).success).toBe(true);
+  });
+  it('refuses a relative path, a newline and too many roots', () => {
+    for (const bad of [{ path: 'docs/a.md', roots: [] }, { path: '/a\n.md', roots: [] }, { path: '/a.md', roots: Array(17).fill('/x') }, { path: '/a.md', roots: ['rel'] }]) {
+      expect(RPC['file.read'].params.safeParse(bad).success).toBe(false);
+    }
+  });
+  it('validates both shapes of the result', () => {
+    expect(RPC['file.read'].result.safeParse(ok).success).toBe(true);
+    expect(RPC['file.read'].result.safeParse({ status: 'too_large', size: 9_999_999 }).success).toBe(true);
+    expect(RPC['file.read'].result.safeParse({ status: 'outside' }).success).toBe(true);
+    expect(RPC['file.read'].result.safeParse({ status: 'gone' }).success).toBe(false);
+    expect(RPC['file.read'].result.safeParse({ ...ok, size: FILE_READ_MAX_BYTES + 1 }).success).toBe(false);
+  });
 });
