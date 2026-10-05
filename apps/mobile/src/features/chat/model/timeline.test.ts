@@ -208,6 +208,52 @@ describe('chatTimeline: surfaced_at', () => {
   });
 });
 
+describe('chatTimeline — actions that ran without asking (TER-984)', () => {
+  const T3 = '2026-01-01T00:03:00.000Z';
+  const ids = (entries: ReturnType<typeof chatTimeline>) => entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind));
+
+  it('puts a granted action before the answer of the turn it ran in, so the answer reads last', () => {
+    // The answer's row is created empty when the turn starts (T0) and filled in later; the granted send ran mid-turn (T1).
+    const messages = [message({ id: 'u1', role: 'user', created_at: '2025-12-31T23:59:00.000Z' }), message({ id: 'm1', created_at: T0 })];
+    const actions = [action({ id: 'a1', status: 'executed', grant_id: 'g1', created_at: T1 })];
+
+    expect(ids(chatTimeline(messages, actions))).toEqual(['u1', 'a1', 'm1']);
+  });
+
+  it('keeps several granted actions of one turn in the order they ran, all above the answer', () => {
+    const messages = [message({ id: 'm1', created_at: T0 })];
+    const actions = [action({ id: 'a2', status: 'executed', grant_id: 'g1', created_at: T2 }), action({ id: 'a1', status: 'failed', grant_id: 'g1', created_at: T1 })];
+
+    expect(ids(chatTimeline(messages, actions))).toEqual(['a1', 'a2', 'm1']);
+  });
+
+  it('anchors a granted action to its own turn, not to a later answer', () => {
+    const messages = [message({ id: 'm1', created_at: T0 }), message({ id: 'u2', role: 'user', created_at: T2 }), message({ id: 'm2', created_at: T3 })];
+    const actions = [action({ id: 'a1', status: 'executed', grant_id: 'g1', created_at: T1 })];
+
+    expect(ids(chatTimeline(messages, actions))).toEqual(['a1', 'm1', 'u2', 'm2']);
+  });
+
+  it('leaves a granted action after a user message it followed: there is no answer of that turn to anchor to', () => {
+    const messages = [message({ id: 'm1', created_at: T0 }), message({ id: 'u2', role: 'user', created_at: T1 })];
+    const actions = [action({ id: 'a1', status: 'executed', grant_id: 'g1', created_at: T2 })];
+
+    expect(ids(chatTimeline(messages, actions))).toEqual(['m1', 'u2', 'a1']);
+  });
+
+  it('does not move a card that asked for confirmation, pending or decided', () => {
+    const messages = [message({ id: 'm1', created_at: T0 })];
+    const actions = [action({ id: 'p1', status: 'pending', created_at: T1 }), action({ id: 'd1', status: 'executed', created_at: T2 })];
+
+    expect(ids(chatTimeline(messages, actions))).toEqual(['m1', 'p1', 'd1']);
+  });
+
+  it('keeps the entry\'s own at: only the order changes', () => {
+    const entries = chatTimeline([message({ id: 'm1', created_at: T0 })], [action({ id: 'a1', status: 'executed', grant_id: 'g1', created_at: T1 })]);
+    expect(entries[0]).toMatchObject({ kind: 'action', at: T1 });
+  });
+});
+
 describe('groupPendingActions', () => {
   it('leaves a single pending card alone', () => {
     const entries = chatTimeline([message({ id: 'm1', created_at: T0 })], [action({ id: 'a1', created_at: T1 }), action({ id: 'a2', created_at: T2, status: 'approved' })]);

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Machine } from '../db/repositories/types.js';
 import type { Screen, SimStatus, SimulatorBackend, Viewer } from './session-manager.js';
-import { SimulatorSessionManager } from './session-manager.js';
+import { NO_FREE_PORTS_MESSAGE, RELOCATING_MESSAGE, SimulatorSessionManager, mjpegPortTakenMessage, streamDeadMessage } from './session-manager.js';
+import { wdaPortCandidates, wdaPorts, type WdaPorts } from './ports.js';
 import { WdaClient } from './wda-client.js';
 
 const machine: Machine = { id: 'm1', name: 'mac', host: 'mac.local', ssh_user: 'u', ssh_port: 22, type: 'ssh', os: 'macos', capabilities: ['wda'], checked_at: null, owner_id: null, owner_name: null, created_at: '' };
@@ -29,14 +30,30 @@ function makeBackend(overrides: Partial<SimulatorBackend> = {}) {
   // vida real, onde o runner segue rodando em tmux até algo matá-lo. Testes que querem simular o
   // runner morrendo (ex.: durante a recuperação) sobrescrevem runnerAlive explicitamente.
   let runnerAliveCalls = 0;
+  // Where the fake runner listens. `runnerUp` follows startRunner/stopRunner; before either is
+  // called it follows the last runnerAlive answer, so "runner already alive" tests find it on
+  // candidate 0 like a runner started by the previous release.
+  let runnerAt: WdaPorts = wdaPorts(UDID);
+  let runnerUp: boolean | null = null;
+  let lastAlive = false;
   const backend: SimulatorBackend = {
     boot: vi.fn(async () => {}),
     runnerAlive: vi.fn(async () => {
       runnerAliveCalls++;
       return runnerAliveCalls > 1;
     }),
-    startRunner: vi.fn(async () => {}),
-    stopRunner: vi.fn(async () => {}),
+    startRunner: vi.fn(async (_m: Machine, _u: string, ports: WdaPorts) => {
+      runnerAt = ports;
+      runnerUp = true;
+    }),
+    stopRunner: vi.fn(async () => {
+      runnerUp = false;
+    }),
+    probePorts: vi.fn(async (_m: Machine, ports: WdaPorts) =>
+      (runnerUp ?? lastAlive) && ports.wdaPort === runnerAt.wdaPort
+        ? ({ wda: 'wda', mjpeg: 'mjpeg' } as const)
+        : ({ wda: 'free', mjpeg: 'free' } as const),
+    ),
     runnerTail: vi.fn(async () => ['linha do runner']),
     // Portas locais distintas a cada chamada, como o túnel ssh real (findFreePort por conexão).
     openTunnel: vi.fn(async (_m, ports) => {
@@ -68,8 +85,14 @@ function makeBackend(overrides: Partial<SimulatorBackend> = {}) {
     }),
     ...overrides,
   };
+  const innerAlive = backend.runnerAlive;
+  backend.runnerAlive = vi.fn(async (m: Machine, u: string) => {
+    lastAlive = await innerAlive(m, u);
+    return lastAlive;
+  });
   return {
     backend,
+    runnerPorts: () => runnerAt,
     fetchFn,
     createClientCalls,
     createClientInstances,
@@ -112,8 +135,197 @@ function postSessionCalls(fetchFn: ReturnType<typeof vi.fn>) {
 }
 
 describe('SimulatorSessionManager', () => {
+
+  const FREE = { wda: 'free', mjpeg: 'free' } as const;
+  const RUNNER = { wda: 'wda', mjpeg: 'mjpeg' } as const;
+  const cands = wdaPortCandidates(UDID);
+
+  it('fresh start skips a pair whose MJPEG port is taken and starts the runner on the next free one', async () => {
+    const b = makeBackend();
+    const inner = b.backend.probePorts;
+    b.backend.probePorts = vi.fn(async (m, p) => (p.wdaPort === cands[0].wdaPort ? { wda: 'free', mjpeg: 'taken' } : inner(m, p)));
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await mgr.acquire(machine, UDID, v);
+    expect(b.backend.startRunner).toHaveBeenCalledTimes(1);
+    expect(b.backend.startRunner).toHaveBeenCalledWith(machine, UDID, cands[1]);
+    expect(b.backend.openTunnel).toHaveBeenLastCalledWith(machine, cands[1]);
+    expect(v.statuses.at(-1)).toBe('ready');
+  });
+
+  it('no free pair → clear error, runner never started', async () => {
+    const b = makeBackend({ probePorts: vi.fn(async () => ({ wda: 'taken', mjpeg: 'taken' }) as const) });
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await expect(mgr.acquire(machine, UDID, v)).rejects.toThrow(NO_FREE_PORTS_MESSAGE);
+    expect(b.backend.startRunner).not.toHaveBeenCalled();
+    expect(v.fullStatuses.at(-1)).toMatchObject({ state: 'error', message: NO_FREE_PORTS_MESSAGE });
+  });
+
+  it('runner already alive on a shifted pair is found there, not restarted', async () => {
+    const b = makeBackend({
+      runnerAlive: vi.fn(async () => true),
+      probePorts: vi.fn(async (_m, p) => (p.wdaPort === cands[3].wdaPort ? RUNNER : FREE)),
+    });
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    await mgr.acquire(machine, UDID, makeViewer());
+    expect(b.backend.startRunner).not.toHaveBeenCalled();
+    expect(b.backend.stopRunner).not.toHaveBeenCalled();
+    expect(b.backend.openTunnel).toHaveBeenLastCalledWith(machine, cands[3]);
+  });
+
+  it('runner alive but not found on any pair (its MJPEG is foreign) → stopped and restarted on a free pair', async () => {
+    let restarted = false;
+    const b = makeBackend({
+      runnerAlive: vi.fn(async () => true),
+      startRunner: vi.fn(async () => {
+        restarted = true;
+      }),
+      probePorts: vi.fn(async (_m, p) => {
+        if (p.wdaPort === cands[0].wdaPort) return restarted ? ({ wda: 'free', mjpeg: 'taken' } as const) : ({ wda: 'wda', mjpeg: 'taken' } as const);
+        if (restarted && p.wdaPort === cands[1].wdaPort) return RUNNER;
+        return FREE;
+      }),
+    });
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await mgr.acquire(machine, UDID, v);
+    expect(b.backend.stopRunner).toHaveBeenCalledTimes(1);
+    expect(b.backend.startRunner).toHaveBeenCalledWith(machine, UDID, cands[1]);
+    expect(v.fullStatuses.some((st) => st.message === RELOCATING_MESSAGE)).toBe(true);
+    expect(v.statuses.at(-1)).toBe('ready');
+  });
+
+  it('MJPEG taken after the runner came up → runner moved to the next free pair', async () => {
+    const started: number[] = [];
+    const b = makeBackend({
+      startRunner: vi.fn(async (_m, _u, p) => {
+        started.push(p.wdaPort);
+      }),
+      probePorts: vi.fn(async (_m, p) => {
+        if (!started.includes(p.wdaPort)) return FREE;
+        return p.wdaPort === cands[0].wdaPort ? ({ wda: 'wda', mjpeg: 'taken' } as const) : RUNNER;
+      }),
+    });
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await mgr.acquire(machine, UDID, v);
+    expect(started).toEqual([cands[0].wdaPort, cands[1].wdaPort]);
+    expect(b.backend.stopRunner).toHaveBeenCalledTimes(1);
+    expect(v.statuses.at(-1)).toBe('ready');
+  });
+
+  it('MJPEG still taken after 2 relocations → error naming the port, with the runner tail', async () => {
+    const started: number[] = [];
+    const b = makeBackend({
+      startRunner: vi.fn(async (_m, _u, p) => {
+        started.push(p.wdaPort);
+      }),
+      probePorts: vi.fn(async (_m, p) => (started.includes(p.wdaPort) ? ({ wda: 'wda', mjpeg: 'taken' } as const) : FREE)),
+    });
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await expect(mgr.acquire(machine, UDID, v)).rejects.toThrow();
+    expect(started).toHaveLength(3);
+    expect(v.fullStatuses.at(-1)).toMatchObject({ state: 'error', message: mjpegPortTakenMessage(cands[2].mjpegPort), tail: ['linha do runner'] });
+  });
+
+  it('remembers the pair: the next session probes it first', async () => {
+    const b = makeBackend({
+      probePorts: vi.fn(async (_m, p) => {
+        if (p.wdaPort === cands[0].wdaPort) return { wda: 'free', mjpeg: 'taken' } as const;
+        if (p.wdaPort === cands[1].wdaPort && (b.backend.startRunner as ReturnType<typeof vi.fn>).mock.calls.length) return RUNNER;
+        return FREE;
+      }),
+    });
+    const probe = b.backend.probePorts as ReturnType<typeof vi.fn>;
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10, idleMs: 10 });
+    const h = await mgr.acquire(machine, UDID, makeViewer());
+    h.release();
+    await vi.advanceTimersByTimeAsync(20); // idle → disposed with stopRunner
+    probe.mockClear();
+    (b.backend.runnerAlive as ReturnType<typeof vi.fn>).mockImplementation(async () => true);
+    probe.mockImplementation(async (_m, p) => (p.wdaPort === cands[1].wdaPort ? RUNNER : FREE));
+    await mgr.acquire(machine, UDID, makeViewer());
+    expect(probe.mock.calls[0][1]).toEqual(cands[1]);
+  });
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
+
+  it('a stream that keeps ending before its first frame stops after 3 strikes with a clear error', async () => {
+    const b = makeBackend();
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await mgr.acquire(machine, UDID, v);
+    for (let i = 0; i < 5; i++) {
+      b.endStream(new Error('MJPEG respondeu 404'));
+      await vi.advanceTimersByTimeAsync(3000);
+    }
+    expect(b.backend.openMjpeg).toHaveBeenCalledTimes(3);
+    expect(v.fullStatuses.at(-1)).toEqual({ state: 'error', message: 'O vídeo do simulador não responde (MJPEG respondeu 404)' });
+    expect(mgr.isReady('m1', UDID)).toBe(false);
+    expect(b.backend.stopRunner).not.toHaveBeenCalled();
+  });
+
+  it('a frame resets the strikes: streams that work for a while keep recovering', async () => {
+    const b = makeBackend();
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await mgr.acquire(machine, UDID, v);
+    for (let i = 0; i < 5; i++) {
+      b.emitFrame(Buffer.from('f'));
+      b.endStream(new Error('caiu'));
+      await vi.advanceTimersByTimeAsync(3000);
+    }
+    expect(b.backend.openMjpeg).toHaveBeenCalledTimes(6);
+    expect(v.statuses.at(-1)).toBe('ready');
+  });
+
+  it('a frame in between resets the strikes: two dead streams, a working one, two more dead keep the session', async () => {
+    const b = makeBackend();
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await mgr.acquire(machine, UDID, v);
+    const dead = async () => {
+      b.endStream(new Error('MJPEG respondeu 404'));
+      await vi.advanceTimersByTimeAsync(3000);
+    };
+    await dead();
+    await dead();
+    b.emitFrame(Buffer.from('f'));
+    b.endStream(new Error('caiu'));
+    await vi.advanceTimersByTimeAsync(3000);
+    await dead();
+    await dead();
+    expect(v.statuses.at(-1)).toBe('ready');
+    expect(mgr.isReady('m1', UDID)).toBe(true);
+    expect(v.fullStatuses.some((st) => st.state === 'error')).toBe(false);
+  });
+
+  it('MJPEG reported free right after /status is re-probed once before relocating', async () => {
+    const answers = [{ wda: 'wda', mjpeg: 'free' }, { wda: 'wda', mjpeg: 'mjpeg' }] as const;
+    let i = 0;
+    const b = makeBackend({
+      probePorts: vi.fn(async () => {
+        if (!(b.backend.startRunner as ReturnType<typeof vi.fn>).mock.calls.length) return FREE;
+        return answers[Math.min(i++, 1)];
+      }),
+    });
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    const acquiring = mgr.acquire(machine, UDID, v);
+    await vi.advanceTimersByTimeAsync(100);
+    await acquiring;
+    expect(b.backend.stopRunner).not.toHaveBeenCalled();
+    expect(b.backend.startRunner).toHaveBeenCalledTimes(1);
+    expect(v.statuses.at(-1)).toBe('ready');
+  });
+
+  it('streamDeadMessage keeps the reader pt-BR causes and hides anything else', () => {
+    expect(streamDeadMessage(new Error('MJPEG sem dados por 15s'))).toBe('O vídeo do simulador não responde (MJPEG sem dados por 15s)');
+    expect(streamDeadMessage(new Error('socket hang up'))).toBe('O vídeo do simulador não responde');
+    expect(streamDeadMessage()).toBe('O vídeo do simulador não responde');
+  });
 
   it('sobe runner, túnel, sessão WDA e entrega status/screen/frames', async () => {
     const b = makeBackend();

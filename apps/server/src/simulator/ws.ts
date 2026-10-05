@@ -20,6 +20,15 @@ interface Deps {
 const MAX_BUFFERED = 1024 * 1024;
 const BUTTON_NAME: Record<string, string> = { home: 'home', lock: 'lock', volumeUp: 'volumeUp', volumeDown: 'volumeDown' };
 
+export const RECONNECTING_TOAST = 'Simulador reconectando; tente de novo em instantes.';
+
+/** The toast for a failed command. undici's bare "fetch failed" means the tunnel under the client closed. */
+export function commandErrorMessage(err: unknown): string {
+  if (err instanceof WdaError) return `WDA: ${err.message}`;
+  if (err instanceof TypeError && err.message === 'fetch failed') return RECONNECTING_TOAST;
+  return err instanceof Error ? err.message : 'Comando falhou';
+}
+
 export function registerSimulatorWs(router: ReturnType<typeof createUpgradeRouter>, deps: Deps) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
   const log = deps.log.child({ mod: 'sim-ws' });
@@ -150,7 +159,7 @@ async function handleConnection(
 
   const toast = (message: string) => send({ type: 'toast', message });
   const run = (p: Promise<unknown>) =>
-    p.catch((err) => toast(err instanceof WdaError ? `WDA: ${err.message}` : err instanceof Error ? err.message : 'Comando falhou'));
+    p.catch((err) => toast(commandErrorMessage(err)));
 
   ws.on('message', (raw, isBinary) => {
     if (isBinary) return;
@@ -212,7 +221,7 @@ async function handleConnection(
     } catch (err) {
       // Seguro barato: uma exceção síncrona aqui (ex.: montar as W3C actions) derrubaria o
       // processo, já que é um listener de evento do `ws` — nunca deixa escapar, vira toast.
-      toast(err instanceof WdaError ? `WDA: ${err.message}` : err instanceof Error ? err.message : 'Comando falhou');
+      toast(commandErrorMessage(err));
     }
   });
 

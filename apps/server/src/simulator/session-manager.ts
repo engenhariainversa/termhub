@@ -1,7 +1,8 @@
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { AGENT_OFFLINE_MESSAGE, NO_CHANNELS_MESSAGE } from './agent-tunnel.js';
-import { wdaPorts, type WdaPorts } from './ports.js';
+import type { PortProbe } from './port-probe.js';
+import { wdaPortCandidates, wdaPorts, type WdaPorts } from './ports.js';
 import type { Tunnel } from './tunnel.js';
 import { WdaClient, type Orientation } from './wda-client.js';
 
@@ -25,6 +26,8 @@ export interface SimulatorBackend {
   stopRunner(machine: Machine, udid: string): Promise<void>;
   runnerTail(machine: Machine, udid: string): Promise<string[]>;
   openTunnel(machine: Machine, ports: WdaPorts): Promise<Tunnel>;
+  /** Classifies the pair's ports on the machine (through a short-lived tunnel). */
+  probePorts(machine: Machine, ports: WdaPorts): Promise<PortProbe>;
   createClient(baseUrl: string): WdaClient;
   openMjpeg(port: number, onFrame: (f: Buffer) => void, onEnd: (err?: Error) => void): () => void;
 }
@@ -51,6 +54,17 @@ interface Options {
 const DEFAULT_SETTINGS = { mjpegServerFramerate: 30, mjpegScalingFactor: 50, mjpegServerScreenshotQuality: 40 };
 const RECOVER_ATTEMPTS = 3;
 const RECOVER_DELAY_MS = 2000;
+const MAX_RELOCATIONS = 2;
+export const RELOCATING_MESSAGE = 'Reiniciando o WebDriverAgent em outras portas…';
+export const NO_FREE_PORTS_MESSAGE = 'Nenhuma porta livre para o WebDriverAgent no Mac (8100–8199 / 9100–9199)';
+export function mjpegPortTakenMessage(port: number): string {
+  return `A porta ${port} do Mac está em uso por outro programa; o vídeo do simulador não consegue subir`;
+}
+const STREAM_DEAD_MESSAGE = 'O vídeo do simulador não responde';
+/** Only the MJPEG reader's own messages ("MJPEG respondeu 404", "MJPEG sem dados por 15s") are pt-BR. */
+export function streamDeadMessage(cause?: Error): string {
+  return cause?.message.startsWith('MJPEG ') ? `${STREAM_DEAD_MESSAGE} (${cause.message})` : STREAM_DEAD_MESSAGE;
+}
 const DISPOSED_ERROR = 'sessão encerrada';
 const CONNECTION_LOST_MESSAGE = 'Conexão com o simulador perdida';
 
@@ -82,6 +96,8 @@ interface Session {
   /** Why the current `tunnel` closed on its own (null while it is up); cleared when a new one opens. */
   tunnelError: Error | null;
   closeMjpeg: (() => void) | null;
+  /** Streams in a row that ended before their first frame. */
+  streamStrikes: number;
   screen: Screen;
   idleTimer: ReturnType<typeof setTimeout> | null;
   recovering: Promise<void> | null;
@@ -99,6 +115,7 @@ export class SimulatorSessionManager {
   private recoverReadyTimeoutMs: number;
   private pollMs: number;
   private log: (msg: string, meta?: object) => void;
+  private knownPorts = new Map<string, WdaPorts>();
 
   constructor(
     private backend: SimulatorBackend,
@@ -138,7 +155,7 @@ export class SimulatorSessionManager {
         key,
         machine,
         udid,
-        ports: wdaPorts(udid),
+        ports: this.knownPorts.get(key) ?? wdaPorts(udid),
         viewers: new Set(),
         activeViewers: new Set(),
         starting: null,
@@ -147,6 +164,7 @@ export class SimulatorSessionManager {
         tunnel: null,
         tunnelError: null,
         closeMjpeg: null,
+        streamStrikes: 0,
         screen: { width: 0, height: 0, orientation: 'portrait' },
         idleTimer: null,
         recovering: null,
@@ -263,20 +281,87 @@ export class SimulatorSessionManager {
     this.deactivateViewer(s, viewer);
   }
 
+  /** Candidate pairs for this session: the remembered one first, then the hash order. */
+  private candidates(s: Session): WdaPorts[] {
+    const known = this.knownPorts.get(s.key);
+    const all = wdaPortCandidates(s.udid);
+    return known ? [known, ...all.filter((p) => p.wdaPort !== known.wdaPort)] : all;
+  }
+
+  /** The pair where a runner that is already running answers as WDA (status + MJPEG), if any. */
+  private async locateRunner(s: Session): Promise<WdaPorts | null> {
+    for (const p of this.candidates(s)) {
+      const probe = await this.backend.probePorts(s.machine, p);
+      if (s.disposed) throw new Error(DISPOSED_ERROR);
+      if (probe.wda === 'wda' && probe.mjpeg === 'mjpeg') return p;
+    }
+    return null;
+  }
+
+  /** Starts the runner on the first candidate whose two ports are free, skipping `excluded`. */
+  private async startRunnerOnFreePorts(s: Session, excluded: Set<number>): Promise<void> {
+    for (const p of this.candidates(s)) {
+      if (excluded.has(p.wdaPort)) continue;
+      const probe = await this.backend.probePorts(s.machine, p);
+      if (s.disposed) throw new Error(DISPOSED_ERROR);
+      if (probe.wda !== 'free' || probe.mjpeg !== 'free') continue;
+      s.ports = p;
+      this.log('iniciando runner do WDA', { machineId: s.machine.id, udid: s.udid, ...p });
+      await this.backend.startRunner(s.machine, s.udid, p);
+      return;
+    }
+    throw new Error(NO_FREE_PORTS_MESSAGE);
+  }
+
   private async start(s: Session): Promise<void> {
-    const meta = { machineId: s.machine.id, udid: s.udid, ...s.ports };
+    const meta = () => ({ machineId: s.machine.id, udid: s.udid, ...s.ports });
     try {
       this.broadcast(s, (v) => v.onStatus({ state: 'booting' }));
       await this.backend.boot(s.machine, s.udid);
       if (s.disposed) throw new Error(DISPOSED_ERROR);
       this.broadcast(s, (v) => v.onStatus({ state: 'starting' }));
-      if (!(await this.backend.runnerAlive(s.machine, s.udid))) {
-        if (s.disposed) throw new Error(DISPOSED_ERROR);
-        this.log('iniciando runner do WDA', meta);
-        await this.backend.startRunner(s.machine, s.udid, s.ports);
+      const excluded = new Set<number>();
+      let fresh = true;
+      if (await this.backend.runnerAlive(s.machine, s.udid)) {
+        const found = await this.locateRunner(s);
+        if (found) {
+          s.ports = found;
+          fresh = false;
+        } else {
+          // Alive but not answering as WDA on any candidate (e.g. its MJPEG port belongs to another
+          // program): start it over on free ports.
+          this.log('runner do WDA vivo sem responder nas portas candidatas; reiniciando', meta());
+          this.broadcast(s, (v) => v.onStatus({ state: 'starting', message: RELOCATING_MESSAGE }));
+          await this.backend.stopRunner(s.machine, s.udid);
+        }
       }
       if (s.disposed) throw new Error(DISPOSED_ERROR);
-      await this.connect(s, this.readyTimeoutMs);
+      if (fresh) await this.startRunnerOnFreePorts(s, excluded);
+      for (let relocations = 0; ; relocations++) {
+        if (s.disposed) throw new Error(DISPOSED_ERROR);
+        await this.connect(s, this.readyTimeoutMs);
+        if (!fresh) break; // a located runner was already checked (status + MJPEG)
+        let probe = await this.backend.probePorts(s.machine, s.ports);
+        this.checkAlive(s);
+        // `free` right after /status is ambiguous (WDA may not have bound the broadcaster yet), so
+        // look once more before deciding. `taken` is conclusive: another program owns the port.
+        if (probe.mjpeg === 'free') {
+          await sleep(this.pollMs);
+          this.checkAlive(s);
+          probe = await this.backend.probePorts(s.machine, s.ports);
+          this.checkAlive(s);
+        }
+        if (probe.mjpeg === 'mjpeg') break;
+        // WDA is up but its MJPEG port answers as something else: WDA could not bind it.
+        if (relocations >= MAX_RELOCATIONS) throw new Error(mjpegPortTakenMessage(s.ports.mjpegPort));
+        this.log('porta MJPEG do WDA ocupada por outro programa; trocando de portas', meta());
+        this.broadcast(s, (v) => v.onStatus({ state: 'starting', message: RELOCATING_MESSAGE }));
+        excluded.add(s.ports.wdaPort);
+        this.closeTunnel(s);
+        await this.backend.stopRunner(s.machine, s.udid);
+        await this.startRunnerOnFreePorts(s, excluded);
+      }
+      this.knownPorts.set(s.key, s.ports);
       const client = s.client!;
       await client.createSession();
       this.checkAlive(s);
@@ -287,7 +372,7 @@ export class SimulatorSessionManager {
       s.screen = { ...size, orientation };
       if (s.activeViewers.size > 0) this.openStream(s);
       s.ready = true;
-      this.log('simulador pronto', meta);
+      this.log('simulador pronto', meta());
       this.broadcast(s, (v) => {
         v.onStatus({ state: 'ready' });
         v.onScreen(s.screen);
@@ -300,7 +385,7 @@ export class SimulatorSessionManager {
       } catch {
         tail = undefined;
       }
-      this.log('falha ao subir simulador: ' + message, meta);
+      this.log('falha ao subir simulador: ' + message, meta());
       this.broadcast(s, (v) => v.onStatus({ state: 'error', message, tail }));
       await this.dispose(s, { stopRunner: false });
       throw err instanceof Error ? err : new Error(message);
@@ -352,15 +437,39 @@ export class SimulatorSessionManager {
 
   private openStream(s: Session) {
     const port = s.tunnel!.mjpegPort;
+    let gotFrame = false;
     const close = this.backend.openMjpeg(
       port,
-      (frame) => this.broadcast(s, (v) => v.onFrame(frame)),
+      (frame) => {
+        if (!gotFrame) {
+          gotFrame = true;
+          s.streamStrikes = 0;
+        }
+        this.broadcast(s, (v) => v.onFrame(frame));
+      },
       (err) => {
         if (s.closeMjpeg !== close || s.disposed) return;
+        if (!gotFrame) s.streamStrikes++;
+        // A stream that dies before any frame, again and again, is not a network hiccup: reconnecting
+        // "succeeds" (WDA's /status is fine) and the cycle would never end (TER-983).
+        if (s.streamStrikes >= RECOVER_ATTEMPTS) {
+          void this.giveUpStream(s, err);
+          return;
+        }
         void this.recover(s, err);
       },
     );
     s.closeMjpeg = close;
+  }
+
+  private async giveUpStream(s: Session, cause?: Error): Promise<void> {
+    this.log('stream MJPEG terminou sem frames repetidas vezes; desistindo: ' + (cause?.message ?? ''), { machineId: s.machine.id, udid: s.udid, ...s.ports });
+    s.ready = false;
+    this.closeMjpegStream(s);
+    this.closeTunnel(s);
+    const message = streamDeadMessage(cause);
+    this.broadcast(s, (v) => v.onStatus({ state: 'error', message }));
+    await this.dispose(s, { stopRunner: false });
   }
 
   /** Túnel ou stream caiu: reabre até RECOVER_ATTEMPTS vezes mantendo a sessão WDA. Reentrante-seguro. */

@@ -51,13 +51,42 @@ export function chatTimeline(messages: ChatMessage[], actions: ChatAction[], tab
     ...visibleLimits.map((limit): ChatEntry => ({ kind: 'tab_limit', at: limit.created_at, limit })),
   ];
 
-  return entries.sort((a, b) => {
-    if (a.at !== b.at) return a.at < b.at ? -1 : 1;
-    // A card (a gate card, a tab's question or suggestion) reads after the message of the same instant; two cards keep their order.
-    if (a.kind === 'message' && b.kind !== 'message') return -1;
-    if (b.kind === 'message' && a.kind !== 'message') return 1;
-    return 0;
+  /**
+   * TER-984: the answer's row is created empty when its turn starts and filled in as the turn runs, so
+   * by time alone every card the turn made would read after its answer. A call that ran without asking
+   * (a `grant_id`: set once, when the row is made) belongs inside the turn, so it is sorted just before
+   * the answer of the turn it ran in, and the answer stays the last thing the turn shows. A card that
+   * asks for confirmation keeps its own time, and so does a call made after a user message with no
+   * answer yet (there is no answer of its turn to sit above).
+   */
+  const byTime = [...messages].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+  const turnAnswerAt = (at: string): string | null => {
+    let last: ChatMessage | null = null;
+    for (const m of byTime) {
+      if (m.created_at > at) break;
+      last = m;
+    }
+    return last?.role === 'assistant' ? last.created_at : null;
+  };
+  // rank breaks a tie at the same `key`: a call anchored to an answer reads before it, any other card after it.
+  const keyed = entries.map((entry) => {
+    if (entry.kind === 'action' && entry.action.grant_id && !entry.action.surfaced_at) {
+      const answerAt = turnAnswerAt(entry.at);
+      if (answerAt !== null) return { entry, key: answerAt, rank: 0 };
+    }
+    return { entry, key: entry.at, rank: entry.kind === 'message' ? 1 : 2 };
   });
+
+  return keyed
+    .sort((a, b) => {
+      if (a.key !== b.key) return a.key < b.key ? -1 : 1;
+      // A card (a gate card, a tab's question, suggestion or usage limit) reads after the message of the same instant; two cards keep their order.
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      // Calls anchored to the same answer keep the order they ran in.
+      if (a.rank === 0) return a.entry.at < b.entry.at ? -1 : a.entry.at > b.entry.at ? 1 : 0;
+      return 0;
+    })
+    .map((k) => k.entry);
 }
 
 /** Two or more pending gate cards become one grouped confirmation, where the oldest of them was (spec
