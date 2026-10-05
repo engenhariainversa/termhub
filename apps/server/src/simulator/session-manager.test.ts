@@ -281,6 +281,46 @@ describe('SimulatorSessionManager', () => {
     expect(v.statuses.at(-1)).toBe('ready');
   });
 
+  it('a frame in between resets the strikes: two dead streams, a working one, two more dead keep the session', async () => {
+    const b = makeBackend();
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await mgr.acquire(machine, UDID, v);
+    const dead = async () => {
+      b.endStream(new Error('MJPEG respondeu 404'));
+      await vi.advanceTimersByTimeAsync(3000);
+    };
+    await dead();
+    await dead();
+    b.emitFrame(Buffer.from('f'));
+    b.endStream(new Error('caiu'));
+    await vi.advanceTimersByTimeAsync(3000);
+    await dead();
+    await dead();
+    expect(v.statuses.at(-1)).toBe('ready');
+    expect(mgr.isReady('m1', UDID)).toBe(true);
+    expect(v.fullStatuses.some((st) => st.state === 'error')).toBe(false);
+  });
+
+  it('MJPEG reported free right after /status is re-probed once before relocating', async () => {
+    const answers = [{ wda: 'wda', mjpeg: 'free' }, { wda: 'wda', mjpeg: 'mjpeg' }] as const;
+    let i = 0;
+    const b = makeBackend({
+      probePorts: vi.fn(async () => {
+        if (!(b.backend.startRunner as ReturnType<typeof vi.fn>).mock.calls.length) return FREE;
+        return answers[Math.min(i++, 1)];
+      }),
+    });
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    const acquiring = mgr.acquire(machine, UDID, v);
+    await vi.advanceTimersByTimeAsync(100);
+    await acquiring;
+    expect(b.backend.stopRunner).not.toHaveBeenCalled();
+    expect(b.backend.startRunner).toHaveBeenCalledTimes(1);
+    expect(v.statuses.at(-1)).toBe('ready');
+  });
+
   it('streamDeadMessage keeps the reader pt-BR causes and hides anything else', () => {
     expect(streamDeadMessage(new Error('MJPEG sem dados por 15s'))).toBe('O vídeo do simulador não responde (MJPEG sem dados por 15s)');
     expect(streamDeadMessage(new Error('socket hang up'))).toBe('O vídeo do simulador não responde');

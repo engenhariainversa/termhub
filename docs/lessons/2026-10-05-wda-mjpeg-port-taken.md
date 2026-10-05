@@ -1,7 +1,7 @@
 ---
 symptom: "iOS simulator tab stuck on \"Reconectando ao simulador…\" with \"fetch failed\" toasts; server log loops \"túnel/stream caiu, tentando recuperar: MJPEG respondeu 404\""
 tags: [simulator, wda, mjpeg, ports, macos]
-evidence: fixed
+evidence: observed
 card: TER-983
 pr: <PR URL>
 agent: claude

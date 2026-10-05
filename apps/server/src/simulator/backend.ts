@@ -16,8 +16,17 @@ export function createRealBackend(log?: (msg: string, meta?: object) => void): S
     openTunnel: (machine, ports) => openTunnel(machine, ports, { log }),
     probePorts: async (machine, ports) => {
       const tunnel = await openTunnel(machine, ports, { log });
+      let closed = false;
+      let closeErr: Error | undefined;
+      tunnel.onClose((err) => {
+        closed = true;
+        closeErr = err;
+      });
       try {
-        return await probeLocalPorts(tunnel.wdaPort, tunnel.mjpegPort);
+        const result = await probeLocalPorts(tunnel.wdaPort, tunnel.mjpegPort);
+        // A dying tunnel makes every port look `free`; do not let that stop a healthy runner.
+        if (closed) throw closeErr ?? new Error('Conexão com o simulador perdida');
+        return result;
       } finally {
         tunnel.close();
       }

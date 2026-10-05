@@ -341,8 +341,16 @@ export class SimulatorSessionManager {
         if (s.disposed) throw new Error(DISPOSED_ERROR);
         await this.connect(s, this.readyTimeoutMs);
         if (!fresh) break; // a located runner was already checked (status + MJPEG)
-        const probe = await this.backend.probePorts(s.machine, s.ports);
+        let probe = await this.backend.probePorts(s.machine, s.ports);
         this.checkAlive(s);
+        // `free` right after /status is ambiguous (WDA may not have bound the broadcaster yet), so
+        // look once more before deciding. `taken` is conclusive: another program owns the port.
+        if (probe.mjpeg === 'free') {
+          await sleep(this.pollMs);
+          this.checkAlive(s);
+          probe = await this.backend.probePorts(s.machine, s.ports);
+          this.checkAlive(s);
+        }
         if (probe.mjpeg === 'mjpeg') break;
         // WDA is up but its MJPEG port answers as something else: WDA could not bind it.
         if (relocations >= MAX_RELOCATIONS) throw new Error(mjpegPortTakenMessage(s.ports.mjpegPort));

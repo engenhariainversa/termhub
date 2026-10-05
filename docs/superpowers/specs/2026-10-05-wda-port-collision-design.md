@@ -39,7 +39,7 @@ changes when the ports are free.
 |---|---|
 | `free`: the connection closed or was refused with no response | `free`: same |
 | `wda`: 200 with a JSON body whose `value.ready` is a boolean | `mjpeg`: 200 with `Content-Type: multipart/x-mixed-replace` |
-| `taken`: any other response, or 1.5 s without a response on an open connection | `taken`: same |
+| `taken`: any other response, or 3 s without a response on an open connection | `taken`: same |
 
 This works for every machine type: a local machine probes the real port, an SSH tunnel closes the
 local socket when the remote `connect` fails, and an agent tunnel does the same on `ECONNREFUSED`.
@@ -57,7 +57,8 @@ The backend gets `probePorts(machine, ports)`. It opens a tunnel, probes, and cl
    - **No runner**: the first pair where both ports are `free`. If none is free, fail with
      "Nenhuma porta livre para o WebDriverAgent no Mac (8100–8199 / 9100–9199)".
 3. Start the runner and wait for `/status` (unchanged).
-4. **Check the MJPEG**: probe the pair. If the MJPEG port is not `mjpeg`, stop the runner, exclude the
+4. **Check the MJPEG**: probe the pair. A `free` MJPEG port is ambiguous right after `/status` (WDA may
+   not have bound it yet), so wait one poll interval and probe once more. If the MJPEG port is not `mjpeg`, stop the runner, exclude the
    pair, pick the next free one and go back to step 3. After 2 relocations, fail with
    "A porta <mjpeg> do Mac está em uso por outro programa; o vídeo do simulador não consegue subir"
    and the runner's tail.
