@@ -104,6 +104,28 @@ export const GUARDED = [
   'lib/attachments.ts',
   'lib/code-blocks.ts',
   'lib/markdown.ts',
+  // settings + city
+  'components/AiAccountsView.tsx',
+  'components/ApiTokensView.tsx',
+  'components/AutoSwapSettings.tsx',
+  'components/ChatGrantsView.tsx',
+  'components/DeleteAccountDialog.tsx',
+  'components/DevicesView.tsx',
+  'components/HardwareView.tsx',
+  'components/IntegrationsView.tsx',
+  'components/MyCityView.tsx',
+  'components/NicknameDialog.tsx',
+  'components/ReviewAccountPanel.tsx',
+  'components/UploadsView.tsx',
+  'components/WaitlistView.tsx',
+  'components/AnalyticsGate.tsx',
+  'components/RateLimitBanner.tsx',
+  'components/PublishControl.tsx',
+  'city/',
+  'lib/account-deletion.ts',
+  'lib/city-link.ts',
+  'lib/public-city.ts',
+  'lib/consent.ts',
 ];
 
 /** JSX attributes that carry copy a person reads (or hears). */

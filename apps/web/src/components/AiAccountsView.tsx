@@ -5,14 +5,15 @@ import { STATUS_DOT, STATUS_LABEL } from '../lib/machine-status';
 import { AI_PROVIDER_LABEL, type AiAccount, type AiAccountUsage, type AiProvider, type AiUsageWindow, type Machine } from '../lib/types';
 import { AutoSwapSettings } from './AutoSwapSettings';
 import { ConfirmDialog, Modal } from './Modal';
+import { i18n, tk, Trans, useTranslation } from '../i18n';
 
 const PROVIDERS: AiProvider[] = ['claude', 'chatgpt', 'gemini', 'antigravity'];
 
 const PROVIDER_HINT: Record<AiProvider, string> = {
-  claude: 'Lê o login do Claude Code na máquina (~/.claude). Para uma segunda conta (ex.: a da empresa), faça login com CLAUDE_CONFIG_DIR=~/.claude-work claude e escolha "Outro diretório de config" abaixo.',
-  chatgpt: 'Lê o login do Codex CLI na máquina (~/.codex). Entre com "Sign in with ChatGPT" — login por API key não tem limite de plano.',
-  gemini: 'Lê o login do Gemini CLI na máquina (~/.gemini). Entre com a conta Google — login por API key não tem cota de plano.',
-  antigravity: 'Lê o login do Antigravity CLI na máquina (~/.gemini/antigravity-cli/antigravity-oauth-token; o diretório de config é ~/.gemini). Rode `agy` e entre com a conta Google do plano AI Pro/Ultra — login por API key não tem cota de plano.',
+  claude: tk('Lê o login do Claude Code na máquina (~/.claude). Para uma segunda conta (ex.: a da empresa), faça login com CLAUDE_CONFIG_DIR=~/.claude-work claude e escolha "Outro diretório de config" abaixo.'),
+  chatgpt: tk('Lê o login do Codex CLI na máquina (~/.codex). Entre com "Sign in with ChatGPT" — login por API key não tem limite de plano.'),
+  gemini: tk('Lê o login do Gemini CLI na máquina (~/.gemini). Entre com a conta Google — login por API key não tem cota de plano.'),
+  antigravity: tk('Lê o login do Antigravity CLI na máquina (~/.gemini/antigravity-cli/antigravity-oauth-token; o diretório de config é ~/.gemini). Rode `agy` e entre com a conta Google do plano AI Pro/Ultra — login por API key não tem cota de plano.'),
 };
 
 const PROVIDER_STYLE: Record<AiProvider, string> = {
@@ -33,20 +34,20 @@ const OTHER_DIR_EXAMPLE: Record<AiProvider, string> = {
 function countdown(iso: string | null, now: number): string | null {
   if (!iso) return null;
   const ms = new Date(iso).getTime() - now;
-  if (ms <= 0) return 'agora';
+  if (ms <= 0) return i18n.t('agora');
   const m = Math.ceil(ms / 60000);
-  if (m < 60) return `${m} min`;
+  if (m < 60) return i18n.t('{{m}} min', { m });
   const h = Math.floor(m / 60);
-  if (h < 48) return `${h} h ${m % 60 ? `${m % 60} min` : ''}`.trim();
+  if (h < 48) return m % 60 ? i18n.t('{{h}} h {{m}} min', { h, m: m % 60 }) : i18n.t('{{h}} h', { h });
   const d = Math.floor(h / 24);
-  return `${d} d ${h % 24} h`;
+  return i18n.t('{{d}} d {{h}} h', { d, h: h % 24 });
 }
 
 function relative(iso: string, now: number): string {
   const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
-  if (s < 5) return 'agora';
-  if (s < 60) return `há ${s} s`;
-  return `há ${Math.round(s / 60)} min`;
+  if (s < 5) return i18n.t('agora');
+  if (s < 60) return i18n.t('há {{n}} s', { n: s });
+  return i18n.t('há {{n}} min', { n: Math.round(s / 60) });
 }
 
 function barColor(pct: number): string {
@@ -56,6 +57,7 @@ function barColor(pct: number): string {
 }
 
 function WindowBar({ w, now }: { w: AiUsageWindow; now: number }) {
+  const { t } = useTranslation();
   const pct = Math.round(w.utilization);
   const reset = countdown(w.resets_at, now);
   return (
@@ -64,7 +66,7 @@ function WindowBar({ w, now }: { w: AiUsageWindow; now: number }) {
         <span className="text-fg-muted">{w.label}</span>
         <span className="tabular-nums">
           <span className={pct >= 90 ? 'text-danger' : pct >= 70 ? 'text-warn' : 'text-fg'}>{pct}%</span>
-          {reset && <span className="text-fg-dim"> · reseta em {reset}</span>}
+          {reset && <span className="text-fg-dim">{t(' · reseta em {{time}}', { time: reset })}</span>}
         </span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-bg-4">
@@ -89,6 +91,7 @@ function AccountCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const worst = usage?.ok ? Math.max(...usage.windows.map((w) => w.utilization)) : null;
   return (
@@ -100,7 +103,7 @@ function AccountCard({
         <span className="ml-auto flex shrink-0 items-center gap-0.5">
           <button
             className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50"
-            title="Atualizar agora"
+            title={t('Atualizar agora')}
             disabled={refreshing}
             onClick={() => {
               setRefreshing(true);
@@ -109,20 +112,20 @@ function AccountCard({
           >
             {refreshing ? '…' : '↻'}
           </button>
-          <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg" title="Editar" onClick={onEdit}>
+          <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg" title={t('Editar')} onClick={onEdit}>
             ✎
           </button>
-          <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-danger" title="Remover" onClick={onDelete}>
+          <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-danger" title={t('Remover')} onClick={onDelete}>
             ✕
           </button>
         </span>
       </div>
       <div className="mt-0.5 truncate font-mono text-[11px] text-fg-dim" title={account.config_dir ?? undefined}>
-        {account.config_dir ?? 'login padrão'}
+        {account.config_dir ?? t('login padrão')}
       </div>
 
       <div className="mt-3 flex-1">
-        {!usage && <p className="text-xs text-fg-dim">Consultando…</p>}
+        {!usage && <p className="text-xs text-fg-dim">{t('Consultando…')}</p>}
         {usage && !usage.ok && (
           <div className="rounded border border-danger/40 bg-danger/10 p-2 text-xs">
             <p className="text-danger">{usage.error}</p>
@@ -140,8 +143,8 @@ function AccountCard({
 
       {usage && (
         <div className="mt-3 border-t border-line pt-2 text-[11px] text-fg-dim">
-          atualizado {relative(usage.fetched_at, now)}
-          {usage.stale && <span className="text-warn"> · limite de consultas do provedor; mostrando a última leitura</span>}
+          {t('atualizado {{when}}', { when: relative(usage.fetched_at, now) })}
+          {usage.stale && <span className="text-warn">{t(' · limite de consultas do provedor; mostrando a última leitura')}</span>}
         </div>
       )}
     </li>
@@ -160,6 +163,7 @@ function AccountForm({
   onClose: () => void;
   onSaved: (a: AiAccount) => void;
 }) {
+  const { t } = useTranslation();
   const { machines } = useData();
   const [provider, setProvider] = useState<AiProvider>(account?.provider ?? 'claude');
   const [label, setLabel] = useState(account?.label ?? '');
@@ -180,17 +184,17 @@ function AccountForm({
       const r = account ? await api.aiAccounts.update(account.id, input) : await api.aiAccounts.create({ provider, ...input });
       onSaved(r.account);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao salvar');
+      setError(err instanceof ApiError ? err.message : t('Erro ao salvar'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal title={account ? 'Editar conta de IA' : 'Nova conta de IA'} open onClose={onClose}>
+    <Modal title={account ? t('Editar conta de IA') : t('Nova conta de IA')} open onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <div>
-          <label className="label">Provedor</label>
+          <label className="label">{t('Provedor')}</label>
           <div className="flex gap-1 rounded-md border border-line bg-bg p-1">
             {PROVIDERS.map((p) => (
               <button
@@ -204,14 +208,14 @@ function AccountForm({
               </button>
             ))}
           </div>
-          <p className="mt-1 text-xs text-fg-dim">{PROVIDER_HINT[provider]}</p>
+          <p className="mt-1 text-xs text-fg-dim">{t(PROVIDER_HINT[provider])}</p>
         </div>
         <div>
-          <label className="label">Nome</label>
-          <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={`ex.: ${AI_PROVIDER_LABEL[provider]} pessoal`} autoFocus />
+          <label className="label">{t('Nome')}</label>
+          <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('ex.: {{provider}} pessoal', { provider: AI_PROVIDER_LABEL[provider] })} autoFocus />
         </div>
         <div>
-          <label className="label">Máquina onde o CLI está logado</label>
+          <label className="label">{t('Máquina onde o CLI está logado')}</label>
           <select className="input" value={machineId} onChange={(e) => setMachineId(e.target.value)} required>
             {machines.map((m) => (
               <option key={m.id} value={m.id}>
@@ -221,25 +225,25 @@ function AccountForm({
           </select>
         </div>
         <fieldset>
-          <legend className="label">Login</legend>
+          <legend className="label">{t('Login')}</legend>
           <label className="flex items-start gap-2 text-sm">
             <input type="radio" name="ai-account-login" className="mt-1" checked={!custom} onChange={() => setCustom(false)} />
             <span>
-              Conta padrão da máquina
-              <span className="block text-xs text-fg-dim">O login que o CLI usa quando nenhum diretório de config é definido.</span>
+              {t('Conta padrão da máquina')}
+              <span className="block text-xs text-fg-dim">{t('O login que o CLI usa quando nenhum diretório de config é definido.')}</span>
             </span>
           </label>
           <label className="mt-2 flex items-start gap-2 text-sm">
             <input type="radio" name="ai-account-login" className="mt-1" checked={custom} onChange={() => setCustom(true)} />
             <span>
-              Outro diretório de config
-              <span className="block text-xs text-fg-dim">Uma segunda conta do mesmo CLI, logada em um diretório próprio.</span>
+              {t('Outro diretório de config')}
+              <span className="block text-xs text-fg-dim">{t('Uma segunda conta do mesmo CLI, logada em um diretório próprio.')}</span>
             </span>
           </label>
           {custom && (
             <input
               className="input mt-2 font-mono"
-              aria-label="Diretório de config"
+              aria-label={t('Diretório de config')}
               value={configDir}
               onChange={(e) => setConfigDir(e.target.value)}
               placeholder={OTHER_DIR_EXAMPLE[provider]}
@@ -249,10 +253,10 @@ function AccountForm({
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>
-            Cancelar
+            {t('Cancelar')}
           </button>
           <button type="submit" className="btn-primary" disabled={busy || !machineId || (custom && !configDir.trim())}>
-            {account ? 'Salvar' : 'Adicionar'}
+            {account ? t('Salvar') : t('Adicionar')}
           </button>
         </div>
       </form>
@@ -275,7 +279,6 @@ export function groupAccountsByMachine(machines: Machine[], accounts: AiAccount[
 }
 
 const OPEN_KEY = 'termhub:ai-accounts-open';
-const UNKNOWN_MACHINE = 'Máquina desconhecida';
 
 function readOpen(): Record<string, boolean> {
   try {
@@ -286,8 +289,9 @@ function readOpen(): Record<string, boolean> {
 }
 
 function MachineSection({ machine, count, open, onToggle, onAdd, children }: { machine: Machine | null; count: number; open: boolean; onToggle: () => void; onAdd?: () => void; children: ReactNode }) {
+  const { t } = useTranslation();
   const { statuses } = useData();
-  const name = machine?.name ?? UNKNOWN_MACHINE;
+  const name = machine?.name ?? t('Máquina desconhecida');
   const status = machine ? (statuses[machine.id] ?? 'checking') : null;
   return (
     <section aria-label={name} className="rounded-lg border border-line bg-bg-2">
@@ -299,11 +303,11 @@ function MachineSection({ machine, count, open, onToggle, onAdd, children }: { m
           {status && <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} title={STATUS_LABEL[status]} />}
           <span className="truncate font-medium">{name}</span>
           {machine?.subtitle && <span className="truncate text-xs text-fg-muted">{machine.subtitle}</span>}
-          <span className="text-xs text-fg-dim">{count === 1 ? '1 conta' : `${count} contas`}</span>
+          <span className="text-xs text-fg-dim">{t('{{count}} contas', { count })}</span>
         </button>
         {onAdd && (
-          <button type="button" className="btn-ghost shrink-0 text-xs" aria-label={`Adicionar conta em ${name}`} title={`Adicionar conta em ${name}`} onClick={onAdd}>
-            + conta
+          <button type="button" className="btn-ghost shrink-0 text-xs" aria-label={t('Adicionar conta em {{name}}', { name })} title={t('Adicionar conta em {{name}}', { name })} onClick={onAdd}>
+            {t('+ conta')}
           </button>
         )}
       </div>
@@ -316,6 +320,7 @@ function MachineSection({ machine, count, open, onToggle, onAdd, children }: { m
 const POLL_MS = 5 * 60_000;
 
 export function AiAccountsView() {
+  const { t } = useTranslation();
   const { machines } = useData();
   const [accounts, setAccounts] = useState<AiAccount[] | null>(null);
   const [usage, setUsage] = useState<Record<string, AiAccountUsage>>({});
@@ -330,7 +335,7 @@ export function AiAccountsView() {
       const r = await api.aiAccounts.usage(refresh);
       setUsage(Object.fromEntries(r.usage.map((u) => [u.account_id, u])));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao consultar os limites');
+      setError(err instanceof ApiError ? err.message : t('Erro ao consultar os limites'));
     }
   }, []);
 
@@ -340,7 +345,7 @@ export function AiAccountsView() {
       setAccounts(r.accounts);
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao carregar as contas');
+      setError(err instanceof ApiError ? err.message : t('Erro ao carregar as contas'));
     }
   }, []);
 
@@ -382,22 +387,22 @@ export function AiAccountsView() {
     <div>
       <div className="mb-5 flex items-end gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Contas de IA</h2>
-          <p className="text-sm text-fg-muted">Limites de uso das suas assinaturas, lidos do login dos CLIs nas máquinas. Atualiza a cada minuto.</p>
+          <h2 className="text-lg font-semibold">{t('Contas de IA')}</h2>
+          <p className="text-sm text-fg-muted">{t('Limites de uso das suas assinaturas, lidos do login dos CLIs nas máquinas. Atualiza a cada minuto.')}</p>
         </div>
         <span className="ml-auto flex gap-2">
-          <button className="btn-ghost text-xs" onClick={() => void loadUsage(true)} title="Consultar todas agora">
-            ↻ atualizar
+          <button className="btn-ghost text-xs" onClick={() => void loadUsage(true)} title={t('Consultar todas agora')}>
+            {t('↻ atualizar')}
           </button>
           <button className="btn-primary text-xs" onClick={() => setForm({ open: true, account: null })}>
-            + conta
+            {t('+ conta')}
           </button>
         </span>
       </div>
 
       {error && <p className="mb-3 text-sm text-danger">{error}</p>}
       {accounts && accounts.length === 0 && (
-        <p className="text-sm text-fg-dim">Nenhuma conta cadastrada. Adicione uma conta apontando para a máquina onde o Claude Code, Codex, Gemini CLI ou Antigravity CLI está logado.</p>
+        <p className="text-sm text-fg-dim">{t('Nenhuma conta cadastrada. Adicione uma conta apontando para a máquina onde o Claude Code, Codex, Gemini CLI ou Antigravity CLI está logado.')}</p>
       )}
 
       <div className="space-y-3">
@@ -450,13 +455,15 @@ export function AiAccountsView() {
       )}
       <ConfirmDialog
         open={!!deleting}
-        title="Remover conta"
+        title={t('Remover conta')}
         message={
-          <>
-            Remover <strong>{deleting?.label}</strong> da lista? O login na máquina não é alterado.
-          </>
+          <Trans
+            i18nKey="Remover <0>{{label}}</0> da lista? O login na máquina não é alterado."
+            values={{ label: deleting?.label ?? '' }}
+            components={[<strong key="l" />]}
+          />
         }
-        confirmLabel="Remover"
+        confirmLabel={t('Remover')}
         danger
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
@@ -465,7 +472,7 @@ export function AiAccountsView() {
             await api.aiAccounts.remove(deleting.id);
             setAccounts((l) => (l ?? []).filter((x) => x.id !== deleting.id));
           } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Erro ao remover');
+            setError(err instanceof ApiError ? err.message : t('Erro ao remover'));
           }
           setDeleting(null);
         }}
