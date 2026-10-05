@@ -1,5 +1,5 @@
 import { i18n, tk, useTranslation } from '../../i18n';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import type { ChatAction, ChatDecisionWord, ChatGrant, ChatProjectGrant, ChatStandingGrant, ChatStandingKind } from '../../lib/types';
 import { actionAutoDecision, AutoDecisionBadge } from './AutoDecisionBadge';
 import { STANDING_KIND_LABEL, standingKindLabel } from './grant-list-text';
@@ -107,6 +107,29 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
   const standingKind = standingKindOf(action);
   const stale = staleLabel(action);
   const autoDecision = actionAutoDecision(action);
+  // TER-984: a call that ran under a grant asked nobody, so it reads as one line — what it did and how
+  // it ended — and opens to the whole card on a click. A card that asks (or asked) keeps its full form.
+  const compact = Boolean(action.grant_id) && action.status !== 'pending' && !stale;
+  const [expanded, setExpanded] = useState(false);
+  const statusLine = action.status === 'pending' ? '' : `${t(ACTION_STATUS_LABEL[action.status])}${action.grant_id ? ` ${grantedLabel(action)}` : ''}`;
+  if (compact && !expanded) {
+    return (
+      <li data-chat-card={action.id} data-compact="" className="chat-enter flex min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-xs text-fg-dim">
+        <span aria-hidden="true" className={action.status === 'failed' ? 'text-danger' : 'text-ok'}>
+          {action.status === 'failed' ? '✗' : '✓'}
+        </span>
+        {/* Plain text, first line only: the whole sentence (never HTML) is in the expanded card. */}
+        <span className="min-w-0 flex-1 truncate text-fg-muted" title={action.summary}>
+          {action.summary.split('\n')[0]}
+        </span>
+        <span className="shrink-0">{statusLine}</span>
+        {autoDecision && <AutoDecisionBadge decision={autoDecision} />}
+        <button type="button" className="shrink-0 underline hover:text-fg" aria-expanded={false} onClick={() => setExpanded(true)}>
+          {t('Ver detalhes')}
+        </button>
+      </li>
+    );
+  }
   return (
     // `data-chat-card`: how the pending bar finds this card to scroll to it (TER-477). A stale card waits
     // on nobody, so it drops the attention border.
@@ -115,6 +138,11 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
         {/* Plain text only — never HTML: this sentence can carry a command the model read off a real terminal screen. */}
         <p className="flex-1 whitespace-pre-wrap text-fg">{action.summary}</p>
         {onReply && <ChatReplyButton onClick={() => onReply(action)} />}
+        {compact && (
+          <button type="button" className="text-xs text-fg-dim underline hover:text-fg" aria-expanded onClick={() => setExpanded(false)}>
+            {t('Recolher')}
+          </button>
+        )}
       </div>
       {/* The subagent whose turn proposed this action (spec 2026-09-26 §4), when there is one. */}
       {action.subagent && <p className="text-xs text-fg-dim">{t('Pedido pelo subagente «{{name}}»', { name: action.subagent.description })}</p>}
@@ -162,10 +190,7 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
           )}
         </p>
       ) : (
-        <p className="mt-1 text-xs text-fg-dim">
-          {t(ACTION_STATUS_LABEL[action.status])}
-          {action.grant_id ? ` ${grantedLabel(action)}` : ''}
-        </p>
+        <p className="mt-1 text-xs text-fg-dim">{statusLine}</p>
       )}
       {/* TER-641: sent without a click on a precedent from memory — apart from the allowance it ran under. */}
       {autoDecision && <AutoDecisionBadge decision={autoDecision} />}

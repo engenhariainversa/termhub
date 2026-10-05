@@ -38,7 +38,8 @@ describe('ActionCard: "Permitir sempre neste projeto" (board grant, design spec 
   it('shows the active project grant with "Permitido neste projeto até HH:MM" and revokes it', async () => {
     const projectGrant = { id: 'pg1', project_id: 'p-termhub', project_name: 'termhub', source_action_id: 'a1', created_at: new Date().toISOString(), expires_at: '2099-01-01T00:00:00.000Z', scope: 'board' as const };
     const onRevoke = jest.fn();
-    await render(<ActionCard action={{ ...BASE_ACTION, status: 'executed', grant_id: 'g1' }} busy={false} onDecide={jest.fn()} projectGrant={projectGrant} revoking={false} onRevoke={onRevoke} />);
+    // The card that created the grant was decided by a click: it ran under no grant of its own.
+    await render(<ActionCard action={{ ...BASE_ACTION, status: 'executed' }} busy={false} onDecide={jest.fn()} projectGrant={projectGrant} revoking={false} onRevoke={onRevoke} />);
     expect(screen.getByText(/^Permitido neste projeto/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Revogar' }));
     expect(onRevoke).toHaveBeenCalledWith('pg1');
@@ -230,5 +231,40 @@ describe('ActionCard in English (i18n)', () => {
     await render(<ActionCard action={{ ...BASE_ACTION, status: 'expired' }} busy={false} onDecide={jest.fn()} revoking={false} onRevoke={jest.fn()} onRepropose={jest.fn()} />);
     expect(screen.getByText('expired without an answer')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Propose again' })).toBeTruthy();
+  });
+});
+
+describe('ActionCard: a call that ran under a grant reads as one line (TER-984)', () => {
+  const RAN: ChatAction = { ...BASE_ACTION, tool: 'send_input', tab_id: 't-app', status: 'executed', grant_id: 'g1', summary: 'digitar `Mensagem do Pedro\nsegunda linha comprida` na aba App' };
+
+  it('shows the first line and how it ended; a tap opens the whole card and Recolher folds it back', async () => {
+    await render(<ActionCard action={RAN} busy={false} onDecide={jest.fn()} revoking={false} onRevoke={jest.fn()} />);
+    expect(screen.getByText('digitar `Mensagem do Pedro')).toBeTruthy();
+    expect(screen.getByText('executada · aba confiada')).toBeTruthy();
+    expect(screen.queryByText('Pedido de confirmação')).toBeNull();
+    expect(screen.queryByText(/segunda linha comprida/)).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver detalhes' }));
+    expect(screen.getByText('Pedido de confirmação')).toBeTruthy();
+    expect(screen.getByText(/segunda linha comprida/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Recolher' }));
+    expect(screen.queryByText('Pedido de confirmação')).toBeNull();
+  });
+
+  it('marks a failed call with ✗', async () => {
+    await render(<ActionCard action={{ ...RAN, status: 'failed', error_code: 'MACHINE_OFFLINE' }} busy={false} onDecide={jest.fn()} revoking={false} onRevoke={jest.fn()} />);
+    expect(screen.getByText('✗')).toBeTruthy();
+    expect(screen.getByText('falhou · aba confiada')).toBeTruthy();
+  });
+
+  it.each([
+    ['a pending card', { ...BASE_ACTION }],
+    ['a card decided by a click', { ...BASE_ACTION, status: 'executed' as const }],
+    ['a stale granted card', { ...RAN, status: 'failed' as const, error_code: 'TAB_GONE' }],
+  ])('keeps %s in its full form', async (_label, action) => {
+    await render(<ActionCard action={action} busy={false} onDecide={jest.fn()} revoking={false} onRevoke={jest.fn()} />);
+    expect(screen.getByText('Pedido de confirmação')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ver detalhes' })).toBeNull();
   });
 });
