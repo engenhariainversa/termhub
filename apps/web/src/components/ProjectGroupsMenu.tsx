@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from '../i18n';
 import { useProjectGroups } from '../lib/project-groups';
 import type { ProjectGroup } from '../lib/types';
 import { GROUP_NAME_MAX } from './GroupHeader';
@@ -14,6 +15,7 @@ const MENU_WIDTH = 208;
 
 /** The keyboard/touch path to groups: a checkbox per group for one project, plus "Novo grupo…". */
 export function ProjectGroupsMenu({ projectId, anchor, onClose }: Props) {
+  const { t } = useTranslation();
   const { groups, setMemberships, createGroup } = useProjectGroups();
   const ref = useRef<HTMLDivElement>(null);
   const [creating, setCreating] = useState(false);
@@ -38,8 +40,8 @@ export function ProjectGroupsMenu({ projectId, anchor, onClose }: Props) {
       if (anchor.isConnected) anchor.focus();
     };
     const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (ref.current?.contains(t) || anchor.contains(t)) return;
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || anchor.contains(target)) return;
       latestClose.current();
     };
     window.addEventListener('keydown', onKey);
@@ -79,7 +81,7 @@ export function ProjectGroupsMenu({ projectId, anchor, onClose }: Props) {
     <div
       ref={ref}
       role="menu"
-      aria-label="Grupos"
+      aria-label={t('Grupos')}
       className="fixed z-50 rounded-md border border-line bg-bg-2 py-1 text-xs shadow-xl"
       style={{ ...pos, width: MENU_WIDTH }}
     >
@@ -97,7 +99,7 @@ export function ProjectGroupsMenu({ projectId, anchor, onClose }: Props) {
             <span className="w-3 shrink-0 text-accent" aria-hidden="true">
               {checked ? '✓' : ''}
             </span>
-            <span className="truncate">{g.name}</span>
+            <span className="truncate">{g.kind === 'favorites' ? t('Favoritos') : g.name}</span>
           </button>
         );
       })}
@@ -106,8 +108,8 @@ export function ProjectGroupsMenu({ projectId, anchor, onClose }: Props) {
         <div className="px-2 py-1">
           <input
             className="input px-2 py-1 text-xs"
-            aria-label="Nome do novo grupo"
-            placeholder="Nome do grupo"
+            aria-label={t('Nome do novo grupo')}
+            placeholder={t('Nome do grupo')}
             value={draft}
             maxLength={GROUP_NAME_MAX}
             autoFocus
@@ -122,7 +124,7 @@ export function ProjectGroupsMenu({ projectId, anchor, onClose }: Props) {
         </div>
       ) : (
         <button type="button" role="menuitem" className="w-full px-3 py-1 text-left text-fg-muted hover:bg-bg-3 hover:text-fg" onClick={() => setCreating(true)}>
-          Novo grupo…
+          {t('Novo grupo…')}
         </button>
       )}
     </div>

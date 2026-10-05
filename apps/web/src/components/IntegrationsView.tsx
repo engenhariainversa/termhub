@@ -3,6 +3,7 @@ import { api, ApiError } from '../lib/api';
 import { PROVIDER_LABEL, type ConnectionInfo, type Integration, type IntegrationProvider } from '../lib/types';
 import { ConfirmDialog, Modal } from './Modal';
 import { PageFrame } from './PageHeader';
+import { formatDate } from '../lib/format';
 
 const PROVIDERS: { id: IntegrationProvider; secretLabel: string; help: string; fields: { key: string; label: string; placeholder: string }[] }[] = [
   {
@@ -77,7 +78,7 @@ export function IntegrationsView() {
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{i.name}</div>
                 <div className="truncate text-xs text-fg-dim">
-                  {i.provider === 'jira' ? `${i.config.baseUrl ?? ''} · ${i.config.email ?? ''}` : i.config.login ? String(i.config.login) : `criada em ${new Date(i.created_at).toLocaleDateString('pt-BR')}`}
+                  {i.provider === 'jira' ? `${i.config.baseUrl ?? ''} · ${i.config.email ?? ''}` : i.config.login ? String(i.config.login) : `criada em ${formatDate(i.created_at)}`}
                   {t && t !== 'loading' && (
                     <span className={`ml-2 ${t.ok ? 'text-ok' : 'text-danger'}`}>{t.ok ? `✓ ${t.account ?? 'ok'}` : `✗ ${t.error}`}</span>
                   )}

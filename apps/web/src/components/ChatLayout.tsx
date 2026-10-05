@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Link, Outlet } from 'react-router-dom';
+import { useTranslation } from '../i18n';
 import { trackAppHeight } from '../lib/viewport';
 
 /**
@@ -15,6 +16,7 @@ import { trackAppHeight } from '../lib/viewport';
  * variable comes first: neither unit shrinks for the on-screen keyboard, and this shell has to.
  */
 export function ChatLayout() {
+  const { t } = useTranslation();
   // The document itself must not scroll while the chat is open. Sizing the shell to the viewport is
   // not enough on iOS: a drag that starts on a child which cannot scroll — the message box, most of
   // all — is handed to the document, and the page pans under a conversation that is already
@@ -33,19 +35,19 @@ export function ChatLayout() {
   return (
     <div className="flex h-[var(--app-height,100svh)] flex-col overflow-hidden">
       <header className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-3">
-        <Link to="/" className="text-sm text-fg-dim hover:text-fg" aria-label="Voltar para o início" title="Voltar para o início">
-          ← Voltar
+        <Link to="/" className="text-sm text-fg-dim hover:text-fg" aria-label={t('Voltar para o início')} title={t('Voltar para o início')}>
+          {t('← Voltar')}
         </Link>
-        <h1 className="text-sm font-semibold text-fg">Chat</h1>
+        <h1 className="text-sm font-semibold text-fg">{t('Chat')}</h1>
         {/* The suggestion memory's own screen (spec 2026-09-26 §5.2): list, search, forget, switch. */}
         <Link to="/chat/memoria" className="text-sm text-fg-dim hover:text-fg">
-          Memória
+          {t('Memória')}
         </Link>
         {/* Which bundle this screen is running, so "it did not change on my phone" can be answered by
             reading it instead of guessing between a stale page and a fix that does not work. The
             version is what the person asked for; the commit is what actually tells two deploys apart,
             since the version has not moved since 0.1.0. */}
-        <span className="ml-auto font-mono text-[10px] text-fg-dim" title="build">
+        <span className="ml-auto font-mono text-[10px] text-fg-dim" title="build" /* i18n-ignore: a version stamp */>
           v{__APP_VERSION__} · {import.meta.env.VITE_BUILD_SHA || __BUILD_STAMP__}
         </span>
       </header>

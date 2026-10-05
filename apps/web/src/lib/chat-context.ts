@@ -6,6 +6,7 @@
 
 /** From this share of the window on, the meter is highlighted and suggests compacting. */
 export const CONTEXT_WARN_AT = 0.8;
+import { formatNumber } from './format';
 /** From this share on, the next turns may hit the window: the meter turns red. */
 export const CONTEXT_FULL_AT = 0.95;
 
@@ -26,7 +27,7 @@ export function contextLevel(share: number | null): ContextLevel {
 
 /** 950 → "950", 25 258 → "25,3 mil", 1 000 000 → "1 mi": short enough for the dock's header. */
 export function formatTokens(n: number): string {
-  const one = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: v < 10 ? 1 : 0 });
+  const one = (v: number) => formatNumber(v, { maximumFractionDigits: v < 10 ? 1 : 0 });
   if (n >= 1_000_000) return `${one(n / 1_000_000)} mi`;
   if (n >= 1_000) return `${one(n / 1_000)} mil`;
   return String(Math.round(n));
@@ -40,7 +41,7 @@ export function formatShare(share: number): string {
 
 /** The meter's tooltip: the exact numbers, and what to do once it is high. */
 export function contextTitle(tokens: number, window: number | null): string {
-  const exact = (v: number) => v.toLocaleString('pt-BR');
+  const exact = (v: number) => formatNumber(v);
   const share = contextShare(tokens, window);
   const base = window === null ? `Contexto da conversa: ${exact(tokens)} tokens` : `Contexto da conversa: ${exact(tokens)} de ${exact(window)} tokens (${formatShare(share!)})`;
   return contextLevel(share) === 'ok' ? base : `${base}. Compacte a conversa para liberar espaço.`;
