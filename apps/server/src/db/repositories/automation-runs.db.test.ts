@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { serializeAutomationDb } from '../../../test/automation-db-lock.js';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
@@ -9,6 +10,7 @@ const keyOf = (id: string) => 'R' + id.replace(/[^a-z0-9]/gi, '').slice(0, 8).to
 
 // Needs a migrated Postgres: TERMHUB_DB_TESTS=1 DATABASE_URL=…
 describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and account exhaustions (Postgres)', () => {
+  serializeAutomationDb();
   let db: PrismaClient;
   let runs: AutomationRunsRepository;
   let exhaustions: AiAccountExhaustionsRepository;

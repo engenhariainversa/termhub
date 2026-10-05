@@ -56,6 +56,15 @@ describe('cleanupRuns', () => {
     expect(w.removeWorkspace).toHaveBeenCalledTimes(1);
   });
 
+  it('waiting on an active sibling run or a busy tab is not a failed attempt: it never gives up', async () => {
+    const w = world([{ cleanup_attempts: CLEANUP_MAX_ATTEMPTS - 1 }, { status: 'running', cleanup_attempts: CLEANUP_MAX_ATTEMPTS - 1 }]);
+    await cleanupRuns(w.deps, project, setup, w.rows);
+    expect(w.rows.map((r) => [r.cleanup_state, r.cleanup_attempts])).toEqual([['due', CLEANUP_MAX_ATTEMPTS - 1], ['due', CLEANUP_MAX_ATTEMPTS - 1]]);
+    const busy = world([{ tab_id: 'tab1', cleanup_attempts: CLEANUP_MAX_ATTEMPTS - 1 }], 'working');
+    await cleanupRuns(busy.deps, project, setup, busy.rows);
+    expect(busy.rows[0]).toMatchObject({ cleanup_state: 'due', cleanup_attempts: CLEANUP_MAX_ATTEMPTS - 1 });
+  });
+
   it('nothing to remove (invalid or missing root) is a settled cleanup without an event', async () => {
     const w = world([{}]);
     w.removeWorkspace.mockResolvedValue({ removed: false, dirty: false });

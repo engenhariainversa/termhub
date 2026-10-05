@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { serializeAutomationDb } from '../../test/automation-db-lock.js';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { AGENT_EXITED_TEXT } from '../chat/agent-exited.js';
 import { controlContextFor } from '../control/context.js';
@@ -46,6 +47,7 @@ interface Act {
  * shared), over one real database, with fakes for the agent start, the typing and GitHub.
  */
 describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours (Postgres)', () => {
+  serializeAutomationDb();
   let db: PrismaClient;
   let repos: Repositories;
   let ownerId: string;

@@ -72,10 +72,13 @@ export async function cleanupRuns(deps: CleanupDeps, project: Pick<Project, 'id'
     } catch (e) {
       if (codeOf(e) === 'TAB_NOT_FOUND' || codeOf(e) === 'NOT_FOUND') return true;
       log.warn({ runId: run.id, tabId: tab.id, code: codeOf(e) }, 'automation: tab of a finished run not closed');
+      failed.add(run.id);
       return false;
     }
   };
 
+  /** runs whose cleanup really failed (an RPC or close error): only these count against the attempt bound */
+  const failed = new Set<string>();
   const ready: AutomationRun[] = [];
   const waiting: AutomationRun[] = [];
   for (const run of due) {
@@ -83,6 +86,7 @@ export async function cleanupRuns(deps: CleanupDeps, project: Pick<Project, 'id'
       (await tabResolved(run) ? ready : waiting).push(run);
     } catch (e) {
       log.warn({ runId: run.id, code: codeOf(e) }, 'automation: tab step failed');
+      failed.add(run.id);
       waiting.push(run);
     }
   }
@@ -134,15 +138,19 @@ export async function cleanupRuns(deps: CleanupDeps, project: Pick<Project, 'id'
       log.info({ runId: run.id, machineId: machine.id, removed: r.removed, dirty: r.dirty }, 'automation: worktree cleanup');
     } catch (e) {
       log.warn({ runId: run.id, machineId: run.machine_id, code: codeOf(e) }, 'automation: worktree not removed yet');
+      group.forEach((r) => failed.add(r.id));
       waiting.push(...group);
     }
   }
 
   for (const run of waiting) {
     result.pending++;
-    // another run of the card still active is not a failed attempt: the cleanup simply is not due yet
-    if (ACTIVE.has(run.status)) continue;
-    const attempts = await repos.automationRuns.bumpCleanup(run.id).catch(() => 0);
+    // waiting on an active sibling run or a busy tab is not a failed attempt: only a real failure is counted
+    if (!failed.has(run.id)) continue;
+    const attempts = await repos.automationRuns.bumpCleanup(run.id).catch((e: unknown) => {
+      log.warn({ runId: run.id, code: codeOf(e) }, 'automation: cleanup attempt not counted');
+      return 0;
+    });
     if (attempts >= CLEANUP_MAX_ATTEMPTS) {
       result.pending--;
       await settle(run, 'gave_up', 'gave_up');
