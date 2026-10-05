@@ -1,5 +1,4 @@
 import { mcpConfig } from '@termhub/claude-cli';
-import { GIT_BRANCH_RE } from '@termhub/agent-protocol';
 import { isClaudeSessionId, shellQuote, TAB_ID_RE, TAB_MCP_DIR_REL } from '@termhub/machine-ops';
 import { config } from '../config.js';
 import { MODEL_RE, type ProjectAi } from '../setup/schema.js';
@@ -15,6 +14,9 @@ import { ControlError, type ControlContext } from './context.js';
 import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
 import { openTab } from './terminals.js';
 import { msg } from '../i18n/index.js';
+import { AUTOMATION_DENIED_TOOLS, branchPushRules, safeAllowedTools } from './automation-tools.js';
+
+export { AUTOMATION_DENIED_TOOLS, branchPushRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
 /** Same ceiling as one typed input: the prompt travels as a single command-line argument. */
 export const PROMPT_MAX_CHARS = 4000;
@@ -133,77 +135,6 @@ export const DEFAULT_AUTOMATION_TOOLS: string[] = [
 ];
 
 /**
- * What an automatic tab never does, whatever its project allows (TER-968, spec R5): fixed here, not
- * editable per project, passed as `--disallowedTools` on every automatic line and applied again by the
- * server's `permissionAllowed`, where it beats any `allowed_tools` entry.
- *
- * Claude Code's rule syntax (https://code.claude.com/docs/en/permissions, read 2026-10-05): rules are
- * evaluated deny → ask → allow and "an allow rule can't carve an exception out of a deny rule", so a
- * generic `Bash(git push:*)` here would also block the run's own branch. Pushes are closed instead by the
- * allow list (only `branchPushRules`; any other push asks and the server escalates it, never "allow"), and
- * the forms that can never be the run's own branch push (force, delete, mirror, a `+` refspec) are denied
- * outright. `*` matches anywhere in a Bash rule and `X:*` equals `X *`, which needs a space after `X`:
- * `npm run release*` (no space) is what covers `release:ota`. Read and Edit rules are gitignore patterns
- * (`~/` is the home dir, `**` any depth); a Read deny also blocks `cat`/`head`/… on that path in Bash.
- */
-export const AUTOMATION_DENIED_TOOLS: readonly string[] = [
-  'Bash(git push --force*)',
-  'Bash(git push * --force*)',
-  'Bash(git push -f*)',
-  'Bash(git push * -f*)',
-  'Bash(git push --delete*)',
-  'Bash(git push * --delete*)',
-  'Bash(git push -d*)',
-  'Bash(git push * -d*)',
-  'Bash(git push --mirror*)',
-  'Bash(git push * --mirror*)',
-  'Bash(git push * +*)',
-  'Bash(gh pr merge:*)',
-  'Bash(gh api:*)',
-  'Bash(gh secret:*)',
-  'Bash(npm publish:*)',
-  'Bash(pnpm publish:*)',
-  'Bash(yarn publish:*)',
-  'Bash(npm run release*)',
-  'Bash(eas:*)',
-  'Bash(eas-cli:*)',
-  'Bash(npx eas*)',
-  'Bash(fastlane:*)',
-  'Bash(docker:*)',
-  'Bash(psql:*)',
-  'Bash(security:*)',
-  'Bash(rm -rf:*)',
-  'Bash(rm -fr:*)',
-  'Bash(rm -r:*)',
-  'Bash(rm -R:*)',
-  'Read(**/.env*)',
-  'Edit(**/.env*)',
-  'Read(~/.ssh/**)',
-  'Edit(~/.ssh/**)',
-  'Read(~/.config/gh/**)',
-  'Edit(~/.config/gh/**)',
-  'Read(~/.claude*/.credentials.json)',
-  'Edit(~/.claude*/.credentials.json)',
-  'Read(~/.aws/**)',
-  'Edit(~/.aws/**)',
-];
-
-/**
- * The pushes an automatic run may send without asking (TER-968, spec R5): exact rules naming its own
- * branch — the card's branch, the PR's branch for a fixer, the epic branch for an integrator. A name the
- * agent's charset refuses (`GIT_BRANCH_RE`: no space, `*`, `:` or `+`) gives no rule, so every push asks.
- */
-export function branchPushRules(branch: string | null): string[] {
-  if (!branch || !GIT_BRANCH_RE.test(branch)) return [];
-  return [
-    `Bash(git push origin ${branch})`,
-    `Bash(git push -u origin ${branch})`,
-    `Bash(git push origin HEAD:refs/heads/${branch})`,
-    `Bash(git push -u origin HEAD:refs/heads/${branch})`,
-  ];
-}
-
-/**
  * How an automatic tab's Claude is started: `acceptEdits` plus a closed allow list (never a bypass), the
  * run's own branch pushes (`branch`, null for none) and the fixed deny list.
  */
@@ -226,13 +157,14 @@ function checkAllowedTools(tools: string[]): string[] {
 
 /**
  * An automatic tab's Claude options (spec D19, preflight F-7/F-12, TER-968): the permission mode, then the
- * allow list plus the run's own branch pushes — merged with the tab MCP's own tools when the tab has its
+ * allow list (less any rule broad enough to reach a push or a denied command, `safeAllowedTools`) plus the
+ * run's own branch pushes — merged with the tab MCP's own tools when the tab has its
  * MCP, so there is one variadic `--allowedTools` — then the fixed `--disallowedTools`. Both are variadic:
  * the caller ends the options with `--` (or another option, then `--`).
  */
 function permissionFlags(permission: AgentPermission, mcpTabId: string | null): string {
   if (permission.mode !== 'acceptEdits') throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
-  const tools = [...checkAllowedTools(permission.allowedTools), ...branchPushRules(permission.branch)];
+  const tools = [...safeAllowedTools(checkAllowedTools(permission.allowedTools)).kept, ...branchPushRules(permission.branch)];
   const allow = mcpTabId ? claudeMcpFlags(mcpTabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
   const deny = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => shellQuote(t)).join(' ')}`;
   return `--permission-mode ${permission.mode}${allow ? ` ${allow}` : ''} ${deny}`;

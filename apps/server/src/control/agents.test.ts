@@ -803,13 +803,28 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     for (const rule of [
       'Bash(gh pr merge:*)', 'Bash(gh api:*)', 'Bash(gh secret:*)', 'Bash(npm publish:*)', 'Bash(npm run release*)', 'Bash(eas:*)', 'Bash(fastlane:*)',
       'Bash(docker:*)', 'Bash(psql:*)', 'Bash(security:*)', 'Bash(rm -rf:*)', 'Bash(git push --force*)', 'Bash(git push * +*)',
-      'Read(**/.env*)', 'Edit(**/.env*)', 'Read(~/.ssh/**)', 'Edit(~/.ssh/**)', 'Read(~/.config/gh/**)', 'Edit(~/.config/gh/**)',
+      'Read(//**/.env*)', 'Edit(//**/.env*)', 'Read(~/.ssh/**)', 'Edit(~/.ssh/**)', 'Read(~/.config/gh/**)', 'Edit(~/.config/gh/**)',
       'Read(~/.claude*/.credentials.json)', 'Edit(~/.claude*/.credentials.json)', 'Read(~/.aws/**)', 'Edit(~/.aws/**)',
     ])
       expect(AUTOMATION_DENIED_TOOLS).toContain(rule);
     // an allow rule cannot carve an exception out of a deny rule in Claude Code: no generic push deny, or the run's own push would be blocked too
     expect(AUTOMATION_DENIED_TOOLS).not.toContain('Bash(git push:*)');
     for (const t of AUTOMATION_DENIED_TOOLS) for (const own of branchPushRules('TER-1-card')) expect(denyGlob(t).test(own)).toBe(false);
+  });
+
+  it('path rules use the documented anchors: `//` (filesystem root) for .env, `~/` for the home dir; none is cwd-relative', () => {
+    const paths = AUTOMATION_DENIED_TOOLS.filter((t) => /^(Read|Edit)\(/.test(t)).map((t) => t.replace(/^(Read|Edit)\((.*)\)$/, '$2'));
+    expect(paths.length).toBe(10);
+    for (const p of paths) expect(p.startsWith('//') || p.startsWith('~/'), p).toBe(true);
+    expect(launchLine('claude', null, 'x', null, null, PERMISSION)).toContain(`'Read(//**/.env*)' 'Edit(//**/.env*)' 'Read(~/.ssh/**)'`);
+  });
+
+  it('a project allow rule too broad for an automatic tab never reaches the line; the run\'s own pushes still do (TER-968, review 1)', () => {
+    const broad = ['Bash', 'Bash(*)', 'Bash(git:*)', 'Bash(git *)', 'Bash(git push:*)', 'Bash(git push origin HEAD)', 'Bash(npm run:*)', 'Bash(gh:*)', 'Bash(docker:*)', 'Bash(sh -c:*)', '*'];
+    const line = launchLine('claude', null, 'x', null, null, { mode: 'acceptEdits', allowedTools: [...broad, 'Bash(npm test:*)'], branch: 'TER-1-card' });
+    const allow = line.slice(line.indexOf('--allowedTools'), line.indexOf('--disallowedTools'));
+    for (const b of broad) expect(allow, b).not.toContain(` '${b}'`);
+    expect(allow).toContain(`'Bash(npm test:*)' ${branchPushRules('TER-1-card').map((t) => `'${t}'`).join(' ')}`);
   });
 
   it('the run\'s own branch push rules are exact and built only from a valid branch name', () => {

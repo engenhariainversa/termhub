@@ -50,6 +50,7 @@
   "Recurso ou ação inválidos": "Invalid resource or action",
   "Roles de administrador têm acesso total": "Administrator roles have full access",
   "Fonte de tickets repetida": "Repeated ticket source",
+  "Regra ampla demais para uma aba automática: alcançaria git push, merge, publicação ou outro comando bloqueado. Use uma regra específica, como Bash(npm test:*).": "Rule too broad for an automatic tab: it would reach git push, merge, publishing or another blocked command. Use a specific rule, such as Bash(npm test:*).",
   "Integração de tickets inexistente": "Ticket integration does not exist",
   "Integração do repositório inexistente": "Repository integration does not exist",
   "Máquina do runner inexistente": "Runner machine does not exist",

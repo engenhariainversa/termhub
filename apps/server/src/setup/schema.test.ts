@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeSetup, setupInputSchema, withLegacyMirror, SETUP_VERSION } from './schema.js';
+import { automationInputSchema, normalizeSetup, setupInputSchema, UNSAFE_ALLOWED_TOOL, withLegacyMirror, SETUP_VERSION } from './schema.js';
 
 const legacy = { provider: 'linear', integration_id: 'i1', scope: 'EI', filter: null, include_done: true, sync_minutes: 15 };
 
@@ -108,5 +108,27 @@ describe('setup automation block (TER-879)', () => {
     const d = normalizeSetup({ automation: { enabled: 'yes' }, runner: { worktree: false } }, 2);
     expect(d.automation.enabled).toBe(false);
     expect(d.runner.worktree).toBe(false);
+  });
+});
+
+describe('automation allow rules too broad for an automatic tab (TER-968)', () => {
+  it('saving refuses them on the field, with the reason', () => {
+    const r = automationInputSchema.safeParse({ allowed_tools: ['Bash(npm test:*)', 'Bash(git:*)'] });
+    expect(r.success).toBe(false);
+    expect(r.error!.issues).toEqual([expect.objectContaining({ path: ['allowed_tools', 1], message: UNSAFE_ALLOWED_TOOL })]);
+    const s = setupInputSchema.safeParse({ automation: { allowed_tools: ['Bash'] } });
+    expect(s.success).toBe(false);
+    expect(s.error!.issues[0]).toMatchObject({ path: ['automation', 'allowed_tools', 0], message: UNSAFE_ALLOWED_TOOL });
+  });
+
+  it('specific rules and the default (null) save', () => {
+    expect(automationInputSchema.safeParse({ allowed_tools: ['Bash(npm test:*)', 'WebFetch'] }).success).toBe(true);
+    expect(automationInputSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('a stored setup holding one is still read as is (filtered at launch), never reset to the defaults', () => {
+    const data = normalizeSetup({ automation: { enabled: true, allowed_tools: ['Bash'] } }, SETUP_VERSION);
+    expect(data.automation.enabled).toBe(true);
+    expect(data.automation.allowed_tools).toEqual(['Bash']);
   });
 });

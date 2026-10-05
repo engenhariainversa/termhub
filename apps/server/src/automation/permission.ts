@@ -1,4 +1,5 @@
 import { DEFAULT_AUTOMATION_TOOLS, type AgentPermission } from '../control/agents.js';
+import { safeAllowedTools } from '../control/automation-tools.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { ProjectSetupData } from '../setup/schema.js';
@@ -10,6 +11,17 @@ import type { ProjectSetupData } from '../setup/schema.js';
  */
 export function automationPermission(automation: Pick<ProjectSetupData['automation'], 'allowed_tools'>, branch: string | null): AgentPermission {
   return { mode: 'acceptEdits', allowedTools: automation.allowed_tools ?? DEFAULT_AUTOMATION_TOOLS, branch };
+}
+
+/**
+ * The profile a new run starts with, its allow list less any rule too broad for an automatic tab
+ * (`unsafeAllowedTool`, TER-968): `dropped` counts them, so the caller can log it (never the rules).
+ * The line builder and `permissionAllowed` filter again, for lists stored before the filter existed.
+ */
+export function startPermission(automation: Pick<ProjectSetupData['automation'], 'allowed_tools'>, branch: string | null): { permission: AgentPermission; dropped: number } {
+  const base = automationPermission(automation, branch);
+  const { kept, dropped } = safeAllowedTools(base.allowedTools);
+  return { permission: { ...base, allowedTools: kept }, dropped: dropped.length };
 }
 
 /**

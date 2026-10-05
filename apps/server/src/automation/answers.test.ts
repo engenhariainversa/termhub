@@ -290,8 +290,9 @@ describe('permissionAllowed (spec D19, §9.2, preflight F-6)', () => {
     expect(refused(bash(null), ['Bash', 'Bash(npm test:*)'])).toBe(true);
   });
 
-  it('a bare `Bash` rule allows a plain command, never a refused one', () => {
-    expect(permissionAllowed(bash('ls -la'), ['Bash'])).toBe(true);
+  it('a bare `Bash` rule is too broad for an automatic tab (TER-968): dropped, it allows nothing', () => {
+    expect(permissionAllowed(bash('ls -la'), ['Bash'])).toBe(false);
+    expect(permissionAllowed(bash('ls -la'), ['Bash(ls:*)'])).toBe(true);
     expect(refused(bash('gh pr merge 3'), ['Bash'])).toBe(true);
   });
 
@@ -325,8 +326,14 @@ describe('permissionAllowed (spec D19, §9.2, preflight F-6)', () => {
       expect(refused(bash(c), ['Bash', 'Bash(gh:*)', 'Bash(docker:*)', `Bash(${c})`]), c).toBe(true);
     for (const tool of ['Read', 'Edit', 'Write', 'NotebookEdit']) expect(refused({ tool, command: null }, [tool]), tool).toBe(true);
     // what the deny list does not name is still decided by the allow list
-    expect(permissionAllowed(bash('gh pr view 3'), ['Bash(gh:*)'])).toBe(true);
-    expect(permissionAllowed(bash('ls -la'), ['Bash'])).toBe(true);
+    expect(permissionAllowed(bash('gh pr view 3'), ['Bash(gh pr view:*)'])).toBe(true);
+    expect(permissionAllowed(bash('ls -la'), ['Bash(ls:*)'])).toBe(true);
+  });
+
+  it('a project rule broad enough to reach a push or a denied command is dropped before matching (TER-968, review 1)', () => {
+    for (const rule of ['Bash', 'Bash(*)', 'Bash(git:*)', 'Bash(git *)', 'Bash(gh:*)', 'Bash(sh -c:*)'])
+      expect(permissionAllowed(bash('git status'), [rule]), rule).toBe(false);
+    expect(permissionAllowed(bash('git status'), ['Bash(git status:*)'])).toBe(true);
   });
 
   it('the run\'s own push rules join the allow list, but a push is still never answered automatically (keyword block)', () => {

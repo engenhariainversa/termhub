@@ -3,7 +3,7 @@ import { publishTabQuestions } from '../chat/tab-questions.js';
 import { answerTabQuestion } from '../chat/tab-question-answer.js';
 import { checkChoiceAnswer, type ChoiceAnswer, type ChoicePayload, type PermissionPayload } from '../chat/tab-question-payload.js';
 import type { Waker } from '../chat/wake.js';
-import { AUTOMATION_DENIED_TOOLS, branchPushRules } from '../control/agents.js';
+import { AUTOMATION_DENIED_TOOLS, branchPushRules, safeAllowedTools } from '../control/automation-tools.js';
 import { controlContextFor } from '../control/context.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -334,7 +334,8 @@ function deniedByList(tool: string, command: string | null): boolean {
  *    is refused at every level (`refusedCommand`, the run's `branch` for pushes): never;
  * 3. the fixed deny list (`AUTOMATION_DENIED_TOOLS`, TER-968 R5), the same one the tab was started with as
  *    `--disallowedTools`: never, whatever `allowed` says;
- * 4. a rule of `allowed` (Claude Code's syntax) or of the run's own branch pushes (`branchPushRules`) for
+ * 4. a rule of `allowed` (Claude Code's syntax; one too broad for an automatic tab, `unsafeAllowedTool`, is
+ *    dropped, as on the tab's line) or of the run's own branch pushes (`branchPushRules`) for
  *    this tool: a bare `Tool`, or for `Bash` a `Bash(prefix:*)` matching on a word boundary or a
  *    `Bash(exact)` matching exactly. A specifier on any other tool never matches: its input is not known here.
  *
@@ -351,7 +352,7 @@ export function permissionAllowed(req: PermissionRequest, allowed: string[], bra
     if (command === '' || refusedCommand(command, branch)) return false;
   }
   if (deniedByList(req.tool, command)) return false;
-  return [...allowed, ...branchPushRules(branch)].some((raw) => {
+  return [...safeAllowedTools(allowed).kept, ...branchPushRules(branch)].some((raw) => {
     const rule = parseRule(raw);
     if (!rule || rule.tool !== req.tool) return false;
     if (rule.spec === null) return true;
