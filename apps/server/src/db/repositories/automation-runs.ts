@@ -26,6 +26,8 @@ export interface AutomationRun {
   restart_count: number;
   /** the `--allowedTools` the agent was started with (preflight F-12); null on runs started before it was stored */
   allowed_tools: string[] | null;
+  /** when something was last typed into the run's tab (a resume, a restart): read by whichever colour follows the run */
+  last_typed_at: Date | null;
   /** the server instance (colour) driving the run */
   claimed_by: string;
   heartbeat_at: Date;
@@ -66,6 +68,7 @@ const map = (r: Row): AutomationRun => ({
   fix_count: r.fixCount,
   restart_count: r.restartCount,
   allowed_tools: toolsOf(r.allowedTools),
+  last_typed_at: r.lastTypedAt,
   claimed_by: r.claimedBy,
   heartbeat_at: r.heartbeatAt,
   started_at: r.startedAt,
@@ -156,6 +159,11 @@ export class AutomationRunsRepository {
     const key = field === 'resume_count' ? 'resumeCount' : field === 'fix_count' ? 'fixCount' : 'restartCount';
     const row = await this.db.automationRun.update({ where: { id }, data: { [key]: { increment: 1 } }, select: { resumeCount: true, fixCount: true, restartCount: true } });
     return row[key];
+  }
+
+  /** Records that a line was just typed into the run's tab (by id: whichever colour drives the run typed it). */
+  async noteTyped(id: string, at: Date): Promise<void> {
+    await this.db.automationRun.updateMany({ where: { id }, data: { lastTypedAt: at } });
   }
 
   /** Refreshes `heartbeat_at` on every active run this instance drives (the database's clock, like `takeOver`). */

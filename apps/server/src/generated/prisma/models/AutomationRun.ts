@@ -59,6 +59,7 @@ export type AutomationRunMinAggregateOutputType = {
   resumeCount: number | null
   fixCount: number | null
   restartCount: number | null
+  lastTypedAt: Date | null
   claimedBy: string | null
   heartbeatAt: Date | null
   startedAt: Date | null
@@ -81,6 +82,7 @@ export type AutomationRunMaxAggregateOutputType = {
   resumeCount: number | null
   fixCount: number | null
   restartCount: number | null
+  lastTypedAt: Date | null
   claimedBy: string | null
   heartbeatAt: Date | null
   startedAt: Date | null
@@ -104,6 +106,7 @@ export type AutomationRunCountAggregateOutputType = {
   fixCount: number
   restartCount: number
   allowedTools: number
+  lastTypedAt: number
   claimedBy: number
   heartbeatAt: number
   startedAt: number
@@ -140,6 +143,7 @@ export type AutomationRunMinAggregateInputType = {
   resumeCount?: true
   fixCount?: true
   restartCount?: true
+  lastTypedAt?: true
   claimedBy?: true
   heartbeatAt?: true
   startedAt?: true
@@ -162,6 +166,7 @@ export type AutomationRunMaxAggregateInputType = {
   resumeCount?: true
   fixCount?: true
   restartCount?: true
+  lastTypedAt?: true
   claimedBy?: true
   heartbeatAt?: true
   startedAt?: true
@@ -185,6 +190,7 @@ export type AutomationRunCountAggregateInputType = {
   fixCount?: true
   restartCount?: true
   allowedTools?: true
+  lastTypedAt?: true
   claimedBy?: true
   heartbeatAt?: true
   startedAt?: true
@@ -295,6 +301,7 @@ export type AutomationRunGroupByOutputType = {
   fixCount: number
   restartCount: number
   allowedTools: runtime.JsonValue | null
+  lastTypedAt: Date | null
   claimedBy: string
   heartbeatAt: Date
   startedAt: Date | null
@@ -341,6 +348,7 @@ export type AutomationRunWhereInput = {
   fixCount?: Prisma.IntFilter<"AutomationRun"> | number
   restartCount?: Prisma.IntFilter<"AutomationRun"> | number
   allowedTools?: Prisma.JsonNullableFilter<"AutomationRun">
+  lastTypedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
   claimedBy?: Prisma.StringFilter<"AutomationRun"> | string
   heartbeatAt?: Prisma.DateTimeFilter<"AutomationRun"> | Date | string
   startedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
@@ -366,6 +374,7 @@ export type AutomationRunOrderByWithRelationInput = {
   fixCount?: Prisma.SortOrder
   restartCount?: Prisma.SortOrder
   allowedTools?: Prisma.SortOrderInput | Prisma.SortOrder
+  lastTypedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   claimedBy?: Prisma.SortOrder
   heartbeatAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -394,6 +403,7 @@ export type AutomationRunWhereUniqueInput = Prisma.AtLeast<{
   fixCount?: Prisma.IntFilter<"AutomationRun"> | number
   restartCount?: Prisma.IntFilter<"AutomationRun"> | number
   allowedTools?: Prisma.JsonNullableFilter<"AutomationRun">
+  lastTypedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
   claimedBy?: Prisma.StringFilter<"AutomationRun"> | string
   heartbeatAt?: Prisma.DateTimeFilter<"AutomationRun"> | Date | string
   startedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
@@ -419,6 +429,7 @@ export type AutomationRunOrderByWithAggregationInput = {
   fixCount?: Prisma.SortOrder
   restartCount?: Prisma.SortOrder
   allowedTools?: Prisma.SortOrderInput | Prisma.SortOrder
+  lastTypedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   claimedBy?: Prisma.SortOrder
   heartbeatAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -450,6 +461,7 @@ export type AutomationRunScalarWhereWithAggregatesInput = {
   fixCount?: Prisma.IntWithAggregatesFilter<"AutomationRun"> | number
   restartCount?: Prisma.IntWithAggregatesFilter<"AutomationRun"> | number
   allowedTools?: Prisma.JsonNullableWithAggregatesFilter<"AutomationRun">
+  lastTypedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"AutomationRun"> | Date | string | null
   claimedBy?: Prisma.StringWithAggregatesFilter<"AutomationRun"> | string
   heartbeatAt?: Prisma.DateTimeWithAggregatesFilter<"AutomationRun"> | Date | string
   startedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"AutomationRun"> | Date | string | null
@@ -471,6 +483,7 @@ export type AutomationRunCreateInput = {
   fixCount?: number
   restartCount?: number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -496,6 +509,7 @@ export type AutomationRunUncheckedCreateInput = {
   fixCount?: number
   restartCount?: number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -517,6 +531,7 @@ export type AutomationRunUpdateInput = {
   fixCount?: Prisma.IntFieldUpdateOperationsInput | number
   restartCount?: Prisma.IntFieldUpdateOperationsInput | number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -542,6 +557,7 @@ export type AutomationRunUncheckedUpdateInput = {
   fixCount?: Prisma.IntFieldUpdateOperationsInput | number
   restartCount?: Prisma.IntFieldUpdateOperationsInput | number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -565,6 +581,7 @@ export type AutomationRunCreateManyInput = {
   fixCount?: number
   restartCount?: number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -586,6 +603,7 @@ export type AutomationRunUpdateManyMutationInput = {
   fixCount?: Prisma.IntFieldUpdateOperationsInput | number
   restartCount?: Prisma.IntFieldUpdateOperationsInput | number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -609,6 +627,7 @@ export type AutomationRunUncheckedUpdateManyInput = {
   fixCount?: Prisma.IntFieldUpdateOperationsInput | number
   restartCount?: Prisma.IntFieldUpdateOperationsInput | number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -642,6 +661,7 @@ export type AutomationRunCountOrderByAggregateInput = {
   fixCount?: Prisma.SortOrder
   restartCount?: Prisma.SortOrder
   allowedTools?: Prisma.SortOrder
+  lastTypedAt?: Prisma.SortOrder
   claimedBy?: Prisma.SortOrder
   heartbeatAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -670,6 +690,7 @@ export type AutomationRunMaxOrderByAggregateInput = {
   resumeCount?: Prisma.SortOrder
   fixCount?: Prisma.SortOrder
   restartCount?: Prisma.SortOrder
+  lastTypedAt?: Prisma.SortOrder
   claimedBy?: Prisma.SortOrder
   heartbeatAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -692,6 +713,7 @@ export type AutomationRunMinOrderByAggregateInput = {
   resumeCount?: Prisma.SortOrder
   fixCount?: Prisma.SortOrder
   restartCount?: Prisma.SortOrder
+  lastTypedAt?: Prisma.SortOrder
   claimedBy?: Prisma.SortOrder
   heartbeatAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -803,6 +825,7 @@ export type AutomationRunCreateWithoutProjectInput = {
   fixCount?: number
   restartCount?: number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -826,6 +849,7 @@ export type AutomationRunUncheckedCreateWithoutProjectInput = {
   fixCount?: number
   restartCount?: number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -878,6 +902,7 @@ export type AutomationRunScalarWhereInput = {
   fixCount?: Prisma.IntFilter<"AutomationRun"> | number
   restartCount?: Prisma.IntFilter<"AutomationRun"> | number
   allowedTools?: Prisma.JsonNullableFilter<"AutomationRun">
+  lastTypedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
   claimedBy?: Prisma.StringFilter<"AutomationRun"> | string
   heartbeatAt?: Prisma.DateTimeFilter<"AutomationRun"> | Date | string
   startedAt?: Prisma.DateTimeNullableFilter<"AutomationRun"> | Date | string | null
@@ -899,6 +924,7 @@ export type AutomationRunCreateWithoutTaskInput = {
   fixCount?: number
   restartCount?: number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -922,6 +948,7 @@ export type AutomationRunUncheckedCreateWithoutTaskInput = {
   fixCount?: number
   restartCount?: number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -970,6 +997,7 @@ export type AutomationRunCreateManyProjectInput = {
   fixCount?: number
   restartCount?: number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -991,6 +1019,7 @@ export type AutomationRunUpdateWithoutProjectInput = {
   fixCount?: Prisma.IntFieldUpdateOperationsInput | number
   restartCount?: Prisma.IntFieldUpdateOperationsInput | number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1014,6 +1043,7 @@ export type AutomationRunUncheckedUpdateWithoutProjectInput = {
   fixCount?: Prisma.IntFieldUpdateOperationsInput | number
   restartCount?: Prisma.IntFieldUpdateOperationsInput | number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1036,6 +1066,7 @@ export type AutomationRunUncheckedUpdateManyWithoutProjectInput = {
   fixCount?: Prisma.IntFieldUpdateOperationsInput | number
   restartCount?: Prisma.IntFieldUpdateOperationsInput | number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1058,6 +1089,7 @@ export type AutomationRunCreateManyTaskInput = {
   fixCount?: number
   restartCount?: number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
   claimedBy: string
   heartbeatAt?: Date | string
   startedAt?: Date | string | null
@@ -1079,6 +1111,7 @@ export type AutomationRunUpdateWithoutTaskInput = {
   fixCount?: Prisma.IntFieldUpdateOperationsInput | number
   restartCount?: Prisma.IntFieldUpdateOperationsInput | number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1102,6 +1135,7 @@ export type AutomationRunUncheckedUpdateWithoutTaskInput = {
   fixCount?: Prisma.IntFieldUpdateOperationsInput | number
   restartCount?: Prisma.IntFieldUpdateOperationsInput | number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1124,6 +1158,7 @@ export type AutomationRunUncheckedUpdateManyWithoutTaskInput = {
   fixCount?: Prisma.IntFieldUpdateOperationsInput | number
   restartCount?: Prisma.IntFieldUpdateOperationsInput | number
   allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
   heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1149,6 +1184,7 @@ export type AutomationRunSelect<ExtArgs extends runtime.Types.Extensions.Interna
   fixCount?: boolean
   restartCount?: boolean
   allowedTools?: boolean
+  lastTypedAt?: boolean
   claimedBy?: boolean
   heartbeatAt?: boolean
   startedAt?: boolean
@@ -1174,6 +1210,7 @@ export type AutomationRunSelectCreateManyAndReturn<ExtArgs extends runtime.Types
   fixCount?: boolean
   restartCount?: boolean
   allowedTools?: boolean
+  lastTypedAt?: boolean
   claimedBy?: boolean
   heartbeatAt?: boolean
   startedAt?: boolean
@@ -1199,6 +1236,7 @@ export type AutomationRunSelectUpdateManyAndReturn<ExtArgs extends runtime.Types
   fixCount?: boolean
   restartCount?: boolean
   allowedTools?: boolean
+  lastTypedAt?: boolean
   claimedBy?: boolean
   heartbeatAt?: boolean
   startedAt?: boolean
@@ -1224,6 +1262,7 @@ export type AutomationRunSelectScalar = {
   fixCount?: boolean
   restartCount?: boolean
   allowedTools?: boolean
+  lastTypedAt?: boolean
   claimedBy?: boolean
   heartbeatAt?: boolean
   startedAt?: boolean
@@ -1231,7 +1270,7 @@ export type AutomationRunSelectScalar = {
   createdAt?: boolean
 }
 
-export type AutomationRunOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "taskId" | "role" | "status" | "waitingReason" | "tabId" | "machineId" | "accountId" | "branch" | "worktreePath" | "resumeCount" | "fixCount" | "restartCount" | "allowedTools" | "claimedBy" | "heartbeatAt" | "startedAt" | "endedAt" | "createdAt", ExtArgs["result"]["automationRun"]>
+export type AutomationRunOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "taskId" | "role" | "status" | "waitingReason" | "tabId" | "machineId" | "accountId" | "branch" | "worktreePath" | "resumeCount" | "fixCount" | "restartCount" | "allowedTools" | "lastTypedAt" | "claimedBy" | "heartbeatAt" | "startedAt" | "endedAt" | "createdAt", ExtArgs["result"]["automationRun"]>
 export type AutomationRunInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   task?: boolean | Prisma.AutomationRun$taskArgs<ExtArgs>
@@ -1279,6 +1318,10 @@ export type $AutomationRunPayload<ExtArgs extends runtime.Types.Extensions.Inter
      * the allow list the agent was started with (preflight F-12); null = started before it was stored
      */
     allowedTools: runtime.JsonValue | null
+    /**
+     * when the follower last typed into the run's tab: the colour that takes the run over does not type again
+     */
+    lastTypedAt: Date | null
     claimedBy: string
     heartbeatAt: Date
     startedAt: Date | null
@@ -1724,6 +1767,7 @@ export interface AutomationRunFieldRefs {
   readonly fixCount: Prisma.FieldRef<"AutomationRun", 'Int'>
   readonly restartCount: Prisma.FieldRef<"AutomationRun", 'Int'>
   readonly allowedTools: Prisma.FieldRef<"AutomationRun", 'Json'>
+  readonly lastTypedAt: Prisma.FieldRef<"AutomationRun", 'DateTime'>
   readonly claimedBy: Prisma.FieldRef<"AutomationRun", 'String'>
   readonly heartbeatAt: Prisma.FieldRef<"AutomationRun", 'DateTime'>
   readonly startedAt: Prisma.FieldRef<"AutomationRun", 'DateTime'>

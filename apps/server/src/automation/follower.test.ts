@@ -30,7 +30,7 @@ function world(o: {
   const run: AutomationRun = {
     id: runId, project_id: 'p1', task_id: 't1', role: 'implementer', status: 'running', waiting_reason: null, tab_id: 'tab1', machine_id: 'm1', account_id: 'a1',
     branch: 'TER-1-card', worktree_path: '/w/TER-1', resume_count: 0, fix_count: 0, restart_count: 0, claimed_by: ME, heartbeat_at: new Date(), started_at: new Date(),
-    ended_at: null, created_at: new Date(), allowed_tools: null, ...o.run,
+    ended_at: null, created_at: new Date(), allowed_tools: null, last_typed_at: null, ...o.run,
   };
   const tab = { id: 'tab1', project_id: 'p1', machine_id: 'm1', state: 'waiting_input', state_text: 'Pronto.', state_tool: 'claude', state_at: `2026-10-05T10:00:0${seq % 10}.000Z`, rate_limited_at: null, ...o.tab } as Tab;
   const task = { id: 't1', project_id: 'p1', ref: 'TER-1', title: 'Card', description: 'd', type: 'task', status: 'doing', tab_id: 'tab1', auto: true, parent_id: null, epic_id: null, column_id: 'c2', ...o.task } as Task;
@@ -47,6 +47,7 @@ function world(o: {
         return true;
       }),
       bump: vi.fn(async (_id: string, field: 'resume_count' | 'restart_count') => ++run[field]),
+      noteTyped: vi.fn(async (_id: string, at: Date) => void (run.last_typed_at = at)),
     },
     tabs: { findById: vi.fn(async () => tab) },
     tabQuestions: { hasOpenQuestion: vi.fn(async () => o.openQuestion ?? false) },
