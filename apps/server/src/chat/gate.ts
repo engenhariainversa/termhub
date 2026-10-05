@@ -13,7 +13,7 @@ export type ActionClass = 'read' | 'self_mediated' | 'write' | 'irreversible';
 // spec TER-205 D11. Never add a tool here that acts on a machine directly.
 // recap_pending_cards only moves the person's own cards to the end of their chat (TER-477): nothing is
 // decided, sent or changed on a machine, and a confirmation card for it would be one more card to answer.
-const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards']);
+const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run']);
 
 // Tools classified by reversibility
 const readTools = new Set([

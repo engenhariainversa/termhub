@@ -29,7 +29,7 @@ const card = (payload: ChoicePayload, over: Partial<TabQuestion> = {}): TabQuest
 
 const run = (): AutomationRun => ({
   id: 'run1', project_id: 'p1', task_id: 't1', role: 'implementer', status: 'running', waiting_reason: null, tab_id: 'tab1', machine_id: 'm1', account_id: 'a1',
-  branch: 'TER-1-card', worktree_path: '/w', resume_count: 0, fix_count: 0, restart_count: 0, allowed_tools: null, last_typed_at: null, claimed_by: 'me',
+  branch: 'TER-1-card', worktree_path: '/w', resume_count: 0, fix_count: 0, restart_count: 0, allowed_tools: null, last_typed_at: null, woken_at: null, claimed_by: 'me',
   heartbeat_at: new Date(), started_at: new Date(), ended_at: null, created_at: new Date(),
 });
 

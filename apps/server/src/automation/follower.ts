@@ -8,6 +8,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun, AutomationRunPatch } from '../db/repositories/automation-runs.js';
 import type { Tab, Task } from '../db/repositories/types.js';
 import { DEFAULT_LOCALE, msg, t, tk, type Locale } from '../i18n/index.js';
+import type { StoppedTabWake } from '../chat/wake.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
 import { CI_POLL_MS } from '../ci/scheduler.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
@@ -87,6 +88,9 @@ export interface FollowerDeps {
   onRateLimited?: (run: AutomationRun, tab: Tab) => Promise<void>;
   /** The account's usage, for the reset a limited account waits for. Default: `getAccountUsage`, refreshed. */
   accountUsage?: (accountId: string) => Promise<AiAccountUsage | null>;
+  /** Wakes the project's chat for a stopped tab that used up its resumes (D15, TER-887): `wakeForStoppedTab` of
+   *  the waker, wired in app.ts. Left out, the run is escalated at once. True when the chat was woken. */
+  wakeStopped?: (i: StoppedTabWake) => Promise<boolean>;
   /** The clock (tests). */
   now?: () => Date;
   /** How long a change settles before the tab is read (default SETTLE_MS). */
@@ -131,14 +135,40 @@ export async function escalateRun(repos: Repositories, run: AutomationRun, reaso
   );
 }
 
-/**
- * A run that keeps stopping after `resume_max` resumes (spec D15). Task 23 first wakes the chat to read the
- * last answer and decide; for now the run waits (so it is not resumed again) and is escalated.
- */
+/** The reason a run is handed over after `resume_max` resumes that did not move it. */
+export const RESUME_CAP = 'resume_cap';
+
+/** Parks the run (so it is not resumed again) and escalates it. */
 export async function wakeOrEscalate(repos: Repositories, run: AutomationRun, reason: string, log: Log = noopLog): Promise<void> {
   if (!(await writeRun(repos, run, { status: 'waiting', waiting_reason: reason }))) return;
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, reason }, 'automation: run waits for a person');
   await escalateRun(repos, run, reason, log);
+}
+const parkAndEscalate = wakeOrEscalate;
+
+/**
+ * A tab that keeps stopping after `resume_max` resumes (D15): first wakes the chat once, to read the last answer and decide: the wake is
+ * claimed on the run (`woken_at`), so it happens once per run whatever the colour or restart. The run stays
+ * `running` meanwhile; a second stop (the tab stopped again after the wake) or QUESTION_WAIT_MS of silence
+ * escalates it. Without a waker, or when the wake could not start, it escalates at once.
+ */
+async function wakeStoppedOrEscalate(deps: FollowerDeps, run: AutomationRun, log: Log, stop: { tab: Tab; task: Task; ownerId: string }): Promise<void> {
+  const { repos } = deps;
+  const reason = RESUME_CAP;
+  if (!deps.wakeStopped) return parkAndEscalate(repos, run, reason, log);
+  const now = deps.now?.() ?? new Date();
+  if (run.woken_at) {
+    // woken already: the chat has until QUESTION_WAIT_MS to move the tab; the tab stopping again, or silence, hands it over
+    const stoppedAgain = Date.parse(stop.tab.state_at ?? '') > run.woken_at.getTime();
+    if (!stoppedAgain && now.getTime() - run.woken_at.getTime() < QUESTION_WAIT_MS) return;
+    return parkAndEscalate(repos, run, reason, log);
+  }
+  if (!(await repos.automationRuns.claimWake(run.id, run.claimed_by, now))) return;
+  const woke = await deps
+    .wakeStopped({ ownerId: stop.ownerId, projectId: run.project_id, runId: run.id, tabId: stop.tab.id, cardRef: stop.task.ref, cardTitle: stop.task.title, tabName: stop.tab.name ?? null })
+    .catch(() => false);
+  log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, woke }, 'automation: chat woken for a stopped tab');
+  if (!woke) await parkAndEscalate(repos, run, reason, log);
 }
 
 /**
@@ -262,7 +292,9 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
   const ready = await mayType(deps, run, log);
   if (!ready) return false;
   if (run.resume_count >= ready.setup.automation.resume_max) {
-    await wakeOrEscalate(repos, run, 'resume_cap', log);
+    // `mayType` read the tag and the pause a moment ago; once more right before the chat is woken (D24)
+    if (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id)) return false;
+    await wakeStoppedOrEscalate(deps, run, log, { tab, task: ready.task, ownerId: ready.ctx.scope.createAs });
     return false;
   }
   // D24: the last check before anything is typed
@@ -489,6 +521,23 @@ export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blo
       : await finishBlocked(ctx.repos, run, 'reported_blocked', i.reason ?? null, log);
   // another instance took the run over between the read and the write: the agent may simply call again
   if (!ended) throw new ControlError('RUN_MOVED', msg('O trabalho automático desta aba mudou de instância; chame report_card de novo'));
+  return { ok: true };
+}
+
+/**
+ * The chat tool `escalate_automation_run` (D15, TER-887): the woken chat read the last answer and finds nothing
+ * it can continue with, so the run goes to the person. The run is one of the caller's own projects (404
+ * otherwise); an ended run is refused. `reason` is the chat's own words for the person: it is not kept in the
+ * event (events carry ids and codes, never what came off a tab); Task 24's escalation card is where it shows.
+ */
+export async function escalateAutomationRun(ctx: ControlContext, i: { run_id: string; reason: string }): Promise<{ ok: true }> {
+  const run = await ctx.repos.automationRuns.findById(i.run_id);
+  if (!run) throw new ControlError('NOT_FOUND', msg('Execução automática não encontrada'));
+  await ctx.scoped.project(run.project_id);
+  if (run.status !== 'running' && run.status !== 'waiting') throw new ControlError('RUN_ENDED', msg('Esta execução automática já terminou'));
+  // already handed over (waiting): nothing to do, no second escalation
+  if (run.status === 'waiting') return { ok: true };
+  await parkAndEscalate(ctx.repos, run, RESUME_CAP, ctx.log ?? noopLog);
   return { ok: true };
 }
 

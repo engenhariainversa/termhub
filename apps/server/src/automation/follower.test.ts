@@ -9,7 +9,8 @@ import type { Tab, Task } from '../db/repositories/types.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { monitorBus } from '../monitor/bus.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
-import { escalationText, followRun, getRunCard, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
+import { escalateAutomationRun, escalationText, followRun, getRunCard, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
+import { stoppedTabWakeText, type StoppedTabWake } from '../chat/wake.js';
 import { automationBus } from './events.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 
@@ -33,7 +34,7 @@ function world(o: {
   const run: AutomationRun = {
     id: runId, project_id: 'p1', task_id: 't1', role: 'implementer', status: 'running', waiting_reason: null, tab_id: 'tab1', machine_id: 'm1', account_id: 'a1',
     branch: 'TER-1-card', worktree_path: '/w/TER-1', resume_count: 0, fix_count: 0, restart_count: 0, claimed_by: ME, heartbeat_at: new Date(), started_at: new Date(),
-    ended_at: null, created_at: new Date(), allowed_tools: null, last_typed_at: null, ...o.run,
+    ended_at: null, created_at: new Date(), allowed_tools: null, last_typed_at: null, woken_at: null, ...o.run,
   };
   const tab = { id: 'tab1', project_id: 'p1', machine_id: 'm1', state: 'waiting_input', state_text: 'Pronto.', state_tool: 'claude', state_at: `2026-10-05T10:00:0${seq % 10}.000Z`, rate_limited_at: null, ...o.tab } as Tab;
   const task = { id: 't1', project_id: 'p1', ref: 'TER-1', title: 'Card', description: 'd', type: 'task', status: 'doing', tab_id: 'tab1', auto: true, parent_id: null, epic_id: null, column_id: 'c2', ...o.task } as Task;
@@ -50,6 +51,11 @@ function world(o: {
         return true;
       }),
       bump: vi.fn(async (_id: string, field: 'resume_count' | 'restart_count') => ++run[field]),
+      claimWake: vi.fn(async (_id: string, instance: string, at: Date) => {
+        if (instance !== run.claimed_by || run.woken_at) return false;
+        run.woken_at = at;
+        return true;
+      }),
       noteTyped: vi.fn(async (_id: string, at: Date) => void (run.last_typed_at = at)),
     },
     tabs: { findById: vi.fn(async () => tab) },
@@ -277,6 +283,116 @@ describe('no stop is abandoned (review round 1)', () => {
     expect(w.run.status).toBe('done');
     expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
     expect(w.type).not.toHaveBeenCalled();
+  });
+});
+
+describe('a tab that keeps stopping: wake the chat once, then escalate (D15, TER-887)', () => {
+  const withWake = (w: ReturnType<typeof world>, woke = true) => {
+    const wakeStopped = vi.fn(async (_i: StoppedTabWake) => woke);
+    w.deps.wakeStopped = wakeStopped;
+    return wakeStopped;
+  };
+
+  it('wakes the chat once past resume_max, naming ids and the card only; nothing typed, run still followed', async () => {
+    const w = world({ run: { resume_count: 3 } });
+    const wake = withWake(w);
+    await followRun(w.deps, w.run.id);
+    expect(wake).toHaveBeenCalledTimes(1);
+    expect(wake).toHaveBeenCalledWith({ ownerId: 'u1', projectId: 'p1', runId: w.run.id, tabId: 'tab1', cardRef: 'TER-1', cardTitle: 'Card', tabName: null });
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run.woken_at).toBeInstanceOf(Date);
+    expect(w.run.status).toBe('running');
+    expect(w.events).toEqual([]);
+    // the next sweep, the tab not having moved: no second wake, no escalation yet
+    await followRun(w.deps, w.run.id);
+    expect(wake).toHaveBeenCalledTimes(1);
+    expect(w.run.status).toBe('running');
+  });
+
+  it('a second stop after the wake escalates', async () => {
+    const w = world({ run: { resume_count: 3 } });
+    const wake = withWake(w);
+    await followRun(w.deps, w.run.id);
+    w.tab.state_at = new Date(w.run.woken_at!.getTime() + 60_000).toISOString();
+    w.setNow(new Date(w.run.woken_at!.getTime() + 2 * 60_000 + PR_GRACE_MS));
+    await followRun(w.deps, w.run.id);
+    expect(wake).toHaveBeenCalledTimes(1);
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'resume_cap' });
+    expect(w.kinds()).toEqual(['escalated']);
+  });
+
+  it('a chat that did nothing for QUESTION_WAIT_MS is escalated too', async () => {
+    const w = world({ run: { resume_count: 3 } });
+    withWake(w);
+    await followRun(w.deps, w.run.id);
+    w.setNow(new Date(w.run.woken_at!.getTime() + QUESTION_WAIT_MS));
+    await followRun(w.deps, w.run.id);
+    expect(w.kinds()).toEqual(['escalated']);
+  });
+
+  it('a wake that could not start escalates at once', async () => {
+    const w = world({ run: { resume_count: 3 } });
+    withWake(w, false);
+    await followRun(w.deps, w.run.id);
+    expect(w.kinds()).toEqual(['escalated']);
+    expect(w.run.status).toBe('waiting');
+  });
+
+  it('a paused project is not woken for', async () => {
+    const w = world({ run: { resume_count: 3 }, paused: true });
+    const wake = withWake(w);
+    await followRun(w.deps, w.run.id);
+    expect(wake).not.toHaveBeenCalled();
+    expect(w.run.woken_at).toBeNull();
+    expect(w.events).toEqual([]);
+  });
+
+  it('an untagged card is not woken for: the run is cancelled', async () => {
+    const w = world({ run: { resume_count: 3 }, task: { auto: false } });
+    const wake = withWake(w);
+    await followRun(w.deps, w.run.id);
+    expect(wake).not.toHaveBeenCalled();
+    expect(w.run.status).toBe('cancelled');
+  });
+
+  it('a stop under resume_max is resumed, never woken for', async () => {
+    const w = world({ run: { resume_count: 1 } });
+    const wake = withWake(w);
+    await followRun(w.deps, w.run.id);
+    expect(wake).not.toHaveBeenCalled();
+    expect(w.type).toHaveBeenCalledTimes(1);
+  });
+
+  it('a question the automation could not answer escalates without waking for a stop', async () => {
+    const w = world({ question: { id: 'q1', kind: 'choice', status: 'open', auto_answer: null, created_at: '2026-10-05T10:00:00.000Z' } as unknown as TabQuestion });
+    const wake = withWake(w);
+    w.setNow(new Date('2026-10-05T12:00:00.000Z'));
+    await followRun(w.deps, w.run.id);
+    expect(wake).not.toHaveBeenCalled();
+    expect(w.kinds()).toEqual(['escalated']);
+  });
+
+  it('escalate_automation_run hands a run over to the person (the chat tool), from its own project only', async () => {
+    const w = world({ run: { resume_count: 3 } });
+    const ctx = (ok: boolean) => ({ repos: w.repos, scoped: { project: vi.fn(async () => { if (!ok) throw new Error('NOT_FOUND'); return {}; }) } }) as unknown as ControlContext;
+    await expect(escalateAutomationRun(ctx(false), { run_id: w.run.id, reason: 'x' })).rejects.toThrow();
+    expect(w.run.status).toBe('running');
+    await expect(escalateAutomationRun(ctx(true), { run_id: w.run.id, reason: 'não sei continuar' })).resolves.toEqual({ ok: true });
+    await expect(escalateAutomationRun(ctx(true), { run_id: w.run.id, reason: 'de novo' })).resolves.toEqual({ ok: true });
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'resume_cap' });
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', payload: { reason: 'resume_cap', tab_id: 'tab1' } })]);
+  });
+});
+
+describe('the stopped-tab wake text', () => {
+  it('is pt-BR, starts with Automático:, names the card and the run, and carries no tab content', () => {
+    const text = stoppedTabWakeText({ runId: 'r1', tabId: 'tab1', cardRef: 'TER-1', cardTitle: 'Título «x»', tabName: 'api' });
+    expect(text.startsWith('Automático: ')).toBe(true);
+    expect(text).toContain('TER-1');
+    expect(text).toContain('escalate_automation_run');
+    expect(text).toContain('run_id "r1"');
+    expect(text).toContain('send_input');
+    expect(text).toContain('tab_id tab1');
   });
 });
 

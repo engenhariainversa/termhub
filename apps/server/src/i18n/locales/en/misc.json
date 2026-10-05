@@ -34,6 +34,8 @@
   "Máquina do agente desligada": "The agent's machine is offline",
   "Integração do GitHub sem acesso": "The GitHub integration has no access",
   "Esta aba não tem trabalho automático em andamento": "This tab has no automatic work in progress",
+  "Execução automática não encontrada": "Automatic run not found",
+  "Esta execução automática já terminou": "This automatic run has already ended",
   "O trabalho automático desta aba mudou de instância; chame report_card de novo": "This tab's automatic work moved to another instance; call report_card again",
   "Diga em reason por que o trabalho travou": "Say in reason why the work is stuck",
   "O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.": "The agent stopped at the folder trust confirmation; confirm it in the tab to continue.",

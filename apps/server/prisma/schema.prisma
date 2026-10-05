@@ -607,6 +607,8 @@ model AutomationRun {
   allowedTools  Json?     @map("allowed_tools")
   /// when the follower last typed into the run's tab: the colour that takes the run over does not type again
   lastTypedAt   DateTime? @map("last_typed_at") @db.Timestamptz
+  /// when the chat was woken for a tab that keeps stopping (one wake per run, D15)
+  wokenAt       DateTime? @map("woken_at") @db.Timestamptz
   claimedBy     String    @map("claimed_by")
   heartbeatAt   DateTime  @default(now()) @map("heartbeat_at") @db.Timestamptz
   startedAt     DateTime? @map("started_at") @db.Timestamptz
