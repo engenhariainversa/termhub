@@ -7,8 +7,8 @@ import type { ChoicePayload } from '../chat/tab-question-payload.js';
 
 // the card's republish is the chat's business, not this module's
 vi.mock('../chat/tab-questions.js', () => ({ publishTabQuestions: vi.fn(async () => []) }));
-const { AUTOMATION_ANSWERS_MAX_PER_HOUR, automationAnswer, answerPermissionAutomatically, PERMISSION_SETTLE_MS, permissionAllowed, questionWithoutCard, recommendedOption, refusedCommand, RECOMMENDED_REASON } = await import('./answers.js');
-const { ANSWER_CAP, PERMISSION_NEEDED, QUESTION_UNANSWERED } = await import('./follower.js');
+const { AUTOMATION_ANSWERS_MAX_PER_RUN, ANSWER_CYCLE_MAX, questionCycleHash, AUTOMATION_ANSWERS_MAX_PER_HOUR, automationAnswer, answerPermissionAutomatically, PERMISSION_SETTLE_MS, permissionAllowed, questionWithoutCard, recommendedOption, refusedCommand, RECOMMENDED_REASON } = await import('./answers.js');
+const { ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, QUESTION_UNANSWERED } = await import('./follower.js');
 const { DEFAULT_AUTOMATION_TOOLS } = await import('../control/agents.js');
 const { normaliseLabel, parseAskUserQuestion } = await import('../chat/tab-question-payload.js');
 
@@ -33,7 +33,7 @@ const run = (): AutomationRun => ({
   heartbeat_at: new Date(), started_at: new Date(), ended_at: null, created_at: new Date(),
 });
 
-function world(q: TabQuestion, o: { wakes?: boolean | 'throws'; noWaker?: boolean; openNow?: TabQuestion | undefined; answeredLastHour?: number } = {}) {
+function world(q: TabQuestion, o: { wakes?: boolean | 'throws'; noWaker?: boolean; openNow?: TabQuestion | undefined; answeredLastHour?: number; answeredInRun?: number; priorPayloads?: Array<Record<string, string | number | boolean | null>> } = {}) {
   const r = run();
   const events: AutomationEventInput[] = [];
   const scheduled: AutoAnswer[] = [];
@@ -53,7 +53,8 @@ function world(q: TabQuestion, o: { wakes?: boolean | 'throws'; noWaker?: boolea
     },
     automationEvents: {
       insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })),
-      countForRun: vi.fn(async (_runId: string, _kind: string, _since: Date) => o.answeredLastHour ?? 0),
+      countForRun: vi.fn(async (_runId: string, _kind: string, since: Date) => (since.getTime() === 0 ? (o.answeredInRun ?? o.answeredLastHour ?? 0) : (o.answeredLastHour ?? 0))),
+      payloadsForRun: vi.fn(async () => o.priorPayloads ?? []),
     },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
   } as unknown as Repositories;
@@ -94,7 +95,7 @@ describe('automationAnswer (spec D18)', () => {
     expect(await automationAnswer(w.deps, card(one(item([['Worktree', true], ['Branch', false]])), { auto_answer: auto }), w.run)).toBe('repeat');
     expect(w.repos.tabQuestions.setAutoAnswer).not.toHaveBeenCalled();
     expect(w.wake).not.toHaveBeenCalled();
-    expect(w.events).toEqual([expect.objectContaining({ kind: 'question_answered', run_id: 'run1', payload: { via: 'repeat', tab_id: 'tab1', question_id: 'q1' } })]);
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'question_answered', run_id: 'run1', payload: { via: 'repeat', tab_id: 'tab1', question_id: 'q1', cycle: expect.stringMatching(/^[0-9a-f]{16}$/) } })]);
   });
 
   it('2. the recommended option is scheduled with by "automation" and the usual 60 s countdown', async () => {
@@ -193,7 +194,7 @@ describe('the answer cap (review I2)', () => {
 
   it('below the cap the recommended option is still scheduled; the count is the run\'s own answers of the last hour', async () => {
     const q = card(one(item([['A', true], ['B', false]])));
-    const w = world(q, { answeredLastHour: AUTOMATION_ANSWERS_MAX_PER_HOUR - 1 });
+    const w = world(q, { answeredLastHour: AUTOMATION_ANSWERS_MAX_PER_HOUR - 1, answeredInRun: 0 });
     expect(await automationAnswer({ ...w.deps, now: () => now }, q, w.run)).toBe('recommended');
     expect(w.repos.automationEvents.countForRun).toHaveBeenCalledWith('run1', 'question_answered', new Date(now.getTime() - 3600_000));
   });
@@ -228,10 +229,78 @@ describe('the answer cap (review I2)', () => {
       return { ...e, id: 'e', created_at: '' } as never;
     });
     const outcomes: string[] = [];
-    for (let i = 0; i <= AUTOMATION_ANSWERS_MAX_PER_HOUR; i++) outcomes.push(await automationAnswer(w.deps, card(q.payload as ChoicePayload, { id: `q${i}` }), w.run));
-    expect(outcomes.slice(0, AUTOMATION_ANSWERS_MAX_PER_HOUR).every((o) => o === 'recommended')).toBe(true);
+    for (let i = 0; i <= AUTOMATION_ANSWERS_MAX_PER_RUN; i++) outcomes.push(await automationAnswer(w.deps, card(one(item([['A', true], ['B', false]], `Pergunta ${i}?`)), { id: `q${i}` }), w.run));
+    expect(outcomes.slice(0, AUTOMATION_ANSWERS_MAX_PER_RUN).every((o) => o === 'recommended')).toBe(true);
     expect(outcomes.at(-1)).toBe('escalated');
-    expect(w.run.waiting_reason).toBe(ANSWER_CAP);
+    expect(w.run.waiting_reason).toBe(ANSWER_RUN_CAP);
+  });
+});
+
+describe('answer cycle detector (TER-970, R7)', () => {
+  it('the cycle counts over the whole run, not a window', async () => {
+    const q = card(one(item([['A', true], ['B', false]], 'Qual nome de arquivo?')));
+    const h = questionCycleHash(q.payload as ChoicePayload, { answers: [{ selected: [0] }] });
+    const w = world(q, { priorPayloads: Array(ANSWER_CYCLE_MAX).fill({ via: 'recommended', cycle: h }) });
+    await automationAnswer(w.deps, q, w.run);
+    expect(w.repos.automationEvents.payloadsForRun).toHaveBeenCalledWith('run1', 'question_answered', new Date(0));
+  });
+
+  it('more than AUTOMATION_ANSWERS_MAX_PER_RUN answers in a run escalate as answer_run_cap, under the hourly cap', async () => {
+    const q = card(one(item([['A', true], ['B', false]])));
+    const w = world(q, { answeredLastHour: 0, answeredInRun: AUTOMATION_ANSWERS_MAX_PER_RUN });
+    expect(await automationAnswer(w.deps, q, w.run)).toBe('escalated');
+    expect(w.run.waiting_reason).toBe(ANSWER_RUN_CAP);
+    const ok = world(q, { answeredInRun: AUTOMATION_ANSWERS_MAX_PER_RUN - 1 });
+    expect(await automationAnswer(ok.deps, q, ok.run)).toBe('recommended');
+  });
+
+  const same = () => card(one(item([['A', true], ['B', false]], 'Qual nome de arquivo?')));
+
+  it('answers a repeated question until ANSWER_CYCLE_MAX, then escalates as answer_cycle', async () => {
+    const q = same();
+    const h = questionCycleHash(q.payload as ChoicePayload, { answers: [{ selected: [0] }] });
+    const ok = world(q, { priorPayloads: Array(ANSWER_CYCLE_MAX - 1).fill({ via: 'recommended', cycle: h }) });
+    expect(await automationAnswer(ok.deps, q, ok.run)).toBe('recommended');
+    expect(ok.events[0]!.payload).toMatchObject({ via: 'recommended', cycle: h });
+
+    const w = world(q, { priorPayloads: Array(ANSWER_CYCLE_MAX).fill({ via: 'recommended', cycle: h }) });
+    expect(await automationAnswer(w.deps, q, w.run)).toBe('escalated');
+    expect(w.repos.tabQuestions.setAutoAnswer).not.toHaveBeenCalled();
+    expect(w.wake).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: ANSWER_CYCLE });
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', payload: { reason: ANSWER_CYCLE, tab_id: 'tab1' } })]);
+  });
+
+  it('a different question, or another answer to it, does not count', async () => {
+    const q = same();
+    const other = questionCycleHash(one(item([['A', true], ['B', false]], 'Outra pergunta?')), { answers: [{ selected: [0] }] });
+    const otherAnswer = questionCycleHash(q.payload as ChoicePayload, { answers: [{ selected: [1] }] });
+    const w = world(q, { priorPayloads: [...Array(5).fill({ via: 'recommended', cycle: other }), ...Array(5).fill({ via: 'recommended', cycle: otherAnswer })] });
+    expect(await automationAnswer(w.deps, q, w.run)).toBe('recommended');
+  });
+
+  it('a memory repeat counting down is cancelled at the cycle', async () => {
+    const answer = { answers: [{ selected: [0] }] };
+    const auto: AutoAnswer = { answer, by: 'memory', reason: 'r', sources: [], due_at: '', status: 'scheduled' };
+    const q = card(one(item([['A', false], ['B', false]], 'Qual nome de arquivo?')), { auto_answer: auto });
+    const h = questionCycleHash(q.payload as ChoicePayload, answer);
+    const w = world(q, { priorPayloads: Array(ANSWER_CYCLE_MAX).fill({ via: 'repeat', cycle: h }) });
+    expect(await automationAnswer(w.deps, q, w.run)).toBe('escalated');
+    expect(w.repos.tabQuestions.cancelAutoAnswer).toHaveBeenCalledWith('q1', 'u1');
+    expect(w.run.waiting_reason).toBe(ANSWER_CYCLE);
+  });
+
+  it('keeps only a hash: the event payload never holds the question text', async () => {
+    const q = same();
+    const w = world(q);
+    await automationAnswer(w.deps, q, w.run);
+    expect(JSON.stringify(w.events)).not.toContain('nome de arquivo');
+  });
+
+  it('the hash is stable and tells questions and answers apart', () => {
+    const p = one(item([['A', true], ['B', false]]));
+    expect(questionCycleHash(p, { answers: [{ selected: [0] }] })).toBe(questionCycleHash(p, { answers: [{ selected: [0] }] }));
+    expect(questionCycleHash(p, { answers: [{ selected: [0] }] })).not.toBe(questionCycleHash(p, { answers: [{ selected: [1] }] }));
   });
 });
 
@@ -425,7 +494,7 @@ describe('answerPermissionAutomatically (spec §9.2)', () => {
   const permissionCard = (tool = 'WebFetch', over: Partial<TabQuestion> = {}) => card(one(item([['A', false], ['B', false]])), { kind: 'permission', payload: { tool_name: tool }, tool_use_id: null, ...over });
 
   /** `world` plus what the pre-send check and the send read: the run still live, its card still tagged, the owner. */
-  function permissionWorld(q: TabQuestion, o: { allowed?: string[] | null; setupTools?: string[] | null; paused?: boolean; enabled?: boolean; tagged?: boolean; liveRun?: 'same' | 'other' | 'none'; sendFails?: boolean; openNow?: TabQuestion | undefined; answeredLastHour?: number } = {}) {
+  function permissionWorld(q: TabQuestion, o: { allowed?: string[] | null; setupTools?: string[] | null; paused?: boolean; enabled?: boolean; tagged?: boolean; liveRun?: 'same' | 'other' | 'none'; sendFails?: boolean; openNow?: TabQuestion | undefined; answeredLastHour?: number; priorPayloads?: Array<Record<string, string | number | boolean | null>> } = {}) {
     const w = world(q, { answeredLastHour: o.answeredLastHour, ...('openNow' in o ? { openNow: o.openNow } : {}) });
     w.run.allowed_tools = o.allowed === undefined ? ['WebFetch'] : o.allowed;
     const live = o.liveRun ?? 'same';

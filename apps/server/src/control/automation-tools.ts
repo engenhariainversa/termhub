@@ -73,6 +73,11 @@ export const AUTOMATION_DENIED_TOOLS: readonly string[] = [
   'Bash(docker:*)',
   'Bash(psql:*)',
   'Bash(security:*)',
+  // reaching other machines or clusters from an automatic tab (TER-968)
+  'Bash(ssh:*)',
+  'Bash(scp:*)',
+  'Bash(rsync:*)',
+  'Bash(kubectl:*)',
   'Bash(rm -rf:*)',
   'Bash(rm -fr:*)',
   'Bash(rm -r:*)',
