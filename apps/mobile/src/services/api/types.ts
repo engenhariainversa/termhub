@@ -32,6 +32,7 @@ import type {
   TNotesResponse,
   TNotificationsResponse,
   TProgressResponse,
+  TAutomationSetup,
   TProjectAi,
   TProjectAiResponse,
   TSendAccepted,
@@ -146,6 +147,16 @@ export interface MobileApi {
   getProjectAi(auth: Auth, projectId: string): Promise<TProjectAiResponse>;
   /** Saves them; answers the same shape. 400 with a pt-BR `error` for an account or model the server refuses. */
   saveProjectAi(auth: Auth, projectId: string, ai: TProjectAi): Promise<TProjectAiResponse>;
+
+  // Trabalho automático (spec 2026-10-04)
+  /** The project's automation block, whole (the app sends it back as it got it). 404 outside the scope. */
+  getAutomationSetup(auth: Auth, projectId: string): Promise<TAutomationSetup>;
+  /** Saves the block. Turning it on, or raising the level to deploy/release, needs `proof` (a PIN proof over a
+   * decision challenge for `automationSetupActionId(projectId)`, signed `automation_setup`): without one the
+   * server answers 401 `PIN_REQUIRED`. Lowering the level or turning off never asks. */
+  saveAutomationSetup(auth: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }): Promise<TAutomationSetup>;
+  /** Tags or untags a card for automatic work; answers the tag as it now stands. No PIN. 404 outside the scope. */
+  setCardAuto(auth: Auth, taskId: string, auto: boolean): Promise<boolean>;
 
   // attachments (spec 2026-09-26 §5.3, §5.6)
   /** Streams the file as the raw body; `onProgress` is 0..1. 415 ATTACHMENT_TYPE, 413 ATTACHMENT_TOO_LARGE / ATTACHMENT_QUOTA. */

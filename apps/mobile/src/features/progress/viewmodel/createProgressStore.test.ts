@@ -134,3 +134,26 @@ it('an older response never overwrites a newer one', async () => {
   expect(progress.getState().epics.map((e) => e.id)).toEqual(['new']);
   expect(progress.getState().loading).toBe(false);
 });
+
+it('setAuto() tags a card through the API and shows the badge state', async () => {
+  const { progress, api } = await setup();
+  await progress.getState().load();
+  const card = progress.getState().epics[0]!.cards[0]!;
+  expect(card.auto).toBe(false);
+  const spy = jest.spyOn(api, 'setCardAuto');
+  expect(await progress.getState().setAuto(card.id, true)).toBe(true);
+  expect(spy).toHaveBeenCalledWith(expect.anything(), card.id, true);
+  expect(progress.getState().epics[0]!.cards[0]!.auto).toBe(true);
+  expect(await progress.getState().setAuto(card.id, false)).toBe(true);
+  expect(progress.getState().epics[0]!.cards[0]!.auto).toBe(false);
+});
+
+it('setAuto() keeps the card as it was and says so when the request fails', async () => {
+  const { progress, api } = await setup();
+  await progress.getState().load();
+  const card = progress.getState().epics[0]!.cards[0]!;
+  jest.spyOn(api, 'setCardAuto').mockRejectedValueOnce(new Error('boom'));
+  expect(await progress.getState().setAuto(card.id, true)).toBe(false);
+  expect(progress.getState().epics[0]!.cards[0]!.auto).toBe(false);
+  expect(progress.getState().error).toBe('Não foi possível marcar o card.');
+});

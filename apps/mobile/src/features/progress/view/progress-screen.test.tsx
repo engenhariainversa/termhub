@@ -45,6 +45,15 @@ describe('Progresso', () => {
     expect(screen.getAllByText('~20–45 min de trabalho').length).toBeGreaterThan(0);
   });
 
+  it('a long-press on a card tags it for automatic work and shows the badge', async () => {
+    await render(<ProgressScreen />);
+    await act(async () => fireEvent.press(await screen.findByText('Visão gerencial', {}, LOAD)));
+    expect(screen.queryByLabelText('automático')).toBeNull();
+    await act(async () => fireEvent(screen.getByLabelText('TER-183 Painel de progresso'), 'longPress'));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Marcar como automático' })));
+    await waitFor(() => expect(screen.getByLabelText('automático')).toBeTruthy());
+  });
+
   it('tells assistive tech whether an epic is expanded', async () => {
     await render(<ProgressScreen />);
     await screen.findByText('Visão gerencial', {}, LOAD);

@@ -29,12 +29,19 @@ function ProjectHostSheet({ open, onClose, projectId, host }: { open: boolean; o
     onClose();
     router.push(`/project-ai/${encodeURIComponent(projectId)}` as Href);
   };
+  const openAutomation = () => {
+    onClose();
+    router.push(`/project-automation/${encodeURIComponent(projectId)}` as Href);
+  };
   return (
     <Sheet open={open} onClose={onClose} title="Onde o chat roda">
       <View className="gap-3">
         {host ? <AppText variant="muted">{hostAccountLine(host)}</AppText> : null}
         <Pressable accessibilityRole="button" accessibilityLabel="Contas e modelo do projeto" onPress={openProjectAi} className="rounded-xl bg-app-surface2 px-4 py-3">
           <AppText>Contas e modelo do projeto</AppText>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Trabalho automático" onPress={openAutomation} className="rounded-xl bg-app-surface2 px-4 py-3">
+          <AppText>Trabalho automático</AppText>
         </Pressable>
       </View>
     </Sheet>
