@@ -14,6 +14,8 @@ export const PERMISSIONS_MSG = {
     undetermined: 'Ainda não ativadas.',
   },
   openSettings: 'Abrir Ajustes do sistema',
+  pushTest: 'Enviar notificação de teste',
+  pushTestHint: 'Feche o app para ver como ela chega.',
   adsSwitch: 'Medição de anúncios',
   adsHint: 'Usa o identificador de publicidade do aparelho só para medir quais anúncios trouxeram novas pessoas ao termhub.',
 } as const;

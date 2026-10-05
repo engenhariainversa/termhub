@@ -32,7 +32,13 @@ export interface SettingsState {
   loadingDevice: boolean;
   error: string | null;
   loadDevice(): Promise<void>;
+  /** "Enviar notificação de teste" (TER-913): in flight, then what happened. */
+  pushTest: { sending: boolean; note: string | null; error: string | null };
+  sendTestPush(): Promise<void>;
 }
+
+/** Time to close the app before the test push is sent. */
+export const PUSH_TEST_DELAY_SECONDS = 10;
 
 const NETWORK_MSG = 'Não foi possível falar com o servidor. Tente de novo.';
 
@@ -46,6 +52,7 @@ export function createSettingsStore(deps: SettingsDeps) {
     device: null,
     loadingDevice: false,
     error: null,
+    pushTest: { sending: false, note: null, error: null },
 
     async loadDevice() {
       const gen = generation;
@@ -60,11 +67,22 @@ export function createSettingsStore(deps: SettingsDeps) {
         set({ loadingDevice: false, error: e instanceof ApiError ? e.message : NETWORK_MSG });
       }
     },
+
+    async sendTestPush() {
+      set({ pushTest: { sending: true, note: null, error: null } });
+      try {
+        await api.pushTest(session().auth(), { kind: 'confirmation', delay_seconds: PUSH_TEST_DELAY_SECONDS });
+        set({ pushTest: { sending: false, note: `Enviada. Ela chega em ${PUSH_TEST_DELAY_SECONDS} s.`, error: null } });
+      } catch (e) {
+        if (session().handleApiError(e)) return set({ pushTest: { sending: false, note: null, error: null } });
+        set({ pushTest: { sending: false, note: null, error: e instanceof ApiError ? e.message : NETWORK_MSG } });
+      }
+    },
   }));
 
   sessionEnded.subscribe(() => {
     generation++;
-    store.setState({ device: null, loadingDevice: false, error: null });
+    store.setState({ device: null, loadingDevice: false, error: null, pushTest: { sending: false, note: null, error: null } });
   });
 
   return store;

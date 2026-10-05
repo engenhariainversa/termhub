@@ -12,8 +12,10 @@ import { usePermissionsStore } from '@/features/permissions/viewmodel/usePermiss
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { useThemeStore, type ThemePreference } from '@/features/theme/viewmodel/useThemeStore';
 import { diagnosticKey } from '@/services/key';
+import { runningUpdate } from '@/services/updates';
 import { AppText, Button, Screen, Sheet } from '@/ui';
 import { runKeyDiagnostic, type KeyDiagnosticResult } from '../model/key-diagnostic';
+import { updateLabel } from '../model/update-label';
 import { useSettingsStore } from '../viewmodel/useSettingsStore';
 import { KeyDiagnosticSheet } from './key-diagnostic-sheet';
 
@@ -42,6 +44,8 @@ export function SettingsScreen() {
   const device = useSettingsStore((s) => s.device);
   const loadDevice = useSettingsStore((s) => s.loadDevice);
   const server = useSettingsStore((s) => s.server);
+  const pushTest = useSettingsStore((s) => s.pushTest);
+  const sendTestPush = useSettingsStore((s) => s.sendTestPush);
   const biometricsEnabled = useSessionStore((s) => s.biometricsEnabled);
   const enableBiometrics = useSessionStore((s) => s.enableBiometrics);
   const disableBiometrics = useSessionStore((s) => s.disableBiometrics);
@@ -138,6 +142,13 @@ export function SettingsScreen() {
           <AppText variant="muted">{PERMISSIONS_MSG.notificationStatus[notificationStatus ?? 'undetermined']}</AppText>
           {notificationStatus === 'undetermined' ? <Button label={PERMISSIONS_MSG.pushAccept} variant="secondary" onPress={() => void acceptPush()} /> : null}
           {notificationStatus === 'denied' ? <Button label={PERMISSIONS_MSG.openSettings} variant="secondary" onPress={() => void openSystemSettings()} /> : null}
+          {notificationStatus === 'granted' ? (
+            <>
+              <Button label={PERMISSIONS_MSG.pushTest} variant="secondary" loading={pushTest.sending} onPress={() => void sendTestPush()} />
+              <AppText variant="muted">{pushTest.note ? `${pushTest.note} ${PERMISSIONS_MSG.pushTestHint}` : PERMISSIONS_MSG.pushTestHint}</AppText>
+              {pushTest.error ? <AppText className="text-app-danger">{pushTest.error}</AppText> : null}
+            </>
+          ) : null}
         </Section>
 
         <Section title="Privacidade">
@@ -176,6 +187,7 @@ export function SettingsScreen() {
           <AppText variant="muted">
             {Application.nativeApplicationVersion} ({Application.nativeBuildVersion})
           </AppText>
+          <AppText variant="muted">{updateLabel(runningUpdate().updateId, runningUpdate().isEmbeddedLaunch)}</AppText>
           <AppText variant="muted">{server}</AppText>
         </Section>
 
