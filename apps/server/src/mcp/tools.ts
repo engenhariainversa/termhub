@@ -427,7 +427,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'get_project_setup',
     description:
-      "Read a project's repository setup: the GitHub integration, the repository (owner/repo), the base branch and the deploy workflow (the GitHub Actions workflow whose run on a merge is the deploy; null = not tracked), with the integration's name and login.",
+      "Read a project's repository setup: the GitHub integration, the repository (owner/repo), the base branch and the deploy workflow (the GitHub Actions workflow whose run on a merge is the deploy; null = not tracked), with the integration's name and login. Also returns the `automation` block (agentic board settings: enabled, autonomy level, eligible card types, release/store paths and limits).",
     scope: 'read', resource: 'projects', action: 'read',
     input: { project_id: id },
     run: (ctx, a) => getProjectSetup(ctx, a as { project_id: string }),
