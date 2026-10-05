@@ -2,7 +2,7 @@ import { getAccountUsage, type AiAccountUsage } from '../ai/index.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Tab } from '../db/repositories/types.js';
 import { recordEvent } from './events.js';
-import { defaultType, mayType, noteTyped, type FollowerDeps } from './follower.js';
+import { defaultType, mayType, type FollowerDeps } from './follower.js';
 import { isPaused } from './pause.js';
 import { QUOTA_RESUME_TEXT, serverMessage } from './prompts.js';
 
@@ -127,10 +127,11 @@ export async function resumeAfterReset(deps: FollowerDeps): Promise<void> {
       const typing = tab.state === 'waiting_input';
       // D24: the last check before anything is typed
       if (typing && (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id))) continue;
+      // the limit screen stays until the agent reacts: the follower (of either colour) must not read it as a
+      // new limit, so the run says it was typed into before it is followed again
+      if (typing) await repos.automationRuns.noteTyped(run.id, now);
       if (!(await repos.automationRuns.updateActive(run.id, run.claimed_by, { status: 'running', waiting_reason: null }))) continue;
       if (typing) {
-        // the limit screen stays until the agent reacts: the follower must not read it as a new limit
-        noteTyped(run.id, tab, now);
         try {
           await (deps.type ?? defaultType)(ready.ctx, tab.id, serverMessage(QUOTA_RESUME_TEXT));
         } catch (e) {

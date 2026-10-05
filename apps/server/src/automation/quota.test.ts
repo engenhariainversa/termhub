@@ -46,7 +46,7 @@ function world(o: { exhausted?: Map<string, Date>; paused?: boolean; enabled?: b
   const run: AutomationRun = {
     id: `run-${Math.random().toString(36).slice(2)}`, project_id: 'p1', task_id: 't1', role: 'implementer', status: 'running', waiting_reason: null, tab_id: 'tab1', machine_id: 'm1',
     account_id: 'a1', branch: 'TER-1-card', worktree_path: '/w/TER-1', resume_count: 0, fix_count: 0, restart_count: 0, claimed_by: ME, heartbeat_at: NOW, started_at: NOW,
-    ended_at: null, created_at: NOW, allowed_tools: null,
+    ended_at: null, created_at: NOW, allowed_tools: null, last_typed_at: null,
   };
   const tab = {
     id: 'tab1', project_id: 'p1', machine_id: 'm1', ai_account_id: 'a1', state: 'waiting_input', state_text: `${RATE_LIMIT_TEXT} — volta às 15h`, state_tool: 'claude',
@@ -70,6 +70,7 @@ function world(o: { exhausted?: Map<string, Date>; paused?: boolean; enabled?: b
       update: vi.fn(async (_id: string, instance: string, patch: Partial<AutomationRun>) => write(instance, patch)),
       updateActive: vi.fn(async (_id: string, instance: string, patch: Partial<AutomationRun>) => write(instance, patch)),
       bump: vi.fn(async (_id: string, field: 'resume_count' | 'restart_count') => ++run[field]),
+      noteTyped: vi.fn(async (_id: string, at: Date) => void (run.last_typed_at = at)),
     },
     aiAccountExhaustions: {
       mark: vi.fn(async (id: string, until: Date) => void exhausted.set(id, until)),

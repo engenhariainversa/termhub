@@ -120,7 +120,6 @@ export async function escalateRun(repos: Repositories, run: AutomationRun, reaso
  */
 export async function wakeOrEscalate(repos: Repositories, run: AutomationRun, reason: string, log: Log = noopLog): Promise<void> {
   if (!(await writeRun(repos, run, { status: 'waiting', waiting_reason: reason }))) return;
-  actedOn.delete(run.id);
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, reason }, 'automation: run waits for a person');
   await escalateRun(repos, run, reason, log);
 }
@@ -131,7 +130,6 @@ export async function wakeOrEscalate(repos: Repositories, run: AutomationRun, re
  */
 async function parkForTrust(repos: Repositories, run: AutomationRun, log: Log): Promise<void> {
   if (!(await writeRun(repos, run, { status: 'waiting', waiting_reason: NEEDS_PERSON }))) return;
-  actedOn.delete(run.id);
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id }, 'automation: run waits on the trust question');
   await escalateRun(repos, run, TRUST_PROMPT, log);
 }
@@ -158,7 +156,6 @@ async function placeDoneCard(repos: Repositories, run: AutomationRun, log: Log):
  *  instance wrote it first. */
 async function finishDone(repos: Repositories, run: AutomationRun, via: 'report_card' | 'pull_request', pr: { url: string; number?: number } | null, log: Log): Promise<boolean> {
   if (!(await writeRun(repos, run, { status: 'done', waiting_reason: null, ended_at: new Date() }))) return false;
-  actedOn.delete(run.id);
   await placeDoneCard(repos, run, log);
   const base = { project_id: run.project_id, task_id: run.task_id, run_id: run.id };
   await recordEvent(repos, { ...base, kind: 'run_done', payload: { via, tab_id: run.tab_id, pr_url: pr?.url ?? null } }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_done not recorded'));
@@ -174,7 +171,6 @@ async function finishDone(repos: Repositories, run: AutomationRun, via: 'report_
 /** Ends the run `blocked` and escalates it (spec D15, D17). */
 async function finishBlocked(repos: Repositories, run: AutomationRun, code: string, reason: string | null, log: Log): Promise<boolean> {
   if (!(await writeRun(repos, run, { status: 'blocked', waiting_reason: code, ended_at: new Date() }))) return false;
-  actedOn.delete(run.id);
   await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_blocked', payload: { code, reason, tab_id: run.tab_id } }).catch((e: unknown) =>
     log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_blocked not recorded'),
   );
@@ -297,18 +293,21 @@ async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: L
 }
 
 /** One handler at a time per run. A change that arrives while a follow still settles joins it: that follow
- *  reads the tab after it anyway. `actedOn`: the tab state something was typed for, and when — a hook
- *  delivered twice, or a sweep before the agent reacted, does not type it again. Only a typed message is
- *  recorded: every other outcome (a pause, automation off, a stop in its grace, a failure) is looked at again
- *  by the next sweep, so no run is left `running` with nobody following it. */
+ *  reads the tab after it anyway. */
 const chains = new Map<string, Promise<void>>();
 const settling = new Map<string, Promise<void>>();
-const actedOn = new Map<string, { key: string; at: number }>();
 
-/** Something was typed into the run's tab outside the follower (the resume after a usage limit's reset):
- *  the tab's current state is not acted on again until it moves (or RETYPE_AFTER_MS passes). */
-export function noteTyped(runId: string, tab: Pick<Tab, 'state' | 'state_at'>, at: Date): void {
-  actedOn.set(runId, { key: `${tab.state}@${tab.state_at}`, at: at.getTime() });
+/**
+ * Whether a line was typed into the tab after its current state was set and less than RETYPE_AFTER_MS ago:
+ * the agent has not reacted yet, so the state is not acted on again (a hook delivered twice, a sweep before
+ * the agent reacted). Read from the run (`last_typed_at`), not from memory, so the colour that takes a run
+ * over knows what the other one typed. Only a typed line is recorded: every other outcome (a pause,
+ * automation off, a stop in its grace, a failure) is looked at again by the next sweep.
+ */
+function typedSinceState(run: AutomationRun, tab: Tab, now: number): boolean {
+  if (!run.last_typed_at) return false;
+  const typedAt = run.last_typed_at.getTime();
+  return typedAt >= Date.parse(tab.state_at ?? '') && now - typedAt < RETYPE_AFTER_MS;
 }
 
 /**
@@ -329,10 +328,7 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
       settling.delete(runId);
       if (deps.lifecycle.draining) return;
       const run = await deps.repos.automationRuns.findById(runId);
-      if (!run || (run.status !== 'running' && run.status !== 'waiting') || run.claimed_by !== deps.instance || !run.tab_id) {
-        actedOn.delete(runId);
-        return;
-      }
+      if (!run || (run.status !== 'running' && run.status !== 'waiting') || run.claimed_by !== deps.instance || !run.tab_id) return;
       const tab = await deps.repos.tabs.findById(run.tab_id);
       if (!tab) return;
       if (!tab.state_at) {
@@ -360,12 +356,11 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
       const exited = tab.state === 'idle' && tab.state_text === AGENT_EXITED_TEXT;
       // permissions are Task 22's
       if (!stopped && !exited) return;
-      const key = `${tab.state}@${tab.state_at}`;
-      const last = actedOn.get(runId);
-      const now = (deps.now?.() ?? new Date()).getTime();
-      if (last?.key === key && now - last.at < RETYPE_AFTER_MS) return;
+      // taken before anything is typed: a state the agent reaches in reaction is always newer than it
+      const now = deps.now?.() ?? new Date();
+      if (typedSinceState(run, tab, now.getTime())) return;
       const typed = stopped ? await onStopped(deps, run, tab, log) : await onExited(deps, run, tab, log);
-      if (typed) actedOn.set(runId, { key, at: now });
+      if (typed) await deps.repos.automationRuns.noteTyped(run.id, now);
     })
     .catch((e: unknown) => log.warn({ runId, code: errorCode(e) }, 'automation: follow failed'))
     .finally(() => {
