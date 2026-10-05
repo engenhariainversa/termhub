@@ -5,6 +5,7 @@ import { controlContextFor } from '../control/context.js';
 import { createRepositories, type Repositories } from '../db/repositories/index.js';
 import type { User } from '../db/repositories/types.js';
 import { newId } from '../lib/ids.js';
+import { pauseAutomation, resumeAutomation } from './pause.js';
 import { automationQueue } from './queue.js';
 
 const keyOf = (id: string) => 'K' + id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase();
@@ -71,5 +72,33 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automationQueue (Postgres
     const items = await automationQueue(ctx(), projectId);
     expect(items).toHaveLength(3);
     expect(items.every((i) => !i.eligible && i.reason === 'automation_off' && i.reason_text === 'Trabalho automático desligado no projeto')).toBe(true);
+  });
+
+  it('a paused project reads paused on every tagged card, and resuming lifts it', async () => {
+    await setAutomation(true);
+    await twoColumns();
+    await pauseAutomation(ctx(), { scope: projectId });
+    expect((await automationQueue(ctx(), projectId)).map((i) => i.reason)).toEqual(['paused', 'paused', 'paused']);
+    await resumeAutomation(ctx(), { scope: projectId });
+    expect((await automationQueue(ctx(), projectId)).map((i) => i.reason)).toEqual(['no_capable_machine', 'no_capable_machine', 'no_capable_machine']);
+  });
+
+  it('"Pausar tudo" pauses the owner\'s projects', async () => {
+    await setAutomation(true);
+    await twoColumns();
+    await pauseAutomation(ctx(), { scope: 'all' });
+    const items = await automationQueue(ctx(), projectId);
+    expect(items.every((i) => i.reason === 'paused' && i.reason_text === 'Automático pausado')).toBe(true);
+    await resumeAutomation(ctx(), { scope: 'all' });
+    expect((await automationQueue(ctx(), projectId)).some((i) => i.reason === 'paused')).toBe(false);
+  });
+
+  it('a project with automation off still reads automation_off when paused, and records no event on "Pausar tudo"', async () => {
+    await setAutomation(false);
+    await twoColumns();
+    await pauseAutomation(ctx(), { scope: 'all' });
+    const items = await automationQueue(ctx(), projectId);
+    expect(items.every((i) => i.reason === 'automation_off')).toBe(true);
+    expect(await repos.automationEvents.listByProject(projectId, { limit: 10 })).toEqual([]);
   });
 });

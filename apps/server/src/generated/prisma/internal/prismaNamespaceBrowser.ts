@@ -69,6 +69,7 @@ export const ModelName = {
   TaskColumn: 'TaskColumn',
   Task: 'Task',
   TaskPullRequest: 'TaskPullRequest',
+  AutomationEvent: 'AutomationEvent',
   Note: 'Note',
   Integration: 'Integration',
   ProjectSetup: 'ProjectSetup',
@@ -142,6 +143,8 @@ export const UserScalarFieldEnum = {
   pushTabFinished: 'pushTabFinished',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
+  automationPausedAt: 'automationPausedAt',
+  timeZone: 'timeZone',
   locale: 'locale'
 } as const
 
@@ -254,6 +257,7 @@ export const ProjectScalarFieldEnum = {
   isPublic: 'isPublic',
   agentColumnId: 'agentColumnId',
   lastTerminalAt: 'lastTerminalAt',
+  automationPausedAt: 'automationPausedAt',
   createdAt: 'createdAt'
 } as const
 
@@ -414,6 +418,19 @@ export const TaskPullRequestScalarFieldEnum = {
 } as const
 
 export type TaskPullRequestScalarFieldEnum = (typeof TaskPullRequestScalarFieldEnum)[keyof typeof TaskPullRequestScalarFieldEnum]
+
+
+export const AutomationEventScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  runId: 'runId',
+  kind: 'kind',
+  payload: 'payload',
+  createdAt: 'createdAt'
+} as const
+
+export type AutomationEventScalarFieldEnum = (typeof AutomationEventScalarFieldEnum)[keyof typeof AutomationEventScalarFieldEnum]
 
 
 export const NoteScalarFieldEnum = {

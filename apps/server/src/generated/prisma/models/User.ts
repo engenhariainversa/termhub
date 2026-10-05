@@ -47,6 +47,8 @@ export type UserMinAggregateOutputType = {
   pushTabFinished: boolean | null
   deletionRequestedAt: Date | null
   deletionScheduledAt: Date | null
+  automationPausedAt: Date | null
+  timeZone: string | null
   locale: string | null
 }
 
@@ -73,6 +75,8 @@ export type UserMaxAggregateOutputType = {
   pushTabFinished: boolean | null
   deletionRequestedAt: Date | null
   deletionScheduledAt: Date | null
+  automationPausedAt: Date | null
+  timeZone: string | null
   locale: string | null
 }
 
@@ -99,6 +103,8 @@ export type UserCountAggregateOutputType = {
   pushTabFinished: number
   deletionRequestedAt: number
   deletionScheduledAt: number
+  automationPausedAt: number
+  timeZone: number
   locale: number
   _all: number
 }
@@ -127,6 +133,8 @@ export type UserMinAggregateInputType = {
   pushTabFinished?: true
   deletionRequestedAt?: true
   deletionScheduledAt?: true
+  automationPausedAt?: true
+  timeZone?: true
   locale?: true
 }
 
@@ -153,6 +161,8 @@ export type UserMaxAggregateInputType = {
   pushTabFinished?: true
   deletionRequestedAt?: true
   deletionScheduledAt?: true
+  automationPausedAt?: true
+  timeZone?: true
   locale?: true
 }
 
@@ -179,6 +189,8 @@ export type UserCountAggregateInputType = {
   pushTabFinished?: true
   deletionRequestedAt?: true
   deletionScheduledAt?: true
+  automationPausedAt?: true
+  timeZone?: true
   locale?: true
   _all?: true
 }
@@ -278,6 +290,8 @@ export type UserGroupByOutputType = {
   pushTabFinished: boolean
   deletionRequestedAt: Date | null
   deletionScheduledAt: Date | null
+  automationPausedAt: Date | null
+  timeZone: string | null
   locale: string | null
   _count: UserCountAggregateOutputType | null
   _min: UserMinAggregateOutputType | null
@@ -325,6 +339,8 @@ export type UserWhereInput = {
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
+  automationPausedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
+  timeZone?: Prisma.StringNullableFilter<"User"> | string | null
   locale?: Prisma.StringNullableFilter<"User"> | string | null
   roleRef?: Prisma.XOR<Prisma.RoleNullableScalarRelationFilter, Prisma.RoleWhereInput> | null
   sessions?: Prisma.SessionListRelationFilter
@@ -369,6 +385,8 @@ export type UserOrderByWithRelationInput = {
   pushTabFinished?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  automationPausedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  timeZone?: Prisma.SortOrderInput | Prisma.SortOrder
   locale?: Prisma.SortOrderInput | Prisma.SortOrder
   roleRef?: Prisma.RoleOrderByWithRelationInput
   sessions?: Prisma.SessionOrderByRelationAggregateInput
@@ -416,6 +434,8 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
+  automationPausedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
+  timeZone?: Prisma.StringNullableFilter<"User"> | string | null
   locale?: Prisma.StringNullableFilter<"User"> | string | null
   roleRef?: Prisma.XOR<Prisma.RoleNullableScalarRelationFilter, Prisma.RoleWhereInput> | null
   sessions?: Prisma.SessionListRelationFilter
@@ -460,6 +480,8 @@ export type UserOrderByWithAggregationInput = {
   pushTabFinished?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  automationPausedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  timeZone?: Prisma.SortOrderInput | Prisma.SortOrder
   locale?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.UserCountOrderByAggregateInput
   _max?: Prisma.UserMaxOrderByAggregateInput
@@ -492,6 +514,8 @@ export type UserScalarWhereWithAggregatesInput = {
   pushTabFinished?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   deletionRequestedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
+  automationPausedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
+  timeZone?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   locale?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
 }
 
@@ -517,6 +541,8 @@ export type UserCreateInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -561,6 +587,8 @@ export type UserUncheckedCreateInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -603,6 +631,8 @@ export type UserUpdateInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -647,6 +677,8 @@ export type UserUncheckedUpdateInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -690,6 +722,8 @@ export type UserCreateManyInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
 }
 
@@ -715,6 +749,8 @@ export type UserUpdateManyMutationInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
@@ -741,6 +777,8 @@ export type UserUncheckedUpdateManyInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
@@ -767,6 +805,8 @@ export type UserCountOrderByAggregateInput = {
   pushTabFinished?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrder
+  automationPausedAt?: Prisma.SortOrder
+  timeZone?: Prisma.SortOrder
   locale?: Prisma.SortOrder
 }
 
@@ -793,6 +833,8 @@ export type UserMaxOrderByAggregateInput = {
   pushTabFinished?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrder
+  automationPausedAt?: Prisma.SortOrder
+  timeZone?: Prisma.SortOrder
   locale?: Prisma.SortOrder
 }
 
@@ -819,6 +861,8 @@ export type UserMinOrderByAggregateInput = {
   pushTabFinished?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrder
+  automationPausedAt?: Prisma.SortOrder
+  timeZone?: Prisma.SortOrder
   locale?: Prisma.SortOrder
 }
 
@@ -1180,6 +1224,8 @@ export type UserCreateWithoutRoleRefInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineCreateNestedManyWithoutOwnerInput
@@ -1222,6 +1268,8 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -1294,6 +1342,8 @@ export type UserScalarWhereInput = {
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
+  automationPausedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
+  timeZone?: Prisma.StringNullableFilter<"User"> | string | null
   locale?: Prisma.StringNullableFilter<"User"> | string | null
 }
 
@@ -1319,6 +1369,8 @@ export type UserCreateWithoutSessionsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   machines?: Prisma.MachineCreateNestedManyWithoutOwnerInput
@@ -1362,6 +1414,8 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
   projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
@@ -1419,6 +1473,8 @@ export type UserUpdateWithoutSessionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   machines?: Prisma.MachineUpdateManyWithoutOwnerNestedInput
@@ -1462,6 +1518,8 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
   projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
@@ -1503,6 +1561,8 @@ export type UserCreateWithoutMachinesInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -1546,6 +1606,8 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
@@ -1603,6 +1665,8 @@ export type UserUpdateWithoutMachinesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -1646,6 +1710,8 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
@@ -1687,6 +1753,8 @@ export type UserCreateWithoutProjectsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -1730,6 +1798,8 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -1787,6 +1857,8 @@ export type UserUpdateWithoutProjectsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -1830,6 +1902,8 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -1871,6 +1945,8 @@ export type UserCreateWithoutIntegrationsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -1914,6 +1990,8 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -1971,6 +2049,8 @@ export type UserUpdateWithoutIntegrationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -2014,6 +2094,8 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -2055,6 +2137,8 @@ export type UserCreateWithoutUploadsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -2098,6 +2182,8 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -2155,6 +2241,8 @@ export type UserUpdateWithoutUploadsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -2198,6 +2286,8 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -2239,6 +2329,8 @@ export type UserCreateWithoutApiTokensInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -2282,6 +2374,8 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -2339,6 +2433,8 @@ export type UserUpdateWithoutApiTokensInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -2382,6 +2478,8 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -2423,6 +2521,8 @@ export type UserCreateWithoutChatConversationsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -2466,6 +2566,8 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -2523,6 +2625,8 @@ export type UserUpdateWithoutChatConversationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -2566,6 +2670,8 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -2607,6 +2713,8 @@ export type UserCreateWithoutChatAttachmentsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -2650,6 +2758,8 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -2707,6 +2817,8 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -2750,6 +2862,8 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -2791,6 +2905,8 @@ export type UserCreateWithoutStandingGrantsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -2834,6 +2950,8 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -2891,6 +3009,8 @@ export type UserUpdateWithoutStandingGrantsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -2934,6 +3054,8 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -2975,6 +3097,8 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -3018,6 +3142,8 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -3075,6 +3201,8 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -3118,6 +3246,8 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -3159,6 +3289,8 @@ export type UserCreateWithoutChatDecisionsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -3202,6 +3334,8 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -3259,6 +3393,8 @@ export type UserUpdateWithoutChatDecisionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -3302,6 +3438,8 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -3343,6 +3481,8 @@ export type UserCreateWithoutMemoryItemsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -3386,6 +3526,8 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -3432,6 +3574,8 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -3475,6 +3619,8 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -3532,6 +3678,8 @@ export type UserUpdateWithoutMemoryItemsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -3575,6 +3723,8 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -3627,6 +3777,8 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -3670,6 +3822,8 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -3711,6 +3865,8 @@ export type UserCreateWithoutProjectGroupsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -3754,6 +3910,8 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -3811,6 +3969,8 @@ export type UserUpdateWithoutProjectGroupsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -3854,6 +4014,8 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -3895,6 +4057,8 @@ export type UserCreateWithoutDeviceRequestsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -3938,6 +4102,8 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -3995,6 +4161,8 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -4038,6 +4206,8 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -4079,6 +4249,8 @@ export type UserCreateWithoutDevicesInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -4122,6 +4294,8 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -4179,6 +4353,8 @@ export type UserUpdateWithoutDevicesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -4222,6 +4398,8 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -4263,6 +4441,8 @@ export type UserCreateWithoutNotificationsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -4306,6 +4486,8 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -4363,6 +4545,8 @@ export type UserUpdateWithoutNotificationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -4406,6 +4590,8 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -4447,6 +4633,8 @@ export type UserCreateManyRoleRefInput = {
   pushTabFinished?: boolean
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
   locale?: string | null
 }
 
@@ -4472,6 +4660,8 @@ export type UserUpdateWithoutRoleRefInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUpdateManyWithoutOwnerNestedInput
@@ -4514,6 +4704,8 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -4556,6 +4748,8 @@ export type UserUncheckedUpdateManyWithoutRoleRefInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
@@ -4757,6 +4951,8 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   pushTabFinished?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
+  automationPausedAt?: boolean
+  timeZone?: boolean
   locale?: boolean
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
@@ -4802,6 +4998,8 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   pushTabFinished?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
+  automationPausedAt?: boolean
+  timeZone?: boolean
   locale?: boolean
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
@@ -4829,6 +5027,8 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   pushTabFinished?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
+  automationPausedAt?: boolean
+  timeZone?: boolean
   locale?: boolean
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
@@ -4856,10 +5056,12 @@ export type UserSelectScalar = {
   pushTabFinished?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
+  automationPausedAt?: boolean
+  timeZone?: boolean
   locale?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatCodexReplies" | "pushTabFinished" | "deletionRequestedAt" | "deletionScheduledAt" | "locale", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatCodexReplies" | "pushTabFinished" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "locale", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
@@ -4973,6 +5175,14 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
      * When the deletion job removes the account for good (30 days after the request). Null = not pending.
      */
     deletionScheduledAt: Date | null
+    /**
+     * "Pausar tudo" (agentic board): while set, no automatic work starts, types or merges on any of this user's projects.
+     */
+    automationPausedAt: Date | null
+    /**
+     * IANA time zone (e.g. America/Sao_Paulo) for the automation's daily summary hour. Null = the server's.
+     */
+    timeZone: string | null
     /**
      * The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
      */
@@ -5440,6 +5650,8 @@ export interface UserFieldRefs {
   readonly pushTabFinished: Prisma.FieldRef<"User", 'Boolean'>
   readonly deletionRequestedAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly deletionScheduledAt: Prisma.FieldRef<"User", 'DateTime'>
+  readonly automationPausedAt: Prisma.FieldRef<"User", 'DateTime'>
+  readonly timeZone: Prisma.FieldRef<"User", 'String'>
   readonly locale: Prisma.FieldRef<"User", 'String'>
 }
     

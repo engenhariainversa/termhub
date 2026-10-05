@@ -14,6 +14,9 @@ import { addSubtasks, createTask, deleteTask, listTasks, moveTask, TASK_DESCRIPT
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
 import { automationQueue } from '../automation/queue.js';
 import { policyText } from '../automation/policy.js';
+import { listAutomationEvents } from '../automation/events.js';
+import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
+import { AUTOMATION_EVENTS_PAGE_MAX } from '../db/repositories/automation-events.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
 import { answerTabQuestionTool, listTabQuestions, recordDecision, searchMemory, MEMORY_REF, type MemoryRefKind } from '../control/memory.js';
 import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } from '../control/integrations.js';
@@ -268,6 +271,39 @@ export const TOOLS: ToolDef[] = [
     run: async (ctx, a) => {
       const { automation, repo } = await getProjectSetup(ctx, a as { project_id: string });
       return { enabled: automation.enabled, autonomy: automation.autonomy, text: policyText(automation, repo?.deploy_workflow ?? null) };
+    },
+  },
+  {
+    name: 'pause_automation',
+    description:
+      "Pause the automatic work (agentic board): with project_id, that project only; without it, every project of the person (\"Pausar tudo\"). While paused nothing is started, typed, answered or merged. Pausing what is already paused keeps the first time. interrupt: true also asks to stop the tabs running automatic work now (it sends Escape to them, so it asks the person first). Answers paused_at.",
+    scope: 'tasks', resource: 'projects', action: 'update',
+    input: { project_id: id.optional(), interrupt: z.boolean().optional() },
+    run: (ctx, a) => {
+      const { project_id, interrupt } = a as { project_id?: string; interrupt?: boolean };
+      return pauseAutomation(ctx, { scope: project_id ?? 'all', interrupt });
+    },
+  },
+  {
+    name: 'resume_automation',
+    description:
+      "Lift a pause of the automatic work: with project_id, that project's pause; without it, the person's \"Pausar tudo\". A project stays paused while either pause is on.",
+    scope: 'tasks', resource: 'projects', action: 'update',
+    input: { project_id: id.optional() },
+    run: async (ctx, a) => {
+      await resumeAutomation(ctx, { scope: (a as { project_id?: string }).project_id ?? 'all' });
+      return { ok: true };
+    },
+  },
+  {
+    name: 'list_automation_events',
+    description:
+      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses. Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons, and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
+    scope: 'read', resource: 'projects', action: 'read',
+    input: { project_id: id, before: z.string().datetime({ offset: true }).optional(), limit: z.number().int().min(1).max(AUTOMATION_EVENTS_PAGE_MAX).optional() },
+    run: async (ctx, a) => {
+      const { project_id, before, limit } = a as { project_id: string; before?: string; limit?: number };
+      return { events: await listAutomationEvents(ctx, project_id, { before, limit }) };
     },
   },
   {

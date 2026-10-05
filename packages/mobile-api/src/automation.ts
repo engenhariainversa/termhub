@@ -68,3 +68,16 @@ export type AutomationQueueItem = z.infer<typeof automationQueueItem>;
 /** Whether the project's automatic work is paused (the pause switch ships with the scheduler). */
 export const pauseState = z.object({ paused: z.boolean(), paused_at: z.string().nullable() });
 export type PauseState = z.infer<typeof pauseState>;
+
+/** What the automatic work did (`automation_events`): ids, URLs, counts and reasons only. `kind` stays a
+ * string so a kind a newer server adds still parses on an older app. */
+export const automationEventSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  task_id: z.string().nullable(),
+  run_id: z.string().nullable(),
+  kind: z.string(),
+  payload: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  created_at: z.string(),
+});
+export type AutomationEventView = z.infer<typeof automationEventSchema>;

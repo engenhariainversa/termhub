@@ -88,6 +88,10 @@ model User {
   deletionRequestedAt DateTime? @map("deletion_requested_at")
   /// When the deletion job removes the account for good (30 days after the request). Null = not pending.
   deletionScheduledAt DateTime? @map("deletion_scheduled_at")
+  /// "Pausar tudo" (agentic board): while set, no automatic work starts, types or merges on any of this user's projects.
+  automationPausedAt  DateTime? @map("automation_paused_at") @db.Timestamptz
+  /// IANA time zone (e.g. America/Sao_Paulo) for the automation's daily summary hour. Null = the server's.
+  timeZone            String?   @map("time_zone")
   /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
   locale              String?
 
@@ -236,6 +240,8 @@ model Project {
   /// Column a card moves to when an agent starts on it (start_agent). Null = automatic: the first `doing` column.
   agentColumnId  String?       @map("agent_column_id")
   lastTerminalAt DateTime?     @map("last_terminal_at")
+  /// Per-project pause of the automatic work (agentic board). Null = not paused.
+  automationPausedAt DateTime? @map("automation_paused_at") @db.Timestamptz
   createdAt      DateTime      @default(now()) @map("created_at")
   owner          User?         @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   /// Machines this project runs on, each with its own working directory.
@@ -256,6 +262,7 @@ model Project {
   columns        TaskColumn[]  @relation("ProjectColumns")
   pullRequests   TaskPullRequest[]
   standingGrants ChatStandingGrant[]
+  automationEvents AutomationEvent[]
 
   @@index([ownerId])
   @@map("projects")
@@ -498,6 +505,7 @@ model Task {
   columnId    String?    @map("column_id")
   column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
   pullRequests TaskPullRequest[]
+  automationEvents AutomationEvent[]
 
   @@unique([projectId, externalKey])
   @@unique([projectId, number])
@@ -540,6 +548,25 @@ model TaskPullRequest {
   @@unique([taskId, repo, number])
   @@index([projectId, state])
   @@map("task_pull_requests")
+}
+
+/// What the automatic work did, for the activity feed and the daily summary (agentic board). Holds ids,
+/// URLs, counts and reasons only — never terminal content or prompts. Kept 30 days (hourly purge).
+model AutomationEvent {
+  id        String   @id
+  projectId String   @map("project_id")
+  taskId    String?  @map("task_id")
+  runId     String?  @map("run_id")
+  /// AutomationEventKind (automation/events.ts)
+  kind      String
+  /// Flat object of strings (≤ 500 chars), numbers, booleans and nulls
+  payload   Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt(sort: Desc)], map: "automation_events_project_created_idx")
+  @@map("automation_events")
 }
 
 model Note {

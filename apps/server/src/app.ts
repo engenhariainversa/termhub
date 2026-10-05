@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, ROOT_DIR } from './config.js';
 import { getPrisma, closePrisma } from './db/prisma.js';
-import { createRepositories, type Repositories } from './db/repositories/index.js';
+import { AUTOMATION_EVENT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
 import { createMailer } from './email/mailer.js';
 import { createAccessAllowlist } from './cloudflare/access.js';
 import { AuthService, authRoutes, buildAuthHook, type AuthContext } from './auth/index.js';
@@ -25,7 +25,7 @@ import { progressRoutes } from './routes/progress.js';
 import { officeRoutes } from './routes/office.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { setupRoutes } from './routes/setup.js';
-import { projectAutomationRoutes } from './routes/automation.js';
+import { automationPauseRoutes, projectAutomationEventRoutes, projectAutomationRoutes } from './routes/automation.js';
 import { projectAiRoutes } from './routes/project-ai.js';
 import { projectTicketRoutes, taskTicketRoutes } from './routes/tickets.js';
 import { aiAccountRoutes } from './routes/ai-accounts.js';
@@ -261,6 +261,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('tasks', (a) => taskRoutes(a, repos), '/tasks');
       await guarded('tasks', (a) => projectColumnRoutes(a, repos), '/projects');
       await guarded('tasks', (a) => projectAutomationRoutes(a, repos), '/projects');
+      await guarded('projects', (a) => projectAutomationEventRoutes(a, repos), '/projects');
+      await guarded('projects', (a) => automationPauseRoutes(a, repos), '/automation');
       await guarded('tasks', (a) => columnRoutes(a, repos), '/columns');
       await guarded('projects', (a) => dashboardRoutes(a, repos), '/dashboard');
       await guarded('tasks', (a) => progressRoutes(a, repos), '/progress');
@@ -329,6 +331,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void expireOrphanTabQuestions(repos, fastify.log);
     // Accounts whose 30-day deletion window is over go for good (TER-720); both colors may run it, the row lock picks one.
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
+    // Automation events are kept 30 days (agentic board).
+    void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
   const stopCiSync = startCiSyncScheduler(repos, fastify.log);

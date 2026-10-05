@@ -7,8 +7,10 @@ import { WebSocket, type WebSocketServer } from 'ws';
 import { canAccess } from '../auth/permissions.js';
 import { hashToken } from '../auth/tokens.js';
 import { chatBus } from '../chat/bus.js';
+import { automationBus } from '../automation/events.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { createUpgradeRouter } from '../ws/router.js';
+import { chatEventSchema } from '@termhub/mobile-api';
 import { JtiCache } from './dpop.js';
 import { MobileSocketRegistry } from './revocation.js';
 import { registerMobileChatWs } from './ws.js';
@@ -100,6 +102,18 @@ it('sends hello first, then only this user chat events', async () => {
   c.ws.close();
   await c.closed;
   await waitFor(() => !sockets.hasLive('d1'));
+});
+
+it('forwards the automation events of this user\'s own projects, without the owner id', async () => {
+  const c = open(await headers());
+  await c.opened;
+  await waitFor(() => c.frames.length === 1);
+  const base = { id: 'e1', project_id: 'p1', task_id: null, run_id: null, kind: 'paused' as const, payload: { scope: 'all', interrupt: false }, created_at: '2026-10-05T10:00:00.000Z' };
+  automationBus.publish({ ...base, owner_id: 'u2' });
+  automationBus.publish({ ...base, owner_id: 'u1' });
+  await waitFor(() => c.frames.length === 2);
+  expect(c.frames[1]).toEqual({ type: 'automation', event: base });
+  expect(chatEventSchema.safeParse(c.frames[1]).success).toBe(true);
 });
 
 it('refuses a missing token, a bad proof, a replayed jti (401) and a user without chat:read (403)', async () => {
