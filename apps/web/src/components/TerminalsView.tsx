@@ -28,6 +28,7 @@ import { PaneLayer, PANE_HEADER_HEIGHT } from './PaneLayer';
 import { FloatingWindow, FLOATING_TITLE_HEIGHT } from './FloatingWindow';
 import { MachinePicker } from './MachinePicker';
 import { OfficeEmptyState } from './OfficeEmptyState';
+import { i18n, Trans, useTranslation } from '../i18n';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/data';
 import { useMarkSeenOnFocus, useMonitor } from '../lib/monitor';
@@ -54,6 +55,7 @@ interface Props {
 }
 
 export function TerminalsView({ project, visible }: Props) {
+  const { t } = useTranslation();
   const { machines, machinesOf, missingTmux } = useData();
   const { can } = useAuth();
   const { items: monitorItems } = useMonitor();
@@ -206,7 +208,7 @@ export function TerminalsView({ project, visible }: Props) {
     } catch (e) {
       // Keep `tabs` as-is (usually still null on the first load): a fake `[]` would make the
       // layout effects sanitize away — and then persist — an empty layout over whatever was saved.
-      setError(e instanceof ApiError ? e.message : 'Erro ao carregar tabs');
+      setError(e instanceof ApiError ? e.message : i18n.t('Erro ao carregar tabs'));
     }
   }, [project.id]);
 
@@ -310,8 +312,8 @@ export function TerminalsView({ project, visible }: Props) {
       if (candidates.length === 0) {
         setError(
           kind === 'simulator'
-            ? 'Nenhuma máquina vinculada tem o WDA preparado para simuladores.'
-            : 'Vincule uma máquina ao projeto em Setup → Máquinas para abrir terminais.',
+            ? i18n.t('Nenhuma máquina vinculada tem o WDA preparado para simuladores.')
+            : i18n.t('Vincule uma máquina ao projeto em Setup → Máquinas para abrir terminais.'),
         );
         return;
       }
@@ -330,7 +332,7 @@ export function TerminalsView({ project, visible }: Props) {
           return reduce(l, { type: 'assignTo', cell: target, tabId: tab.id }, area);
         });
       } catch (e) {
-        setError(e instanceof ApiError ? e.message : 'Erro ao criar tab');
+        setError(e instanceof ApiError ? e.message : i18n.t('Erro ao criar tab'));
       }
     },
     [project.id, area, projectMachines],
@@ -428,39 +430,41 @@ export function TerminalsView({ project, visible }: Props) {
       )}
       {projectMachines.length === 0 && (
         <div className="border-b border-warn/30 bg-warn/10 px-3 py-1 text-xs text-warn">
-          Este projeto não tem máquina vinculada.{' '}
+          {t('Este projeto não tem máquina vinculada.')}{' '}
           <Link to={`/projects/${project.id}/settings`} className="underline">
-            Vincular em Setup → Máquinas
+            {t('Vincular em Setup → Máquinas')}
           </Link>
           .
         </div>
       )}
       {noTmux && (
         <div className="border-b border-warn/30 bg-warn/10 px-3 py-1 text-xs text-warn">
-          <strong>{projectMachines.filter((m) => missingTmux[m.id]).map((m) => m.name).join(', ')}</strong> está online mas não tem{' '}
-          <code className="font-mono">tmux</code> instalado. Instale (ex.: <code className="font-mono">sudo apt install tmux</code>) para abrir
-          terminais.
+          <Trans
+            i18nKey="<0>{{machines}}</0> está online mas não tem <1>tmux</1> instalado. Instale (ex.: <2>sudo apt install tmux</2>) para abrir terminais."
+            values={{ machines: projectMachines.filter((m) => missingTmux[m.id]).map((m) => m.name).join(', ') }}
+            components={[<strong key="m" />, <code key="t" className="font-mono" />, <code key="c" className="font-mono" />]}
+          />
         </div>
       )}
       {!reachable && (
         <div className="border-b border-warn/30 bg-warn/10 px-3 py-1 text-xs text-warn">
-          Não foi possível consultar as sessões tmux nesta máquina (offline?). Os terminais podem não conectar.
+          {t('Não foi possível consultar as sessões tmux nesta máquina (offline?). Os terminais podem não conectar.')}
         </div>
       )}
       {error && (
         <div className="border-b border-danger/30 bg-danger/10 px-3 py-1 text-xs text-danger">
           {error}{' '}
           <button className="underline" onClick={() => void load()}>
-            Tentar de novo
+            {t('Tentar de novo')}
           </button>{' '}
           <button className="underline" onClick={() => setError(null)}>
-            fechar
+            {t('fechar')}
           </button>
         </div>
       )}
       <div ref={areaRef} className="relative min-h-0 flex-1 overflow-hidden">
         {tabs === null ? (
-          <div className="flex h-full items-center justify-center text-sm text-fg-dim">Carregando tabs…</div>
+          <div className="flex h-full items-center justify-center text-sm text-fg-dim">{t('Carregando tabs…')}</div>
         ) : barTabs.length === 0 && (tabs.length === 0 || layout.preset === 'single') ? (
           // Nothing open (or no terminal yet): the project's office, with its epics in progress and a
           // plain list of the terminals — the sidebar can be collapsed, or hidden in focus mode (TER-912). An open

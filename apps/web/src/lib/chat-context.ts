@@ -7,6 +7,7 @@
 /** From this share of the window on, the meter is highlighted and suggests compacting. */
 export const CONTEXT_WARN_AT = 0.8;
 import { formatNumber } from './format';
+import { i18n } from '../i18n';
 /** From this share on, the next turns may hit the window: the meter turns red. */
 export const CONTEXT_FULL_AT = 0.95;
 
@@ -25,12 +26,13 @@ export function contextLevel(share: number | null): ContextLevel {
   return 'ok';
 }
 
-/** 950 → "950", 25 258 → "25,3 mil", 1 000 000 → "1 mi": short enough for the dock's header. */
+/**
+ * 950 → "950", 25 258 → "25 mil" / "25K", 1 000 000 → "1 mi" / "1M": short enough for the dock's
+ * header, in the language on screen (Intl compact notation, with a plain space instead of its NBSP).
+ */
 export function formatTokens(n: number): string {
-  const one = (v: number) => formatNumber(v, { maximumFractionDigits: v < 10 ? 1 : 0 });
-  if (n >= 1_000_000) return `${one(n / 1_000_000)} mi`;
-  if (n >= 1_000) return `${one(n / 1_000)} mil`;
-  return String(Math.round(n));
+  if (n < 1_000) return String(Math.round(n));
+  return formatNumber(n, { notation: 'compact' }).replace(/\u00a0/g, ' ');
 }
 
 /** 0.034 → "3%", 0.004 → "<1%" (a fresh session is never "0%" of a million-token window). */
@@ -43,27 +45,30 @@ export function formatShare(share: number): string {
 export function contextTitle(tokens: number, window: number | null): string {
   const exact = (v: number) => formatNumber(v);
   const share = contextShare(tokens, window);
-  const base = window === null ? `Contexto da conversa: ${exact(tokens)} tokens` : `Contexto da conversa: ${exact(tokens)} de ${exact(window)} tokens (${formatShare(share!)})`;
-  return contextLevel(share) === 'ok' ? base : `${base}. Compacte a conversa para liberar espaço.`;
+  const base =
+    window === null
+      ? i18n.t('Contexto da conversa: {{tokens}} tokens', { tokens: exact(tokens) })
+      : i18n.t('Contexto da conversa: {{tokens}} de {{window}} tokens ({{share}})', { tokens: exact(tokens), window: exact(window), share: formatShare(share!) });
+  return contextLevel(share) === 'ok' ? base : i18n.t('{{base}}. Compacte a conversa para liberar espaço.', { base });
 }
 
 /** What the status line says once "Compactar" finished. */
 export function compactDoneText(before: number | null, after: number | null): string {
-  if (before !== null && after !== null) return `Conversa compactada: ${formatTokens(before)} → ${formatTokens(after)} tokens`;
-  return 'Conversa compactada';
+  if (before !== null && after !== null) return i18n.t('Conversa compactada: {{before}} → {{after}} tokens', { before: formatTokens(before), after: formatTokens(after) });
+  return i18n.t('Conversa compactada');
 }
 
 /** Why "Compactar" failed, by the code the server sent. */
 export function compactFailedText(code: string | null): string {
   switch (code) {
     case 'MISSING_SESSION':
-      return 'A sessão desta conversa não existe mais na máquina: não há o que compactar';
+      return i18n.t('A sessão desta conversa não existe mais na máquina: não há o que compactar');
     case 'HOST_GONE':
-      return 'A máquina do chat saiu do ar durante a compactação';
+      return i18n.t('A máquina do chat saiu do ar durante a compactação');
     case 'CLI_MISSING':
-      return 'A máquina do chat não tem o Claude Code instalado';
+      return i18n.t('A máquina do chat não tem o Claude Code instalado');
     default:
-      return 'Não foi possível compactar a conversa';
+      return i18n.t('Não foi possível compactar a conversa');
   }
 }
 

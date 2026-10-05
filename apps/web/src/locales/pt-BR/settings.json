@@ -1,0 +1,17 @@
+{
+  "{{count}} arquivos_one": "{{count}} arquivo",
+  "{{count}} arquivos_other": "{{count}} arquivos",
+  "{{count}} arquivos_zero": "{{count}} arquivos",
+  "{{count}} contas_one": "{{count}} conta",
+  "{{count}} contas_other": "{{count}} contas",
+  "{{count}} contas_zero": "{{count}} contas",
+  "{{count}} convites enviados de {{total}}._one": "{{count}} convite enviado de {{total}}.",
+  "{{count}} convites enviados de {{total}}._other": "{{count}} convites enviados de {{total}}.",
+  "{{count}} convites enviados de {{total}}._zero": "{{count}} convites enviados de {{total}}.",
+  "{{count}} máquinas_one": "{{count}} máquina",
+  "{{count}} máquinas_other": "{{count}} máquinas",
+  "{{count}} máquinas_zero": "{{count}} máquinas",
+  "publicado · {{count}} terminais agora_one": "publicado · {{count}} terminal agora",
+  "publicado · {{count}} terminais agora_other": "publicado · {{count}} terminais agora",
+  "publicado · {{count}} terminais agora_zero": "publicado · {{count}} terminais agora"
+}
