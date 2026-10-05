@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { openTab, sendTextToSession, installTabMcp, tabMcpSupported, cfg, getAccountUsage } = vi.hoisted(() => ({
@@ -20,7 +21,7 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import { Scoped } from '../auth/scope.js';
 import { ControlError, type ControlContext } from './context.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { checkPrompt, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
+import { checkPrompt, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
 
 /** A Claude agent's first prompt: the lessons reminder, then the origin reminder (TER-851). */
 const started = (prompt: string) => withOriginReminder(withLessonsReminder(prompt));
@@ -796,7 +797,7 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     const { c } = ctx();
     await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'do the card' }, { cwd: WORKTREE, permission: PERMISSION, setupCommand: 'npm ci && npm run build:packages' });
     expect(openTab).toHaveBeenCalledWith(c, { project_id: 'p1', machine_id: 'm1', name: 'claude · pedrogoiania' }, { cwd: WORKTREE });
-    expect(sendTextToSession.mock.calls[0][2]).toBe(`npm ci && npm run build:packages ; ${launchLine('claude', '/Users/p/.claude-work', started('do the card'), null, null, PERMISSION)}`);
+    expect(sendTextToSession.mock.calls[0][2]).toBe(`eval 'npm ci && npm run build:packages' ; ${launchLine('claude', '/Users/p/.claude-work', started('do the card'), null, null, PERMISSION)}`);
   });
 
   it('with the MCP installed, the setup command and the merged allow list', async () => {
@@ -804,7 +805,7 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     openTab.mockResolvedValue({ tab_id: 'abc', name: 'pedrogoiania', project_id: 'p1', tmux_session: 'termhub-p1-abc', created: true });
     const { c } = ctx();
     await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'do the card' }, { cwd: WORKTREE, permission: PERMISSION, setupCommand: 'pnpm i' });
-    expect(sendTextToSession.mock.calls[0][2]).toBe(`pnpm i ; ${launchLine('claude', '/Users/p/.claude-work', started('do the card'), { tabId: 'abc', url: MCP_URL }, null, PERMISSION)}`);
+    expect(sendTextToSession.mock.calls[0][2]).toBe(`eval 'pnpm i' ; ${launchLine('claude', '/Users/p/.claude-work', started('do the card'), { tabId: 'abc', url: MCP_URL }, null, PERMISSION)}`);
   });
 
   it('a blank setup command adds nothing; promptIsFinal does not append the lessons reminder again', async () => {
@@ -812,6 +813,19 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     const prompt = withLessonsReminder('do the card');
     await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt }, { setupCommand: '  ', promptIsFinal: true });
     expect(sendTextToSession.mock.calls[0][2]).toBe(launchLine('claude', '/Users/p/.claude-work', withOriginReminder(prompt)));
+  });
+
+  it('isolates the setup command: a comment, a trailing ; & \\ or an unbalanced quote never break the CLI line', () => {
+    expect(withSetup('npm ci # x', 'claude x')).toBe("eval 'npm ci # x' ; claude x");
+    expect(withSetup('npm ci;', 'claude x')).toBe("eval 'npm ci;' ; claude x");
+    expect(withSetup('npm ci &', 'claude x')).toBe("eval 'npm ci &' ; claude x");
+    expect(withSetup("FOO='a b' npm ci", 'claude x')).toBe("eval 'FOO='\\''a b'\\'' npm ci' ; claude x");
+    // run for real in bash (as a tab's shell would): the line after the setup always runs, and the setup itself runs as written
+    const run = (setup: string) => execFileSync('bash', ['--norc', '--noprofile', '-c', withSetup(setup, 'echo LAUNCHED')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    for (const setup of ['true # x', 'true;', 'true &', 'true \\', 'echo "unbalanced', "echo 'unbalanced", 'false']) {
+      expect(run(setup), setup).toMatch(/LAUNCHED\n$/);
+    }
+    expect(run("V='a b'; echo \"[$V]\"")).toBe('[a b]\nLAUNCHED\n');
   });
 
   it('refuses a cwd that is not absolute or climbs out, and a multi-line setup, before any tab exists', async () => {

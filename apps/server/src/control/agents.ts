@@ -379,17 +379,19 @@ function checkCwd(cwd: string): string {
 }
 
 /**
- * The line typed into the tab with the setup command first (`<setup> ; <cli line>`): the setup runs, and
- * the agent starts whether it succeeded or not (it sees the output above). The setup command is typed as
- * is, the way the owner would type it — it comes from the owner's own project setup, never from MCP input
- * or a card — while every value of the CLI line went through `shellQuote`. One line only: a newline would
- * submit half of it.
+ * The line typed into the tab with the setup command first (`eval '<setup>' ; <cli line>`): the setup runs,
+ * and the agent starts whether it succeeded or not (it sees the output above). The setup command is the
+ * owner's own (project setup, never MCP input or a card) and runs as the owner wrote it, but isolated: it
+ * travels as one quoted argument to `eval`, so a `# comment`, a trailing `;`, `&` or `\` or an unbalanced
+ * quote in it can never swallow or break the CLI line after it (in bash an unparsable setup just fails and
+ * the agent still starts; dash drops the rest of the line on a syntax error, but nobody runs a tab in dash).
+ * Every value of the CLI line went through `shellQuote`. One line only: a newline would submit half of it.
  */
-function withSetup(setupCommand: string | null | undefined, line: string): string {
+export function withSetup(setupCommand: string | null | undefined, line: string): string {
   const setup = setupCommand?.trim();
   if (!setup) return line;
   if (CONTROL_CHARS.test(setup) || setup.includes('\n')) throw new ControlError('INVALID_SETUP_COMMAND', 'O comando de preparo tem quebras de linha ou caracteres de controle; use uma linha só');
-  return `${setup} ; ${line}`;
+  return `eval ${shellQuote(setup)} ; ${line}`;
 }
 
 /**
