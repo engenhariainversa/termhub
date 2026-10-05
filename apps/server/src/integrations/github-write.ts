@@ -21,7 +21,10 @@ export interface GithubWriteClient {
   createBranch(token: string, repo: string, branch: string, fromSha: string): Promise<'created' | 'exists'>;
   openPull(token: string, repo: string, i: { head: string; base: string; title: string; body: string; draft: boolean }): Promise<PullInfo>;
   findOpenPull(token: string, repo: string, head: string, base: string): Promise<PullInfo | null>;
-  pull(token: string, repo: string, n: number): Promise<{ mergeable: boolean | null; mergeable_state: string; head_sha: string; base_ref: string }>;
+  /** `head_repo`: the repository the head branch lives in (`owner/name`), null when the fork is gone. */
+  pull(token: string, repo: string, n: number): Promise<{ mergeable: boolean | null; mergeable_state: string; head_sha: string; head_ref: string; head_repo: string | null; base_ref: string }>;
+  /** How far `head` is from `base` (a branch or a sha): `behind_by` = commits of the base the head lacks. */
+  compare(token: string, repo: string, base: string, head: string): Promise<{ ahead_by: number; behind_by: number }>;
   files(token: string, repo: string, n: number): Promise<PullFiles>;
   /** 409 (head moved) gives `{ merged: false }`; 405 (not mergeable, already merged, method not allowed) throws `not_mergeable`. */
   merge(token: string, repo: string, n: number, i: { sha: string; title: string; method: 'squash' | 'merge' }): Promise<{ merged: boolean; sha: string | null }>;
@@ -83,8 +86,14 @@ export function createGithubWriteClient(fetchImpl: typeof fetch = fetch): Github
     async pull(token, repo, n) {
       const res = await call(token, 'GET', `/repos/${repo}/pulls/${n}`);
       if (!res.ok) throw writeFailure(res);
-      const p = (await res.json()) as { mergeable: boolean | null; mergeable_state: string; head: { sha: string }; base: { ref: string } };
-      return { mergeable: p.mergeable, mergeable_state: p.mergeable_state, head_sha: p.head.sha, base_ref: p.base.ref };
+      const p = (await res.json()) as { mergeable: boolean | null; mergeable_state: string; head: { sha: string; ref: string; repo: { full_name: string } | null }; base: { ref: string } };
+      return { mergeable: p.mergeable, mergeable_state: p.mergeable_state, head_sha: p.head.sha, head_ref: p.head.ref, head_repo: p.head.repo?.full_name ?? null, base_ref: p.base.ref };
+    },
+    async compare(token, repo, base, head) {
+      const res = await call(token, 'GET', `/repos/${repo}/compare/${enc(base)}...${enc(head)}?per_page=1`);
+      if (!res.ok) throw writeFailure(res);
+      const c = (await res.json()) as { ahead_by: number; behind_by: number };
+      return { ahead_by: c.ahead_by, behind_by: c.behind_by };
     },
     async files(token, repo, n) {
       const paths: string[] = [];

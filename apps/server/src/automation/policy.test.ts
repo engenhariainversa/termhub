@@ -9,6 +9,13 @@ describe('requiredLevel', () => {
     expect(requiredLevel({ ...base, base: 'epic/TER-1-x', epicBranch: 'epic/TER-1-x', deployWorkflow: 'CI e Deploy' })).toBe('merge'));
   it('into main with a deploy workflow needs deploy', () => expect(requiredLevel({ ...base, deployWorkflow: 'CI e Deploy' })).toBe('deploy'));
   it('into main without a deploy workflow needs merge', () => expect(requiredLevel(base)).toBe('merge'));
+  it('a base that is neither the epic branch nor the base branch is other_base, never allowed', () => {
+    const n = requiredLevel({ ...base, base: 'production' });
+    expect(n).toBe('other_base');
+    expect(allows('release', n)).toBe(false);
+    expect(requiredLevel({ ...base, base: 'epic/y', epicBranch: 'epic/x' })).toBe('other_base');
+    expect(requiredLevel({ ...base, base: 'production', files: ['apps/agent/package.json'], releasePaths: ['apps/agent/**'] })).toBe('other_base');
+  });
   it('a release path anywhere needs release', () =>
     expect(requiredLevel({ ...base, files: ['apps/agent/package.json'], releasePaths: ['apps/agent/package.json'] })).toBe('release'));
   it('a release glob matches nested files', () =>

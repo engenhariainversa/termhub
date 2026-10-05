@@ -90,18 +90,60 @@ interface PullCtx {
   /** the PR's rows (one per card it names), all of automatic cards */
   rows: TaskPullRequest[];
   tasks: Task[];
+  /** the card whose automatic run worked on the PR's head branch */
+  primary: Task;
+  /** the primary card's epic branch, when its epic is automatic */
+  epicBranch: string | null;
+  baseBranch: string;
 }
 
 const now = (deps: MergeDeps) => deps.now?.() ?? new Date();
 const waitOn = (c: PullCtx, wait: MergeWait) => noteMergeWait(c.tasks.map((t) => t.id), wait, now(c.deps));
 
 /**
+ * Whether termhub may merge this PR at all, from its rows: every card it names is automatic, its head branch
+ * is the branch an automatic run of one of them worked on (that card is the primary), and its base is that
+ * card's epic branch or the project's base branch. A PR anyone else opened that only mentions a card, or one
+ * into another branch, is ignored: no merge and no card. Null when it is not a candidate.
+ */
+async function candidateOf(
+  deps: MergeDeps,
+  base: Omit<PullCtx, 'rows' | 'tasks' | 'primary' | 'epicBranch' | 'baseBranch'>,
+  rows: TaskPullRequest[],
+): Promise<PullCtx | null> {
+  const { repos } = deps;
+  const row = rows[0];
+  if (!row?.base_ref) return null;
+  const found = await Promise.all(rows.map((r) => repos.tasks.findById(r.task_id)));
+  // a PR that names a card a person works on is merged by a person
+  if (found.some((task) => !task || !task.auto)) return null;
+  const tasks = found as Task[];
+  let primary: Task | undefined;
+  for (const task of tasks) {
+    if ((await repos.automationRuns.branchesOfTask(task.id)).includes(row.head_ref)) {
+      primary = task;
+      break;
+    }
+  }
+  if (!primary) return null;
+  const epic = primary.epic_id ? await repos.tasks.findById(primary.epic_id) : undefined;
+  const { epicBranch } = targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, base.setup);
+  const baseBranch = base.setup.repo?.base_branch ?? 'main';
+  if (row.base_ref !== baseBranch && row.base_ref !== epicBranch) return null;
+  return { ...base, rows, tasks, primary, epicBranch, baseBranch };
+}
+
+/** GitHub's own view of the PR still matches the candidate: same head branch, from this repository (no fork), same base. */
+const sameTarget = (c: PullCtx, row: TaskPullRequest, pull: { head_ref: string; head_repo: string | null; base_ref: string }) =>
+  pull.head_repo === c.repo && pull.head_ref === row.head_ref && pull.base_ref === row.base_ref;
+
+/**
  * The merge executor (spec §10.1, D5–D7, spike R1/R2), run after each CI sync of a project with automation on.
- * For each open PR whose cards are all automatic and whose CI is green: merges it (squash, the PR's own
- * title) when the project's level allows what its files need, or asks the owner once per PR head with an
- * irreversible card. Store paths, and a file list GitHub could not give whole, always ask. A PR in conflict
- * gets one fixer run per head, up to `fix_attempts`. Red CI is not handled here. Nothing happens while the
- * instance drains, the project is paused, or its automation is off.
+ * For each open PR of an automatic card's own branch (`candidateOf`) whose CI is green: merges it (squash,
+ * the PR's own title) when the project's level allows what its files need, or asks the owner once per PR head
+ * with an irreversible card. Store paths, and a file list GitHub could not give whole, always ask. A PR in
+ * conflict gets one fixer run per head, up to `fix_attempts`. Red CI is not handled here. Nothing happens
+ * while the instance drains, the project is paused, or its automation is off.
  */
 export async function runMergeExecutor(deps: MergeDeps, projectId: string): Promise<void> {
   const { repos } = deps;
@@ -122,10 +164,8 @@ export async function runMergeExecutor(deps: MergeDeps, projectId: string): Prom
 
   for (const rows of byNumber.values()) {
     if (deps.lifecycle.draining) return;
-    const found = await Promise.all(rows.map((r) => repos.tasks.findById(r.task_id)));
-    // a PR that names a card a person works on is merged by a person
-    if (found.length === 0 || found.some((task) => !task || !task.auto)) continue;
-    const c: PullCtx = { deps, project: owned, setup, ...access, rows, tasks: found as Task[] };
+    const c = await candidateOf(deps, { deps, project: owned, setup, ...access }, rows);
+    if (!c) continue;
     try {
       await handlePull(c);
     } catch (e) {
@@ -158,6 +198,7 @@ async function handlePull(c: PullCtx): Promise<void> {
   if (!(await checksGreen(c, row, seen, seenKey))) return;
 
   // a card already asked for this head: act on an approval a missed hook left behind, else wait for the person
+  // (a conflict that appears while the card waits is left to the person, who sees it on GitHub)
   const asked = await repos.chatActions.findLatestByKeyInProject(c.project.owner_id, c.project.id, mergeKey(repo, row.number, row.head_sha));
   if (asked) {
     if (asked.status === 'approved') await mergeApproved(deps, asked.id);
@@ -167,37 +208,30 @@ async function handlePull(c: PullCtx): Promise<void> {
 
   const pull = await deps.gh.pull(token, repo, row.number);
   if (pull.head_sha !== row.head_sha) return; // the head moved since CI: the next sync reads the new one
+  if (!sameTarget(c, row, pull)) return;
   if (pull.mergeable === null) return; // GitHub is still computing it
   if (pull.mergeable === false || pull.mergeable_state === 'dirty') return void (await onConflict(c, row, pull.base_ref));
 
-  const baseBranch = setup.repo?.base_branch ?? 'main';
-  if (pull.base_ref === baseBranch) {
-    // R1: never merge code that was not tested together with the base
-    if (pull.mergeable_state === 'behind') {
-      await deps.gh.updateBranch(token, repo, row.number, pull.head_sha);
-      seen.delete(seenKey);
-      return waitOn(c, 'merge_updating');
-    }
-    const base = await baseState(c, baseBranch);
-    if (base !== 'green') return waitOn(c, base === 'red' ? 'merge_base_red' : 'merge_base_pending');
+  const delivery = await deliveryGate(c, row, pull);
+  if (delivery !== 'ok') {
+    if (delivery === 'merge_updating') seen.delete(seenKey);
+    return waitOn(c, delivery);
   }
 
   const files = await deps.gh.files(token, repo, row.number);
   const paths = files.paths.map(normalizePath).filter((p) => p.length > 0);
   // an empty or cut list cannot prove the PR stays within the level: a person decides
   const complete = files.complete && paths.length > 0;
-  const epic = c.tasks[0]!.epic_id ? await repos.tasks.findById(c.tasks[0]!.epic_id) : undefined;
-  const { epicBranch } = targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup);
   const needed = requiredLevel({
     base: pull.base_ref,
-    epicBranch,
-    baseBranch,
+    epicBranch: c.epicBranch,
+    baseBranch: c.baseBranch,
     deployWorkflow: setup.repo?.deploy_workflow ?? null,
     files: paths,
     releasePaths: setup.automation.release_paths,
     storePaths: setup.automation.store_paths,
   });
-  await repos.taskPullRequests.setChangedLevel(c.project.id, repo, row.number, needed);
+  await repos.taskPullRequests.setChangedLevel(c.project.id, repo, row.number, complete ? needed : 'files_incomplete');
 
   if (complete && allows(setup.automation.autonomy, needed)) {
     // D24 / Review Focus 4: the last check before the merge
@@ -210,11 +244,31 @@ async function handlePull(c: PullCtx): Promise<void> {
 }
 
 /**
+ * R1 for a PR into the base branch, on both paths: the head contains the base's current head (compared
+ * explicitly: GitHub's `behind` state only shows under strict branch protection), else the branch is updated
+ * and the PR waits for CI on the new head; and the base head is green with nothing being delivered.
+ * `ok` for a PR into the epic branch (epic branches deploy nothing).
+ */
+async function deliveryGate(c: PullCtx, row: TaskPullRequest, pull: { head_sha: string; base_ref: string; mergeable_state: string }): Promise<'ok' | MergeWait> {
+  if (pull.base_ref !== c.baseBranch) return 'ok';
+  const { behind_by } = await c.deps.gh.compare(c.token, c.repo, c.baseBranch, pull.head_sha);
+  if (behind_by > 0 || pull.mergeable_state === 'behind') {
+    const updated = await c.deps.gh.updateBranch(c.token, c.repo, row.number, pull.head_sha);
+    if (!updated) (c.deps.log ?? noopLog).warn({ projectId: c.project.id, pr: row.number }, 'automation: update-branch refused (head moved or nothing to do)');
+    return 'merge_updating';
+  }
+  const base = await baseState(c, c.baseBranch);
+  return base === 'green' ? 'ok' : base === 'red' ? 'merge_base_red' : 'merge_base_pending';
+}
+
+/**
  * Whether the PR's checks are green enough to merge (spike R1). With `required_checks`, every listed
  * workflow has a successful run on the head. Without, every run passed (`ci_state`, which needs at least one)
  * on two consecutive passes, so a workflow GitHub had not queued yet on the first one gets its chance.
+ * `seen` null: one reading is enough (an approved card, whose head was already read green when it was asked).
  */
-async function checksGreen(c: PullCtx, row: TaskPullRequest, seen: Map<string, string>, seenKey: string): Promise<boolean> {
+async function checksGreen(c: PullCtx, row: TaskPullRequest, seen: Map<string, string> | null, seenKey: string): Promise<boolean> {
+  if (row.ci_state === 'failed' || row.ci_state === 'none') return false;
   const required = c.setup.automation.required_checks;
   if (required.length > 0) {
     const runs = latestPerWorkflow(await c.deps.ci.listRuns(c.token, c.repo, row.head_sha));
@@ -223,10 +277,10 @@ async function checksGreen(c: PullCtx, row: TaskPullRequest, seen: Map<string, s
     return ok;
   }
   if (row.ci_state !== 'passed') {
-    seen.delete(seenKey);
+    seen?.delete(seenKey);
     return false;
   }
-  if (seen.get(seenKey) === row.head_sha) return true;
+  if (!seen || seen.get(seenKey) === row.head_sha) return true;
   seen.set(seenKey, row.head_sha);
   waitOn(c, 'merge_checks_pending');
   return false;
@@ -253,7 +307,7 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   const { deps } = c;
   const { repos } = deps;
   const log = deps.log ?? noopLog;
-  const task = c.tasks[0]!;
+  const task = c.primary;
   const used = await repos.automationRuns.countTriggered(task.id, 'fixer', CONFLICT_CAP);
   if (used >= c.setup.automation.fix_attempts) {
     // the marker takes this head's trigger: the escalation happens once per head, on whichever colour
@@ -347,12 +401,14 @@ async function finish(repos: Repositories, action: ChatAction, ownerId: string, 
 
 /**
  * The person approved an `automation_merge` card (spec D7, F-19): the decision hook of every decision path
- * calls this, and the executor too when it finds an approval a hook never acted on. The row is claimed
- * right before the merge (`claimApproved`), so two approvals, two hooks or both colours merge once. While
- * the instance drains, the project is paused, or (into the base branch) the base is not green or still
- * delivering, the approval is left as it is: the executor acts on it on a later pass. The merge is bound to
- * the head the card was asked for: a PR that moved since is not merged (`HEAD_MOVED`), and one that fell
- * behind the base is updated first (`BEHIND_BASE`), which makes a new head and a new card.
+ * calls this, and the executor too when it finds an approval a hook never acted on. The whole gate runs
+ * again first — the PR is still a candidate on the same head, its checks are explicitly green, and (into
+ * the base) it contains the base's head, the base is green and nothing is being delivered — then the pause
+ * and the drain are checked once more and the row is claimed right before the merge (`claimApproved`), so
+ * two approvals, two hooks or both colours merge once. A gate that only has to wait (checks running, base
+ * pending, paused, draining) leaves the approval as it is, and the executor acts on it on a later pass.
+ * Closed without a merge: `HEAD_MOVED` (the head the card was asked for is gone), `CI_FAILED`, `BEHIND_BASE`
+ * (the branch was updated: a new head and a new card), `NOT_CANDIDATE`, `GITHUB_NO_ACCESS`.
  */
 export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<void> {
   const { repos } = deps;
@@ -366,7 +422,8 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
   if (!project?.owner_id) return;
   const owned = project as Project & { owner_id: string };
   const setup = (await repos.projectSetup.get(project.id)).data;
-  if (!setup.automation.enabled || (await isPaused(repos, owned.owner_id, project.id))) return;
+  const halted = async () => deps.lifecycle.draining || !setup.automation.enabled || (await isPaused(repos, owned.owner_id, project.id));
+  if (await halted()) return;
   // the card is the owner's: it was asked in one of the owner's conversations of this project
   const conversation = await repos.chat.findByIdForUser(action.conversation_id, owned.owner_id);
   if (!conversation || conversation.project_id !== project.id) return;
@@ -378,24 +435,29 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
   const access = await githubAccess(repos, owned, setup);
   if (!access || access.repo !== args.repo) return void (await close('GITHUB_NO_ACCESS'));
   const rows = (await repos.taskPullRequests.listWatched(project.id, { repo: args.repo, includeMerged: false }, now(deps))).filter((r) => r.number === args.number && r.state === 'open');
-  const tasks = (await Promise.all(rows.map((r) => repos.tasks.findById(r.task_id)))).filter((task): task is Task => !!task);
   const row = rows[0];
   if (!row || row.head_sha !== args.head_sha) return void (await close('HEAD_MOVED'));
-  const c: PullCtx = { deps, project: owned, setup, ...access, rows, tasks };
+  const c = await candidateOf(deps, { deps, project: owned, setup, ...access }, rows);
+  if (!c) return void (await close('NOT_CANDIDATE'));
+
+  // R1 again, on the head the card was asked for: the CI may have been re-run since
+  if (row.ci_state === 'failed') return void (await close('CI_FAILED'));
+  if (!(await checksGreen(c, row, null, ''))) return;
   const pull = await deps.gh.pull(access.token, args.repo, args.number);
   if (pull.head_sha !== args.head_sha) return void (await close('HEAD_MOVED'));
-  const baseBranch = setup.repo?.base_branch ?? 'main';
-  if (pull.base_ref === baseBranch) {
-    // R1 holds for an approved merge too: tested with the base, and one delivery at a time
-    if (pull.mergeable_state === 'behind') {
-      await deps.gh.updateBranch(access.token, args.repo, args.number, pull.head_sha).catch((e: unknown) => {
-        if (e instanceof GithubCiError && e.kind === 'forbidden') noWrite(c);
-      });
-      return void (await close('BEHIND_BASE'));
-    }
-    const base = await baseState(c, baseBranch);
-    if (base !== 'green') return waitOn(c, base === 'red' ? 'merge_base_red' : 'merge_base_pending');
+  if (!sameTarget(c, row, pull)) return void (await close('NOT_CANDIDATE'));
+  let delivery: 'ok' | MergeWait;
+  try {
+    delivery = await deliveryGate(c, row, pull);
+  } catch (e) {
+    if (e instanceof GithubCiError && e.kind === 'forbidden') return noWrite(c);
+    throw e;
   }
+  if (delivery === 'merge_updating') return void (await close('BEHIND_BASE'));
+  if (delivery !== 'ok') return waitOn(c, delivery);
+
+  // D24 / Review Focus 4: the last check before the merge, after every GitHub read
+  if (await halted()) return;
   if (!(await repos.chatActions.claimApproved(action.id))) return;
 
   const started = Date.now();

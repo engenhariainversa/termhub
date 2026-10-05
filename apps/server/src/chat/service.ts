@@ -712,6 +712,32 @@ export class ChatService {
   }
 
   /**
+   * Registers what the server does when a person approves a card of `tool` that the server asked itself
+   * (agentic board F-19: `automation_merge` → `mergeApproved`). Such cards are born injected, so the
+   * concierge never hears of them: this hook is their only effect.
+   */
+  onApproved(tool: string, fn: (action: ChatAction) => Promise<void>): void {
+    this.approvedHooks.set(tool, fn);
+  }
+
+  /**
+   * The decision hook, called by every path that decides cards — the web's single and batch routes, the
+   * phone's single and batch routes — right after the rows are decided. Approved rows with a hook run it
+   * in the background; a failure is logged by code and never turns the decision into an error (the hook
+   * owner retries on its own: the merge executor picks an approved card up on its next pass).
+   */
+  afterDecisions(actions: ChatAction[]): void {
+    for (const action of actions) {
+      if (action.status !== 'approved') continue;
+      const hook = this.approvedHooks.get(action.tool);
+      if (!hook) continue;
+      void Promise.resolve()
+        .then(() => hook(action))
+        .catch((err: unknown) => console.error('chat: approval hook failed', { action_id: action.id, tool: action.tool, error: failureLabel(err) }));
+    }
+  }
+
+  /**
    * Answers the user's decision on a gated action by re-injecting it into the same CLI session, so
    * the model re-issues the call (an approval, which Task 4's `allow` branch then executes) or drops
    * it (a denial). This is exactly one message: `decide()` already made sure the caller cannot reach
@@ -740,32 +766,6 @@ export class ChatService {
    * paths — inject into the live run, inject now, or inject once the lock frees up — all go through the
    * same `markInjectedMany` marking in `beforeRun`, and cannot diverge (fix round 2, point 4).
    */
-  /**
-   * Registers what the server does when a person approves a card of `tool` that the server asked itself
-   * (agentic board F-19: `automation_merge` → `mergeApproved`). Such cards are born injected, so the
-   * concierge never hears of them: this hook is their only effect.
-   */
-  onApproved(tool: string, fn: (action: ChatAction) => Promise<void>): void {
-    this.approvedHooks.set(tool, fn);
-  }
-
-  /**
-   * The decision hook, called by every path that decides cards — the web's single and batch routes, the
-   * phone's single and batch routes — right after the rows are decided. Approved rows with a hook run it
-   * in the background; a failure is logged by code and never turns the decision into an error (the hook
-   * owner retries on its own: the merge executor picks an approved card up on its next pass).
-   */
-  afterDecisions(actions: ChatAction[]): void {
-    for (const action of actions) {
-      if (action.status !== 'approved') continue;
-      const hook = this.approvedHooks.get(action.tool);
-      if (!hook) continue;
-      void Promise.resolve()
-        .then(() => hook(action))
-        .catch((err: unknown) => console.error('chat: approval hook failed', { action_id: action.id, tool: action.tool, error: failureLabel(err) }));
-    }
-  }
-
   async startAfterDecision(user: User, action: ChatAction): Promise<StartedRun | undefined> {
     const conversation = await this.deps.repos.chat.findByIdForUser(action.conversation_id, user.id);
     // `decide` already proved the row is this user's; a conversation archived since then has nobody

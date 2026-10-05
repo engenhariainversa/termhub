@@ -23,10 +23,13 @@ const EPIC2 = { id: 'e2', ref: 'TER-2', title: 'Geral', auto: false, type: 'epic
 
 const run = (name: string, status: string, conclusion: string | null, id = 1): WorkflowRun => ({ id, name, path: `.github/workflows/${name}.yml`, status, conclusion, html_url: `r/${name}`, created_at: '2026-10-05T12:00:00Z' });
 
+const BRANCH: Record<string, string> = { c1: 'TER-5-arrastar-cards', c2: 'TER-6-card-avulso', c3: 'TER-7-card-manual' };
+
 function pr(over: Partial<TaskPullRequest> = {}): TaskPullRequest {
+  const task = over.task_id ?? 'c1';
   return {
     id: 'pr1', project_id: 'p1', task_id: 'c1', repo: 'acme/app', number: 7, url: 'https://github.com/acme/app/pull/7', title: 'Board: drag cards',
-    head_ref: 'TER-5-arrastar-cards', head_sha: 'h1', base_ref: EPIC_BRANCH, state: 'open', draft: false, merged_at: null, merge_commit_sha: null,
+    head_ref: BRANCH[task]!, head_sha: 'h1', base_ref: EPIC_BRANCH, state: 'open', draft: false, merged_at: null, merge_commit_sha: null,
     ci_state: 'passed', ci_summary: { total: 1, passed: 1, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, changed_level: null, synced_at: '',
     ...over,
   };
@@ -95,6 +98,8 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
       }),
     },
     automationRuns: {
+      // the branches the cards' automatic runs worked on
+      branchesOfTask: vi.fn(async (taskId: string) => (taskId === 'c3' ? [] : [BRANCH[taskId]!])),
       countTriggered: vi.fn(async (taskId: string, role: string, except: string) => (o.triggered ?? 0) + state.runs.filter((r) => r.task_id === taskId && r.role === role && r.trigger_sha && r.waiting_reason !== except).length),
       claim: vi.fn(async (i: { task_id: string; role: string; trigger_sha?: string }) => {
         if (state.runs.some((r) => r.task_id === i.task_id && r.role === i.role && r.trigger_sha === i.trigger_sha)) return null;
@@ -109,8 +114,19 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
     },
   } as unknown as Repositories;
 
+  // GitHub's view of the first PR: the run's branch, from this repository, into the row's base
+  const pullFor = (over: Record<string, unknown> = {}) => ({
+    mergeable: true as boolean | null,
+    mergeable_state: 'clean',
+    head_sha: 'h1',
+    head_ref: state.prs[0]?.head_ref ?? BRANCH.c1!,
+    head_repo: 'acme/app' as string | null,
+    base_ref: state.prs[0]?.base_ref ?? EPIC_BRANCH,
+    ...over,
+  });
   const gh = {
-    pull: vi.fn(async () => ({ mergeable: true as boolean | null, mergeable_state: 'clean', head_sha: 'h1', base_ref: state.prs[0]?.base_ref ?? EPIC_BRANCH })),
+    pull: vi.fn(async () => pullFor()),
+    compare: vi.fn(async () => ({ ahead_by: 1, behind_by: 0 })),
     files: vi.fn(async () => ({ paths: ['apps/web/src/Board.tsx'], complete: true })),
     merge: vi.fn(async () => ({ merged: true, sha: 'm1' })),
     updateBranch: vi.fn(async () => true),
@@ -125,7 +141,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
   // one green reading already seen for h1: the merge happens on this pass (the two-readings rule has its own test)
   const seen = new Map([['p1:acme/app#7', 'h1']]);
   const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, seen, now: () => new Date('2026-10-05T12:00:00Z') };
-  return { state, repos, gh, ci, startFixer, lifecycle, seen, deps };
+  return { state, repos, gh, ci, startFixer, lifecycle, seen, deps, pullFor };
 }
 
 const approve = (a: ChatAction) => {
@@ -199,7 +215,7 @@ describe('runMergeExecutor', () => {
     await runMergeExecutor(w.deps, 'p1');
     expect(w.gh.merge).not.toHaveBeenCalled();
     w.state.prs = [pr({ head_sha: 'h2' })];
-    w.gh.pull.mockResolvedValue({ mergeable: true, mergeable_state: 'clean', head_sha: 'h2', base_ref: EPIC_BRANCH });
+    w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: true, mergeable_state: 'clean', head_sha: 'h2', base_ref: EPIC_BRANCH }));
     await runMergeExecutor(w.deps, 'p1');
     expect(w.gh.merge).not.toHaveBeenCalled();
     await runMergeExecutor(w.deps, 'p1');
@@ -238,19 +254,67 @@ describe('runMergeExecutor', () => {
     }
   });
 
-  it('a PR into the base that is behind it is updated and waits for CI again', async () => {
+  it('a PR into the base that is behind it (compared explicitly) is updated and waits for CI again', async () => {
     const w = world({ setup: setupWith({ autonomy: 'deploy' }), prs: [pr({ task_id: 'c2', base_ref: 'main' })] });
-    w.gh.pull.mockResolvedValue({ mergeable: true, mergeable_state: 'behind', head_sha: 'h1', base_ref: 'main' });
+    // GitHub says `clean` (no strict branch protection): only the explicit compare sees the PR is behind
+    w.gh.compare.mockResolvedValue({ ahead_by: 1, behind_by: 2 });
     await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.compare).toHaveBeenCalledWith('tok', 'acme/app', 'main', 'h1');
     expect(w.gh.updateBranch).toHaveBeenCalledWith('tok', 'acme/app', 7, 'h1');
     expect(w.gh.merge).not.toHaveBeenCalled();
     expect(w.seen.has('p1:acme/app#7')).toBe(false);
   });
 
+  it('a PR into the epic branch is not compared nor throttled (epic branches deploy nothing)', async () => {
+    const w = world();
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.compare).not.toHaveBeenCalled();
+    expect(w.gh.branchSha).not.toHaveBeenCalled();
+    expect(w.gh.merge).toHaveBeenCalledTimes(1);
+  });
+
+  // Only the card's own automatic branch, from this repository, into its epic branch or the base branch.
+  it('a PR from a fork is ignored: no merge, no card', async () => {
+    const w = world();
+    w.gh.pull.mockResolvedValue(w.pullFor({ head_repo: 'mallory/app' }));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(w.gh.files).not.toHaveBeenCalled();
+    expect(w.state.actions).toHaveLength(0);
+  });
+
+  it('a collaborator PR that only names the card (another head branch) is ignored', async () => {
+    const w = world({ prs: [pr({ head_ref: 'feature/naming-TER-5' })] });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.pull).not.toHaveBeenCalled();
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(w.state.actions).toHaveLength(0);
+  });
+
+  it('a PR into another base (neither the epic branch nor the base branch) is ignored, whatever the level', async () => {
+    for (const base_ref of ['production', 'epic/TER-9-other', null]) {
+      const w = world({ setup: setupWith({ autonomy: 'release' }), prs: [pr({ base_ref })] });
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.pull).not.toHaveBeenCalled();
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      expect(w.state.actions).toHaveLength(0);
+    }
+  });
+
+  it('GitHub reporting another head branch or base than the synced row is ignored', async () => {
+    for (const over of [{ head_ref: 'other' }, { base_ref: 'main' }]) {
+      const w = world();
+      w.gh.pull.mockResolvedValue(w.pullFor(over));
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      expect(w.state.actions).toHaveLength(0);
+    }
+  });
+
   it('a head that moved since CI, or a mergeability GitHub has not computed, waits for the next sync', async () => {
     for (const p of [{ mergeable: true, mergeable_state: 'clean', head_sha: 'h9', base_ref: EPIC_BRANCH }, { mergeable: null, mergeable_state: 'unknown', head_sha: 'h1', base_ref: EPIC_BRANCH }]) {
       const w = world();
-      w.gh.pull.mockResolvedValue(p);
+      w.gh.pull.mockResolvedValue(w.pullFor(p));
       await runMergeExecutor(w.deps, 'p1');
       expect(w.gh.merge).not.toHaveBeenCalled();
       expect(w.startFixer).not.toHaveBeenCalled();
@@ -259,7 +323,7 @@ describe('runMergeExecutor', () => {
 
   it('not mergeable: a fixer run keyed by the PR head, with the conflict prompt; no merge', async () => {
     const w = world();
-    w.gh.pull.mockResolvedValue({ mergeable: false, mergeable_state: 'dirty', head_sha: 'h1', base_ref: EPIC_BRANCH });
+    w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: false, mergeable_state: 'dirty', head_sha: 'h1', base_ref: EPIC_BRANCH }));
     await runMergeExecutor(w.deps, 'p1');
     expect(w.startFixer).toHaveBeenCalledTimes(1);
     expect(w.startFixer).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1', taskId: 'c1', role: 'fixer', triggerSha: 'h1', branch: 'TER-5-arrastar-cards', base: EPIC_BRANCH }));
@@ -270,7 +334,7 @@ describe('runMergeExecutor', () => {
 
   it('after fix_attempts conflict fixers: no new fixer, one escalation per head', async () => {
     const w = world({ triggered: 3 });
-    w.gh.pull.mockResolvedValue({ mergeable: false, mergeable_state: 'dirty', head_sha: 'h1', base_ref: EPIC_BRANCH });
+    w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: false, mergeable_state: 'dirty', head_sha: 'h1', base_ref: EPIC_BRANCH }));
     await runMergeExecutor(w.deps, 'p1');
     await runMergeExecutor(w.deps, 'p1');
     expect(w.startFixer).not.toHaveBeenCalled();
@@ -301,7 +365,8 @@ describe('runMergeExecutor', () => {
 
   it('a read-only token on update-branch says the same', async () => {
     const w = world({ setup: setupWith({ autonomy: 'deploy' }), prs: [pr({ task_id: 'c2', base_ref: 'main' })] });
-    w.gh.pull.mockResolvedValue({ mergeable: true, mergeable_state: 'behind', head_sha: 'h1', base_ref: 'main' });
+    // GitHub says `clean` (no strict branch protection): only the explicit compare sees the PR is behind
+    w.gh.compare.mockResolvedValue({ ahead_by: 1, behind_by: 2 });
     w.gh.updateBranch.mockRejectedValue(new GithubCiError('forbidden', 403));
     await runMergeExecutor(w.deps, 'p1');
     expect(mergeWaitOf('c2', new Date('2026-10-05T12:00:00Z'))).toBe('merge_no_write');
@@ -404,7 +469,7 @@ describe('mergeApproved', () => {
   it('a PR whose head moved since the card is not merged: the card fails with HEAD_MOVED', async () => {
     const { w, action } = await asked();
     approve(action);
-    w.gh.pull.mockResolvedValue({ mergeable: true, mergeable_state: 'clean', head_sha: 'h2', base_ref: 'main' });
+    w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: true, mergeable_state: 'clean', head_sha: 'h2', base_ref: 'main' }));
     await mergeApproved(w.deps, action.id);
     expect(w.gh.merge).not.toHaveBeenCalled();
     expect(action).toMatchObject({ status: 'failed', error_code: 'HEAD_MOVED' });
@@ -426,11 +491,68 @@ describe('mergeApproved', () => {
   it('an approved PR that fell behind the base is updated, not merged: the card closes with BEHIND_BASE', async () => {
     const { w, action } = await asked();
     approve(action);
-    w.gh.pull.mockResolvedValue({ mergeable: true, mergeable_state: 'behind', head_sha: 'h1', base_ref: 'main' });
+    // GitHub says `clean` (no strict branch protection): only the explicit compare sees the PR is behind
+    w.gh.compare.mockResolvedValue({ ahead_by: 1, behind_by: 2 });
     await mergeApproved(w.deps, action.id);
     expect(w.gh.updateBranch).toHaveBeenCalledWith('tok', 'acme/app', 7, 'h1');
     expect(w.gh.merge).not.toHaveBeenCalled();
     expect(action).toMatchObject({ status: 'failed', error_code: 'BEHIND_BASE' });
+  });
+
+  it('the CI turned red on the same head after the card: the approval closes with CI_FAILED, no merge', async () => {
+    const { w, action } = await asked();
+    approve(action);
+    w.state.prs = [pr({ task_id: 'c2', base_ref: 'main', ci_state: 'failed' })];
+    await mergeApproved(w.deps, action.id);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(action).toMatchObject({ status: 'failed', error_code: 'CI_FAILED' });
+  });
+
+  it('CI re-running, or a required check not green yet: the approval waits, nothing merged', async () => {
+    const { w, action } = await asked();
+    approve(action);
+    w.state.prs = [pr({ task_id: 'c2', base_ref: 'main', ci_state: 'running' })];
+    await mergeApproved(w.deps, action.id);
+    w.state.setup = setupWith({ autonomy: 'merge', required_checks: ['e2e'] }, { deploy_workflow: 'deploy.yml' });
+    w.state.prs = [pr({ task_id: 'c2', base_ref: 'main' })];
+    w.ci.listRuns.mockResolvedValue([run('e2e', 'completed', 'failure')]);
+    await mergeApproved(w.deps, action.id);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(action.status).toBe('approved');
+  });
+
+  it('a pause landing between the GitHub reads and the merge stops it; the approval stays', async () => {
+    const { w, action } = await asked();
+    approve(action);
+    vi.mocked(w.repos.automationPauses.state)
+      .mockResolvedValueOnce({ user: null, project: null })
+      .mockResolvedValue({ user: null, project: new Date() });
+    await mergeApproved(w.deps, action.id);
+    expect(w.gh.pull).toHaveBeenCalled();
+    expect(w.ci.listRuns).toHaveBeenCalled();
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(action.status).toBe('approved');
+  });
+
+  it('draining that starts during the GitHub reads stops the merge too', async () => {
+    const { w, action } = await asked();
+    approve(action);
+    w.gh.branchSha.mockImplementation(async () => {
+      w.lifecycle.draining = true;
+      return 'base1';
+    });
+    await mergeApproved(w.deps, action.id);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(action.status).toBe('approved');
+  });
+
+  it('an approved PR that turned out to come from a fork is never merged', async () => {
+    const { w, action } = await asked();
+    approve(action);
+    w.gh.pull.mockResolvedValue(w.pullFor({ head_repo: 'mallory/app' }));
+    await mergeApproved(w.deps, action.id);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(action).toMatchObject({ status: 'failed', error_code: 'NOT_CANDIDATE' });
   });
 
   it('GitHub refusing the approved merge (405) fails the card and records no merge', async () => {

@@ -2,12 +2,15 @@ import { AUTONOMY_LEVELS, type AutonomyLevel, type ProjectAutomation } from '../
 
 export { AUTONOMY_LEVELS, type AutonomyLevel };
 
-/** What a pull request needs to be merged by termhub alone. `store` (app store builds) is never allowed. */
-export type NeededLevel = AutonomyLevel | 'store';
+/**
+ * What a pull request needs to be merged by termhub alone. `store` (app store builds) and `other_base` (a
+ * base that is neither the epic branch nor the project's base branch) are never allowed.
+ */
+export type NeededLevel = AutonomyLevel | 'store' | 'other_base';
 
 /** Levels are cumulative: a project at `deploy` may also merge, and one at `merge` may also open PRs. */
 export function allows(level: AutonomyLevel, needed: NeededLevel): boolean {
-  if (needed === 'store') return false;
+  if (needed === 'store' || needed === 'other_base') return false;
   return AUTONOMY_LEVELS.indexOf(level) >= AUTONOMY_LEVELS.indexOf(needed);
 }
 
@@ -34,8 +37,9 @@ const matchesAny = (patterns: string[], files: string[]) => files.some((f) => pa
 
 /**
  * The lowest autonomy level at which a PR may be merged by termhub. A store path wins over everything;
- * a release path needs `release`; main with a deploy workflow needs `deploy`; any other merge (an epic
- * branch, or main with nothing deploying) needs `merge`.
+ * a release path needs `release`; main with a deploy workflow needs `deploy`; the epic branch, or main with
+ * nothing deploying, needs `merge`. Any other base is `other_base`: never merged by termhub, since what it
+ * deploys is unknown.
  */
 export function requiredLevel(i: {
   base: string;
@@ -47,9 +51,11 @@ export function requiredLevel(i: {
   storePaths: string[];
 }): NeededLevel {
   if (matchesAny(i.storePaths, i.files)) return 'store';
+  const toEpic = i.epicBranch !== null && i.base === i.epicBranch;
+  if (!toEpic && i.base !== i.baseBranch) return 'other_base';
   if (matchesAny(i.releasePaths, i.files)) return 'release';
-  if (i.epicBranch !== null && i.base === i.epicBranch) return 'merge';
-  if (i.base === i.baseBranch && i.deployWorkflow) return 'deploy';
+  if (toEpic) return 'merge';
+  if (i.deployWorkflow) return 'deploy';
   return 'merge';
 }
 

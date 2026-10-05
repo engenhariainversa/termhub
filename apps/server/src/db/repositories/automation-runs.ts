@@ -243,6 +243,12 @@ export class AutomationRunsRepository {
     });
   }
 
+  /** The branches the card's runs worked on: the only PR heads the merge executor merges for it. */
+  async branchesOfTask(taskId: string): Promise<string[]> {
+    const rows = await this.db.automationRun.findMany({ where: { taskId, branch: { not: null } }, distinct: ['branch'], select: { branch: true } });
+    return rows.map((r) => r.branch!).filter((b) => b.length > 0);
+  }
+
   async activeByTab(tabId: string): Promise<AutomationRun | null> {
     const row = await this.db.automationRun.findFirst({ where: { tabId, status: active }, orderBy: { createdAt: 'desc' } });
     return row ? map(row) : null;
