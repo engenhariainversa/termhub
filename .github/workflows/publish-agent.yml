@@ -86,8 +86,8 @@ jobs:
           npm pack -w @termhub/agent --pack-destination /tmp >/dev/null
           tar -xOf /tmp/termhub-agent-*.tgz package/package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const b=JSON.parse(s).bin||{};if(b["termhub-agent"]!=="dist/cli.js"){console.error("bin missing in tarball:",b);process.exit(1)}console.log("bin ok:",b)})'
       # `decide` may have looked before npm showed a version another run had just published: that
-      # version being there already is the outcome we wanted, not a failure. npm holds a CI publish
-      # as "staged" (invisible to `npm view`) until a maintainer approves it with 2FA, and a publish
+      # version being there already is the outcome we wanted, not a failure. npm holds every publish
+      # as "staged" (invisible to `npm view`) while it processes it, usually minutes, and a publish
       # in that window answers "Cannot publish over previously staged version": the same case. Any
       # other error fails.
       - name: Publicar (trusted publishing / OIDC)
