@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useMonitor } from '../lib/monitor';
-import { BASIS_LABEL, ciLabel, epicCiLine, formatEstimate, needsYouAgents, stateLabel, withLiveTab } from '../lib/progress';
+import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, stateLabel, withLiveTab } from '../lib/progress';
 import { relativeTime } from '../lib/time';
+import { i18n, useTranslation } from '../i18n';
 import type { AgentOnCard, CardProgress, EpicProgress, ProgressEstimate, ProgressResponse, ProgressScope, PullRequestBadge } from '../lib/types';
 
 /** Percentages move at subtask pace; tab states come live from the monitor (spec D9). */
@@ -28,15 +29,17 @@ function Bar({ percent, label }: { percent: number; label: string }) {
 }
 
 function EstimateLine({ estimate }: { estimate: ProgressEstimate }) {
+  useTranslation(); // re-render on a language change
   return (
     <span className="text-xs text-zinc-500">
       {formatEstimate(estimate)}
-      {estimate.kind === 'range' && <span title={BASIS_LABEL[estimate.basis]}> · {BASIS_LABEL[estimate.basis]}</span>}
+      {estimate.kind === 'range' && <span title={basisLabel(estimate.basis)}> · {basisLabel(estimate.basis)}</span>}
     </span>
   );
 }
 
 function AgentChip({ agent, projectId }: { agent: AgentOnCard; projectId: string }) {
+  const { t } = useTranslation();
   const since = agent.state_at ? ` · ${relativeTime(agent.state_at)}` : '';
   return (
     <Link
@@ -51,7 +54,7 @@ function AgentChip({ agent, projectId }: { agent: AgentOnCard; projectId: string
         {since}
       </span>
       {agent.subtask_ref && <span className="text-zinc-500">{agent.subtask_ref}</span>}
-      {agent.rate_limited && <span className="text-red-600">limite de uso</span>}
+      {agent.rate_limited && <span className="text-red-600">{t('limite de uso')}</span>}
     </Link>
   );
 }
@@ -59,6 +62,7 @@ function AgentChip({ agent, projectId }: { agent: AgentOnCard; projectId: string
 const CI_TONE: Record<string, string> = { passed: 'text-emerald-600', running: 'text-amber-600', failed: 'text-red-600', none: 'text-zinc-500' };
 
 export function PullRequestBadges({ pulls }: { pulls: PullRequestBadge[] }) {
+  const { t } = useTranslation();
   if (pulls.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-1">
@@ -67,8 +71,8 @@ export function PullRequestBadges({ pulls }: { pulls: PullRequestBadge[] }) {
         return (
           <span key={p.number} className="inline-flex items-center gap-1 text-xs">
             <a href={p.url} target="_blank" rel="noreferrer" className="rounded border border-zinc-300 px-1.5 py-0.5 hover:underline dark:border-zinc-700" title={p.title}>
-              PR #{p.number}
-              {p.draft ? ' · rascunho' : ''}
+              {t('PR #{{number}}', { number: p.number })}
+              {p.draft ? ` · ${t('rascunho')}` : ''}
             </a>
             {p.state === 'merged' && p.deploy_url ? (
               <a href={p.deploy_url} target="_blank" rel="noreferrer" className={tone}>
@@ -85,13 +89,14 @@ export function PullRequestBadges({ pulls }: { pulls: PullRequestBadge[] }) {
 }
 
 function CardRow({ card, projectId }: { card: CardProgress; projectId: string }) {
+  const { t } = useTranslation();
   return (
     <li className="space-y-1 py-2">
       <div className="flex items-baseline gap-2">
         <Link to={`/project/${card.ref}`} className="font-medium hover:underline">
           {card.ref} {card.title}
         </Link>
-        <span className="text-xs text-zinc-500">{card.column_name ?? 'Backlog'}</span>
+        <span className="text-xs text-zinc-500">{card.column_name ?? t('Backlog')}</span>
         <span className="ml-auto text-xs tabular-nums">
           {card.units.done}/{card.units.total} · {card.percent}%
         </span>
@@ -111,6 +116,7 @@ function CardRow({ card, projectId }: { card: CardProgress; projectId: string })
 }
 
 function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string }) {
+  const { t } = useTranslation();
   return (
     <section className="space-y-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       <header className="flex items-baseline gap-2">
@@ -122,13 +128,17 @@ function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string 
       <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
         <span>
           {epic.units.done}/{epic.units.total}
-          {epic.units.backlog_total > 0 ? ` · backlog: ${epic.units.backlog_total}` : ''}
+          {epic.units.backlog_total > 0 ? ` · ${t('backlog: {{n}}', { n: epic.units.backlog_total })}` : ''}
         </span>
         <EstimateLine estimate={epic.estimate} />
-        {epic.cards_without_estimate > 0 && <span>{epic.cards_without_estimate} cards sem estimativa</span>}
+        {epic.cards_without_estimate > 0 && <span>{t('{{count}} cards sem estimativa', { count: epic.cards_without_estimate })}</span>}
         {epic.agents && (
           <span>
-            {epic.agents.working} trabalhando · {epic.agents.needs_you} esperando você · {epic.agents.idle} parados
+            {t('{{working}} trabalhando · {{waiting}} esperando você · {{idle}} parados', {
+              working: epic.agents.working,
+              waiting: epic.agents.needs_you,
+              idle: epic.agents.idle,
+            })}
           </span>
         )}
         {epic.ci && <span>{epicCiLine(epic.ci)}</span>}
@@ -145,6 +155,7 @@ function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string 
 
 /** Project section "Progresso" (spec 2026-09-26 progress-panel §4.6). Read-only. */
 export function ProgressPanel({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
   const [scope, setScope] = useState<ProgressScope>('active');
   const [data, setData] = useState<ProgressResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +172,7 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
       setError(null);
     } catch {
       if (mine !== latest.current) return;
-      setError('Não foi possível carregar o progresso.');
+      setError(i18n.t('Não foi possível carregar o progresso.'));
     }
   }, [projectId, scope]);
 
@@ -186,11 +197,11 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
   return (
     <div className="h-full space-y-4 overflow-y-auto p-4">
       <div className="flex items-center gap-2">
-        <h1 className="text-lg font-semibold">Progresso</h1>
+        <h1 className="text-lg font-semibold">{t('Progresso')}</h1>
         <div className="ml-auto flex gap-1">
           {(['active', 'all'] as const).map((s) => (
             <button key={s} type="button" aria-pressed={scope === s} onClick={() => setScope(s)} className={`rounded px-2 py-1 text-sm ${scope === s ? 'bg-indigo-600 text-white' : 'border border-zinc-300 dark:border-zinc-700'}`}>
-              {s === 'active' ? 'Só ativos' : 'Todos'}
+              {s === 'active' ? t('Só ativos') : t('Todos')}
             </button>
           ))}
         </div>
@@ -198,7 +209,7 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
       {error && <p className="text-sm text-red-600">{error}</p>}
       {waiting.length > 0 && (
         <div className="rounded-lg border border-amber-500 bg-amber-50 p-3 dark:bg-amber-950">
-          <p className="text-sm font-medium">{waiting.length === 1 ? '1 agente esperando você' : `${waiting.length} agentes esperando você`}</p>
+          <p className="text-sm font-medium">{t('{{count}} agentes esperando você', { count: waiting.length })}</p>
           <div className="mt-2 flex flex-wrap gap-1">
             {waiting.map((a) => (
               <AgentChip key={a.tab_id} agent={a} projectId={projectId} />
@@ -206,7 +217,7 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
           </div>
         </div>
       )}
-      {data && epics.length === 0 && <p className="text-sm text-zinc-500">Nenhum épico em andamento</p>}
+      {data && epics.length === 0 && <p className="text-sm text-zinc-500">{t('Nenhum épico em andamento')}</p>}
       {epics.map((e) => (
         <EpicBlock key={e.id} epic={e} projectId={projectId} />
       ))}

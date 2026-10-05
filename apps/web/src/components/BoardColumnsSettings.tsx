@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../lib/api';
-import { COLUMN_CATEGORY_LABEL, type ColumnCategory, type Project, type TaskColumn } from '../lib/types';
+import type { ColumnCategory, Project, TaskColumn } from '../lib/types';
+import { columnCategoryLabel } from '../lib/board';
+import { Trans, useTranslation } from '../i18n';
 import { ConfirmDialog } from './Modal';
 
 const CATEGORIES: ColumnCategory[] = ['todo', 'doing', 'done'];
 const MAX_COLUMNS = 12;
-const LOCKED = 'O board precisa de ao menos uma coluna de cada tipo';
 
 /** Setup → "Colunas do board" (spec §7): names, categories, order, deletion and the agent column. */
 export function BoardColumnsSettings({ project }: { project: Project }) {
+  const { t } = useTranslation();
   const [columns, setColumns] = useState<TaskColumn[] | null>(null);
   const [agentColumnId, setAgentColumnId] = useState<string | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -26,7 +28,7 @@ export function BoardColumnsSettings({ project }: { project: Project }) {
       for (const t of r.tasks) if (t.column_id && !t.parent_id) c[t.column_id] = (c[t.column_id] ?? 0) + 1;
       setCounts(c);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Erro ao carregar as colunas');
+      setError(e instanceof ApiError ? e.message : t('Erro ao carregar as colunas'));
     }
   }, [project.id]);
 
@@ -46,7 +48,7 @@ export function BoardColumnsSettings({ project }: { project: Project }) {
   };
 
   if (!columns) {
-    return <section className="mb-8 rounded-lg border border-line bg-bg-2 p-4 text-sm text-fg-dim">{error ?? 'Carregando colunas…'}</section>;
+    return <section className="mb-8 rounded-lg border border-line bg-bg-2 p-4 text-sm text-fg-dim">{error ?? t('Carregando colunas…')}</section>;
   }
 
   const lastOfCategory = (c: TaskColumn) => columns.filter((x) => x.category === c.category).length === 1;
@@ -58,14 +60,14 @@ export function BoardColumnsSettings({ project }: { project: Project }) {
     const name = draftName.trim();
     if (!name) return;
     setDraftName('');
-    void run(() => api.columns.create(project.id, { name, category: draftCategory }), 'Erro ao criar a coluna');
+    void run(() => api.columns.create(project.id, { name, category: draftCategory }), t('Erro ao criar a coluna'));
   };
 
   return (
-    <section aria-label="Colunas do board" className="mb-8 space-y-3 rounded-lg border border-line bg-bg-2 p-4">
-      <h3 className="text-sm font-semibold">Colunas do board</h3>
+    <section aria-label={t('Colunas do board')} className="mb-8 space-y-3 rounded-lg border border-line bg-bg-2 p-4">
+      <h3 className="text-sm font-semibold">{t('Colunas do board')}</h3>
       <p className="text-xs text-fg-dim">
-        O nome é seu; o tipo diz ao termhub o que a coluna significa. O board precisa de ao menos uma coluna de cada tipo e aceita até 12.
+        {t('O nome é seu; o tipo diz ao termhub o que a coluna significa. O board precisa de ao menos uma coluna de cada tipo e aceita até {{max}}.', { max: MAX_COLUMNS })}
       </p>
       {error && <p className="text-xs text-danger">{error}</p>}
       <ul className="space-y-2">
@@ -76,29 +78,29 @@ export function BoardColumnsSettings({ project }: { project: Project }) {
             index={i}
             last={i === columns.length - 1}
             locked={lastOfCategory(c)}
-            onRename={(name) => void run(() => api.columns.update(c.id, { name }), 'Erro ao renomear a coluna')}
-            onCategory={(category) => void run(() => api.columns.update(c.id, { category }), 'Erro ao mudar o tipo da coluna')}
-            onMove={(position) => void run(() => api.columns.move(c.id, position), 'Erro ao mover a coluna')}
+            onRename={(name) => void run(() => api.columns.update(c.id, { name }), t('Erro ao renomear a coluna'))}
+            onCategory={(category) => void run(() => api.columns.update(c.id, { category }), t('Erro ao mudar o tipo da coluna'))}
+            onMove={(position) => void run(() => api.columns.move(c.id, position), t('Erro ao mover a coluna'))}
             onDelete={() => setDeleting(c)}
           />
         ))}
       </ul>
       <form onSubmit={add} className="flex gap-2">
-        <input className="input" aria-label="Nome da nova coluna" placeholder="Nome da coluna" maxLength={40} value={draftName} onChange={(e) => setDraftName(e.target.value)} />
-        <select className="input w-auto" aria-label="Tipo da nova coluna" value={draftCategory} onChange={(e) => setDraftCategory(e.target.value as ColumnCategory)}>
+        <input className="input" aria-label={t('Nome da nova coluna')} placeholder={t('Nome da coluna')} maxLength={40} value={draftName} onChange={(e) => setDraftName(e.target.value)} />
+        <select className="input w-auto" aria-label={t('Tipo da nova coluna')} value={draftCategory} onChange={(e) => setDraftCategory(e.target.value as ColumnCategory)}>
           {CATEGORIES.map((k) => (
             <option key={k} value={k}>
-              {COLUMN_CATEGORY_LABEL[k]}
+              {columnCategoryLabel(k)}
             </option>
           ))}
         </select>
         <button type="submit" className="btn-primary shrink-0" disabled={columns.length >= MAX_COLUMNS}>
-          + coluna
+          {t('+ coluna')}
         </button>
       </form>
       <div>
         <label className="label" htmlFor="agent-column">
-          Coluna do agente
+          {t('Coluna do agente')}
         </label>
         <select
           id="agent-column"
@@ -106,10 +108,10 @@ export function BoardColumnsSettings({ project }: { project: Project }) {
           value={agentColumnId ?? ''}
           onChange={(e) => {
             const columnId = e.target.value || null;
-            void run(() => api.columns.setAgent(project.id, columnId), 'Erro ao salvar a coluna do agente');
+            void run(() => api.columns.setAgent(project.id, columnId), t('Erro ao salvar a coluna do agente'));
           }}
         >
-          <option value="">Automática (primeira Fazendo)</option>
+          <option value="">{t('Automática (primeira Fazendo)')}</option>
           {columns
             .filter((c) => c.category === 'doing')
             .map((c) => (
@@ -118,26 +120,26 @@ export function BoardColumnsSettings({ project }: { project: Project }) {
               </option>
             ))}
         </select>
-        <p className="mt-1 text-xs text-fg-dim">Para onde o card vai quando um agente começa a trabalhar nele.</p>
+        <p className="mt-1 text-xs text-fg-dim">{t('Para onde o card vai quando um agente começa a trabalhar nele.')}</p>
       </div>
       <ConfirmDialog
         open={deleting !== null}
-        title="Excluir coluna"
+        title={t('Excluir coluna')}
         message={
           deleting ? (
             <>
-              Excluir <strong>{deleting.name}</strong>?{' '}
-              {moving > 0 ? `${moving === 1 ? '1 card vai' : `${moving} cards vão`} para "${destination(deleting)?.name ?? ''}".` : 'Ela está vazia.'}
+              <Trans i18nKey="Excluir <0>{{name}}</0>?" values={{ name: deleting.name }} components={[<strong key="n" />]} />{' '}
+              {moving > 0 ? t('{{count}} cards vão para "{{column}}".', { count: moving, column: destination(deleting)?.name ?? '' }) : t('Ela está vazia.')}
             </>
           ) : null
         }
-        confirmLabel="Excluir"
+        confirmLabel={t('Excluir')}
         danger
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           const c = deleting;
           setDeleting(null);
-          if (c) await run(() => api.columns.remove(c.id), 'Erro ao excluir a coluna');
+          if (c) await run(() => api.columns.remove(c.id), t('Erro ao excluir a coluna'));
         }}
       />
     </section>
@@ -157,6 +159,8 @@ interface RowProps {
 }
 
 function ColumnRow({ column, index, last, locked, onRename, onCategory, onMove, onDelete }: RowProps) {
+  const { t } = useTranslation();
+  const lockedHint = t('O board precisa de ao menos uma coluna de cada tipo');
   const [name, setName] = useState(column.name);
   // Follows a rename from outside, adjusted while rendering: as an effect it ran a moment after the row
   // appeared and reset whatever had been typed in between (TER-911).
@@ -176,7 +180,7 @@ function ColumnRow({ column, index, last, locked, onRename, onCategory, onMove, 
     <li className="flex items-center gap-2">
       <input
         className="input"
-        aria-label={`Nome da coluna ${column.name}`}
+        aria-label={t('Nome da coluna {{name}}', { name: column.name })}
         maxLength={40}
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -188,25 +192,25 @@ function ColumnRow({ column, index, last, locked, onRename, onCategory, onMove, 
       />
       <select
         className="input w-auto"
-        aria-label={`Tipo da coluna ${column.name}`}
+        aria-label={t('Tipo da coluna {{name}}', { name: column.name })}
         value={column.category}
         disabled={locked}
-        title={locked ? LOCKED : undefined}
+        title={locked ? lockedHint : undefined}
         onChange={(e) => onCategory(e.target.value as ColumnCategory)}
       >
         {CATEGORIES.map((k) => (
           <option key={k} value={k}>
-            {COLUMN_CATEGORY_LABEL[k]}
+            {columnCategoryLabel(k)}
           </option>
         ))}
       </select>
-      <button type="button" className="btn-ghost px-2" aria-label={`Subir ${column.name}`} disabled={index === 0} onClick={() => onMove(index - 1)}>
+      <button type="button" className="btn-ghost px-2" aria-label={t('Subir {{name}}', { name: column.name })} disabled={index === 0} onClick={() => onMove(index - 1)}>
         ↑
       </button>
-      <button type="button" className="btn-ghost px-2" aria-label={`Descer ${column.name}`} disabled={last} onClick={() => onMove(index + 1)}>
+      <button type="button" className="btn-ghost px-2" aria-label={t('Descer {{name}}', { name: column.name })} disabled={last} onClick={() => onMove(index + 1)}>
         ↓
       </button>
-      <button type="button" className="btn-ghost px-2 text-danger" aria-label={`Excluir ${column.name}`} disabled={locked} title={locked ? LOCKED : undefined} onClick={onDelete}>
+      <button type="button" className="btn-ghost px-2 text-danger" aria-label={t('Excluir {{name}}', { name: column.name })} disabled={locked} title={locked ? lockedHint : undefined} onClick={onDelete}>
         ✕
       </button>
     </li>
