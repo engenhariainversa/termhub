@@ -17,11 +17,28 @@ describe('push texts', () => {
     expect(tabQuestionText({ projectName: 'termhub', tabName: 'api', machineName: null }, 'permission')).toEqual({ title: 'termhub precisa de você', body: 'A aba api pede permissão para continuar.' });
     expect(tabQuestionText({ projectName: null, tabName: null, machineName: null }, 'choice')).toEqual({ title: 'termhub precisa de você', body: 'Uma aba fez uma pergunta.' });
   });
+
+  it('writes every text in English for an English recipient', () => {
+    expect(confirmationText({ projectName: 'termhub', tabName: 'api', machineName: 'jarvis' }, 'en')).toEqual({
+      title: 'termhub needs you',
+      body: 'The chat of project termhub asked for confirmation to act in tab api (jarvis).',
+    });
+    expect(confirmationText({ projectName: null, tabName: null, machineName: null }, 'en')).toEqual({ title: 'termhub needs you', body: 'The general chat asked for your confirmation.' });
+    expect(replyText({ projectName: 'termhub', tabName: null, machineName: null }, 'en')).toEqual({ title: 'Answer ready in termhub', body: 'The chat of project termhub finished answering.' });
+    expect(replyText({ projectName: null, tabName: null, machineName: null }, 'en').title).toBe('Answer ready');
+    expect(deviceRequestText({ model: 'iPhone 15', city: 'Lisbon', country: 'PT' }, 'en')).toEqual({
+      title: 'New device asking for access',
+      body: 'iPhone 15 (Lisbon) asked for access to your account. Check the code and approve or decline on the web.',
+    });
+    expect(tabQuestionText({ projectName: 'termhub', tabName: 'api', machineName: null }, 'permission', 'en').body).toBe('Tab api asks for permission to continue.');
+    expect(tabQuestionText({ projectName: null, tabName: null, machineName: null }, 'choice', 'en').body).toBe('A tab asked a question.');
+  });
 });
 
 describe('tabFinishedText (TER-925)', () => {
   it('names project, tab and machine when known', () => {
     expect(tabFinishedText({ projectName: 'termhub', tabName: 'api', machineName: 'jarvis' })).toEqual({ title: 'termhub: aba terminou', body: 'A aba api (jarvis) terminou e espera você.' });
     expect(tabFinishedText({ projectName: null, tabName: null, machineName: null })).toEqual({ title: 'Aba terminou', body: 'Uma aba terminou e espera você.' });
+    expect(tabFinishedText({ projectName: 'termhub', tabName: 'api', machineName: 'jarvis' }, 'en')).toEqual({ title: 'termhub: tab finished', body: 'Tab api (jarvis) finished and is waiting for you.' });
   });
 });

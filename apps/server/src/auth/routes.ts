@@ -4,11 +4,12 @@ import { config } from '../config.js';
 import { toPublicUser, type User } from '../db/repositories/types.js';
 import { isAdmin, permissionsOf } from './permissions.js';
 import { VIEW_AS_ALL, VIEW_AS_COOKIE, type Scope } from './scope.js';
-import { HttpError, badRequest, forbidden, unauthorized } from '../lib/errors.js';
+import { HttpError, badRequest, forbidden, unauthorized, sendError } from '../lib/errors.js';
 import type { AuthContext } from './middleware.js';
 import { buildAuthorizationUrl, exchangeCode, isGoogleEnabled } from './google.js';
 import { normalizeNickname } from '../public/nickname.js';
 import { CSRF_COOKIE, OAUTH_COOKIE, SESSION_COOKIE } from './tokens.js';
+import { msg, requestLocale, tk } from '../i18n/index.js';
 
 const loginSchema = z.object({
   email: z.string().email().max(254),
@@ -50,6 +51,8 @@ function viewAsOf(scope: Scope | undefined) {
 
 const viewAsSchema = z.object({ user_id: z.string().min(1).max(64).nullable() });
 const nicknameBodySchema = z.object({ nickname: z.string() });
+/** null = automatic (the browser's language; pt-BR for e-mails and push). */
+const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en']).nullable() });
 
 export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: { onNicknameClaimed?: (user: User) => void } = {}) {
   /** Public user + role summary + flat permission list: what the client needs to gate its UI. */
@@ -84,21 +87,30 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     if (!request.user) throw unauthorized();
     const body = nicknameBodySchema.parse(request.body);
     const parsed = normalizeNickname(body.nickname);
-    if (!parsed.ok) return reply.code(400).send({ error: parsed.reason === 'reserved' ? 'Esse apelido é reservado' : 'Use de 3 a 30 letras, números ou hífen', code: 'NICKNAME_INVALID' });
+    if (!parsed.ok) return sendError(request, reply, 400, parsed.reason === 'reserved' ? tk('Esse apelido é reservado') : tk('Use de 3 a 30 letras, números ou hífen'), 'NICKNAME_INVALID');
     // Once claimed, the address is this person's for good (spec §8): releasing it would let anyone
     // claim it next and inherit every /city/@nick link already shared. Re-sending the same one is a no-op.
     if (request.user.nickname && request.user.nickname !== parsed.value) {
-      return reply.code(409).send({ error: 'Seu apelido já foi escolhido e não pode ser trocado', code: 'NICKNAME_LOCKED' });
+      return sendError(request, reply, 409, 'Seu apelido já foi escolhido e não pode ser trocado', 'NICKNAME_LOCKED');
     }
     const out = await ctx.repos.users.setNickname(request.user.id, parsed.value);
-    if (out === 'taken') return reply.code(409).send({ error: 'Esse apelido já é de outra pessoa', code: 'NICKNAME_TAKEN' });
-    if (out === 'locked') return reply.code(409).send({ error: 'Seu apelido já foi escolhido e não pode ser trocado', code: 'NICKNAME_LOCKED' });
+    if (out === 'taken') return sendError(request, reply, 409, 'Esse apelido já é de outra pessoa', 'NICKNAME_TAKEN');
+    if (out === 'locked') return sendError(request, reply, 409, 'Seu apelido já foi escolhido e não pode ser trocado', 'NICKNAME_LOCKED');
     request.log.info({ userId: request.user.id }, 'nickname: claimed');
     const claimed = { ...request.user, nickname: parsed.value };
     // A first claim only (re-sending the nickname you hold is a no-op): the city's short link is
     // started here, after the write, and nothing waits for it — the partner can be slow or down.
     if (!request.user.nickname) opts.onNicknameClaimed?.(claimed);
     return { user: await withRole(claimed) };
+  });
+
+  /** The language this person chose (TER-405): used for API errors, e-mails and push texts. */
+  app.patch('/me/locale', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    const { locale } = localeBodySchema.parse(request.body);
+    await ctx.repos.users.setLocale(request.user.id, locale);
+    request.log.info({ userId: request.user.id, locale }, 'locale: set');
+    return reply.code(204).send();
   });
 
   /**
@@ -132,7 +144,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     if (!result.ok) {
       if (result.reason === 'locked') {
         reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));
-        throw new HttpError(429, `Muitas tentativas. Tente novamente em ${Math.ceil(result.retryAfterMs / 1000)}s.`, 'LOCKED');
+        throw new HttpError(429, msg('Muitas tentativas. Tente novamente em {{seconds}}s.', { seconds: Math.ceil(result.retryAfterMs / 1000) }), 'LOCKED');
       }
       throw unauthorized('E-mail ou senha inválidos');
     }
@@ -145,7 +157,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
   app.post('/code/send', { config: { public: true } }, async (request, reply) => {
     if (!config.auth.modes.has('app')) throw badRequest('Login por e-mail desativado neste modo');
     const body = sendCodeSchema.parse(request.body);
-    const result = await service.sendLoginCode(body.email, request.ip);
+    const result = await service.sendLoginCode(body.email, request.ip, requestLocale(request));
     if (!result.ok) {
       if (result.reason === 'rate_limited') {
         reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));
@@ -163,7 +175,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     if (!result.ok) {
       if (result.reason === 'locked') {
         reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));
-        throw new HttpError(429, `Muitas tentativas. Tente novamente em ${Math.ceil(result.retryAfterMs / 1000)}s.`, 'LOCKED');
+        throw new HttpError(429, msg('Muitas tentativas. Tente novamente em {{seconds}}s.', { seconds: Math.ceil(result.retryAfterMs / 1000) }), 'LOCKED');
       }
       throw unauthorized('Código inválido ou expirado');
     }

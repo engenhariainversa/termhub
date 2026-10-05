@@ -19,6 +19,7 @@ jest.mock('react-native-mmkv', () => require('./fakes/mmkv'));
 jest.mock('expo-secure-store', () => require('./fakes/secure-store'));
 jest.mock('expo-device', () => require('./fakes/expo-device'));
 jest.mock('expo-application', () => ({ nativeApplicationVersion: '0.1.0', nativeBuildVersion: '1' }));
+jest.mock('expo-updates', () => ({ updateId: null, isEmbeddedLaunch: true }));
 jest.mock('expo-local-authentication', () => require('./fakes/local-auth'));
 jest.mock('expo-notifications', () => require('./fakes/expo-notifications'));
 jest.mock('expo-tracking-transparency', () => require('./fakes/expo-tracking-transparency'));
