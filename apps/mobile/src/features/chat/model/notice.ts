@@ -1,4 +1,5 @@
 import type { ChatMessage } from './types';
+import { dateTimeFormat } from '@/i18n/format';
 
 type ChatNotice = NonNullable<ChatMessage['notice']>;
 
@@ -14,7 +15,7 @@ function parts(d: Date, timeZone?: string) {
   // The phone's own clock needs no Intl (whose time zone support varies across Hermes builds); a zone
   // is only ever given by the tests.
   if (!timeZone) return { day: d.getDate(), month: d.getMonth() + 1, hour: d.getHours(), minute: d.getMinutes() };
-  const f = new Intl.DateTimeFormat('pt-BR', { timeZone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const f = dateTimeFormat({ timeZone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   const get = (type: string) => Number(f.formatToParts(d).find((p) => p.type === type)?.value ?? '0');
   return { day: get('day'), month: get('month'), hour: get('hour'), minute: get('minute') };
 }

@@ -5,8 +5,9 @@ import type { TChatDecision, TConciergeNote, TLessonItem } from '@/services/api/
 import { TERMHUB_URL } from '@/services/api/config';
 import { AppText, Banner, Button, EmptyState, Field, Screen } from '@/ui';
 import { useChatMemoryStore } from '../viewmodel/useChatMemoryStore';
+import { formatDate } from '@/i18n/format';
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
+const fmtDate = (iso: string) => formatDate(iso);
 
 /** "Lições" (spec 2026-09-27 failure lessons §6/§8): pt-BR labels for `evidence`, verbatim (binding
  * clarifications) — the mobile twin of `ChatMemoryPage`'s `EVIDENCE_LABEL`. */

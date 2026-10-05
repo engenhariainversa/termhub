@@ -87,6 +87,19 @@ it('sends the app header, bearer and a DPoP proof bound to method, canonical url
   expect(calls[0]!.url).toBe('https://termhub.dev/api/m/v1/chat/projects');
 });
 
+it('sends Accept-Language with the language the app shows, read on every call (i18n spec §2)', async () => {
+  const { transport, calls } = scripted([
+    { status: 200, body: { projects: [] } },
+    { status: 200, body: { projects: [] } },
+  ]);
+  let language = 'pt-BR';
+  const api = createHttpMobileApi({ transport, baseUrl: 'https://termhub.dev', app: 'ios/0.1.0+1', key, onTokenExpired: async () => null, now: () => NOW * 1000, language: () => language });
+  await api.chatProjects({ accessToken: 'tok' });
+  language = 'en';
+  await api.chatProjects({ accessToken: 'tok' });
+  expect(calls.map((c) => c.headers['Accept-Language'])).toEqual(['pt-BR', 'en']);
+});
+
 it('corrects iat by the skew learned from the Date header', async () => {
   const { transport, calls } = scripted([
     { status: 200, headers: { date: new Date((NOW + 180) * 1000).toUTCString() }, body: { projects: [] } },
@@ -286,6 +299,19 @@ describe('events()', () => {
     const payload = dpopPayload(connects[0]!.headers.DPoP!);
     expect(payload).toMatchObject({ htm: 'GET', htu: 'https://termhub.dev/ws/m/chat', ath: b64url(sha256(utf8('tok'))) });
     close();
+  });
+
+  it('sends Accept-Language on the socket upgrade', async () => {
+    const { transport, connects } = connectableTransport();
+    const api = createHttpMobileApi({ transport, baseUrl: 'https://termhub.dev', app: 'ios/0.1.0+1', key, onTokenExpired: async () => null, now: () => NOW * 1000, language: () => 'en' });
+    const close = api.events({ accessToken: 'tok' }, { onEvent: jest.fn(), onReconnect: jest.fn(), onClose: jest.fn() });
+    await waitFor(() => connects.length > 0);
+    expect(connects[0]!.headers['Accept-Language']).toBe('en');
+    close();
+    const closeTab = api.tabEvents(() => ({ accessToken: 'tok' }), 'tab-1', { after: () => null, onFrame: jest.fn(), onClose: jest.fn() });
+    await waitFor(() => connects.length > 1);
+    expect(connects[1]!.headers['Accept-Language']).toBe('en');
+    closeTab();
   });
 
   it("feeds hello.server_time into the client's skew, delivers later frames, and passes onReconnect/onClose through", async () => {

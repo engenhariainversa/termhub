@@ -1,5 +1,6 @@
 // Copied from apps/web/src/components/chat/tab-question-text.ts — keep the two in step (same pt-BR copy).
 import type { TabQuestion, TabQuestionItem, TabQuestionSuggestionItem } from './types';
+import { formatDate } from '@/i18n/format';
 
 type TabQuestionChoice = Extract<TabQuestion, { kind: 'choice' }>;
 type TabQuestionPermission = Extract<TabQuestion, { kind: 'permission' }>;
@@ -121,7 +122,7 @@ function suggestionValue(item: TabQuestionItem, hint: TabQuestionSuggestionItem)
 /** "você respondeu «X» a «pergunta» em termhub, 24/09/2026": the past-decision sentence, reused as the
  * countdown's "Fonte:" (spec 2026-09-26 concierge memory §8, controller ruling for `by: 'memory'`). */
 export function suggestionSourceSentence(item: TabQuestionItem, hint: TabQuestionSuggestionItem): string {
-  const date = new Date(hint.source.answered_at).toLocaleDateString('pt-BR');
+  const date = formatDate(hint.source.answered_at);
   const project = hint.source.project_name ?? 'sem projeto';
   return `você respondeu «${suggestionValue(item, hint)}» a «${hint.source.question}» em ${project}, ${date}`;
 }
