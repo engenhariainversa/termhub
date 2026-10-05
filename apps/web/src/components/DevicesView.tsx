@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth';
 import type { Device, DeviceEventView, DeviceRequestView, PushTestKind } from '../lib/types';
 import { ConfirmDialog } from './Modal';
 import { formatDate, formatTime } from '../lib/format';
-import { i18n, useTranslation } from '../i18n';
+import { i18n, tk, useTranslation } from '../i18n';
 
 /** Same ceiling the server enforces (mobile/enrolment.ts's DEVICE_LIMIT, 409 "Revogue um aparelho
  *  antes"): Aprovar is disabled here too, instead of always waiting for that round-trip. */
@@ -39,10 +39,10 @@ function situationLabel(d: Device, now = new Date()): string {
 }
 
 const PUSH_TEST_KINDS: { value: PushTestKind; label: string }[] = [
-  { value: 'confirmation', label: 'Confirmação do chat' },
-  { value: 'tab_question', label: 'Pergunta de aba' },
-  { value: 'reply', label: 'Resposta pronta' },
-  { value: 'device_request', label: 'Pedido de aparelho novo' },
+  { value: 'confirmation', label: tk('Confirmação do chat') },
+  { value: 'tab_question', label: tk('Pergunta de aba') },
+  { value: 'reply', label: tk('Resposta pronta') },
+  { value: 'device_request', label: tk('Pedido de aparelho novo') },
 ];
 
 const PUSH_TEST_DELAYS = [0, 10, 30];
@@ -117,10 +117,10 @@ export function DevicesView() {
     setError(null);
     try {
       const r = await api.devices.testPush(testTarget.id, { kind: testKind, delay_seconds: testDelay });
-      if (r.ticket?.status === 'error') setError(`A notificação de teste falhou: ${r.ticket.error}`);
-      else setTestNote(testDelay > 0 ? `Enviando em ${testDelay} s. Feche o app para ver como ela chega.` : 'Enviada. Confira o celular.');
+      if (r.ticket?.status === 'error') setError(t('A notificação de teste falhou: {{code}}', { code: r.ticket.error }));
+      else setTestNote(testDelay > 0 ? t('Enviando em {{seconds}} s. Feche o app para ver como ela chega.', { seconds: testDelay }) : t('Enviada. Confira o celular.'));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao enviar a notificação de teste');
+      setError(err instanceof ApiError ? err.message : t('Erro ao enviar a notificação de teste'));
     } finally {
       setTesting(false);
     }
@@ -302,11 +302,11 @@ export function DevicesView() {
 
           {pushDevices.length > 0 && can('devices', 'update') && (
             <section className="space-y-2">
-              <h2 className="text-sm font-semibold">Notificação de teste</h2>
-              <p className="text-xs text-fg-dim">Envia um aviso de exemplo para o seu aparelho, sem entrar no histórico de notificações. O resultado aparece em Atividade.</p>
+              <h2 className="text-sm font-semibold">{t('Notificação de teste')}</h2>
+              <p className="text-xs text-fg-dim">{t('Envia um aviso de exemplo para o seu aparelho, sem entrar no histórico de notificações. O resultado aparece em Atividade.')}</p>
               <div className="flex flex-wrap items-center gap-2">
                 {pushDevices.length > 1 && (
-                  <select className="input w-auto py-1" aria-label="Aparelho" value={testTarget?.id ?? ''} onChange={(e) => setTestDeviceId(e.target.value)}>
+                  <select className="input w-auto py-1" aria-label={t('Aparelho')} value={testTarget?.id ?? ''} onChange={(e) => setTestDeviceId(e.target.value)}>
                     {pushDevices.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name}
@@ -314,22 +314,22 @@ export function DevicesView() {
                     ))}
                   </select>
                 )}
-                <select className="input w-auto py-1" aria-label="Tipo de aviso" value={testKind} onChange={(e) => setTestKind(e.target.value as PushTestKind)}>
+                <select className="input w-auto py-1" aria-label={t('Tipo de aviso')} value={testKind} onChange={(e) => setTestKind(e.target.value as PushTestKind)}>
                   {PUSH_TEST_KINDS.map((k) => (
                     <option key={k.value} value={k.value}>
-                      {k.label}
+                      {t(k.label)}
                     </option>
                   ))}
                 </select>
-                <select className="input w-auto py-1" aria-label="Quando enviar" value={testDelay} onChange={(e) => setTestDelay(Number(e.target.value))}>
+                <select className="input w-auto py-1" aria-label={t('Quando enviar')} value={testDelay} onChange={(e) => setTestDelay(Number(e.target.value))}>
                   {PUSH_TEST_DELAYS.map((s) => (
                     <option key={s} value={s}>
-                      {s === 0 ? 'Agora' : `Em ${s} s`}
+                      {s === 0 ? t('Agora') : t('Em {{seconds}} s', { seconds: s })}
                     </option>
                   ))}
                 </select>
                 <button className="btn-primary" disabled={testing} onClick={() => void sendTestPush()}>
-                  Enviar notificação de teste
+                  {t('Enviar notificação de teste')}
                 </button>
               </div>
               {testNote && <p className="text-xs text-fg-muted">{testNote}</p>}
