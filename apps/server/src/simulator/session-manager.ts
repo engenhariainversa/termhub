@@ -60,6 +60,11 @@ export const NO_FREE_PORTS_MESSAGE = 'Nenhuma porta livre para o WebDriverAgent 
 export function mjpegPortTakenMessage(port: number): string {
   return `A porta ${port} do Mac está em uso por outro programa; o vídeo do simulador não consegue subir`;
 }
+const STREAM_DEAD_MESSAGE = 'O vídeo do simulador não responde';
+/** Only the MJPEG reader's own messages ("MJPEG respondeu 404", "MJPEG sem dados por 15s") are pt-BR. */
+export function streamDeadMessage(cause?: Error): string {
+  return cause?.message.startsWith('MJPEG ') ? `${STREAM_DEAD_MESSAGE} (${cause.message})` : STREAM_DEAD_MESSAGE;
+}
 const DISPOSED_ERROR = 'sessão encerrada';
 const CONNECTION_LOST_MESSAGE = 'Conexão com o simulador perdida';
 
@@ -91,6 +96,8 @@ interface Session {
   /** Why the current `tunnel` closed on its own (null while it is up); cleared when a new one opens. */
   tunnelError: Error | null;
   closeMjpeg: (() => void) | null;
+  /** Streams in a row that ended before their first frame. */
+  streamStrikes: number;
   screen: Screen;
   idleTimer: ReturnType<typeof setTimeout> | null;
   recovering: Promise<void> | null;
@@ -157,6 +164,7 @@ export class SimulatorSessionManager {
         tunnel: null,
         tunnelError: null,
         closeMjpeg: null,
+        streamStrikes: 0,
         screen: { width: 0, height: 0, orientation: 'portrait' },
         idleTimer: null,
         recovering: null,
@@ -421,15 +429,39 @@ export class SimulatorSessionManager {
 
   private openStream(s: Session) {
     const port = s.tunnel!.mjpegPort;
+    let gotFrame = false;
     const close = this.backend.openMjpeg(
       port,
-      (frame) => this.broadcast(s, (v) => v.onFrame(frame)),
+      (frame) => {
+        if (!gotFrame) {
+          gotFrame = true;
+          s.streamStrikes = 0;
+        }
+        this.broadcast(s, (v) => v.onFrame(frame));
+      },
       (err) => {
         if (s.closeMjpeg !== close || s.disposed) return;
+        if (!gotFrame) s.streamStrikes++;
+        // A stream that dies before any frame, again and again, is not a network hiccup: reconnecting
+        // "succeeds" (WDA's /status is fine) and the cycle would never end (TER-983).
+        if (s.streamStrikes >= RECOVER_ATTEMPTS) {
+          void this.giveUpStream(s, err);
+          return;
+        }
         void this.recover(s, err);
       },
     );
     s.closeMjpeg = close;
+  }
+
+  private async giveUpStream(s: Session, cause?: Error): Promise<void> {
+    this.log('stream MJPEG terminou sem frames repetidas vezes; desistindo: ' + (cause?.message ?? ''), { machineId: s.machine.id, udid: s.udid, ...s.ports });
+    s.ready = false;
+    this.closeMjpegStream(s);
+    this.closeTunnel(s);
+    const message = streamDeadMessage(cause);
+    this.broadcast(s, (v) => v.onStatus({ state: 'error', message }));
+    await this.dispose(s, { stopRunner: false });
   }
 
   /** Túnel ou stream caiu: reabre até RECOVER_ATTEMPTS vezes mantendo a sessão WDA. Reentrante-seguro. */

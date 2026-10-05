@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Machine } from '../db/repositories/types.js';
 import type { Screen, SimStatus, SimulatorBackend, Viewer } from './session-manager.js';
-import { NO_FREE_PORTS_MESSAGE, RELOCATING_MESSAGE, SimulatorSessionManager, mjpegPortTakenMessage } from './session-manager.js';
+import { NO_FREE_PORTS_MESSAGE, RELOCATING_MESSAGE, SimulatorSessionManager, mjpegPortTakenMessage, streamDeadMessage } from './session-manager.js';
 import { wdaPortCandidates, wdaPorts, type WdaPorts } from './ports.js';
 import { WdaClient } from './wda-client.js';
 
@@ -251,6 +251,41 @@ describe('SimulatorSessionManager', () => {
   });
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
+
+  it('a stream that keeps ending before its first frame stops after 3 strikes with a clear error', async () => {
+    const b = makeBackend();
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await mgr.acquire(machine, UDID, v);
+    for (let i = 0; i < 5; i++) {
+      b.endStream(new Error('MJPEG respondeu 404'));
+      await vi.advanceTimersByTimeAsync(3000);
+    }
+    expect(b.backend.openMjpeg).toHaveBeenCalledTimes(3);
+    expect(v.fullStatuses.at(-1)).toEqual({ state: 'error', message: 'O vídeo do simulador não responde (MJPEG respondeu 404)' });
+    expect(mgr.isReady('m1', UDID)).toBe(false);
+    expect(b.backend.stopRunner).not.toHaveBeenCalled();
+  });
+
+  it('a frame resets the strikes: streams that work for a while keep recovering', async () => {
+    const b = makeBackend();
+    const mgr = new SimulatorSessionManager(b.backend, { pollMs: 10 });
+    const v = makeViewer();
+    await mgr.acquire(machine, UDID, v);
+    for (let i = 0; i < 5; i++) {
+      b.emitFrame(Buffer.from('f'));
+      b.endStream(new Error('caiu'));
+      await vi.advanceTimersByTimeAsync(3000);
+    }
+    expect(b.backend.openMjpeg).toHaveBeenCalledTimes(6);
+    expect(v.statuses.at(-1)).toBe('ready');
+  });
+
+  it('streamDeadMessage keeps the reader pt-BR causes and hides anything else', () => {
+    expect(streamDeadMessage(new Error('MJPEG sem dados por 15s'))).toBe('O vídeo do simulador não responde (MJPEG sem dados por 15s)');
+    expect(streamDeadMessage(new Error('socket hang up'))).toBe('O vídeo do simulador não responde');
+    expect(streamDeadMessage()).toBe('O vídeo do simulador não responde');
+  });
 
   it('sobe runner, túnel, sessão WDA e entrega status/screen/frames', async () => {
     const b = makeBackend();
