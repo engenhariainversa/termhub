@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_AUTOMATION_TOOLS } from './agents.js';
-import { branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
+import { AUTOMATION_DENIED_TOOLS, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
 describe('unsafeAllowedTool: allow rules too broad for an automatic tab (TER-968, review 1)', () => {
   it.each([
@@ -91,6 +91,15 @@ describe('unsafeAllowedTool: allow rules too broad for an automatic tab (TER-968
     expect(safeAllowedTools(DEFAULT_AUTOMATION_TOOLS)).toEqual({ kept: DEFAULT_AUTOMATION_TOOLS, dropped: [] });
     for (const own of branchPushRules('TER-1-card')) expect(unsafeAllowedTool(own), own).toBe(true);
     expect(runBranchRules('TER-1-card')).toContain('Bash(git fetch origin TER-1-card)');
+  });
+
+  it.each(['Bash(ssh:*)', 'Bash(ssh host ls)', 'Bash(scp:*)', 'Bash(rsync -a:*)', 'Bash(kubectl get:*)', 'Bash(kubectl:*)'])('drops %s from a project allow list (remote reach)', (rule) => {
+    expect(unsafeAllowedTool(rule)).toBe(true);
+  });
+
+  it('denies ssh, scp, rsync and kubectl, and no deny covers a default rule', () => {
+    for (const r of ['Bash(ssh:*)', 'Bash(scp:*)', 'Bash(rsync:*)', 'Bash(kubectl:*)']) expect(AUTOMATION_DENIED_TOOLS).toContain(r);
+    for (const rule of DEFAULT_AUTOMATION_TOOLS) expect(unsafeAllowedTool(rule), rule).toBe(false);
   });
 
   it('splits a list into kept and dropped, in order', () => {

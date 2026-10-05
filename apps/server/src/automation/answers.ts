@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { blocklistParts, scheduleAutoAnswer } from '../chat/auto-answer.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
 import { answerTabQuestion } from '../chat/tab-question-answer.js';
@@ -11,7 +12,7 @@ import type { TabQuestion as TabQuestionRow } from '../db/repositories/tab-quest
 import { tk } from '../i18n/index.js';
 import { autoAnswerBlocked } from '../memory/blocklist.js';
 import { recordEvent } from './events.js';
-import { ANSWER_CAP, PERMISSION_NEEDED, QUESTION_UNANSWERED, wakeOrEscalate } from './follower.js';
+import { ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, QUESTION_UNANSWERED, wakeOrEscalate } from './follower.js';
 import { automaticRunOfTab } from './pause.js';
 import { runPermission } from './permission.js';
 
@@ -29,6 +30,25 @@ export const RECOMMENDED_REASON = tk('Opção recomendada pelo agente');
  * would otherwise be answered every 60 s for ever. The cycle detector (TER-970) is the finer answer.
  */
 export const AUTOMATION_ANSWERS_MAX_PER_HOUR = 20;
+
+/**
+ * TER-970 (R7): the same question answered the same way this many times in one run is a cycle; the
+ * next ask is not answered and the run is escalated (`answer_cycle`). Per run, hashes only.
+ */
+export const ANSWER_CYCLE_MAX = 2;
+
+/** R7: more than this many automatic answers in one run (any time, not a window) escalate as `answer_run_cap`. */
+export const AUTOMATION_ANSWERS_MAX_PER_RUN = 10;
+
+/**
+ * A short hash of a question and the way it is about to be answered (its texts, option labels and the
+ * picked options or typed text). Stored in the `question_answered` event (`cycle`): the question's text is
+ * terminal content and is never kept, the hash only avoids storing it.
+ */
+export function questionCycleHash(payload: ChoicePayload, answer: ChoiceAnswer): string {
+  const body = JSON.stringify([payload.questions.map((q) => [q.header, q.question, q.multi_select, q.options.map((o) => o.label)]), answer.answers.map((a) => [[...a.selected].sort(), a.text ?? null])]);
+  return createHash('sha256').update(body).digest('hex').slice(0, 16);
+}
 
 /**
  * How long an allowed permission waits before it is sent: the hook that opened the card may land before
@@ -79,10 +99,19 @@ export function recommendedOption(payload: ChoicePayload): string | null {
   return marked.length === 1 ? marked[0]!.label : null;
 }
 
-/** Whether the run used up its automatic answers of the last hour (AUTOMATION_ANSWERS_MAX_PER_HOUR). */
-async function capReached(deps: AnswerDeps, run: AutomationRun): Promise<boolean> {
+/** Which cap the run's automatic answers hit, if any: the hourly one (AUTOMATION_ANSWERS_MAX_PER_HOUR), then the per-run one. */
+async function capReached(deps: AnswerDeps, run: AutomationRun): Promise<string | null> {
   const since = new Date((deps.now?.() ?? new Date()).getTime() - HOUR_MS);
-  return (await deps.repos.automationEvents.countForRun(run.id, 'question_answered', since)) >= AUTOMATION_ANSWERS_MAX_PER_HOUR;
+  const { automationEvents } = deps.repos;
+  if ((await automationEvents.countForRun(run.id, 'question_answered', since)) >= AUTOMATION_ANSWERS_MAX_PER_HOUR) return ANSWER_CAP;
+  if ((await automationEvents.countForRun(run.id, 'question_answered', new Date(0))) >= AUTOMATION_ANSWERS_MAX_PER_RUN) return ANSWER_RUN_CAP;
+  return null;
+}
+
+/** Whether this question was already answered this way `ANSWER_CYCLE_MAX` times by the run in the run. */
+async function cycleReached(deps: AnswerDeps, run: AutomationRun, hash: string): Promise<boolean> {
+  const payloads = await deps.repos.automationEvents.payloadsForRun(run.id, 'question_answered', new Date(0));
+  return payloads.filter((p) => p.cycle === hash).length >= ANSWER_CYCLE_MAX;
 }
 
 /** The card as the database has it now: closed, counting down (someone scheduled first), or still waiting. */
@@ -116,38 +145,46 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
   const { repos } = deps;
   const log = deps.log ?? noopLog;
   if (q.kind !== 'choice' || q.status !== 'open') return 'closed';
-  const answered = async (via: 'repeat' | 'recommended') => {
-    await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'question_answered', payload: { via, tab_id: q.tab_id, question_id: q.id } }).catch(() =>
+  const answered = async (via: 'repeat' | 'recommended', cycle: string | null = null) => {
+    await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'question_answered', payload: { via, tab_id: q.tab_id, question_id: q.id, ...(cycle ? { cycle } : {}) } }).catch(() =>
       log.warn({ runId: run.id, tabQuestionId: q.id }, 'automation: question_answered not recorded'),
     );
     log.info({ runId: run.id, tabQuestionId: q.id, via }, 'automation: question answered');
   };
 
-  // the cap: past it, a countdown already running is stopped and the person answers
-  if (await capReached(deps, run)) {
+  // past a cap, a countdown already running is stopped and the person answers
+  const stop = async (reason: string, why: string): Promise<AnswerOutcome> => {
     if (q.auto_answer?.status === 'scheduled') {
       const cancelled = await repos.tabQuestions.cancelAutoAnswer(q.id, q.user_id);
       if (cancelled) await publishTabQuestions(repos, 'tab_question', [cancelled], { update: true });
     }
-    log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: answer cap reached');
-    return (await escalate(deps, run, ANSWER_CAP)) ? 'escalated' : 'left';
-  }
+    log.info({ runId: run.id, tabQuestionId: q.id }, why);
+    return (await escalate(deps, run, reason)) ? 'escalated' : 'left';
+  };
+  const cap = await capReached(deps, run);
+  if (cap) return stop(cap, 'automation: answer cap reached');
+
+  const payload = q.payload as ChoicePayload;
+  // what would be sent (a memory repeat's answer, or else the recommendation), for the cycle detector
+  const label = recommendedOption(payload);
+  const recommendedAnswer: ChoiceAnswer | null = label === null ? null : { answers: [{ selected: [payload.questions[0]!.options.findIndex((o) => o.recommended === true)] }] };
+  const planned = q.auto_answer?.status === 'scheduled' || q.auto_answer?.status === 'sent' ? q.auto_answer.answer : recommendedAnswer;
+  const cycle = planned ? questionCycleHash(payload, planned) : null;
+  if (cycle && (await cycleReached(deps, run, cycle))) return stop(ANSWER_CYCLE, 'automation: answer cycle');
 
   // 1. memory first
   const counting = q.auto_answer?.status;
   if (counting === 'scheduled' || counting === 'sent') {
-    await answered('repeat');
+    await answered('repeat', cycle);
     return 'repeat';
   }
 
   // 2. the agent's own recommendation, never past the keyword block
-  const payload = q.payload as ChoicePayload;
-  const label = recommendedOption(payload);
-  if (label !== null) {
-    const answer: ChoiceAnswer = { answers: [{ selected: [payload.questions[0]!.options.findIndex((o) => o.recommended === true)] }] };
+  if (label !== null && recommendedAnswer) {
+    const answer = recommendedAnswer;
     if (checkChoiceAnswer(payload, answer) === null && !autoAnswerBlocked(blocklistParts(payload, answer))) {
       if (await scheduleAutoAnswer(repos, { row: q, answer, by: 'automation', reason: RECOMMENDED_REASON, sources: [] })) {
-        await answered('recommended');
+        await answered('recommended', cycle);
         return 'recommended';
       }
       const now = await cardNow(repos, q);
@@ -395,7 +432,8 @@ export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQues
   if (q.kind !== 'permission' || q.status !== 'open') return 'closed';
   const handOver = async (reason: string): Promise<PermissionOutcome> => ((await escalate(deps, run, reason)) ? 'escalated' : 'left');
 
-  if (await capReached(deps, run)) {
+  // the per-run cap is about questions; permission allows only meet the hourly one
+  if ((await capReached(deps, run)) === ANSWER_CAP) {
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: answer cap reached');
     return handOver(ANSWER_CAP);
   }
