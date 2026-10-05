@@ -298,7 +298,7 @@ describe('a tab that keeps stopping: wake the chat once, then escalate (D15, TER
     const wake = withWake(w);
     await followRun(w.deps, w.run.id);
     expect(wake).toHaveBeenCalledTimes(1);
-    expect(wake).toHaveBeenCalledWith({ ownerId: 'u1', projectId: 'p1', runId: w.run.id, cardRef: 'TER-1', cardTitle: 'Card', tabName: null });
+    expect(wake).toHaveBeenCalledWith({ ownerId: 'u1', projectId: 'p1', runId: w.run.id, tabId: 'tab1', cardRef: 'TER-1', cardTitle: 'Card', tabName: null });
     expect(w.type).not.toHaveBeenCalled();
     expect(w.run.woken_at).toBeInstanceOf(Date);
     expect(w.run.status).toBe('running');
@@ -378,6 +378,7 @@ describe('a tab that keeps stopping: wake the chat once, then escalate (D15, TER
     await expect(escalateAutomationRun(ctx(false), { run_id: w.run.id, reason: 'x' })).rejects.toThrow();
     expect(w.run.status).toBe('running');
     await expect(escalateAutomationRun(ctx(true), { run_id: w.run.id, reason: 'não sei continuar' })).resolves.toEqual({ ok: true });
+    await expect(escalateAutomationRun(ctx(true), { run_id: w.run.id, reason: 'de novo' })).resolves.toEqual({ ok: true });
     expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'resume_cap' });
     expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', payload: { reason: 'resume_cap', tab_id: 'tab1' } })]);
   });
@@ -385,12 +386,13 @@ describe('a tab that keeps stopping: wake the chat once, then escalate (D15, TER
 
 describe('the stopped-tab wake text', () => {
   it('is pt-BR, starts with Automático:, names the card and the run, and carries no tab content', () => {
-    const text = stoppedTabWakeText({ runId: 'r1', cardRef: 'TER-1', cardTitle: 'Título «x»', tabName: 'api' }, 'tab1');
+    const text = stoppedTabWakeText({ runId: 'r1', tabId: 'tab1', cardRef: 'TER-1', cardTitle: 'Título «x»', tabName: 'api' });
     expect(text.startsWith('Automático: ')).toBe(true);
     expect(text).toContain('TER-1');
     expect(text).toContain('escalate_automation_run');
     expect(text).toContain('run_id "r1"');
     expect(text).toContain('send_input');
+    expect(text).toContain('tab_id tab1');
   });
 });
 

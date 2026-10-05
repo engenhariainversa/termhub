@@ -165,7 +165,7 @@ async function wakeStoppedOrEscalate(deps: FollowerDeps, run: AutomationRun, log
   }
   if (!(await repos.automationRuns.claimWake(run.id, run.claimed_by, now))) return;
   const woke = await deps
-    .wakeStopped({ ownerId: stop.ownerId, projectId: run.project_id, runId: run.id, cardRef: stop.task.ref, cardTitle: stop.task.title, tabName: stop.tab.name ?? null })
+    .wakeStopped({ ownerId: stop.ownerId, projectId: run.project_id, runId: run.id, tabId: stop.tab.id, cardRef: stop.task.ref, cardTitle: stop.task.title, tabName: stop.tab.name ?? null })
     .catch(() => false);
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, woke }, 'automation: chat woken for a stopped tab');
   if (!woke) await parkAndEscalate(repos, run, reason, log);
@@ -535,6 +535,8 @@ export async function escalateAutomationRun(ctx: ControlContext, i: { run_id: st
   if (!run) throw new ControlError('NOT_FOUND', msg('Execução automática não encontrada'));
   await ctx.scoped.project(run.project_id);
   if (run.status !== 'running' && run.status !== 'waiting') throw new ControlError('RUN_ENDED', msg('Esta execução automática já terminou'));
+  // already handed over (waiting): nothing to do, no second escalation
+  if (run.status === 'waiting') return { ok: true };
   await parkAndEscalate(ctx.repos, run, RESUME_CAP, ctx.log ?? noopLog);
   return { ok: true };
 }
