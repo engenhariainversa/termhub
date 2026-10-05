@@ -28,6 +28,7 @@ const readTools = new Set([
   'wait_for_state',
   'list_tasks',
   'list_automation_queue',
+  'get_automation_policy',
   'list_tickets',
   'get_ticket',
   'read_attachment',

@@ -13,6 +13,7 @@ import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMac
 import { addSubtasks, createTask, deleteTask, listTasks, moveTask, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
 import { automationQueue } from '../automation/queue.js';
+import { policyText } from '../automation/policy.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
 import { answerTabQuestionTool, listTabQuestions, recordDecision, searchMemory, MEMORY_REF, type MemoryRefKind } from '../control/memory.js';
 import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } from '../control/integrations.js';
@@ -257,6 +258,17 @@ export const TOOLS: ToolDef[] = [
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id },
     run: async (ctx, a) => ({ items: await automationQueue(ctx, (a as { project_id: string }).project_id) }),
+  },
+  {
+    name: 'get_automation_policy',
+    description:
+      "The automation policy of this project: whether automatic work is on, the autonomy level (pr, merge, deploy, release), what it covers and which paths are protected, in pt-BR. Read it before opening a pull request, to know what happens after it.",
+    scope: 'read', resource: 'tasks', action: 'read',
+    input: { project_id: id },
+    run: async (ctx, a) => {
+      const { automation, repo } = await getProjectSetup(ctx, a as { project_id: string });
+      return { enabled: automation.enabled, autonomy: automation.autonomy, text: policyText(automation, repo?.deploy_workflow ?? null) };
+    },
   },
   {
     name: 'read_attachment',
