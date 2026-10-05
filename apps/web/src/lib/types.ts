@@ -498,6 +498,25 @@ export interface AutomationQueueItem {
   reason_text: string | null;
 }
 
+/** Tokens and the API-equivalent cost estimate (US$) of automatic tabs; `cost_usd` null = no priced model. */
+export interface AutomationUsageLine {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  cost_usd: number | null;
+}
+
+/** GET /projects/:id/automation/usage (spec D23). */
+export interface AutomationUsage {
+  from: string | null;
+  to: string | null;
+  total: AutomationUsageLine;
+  cards: Array<AutomationUsageLine & { task_id: string; ref: string }>;
+  epics: Array<AutomationUsageLine & { epic_id: string; ref: string }>;
+  accounts: Array<AutomationUsageLine & { account_id: string; label: string | null }>;
+}
+
 export type AutomationAutonomy = 'pr' | 'merge' | 'deploy' | 'release';
 
 /** Mirrors the server's `ProjectAutomation` (setup/schema.ts). Off by default. */

@@ -4,6 +4,7 @@ import { canHaveSubtasks, cardPath, taskStatusLabel, taskTypeLabel, typeOptions 
 import { ticketKey } from '../lib/ticket-link';
 import { PROVIDER_LABEL, type Task, type TaskColumn, type TaskPatchInput, type TaskType } from '../lib/types';
 import { CardPullRequests } from './CardPullRequests';
+import { CardUsageCost } from './UsageCost';
 import { ConfirmDialog, Modal } from './Modal';
 import { SubtaskList } from './SubtaskList';
 import { formatDate, formatDateTime } from '../lib/format';
@@ -190,6 +191,7 @@ export function TaskEditor({
         />
         {canHaveSubtasks(task) && <SubtaskList parent={task} onChange={onSubtasks} onError={onError} />}
         <CardPullRequests taskId={task.id} />
+        <CardUsageCost task={task} />
         {ref && (
           <div className="rounded-md border border-line bg-bg p-3 text-xs">
             <div className="flex items-center gap-2">

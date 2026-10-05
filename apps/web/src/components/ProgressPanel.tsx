@@ -2,13 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { AutomationBadge } from './AutomationBadge';
+import { UsageCost } from './UsageCost';
+import { formatCost, hasTokens, loadUsage } from '../lib/automation-usage';
 import { PauseBanner } from './PauseAutomationButton';
 import { feedLine } from '../lib/automation-feed';
 import { useMonitor } from '../lib/monitor';
 import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, releaseLabel, stateLabel, withLiveTab } from '../lib/progress';
 import { relativeTime } from '../lib/time';
 import { i18n, useTranslation } from '../i18n';
-import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, ProgressEstimate, ProgressResponse, ProgressScope, PullRequestBadge } from '../lib/types';
+import type { AgentOnCard, AutomationFeedEvent, AutomationUsage, CardProgress, EpicProgress, ProgressEstimate, ProgressResponse, ProgressScope, PullRequestBadge } from '../lib/types';
 
 /** Percentages move at subtask pace; tab states come live from the monitor (spec D9). */
 export const PROGRESS_REFRESH_MS = 15_000;
@@ -108,7 +110,10 @@ export function PullRequestBadges({ pulls }: { pulls: PullRequestBadge[] }) {
   );
 }
 
-function CardRow({ card, projectId }: { card: CardProgress; projectId: string }) {
+/** What the automatic tabs cost, looked up by card and epic id. */
+type UsageIndex = Pick<AutomationUsage, 'cards' | 'epics'> | null;
+
+function CardRow({ card, projectId, usage }: { card: CardProgress; projectId: string; usage: UsageIndex }) {
   const { t } = useTranslation();
   return (
     <li className="space-y-1 py-2">
@@ -122,7 +127,10 @@ function CardRow({ card, projectId }: { card: CardProgress; projectId: string })
         </span>
       </div>
       <Bar percent={card.percent} label={`${card.ref} ${card.percent}%`} />
-      <EstimateLine estimate={card.estimate} />
+      <div className="flex flex-wrap gap-3">
+        <EstimateLine estimate={card.estimate} />
+        <UsageCost line={usage?.cards.find((c) => c.task_id === card.id)} />
+      </div>
       <PullRequestBadges pulls={card.pull_requests} />
       {card.agents && card.agents.length > 0 && (
         <div className="flex flex-wrap gap-1">
@@ -135,7 +143,7 @@ function CardRow({ card, projectId }: { card: CardProgress; projectId: string })
   );
 }
 
-function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string }) {
+function EpicBlock({ epic, projectId, usage }: { epic: EpicProgress; projectId: string; usage: UsageIndex }) {
   const { t } = useTranslation();
   return (
     <section className="space-y-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -162,11 +170,12 @@ function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string 
           </span>
         )}
         {epic.ci && <span>{epicCiLine(epic.ci)}</span>}
+        <UsageCost line={usage?.epics.find((e) => e.epic_id === epic.id)} />
       </div>
       {epic.ci_error && <p className="text-xs text-red-600">{epic.ci_error}</p>}
       <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
         {epic.cards.map((c) => (
-          <CardRow key={c.id} card={c} projectId={projectId} />
+          <CardRow key={c.id} card={c} projectId={projectId} usage={usage} />
         ))}
       </ul>
     </section>
@@ -204,12 +213,28 @@ export function AutomationFeed({ feed }: { feed: AutomationFeedEvent[] }) {
   );
 }
 
+/** The automatic tabs' estimated cost per AI account (spec D23). Nothing until a token was counted. */
+export function UsageByAccount({ usage }: { usage: AutomationUsage | null }) {
+  const { t } = useTranslation();
+  if (!usage || !hasTokens(usage.total)) return null;
+  return (
+    <p className="text-xs text-zinc-500" title={t('Estimativa em preço de API (equivalente em API); contas de assinatura não pagam por token.')}>
+      {t('Custo estimado: {{cost}}', { cost: formatCost(usage.total.cost_usd) })}
+      {usage.accounts
+        .filter(hasTokens)
+        .map((a) => ` · ${a.label ?? t('conta removida')} ${formatCost(a.cost_usd)}`)
+        .join('')}
+    </p>
+  );
+}
+
 /** Project section "Progresso" (spec 2026-09-26 progress-panel §4.6). Read-only. */
 export function ProgressPanel({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const [scope, setScope] = useState<ProgressScope>('active');
   const [data, setData] = useState<ProgressResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<AutomationUsage | null>(null);
   const { tabState } = useMonitor();
   // Only the latest request may write: a "Só ativos"/"Todos" toggle or a poll can overtake one in flight.
   const latest = useRef(0);
@@ -221,6 +246,11 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
       if (mine !== latest.current) return;
       setData(res);
       setError(null);
+      // The cost is asked only where automatic work ran (the feed has lines): nobody else pays for it.
+      if ((res.feed ?? []).length > 0) {
+        const u = await loadUsage(projectId);
+        if (mine === latest.current) setUsage(u);
+      } else setUsage(null);
     } catch {
       if (mine !== latest.current) return;
       setError(i18n.t('Não foi possível carregar o progresso.'));
@@ -271,8 +301,9 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
       )}
       {data && epics.length === 0 && <p className="text-sm text-zinc-500">{t('Nenhum épico em andamento')}</p>}
       <AutomationFeed feed={data?.feed ?? []} />
+      <UsageByAccount usage={usage} />
       {epics.map((e) => (
-        <EpicBlock key={e.id} epic={e} projectId={projectId} />
+        <EpicBlock key={e.id} epic={e} projectId={projectId} usage={usage} />
       ))}
     </div>
   );
