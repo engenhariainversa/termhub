@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Machine } from '../db/repositories/types.js';
 import type { Screen, SimStatus, SimulatorBackend, Viewer } from './session-manager.js';
 import { SimulatorSessionManager } from './session-manager.js';
+import { wdaPorts, type WdaPorts } from './ports.js';
 import { WdaClient } from './wda-client.js';
 
 const machine: Machine = { id: 'm1', name: 'mac', host: 'mac.local', ssh_user: 'u', ssh_port: 22, type: 'ssh', os: 'macos', capabilities: ['wda'], checked_at: null, owner_id: null, owner_name: null, created_at: '' };
@@ -29,14 +30,30 @@ function makeBackend(overrides: Partial<SimulatorBackend> = {}) {
   // vida real, onde o runner segue rodando em tmux até algo matá-lo. Testes que querem simular o
   // runner morrendo (ex.: durante a recuperação) sobrescrevem runnerAlive explicitamente.
   let runnerAliveCalls = 0;
+  // Where the fake runner listens. `runnerUp` follows startRunner/stopRunner; before either is
+  // called it follows the last runnerAlive answer, so "runner already alive" tests find it on
+  // candidate 0 like a runner started by the previous release.
+  let runnerAt: WdaPorts = wdaPorts(UDID);
+  let runnerUp: boolean | null = null;
+  let lastAlive = false;
   const backend: SimulatorBackend = {
     boot: vi.fn(async () => {}),
     runnerAlive: vi.fn(async () => {
       runnerAliveCalls++;
       return runnerAliveCalls > 1;
     }),
-    startRunner: vi.fn(async () => {}),
-    stopRunner: vi.fn(async () => {}),
+    startRunner: vi.fn(async (_m: Machine, _u: string, ports: WdaPorts) => {
+      runnerAt = ports;
+      runnerUp = true;
+    }),
+    stopRunner: vi.fn(async () => {
+      runnerUp = false;
+    }),
+    probePorts: vi.fn(async (_m: Machine, ports: WdaPorts) =>
+      (runnerUp ?? lastAlive) && ports.wdaPort === runnerAt.wdaPort
+        ? ({ wda: 'wda', mjpeg: 'mjpeg' } as const)
+        : ({ wda: 'free', mjpeg: 'free' } as const),
+    ),
     runnerTail: vi.fn(async () => ['linha do runner']),
     // Portas locais distintas a cada chamada, como o túnel ssh real (findFreePort por conexão).
     openTunnel: vi.fn(async (_m, ports) => {
@@ -68,8 +85,14 @@ function makeBackend(overrides: Partial<SimulatorBackend> = {}) {
     }),
     ...overrides,
   };
+  const innerAlive = backend.runnerAlive;
+  backend.runnerAlive = vi.fn(async (m: Machine, u: string) => {
+    lastAlive = await innerAlive(m, u);
+    return lastAlive;
+  });
   return {
     backend,
+    runnerPorts: () => runnerAt,
     fetchFn,
     createClientCalls,
     createClientInstances,

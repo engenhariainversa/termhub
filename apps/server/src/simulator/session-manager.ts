@@ -1,6 +1,7 @@
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { AGENT_OFFLINE_MESSAGE, NO_CHANNELS_MESSAGE } from './agent-tunnel.js';
+import type { PortProbe } from './port-probe.js';
 import { wdaPorts, type WdaPorts } from './ports.js';
 import type { Tunnel } from './tunnel.js';
 import { WdaClient, type Orientation } from './wda-client.js';
@@ -25,6 +26,8 @@ export interface SimulatorBackend {
   stopRunner(machine: Machine, udid: string): Promise<void>;
   runnerTail(machine: Machine, udid: string): Promise<string[]>;
   openTunnel(machine: Machine, ports: WdaPorts): Promise<Tunnel>;
+  /** Classifies the pair's ports on the machine (through a short-lived tunnel). */
+  probePorts(machine: Machine, ports: WdaPorts): Promise<PortProbe>;
   createClient(baseUrl: string): WdaClient;
   openMjpeg(port: number, onFrame: (f: Buffer) => void, onEnd: (err?: Error) => void): () => void;
 }
