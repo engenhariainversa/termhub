@@ -1,5 +1,6 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { catalogFiles } from './catalogs';
 
 /**
  * The web's i18n (spec 2026-10-04 i18n §2–§3). The pt-BR text is the key: `t('Salvar')` shows
@@ -60,11 +61,10 @@ function browserLanguages(): readonly string[] {
 
 type Catalog = Record<string, string>;
 
-/** `src/locales/<lang>/<area>.json`, merged per language. pt-BR files hold only plural forms. */
+/** `src/locales/<lang>/<area>.json` (all of them, or the city's: ./catalogs.ts), merged per language. pt-BR files hold only plural forms. */
 function loadCatalogs(): Record<Locale, Catalog> {
-  const files = import.meta.glob<{ default: Catalog }>('../locales/*/*.json', { eager: true });
   const out: Record<Locale, Catalog> = { 'pt-BR': {}, en: {} };
-  for (const [path, mod] of Object.entries(files)) {
+  for (const [path, mod] of Object.entries(catalogFiles)) {
     const lang = path.split('/').at(-2);
     if (isLocale(lang)) Object.assign(out[lang], mod.default);
   }

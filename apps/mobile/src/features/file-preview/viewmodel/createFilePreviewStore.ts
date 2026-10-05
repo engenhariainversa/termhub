@@ -1,6 +1,7 @@
 // One file preview screen's state (spec 2026-10-04 file preview D15): the file read on its machine on
 // demand, or why it could not be. Nothing of the file is kept once the screen goes.
 import { create } from 'zustand';
+import { t } from '@/i18n';
 import type { TFilePreviewOk, TFilePreviewQuery } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { Auth, MobileApi } from '@/services/api/types';
@@ -36,7 +37,7 @@ export function createFilePreviewStore({ api, session, query }: FilePreviewDeps)
         if (gen !== generation || isLocked(e)) return;
         if (session().handleApiError(e)) return;
         const outdated = e instanceof ApiError && e.code === 'AGENT_OUTDATED';
-        set({ state: { phase: 'refused', text: e instanceof Error && e.message ? e.message : 'Não foi possível abrir o arquivo.', machine: null, outdated } });
+        set({ state: { phase: 'refused', text: e instanceof Error && e.message ? e.message : t('Não foi possível abrir o arquivo.'), machine: null, outdated } });
       }
     },
   }));

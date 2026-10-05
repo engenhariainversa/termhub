@@ -3,8 +3,9 @@ import { api, ApiError } from '../lib/api';
 import type { ChatDefault, ChatGrantListItem } from '../lib/types';
 import { untilLabel } from './chat/grant-time';
 import { endedAtLabel, GRANT_STATE_LABEL, grantOriginLabel, grantTitleLabel } from './chat/grant-list-text';
+import { i18n, useTranslation } from '../i18n';
 
-const LOAD_FAILED = 'Não foi possível carregar as permissões.';
+const loadFailedText = () => i18n.t('Não foi possível carregar as permissões.');
 
 // A tab row also names its project (a tab grant is always inside one); a project row's title already
 // names the project, so nothing is appended there.
@@ -17,6 +18,7 @@ const title = (g: ChatGrantListItem) => `${grantTitleLabel(g)}${g.kind === 'tab'
  * paged history. Reads on open, after a revoke and on "Carregar mais"; no live updates.
  */
 export function ChatGrantsView() {
+  const { t } = useTranslation();
   const [active, setActive] = useState<ChatGrantListItem[] | null>(null);
   const [history, setHistory] = useState<ChatGrantListItem[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export function ChatGrantsView() {
     try {
       setDefaults((await api.setChatDefault(d.kind, !d.allowed)).defaults);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Não foi possível salvar a alteração.');
+      setError(e instanceof ApiError ? e.message : t('Não foi possível salvar a alteração.'));
     } finally {
       setSavingKind(null);
     }
@@ -70,7 +72,7 @@ export function ChatGrantsView() {
       setHistory((prev) => [...(prev ?? []), ...h.grants]);
       setNext(h.next_cursor);
     } catch {
-      setError(LOAD_FAILED);
+      setError(loadFailedText());
     } finally {
       setLoadingMore(false);
     }
@@ -84,7 +86,7 @@ export function ChatGrantsView() {
     } catch (e) {
       // 409: already revoked (another screen, or a reset) — the list is stale, not wrong.
       if (!(e instanceof ApiError && e.status === 409)) {
-        setError(e instanceof ApiError ? e.message : 'Não foi possível revogar a permissão.');
+        setError(e instanceof ApiError ? e.message : t('Não foi possível revogar a permissão.'));
         setRevokingId(null);
         return;
       }
@@ -96,25 +98,25 @@ export function ChatGrantsView() {
   if (loadFailed)
     return (
       <div className="space-y-2 text-sm">
-        <p className="text-danger">{LOAD_FAILED}</p>
+        <p className="text-danger">{loadFailedText()}</p>
         <button type="button" className="btn-ghost" onClick={() => void load()}>
-          Tentar de novo
+          {t('Tentar de novo')}
         </button>
       </div>
     );
-  if (active === null || history === null) return <p className="text-sm text-fg-dim">Carregando…</p>;
+  if (active === null || history === null) return <p className="text-sm text-fg-dim">{t('Carregando…')}</p>;
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-fg-muted">O que o chat pode fazer sem pedir confirmação. Permissões de conversa valem por até 24 horas; as sem prazo valem até você revogar.</p>
+      <p className="text-sm text-fg-muted">{t('O que o chat pode fazer sem pedir confirmação. Permissões de conversa valem por até 24 horas; as sem prazo valem até você revogar.')}</p>
       {error && <p className="text-sm text-danger">{error}</p>}
       {defaults && (
         <section aria-labelledby="chat-defaults" className="space-y-2">
           <h2 id="chat-defaults" className="text-sm font-semibold text-fg">
-            Liberadas por padrão
+            {t('Liberadas por padrão')}
           </h2>
           <p className="text-xs text-fg-dim">
-            O chat faz estas ações sem pedir confirmação; leituras nunca pedem. Desmarque para voltar a pedir. Sempre pedem confirmação: apagar card, rodar comando, responder permissões, texto com “!”, as teclas Ctrl+C e Esc, fechar aba trabalhando, integrações e status de ticket.
+            {t('O chat faz estas ações sem pedir confirmação; leituras nunca pedem. Desmarque para voltar a pedir. Sempre pedem confirmação: apagar card, rodar comando, responder permissões, texto com “!”, as teclas Ctrl+C e Esc, fechar aba trabalhando, integrações e status de ticket.')}
           </p>
           <ul className="space-y-1">
             {defaults.map((d) => (
@@ -130,20 +132,20 @@ export function ChatGrantsView() {
       )}
       <section aria-labelledby="chat-grants-active" className="space-y-2">
         <h2 id="chat-grants-active" className="text-sm font-semibold text-fg">
-          Ativas
+          {t('Ativas')}
         </h2>
         {active.length === 0 ? (
-          <p className="text-sm text-fg-dim">Nenhuma permissão ativa agora.</p>
+          <p className="text-sm text-fg-dim">{t('Nenhuma permissão ativa agora.')}</p>
         ) : (
           <ul className="space-y-2">
             {active.map((g) => (
               <li key={g.id} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-bg-2 px-3 py-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm text-fg">{title(g)}</p>
-                  <p className="text-xs text-fg-dim">{`${grantOriginLabel(g)} · ${typeof g.expires_at === 'string' ? untilLabel(g.expires_at) : 'sem prazo'}`}</p>
+                  <p className="text-xs text-fg-dim">{`${grantOriginLabel(g)} · ${typeof g.expires_at === 'string' ? untilLabel(g.expires_at) : t('sem prazo')}`}</p>
                 </div>
                 <button type="button" className="btn-ghost shrink-0" disabled={revokingId === g.id} onClick={() => void revoke(g.id)}>
-                  Revogar
+                  {t('Revogar')}
                 </button>
               </li>
             ))}
@@ -152,23 +154,25 @@ export function ChatGrantsView() {
       </section>
       <section aria-labelledby="chat-grants-history" className="space-y-2">
         <h2 id="chat-grants-history" className="text-sm font-semibold text-fg">
-          Histórico
+          {t('Histórico')}
         </h2>
         {history.length === 0 ? (
-          <p className="text-sm text-fg-dim">Nada no histórico ainda.</p>
+          <p className="text-sm text-fg-dim">{t('Nada no histórico ainda.')}</p>
         ) : (
           <ul className="space-y-2">
             {history.map((g) => (
               <li key={g.id} className="rounded-lg border border-line px-3 py-2">
                 <p className="truncate text-sm text-fg">{title(g)}</p>
-                <p className="text-xs text-fg-dim">{`${grantOriginLabel(g)} · ${GRANT_STATE_LABEL[g.state]}${g.ended_at ? ` em ${endedAtLabel(g.ended_at)}` : ''}`}</p>
+                <p className="text-xs text-fg-dim">{g.ended_at
+                    ? t('{{origin}} · {{state}} em {{date}}', { origin: grantOriginLabel(g), state: GRANT_STATE_LABEL[g.state], date: endedAtLabel(g.ended_at) })
+                    : `${grantOriginLabel(g)} · ${GRANT_STATE_LABEL[g.state]}`}</p>
               </li>
             ))}
           </ul>
         )}
         {next && (
           <button type="button" className="btn-ghost" disabled={loadingMore} onClick={() => void loadMore()}>
-            Carregar mais
+            {t('Carregar mais')}
           </button>
         )}
       </section>

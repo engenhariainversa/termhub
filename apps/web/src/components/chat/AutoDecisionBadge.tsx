@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useId, useState } from 'react';
 import type { AutoDecision, ChatAction } from '../../lib/types';
 
@@ -23,6 +24,7 @@ export function autoDecisionSourceLine(source: AutoDecision['sources'][number]):
  * the model or the person's own history.
  */
 export function AutoDecisionBadge({ decision }: { decision: AutoDecision }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const detailId = useId();
   return (
@@ -31,16 +33,16 @@ export function AutoDecisionBadge({ decision }: { decision: AutoDecision }) {
         type="button"
         aria-expanded={open}
         aria-controls={detailId}
-        title={decision.reason ?? 'Decidido com base na memória'}
+        title={decision.reason ?? t('Decidido com base na memória')}
         className="inline-flex items-center rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 font-medium text-accent hover:bg-accent/20"
         onClick={() => setOpen((v) => !v)}
       >
-        Decisão automática
+        {t('Decisão automática')}
       </button>
       {open && (
         <div id={detailId} className="mt-1 space-y-0.5 text-fg-dim">
-          {decision.reason && <p className="whitespace-pre-wrap">Motivo: {decision.reason}</p>}
-          <p>Com base em:</p>
+          {decision.reason && <p className="whitespace-pre-wrap">{t('Motivo: {{reason}}', { reason: decision.reason })}</p>}
+          <p>{t('Com base em:')}</p>
           <ul className="list-inside list-disc">
             {decision.sources.map((s) => (
               <li key={s.ref} className="whitespace-pre-wrap">

@@ -1,4 +1,5 @@
-import { REPLY_CARD_LABEL, replyExcerpt, tabQuestionReplyText, type ReplyCardKind, type ReplyCardRef } from '@/services/api/contract';
+import { t } from '@/i18n';
+import { replyExcerpt, type ReplyCardKind, type ReplyCardRef } from '@/services/api/contract';
 import type { ChatAction, ChatMessage, TabQuestion } from './types';
 
 /** What the next send answers, while it is being written and on the optimistic row (TER-447): a
@@ -8,7 +9,32 @@ export type ReplyRef = { id: string; role: 'user' | 'assistant'; excerpt: string
 /** A quote as a message carries it (the server's snapshot). */
 export type ReplyOnRow = NonNullable<ChatMessage['reply_to']>;
 
-export const REPLY_AUTHOR: Record<ReplyRef['role'], string> = { assistant: 'Concierge', user: 'Você' };
+export const REPLY_AUTHOR: Record<ReplyRef['role'], string> = {
+  assistant: 'Concierge',
+  get user() {
+    return t('Você');
+  },
+};
+
+/** What a quote of a card is labelled with, where a message's quote shows its author (TER-849): the
+ * contract's `REPLY_CARD_LABEL` (pt-BR, shared with the server) in the language the app shows. */
+export const REPLY_CARD_LABEL: Record<ReplyCardKind, string> = {
+  get action() {
+    return t('Confirmação');
+  },
+  get tab_question() {
+    return t('Pergunta da aba');
+  },
+};
+
+/** The words a tab question card asks, quoted by a reply to it (TER-849): the contract's
+ * `tabQuestionReplyText` with its one sentence of its own in the language the app shows. */
+export function tabQuestionReplyText(
+  q: { kind: 'choice'; payload: { questions: readonly { question: string }[] } } | { kind: 'permission'; payload: { tool_name: string; question?: string } },
+): string {
+  if (q.kind === 'choice') return q.payload.questions.map((item) => item.question.trim()).filter(Boolean).join(' · ');
+  return q.payload.question?.trim() || t('Permissão para usar {{tool}}', { tool: q.payload.tool_name });
+}
 
 /** Who or what a quote names: a message's author, or a card's kind. */
 export function replyLabel(reply: { role: ReplyRef['role']; card?: ReplyCardKind | ReplyCardRef }): string {

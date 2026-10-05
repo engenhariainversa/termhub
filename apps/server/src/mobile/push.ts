@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { isPendingDeletion } from '../account/deletion.js';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
 import { failureLabel } from '../chat/service.js';
 import type { Device } from '../db/repositories/devices.js';
@@ -379,7 +380,8 @@ export class MobilePushService {
       const ctx = await this.names(event.user_id, projectId, event.tab_id, event.machine_id);
       const data = { kind: 'confirmation', conversation_id: event.conversation_id, project_id: projectId, action_id: event.action_id };
       await this.deliver(event.user_id, 'confirmation', confirmationText(ctx), data, await this.offline(event.user_id));
-    } else if (event.type === 'tab_question' && event.question.kind !== 'suggestion' && !event.resurfaced) {
+    } else if (event.type === 'tab_question' && event.question.kind !== 'suggestion' && !event.resurfaced && !event.update) {
+      // `update`: the same open card republished because it changed (TER-919) — told once is enough.
       // (A suggestion never rides `tab_question` — it has its own events and is never pushed — the
       // kind check only narrows the view's type.)
       // Same channel as a confirmation — the history row keeps that kind, which every app version
@@ -424,8 +426,11 @@ export class MobilePushService {
   }
 
   /** The history row first — it exists even when sending fails — then the push, which carries the
-   * row's id as `notification_id` so a tap on it can mark that row read. */
+   * row's id as `notification_id` so a tap on it can mark that row read. An account waiting out its
+   * deletion (TER-720) is deactivated: it gets neither (TER-920); a cancel brings pushes back. */
   private async deliver(userId: string, kind: Kind, text: PushText, data: Record<string, unknown>, devices: Device[], collapseId?: string): Promise<void> {
+    const owner = await this.deps.repos.users.findById(userId);
+    if (!owner || isPendingDeletion(owner)) return;
     const row = await this.deps.repos.userNotifications.create({ user_id: userId, kind, title: text.title, body: text.body, data });
     const targets = devices.filter((d): d is Device & { push_token: string } => !!d.push_token);
     if (targets.length === 0) return;

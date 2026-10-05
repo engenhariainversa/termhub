@@ -9,9 +9,10 @@ import { ExpoPushSender, ExpoReceiptFetcher, MobilePushService, sweepPushReceipt
 const mkDevice = (id: string, token: string): Device => ({ id, user_id: 'u1', push_token: token, status: 'active' }) as unknown as Device;
 const user = { id: 'u1', email: 'ana@example.com' } as unknown as User;
 
-function setup(opts: { devices?: Device[]; live?: string[] } = {}) {
+function setup(opts: { devices?: Device[]; live?: string[]; deletionScheduledAt?: string } = {}) {
   const devices = opts.devices ?? [mkDevice('d1', 'ExponentPushToken[a]'), mkDevice('d2', 'ExponentPushToken[b]')];
   const repos = {
+    users: { findById: vi.fn(async (id: string) => ({ ...user, id, deletion_scheduled_at: opts.deletionScheduledAt ?? null })) },
     devices: { listActiveWithPush: vi.fn(async () => devices), setPushToken: vi.fn(async () => undefined), clearPushTokenIf: vi.fn(async () => true) },
     deviceEvents: { record: vi.fn(async () => undefined) },
     userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })), countUnread: vi.fn(async () => 3), markReadByData: vi.fn(async () => 1) },
@@ -284,6 +285,19 @@ describe('MobilePushService', () => {
     expect(sent).toHaveLength(0);
   });
 
+  it('the same open question republished because its card changed (update) is not notified again (TER-919)', async () => {
+    const { service, sent, repos } = setup();
+    stop = service.start();
+    const question = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'choice' as const, payload: { questions: [] }, status: 'open' as const, answer: null, error_code: null, created_at: '', answered_at: null, closed_at: null };
+    chatBus.publish({ type: 'tab_question', user_id: 'u1', conversation_id: 'cp', question } as ChatEvent);
+    await flush();
+    // A countdown, a concierge suggestion, a cancel, the switch turned off, a lost sender: each redraws the card.
+    for (let i = 0; i < 5; i++) chatBus.publish({ type: 'tab_question', user_id: 'u1', conversation_id: 'cp', question, update: true } as ChatEvent);
+    await flush();
+    expect(repos.userNotifications.create).toHaveBeenCalledTimes(1);
+    expect(sent).toHaveLength(1);
+  });
+
   it('answered and closed tab questions write no row and show nothing: their rows go read, the badge follows (TER-923)', async () => {
     const { service, sent, repos } = setup();
     stop = service.start();
@@ -294,6 +308,41 @@ describe('MobilePushService', () => {
     expect(repos.userNotifications.create).not.toHaveBeenCalled();
     expect(repos.userNotifications.markReadByData).toHaveBeenCalledWith('u1', 'tab_question_id', 'q1', expect.any(Date));
     expect(sent.flat().every((m) => m.title === undefined && m.badge === 3 && m.data.kind === 'badge')).toBe(true);
+  });
+});
+
+describe('MobilePushService — account pending deletion (TER-920)', () => {
+  const question = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'permission' as const, payload: { tool_name: 'Bash' }, status: 'open' as const, answer: null, error_code: null, created_at: '', answered_at: null, closed_at: null };
+
+  it('sends nothing and writes no history row for any event while the deletion is pending', async () => {
+    const t = setup({ deletionScheduledAt: '2026-11-03T00:00:00.000Z' });
+    stop = t.service.start();
+    chatBus.publish(confirmation);
+    chatBus.publish({ type: 'tab_question', user_id: 'u1', conversation_id: 'cp', question } as ChatEvent);
+    chatBus.publish(finished('cp'));
+    await t.service.deviceRequest(user, { id: 'r1', model: 'Pixel 8', city: null, country: null } as unknown as DeviceRequest);
+    await flush();
+    expect(t.repos.users.findById).toHaveBeenCalledWith('u1');
+    expect(t.repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(t.sent).toEqual([]);
+  });
+
+  it('sends nothing for a user that no longer exists', async () => {
+    const t = setup();
+    t.repos.users.findById.mockResolvedValueOnce(undefined as never);
+    stop = t.service.start();
+    chatBus.publish(confirmation);
+    await flush();
+    expect(t.repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(t.sent).toEqual([]);
+  });
+
+  it('pushes again once the deletion is cancelled', async () => {
+    const t = setup();
+    stop = t.service.start();
+    chatBus.publish(confirmation);
+    await flush();
+    expect(t.sent).toHaveLength(1);
   });
 });
 

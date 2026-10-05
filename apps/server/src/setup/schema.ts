@@ -100,6 +100,33 @@ export const aiSchema = z
   });
 export type ProjectAi = z.infer<typeof aiSchema>;
 
+export const AUTONOMY_LEVELS = ['pr', 'merge', 'deploy', 'release'] as const;
+export type AutonomyLevel = (typeof AUTONOMY_LEVELS)[number];
+const glob = z.string().trim().min(1).max(200);
+// 1200, not more: the implementer template with a custom middle must stay under 4000 characters
+const promptText = z.string().trim().min(1).max(1200).nullable().default(null);
+
+/** Agentic board automation (spec 2026-10-04). Off by default: nothing runs until `enabled`. */
+export const automationSchema = z.object({
+  enabled: z.boolean().default(false),
+  types: z.array(z.enum(['story', 'task', 'bug', 'spike'])).min(1).default(['story', 'task', 'bug']),
+  // maintainer 2026-10-04: pr for everyone (spec §15.1 alternative)
+  autonomy: z.enum(AUTONOMY_LEVELS).default('pr'),
+  release_paths: z.array(glob).max(50).default([]),
+  store_paths: z.array(glob).max(50).default([]),
+  release_workflows: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
+  epic_branch_pattern: z.string().trim().min(1).max(100).refine((p) => p.includes('{ref}'), 'use {ref}').default('epic/{ref}-{slug}'),
+  worktrees_dir: z.string().trim().min(1).max(512).default('~/.termhub/worktrees'),
+  allowed_tools: z.array(z.string().trim().min(1).max(200)).max(100).nullable().default(null),
+  max_parallel: z.number().int().min(1).max(100).nullable().default(null),
+  resume_max: z.number().int().min(0).max(10).default(3),
+  fix_attempts: z.number().int().min(0).max(10).default(3),
+  daily_budget_usd: z.number().positive().max(100000).nullable().default(null),
+  summary_hour: z.number().int().min(0).max(23).nullable().default(null),
+  prompts: z.object({ implementer: promptText, integrator: promptText, fixer: promptText }).default({}),
+});
+export type ProjectAutomation = z.infer<typeof automationSchema>;
+
 export const setupSchema = z.object({
   repo: repoSchema.nullable().default(null),
   tickets: ticketsSchema.nullable().default(null),
@@ -109,6 +136,7 @@ export const setupSchema = z.object({
   verify: verifySchema.default({}),
   approvals: approvalsSchema.default({}),
   ai: aiSchema.default({}),
+  automation: automationSchema.default({}),
 });
 
 export type ProjectSetupData = z.infer<typeof setupSchema>;

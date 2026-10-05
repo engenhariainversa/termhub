@@ -1,3 +1,4 @@
+import { setLocale } from '@/i18n';
 import type { TProjectAiOption } from '@/services/api/contract';
 import { accountLabel, addAccount, canSave, draftFrom, modelError, modelValid, modelWarning, moveAccount, payload, PROJECT_AI_MSG, providersOf, removeAccount, setModel } from './project-ai';
 
@@ -12,6 +13,16 @@ describe('accountLabel', () => {
   it('names the account, its default login, its provider and its machine', () => {
     expect(accountLabel(AVAILABLE[0]!)).toBe('Pessoal (login padrão) · Claude · jarvis');
     expect(accountLabel(AVAILABLE[2]!)).toBe('Codex · Codex · hulk');
+  });
+
+  it('in English', () => {
+    setLocale('en');
+    try {
+      expect(accountLabel(AVAILABLE[0]!)).toBe('Pessoal (default login) · Claude · jarvis');
+      expect(modelError({ choice: 'other', other: 'opus 4' })).toBe('Use only letters, numbers, dots, hyphens, colons or brackets.');
+    } finally {
+      setLocale(null);
+    }
   });
 });
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { AppText, Banner, PinInput, Screen } from '@/ui';
 import { useSessionStore } from '../viewmodel/useSessionStore';
 
@@ -9,6 +10,7 @@ const PIN_LENGTH = 6;
  * The store's own `createPin` re-checks equality (defence in depth) but this screen never lets a
  * mismatched pair reach it. */
 export function CreatePinScreen() {
+  const { t } = useTranslation();
   const createPin = useSessionStore((s) => s.createPin);
   const storeError = useSessionStore((s) => s.error);
   const busy = useSessionStore((s) => s.busy);
@@ -30,7 +32,7 @@ export function CreatePinScreen() {
       return;
     }
     if (next !== firstPin) {
-      setMismatch('Os PINs não são iguais');
+      setMismatch(t('Os PINs não são iguais'));
       setFirstPin('');
       setPin('');
       setStep(1);
@@ -49,8 +51,8 @@ export function CreatePinScreen() {
   return (
     <Screen>
       <View className="flex-1 justify-center gap-6">
-        <AppText variant="title">Criar PIN</AppText>
-        {busy ? null : <AppText variant="muted">{step === 1 ? 'Crie um PIN de 6 dígitos' : 'Repita o PIN'}</AppText>}
+        <AppText variant="title">{t('Criar PIN')}</AppText>
+        {busy ? null : <AppText variant="muted">{step === 1 ? t('Crie um PIN de 6 dígitos') : t('Repita o PIN')}</AppText>}
         {mismatch ? <Banner tone="danger" text={mismatch} /> : null}
         {storeError ? <Banner tone="danger" text={storeError} /> : null}
         {/* Activation (the server call, then scrypt wrapping the secret) takes a moment: say so, rather
@@ -58,10 +60,10 @@ export function CreatePinScreen() {
         {busy ? (
           <View className="items-center gap-3 py-4">
             <ActivityIndicator />
-            <AppText variant="muted">Ativando este aparelho…</AppText>
+            <AppText variant="muted">{t('Ativando este aparelho…')}</AppText>
           </View>
         ) : (
-          <PinInput value={pin} onChange={onChange} length={PIN_LENGTH} accessibilityLabel="PIN" />
+          <PinInput value={pin} onChange={onChange} length={PIN_LENGTH} accessibilityLabel={t('PIN')} />
         )}
       </View>
     </Screen>

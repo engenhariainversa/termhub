@@ -1,3 +1,4 @@
+import { setLocale } from '@/i18n';
 import { stateLine } from './state-line';
 
 const tab = (p: Partial<Parameters<typeof stateLine>[0]>) => stateLine({ state: null, background: false, finished: false, needs_you: false, activity: null, ...p });
@@ -25,4 +26,15 @@ it('idle or no state is Parado; error is Erro', () => {
   expect(tab({ state: 'idle' })).toBe('Parado');
   expect(tab({ state: null })).toBe('Parado');
   expect(tab({ state: 'error' })).toBe('Erro');
+});
+
+describe('in English', () => {
+  beforeEach(() => setLocale('en'));
+  afterEach(() => setLocale(null));
+
+  it('says the state in English', () => {
+    expect(tab({ state: 'working', activity: 'Bash' })).toBe('Working · Bash');
+    expect(tab({ state: 'waiting_input' })).toBe('Waiting for you');
+    expect(tab({ state: 'idle' })).toBe('Idle');
+  });
 });

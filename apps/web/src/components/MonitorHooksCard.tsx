@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import type { Machine, MachineHooks } from '../lib/types';
 import { formatDateTime } from '../lib/format';
+import { i18n, Trans, useTranslation } from '../i18n';
 
 /**
  * What the machine's tabs are reporting, in one sentence. A tab only reaches the monitor once its
@@ -11,31 +12,33 @@ import { formatDateTime } from '../lib/format';
 export function monitorHealthNote(machine: Pick<Machine, 'tabs' | 'tabs_reporting'>, installed: boolean): { text: string; warn: boolean } {
   const tabs = machine.tabs ?? 0;
   const reporting = machine.tabs_reporting ?? 0;
-  if (tabs === 0) return { text: 'Nenhuma tab de terminal nesta máquina ainda.', warn: false };
+  if (tabs === 0) return { text: i18n.t('Nenhuma tab de terminal nesta máquina ainda.'), warn: false };
   if (reporting === 0) {
     return {
       text: installed
-        ? `Nenhuma das ${tabs} tabs reportou estado ainda: elas não aparecem em “Precisando de você”. O estado chega no primeiro hook — rode algo numa tab.`
-        : `Nenhuma das ${tabs} tabs reportou estado: sem os hooks instalados, elas não aparecem em “Precisando de você”.`,
+        ? i18n.t('Nenhuma das {{count}} tabs reportou estado ainda: elas não aparecem em “Precisando de você”. O estado chega no primeiro hook — rode algo numa tab.', { count: tabs })
+        : i18n.t('Nenhuma das {{count}} tabs reportou estado: sem os hooks instalados, elas não aparecem em “Precisando de você”.', { count: tabs }),
       warn: true,
     };
   }
-  return { text: `${reporting} de ${tabs} tabs reportando estado ao monitor.`, warn: false };
+  return { text: i18n.t('{{reporting}} de {{count}} tabs reportando estado ao monitor.', { reporting, count: tabs }), warn: false };
 }
 
 type HookResult = 'installed' | 'skipped';
 
 /** What an install hooked, tool by tool (a Cursor status left out comes from an agent that predates it). */
 export function hooksInstallNote(r: { claude: HookResult; claude_dirs?: string[]; codex: HookResult; cursor?: HookResult | 'agent_outdated' }): string {
-  const found = (s: HookResult | undefined) => (s === 'installed' ? 'ok' : 'não encontrado');
-  const claude = r.claude === 'installed' ? `ok (${(r.claude_dirs ?? ['~/.claude']).join(', ')})` : 'não encontrado';
-  const codex = r.codex === 'installed' ? 'ok (abra o Codex uma vez e confie nos hooks)' : 'não encontrado';
-  const cursor = r.cursor === 'agent_outdated' ? 'atualize o agente (0.4.3 ou mais novo)' : found(r.cursor);
-  return `Claude Code: ${claude} · Codex: ${codex} · Cursor CLI: ${cursor}. Vale para sessões abertas a partir de agora.`;
+  const missing = i18n.t('não encontrado');
+  const found = (s: HookResult | undefined) => (s === 'installed' ? 'ok' : missing);
+  const claude = r.claude === 'installed' ? `ok (${(r.claude_dirs ?? ['~/.claude']).join(', ')})` : missing;
+  const codex = r.codex === 'installed' ? i18n.t('ok (abra o Codex uma vez e confie nos hooks)') : missing;
+  const cursor = r.cursor === 'agent_outdated' ? i18n.t('atualize o agente (0.4.3 ou mais novo)') : found(r.cursor);
+  return i18n.t('Claude Code: {{claude}} · Codex: {{codex}} · Cursor CLI: {{cursor}}. Vale para sessões abertas a partir de agora.', { claude, codex, cursor });
 }
 
 /** Machine form: install / remove the monitor hooks (what feeds "Precisando de você"). */
 export function MonitorHooksCard({ machine }: { machine: Machine }) {
+  const { t } = useTranslation();
   const [hooks, setHooks] = useState<MachineHooks | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +49,7 @@ export function MonitorHooksCard({ machine }: { machine: Machine }) {
     api.machines
       .hooks(machine.id)
       .then((h) => !cancelled && setHooks(h))
-      .catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : 'Erro ao consultar'));
+      .catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : t('Erro ao consultar')));
     return () => {
       cancelled = true;
     };
@@ -61,14 +64,14 @@ export function MonitorHooksCard({ machine }: { machine: Machine }) {
       setHooks({ installed_at: r.installed_at, hooks_url: r.hooks_url });
       setNote(hooksInstallNote(r));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Erro ao instalar');
+      setError(e instanceof ApiError ? e.message : t('Erro ao instalar'));
     } finally {
       setBusy(false);
     }
   };
 
   const remove = async () => {
-    if (!window.confirm('Remover os hooks do termhub desta máquina?')) return;
+    if (!window.confirm(t('Remover os hooks do termhub desta máquina?'))) return;
     setBusy(true);
     setError(null);
     setNote(null);
@@ -76,7 +79,7 @@ export function MonitorHooksCard({ machine }: { machine: Machine }) {
       await api.machines.removeHooks(machine.id);
       setHooks((h) => (h ? { ...h, installed_at: null } : h));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Erro ao remover');
+      setError(e instanceof ApiError ? e.message : t('Erro ao remover'));
     } finally {
       setBusy(false);
     }
@@ -87,23 +90,25 @@ export function MonitorHooksCard({ machine }: { machine: Machine }) {
   return (
     <div className="rounded-md border border-line bg-bg p-2 text-xs">
       <div className="flex items-center gap-2">
-        <p className="font-medium text-fg-muted">Monitor das tabs</p>
-        <span className="text-fg-dim">{hooks ? (installed ? `instalado em ${formatDateTime(hooks.installed_at!)}` : 'não instalado') : '…'}</span>
+        <p className="font-medium text-fg-muted">{t('Monitor das tabs')}</p>
+        <span className="text-fg-dim">{hooks ? (installed ? t('instalado em {{date}}', { date: formatDateTime(hooks.installed_at!) }) : t('não instalado')) : '…'}</span>
         <span className="ml-auto flex gap-1">
           {installed && (
             <button type="button" className="btn-ghost px-2 py-0.5" onClick={() => void remove()} disabled={busy}>
-              Remover
+              {t('Remover')}
             </button>
           )}
           <button type="button" className="btn-ghost px-2 py-0.5" onClick={() => void install()} disabled={busy || !hooks}>
-            {busy ? '…' : installed ? 'Reinstalar' : 'Instalar'}
+            {busy ? '…' : installed ? t('Reinstalar') : t('Instalar')}
           </button>
         </span>
       </div>
       <p className="mt-1 text-fg-dim">
-        Escreve <code className="font-mono">~/.termhub/bin/termhub-hook</code> e registra hooks no Claude Code (<code className="font-mono">~/.claude/settings.json</code> e o diretório de cada conta do Claude desta máquina, em Contas de IA), no Codex (
-        <code className="font-mono">~/.codex/config.toml</code>) e no Cursor CLI (<code className="font-mono">~/.cursor/hooks.json</code>) para avisar quando uma tab está esperando você. Só a pergunta da ferramenta é enviada, nunca o conteúdo do terminal.
-        {machine.type === 'agent' && ' Numa máquina com agente, é o próprio agente que escreve os arquivos (precisa estar conectado).'}
+        <Trans
+          i18nKey="Escreve <0>~/.termhub/bin/termhub-hook</0> e registra hooks no Claude Code (<1>~/.claude/settings.json</1> e o diretório de cada conta do Claude desta máquina, em Contas de IA), no Codex (<2>~/.codex/config.toml</2>) e no Cursor CLI (<3>~/.cursor/hooks.json</3>) para avisar quando uma tab está esperando você. Só a pergunta da ferramenta é enviada, nunca o conteúdo do terminal."
+          components={[<code key="0" className="font-mono" />, <code key="1" className="font-mono" />, <code key="2" className="font-mono" />, <code key="3" className="font-mono" />]}
+        />
+        {machine.type === 'agent' && ` ${t('Numa máquina com agente, é o próprio agente que escreve os arquivos (precisa estar conectado).')}`}
       </p>
       <p className={`mt-1 ${health.warn ? 'text-warn' : 'text-fg-muted'}`}>{health.text}</p>
       {hooks && <p className="mt-1 truncate font-mono text-[10px] text-fg-dim" title={hooks.hooks_url}>→ {hooks.hooks_url}</p>}

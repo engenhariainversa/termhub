@@ -8,9 +8,11 @@ import { STATUS_DOT, STATUS_LABEL, TYPE_LABEL } from '../lib/machine-status';
 import { MachineForm } from '../components/MachineForm';
 import { ConfirmDialog } from '../components/Modal';
 import { PageFrame } from '../components/PageHeader';
+import { Trans, useTranslation } from '../i18n';
 
 /** `/machines`: every machine in the scope, with the projects it's linked to and edit/delete actions. */
 export function MachinesPage() {
+  const { t } = useTranslation();
   const { can, viewAs } = useAuth();
   const { machines, projects, hiddenLocal, claimLocal, statuses, missingTmux, deleteMachine, checkStatus } = useData();
   const [form, setForm] = useState<{ open: boolean; machine?: Machine | null }>({ open: false });
@@ -19,18 +21,18 @@ export function MachinesPage() {
 
   return (
     <PageFrame
-      title="Máquinas"
+      title={t('Máquinas')}
       actions={
         can('machines', 'create') && (
           <button className="btn-primary text-xs" onClick={() => setForm({ open: true, machine: null })}>
-            + máquina
+            {t('+ máquina')}
           </button>
         )
       }
     >
 
       {machines.length === 0 && hiddenLocal.length === 0 && (
-        <p className="text-sm text-fg-dim">Nenhuma máquina cadastrada. Cadastre uma pelo botão acima ou ao criar um projeto.</p>
+        <p className="text-sm text-fg-dim">{t('Nenhuma máquina cadastrada. Cadastre uma pelo botão acima ou ao criar um projeto.')}</p>
       )}
 
       <ul className="space-y-2">
@@ -43,7 +45,7 @@ export function MachinesPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={`inline-block h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status]}`}
-                  title={`${STATUS_LABEL[status]} — clique para verificar`}
+                  title={t('{{status}} — clique para verificar', { status: t(STATUS_LABEL[status]) })}
                   onClick={() => void checkStatus(m.id)}
                 />
                 <span className="truncate text-sm font-medium" title={machineTitle(m, status)}>
@@ -54,7 +56,7 @@ export function MachinesPage() {
                     {m.subtitle}
                   </span>
                 )}
-                <span className="text-[11px] text-fg-dim">{TYPE_LABEL[m.type]}</span>
+                <span className="text-[11px] text-fg-dim">{t(TYPE_LABEL[m.type])}</span>
                 {m.os && <span className="text-[11px] text-fg-dim">{m.os === 'macos' ? '' : m.os}</span>}
                 {badge &&
                   (badge.outdated ? (
@@ -67,32 +69,32 @@ export function MachinesPage() {
                     </span>
                   ))}
                 {viewAs === 'all' && (
-                  <span className="truncate text-[11px] text-fg-dim" title={m.owner_name ? `Dono: ${m.owner_name}` : 'Sem dono'}>
-                    {m.owner_name ?? 'sem dono'}
+                  <span className="truncate text-[11px] text-fg-dim" title={m.owner_name ? t('Dono: {{name}}', { name: m.owner_name }) : t('Sem dono')}>
+                    {m.owner_name ?? t('sem dono')}
                   </span>
                 )}
                 {missingTmux[m.id] && (
-                  <span className="text-[11px] text-warn" title="tmux não está instalado nesta máquina">
-                    sem tmux
+                  <span className="text-[11px] text-warn" title={t('tmux não está instalado nesta máquina')}>
+                    {t('sem tmux')}
                   </span>
                 )}
                 {m.type === 'agent' && m.hooks_installed_at === null && (
                   <button
                     type="button"
                     className="rounded px-1 text-[11px] text-warn hover:bg-bg-3"
-                    title="Os hooks do monitor não estão instalados: as tabs desta máquina não aparecem em “Precisando de você”. Clique para instalar."
+                    title={t('Os hooks do monitor não estão instalados: as tabs desta máquina não aparecem em “Precisando de você”. Clique para instalar.')}
                     onClick={() => setForm({ open: true, machine: m })}
                   >
-                    sem monitor
+                    {t('sem monitor')}
                   </button>
                 )}
                 <span className="ml-auto flex shrink-0 items-center gap-0.5">
-                  <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg" title="Editar" onClick={() => setForm({ open: true, machine: m })}>
+                  <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg" title={t('Editar')} onClick={() => setForm({ open: true, machine: m })}>
                     ✎
                   </button>
                   <button
                     className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-danger"
-                    title="Excluir"
+                    title={t('Excluir')}
                     onClick={() => {
                       setDeleteError(null);
                       setDeleting(m);
@@ -104,7 +106,7 @@ export function MachinesPage() {
               </div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {linked.length === 0 ? (
-                  <span className="text-[11px] text-fg-dim">nenhum projeto</span>
+                  <span className="text-[11px] text-fg-dim">{t('nenhum projeto')}</span>
                 ) : (
                   linked.map((p) => (
                     <Link key={p.id} to={`/projects/${p.id}`} className="rounded-full bg-bg-4 px-2 py-0.5 text-[11px] text-fg-muted hover:text-fg">
@@ -120,15 +122,15 @@ export function MachinesPage() {
 
       {hiddenLocal.length > 0 && (
         <div className="mt-3 text-xs text-fg-dim">
-          <p title="Máquinas marcadas como “o computador que estou usando” em outro navegador. Se esta for a máquina onde você está, clique para vê-la aqui.">
-            {hiddenLocal.length === 1 ? '1 máquina local de outro computador' : `${hiddenLocal.length} máquinas locais de outros computadores`}
+          <p title={t('Máquinas marcadas como “o computador que estou usando” em outro navegador. Se esta for a máquina onde você está, clique para vê-la aqui.')}>
+            {t('{{count}} máquinas locais de outros computadores', { count: hiddenLocal.length })}
           </p>
           <ul className="mt-0.5">
             {hiddenLocal.map((m) => (
               <li key={m.id} className="flex items-center gap-2">
                 <span className="truncate">{m.name}</span>
-                <button className="hover:text-fg" title="Mostrar neste navegador (é o computador que estou usando)" onClick={() => claimLocal(m.id)}>
-                  é este pc
+                <button className="hover:text-fg" title={t('Mostrar neste navegador (é o computador que estou usando)')} onClick={() => claimLocal(m.id)}>
+                  {t('é este pc')}
                 </button>
               </li>
             ))}
@@ -140,14 +142,18 @@ export function MachinesPage() {
 
       <ConfirmDialog
         open={!!deleting}
-        title="Excluir máquina"
+        title={t('Excluir máquina')}
         message={
           <>
-            Excluir <strong>{deleting?.name}</strong>? Os projetos vinculados continuam existindo; só o vínculo e as tabs abertas nesta máquina são removidos.
+            <Trans
+              i18nKey="Excluir <0>{{name}}</0>? Os projetos vinculados continuam existindo; só o vínculo e as tabs abertas nesta máquina são removidos."
+              values={{ name: deleting?.name ?? '' }}
+              components={[<strong key="n" />]}
+            />
             {deleteError && <p className="mt-2 text-danger">{deleteError}</p>}
           </>
         }
-        confirmLabel="Excluir"
+        confirmLabel={t('Excluir')}
         danger
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
@@ -156,7 +162,7 @@ export function MachinesPage() {
             await deleteMachine(deleting.id);
             setDeleting(null);
           } catch (e) {
-            setDeleteError((e as Error).message || 'Erro ao excluir');
+            setDeleteError((e as Error).message || t('Erro ao excluir'));
           }
         }}
       />

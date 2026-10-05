@@ -109,7 +109,7 @@ export function precedentBacks(decisions: ChatDecision[], payload: ChoicePayload
 export async function scheduleAutoAnswer(repos: Repositories, input: ScheduleInput, now = new Date()): Promise<TabQuestion | null> {
   const row = await storeAutoAnswer(repos, input, now);
   if (!row) return null;
-  await publishTabQuestions(repos, 'tab_question', [row]);
+  await publishTabQuestions(repos, 'tab_question', [row], { update: true });
   return row;
 }
 
@@ -197,7 +197,7 @@ export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { 
       log.warn({ tabQuestionId: claimed.id, code }, 'auto answer failed');
       try {
         const failed = await repos.tabQuestions.finishAutoAnswer(claimed.id, 'failed', code);
-        if (failed) await publishTabQuestions(repos, eventFor(failed), [failed]);
+        if (failed) await publishTabQuestions(repos, eventFor(failed), [failed], { update: true });
       } catch (recordErr) {
         // Best effort: the card still shows the question, and the countdown can no longer send.
         log.warn({ tabQuestionId: claimed.id, code: codeOf(recordErr, 'RECORD_FAILED') }, 'auto answer failure not recorded');
@@ -226,7 +226,7 @@ export async function recoverLostAutoAnswers(repos: Repositories, log: Log): Pro
   // Measured on the database's clock, the one that stamped `claimed_at`: two colors never disagree.
   const lost = await repos.tabQuestions.failLostAutoAnswers('SENDER_LOST', SENDER_LOST_AFTER_MS);
   for (const row of lost) log.warn({ tabQuestionId: row.id, code: 'SENDER_LOST' }, 'auto answer sender lost');
-  if (lost.length) await publishTabQuestions(repos, 'tab_question', lost);
+  if (lost.length) await publishTabQuestions(repos, 'tab_question', lost, { update: true });
   return lost.length;
 }
 
@@ -281,6 +281,6 @@ export async function cancelAutoAnswer(ctx: ControlContext, id: string): Promise
   if (!isQuestionRow(row)) throw notFound('Pergunta não encontrada');
   const cancelled = await ctx.repos.tabQuestions.cancelAutoAnswer(id, userId);
   if (!cancelled) throw new HttpError(409, 'Não há resposta automática em contagem nesta pergunta', 'NOT_SCHEDULED');
-  const [view] = await publishTabQuestions(ctx.repos, 'tab_question', [cancelled]);
+  const [view] = await publishTabQuestions(ctx.repos, 'tab_question', [cancelled], { update: true });
   return view ?? toTabQuestionView(cancelled, null);
 }
