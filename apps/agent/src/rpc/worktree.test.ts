@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RpcFailure } from '../exec.js';
-import { ensure, remove } from './worktree.js';
+import { RPC } from '@termhub/agent-protocol';
+import { ENSURE_BUDGET_MS, REMOVE_BUDGET_MS, ensure, parseWorktreeList, remove, scrubCredentials } from './worktree.js';
 
 // A real git: a bare repo stands in for `origin`, a clone for the project folder on the machine.
 const ID = ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'init.defaultBranch=main', '-c', 'commit.gpgsign=false'];
@@ -80,6 +81,16 @@ describe('git.worktree.ensure', () => {
     expect(existsSync(path.join(tmp, 'x'))).toBe(false);
   });
 
+  it('refuses a worktrees root of / or of the home folder itself', async () => {
+    expect((await failure(ensure(params({ root: '/', path: path.join(tmp, 'x') })))).code).toBe('path_outside_root');
+    expect((await failure(ensure({ ...params(), root: '~', path: '~/x' }, tmp))).code).toBe('path_outside_root');
+    expect((await failure(ensure({ ...params(), root: tmp, path: path.join(tmp, 'x') }, tmp))).code).toBe('path_outside_root');
+    mkdirSync(path.join(tmp, 'h'));
+    symlinkSync(tmp, path.join(tmp, 'h', 'link'));
+    expect((await failure(ensure({ ...params(), root: path.join(tmp, 'h', 'link'), path: path.join(tmp, 'h', 'link', 'x') }, tmp))).code).toBe('path_outside_root');
+    expect(existsSync(path.join(tmp, 'x'))).toBe(false);
+  });
+
   it('refuses a link under root that points out of it', async () => {
     mkdirSync(root, { recursive: true });
     mkdirSync(path.join(tmp, 'elsewhere'));
@@ -151,10 +162,41 @@ describe('git.worktree.remove', () => {
     expect(await remove({ repo_dir: repo, root, path: path.join(root, 'p1', 'gone') })).toEqual({ removed: false, dirty: false });
   });
 
+  it('does not create a missing root: nothing to remove', async () => {
+    expect(await remove({ repo_dir: repo, root, path: path.join(root, 'p1', 'x') })).toEqual({ removed: false, dirty: false });
+    expect(existsSync(root)).toBe(false);
+  });
+
   it('refuses a folder that is not a worktree of the repo, and a path outside root', async () => {
     mkdirSync(path.join(root, 'p1', 'plain'), { recursive: true });
     expect((await failure(remove({ repo_dir: repo, root, path: path.join(root, 'p1', 'plain') }))).code).toBe('invalid');
     expect(existsSync(path.join(root, 'p1', 'plain'))).toBe(true);
     expect((await failure(remove({ repo_dir: repo, root, path: repo }))).code).toBe('path_outside_root');
+  });
+});
+
+describe('worktree helpers', () => {
+  it('keeps one deadline under the server RPC timeout', () => {
+    expect(ENSURE_BUDGET_MS).toBeLessThan(RPC['git.worktree.ensure'].timeoutMs);
+    expect(REMOVE_BUDGET_MS).toBeLessThan(RPC['git.worktree.remove'].timeoutMs);
+  });
+
+  it('scrubs credentials from git output', () => {
+    expect(scrubCredentials("fatal: unable to access 'https://x-access-token:ghs_SECRET@github.com/a/b.git/': 403")).toBe("fatal: unable to access 'https://github.com/a/b.git/': 403");
+    expect(scrubCredentials('ssh://git@host/x and http://tok@h/y')).toBe('ssh://host/x and http://h/y');
+    expect(scrubCredentials('no url here')).toBe('no url here');
+  });
+
+  it('parses the -z porcelain list, paths with newlines included', () => {
+    const out = 'worktree /r\0HEAD aaa\0branch refs/heads/main\0\0worktree /w/odd\nname\0HEAD bbb\0detached\0\0worktree /w/b\0HEAD ccc\0branch refs/heads/TER-1\0\0';
+    expect(parseWorktreeList(out, '\0')).toEqual([
+      { path: '/r', branch: 'main' },
+      { path: '/w/odd\nname', branch: null },
+      { path: '/w/b', branch: 'TER-1' },
+    ]);
+    expect(parseWorktreeList('worktree /r\nbranch refs/heads/main\n\nworktree /w\ndetached', '\n')).toEqual([
+      { path: '/r', branch: 'main' },
+      { path: '/w', branch: null },
+    ]);
   });
 });

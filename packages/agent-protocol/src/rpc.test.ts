@@ -47,7 +47,7 @@ describe('rpc catalog', () => {
   it('validates git.worktree params: branch names and machine paths', () => {
     const ok = { repo_dir: '~/code/app', root: '~/.termhub/worktrees', path: '~/.termhub/worktrees/p1/TER-1', branch: 'TER-1-slug', base: 'epic/TER-2' };
     const ensure = RPC['git.worktree.ensure'];
-    expect(ensure.timeoutMs).toBe(120_000);
+    expect(ensure.timeoutMs).toBe(180_000);
     expect(ensure.params.safeParse(ok).success).toBe(true);
     for (const branch of ['--upload-pack=x', '-b', 'a..b', 'a b', 'a:b', 'a;rm', '', 'x'.repeat(201)]) {
       expect(ensure.params.safeParse({ ...ok, branch }).success, branch).toBe(false);

@@ -237,12 +237,13 @@ export const RPC = {
    * or `branch` checked out elsewhere) `worktree_conflict`. Otherwise it fetches `origin`, and starts
    * the branch from `origin/<branch>` when that exists (a branch already pushed is never reset), else
    * from `origin/<base>`; an existing local branch that differs from the remote is checked out as is.
-   * git runs with an argv, never a shell. 120 s: a fetch can be slow.
+   * git runs with an argv, never a shell. 180 s: a fetch and a checkout of a large repo can both be
+   * slow; the agent splits one deadline 10 s under it across the steps, so it answers before this.
    */
   'git.worktree.ensure': def(
     z.object({ repo_dir: machinePath, root: machinePath, path: machinePath, branch: gitBranch, base: gitBranch }),
     z.object({ path: z.string().max(4096), head: z.string().regex(/^[0-9a-f]{40,64}$/), created: z.boolean() }),
-    120_000,
+    180_000,
   ),
   /**
    * Removes a worktree made by `git.worktree.ensure` (the branch stays). A worktree with uncommitted
