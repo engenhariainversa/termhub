@@ -58,6 +58,8 @@ const writeTools = new Set([
   'import_tickets',
   // Lifting the brake lets automatic work start again: the person says so on a card.
   'resume_automation',
+  // Hands one parked automatic run back: the follower may type into its tab again.
+  'resume_automation_run',
 ]);
 
 // close_tab stays irreversible. control/terminals.ts skips its per-token ownership check for a gated

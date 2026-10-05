@@ -51,6 +51,17 @@ export interface AnswerDeps {
 }
 
 /**
+ * Hands the run to the person (spec §9.3, TER-888): the run waits with `reason` (its `max_parallel` slot is
+ * free, `SLOT_FREE_REASONS`), the `escalated` event is recorded (the feed, and the push), and the project
+ * chat gets the line — on the question card when there is one. Answering the card, or acting in the tab,
+ * sets the run back to `running` (the follower). A run another instance took over or that already ended is
+ * left alone. Never throws.
+ */
+export async function escalate(deps: AnswerDeps, run: AutomationRun, reason: string): Promise<void> {
+  await wakeOrEscalate(deps.repos, run, reason, deps.log ?? noopLog);
+}
+
+/**
  * What became of a question of an automatic tab (spec D18): a memory repeat already counting down, the
  * recommended option scheduled, the chat woken, or the run escalated to the person. `closed`: the card
  * moved on meanwhile (answered in the tab, a newer question) and nothing was done.
@@ -117,7 +128,7 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
       if (cancelled) await publishTabQuestions(repos, 'tab_question', [cancelled], { update: true });
     }
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: answer cap reached');
-    await wakeOrEscalate(repos, run, ANSWER_CAP, log);
+    await escalate(deps, run, ANSWER_CAP);
     return 'escalated';
   }
 
@@ -163,7 +174,7 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
     await answered('repeat');
     return 'repeat';
   }
-  await wakeOrEscalate(repos, run, QUESTION_UNANSWERED, log);
+  await escalate(deps, run, QUESTION_UNANSWERED);
   return 'escalated';
 }
 
@@ -176,7 +187,7 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
  */
 export async function questionWithoutCard(repos: Repositories, run: AutomationRun, log: Log = noopLog, kind: 'choice' | 'permission' = 'choice'): Promise<void> {
   log.info({ runId: run.id, tabId: run.tab_id, kind }, 'automation: question with no card');
-  await wakeOrEscalate(repos, run, kind === 'permission' ? PERMISSION_NEEDED : QUESTION_UNANSWERED, log);
+  await escalate({ repos, log }, run, kind === 'permission' ? PERMISSION_NEEDED : QUESTION_UNANSWERED);
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -341,24 +352,24 @@ export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQues
   const { repos } = deps;
   const log = deps.log ?? noopLog;
   if (q.kind !== 'permission' || q.status !== 'open') return 'closed';
-  const escalate = async (reason: string): Promise<PermissionOutcome> => {
-    await wakeOrEscalate(repos, run, reason, log);
+  const handOver = async (reason: string): Promise<PermissionOutcome> => {
+    await escalate(deps, run, reason);
     return 'escalated';
   };
 
   if (await capReached(deps, run)) {
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: answer cap reached');
-    return escalate(ANSWER_CAP);
+    return handOver(ANSWER_CAP);
   }
   const tool: unknown = (q.payload as Partial<PermissionPayload> | null)?.tool_name;
   if (typeof tool !== 'string' || !TOOL_NAME.test(tool)) {
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission with no plain tool name');
-    return escalate(PERMISSION_NEEDED);
+    return handOver(PERMISSION_NEEDED);
   }
   const { allowedTools } = await runPermission(repos, run);
   if (!permissionAllowed({ tool, command }, allowedTools, run.branch)) {
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission outside the rules');
-    return escalate(PERMISSION_NEEDED);
+    return handOver(PERMISSION_NEEDED);
   }
 
   await (deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))))(PERMISSION_SETTLE_MS);
@@ -377,7 +388,7 @@ export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQues
     const code = (err as { code?: unknown })?.code;
     log.warn({ runId: run.id, tabQuestionId: q.id, code: typeof code === 'string' ? code.slice(0, 64) : 'SEND_FAILED' }, 'automation: permission answer failed');
     if ((await cardNow(repos, q)) === 'closed') return 'closed';
-    return escalate(PERMISSION_NEEDED);
+    return handOver(PERMISSION_NEEDED);
   }
   await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'question_answered', payload: { via: 'permission', tab_id: q.tab_id, question_id: q.id } }).catch(() =>
     log.warn({ runId: run.id, tabQuestionId: q.id }, 'automation: question_answered not recorded'),

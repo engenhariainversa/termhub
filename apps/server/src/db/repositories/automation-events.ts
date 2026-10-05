@@ -80,6 +80,12 @@ export class AutomationEventsRepository {
     return rows.map(map);
   }
 
+  /** The run's newest event of `kind`, or null. */
+  async lastForRun(runId: string, kind: AutomationEventKind): Promise<AutomationEvent | null> {
+    const row = await this.db.automationEvent.findFirst({ where: { runId, kind }, orderBy: { createdAt: 'desc' } });
+    return row ? map(row) : null;
+  }
+
   /** How many events of `kind` the run recorded since `since` (the answer cap of spec D18, review I2). */
   async countForRun(runId: string, kind: AutomationEventKind, since: Date): Promise<number> {
     return this.db.automationEvent.count({ where: { runId, kind, createdAt: { gte: since } } });

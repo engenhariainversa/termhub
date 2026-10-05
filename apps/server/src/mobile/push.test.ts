@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
 import { monitorBus } from '../monitor/bus.js';
+import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
 import type { Tab } from '../db/repositories/types.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Device } from '../db/repositories/devices.js';
@@ -786,5 +787,93 @@ describe('MobilePushService — aba terminou (TER-925)', () => {
     stopIt();
     await vi.advanceTimersByTimeAsync(5_000);
     expect(t.sent).toEqual([]);
+  });
+});
+
+describe('MobilePushService — automatic work escalated (agentic board §9.3, D25)', () => {
+  const escalated = (over: Partial<PublishedAutomationEvent> = {}): PublishedAutomationEvent => ({
+    id: 'e1', project_id: 'p1', task_id: 'k1', run_id: 'r1', kind: 'escalated', payload: { reason: 'question_unanswered', tab_id: 't1' }, created_at: '', owner_id: 'u1', ...over,
+  });
+  const withTask = (t: ReturnType<typeof setup>) =>
+    Object.assign(t.repos, { tasks: { findById: vi.fn(async (id: string) => ({ id, project_id: 'p1', ref: 'TER-7' })) } });
+
+  it('one history row and one push to the offline device: "<projeto> precisa de você" / "<ref> parou: <motivo>"', async () => {
+    const t = setup({ live: ['d2'] });
+    withTask(t);
+    stop = t.service.start();
+    automationBus.publish(escalated());
+    await flush();
+    const body = 'TER-7 parou: O agente fez uma pergunta que o modo automático não soube responder; responda no card.';
+    expect(t.repos.userNotifications.create).toHaveBeenCalledTimes(1);
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith({
+      user_id: 'u1', kind: 'confirmation', title: 'termhub precisa de você', body,
+      data: { kind: 'automation_escalation', project_id: 'p1', run_id: 'r1', conversation_id: 'cp' },
+    });
+    expect(t.sent).toHaveLength(1);
+    expect(t.sent[0]).toEqual([
+      { to: 'ExponentPushToken[a]', title: 'termhub precisa de você', body, data: { kind: 'automation_escalation', project_id: 'p1', run_id: 'r1', conversation_id: 'cp', notification_id: 'n1' }, badge: 3, collapseId: 'escalation:r1:question_unanswered' },
+    ]);
+  });
+
+  it("in the owner's language", async () => {
+    const t = setup({ locale: 'en', devices: [mkDevice('d1', 'ExponentPushToken[a]')] });
+    withTask(t);
+    stop = t.service.start();
+    automationBus.publish(escalated({ payload: { reason: 'resume_cap' } }));
+    await flush();
+    expect(t.sent[0]![0]).toMatchObject({ title: 'termhub needs you', body: 'TER-7 stopped: The agent stopped several times without finishing and the chat could not carry on; check the tab.' });
+  });
+
+  it('once per run and reason; another reason of the same run, or another run, is pushed', async () => {
+    const t = setup({ devices: [mkDevice('d1', 'ExponentPushToken[a]')] });
+    withTask(t);
+    stop = t.service.start();
+    automationBus.publish(escalated());
+    automationBus.publish(escalated({ id: 'e2' }));
+    await flush();
+    expect(t.sent).toHaveLength(1);
+    automationBus.publish(escalated({ id: 'e3', payload: { reason: 'answer_cap' } }));
+    automationBus.publish(escalated({ id: 'e4', run_id: 'r2' }));
+    await flush();
+    expect(t.sent).toHaveLength(3);
+  });
+
+  it('only escalations are pushed: other automation events are not', async () => {
+    const t = setup();
+    withTask(t);
+    stop = t.service.start();
+    for (const kind of ['run_started', 'run_done', 'run_blocked', 'question_answered', 'pr_opened', 'paused'] as const) automationBus.publish(escalated({ kind }));
+    await flush();
+    expect(t.repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(t.sent).toEqual([]);
+  });
+
+  it("a project that is not the owner's names nothing and is not pushed", async () => {
+    const t = setup();
+    withTask(t);
+    t.repos.projects.findByIdsForOwner.mockResolvedValue([]);
+    stop = t.service.start();
+    automationBus.publish(escalated());
+    await flush();
+    expect(t.sent).toEqual([]);
+  });
+
+  it('a question card of a tab under automatic work is not pushed (the escalation is); paused, it is', async () => {
+    const question = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'choice', payload: { questions: [] }, status: 'open', answer: null, error_code: null, created_at: '', answered_at: null, closed_at: null };
+    for (const paused of [false, true]) {
+      const t = setup();
+      Object.assign(t.repos, {
+        automationRuns: { activeByTab: vi.fn(async () => ({ id: 'r1', project_id: 'p1', status: 'running' })) },
+        projects: { ...t.repos.projects, findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
+        projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: true } } })) },
+        automationPauses: { state: vi.fn(async () => ({ user: paused ? new Date() : null, project: null })) },
+      });
+      stop = t.service.start();
+      chatBus.publish({ type: 'tab_question', user_id: 'u1', conversation_id: 'cp', question } as unknown as ChatEvent);
+      await flush();
+      stop();
+      stop = null;
+      expect(t.sent.length, `paused=${paused}`).toBe(paused ? 1 : 0);
+    }
   });
 });

@@ -230,12 +230,39 @@ export class AutomationRunsRepository {
     return (await this.db.automationRun.findMany({ where: { claimedBy: instance, status: { in: ['running', 'waiting'] } }, orderBy: { createdAt: 'asc' } })).map(map);
   }
 
-    async activeByProject(projectId: string): Promise<AutomationRun[]> {
+  async activeByProject(projectId: string): Promise<AutomationRun[]> {
     return (await this.db.automationRun.findMany({ where: { projectId, status: active }, orderBy: { createdAt: 'asc' } })).map(map);
   }
 
   async countActive(projectId: string): Promise<number> {
     return this.db.automationRun.count({ where: { projectId, status: active } });
+  }
+
+  /**
+   * The active runs that hold a `max_parallel` slot (TER-888): every active run except a `waiting` one
+   * parked for the person with one of `freeReasons` (an escalation). Such a run stays active — the card
+   * keeps its one run (`automation_runs_one_active_per_task`) — but no longer counts against the ceiling.
+   */
+  async countOccupyingSlots(projectId: string, freeReasons: readonly string[]): Promise<number> {
+    return this.db.automationRun.count({
+      where: {
+        projectId,
+        OR: [{ status: { in: ['queued', 'starting', 'running'] } }, { status: 'waiting', OR: [{ waitingReason: null }, { waitingReason: { notIn: [...freeReasons] } }] }],
+      },
+    });
+  }
+
+  /**
+   * A `waiting` run back to `running` (the person answered, or asked to resume it), whoever drives it.
+   * `fresh` also gives it a new budget of resumes and wakes (an explicit "retomar" after a resume cap).
+   * False when the run was not waiting.
+   */
+  async resumeWaiting(id: string, opts: { fresh?: boolean } = {}): Promise<boolean> {
+    const { count } = await this.db.automationRun.updateMany({
+      where: { id, status: 'waiting' },
+      data: { status: 'running', waitingReason: null, ...(opts.fresh ? { resumeCount: 0, wokenAt: null } : {}) },
+    });
+    return count === 1;
   }
 
   /**

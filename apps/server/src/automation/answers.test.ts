@@ -497,3 +497,29 @@ describe('answerPermissionAutomatically (spec §9.2)', () => {
     expect(w.events).toEqual([]);
   });
 });
+
+describe('escalate (spec §9.3, TER-888)', () => {
+  it('the run waits with the reason, `escalated` is recorded with the reason only, and the project chat gets the line', async () => {
+    const q = card(one(item([['A', false], ['B', false]])));
+    const w = world(q);
+    const added: Array<{ conversation_id: string; text: string }> = [];
+    Object.assign(w.repos, {
+      users: { findById: vi.fn(async () => ({ id: 'u1', locale: null })) },
+      tasks: { findById: vi.fn(async () => ({ id: 't1', project_id: 'p1', ref: 'TER-1' })) },
+      tabQuestions: { ...w.repos.tabQuestions, latestQuestionForTab: vi.fn(async () => undefined) },
+      chat: { findLatestActiveForProject: vi.fn(async () => ({ id: 'cp' })), addMessage: vi.fn(async (m: { conversation_id: string; text: string }) => (added.push(m), { id: 'm1', ...m })) },
+    });
+    const { escalate } = await import('./answers.js');
+    await escalate(w.deps, w.run, PERMISSION_NEEDED);
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: PERMISSION_NEEDED });
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: PERMISSION_NEEDED, tab_id: 'tab1' } })]);
+    expect(added).toEqual([expect.objectContaining({ conversation_id: 'cp', text: "Automático parou em TER-1: O agente pediu uma permissão que as regras do projeto não liberam; responda no card." })]);
+  });
+
+  it('a run another instance drives is left alone: no event, no line', async () => {
+    const w = world(card(one(item([['A', false]]))));
+    const { escalate } = await import('./answers.js');
+    await escalate(w.deps, { ...w.run, claimed_by: 'other' }, QUESTION_UNANSWERED);
+    expect(w.events).toEqual([]);
+  });
+});

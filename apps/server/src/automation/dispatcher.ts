@@ -12,6 +12,7 @@ import type { GithubWriteClient } from '../integrations/github-write.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { cardBranchName, removeWorkspace as removeWorkspaceFn, targetOf, type ensureEpicBranch as ensureEpicBranchFn, type ensureWorkspace as ensureWorkspaceFn } from './branches.js';
 import { automationBus, dispatchTriggers, recordEvent } from './events.js';
+import { escalateRun, SLOT_FREE_REASONS, START_FAILED } from './follower.js';
 import { interruptRuns, isPaused, type PressEscape } from './pause.js';
 import { clearWaiting, noteWaiting, placeRun, type Placement } from './placement.js';
 import { policyText } from './policy.js';
@@ -182,7 +183,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       const { consecutive } = await repos.automationRuns.startFailures(task.id, RETRY_BACKOFF_MS);
       if (consecutive >= MAX_START_FAILURES) {
         await repos.tasks.setAuto(task.id, false);
-        await recordEvent(repos, { project_id: project.id, task_id: task.id, run_id: run.id, kind: 'escalated', payload: { reason: 'start_failed', attempts: consecutive, code, untagged: true } });
+        await escalateRun(repos, run, START_FAILED, log, { extra: { attempts: consecutive, code, untagged: true } });
         log.warn({ runId: run.id, taskId: task.id, attempts: consecutive }, 'automation: card untagged after failed starts');
       }
     } catch (err) {
@@ -263,14 +264,15 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       if (starting.has(item.task_id)) continue;
       // a failed start waits RETRY_BACKOFF_MS before the next attempt, on whichever colour (database clock)
       if ((await repos.automationRuns.startFailures(item.task_id, RETRY_BACKOFF_MS)).recent) continue;
-      if (max !== null && (await repos.automationRuns.countActive(projectId)) >= max) return;
+      // a run parked for the person (an escalation) keeps its card but not its slot (TER-888)
+      if (max !== null && (await repos.automationRuns.countOccupyingSlots(projectId, SLOT_FREE_REASONS)) >= max) return;
       // D24: a pause pressed during this pass stops the claims right here.
       if (await isPaused(repos, project.owner_id, projectId)) return;
 
       const run = await repos.automationRuns.claim({ project_id: projectId, task_id: item.task_id, role: 'implementer', instance });
       if (!run) continue; // already taken (the other colour, or a run still active)
       // Two instances counting at once may both fit under the ceiling: the one that sees it exceeded lets go.
-      if (max !== null && (await repos.automationRuns.countActive(projectId)) > max) {
+      if (max !== null && (await repos.automationRuns.countOccupyingSlots(projectId, SLOT_FREE_REASONS)) > max) {
         await release(run);
         return;
       }
