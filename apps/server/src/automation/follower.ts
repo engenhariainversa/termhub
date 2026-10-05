@@ -1,3 +1,4 @@
+import type { AiAccountUsage } from '../ai/index.js';
 import { AGENT_EXITED_TEXT, EXITED_RESUME_PROMPT, resumeCommandFor } from '../chat/agent-exited.js';
 import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
 import { taskOut, type TaskOut } from '../control/tasks.js';
@@ -42,9 +43,11 @@ export interface FollowerDeps {
   type?: (ctx: ControlContext, tabId: string, text: string) => Promise<void>;
   /** The shell line that brings an exited agent back in the same tab. Default: `resumeCommandFor`. */
   restartLine?: typeof resumeCommandFor;
-  /** A stop on a usage limit (spec D16). Task 19 fills it; until then the run just waits. Called again on
-   *  every look at the run while the tab stays on the limit, so it must be idempotent. */
+  /** A stop on a usage limit (spec D16): `onRateLimit` (quota.ts), wired in app.ts. Called again on every
+   *  look at the run while the tab stays on the limit, so it must be idempotent. */
   onRateLimited?: (run: AutomationRun, tab: Tab) => Promise<void>;
+  /** The account's usage, for the reset a limited account waits for. Default: `getAccountUsage`, refreshed. */
+  accountUsage?: (accountId: string) => Promise<AiAccountUsage | null>;
   /** The clock (tests). */
   now?: () => Date;
   /** How long a change settles before the tab is read (default SETTLE_MS). */
@@ -61,7 +64,7 @@ export const SETTLE_MS = 3_000;
 
 const noopLog: Log = { info: () => {}, warn: () => {} };
 
-const defaultType = async (ctx: ControlContext, tabId: string, text: string): Promise<void> => {
+export const defaultType = async (ctx: ControlContext, tabId: string, text: string): Promise<void> => {
   await sendInput(ctx, { tab_id: tabId, text }, null);
 };
 
@@ -161,7 +164,7 @@ const rateLimited = (tab: Tab) => tab.rate_limited_at !== null || (tab.state_tex
  * not paused (D24), and the card is still tagged (spec §13, preflight F-23). A card whose tag was removed
  * ends its run here — the agent finished its turn and is not resumed; the card is the person's now.
  */
-async function mayType(deps: FollowerDeps, run: AutomationRun, log: Log): Promise<{ ctx: ControlContext; setup: ProjectSetupData; task: Task } | null> {
+export async function mayType(deps: FollowerDeps, run: AutomationRun, log: Log): Promise<{ ctx: ControlContext; setup: ProjectSetupData; task: Task } | null> {
   const { repos } = deps;
   const project = await repos.projects.findById(run.project_id);
   if (!project?.owner_id || !run.task_id) return null;
@@ -259,6 +262,12 @@ async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: L
 const chains = new Map<string, Promise<void>>();
 const settling = new Map<string, Promise<void>>();
 const actedOn = new Map<string, { key: string; at: number }>();
+
+/** Something was typed into the run's tab outside the follower (the resume after a usage limit's reset):
+ *  the tab's current state is not acted on again until it moves (or RETYPE_AFTER_MS passes). */
+export function noteTyped(runId: string, tab: Pick<Tab, 'state' | 'state_at'>, at: Date): void {
+  actedOn.set(runId, { key: `${tab.state}@${tab.state_at}`, at: at.getTime() });
+}
 
 /**
  * Looks at the run's tab as it is now and does what its state asks (spec §8 step 6, D15, D17). Reads the

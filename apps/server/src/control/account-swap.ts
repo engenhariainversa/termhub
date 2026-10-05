@@ -10,6 +10,7 @@ import { applyState } from '../monitor/ingest.js';
 import { sendKeyToSession, sendTextToSession } from '../terminal/session-ops.js';
 import { RESUME_PROMPT, resumeLine } from './agents.js';
 import { activeRunPermission } from '../automation/permission.js';
+import { serverMessage } from '../automation/marker.js';
 import { projectAccountsOn } from '../ai/project-accounts.js';
 import { notifyLimitInChat } from '../chat/tab-limits.js';
 import { ControlError } from './context.js';
@@ -197,7 +198,9 @@ export async function swapAccount(
     // a tab running automatic work keeps its permission profile on the new account (preflight F-12); a
     // failed lookup resumes without it, which only makes the agent ask more
     const permission = await activeRunPermission(repos, tab.id).catch(() => null);
-    const line = resumeLine(to.config_dir, sessionId, RESUME_PROMPT, hasTabMcp ? tab.id : null, prefs.model, permission);
+    // and its prompt says it comes from termhub, as every message typed into an automatic tab (spec D27)
+    const prompt = permission ? serverMessage(RESUME_PROMPT) : RESUME_PROMPT;
+    const line = resumeLine(to.config_dir, sessionId, prompt, hasTabMcp ? tab.id : null, prefs.model, permission);
 
     // Claude waits for the reset on a usage limit (it does not exit): cancel that wait and leave.
     // Already idle means it ended on its own: the tab is at the shell and must not get these keys.
