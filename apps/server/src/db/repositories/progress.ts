@@ -81,6 +81,7 @@ export class ProgressRepository {
               ci_summary: { total: 0, passed: 0, failed: 0, running: 0, failing: [], ...(p.ciSummary as object) },
               deploy_state: p.deployState as PullRequestBadge['deploy_state'],
               deploy_url: p.deployUrl,
+              release_runs: p.releaseRuns as unknown as NonNullable<PullRequestBadge['release_runs']>,
             }),
           ),
         })),

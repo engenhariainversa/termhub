@@ -4727,6 +4727,7 @@ export const TaskPullRequestScalarFieldEnum = {
   ciSummary: 'ciSummary',
   deployState: 'deployState',
   deployUrl: 'deployUrl',
+  releaseRuns: 'releaseRuns',
   syncedAt: 'syncedAt'
 } as const
 

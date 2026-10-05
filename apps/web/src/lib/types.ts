@@ -307,6 +307,7 @@ export interface PullRequestBadge {
   ci_summary: { total: number; passed: number; failed: number; running: number; failing: string[] };
   deploy_state: 'none' | 'running' | 'passed' | 'failed';
   deploy_url: string | null;
+  release_runs?: Array<{ workflow: string; state: 'none' | 'running' | 'passed' | 'failed'; url: string | null; version: string | null }>;
 }
 export interface CardProgress {
   id: string;

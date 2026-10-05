@@ -550,6 +550,8 @@ model TaskPullRequest {
   /// none | running | passed | failed — the setup's deploy workflow on merge_commit_sha
   deployState    String    @default("none") @map("deploy_state")
   deployUrl      String?   @map("deploy_url")
+  /// [{ workflow, state: none|running|passed|failed, url, version }] — the setup's release_workflows on merge_commit_sha
+  releaseRuns    Json      @default("[]") @map("release_runs")
   syncedAt       DateTime  @default(now()) @map("synced_at")
   project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task           Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)

@@ -12,7 +12,7 @@ import { chatBus } from '../chat/bus.js';
 import type { AutomationEventPayload } from '../db/repositories/automation-events.js';
 import type { StoppedTabWake } from '../chat/wake.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
-import { CI_POLL_MS } from '../ci/scheduler.js';
+import { CI_POLL_MS } from '../ci/poll.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { automationBus, recordEvent } from './events.js';
@@ -120,7 +120,7 @@ function writeRun(repos: Repositories, run: AutomationRun, patch: Pick<Automatio
  * active conversation, opened when there is none. `detail` — the chat's or the agent's own words —
  * replaces the reason's text here only; it is never put in an event. Never throws.
  */
-async function postEscalationLine(repos: Repositories, run: AutomationRun, reason: string, detail: string | null, log: Log): Promise<void> {
+async function postEscalationLine(repos: Repositories, run: Pick<AutomationRun, 'id' | 'project_id' | 'task_id' | 'tab_id'>, reason: string, detail: string | null, log: Log): Promise<void> {
   try {
     const project = await repos.projects.findById(run.project_id);
     if (!project?.owner_id) return;
@@ -182,6 +182,18 @@ export async function escalateRun(
   );
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, reason }, 'automation: run escalated');
   await postEscalationLine(repos, run, reason, opts.detail ?? null, log);
+}
+
+/**
+ * Escalation of something that is no run's (a failed deploy or release after a merge, D22): the same
+ * `escalated` event (no run id: the push dedupes on the event) and chat line. Never throws.
+ */
+export async function escalateDelivery(repos: Repositories, about: { project_id: string; task_id: string | null }, reason: string, log: Log = noopLog, extra: AutomationEventPayload = {}): Promise<void> {
+  await recordEvent(repos, { project_id: about.project_id, task_id: about.task_id, kind: 'escalated', payload: { reason, ...extra } }).catch((e: unknown) =>
+    log.warn({ projectId: about.project_id, code: errorCode(e) }, 'automation: escalation not recorded: no push'),
+  );
+  log.info({ projectId: about.project_id, taskId: about.task_id, reason }, 'automation: delivery escalated');
+  await postEscalationLine(repos, { id: '', project_id: about.project_id, task_id: about.task_id, tab_id: null }, reason, null, log);
 }
 
 /**

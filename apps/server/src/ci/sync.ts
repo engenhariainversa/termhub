@@ -1,8 +1,9 @@
 import { epicBranchName } from '../automation/branches.js';
+import { deliveryPending, followMerged } from '../automation/release.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { PullRequestInfo } from '../db/repositories/task-pull-requests.js';
 import { GithubCiError, type GithubCiClient, type GithubPull } from '../integrations/github-ci.js';
-import { ciOf, deployOf, refsIn } from './rules.js';
+import { ciOf, refsIn } from './rules.js';
 import { setCiError } from './status.js';
 
 export interface CiSyncDeps {
@@ -101,17 +102,17 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
       pulls = page.pulls.length;
     }
     const seen = new Set<number>();
-    // Only the current repo's PRs; merged ones only when there is a deploy to follow.
-    const watched = await repos.taskPullRequests.listWatched(projectId, { repo: repo.full_name, includeMerged: !!repo.deploy_workflow }, deps.now?.() ?? new Date());
+    // Only the current repo's PRs; merged ones only when there is a deploy or a release to follow.
+    const releases = !!setup.automation?.enabled && setup.automation.release_workflows.length > 0;
+    const watched = await repos.taskPullRequests.listWatched(projectId, { repo: repo.full_name, includeMerged: !!repo.deploy_workflow || releases, releases }, deps.now?.() ?? new Date());
     for (const w of watched) {
       if (seen.has(w.number)) continue;
       seen.add(w.number);
       if (w.state === 'open') {
         const { state, summary } = ciOf(await deps.github.listRuns(token, w.repo, w.head_sha));
         await repos.taskPullRequests.updateCi(projectId, w.repo, w.number, { ci_state: state, ci_summary: summary });
-      } else if (w.merge_commit_sha) {
-        const { state, url } = deployOf(await deps.github.listRuns(token, w.repo, w.merge_commit_sha), repo.deploy_workflow);
-        await repos.taskPullRequests.updateCi(projectId, w.repo, w.number, { deploy_state: state, deploy_url: url });
+      } else if (w.merge_commit_sha && deliveryPending(setup, w)) {
+        await followMerged({ repos, github: deps.github }, { projectId, ownerId: project.owner_id, token, repo: w.repo, setup }, w);
       }
     }
     setCiError(projectId, null);

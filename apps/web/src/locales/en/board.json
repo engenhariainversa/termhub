@@ -360,5 +360,9 @@
   "▮_ Abrir terminal para esta task": "▮_ Open a terminal for this task",
   "▮_ Ir para o terminal": "▮_ Go to the terminal",
   "Checks obrigatórios": "Required checks",
-  "workflows, um por linha; vazio = todas as execuções do PR passam": "workflows, one per line; empty = every run of the PR passes"
+  "workflows, um por linha; vazio = todas as execuções do PR passam": "workflows, one per line; empty = every run of the PR passes",
+  "publicado": "published",
+  "publicado v{{version}}": "published v{{version}}",
+  "publicação falhou: {{workflow}}": "release failed: {{workflow}}",
+  "publicando: {{workflow}}": "releasing: {{workflow}}"
 }

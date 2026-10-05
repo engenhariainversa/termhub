@@ -1,8 +1,9 @@
 import type { Repositories } from '../db/repositories/index.js';
 import { createGithubCiClient, GithubCiError, type GithubCiClient } from '../integrations/github-ci.js';
+import { CI_POLL_MS } from './poll.js';
 import { syncProjectCi } from './sync.js';
 
-export const CI_POLL_MS = 60_000;
+export { CI_POLL_MS };
 /** A rate-limited project without a reset time waits this long. */
 const DEFAULT_PAUSE_MS = 15 * 60_000;
 

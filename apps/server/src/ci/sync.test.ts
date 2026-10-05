@@ -22,7 +22,7 @@ function setup(over: { integrationOwner?: string | null; projectOwner?: string |
   const updateCi = vi.fn(async () => {});
   const listWatched = vi.fn(async () => [] as unknown[]);
   const repos = {
-    projectSetup: { get: vi.fn(async () => ({ data: { repo: over.repo === undefined ? { integration_id: 'i1', full_name: 'acme/app', deploy_workflow: 'deploy.yml' } : over.repo, automation: { enabled: false, ...over.automation } } })) },
+    projectSetup: { get: vi.fn(async () => ({ data: { repo: over.repo === undefined ? { integration_id: 'i1', full_name: 'acme/app', deploy_workflow: 'deploy.yml' } : over.repo, automation: { enabled: false, release_workflows: [], ...over.automation } } })) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', key: 'TER', owner_id: over.projectOwner === undefined ? 'u1' : over.projectOwner })) },
     integrations: {
       findById: vi.fn(async () => ({ id: 'i1', provider: over.provider ?? 'github', owner_id: over.integrationOwner === undefined ? 'u1' : over.integrationOwner })),
@@ -116,6 +116,28 @@ describe('syncProjectCi', () => {
     expect(github.listRuns).toHaveBeenCalledWith('tok', 'acme/app', 'm5');
   });
 
+  // Agentic board D22: a merged PR is also watched for the release workflows, only with automation on.
+  it('with automation on, follows the release workflows of a merged release-level PR and keeps watching a finished deploy', async () => {
+    const { deps, updateCi, listWatched, github } = setup({ automation: { enabled: true, release_workflows: ['publish-agent.yml'] } });
+    (deps.repos as unknown as { tasks: Record<string, unknown> }).tasks.findById = vi.fn(async () => ({ id: 't1', auto: false }));
+    listWatched.mockResolvedValue([{ repo: 'acme/app', number: 5, state: 'merged', head_sha: 'old', merge_commit_sha: 'm5', base_ref: 'main', task_id: 't1', deploy_state: 'passed', release_runs: [], changed_level: 'release' }]);
+    vi.mocked(github.listRuns).mockResolvedValue([{ id: 9, name: 'Publish', path: '.github/workflows/publish-agent.yml', status: 'in_progress', conclusion: null, html_url: 'r9', created_at: '2026-09-27T12:00:00Z' }]);
+    Object.assign(github, { fileAt: vi.fn(async () => null) });
+    await syncProjectCi(deps, 'p1');
+    expect(listWatched).toHaveBeenCalledWith('p1', { repo: 'acme/app', includeMerged: true, releases: true }, expect.any(Date));
+    expect(updateCi).toHaveBeenCalledWith('p1', 'acme/app', 5, {
+      deploy_state: 'none',
+      deploy_url: null,
+      release_runs: [{ workflow: 'publish-agent.yml', state: 'running', url: 'r9', version: null }],
+    });
+  });
+
+  it('with automation off, never reads release workflows', async () => {
+    const { deps, listWatched } = setup({ automation: { release_workflows: ['publish-agent.yml'] } });
+    await syncProjectCi(deps, 'p1');
+    expect(listWatched).toHaveBeenCalledWith('p1', expect.objectContaining({ releases: false }), expect.any(Date));
+  });
+
   it('skips a project without repo, and one whose integration is not the owner’s GitHub', async () => {
     expect(await syncProjectCi(setup({ repo: null }).deps, 'p1')).toEqual({ skipped: 'no_repo' });
     expect(await syncProjectCi(setup({ integrationOwner: 'u2' }).deps, 'p1')).toEqual({ skipped: 'not_allowed' });
@@ -125,10 +147,10 @@ describe('syncProjectCi', () => {
   it('watches only the current repo, and merged PRs only when a deploy workflow is set', async () => {
     const withDeploy = setup();
     await syncProjectCi(withDeploy.deps, 'p1');
-    expect(withDeploy.listWatched).toHaveBeenCalledWith('p1', { repo: 'acme/app', includeMerged: true }, new Date('2026-09-27T12:00:00Z'));
+    expect(withDeploy.listWatched).toHaveBeenCalledWith('p1', { repo: 'acme/app', includeMerged: true, releases: false }, new Date('2026-09-27T12:00:00Z'));
     const noDeploy = setup({ repo: { integration_id: 'i1', full_name: 'acme/new', deploy_workflow: null } });
     await syncProjectCi(noDeploy.deps, 'p1');
-    expect(noDeploy.listWatched).toHaveBeenCalledWith('p1', { repo: 'acme/new', includeMerged: false }, new Date('2026-09-27T12:00:00Z'));
+    expect(noDeploy.listWatched).toHaveBeenCalledWith('p1', { repo: 'acme/new', includeMerged: false, releases: false }, new Date('2026-09-27T12:00:00Z'));
   });
 
   it('never matches two missing owners', async () => {

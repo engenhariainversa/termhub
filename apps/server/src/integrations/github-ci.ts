@@ -29,6 +29,14 @@ export type PullsPage = { notModified: true } | { notModified: false; etag: stri
 export interface GithubCiClient {
   listPulls(token: string, repo: string, etag: string | null): Promise<PullsPage>;
   listRuns(token: string, repo: string, headSha: string): Promise<WorkflowRun[]>;
+  /** The head commit of a branch; null when the branch is gone. */
+  branchSha(token: string, repo: string, branch: string): Promise<string | null>;
+  /** Whether `ancestor` is part of `descendant`'s history (or the same commit). */
+  isAncestor(token: string, repo: string, ancestor: string, descendant: string): Promise<boolean>;
+  /** The paths a PR changed (first 100 files: enough to find the package a release publishes). */
+  prFiles(token: string, repo: string, number: number): Promise<string[]>;
+  /** A text file at a commit; null when it does not exist there. */
+  fileAt(token: string, repo: string, path: string, ref: string): Promise<string | null>;
 }
 
 export function failure(res: Response): GithubCiError {
@@ -72,6 +80,31 @@ export function createGithubCiClient(fetchImpl: typeof fetch = fetch): GithubCiC
       if (!res.ok) throw failure(res);
       const body = (await res.json()) as { workflow_runs: WorkflowRun[] };
       return body.workflow_runs.map(({ id, name, path, status, conclusion, html_url, created_at }) => ({ id, name, path, status, conclusion, html_url, created_at }));
+    },
+    async branchSha(token, repo, branch) {
+      const res = await get(token, `/repos/${repo}/git/ref/heads/${branch.split('/').map(encodeURIComponent).join('/')}`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw failure(res);
+      return ((await res.json()) as { object: { sha: string } }).object.sha;
+    },
+    async isAncestor(token, repo, ancestor, descendant) {
+      const res = await get(token, `/repos/${repo}/compare/${encodeURIComponent(ancestor)}...${encodeURIComponent(descendant)}?per_page=1`);
+      if (res.status === 404) return false;
+      if (!res.ok) throw failure(res);
+      const { status } = (await res.json()) as { status: string };
+      return status === 'ahead' || status === 'identical';
+    },
+    async prFiles(token, repo, number) {
+      const res = await get(token, `/repos/${repo}/pulls/${number}/files?per_page=100`);
+      if (!res.ok) throw failure(res);
+      return ((await res.json()) as Array<{ filename: string }>).map((f) => f.filename);
+    },
+    async fileAt(token, repo, path, ref) {
+      const res = await get(token, `/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw failure(res);
+      const body = (await res.json()) as { content?: string; encoding?: string };
+      return body.encoding === 'base64' && typeof body.content === 'string' ? Buffer.from(body.content, 'base64').toString('utf8') : null;
     },
   };
 }

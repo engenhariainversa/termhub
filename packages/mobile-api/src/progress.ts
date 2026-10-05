@@ -26,6 +26,8 @@ export const pullRequestBadge = z.object({
   ci_summary: z.object({ total: count, passed: count, failed: count, running: count, failing: z.array(z.string()) }),
   deploy_state: ciState,
   deploy_url: z.string().nullable(),
+  /** the project's release workflows on the merge commit (agentic board D22); absent from a server that predates it */
+  release_runs: z.array(z.object({ workflow: z.string(), state: ciState, url: z.string().nullable(), version: z.string().nullable() })).optional(),
 });
 
 export const agentOnCard = z.object({

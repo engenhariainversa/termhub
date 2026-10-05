@@ -97,7 +97,7 @@ export async function interruptRuns(
  */
 export async function pauseAutomation(
   ctx: ControlContext,
-  i: { scope: PauseScope; interrupt?: boolean },
+  i: { scope: PauseScope; interrupt?: boolean; /** why the server pauses by itself (`deploy_failed`); recorded on the event */ reason?: string },
   opts: { press?: PressEscape } = {},
 ): Promise<{ paused_at: string }> {
   const { repos } = ctx;
@@ -115,7 +115,7 @@ export async function pauseAutomation(
   }
   const { project } = await ctx.scoped.project(i.scope);
   const { paused_at, fresh } = await repos.automationPauses.pauseProject(project.id, new Date());
-  if (fresh || interrupt) await recordEvent(repos, { project_id: project.id, kind: 'paused', payload: { scope: 'project', interrupt } });
+  if (fresh || interrupt) await recordEvent(repos, { project_id: project.id, kind: 'paused', payload: { scope: 'project', interrupt, ...(i.reason ? { reason: i.reason } : {}) } });
   if (interrupt) await interruptRuns(repos, [project.id], opts);
   return { paused_at: paused_at.toISOString() };
 }
