@@ -6,7 +6,7 @@ import { VIEW_AS_COOKIE } from '../auth/scope.js';
 import { AccountDeletionService, deletionStatus } from '../account/deletion.js';
 import { HttpError, unauthorized } from '../lib/errors.js';
 import { config } from '../config.js';
-import { msg, tk } from '../i18n/index.js';
+import { msg, requestLocale, tk } from '../i18n/index.js';
 
 /** Re-authentication for the request: the account's password, or a code e-mailed to it. */
 const requestBody = z.union([
@@ -68,7 +68,7 @@ export async function accountRoutes(app: FastifyInstance, deps: AccountRouteDeps
   /** Sends the code that confirms the request (for accounts without a password, or by choice). */
   app.post('/deletion/code', async (request, reply) => {
     if (!request.user) throw unauthorized();
-    const result = await deps.auth.sendLoginCode(request.user.email, request.ip);
+    const result = await deps.auth.sendLoginCode(request.user.email, request.ip, requestLocale(request));
     if (!result.ok) {
       if (result.reason === 'rate_limited') {
         reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));

@@ -7,6 +7,7 @@ import enAuth from './locales/en/auth.json' with { type: 'json' };
 import enChat from './locales/en/chat.json' with { type: 'json' };
 import enControl from './locales/en/control.json' with { type: 'json' };
 import enDb from './locales/en/db.json' with { type: 'json' };
+import enEmail from './locales/en/email.json' with { type: 'json' };
 import enIntegrations from './locales/en/integrations.json' with { type: 'json' };
 import enMcp from './locales/en/mcp.json' with { type: 'json' };
 import enMisc from './locales/en/misc.json' with { type: 'json' };
@@ -21,5 +22,5 @@ const merge = (...parts: Catalog[]): Catalog => Object.assign({}, ...parts);
 
 export const CATALOGS: Record<Locale, Catalog> = {
   'pt-BR': merge(ptBRControl),
-  en: merge(enAccount, enAgent, enAuth, enChat, enControl, enDb, enIntegrations, enMcp, enMisc, enMobile, enRoutes, enTerminal),
+  en: merge(enAccount, enAgent, enAuth, enChat, enControl, enDb, enEmail, enIntegrations, enMcp, enMisc, enMobile, enRoutes, enTerminal),
 };

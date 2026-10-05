@@ -9,7 +9,7 @@ import type { AuthContext } from './middleware.js';
 import { buildAuthorizationUrl, exchangeCode, isGoogleEnabled } from './google.js';
 import { normalizeNickname } from '../public/nickname.js';
 import { CSRF_COOKIE, OAUTH_COOKIE, SESSION_COOKIE } from './tokens.js';
-import { msg, tk } from '../i18n/index.js';
+import { msg, requestLocale, tk } from '../i18n/index.js';
 
 const loginSchema = z.object({
   email: z.string().email().max(254),
@@ -157,7 +157,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
   app.post('/code/send', { config: { public: true } }, async (request, reply) => {
     if (!config.auth.modes.has('app')) throw badRequest('Login por e-mail desativado neste modo');
     const body = sendCodeSchema.parse(request.body);
-    const result = await service.sendLoginCode(body.email, request.ip);
+    const result = await service.sendLoginCode(body.email, request.ip, requestLocale(request));
     if (!result.ok) {
       if (result.reason === 'rate_limited') {
         reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));

@@ -9,9 +9,10 @@ import { ExpoPushSender, MobilePushService, type PushMessage, type PushSender } 
 const mkDevice = (id: string, token: string): Device => ({ id, user_id: 'u1', push_token: token, status: 'active' }) as unknown as Device;
 const user = { id: 'u1', email: 'ana@example.com' } as unknown as User;
 
-function setup(opts: { devices?: Device[]; live?: string[] } = {}) {
+function setup(opts: { devices?: Device[]; live?: string[]; locale?: 'pt-BR' | 'en' | null } = {}) {
   const devices = opts.devices ?? [mkDevice('d1', 'ExponentPushToken[a]'), mkDevice('d2', 'ExponentPushToken[b]')];
   const repos = {
+    users: { findById: vi.fn(async (id: string) => ({ id, locale: opts.locale ?? null })) },
     devices: { listActiveWithPush: vi.fn(async () => devices), setPushToken: vi.fn(async () => undefined) },
     userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })) },
     projects: { findByIdsForOwner: vi.fn(async () => [{ id: 'p1', name: 'termhub' }]) },
@@ -61,6 +62,18 @@ afterEach(() => {
 });
 
 describe('MobilePushService', () => {
+  it("writes the push and its history row in the recipient's language", async () => {
+    const t = setup({ locale: 'en' });
+    stop = t.service.start();
+    chatBus.publish(confirmation);
+    await flush();
+    expect(t.repos.users.findById).toHaveBeenCalledWith('u1');
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'termhub needs you', body: 'The chat of project termhub asked for confirmation to act in tab api (jarvis).' }),
+    );
+    expect(t.sent[0][0]).toMatchObject({ title: 'termhub needs you' });
+  });
+
   it('turns a confirmation into one history row and a push to devices without a live socket, naming the conversation’s project', async () => {
     const t = setup({ live: ['d2'] });
     stop = t.service.start();

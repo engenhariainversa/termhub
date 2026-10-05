@@ -8,6 +8,7 @@ import type { User } from '../db/repositories/types.js';
 import { confirmationText, deviceRequestText, replyText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { SlidingWindow } from './rate-limit.js';
 import type { MobileSocketRegistry } from './revocation.js';
+import { DEFAULT_LOCALE, localeOf, type Locale } from '../i18n/index.js';
 
 export interface PushMessage {
   to: string;
@@ -113,7 +114,7 @@ export class MobilePushService {
   /** Called by the enrolment service for a real request: goes to every device, live or not. */
   async deviceRequest(user: User, request: DeviceRequest): Promise<void> {
     try {
-      const text = deviceRequestText(request);
+      const text = deviceRequestText(request, localeOf(user.locale));
       const devices = await this.deps.repos.devices.listActiveWithPush(user.id);
       await this.deliver(user.id, 'device_request', text, { kind: 'device_request' }, devices);
     } catch (err) {
@@ -132,7 +133,7 @@ export class MobilePushService {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, event.tab_id, event.machine_id);
       const data = { kind: 'confirmation', conversation_id: event.conversation_id, project_id: projectId, action_id: event.action_id };
-      await this.deliver(event.user_id, 'confirmation', confirmationText(ctx), data, await this.offline(event.user_id));
+      await this.deliver(event.user_id, 'confirmation', confirmationText(ctx, await this.localeFor(event.user_id)), data, await this.offline(event.user_id));
     } else if (event.type === 'tab_question' && event.question.kind !== 'suggestion' && !event.resurfaced) {
       // (A suggestion never rides `tab_question` — it has its own events and is never pushed — the
       // kind check only narrows the view's type.)
@@ -141,13 +142,23 @@ export class MobilePushService {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, event.question.tab_id, null);
       const data = { kind: 'tab_question', conversation_id: event.conversation_id, project_id: projectId, tab_question_id: event.question.id };
-      await this.deliver(event.user_id, 'confirmation', tabQuestionText(ctx, event.question.kind), data, await this.offline(event.user_id));
+      await this.deliver(event.user_id, 'confirmation', tabQuestionText(ctx, event.question.kind, await this.localeFor(event.user_id)), data, await this.offline(event.user_id));
     } else if (event.type === 'run_finished' && event.ok) {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, null, null);
       const data = { kind: 'reply', conversation_id: event.conversation_id, project_id: projectId };
       const send = this.replies.take(event.conversation_id);
-      await this.deliver(event.user_id, 'reply', replyText(ctx), data, send ? await this.offline(event.user_id) : [], `reply:${event.conversation_id}`);
+      await this.deliver(event.user_id, 'reply', replyText(ctx, await this.localeFor(event.user_id)), data, send ? await this.offline(event.user_id) : [], `reply:${event.conversation_id}`);
+    }
+  }
+
+  /** The recipient's language (`users.locale`); pt-BR when unset or when the row cannot be read —
+   *  a push is still worth sending in the default language. */
+  private async localeFor(userId: string): Promise<Locale> {
+    try {
+      return localeOf((await this.deps.repos.users.findById(userId))?.locale);
+    } catch {
+      return DEFAULT_LOCALE;
     }
   }
 
