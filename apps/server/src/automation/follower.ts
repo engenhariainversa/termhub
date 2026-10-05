@@ -47,6 +47,8 @@ export const TRUST_PROMPT = 'trust_prompt';
 export const QUESTION_UNANSWERED = 'question_unanswered';
 /** The escalation reason of a run whose question card closed without an answer while the tab still asks it. */
 export const QUESTION_EXPIRED = 'question_expired';
+/** The escalation reason of a run whose questions were answered automatically too often in the last hour. */
+export const ANSWER_CAP = 'answer_cap';
 /**
  * How long an open question card of an automatic tab may wait with no countdown before the person is
  * called: the woken chat had this long to answer it (spec D18 step 3 → 4).
@@ -58,6 +60,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [TRUST_PROMPT]: tk('O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.'),
   [QUESTION_UNANSWERED]: tk('O agente fez uma pergunta que o modo automático não soube responder; responda no card.'),
   [QUESTION_EXPIRED]: tk('O card da pergunta do agente fechou sem resposta; responda na aba para continuar.'),
+  [ANSWER_CAP]: tk('O agente fez perguntas demais respondidas automaticamente na última hora; confira a aba e responda no card.'),
 };
 
 /** The escalation's text in the reader's language; null for a reason with no text yet. */

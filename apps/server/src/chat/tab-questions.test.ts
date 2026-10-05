@@ -298,7 +298,7 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
       automationRuns: { activeByTab: vi.fn(async () => ((o.run ?? true) ? run : null)), updateActive: vi.fn(async () => true) },
       projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true } } })) },
       automationPauses: { state: vi.fn(async () => ({ user: o.paused ? new Date() : null, project: null })) },
-      automationEvents: { insert: vi.fn(async (e: object) => ({ ...e, id: 'e1', created_at: '' })) },
+      automationEvents: { insert: vi.fn(async (e: object) => ({ ...e, id: 'e1', created_at: '' })), countForRun: vi.fn(async () => 0) },
       tabs: { ...repos.tabs, findById: vi.fn(async () => tab) },
     });
   }
@@ -324,6 +324,31 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
     await vi.waitFor(() => expect(waker.wake).toHaveBeenCalledTimes(1));
     expect(waker.wake).toHaveBeenCalledWith(expect.objectContaining({ id: 'q1' }), 'api', { automatic: true });
     expect(repos.tabQuestions.setAutoAnswer).not.toHaveBeenCalled();
+  });
+
+  it('a choice with no card (no active conversation) parks the run before anything can type into the question (review I1)', async () => {
+    const repos = automaticRepos();
+    repos.tabQuestions.open.mockResolvedValueOnce({ question: null, closed: [] });
+    repos.chat.findLatestActiveForProject.mockResolvedValueOnce(undefined);
+    const waker = { wake: vi.fn(async () => true) };
+    expect(await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' }, { waker })).toBeNull();
+    // awaited inside openTabQuestion: parked before the hook POST returns
+    expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'question_unanswered' });
+    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: 'question_unanswered', tab_id: 't1' } }));
+    expect(waker.wake).not.toHaveBeenCalled();
+  });
+
+  it('a choice with no card in a manual tab (or a permission with none) parks nothing, as before', async () => {
+    for (const [o, input] of [
+      [{ run: false }, { kind: 'choice' as const, payload, tool_use_id: 'toolu_1' }],
+      [{}, { kind: 'permission' as const, payload: { tool_name: 'Bash' }, tool_use_id: null }],
+    ] as const) {
+      const repos = automaticRepos(o);
+      repos.tabQuestions.open.mockResolvedValueOnce({ question: null, closed: [] });
+      await openTabQuestion(asRepos(repos), tab, input);
+      expect(repos.automationRuns.updateActive).not.toHaveBeenCalled();
+      expect(repos.automationEvents.insert).not.toHaveBeenCalled();
+    }
   });
 
   it('a manual tab (no run), or a paused or disabled project, behaves exactly as before: the plain wake, nothing scheduled', async () => {

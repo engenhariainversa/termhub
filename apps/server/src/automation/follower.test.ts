@@ -550,8 +550,19 @@ describe('a question nothing automatic answered (spec §9.1, D18 step 4; carried
     }
   });
 
+  it('a run parked on a question (no card, or past the cap) is never typed into while the tab asks it', async () => {
+    for (const reason of [QUESTION_UNANSWERED, 'answer_cap']) {
+      const w = world({ run: { status: 'waiting', waiting_reason: reason }, tab: { state: 'waiting_input' } });
+      await sweepRuns(w.deps);
+      await sweepRuns(w.deps);
+      expect(w.type).not.toHaveBeenCalled();
+      expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: reason });
+    }
+  });
+
   it('both reasons have a text in both languages', () => {
     expect(escalationText(QUESTION_UNANSWERED, 'en')).toBe('The agent asked a question automatic mode could not answer; answer it on the card.');
     expect(escalationText(QUESTION_EXPIRED)).toBe('O card da pergunta do agente fechou sem resposta; responda na aba para continuar.');
+    expect(escalationText('answer_cap', 'en')).toBe('The agent asked too many questions answered automatically in the last hour; check the tab and answer on the card.');
   });
 });

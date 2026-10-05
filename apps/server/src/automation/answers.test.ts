@@ -7,8 +7,8 @@ import type { ChoicePayload } from '../chat/tab-question-payload.js';
 
 // the card's republish is the chat's business, not this module's
 vi.mock('../chat/tab-questions.js', () => ({ publishTabQuestions: vi.fn(async () => []) }));
-const { automationAnswer, recommendedOption, RECOMMENDED_REASON } = await import('./answers.js');
-const { QUESTION_UNANSWERED } = await import('./follower.js');
+const { AUTOMATION_ANSWERS_MAX_PER_HOUR, automationAnswer, questionWithoutCard, recommendedOption, RECOMMENDED_REASON } = await import('./answers.js');
+const { ANSWER_CAP, QUESTION_UNANSWERED } = await import('./follower.js');
 const { normaliseLabel, parseAskUserQuestion } = await import('../chat/tab-question-payload.js');
 
 type Item = ChoicePayload['questions'][number];
@@ -32,7 +32,7 @@ const run = (): AutomationRun => ({
   heartbeat_at: new Date(), started_at: new Date(), ended_at: null, created_at: new Date(),
 });
 
-function world(q: TabQuestion, o: { wakes?: boolean | 'throws'; noWaker?: boolean; openNow?: TabQuestion | undefined } = {}) {
+function world(q: TabQuestion, o: { wakes?: boolean | 'throws'; noWaker?: boolean; openNow?: TabQuestion | undefined; answeredLastHour?: number } = {}) {
   const r = run();
   const events: AutomationEventInput[] = [];
   const scheduled: AutoAnswer[] = [];
@@ -40,6 +40,7 @@ function world(q: TabQuestion, o: { wakes?: boolean | 'throws'; noWaker?: boolea
     tabQuestions: {
       setAutoAnswer: vi.fn(async (_id: string, auto: AutoAnswer) => (scheduled.push(auto), { ...q, auto_answer: auto })),
       findOpenForTab: vi.fn(async () => ('openNow' in o ? o.openNow : q)),
+      cancelAutoAnswer: vi.fn(async (_id: string, _userId: string) => ({ ...q, auto_answer: { ...q.auto_answer!, status: 'cancelled' as const } })),
     },
     tabs: { findById: vi.fn(async () => ({ id: 'tab1', name: 'api' })) },
     automationRuns: {
@@ -49,7 +50,10 @@ function world(q: TabQuestion, o: { wakes?: boolean | 'throws'; noWaker?: boolea
         return true;
       }),
     },
-    automationEvents: { insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })) },
+    automationEvents: {
+      insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })),
+      countForRun: vi.fn(async (_runId: string, _kind: string, _since: Date) => o.answeredLastHour ?? 0),
+    },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
   } as unknown as Repositories;
   const wake = vi.fn(async () => {
@@ -179,5 +183,62 @@ describe('automationAnswer (spec D18)', () => {
     expect(await automationAnswer(w.deps, card(one(item([['A', true], ['B', false]])), { status: 'answered_in_tab' }), w.run)).toBe('closed');
     expect(w.repos.tabQuestions.setAutoAnswer).not.toHaveBeenCalled();
     expect(w.wake).not.toHaveBeenCalled();
+  });
+});
+
+describe('the answer cap (review I2)', () => {
+  beforeEach(() => vi.clearAllMocks());
+  const now = new Date('2026-10-05T12:00:00.000Z');
+
+  it('below the cap the recommended option is still scheduled; the count is the run\'s own answers of the last hour', async () => {
+    const q = card(one(item([['A', true], ['B', false]])));
+    const w = world(q, { answeredLastHour: AUTOMATION_ANSWERS_MAX_PER_HOUR - 1 });
+    expect(await automationAnswer({ ...w.deps, now: () => now }, q, w.run)).toBe('recommended');
+    expect(w.repos.automationEvents.countForRun).toHaveBeenCalledWith('run1', 'question_answered', new Date(now.getTime() - 3600_000));
+  });
+
+  it('at the cap nothing is answered: the run waits for the person, escalated as answer_cap', async () => {
+    const q = card(one(item([['A', true], ['B', false]])));
+    const w = world(q, { answeredLastHour: AUTOMATION_ANSWERS_MAX_PER_HOUR });
+    expect(await automationAnswer(w.deps, q, w.run)).toBe('escalated');
+    expect(w.repos.tabQuestions.setAutoAnswer).not.toHaveBeenCalled();
+    expect(w.wake).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: ANSWER_CAP });
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', payload: { reason: ANSWER_CAP, tab_id: 'tab1' } })]);
+  });
+
+  it('at the cap a memory repeat already counting down is cancelled, never sent', async () => {
+    const auto: AutoAnswer = { answer: { answers: [{ selected: [0] }] }, by: 'memory', reason: 'r', sources: [{ kind: 'decision', id: 'd1' }], due_at: '', status: 'scheduled' };
+    const q = card(one(item([['A', false], ['B', false]])), { auto_answer: auto });
+    const w = world(q, { answeredLastHour: AUTOMATION_ANSWERS_MAX_PER_HOUR + 3 });
+    expect(await automationAnswer(w.deps, q, w.run)).toBe('escalated');
+    expect(w.repos.tabQuestions.cancelAutoAnswer).toHaveBeenCalledWith('q1', 'u1');
+    expect(w.kinds()).toEqual(['escalated']);
+  });
+
+  it('the next question past N answers escalates (N+1 questions in a run)', async () => {
+    let answered = 0;
+    const q = card(one(item([['A', true], ['B', false]])));
+    const w = world(q);
+    vi.mocked(w.repos.automationEvents.countForRun).mockImplementation(async () => answered);
+    vi.mocked(w.repos.automationEvents.insert).mockImplementation(async (e: AutomationEventInput) => {
+      if (e.kind === 'question_answered') answered++;
+      w.events.push(e);
+      return { ...e, id: 'e', created_at: '' } as never;
+    });
+    const outcomes: string[] = [];
+    for (let i = 0; i <= AUTOMATION_ANSWERS_MAX_PER_HOUR; i++) outcomes.push(await automationAnswer(w.deps, card(q.payload as ChoicePayload, { id: `q${i}` }), w.run));
+    expect(outcomes.slice(0, AUTOMATION_ANSWERS_MAX_PER_HOUR).every((o) => o === 'recommended')).toBe(true);
+    expect(outcomes.at(-1)).toBe('escalated');
+    expect(w.run.waiting_reason).toBe(ANSWER_CAP);
+  });
+});
+
+describe('a question with no card (review I1)', () => {
+  it('parks the run for the person and escalates it', async () => {
+    const w = world(card(one(item([['A', true], ['B', false]]))));
+    await questionWithoutCard(w.repos, w.run);
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: QUESTION_UNANSWERED });
+    expect(w.kinds()).toEqual(['escalated']);
   });
 });

@@ -80,6 +80,11 @@ export class AutomationEventsRepository {
     return rows.map(map);
   }
 
+  /** How many events of `kind` the run recorded since `since` (the answer cap of spec D18, review I2). */
+  async countForRun(runId: string, kind: AutomationEventKind, since: Date): Promise<number> {
+    return this.db.automationEvent.count({ where: { runId, kind, createdAt: { gte: since } } });
+  }
+
   /** Drops events older than `cutoff`; the number removed. */
   async purgeBefore(cutoff: Date): Promise<number> {
     const { count } = await this.db.automationEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });

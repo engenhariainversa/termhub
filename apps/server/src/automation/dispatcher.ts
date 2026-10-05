@@ -216,6 +216,9 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         custom: automation.prompts.implementer,
         description: task.description,
       });
+      // the agent's questions become cards in the owner's project chat (spec §9.1, §9.3): make sure it
+      // has one, or a question would have nowhere to go (review I1)
+      if (project.owner_id) await repos.chat.getOrCreateForProject(project.owner_id, project.id);
       // D24: the last check before anything is typed. The worktree stays; the next claim reuses it.
       // (A pause landing while startAgent runs still lets this one prompt through: within D24's 5 s.)
       if (halted() || (await isPaused(repos, project.owner_id, project.id))) {

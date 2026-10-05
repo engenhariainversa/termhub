@@ -127,6 +127,19 @@ export async function openTabQuestion(
   const conversation = owner ? await repos.chat.findLatestActiveForProject(tab.project_id, owner) : undefined;
   const { question, closed } = await repos.tabQuestions.open({ tab_id: tab.id, project_id: tab.project_id, conversation_id: conversation?.id ?? null, kind: input.kind, payload: input.payload, tool_use_id: input.tool_use_id, agent_id: deps?.agentId ?? null });
   await publishTabQuestions(repos, 'tab_question_closed', closed);
+  if (!question && input.kind === 'choice') {
+    // No card (no active conversation of the owner's): in a tab with a live automatic run the run is
+    // parked for the person before anything else looks at the tab, so nothing is ever typed into the
+    // question (agentic board review I1). A manual tab keeps the question in the tab, as before.
+    const run = await automaticRunOfTab(repos, tab.id).catch(() => null);
+    if (run) {
+      const log = deps?.log ?? silentLog;
+      // loaded lazily: automation/answers reaches the follower, whose imports lead back here
+      await import('../automation/answers.js')
+        .then(({ questionWithoutCard }) => questionWithoutCard(repos, run, log))
+        .catch((err) => log.warn({ tabId: tab.id, code: failureLabel(err) }, 'automation: question with no card not parked'));
+    }
+  }
   let shown = question;
   if (question?.kind === 'choice') {
     const embedder = deps?.embedder !== undefined ? deps.embedder : defaultEmbedder();
