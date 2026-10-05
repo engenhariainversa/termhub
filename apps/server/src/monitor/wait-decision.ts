@@ -80,7 +80,7 @@ export interface WaitEvent {
 }
 
 export type WaitOutcome =
-  | { action: 'drop'; reason: 'session_start_during_turn' | 'post_tool_after_interrupt' | 'subagent_during_wait' | 'reminder_during_background' }
+  | { action: 'drop'; reason: 'session_start_during_turn' | 'post_tool_after_interrupt' | 'subagent_during_wait' | 'reminder_during_background' | 'reminder_after_finished' }
   /**
    * `carry`: the person had seen the wait this one follows. `born`: a wait with nothing new in it,
    * seen from its first moment. `none`: a request the person has not seen.
@@ -114,7 +114,8 @@ function noTurnSinceLastWait(history: HistoryRow[]): boolean {
   if (!last || !isQuiet(last)) return false;
   for (const row of history) {
     if (isQuiet(row) || row.kind === 'idle') continue;
-    return isWait(row.kind);
+    // a turn that ended with a report (TER-972) is as much a turn end as a wait
+    return isWait(row.kind) || row.kind === 'finished';
   }
   // Nothing but quiet rows: a session nobody asked anything — unless the rows that are kept ran
   // out, and a prompt may sit just beyond them.
@@ -149,8 +150,14 @@ export function decideWait(current: WaitCurrent, history: HistoryRow[], event: W
   // The tab is where its main thread is: that wait is still the person's to answer, and nothing the
   // main thread sends later would take the tab out of working again. Only the subagent whose own
   // prompt the tab waits on is back at work when it calls a tool: the person approved it. A main thread
-  // that waits on its own background work (TER-644) stays there too: those tool calls are that work.
-  if (event.kind === 'working' && event.subagent && (isWait(current.state) || current.state === 'waiting_background') && !waitOwnedBy(history, event.subagent)) {
+  // that waits on its own background work (TER-644) stays there too: those tool calls are that work. So
+  // does one that ended its turn with a report (TER-972): its turn is over, whatever a subagent still does.
+  if (
+    event.kind === 'working' &&
+    event.subagent &&
+    (isWait(current.state) || current.state === 'waiting_background' || current.state === 'finished') &&
+    !waitOwnedBy(history, event.subagent)
+  ) {
     return { action: 'drop', reason: 'subagent_during_wait' };
   }
 
@@ -158,6 +165,12 @@ export function decideWait(current: WaitCurrent, history: HistoryRow[], event: W
   // turn did not end in a question: the tab still waits on its work, not on the person (TER-644).
   if (event.continuesWait && event.keepsWaitText && event.kind === 'waiting_input' && current.state === 'waiting_background') {
     return { action: 'drop', reason: 'reminder_during_background' };
+  }
+
+  // Nor does a turn that ended with a report that asks nothing (TER-972): the reminder would turn a
+  // finished tab back into a wait for the person. A `finished` event itself is never a wait (`isWait`).
+  if (event.continuesWait && event.keepsWaitText && event.kind === 'waiting_input' && current.state === 'finished') {
+    return { action: 'drop', reason: 'reminder_after_finished' };
   }
 
   // Cursor's launch with a prompt fires sessionStart and beforeSubmitPrompt together. When the
