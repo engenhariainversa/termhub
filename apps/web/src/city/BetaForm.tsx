@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { currentLocale, tk, useTranslation } from '../i18n';
 
 /**
  * The beta sign-up, on the street. It is the landing's waitlist form (apps/landing/src/WaitlistForm.tsx)
@@ -24,9 +25,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Cloudflare Access signs people in with Google, so only Gmail addresses can be invited. */
 const GMAIL_RE = /^[^@\s]+@gmail\.com$/i;
 
-const GMAIL_ONLY = 'Use um endereço @gmail.com (o acesso é pelo login do Google).';
-const CHECK_FIELD = 'Confira este campo.';
-const GENERIC = 'Não foi possível enviar agora. Tente de novo em instantes.';
+const GMAIL_ONLY = tk('Use um endereço @gmail.com (o acesso é pelo login do Google).');
+const CHECK_FIELD = tk('Confira este campo.');
+const GENERIC = tk('Não foi possível enviar agora. Tente de novo em instantes.');
 const FIELDS: readonly Field[] = ['first_name', 'last_name', 'email', 'phone_country', 'phone_area', 'phone_number', 'linkedin', 'github'];
 
 /** What a failed answer says about the inputs: the two e-mail codes, or zod's issues pointing at fields. */
@@ -43,6 +44,7 @@ function fieldErrors(status: number, data: { code?: string; issues?: Array<{ pat
 }
 
 export function BetaForm() {
+  const { t } = useTranslation();
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
   const [email, setEmail] = useState('');
@@ -79,7 +81,8 @@ export function BetaForm() {
           phone_number: number,
           linkedin: linkedin || null,
           github: github || null,
-          locale: 'pt',
+          // the e-mails that follow go out in the language the visitor is reading
+          locale: currentLocale() === 'en' ? 'en' : 'pt',
           website,
         }),
       });
@@ -101,9 +104,9 @@ export function BetaForm() {
           <span className="mr-1.5 text-accent" aria-hidden="true">
             ✓
           </span>
-          {state.already ? 'Este e-mail já está inscrito no beta.' : 'Inscrição recebida!'}
+          {state.already ? t('Este e-mail já está inscrito no beta.') : t('Inscrição recebida!')}
         </p>
-        {!state.already && <p className="mt-1 text-xs text-fg-muted">Avisamos por e-mail quando o seu acesso ao beta sair.</p>}
+        {!state.already && <p className="mt-1 text-xs text-fg-muted">{t('Avisamos por e-mail quando o seu acesso ao beta sair.')}</p>}
       </div>
     );
   }
@@ -114,10 +117,11 @@ export function BetaForm() {
       bad ? 'border-danger focus:ring-danger' : 'border-line focus:border-accent focus:ring-accent'
     }`;
   const label = 'mb-0.5 block text-[11px] font-medium uppercase tracking-wide text-fg-muted';
+  /** `text` is one of the keys above (GMAIL_ONLY, CHECK_FIELD), translated here, where it is shown */
   const hint = (id: string, text: string | undefined) =>
     text ? (
       <p id={id} role="alert" className="mt-0.5 text-[11px] text-danger">
-        {text}
+        {t(text)}
       </p>
     ) : null;
 
@@ -126,27 +130,27 @@ export function BetaForm() {
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className={label} htmlFor="beta-first">
-            Nome
+            {t('Nome')}
           </label>
           <input id="beta-first" className={field(!!errors.first_name)} aria-invalid={!!errors.first_name} value={first} onChange={(e) => setFirst(e.target.value)} required maxLength={80} autoComplete="given-name" />
         </div>
         <div>
           <label className={label} htmlFor="beta-last">
-            Sobrenome
+            {t('Sobrenome')}
           </label>
           <input id="beta-last" className={field(!!errors.last_name)} aria-invalid={!!errors.last_name} value={last} onChange={(e) => setLast(e.target.value)} required maxLength={80} autoComplete="family-name" />
         </div>
       </div>
       <div>
         <label className={label} htmlFor="beta-email">
-          E-mail (Gmail)
+          {t('E-mail (Gmail)')}
         </label>
         <input
           id="beta-email"
           className={field(!!emailError)}
           type="email"
           inputMode="email"
-          placeholder="voce@gmail.com"
+          placeholder={t('voce@gmail.com')}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           onBlur={() => setEmailTouched(true)}
@@ -159,29 +163,29 @@ export function BetaForm() {
         {hint('beta-email-error', emailError)}
       </div>
       <div>
-        <span className={label}>Telefone</span>
+        <span className={label}>{t('Telefone')}</span>
         <div className="grid grid-cols-[3.5rem_3.5rem_1fr] gap-2">
           <div className="relative">
             <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-fg-dim">+</span>
-            <input className={`${field(!!errors.phone_country)} pl-4`} inputMode="numeric" placeholder="DDI" aria-label="DDI" aria-invalid={!!errors.phone_country} value={ddi} onChange={(e) => setDdi(onlyDigits(e.target.value).slice(0, 4))} required autoComplete="tel-country-code" />
+            <input className={`${field(!!errors.phone_country)} pl-4`} inputMode="numeric" placeholder={t('DDI')} aria-label={t('DDI')} aria-invalid={!!errors.phone_country} value={ddi} onChange={(e) => setDdi(onlyDigits(e.target.value).slice(0, 4))} required autoComplete="tel-country-code" />
           </div>
-          <input className={field(!!errors.phone_area)} inputMode="numeric" placeholder="DDD" aria-label="DDD" aria-invalid={!!errors.phone_area} value={ddd} onChange={(e) => setDdd(onlyDigits(e.target.value).slice(0, 5))} required autoComplete="tel-area-code" />
-          <input className={field(!!errors.phone_number)} inputMode="numeric" placeholder="número" aria-label="número" aria-invalid={!!errors.phone_number} value={number} onChange={(e) => setNumber(onlyDigits(e.target.value).slice(0, 12))} required autoComplete="tel-local" />
+          <input className={field(!!errors.phone_area)} inputMode="numeric" placeholder={t('DDD')} aria-label={t('DDD')} aria-invalid={!!errors.phone_area} value={ddd} onChange={(e) => setDdd(onlyDigits(e.target.value).slice(0, 5))} required autoComplete="tel-area-code" />
+          <input className={field(!!errors.phone_number)} inputMode="numeric" placeholder={t('número')} aria-label={t('número')} aria-invalid={!!errors.phone_number} value={number} onChange={(e) => setNumber(onlyDigits(e.target.value).slice(0, 12))} required autoComplete="tel-local" />
         </div>
         {hint('beta-phone-error', errors.phone_country ?? errors.phone_area ?? errors.phone_number)}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className={label} htmlFor="beta-linkedin">
-            LinkedIn (opcional)
+            {t('LinkedIn (opcional)')}
           </label>
-          <input id="beta-linkedin" className={field(!!errors.linkedin)} aria-invalid={!!errors.linkedin} value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="usuário ou URL" maxLength={200} />
+          <input id="beta-linkedin" className={field(!!errors.linkedin)} aria-invalid={!!errors.linkedin} value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder={t('usuário ou URL')} maxLength={200} />
         </div>
         <div>
           <label className={label} htmlFor="beta-github">
-            GitHub (opcional)
+            {t('GitHub (opcional)')}
           </label>
-          <input id="beta-github" className={field(!!errors.github)} aria-invalid={!!errors.github} value={github} onChange={(e) => setGithub(e.target.value)} placeholder="usuário ou URL" maxLength={200} />
+          <input id="beta-github" className={field(!!errors.github)} aria-invalid={!!errors.github} value={github} onChange={(e) => setGithub(e.target.value)} placeholder={t('usuário ou URL')} maxLength={200} />
         </div>
       </div>
       {/* honeypot: hidden from people, filled by bots */}
@@ -190,7 +194,7 @@ export function BetaForm() {
       </div>
       {generic && (
         <p role="alert" className="text-xs text-danger">
-          {GENERIC}
+          {t(GENERIC)}
         </p>
       )}
       <button
@@ -198,9 +202,9 @@ export function BetaForm() {
         className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent"
         disabled={sending || !first.trim() || !last.trim() || !emailOk || !ddi || !ddd || number.length < 6}
       >
-        {sending ? 'Enviando…' : 'Entrar no beta gratuito'}
+        {sending ? t('Enviando…') : t('Entrar no beta gratuito')}
       </button>
-      <p className="text-[11px] text-fg-dim">Usamos seus dados só para o acesso ao beta do termhub.</p>
+      <p className="text-[11px] text-fg-dim">{t('Usamos seus dados só para o acesso ao beta do termhub.')}</p>
     </form>
   );
 }

@@ -38,7 +38,8 @@ function sources(dir: string): string[] {
 
 /**
  * The same rule, read from the source: runs everywhere (no build needed), and names the file and the
- * import that broke it. The city may import the office, the public types, its own files and packages.
+ * import that broke it. The city may import the office, the public types, the i18n module (its catalogs
+ * are copy, not app code), its own files and packages.
  */
 describe('the public bundle source', () => {
   it('imports nothing of the private app', () => {
@@ -48,7 +49,7 @@ describe('the public bundle source', () => {
         const spec = m[1];
         if (!spec.startsWith('.')) continue;
         const target = relative(SRC, resolve(dirname(file), spec));
-        if (target.startsWith('city/') || target.startsWith('office/') || target === 'lib/types' || target === 'lib/types.ts') continue;
+        if (target.startsWith('city/') || target.startsWith('office/') || target === 'i18n' || target.startsWith('i18n/') || target === 'lib/types' || target === 'lib/types.ts') continue;
         bad.push(`${relative(SRC, file)} -> ${spec}`);
       }
     }

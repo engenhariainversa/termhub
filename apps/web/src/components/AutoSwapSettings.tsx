@@ -3,9 +3,11 @@ import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/data';
 import type { AiAccount, Machine } from '../lib/types';
+import { useTranslation } from '../i18n';
 
 /** One machine's row: a checkbox with an optimistic toggle, reverted on error (like AgentUpdateCard's `setAuto`). */
 function MachineRow({ machine, defaultUnregistered }: { machine: Machine; defaultUnregistered: boolean }) {
+  const { t } = useTranslation();
   const { updateMachine } = useData();
   const [checked, setChecked] = useState(machine.claude_auto_swap);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +19,7 @@ function MachineRow({ machine, defaultUnregistered }: { machine: Machine; defaul
       await updateMachine(machine.id, { claude_auto_swap: next });
     } catch (e) {
       setChecked(!next);
-      setError(e instanceof ApiError ? e.message : 'Erro ao salvar');
+      setError(e instanceof ApiError ? e.message : t('Erro ao salvar'));
     }
   };
 
@@ -25,11 +27,11 @@ function MachineRow({ machine, defaultUnregistered }: { machine: Machine; defaul
     <div>
       <label className="flex items-center gap-2 text-sm text-fg-muted">
         <input type="checkbox" checked={checked} onChange={(e) => void toggle(e.target.checked)} />
-        Trocar de conta sozinho quando o Claude atingir o limite em {machine.name}
+        {t('Trocar de conta sozinho quando o Claude atingir o limite em {{machine}}', { machine: machine.name })}
       </label>
       {defaultUnregistered && (
         <p className="mt-1 text-xs text-fg-dim">
-          A conta padrão do Claude em {machine.name} não está cadastrada: as abas dela passam para as contas cadastradas, mas nenhuma aba volta para ela.
+          {t('A conta padrão do Claude em {{machine}} não está cadastrada: as abas dela passam para as contas cadastradas, mas nenhuma aba volta para ela.', { machine: machine.name })}
         </p>
       )}
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
@@ -45,6 +47,7 @@ function MachineRow({ machine, defaultUnregistered }: { machine: Machine; defaul
  * can update machines.
  */
 export function AutoSwapSettings({ machines, accounts }: { machines: Machine[]; accounts: AiAccount[] }) {
+  const { t } = useTranslation();
   const { can } = useAuth();
   const claude = accounts.filter((a) => a.provider === 'claude');
   const rows = machines.flatMap((m) => {
@@ -56,9 +59,9 @@ export function AutoSwapSettings({ machines, accounts }: { machines: Machine[]; 
 
   return (
     <div className="mt-6 border-t border-line pt-4">
-      <h3 className="text-sm font-semibold">Troca automática de conta</h3>
+      <h3 className="text-sm font-semibold">{t('Troca automática de conta')}</h3>
       <p className="mt-1 text-xs text-fg-dim">
-        Quando uma aba do Claude atingir o limite de uso, o termhub retoma a mesma sessão em outra conta desta máquina.
+        {t('Quando uma aba do Claude atingir o limite de uso, o termhub retoma a mesma sessão em outra conta desta máquina.')}
       </p>
       <div className="mt-3 space-y-2">
         {rows.map((r) => (
