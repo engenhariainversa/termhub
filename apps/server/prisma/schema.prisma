@@ -331,6 +331,8 @@ enum TabState {
   error
   /// The agent ended its turn while background work it started (subagents, shells, monitors) still runs (TER-644).
   waiting_background
+  /// The agent ended its turn with a report that asks nothing: done, not waiting for the person (TER-972).
+  finished
 }
 
 /// What a working agent is doing, from the tool it is about to call (monitor/activity.ts).
@@ -470,6 +472,8 @@ model Task {
   doneAt        DateTime? @map("done_at")
   /// Seconds an agent tab linked to this card (or to one of its subtasks) spent working (monitor/recordEvent).
   activeSeconds Int       @default(0) @map("active_seconds")
+  /// Tagged "automático": eligible for automatic work. On an epic, setAuto propagates to its top-level cards. Never on subtasks.
+  auto        Boolean    @default(false)
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   /// chave estável do ticket externo ("linear:<id>", "jira:<key>") para upsert no sync

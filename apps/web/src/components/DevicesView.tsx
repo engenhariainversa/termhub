@@ -3,6 +3,7 @@ import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { Device, DeviceEventView, DeviceRequestView } from '../lib/types';
 import { ConfirmDialog } from './Modal';
+import { formatDate, formatTime } from '../lib/format';
 
 /** Same ceiling the server enforces (mobile/enrolment.ts's DEVICE_LIMIT, 409 "Revogue um aparelho
  *  antes"): Aprovar is disabled here too, instead of always waiting for that round-trip. */
@@ -11,8 +12,8 @@ const MAX_DEVICES = 5;
 /** DeviceRequestBanner listens for this to refresh its own summary right after a decision here. */
 const DEVICES_CHANGED_EVENT = 'termhub:devices-changed';
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
-const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+const fmtDate = (iso: string) => formatDate(iso);
+const fmtTime = (iso: string) => formatTime(iso, { hour: '2-digit', minute: '2-digit' });
 
 /** City and country as Cloudflare saw them; empty when neither is known (the IP is always shown apart). */
 function placeOf(r: DeviceRequestView): string {

@@ -23,7 +23,7 @@ export type TaskType = 'epic' | 'story' | 'task' | 'subtask' | 'bug' | 'spike';
 export type ColumnCategory = Exclude<TaskStatus, 'backlog'>;
 export type TabKind = 'terminal' | 'simulator';
 /** Monitor state of the tool running in a tab (see monitor/state.ts). */
-export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background';
+export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background' | 'finished';
 /** What a working agent is doing, from the tool it is about to call (monitor/activity.ts). */
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 export const TAB_ACTIVITIES: readonly TabActivity[] = ['coding', 'reading', 'researching', 'planning', 'terminal', 'working'];
@@ -204,6 +204,8 @@ export interface Task {
   epic_id: string | null;
   /** Board column; null in the backlog and on subtasks. */
   column_id: string | null;
+  /** Tagged "automático" (eligible for automatic work); always false on subtasks. */
+  auto: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -401,6 +403,7 @@ export const mapTask = (t: PrismaTask, key: string): Task => ({
   parent_id: t.parentId,
   epic_id: t.epicId,
   column_id: t.columnId,
+  auto: t.auto,
   created_at: t.createdAt.toISOString(),
   updated_at: t.updatedAt.toISOString(),
 });

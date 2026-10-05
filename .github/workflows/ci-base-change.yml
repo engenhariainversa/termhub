@@ -11,6 +11,8 @@ on:
     branches: [main]
 
 jobs:
-  check:
+  # Not `check`: on a title edit this job is skipped, and a skipped `check` next to the real
+  # `check / check` of "CI e Deploy" read like the PR's check had been skipped.
+  base-change:
     if: github.event.changes.base != null
     uses: ./.github/workflows/check.yml

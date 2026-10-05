@@ -5,12 +5,13 @@ import type { Tab } from '../db/repositories/types.js';
 import { applyErrorHandler } from '../lib/errors.js';
 import { monitorBus } from '../monitor/bus.js';
 import { hashHookToken, newHookToken } from '../monitor/token.js';
+import { recordInputOrigin, resetInputOrigins } from '../terminal/input-origin.js';
 import { hooksRoutes } from './hooks.js';
 
 const { token, hash } = newHookToken();
 const tab: Tab = { id: 'tab1', project_id: 'p1', machine_id: 'm1', name: 'x', kind: 'terminal', tmux_session: 'termhub-p1-tab1', simulator_udid: null, position: 0, state: null, state_text: null, state_tool: null, state_at: null, state_seen_at: null, created_at: '2026-09-18T00:00:00.000Z' };
 
-function buildApp() {
+function buildApp(logStream?: { write(line: string): void }) {
   const recordEvent = vi.fn(async (_id: string, e: { kind: Tab['state']; tool: string; text: string | null }) => ({
     tab: { ...tab, state: e.kind, state_text: e.text, state_tool: e.tool, state_at: '2026-09-18T10:00:00.000Z' },
     event: { id: 'e1', tab_id: tab.id, kind: e.kind, tool: e.tool, text: e.text, meta: {}, created_at: '2026-09-18T10:00:00.000Z' },
@@ -19,8 +20,10 @@ function buildApp() {
     machineHooks: { machineIdForTokenHash: async (h: string) => (h === hash ? 'm1' : undefined) },
     tabs: { findByTmuxSession: async (machineId: string, session: string) => (machineId === 'm1' && session === tab.tmux_session ? tab : undefined), recordEvent },
     machines: { findById: async (id: string) => (id === 'm1' ? { id: 'm1', owner_id: 'u1' } : undefined) },
+    users: { findById: async (id: string) => (id === 'u1' ? { id, name: 'Pedro' } : undefined) },
+    chat: { findUserMessagesForUser: async () => [] },
   } as unknown as Repositories;
-  const app = Fastify();
+  const app = Fastify(logStream ? { logger: { level: 'debug', stream: logStream } } : {});
   applyErrorHandler(app);
   app.register((instance) => hooksRoutes(instance, repos), { prefix: '/api/hooks' });
   return { app, recordEvent };
@@ -106,5 +109,49 @@ describe('hook tokens', () => {
     expect(a.token).not.toBe(b.token);
     expect(a.hash).toBe(hashHookToken(a.token));
     expect(a.hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe('POST /api/hooks/events: the origin of a prompt termhub typed (TER-851)', () => {
+  const prompt = 'pode fazer o merge do #279 segredo-do-prompt';
+  const submit = { tool: 'claude', session: tab.tmux_session, event: { hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt } };
+
+  it('answers a matched UserPromptSubmit with the note for the hook to print, once', async () => {
+    resetInputOrigins();
+    const { app } = buildApp();
+    recordInputOrigin(tab.id, prompt, { level: 'assistant', userId: 'u1' });
+    const r = await post(app, submit);
+    expect(r.statusCode).toBe(200);
+    expect(r.body.startsWith('{"hookSpecificOutput"')).toBe(true);
+    expect(r.json()).toEqual({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: expect.stringMatching(/^termhub origin note: the termhub chat assistant sent this message on its own/) } });
+    expect((await post(app, submit)).json()).toEqual({ ok: true, tab_id: 'tab1', state: 'working' });
+  });
+
+  it('answers as before when nothing matches', async () => {
+    resetInputOrigins();
+    const { app } = buildApp();
+    recordInputOrigin(tab.id, 'outro texto', { level: 'assistant', userId: 'u1' });
+    expect((await post(app, submit)).json()).toEqual({ ok: true, tab_id: 'tab1', state: 'working' });
+  });
+
+  it('never answers for a tab of another machine', async () => {
+    resetInputOrigins();
+    const { app } = buildApp();
+    recordInputOrigin(tab.id, prompt, { level: 'assistant', userId: 'u1' });
+    const other = await post(app, { ...submit, session: 'termhub-p9-other' });
+    expect(other.statusCode).toBe(202);
+    expect(other.body).not.toContain('hookSpecificOutput');
+  });
+
+  it('never logs the prompt or the note', async () => {
+    resetInputOrigins();
+    const lines: string[] = [];
+    const { app } = buildApp({ write: (line) => lines.push(line) });
+    recordInputOrigin(tab.id, prompt, { level: 'person_typed', userId: 'u1', surface: 'web' });
+    expect((await post(app, submit)).statusCode).toBe(200);
+    const logged = lines.join('');
+    expect(logged).toContain('monitor: prompt origin');
+    expect(logged).not.toContain('segredo-do-prompt');
+    expect(logged).not.toContain('These are their own words');
   });
 });

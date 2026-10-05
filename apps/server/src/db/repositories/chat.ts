@@ -194,6 +194,14 @@ export class ChatRepository {
     return rows.map(mapMessage);
   }
 
+  /** The person's own messages (`role: 'user'`) among `ids`, in any of `userId`'s conversations. An id of
+   *  someone else's, an assistant's or a missing message is dropped (TER-851: `send_input`'s `on_behalf_of`). */
+  async findUserMessagesForUser(ids: string[], userId: string): Promise<ChatMessage[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db.chatMessage.findMany({ where: { id: { in: ids }, role: 'user', conversation: { userId } } });
+    return rows.map(mapMessage);
+  }
+
   /** A null session also clears the context fill: it described the session that is gone. */
   async setCliSession(id: string, sessionId: string | null): Promise<void> {
     await this.db.chatConversation.update({ where: { id }, data: sessionId === null ? NO_SESSION : { cliSessionId: sessionId } });

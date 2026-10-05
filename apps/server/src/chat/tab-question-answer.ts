@@ -81,7 +81,7 @@ async function runKeyPlan(ctx: ControlContext, tabId: string, steps: KeyStep[], 
     if (i > 0) await sleep(KEY_STEP_PAUSE_MS);
     if ('key' in step) await sendKey(ctx, { tab_id: tabId, key: step.key });
     // This *is* the answer to the prompt the tab is waiting on: past sendInput's WAITING_PERMISSION guard on purpose.
-    else await sendInput(ctx, { tab_id: tabId, text: step.text, enter: false, answering_permission: true });
+    else await sendInput(ctx, { tab_id: tabId, text: step.text, enter: false, answering_permission: true }, null);
   }
 }
 
