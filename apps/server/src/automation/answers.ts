@@ -1,14 +1,19 @@
 import { blocklistParts, scheduleAutoAnswer } from '../chat/auto-answer.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
-import { checkChoiceAnswer, type ChoiceAnswer, type ChoicePayload } from '../chat/tab-question-payload.js';
+import { answerTabQuestion } from '../chat/tab-question-answer.js';
+import { checkChoiceAnswer, type ChoiceAnswer, type ChoicePayload, type PermissionPayload } from '../chat/tab-question-payload.js';
 import type { Waker } from '../chat/wake.js';
+import { controlContextFor } from '../control/context.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { TabQuestion as TabQuestionRow } from '../db/repositories/tab-questions.js';
 import { tk } from '../i18n/index.js';
 import { autoAnswerBlocked } from '../memory/blocklist.js';
+import type { AutonomyLevel } from '../setup/schema.js';
 import { recordEvent } from './events.js';
-import { ANSWER_CAP, QUESTION_UNANSWERED, wakeOrEscalate } from './follower.js';
+import { ANSWER_CAP, PERMISSION_NEEDED, QUESTION_UNANSWERED, wakeOrEscalate } from './follower.js';
+import { automaticRunOfTab } from './pause.js';
+import { runPermission } from './permission.js';
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
 const noopLog: Log = { info: () => {}, warn: () => {} };
@@ -24,6 +29,13 @@ export const RECOMMENDED_REASON = tk('Opção recomendada pelo agente');
  * would otherwise be answered every 60 s for ever. The cycle detector (TER-970) is the finer answer.
  */
 export const AUTOMATION_ANSWERS_MAX_PER_HOUR = 20;
+
+/**
+ * How long an allowed permission waits before it is sent: the hook that opened the card may land before
+ * Claude Code has drawn its dialog, and the answer path's live screen check would then take the card for a
+ * stale one and close it. The pause, the project and the tag are read again after it.
+ */
+export const PERMISSION_SETTLE_MS = 3_000;
 const HOUR_MS = 60 * 60_000;
 
 export interface AnswerDeps {
@@ -33,6 +45,10 @@ export interface AnswerDeps {
   log?: Log;
   /** The clock (tests). */
   now?: () => Date;
+  /** How an allowed permission is sent (tests). Default: the chat's own answer path, `answerTabQuestion`. */
+  sendAnswer?: typeof answerTabQuestion;
+  /** The pause before an allowed permission is sent (tests). */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -50,6 +66,12 @@ export function recommendedOption(payload: ChoicePayload): string | null {
   if (payload.questions.length !== 1) return null;
   const marked = payload.questions[0]!.options.filter((o) => o.recommended === true);
   return marked.length === 1 ? marked[0]!.label : null;
+}
+
+/** Whether the run used up its automatic answers of the last hour (AUTOMATION_ANSWERS_MAX_PER_HOUR). */
+async function capReached(deps: AnswerDeps, run: AutomationRun): Promise<boolean> {
+  const since = new Date((deps.now?.() ?? new Date()).getTime() - HOUR_MS);
+  return (await deps.repos.automationEvents.countForRun(run.id, 'question_answered', since)) >= AUTOMATION_ANSWERS_MAX_PER_HOUR;
 }
 
 /** The card as the database has it now: closed, counting down (someone scheduled first), or still waiting. */
@@ -90,8 +112,7 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
   };
 
   // the cap: past it, a countdown already running is stopped and the person answers
-  const since = new Date((deps.now?.() ?? new Date()).getTime() - HOUR_MS);
-  if ((await repos.automationEvents.countForRun(run.id, 'question_answered', since)) >= AUTOMATION_ANSWERS_MAX_PER_HOUR) {
+  if (await capReached(deps, run)) {
     if (q.auto_answer?.status === 'scheduled') {
       const cancelled = await repos.tabQuestions.cancelAutoAnswer(q.id, q.user_id);
       if (cancelled) await publishTabQuestions(repos, 'tab_question', [cancelled], { update: true });
@@ -148,12 +169,212 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
 }
 
 /**
- * A choice question in a tab with a live automatic run that got no card (the owner has no active chat
+ * A question (choice or permission) in a tab with a live automatic run that got no card (the owner has no active chat
  * conversation for the project — never created, or archived): nothing can answer it and the person cannot
  * see it, so the run waits for them and is escalated. The follower then never types into the tab — a
- * resume typed into Claude's picker would answer the question blindly, past the keyword block (review I1).
+ * resume typed into Claude's picker would answer the question blindly, past the keyword block (review I1). A
+ * permission parks as `permission_needed`, a choice as `question_unanswered`.
  */
-export async function questionWithoutCard(repos: Repositories, run: AutomationRun, log: Log = noopLog): Promise<void> {
-  log.info({ runId: run.id, tabId: run.tab_id }, 'automation: question with no card');
-  await wakeOrEscalate(repos, run, QUESTION_UNANSWERED, log);
+export async function questionWithoutCard(repos: Repositories, run: AutomationRun, log: Log = noopLog, kind: 'choice' | 'permission' = 'choice'): Promise<void> {
+  log.info({ runId: run.id, tabId: run.tab_id, kind }, 'automation: question with no card');
+  await wakeOrEscalate(repos, run, kind === 'permission' ? PERMISSION_NEEDED : QUESTION_UNANSWERED, log);
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Permission requests (spec D19, §9.2, preflight F-6)
+// ---------------------------------------------------------------------------------------------------------
+
+/** What a permission request asks for: the tool, and for `Bash` the command when it is known. */
+export interface PermissionRequest {
+  tool: string;
+  command: string | null;
+}
+
+/**
+ * Shell operators that chain, substitute or redirect: a command holding any of them is never matched
+ * against a rule (`Bash(npm test:*)` must not allow `npm test && curl … | sh`). Crude on purpose: a quoted
+ * `|` in a commit message escalates too, which is the safe direction.
+ */
+const SHELL_OPERATORS = /[;&|`<>\n\r]|\$\(/;
+
+/** A token without the quotes around it, and a path reduced to its last part (`/bin/rm` → `rm`). */
+const bare = (token: string) => token.replace(/^['"]+|['"]+$/g, '');
+const base = (token: string) => bare(token).split('/').pop() ?? '';
+
+/** git's global options that take their value in the next token (`git -C <path> push`). */
+const GIT_OPTION_WITH_VALUE = new Set(['-C', '--git-dir', '--work-tree', '--namespace', '--super-prefix']);
+/** `git push` options that are never sent automatically: force, delete, every ref at once, a remote program. */
+const PUSH_REFUSED_OPTION = /^--(force|mirror|all|tags|delete|prune|receive-pack|exec)(=|$)|^--force-/;
+
+/**
+ * Whether a `git … push …` is refused: any force flag (`-f` in a group too), a delete, every ref at once, a
+ * remote program, a forced (`+`) or mapped (`a:b`, `:b`) refspec, or a refspec that is not `HEAD` or the
+ * run's own branch (TER-968: an automatic tab pushes only its own branch). git's config injection (`-c`,
+ * `--config-env`, `--exec-path`) is refused whatever the subcommand: it can turn any git line into a push.
+ */
+function refusedGit(tokens: string[], branch: string | null): boolean {
+  let i = 1;
+  for (; i < tokens.length; i++) {
+    const t = bare(tokens[i]!);
+    if (t === '-c' || t.startsWith('-c') || t.startsWith('--config-env') || t.startsWith('--exec-path')) return true;
+    if (GIT_OPTION_WITH_VALUE.has(t)) {
+      i++;
+      continue;
+    }
+    if (!t.startsWith('-')) break;
+  }
+  if (bare(tokens[i] ?? '') !== 'push') return false;
+  const positional: string[] = [];
+  for (const raw of tokens.slice(i + 1)) {
+    const t = bare(raw);
+    if (t.startsWith('--')) {
+      if (PUSH_REFUSED_OPTION.test(t)) return true;
+    } else if (t.startsWith('-')) {
+      // a group of short flags: -f (force) and -d (delete) anywhere in it
+      if (/[fd]/.test(t.slice(1))) return true;
+    } else positional.push(t);
+  }
+  // the first positional is the remote; every other one is a refspec
+  return positional.slice(1).some((ref) => ref.startsWith('+') || ref.includes(':') || (ref !== 'HEAD' && ref !== branch));
+}
+
+/**
+ * Whether a shell command is refused at every autonomy level, whatever the allow list says (preflight F-6):
+ * `gh pr merge` (merging is the server's job, D5), a force push or a push to anything but the run's own
+ * branch, publishing (`npm publish`, `npm run release*`, `eas`), a recursive `rm`, and removing or stopping
+ * containers (this host may be production). Read token by token, at any position, so a prefix (`env`,
+ * `npx`, a path) does not hide it. Shell operators are checked by the caller before this.
+ */
+export function refusedCommand(command: string, branch: string | null): boolean {
+  const tokens = command.trim().split(/\s+/).filter(Boolean);
+  for (let i = 0; i < tokens.length; i++) {
+    const t = base(tokens[i]!);
+    const rest = tokens.slice(i + 1).map(bare);
+    if (t === 'gh' && rest.some((r, j) => r === 'pr' && rest[j + 1] === 'merge')) return true;
+    if (t === 'git' && refusedGit(tokens.slice(i), branch)) return true;
+    if ((t === 'npm' || t === 'pnpm' || t === 'yarn') && rest.includes('publish')) return true;
+    if ((t === 'npm' || t === 'pnpm' || t === 'yarn') && rest.some((r, j) => (r === 'run' || r === 'run-script') && (rest[j + 1] ?? '').startsWith('release'))) return true;
+    if (t === 'eas' || t === 'eas-cli') return true;
+    if (t === 'rm' && rest.some((r) => r === '--recursive' || (/^-[a-zA-Z]+$/.test(r) && /[rR]/.test(r)))) return true;
+    if ((t === 'docker' || t === 'podman' || t === 'nerdctl') && rest.some((r) => ['rm', 'rmi', 'stop', 'kill', 'prune', 'down'].includes(r))) return true;
+  }
+  return false;
+}
+
+/** One rule of Claude Code's `--allowedTools` syntax: `Tool`, `Tool(exact)` or `Tool(prefix:*)`. */
+function parseRule(rule: string): { tool: string; spec: string | null } | null {
+  const m = /^([^()\s]+)(?:\(([\s\S]*)\))?$/.exec(rule.trim());
+  return m ? { tool: m[1]!, spec: m[2] ?? null } : null;
+}
+
+const squashSpaces = (s: string) => s.trim().replace(/[ \t]+/g, ' ');
+
+/** A Bash rule's specifier against a command: `prefix:*` on a word boundary, anything else exactly. */
+function bashSpecMatches(spec: string, command: string): boolean {
+  if (spec.endsWith(':*')) {
+    const prefix = squashSpaces(spec.slice(0, -2));
+    if (prefix === '' || prefix.includes('*')) return false;
+    return command === prefix || command.startsWith(`${prefix} `);
+  }
+  const exact = squashSpaces(spec);
+  return !exact.includes('*') && command === exact;
+}
+
+/**
+ * Whether a permission request of an automatic tab may be answered "allow" (spec D19, §9.2), checked in
+ * this order — anything not allowed is escalated to the person, never denied:
+ *
+ * 1. the keyword block (`memory/blocklist.ts`) on the tool's name and the command: never;
+ * 2. for `Bash`: a command that is unknown, holds a shell operator (`; & | \` $( > <` or a line break), or
+ *    is refused at every level (`refusedCommand`, the run's `branch` for pushes): never;
+ * 3. a rule of `allowed` (Claude Code's syntax) for this tool: a bare `Tool`, or for `Bash` a
+ *    `Bash(prefix:*)` matching on a word boundary or a `Bash(exact)` matching exactly. A specifier on any
+ *    other tool never matches: its input is not known here.
+ *
+ * Every refusal holds at every autonomy `level`: merging, deploying and publishing are the server's own
+ * steps (D5), never a permission answered in a tab. The level is taken so a rule can depend on it later.
+ */
+export function permissionAllowed(req: PermissionRequest, allowed: string[], level: AutonomyLevel, branch: string | null = null): boolean {
+  void level;
+  if (autoAnswerBlocked([req.tool, req.command ?? ''])) return false;
+  const isBash = req.tool === 'Bash';
+  let command: string | null = null;
+  if (isBash) {
+    if (req.command === null || SHELL_OPERATORS.test(req.command)) return false;
+    command = squashSpaces(req.command);
+    if (command === '' || refusedCommand(command, branch)) return false;
+  }
+  return allowed.some((raw) => {
+    const rule = parseRule(raw);
+    if (!rule || rule.tool !== req.tool) return false;
+    if (rule.spec === null) return true;
+    return isBash && command !== null && bashSpecMatches(rule.spec, command);
+  });
+}
+
+/** The answer path logs `(object, message)` only, the one form this module's logger has. */
+type AnswerPathLog = Parameters<typeof answerTabQuestion>[3]['log'];
+
+export type PermissionOutcome = 'allowed' | 'escalated' | 'closed';
+
+/**
+ * A `permission` card opened in a tab with a live automatic run (spec §9.2). The request is matched against
+ * the allow list stored on the run (falling back to the project's setup, `runPermission`) and the project's
+ * autonomy level (`permissionAllowed`). Not allowed, or past the hourly cap of automatic answers, the run
+ * waits for the person (`permission_needed` / `answer_cap`) → `'escalated'`.
+ *
+ * Allowed: after PERMISSION_SETTLE_MS, right before sending, the tab's run is read again — still this run, its project on and not
+ * paused (D24), its card still tagged — and when anything changed nothing is sent and the card is left to
+ * the person (`'escalated'`, the run untouched: the follower deals with an untagged card or a pause).
+ * Then "allow" (once) goes through the chat's ordinary answer path as the project's owner, with every check
+ * of a click (live screen, claim) → `'allowed'`, recorded as `question_answered` (`via: 'permission'`). A
+ * send that fails escalates, unless the card moved on meanwhile (`'closed'`). Only "allow" is ever sent.
+ *
+ * `command` is the Bash command when the caller knows it. The machine's hook script forwards the tool's
+ * name only (spec 2026-09-25 tab questions §4.1), so today it is null and every Bash request escalates.
+ * Logs ids only, never the command.
+ */
+export async function automationPermission(deps: AnswerDeps, q: TabQuestionRow, run: AutomationRun, command: string | null = null): Promise<PermissionOutcome> {
+  const { repos } = deps;
+  const log = deps.log ?? noopLog;
+  if (q.kind !== 'permission' || q.status !== 'open') return 'closed';
+  const escalate = async (reason: string): Promise<PermissionOutcome> => {
+    await wakeOrEscalate(repos, run, reason, log);
+    return 'escalated';
+  };
+
+  if (await capReached(deps, run)) {
+    log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: answer cap reached');
+    return escalate(ANSWER_CAP);
+  }
+  const [{ allowedTools }, setup] = await Promise.all([runPermission(repos, run), repos.projectSetup.get(run.project_id)]);
+  const tool = (q.payload as PermissionPayload).tool_name;
+  if (!permissionAllowed({ tool, command }, allowedTools, setup.data.automation.autonomy, run.branch)) {
+    log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission outside the rules');
+    return escalate(PERMISSION_NEEDED);
+  }
+
+  await (deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))))(PERMISSION_SETTLE_MS);
+  // right before sending: the pause, the project's switch, the run and the card's tag, read again
+  const live = await automaticRunOfTab(repos, q.tab_id).catch(() => null);
+  const task = live?.id === run.id && run.task_id ? await repos.tasks.findById(run.task_id) : undefined;
+  const owner = task?.auto ? await repos.projects.findById(run.project_id).then((p) => (p?.owner_id ? repos.users.findById(p.owner_id) : undefined)) : undefined;
+  if (!owner) {
+    log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission left to the person (paused, untagged or run changed)');
+    return 'escalated';
+  }
+
+  try {
+    await (deps.sendAnswer ?? answerTabQuestion)(controlContextFor(repos, owner), q.id, { allow: true }, { log: log as unknown as AnswerPathLog, embedder: null });
+  } catch (err) {
+    const code = (err as { code?: unknown })?.code;
+    log.warn({ runId: run.id, tabQuestionId: q.id, code: typeof code === 'string' ? code.slice(0, 64) : 'SEND_FAILED' }, 'automation: permission answer failed');
+    if ((await cardNow(repos, q)) === 'closed') return 'closed';
+    return escalate(PERMISSION_NEEDED);
+  }
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'question_answered', payload: { via: 'permission', tab_id: q.tab_id, question_id: q.id } }).catch(() =>
+    log.warn({ runId: run.id, tabQuestionId: q.id }, 'automation: question_answered not recorded'),
+  );
+  log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission allowed');
+  return 'allowed';
 }

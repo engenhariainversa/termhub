@@ -9,7 +9,7 @@ import type { Tab, Task } from '../db/repositories/types.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { monitorBus } from '../monitor/bus.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
-import { escalationText, followRun, getRunCard, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
+import { escalationText, followRun, getRunCard, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
 import { automationBus } from './events.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 
@@ -541,8 +541,26 @@ describe('a question nothing automatic answered (spec §9.1, D18 step 4; carried
     expect(exited.run.status).toBe('running');
   });
 
-  it('an answered card, a permission card or no card at all changes nothing', async () => {
-    for (const q of [question({ status: 'answered', closed_at: iso(1_000) }), question({ kind: 'permission', payload: { tool_name: 'Bash' }, created_at: iso(QUESTION_WAIT_MS * 3) }), undefined]) {
+  it('a permission card still open past QUESTION_WAIT_MS escalates as permission_needed; a younger or answered one does not', async () => {
+    const young = world({ question: question({ kind: 'permission', payload: { tool_name: 'Bash' }, created_at: iso(QUESTION_WAIT_MS - 1_000) }), tab: { state: 'waiting_permission' } });
+    await sweepRuns(young.deps);
+    expect(young.run.status).toBe('running');
+    expect(young.events).toEqual([]);
+
+    const answered = world({ question: question({ kind: 'permission', payload: { tool_name: 'Bash' }, status: 'answered', created_at: iso(QUESTION_WAIT_MS * 3) }), tab: { state: 'working' } });
+    await sweepRuns(answered.deps);
+    expect(answered.events).toEqual([]);
+
+    const old = world({ question: question({ kind: 'permission', payload: { tool_name: 'Bash' }, created_at: iso(QUESTION_WAIT_MS) }), tab: { state: 'waiting_permission' } });
+    await sweepRuns(old.deps);
+    expect(old.run).toMatchObject({ status: 'waiting', waiting_reason: PERMISSION_NEEDED });
+    expect(old.kinds()).toEqual(['escalated']);
+    expect(old.type).not.toHaveBeenCalled();
+    expect(escalationText(PERMISSION_NEEDED, 'en')).toBe("The agent asked for a permission the project's rules do not allow; answer it on the card.");
+  });
+
+  it('an answered card or no card at all changes nothing', async () => {
+    for (const q of [question({ status: 'answered', closed_at: iso(1_000) }), undefined]) {
       const w = world({ question: q, tab: { state: 'working' } });
       await sweepRuns(w.deps);
       expect(w.run.status).toBe('running');

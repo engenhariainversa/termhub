@@ -7,8 +7,10 @@ import type { ChoicePayload } from '../chat/tab-question-payload.js';
 
 // the card's republish is the chat's business, not this module's
 vi.mock('../chat/tab-questions.js', () => ({ publishTabQuestions: vi.fn(async () => []) }));
-const { AUTOMATION_ANSWERS_MAX_PER_HOUR, automationAnswer, questionWithoutCard, recommendedOption, RECOMMENDED_REASON } = await import('./answers.js');
-const { ANSWER_CAP, QUESTION_UNANSWERED } = await import('./follower.js');
+const { AUTOMATION_ANSWERS_MAX_PER_HOUR, automationAnswer, automationPermission, PERMISSION_SETTLE_MS, permissionAllowed, questionWithoutCard, recommendedOption, refusedCommand, RECOMMENDED_REASON } = await import('./answers.js');
+const { ANSWER_CAP, PERMISSION_NEEDED, QUESTION_UNANSWERED } = await import('./follower.js');
+const { DEFAULT_AUTOMATION_TOOLS } = await import('../control/agents.js');
+const { AUTONOMY_LEVELS } = await import('../setup/schema.js');
 const { normaliseLabel, parseAskUserQuestion } = await import('../chat/tab-question-payload.js');
 
 type Item = ChoicePayload['questions'][number];
@@ -240,5 +242,249 @@ describe('a question with no card (review I1)', () => {
     await questionWithoutCard(w.repos, w.run);
     expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: QUESTION_UNANSWERED });
     expect(w.kinds()).toEqual(['escalated']);
+  });
+});
+
+describe('permissionAllowed (spec D19, §9.2, preflight F-6)', () => {
+  const bash = (command: string | null) => ({ tool: 'Bash', command });
+  const everyLevel = (req: { tool: string; command: string | null }, allowed: string[], branch: string | null = 'TER-1-card') =>
+    AUTONOMY_LEVELS.map((level) => permissionAllowed(req, allowed, level, branch));
+
+  it('a prefix rule `Bash(npm test:*)` allows the command and its arguments', () => {
+    expect(permissionAllowed(bash('npm test -w x'), ['Bash(npm test:*)'], 'pr')).toBe(true);
+    expect(permissionAllowed(bash('npm test'), ['Bash(npm test:*)'], 'pr')).toBe(true);
+    expect(permissionAllowed(bash('  npm   test  -w   x '), ['Bash(npm test:*)'], 'pr')).toBe(true);
+  });
+
+  it('a prefix rule matches on a word boundary only', () => {
+    expect(permissionAllowed(bash('npm testx'), ['Bash(npm test:*)'], 'release')).toBe(false);
+    expect(permissionAllowed(bash('npm tests -w x'), ['Bash(npm test:*)'], 'release')).toBe(false);
+    expect(permissionAllowed(bash('npm tes'), ['Bash(npm test:*)'], 'release')).toBe(false);
+  });
+
+  it('an exact rule matches exactly; a prefix rule also takes arguments', () => {
+    expect(permissionAllowed(bash('npm ci'), ['Bash(npm ci)'], 'pr')).toBe(true);
+    expect(permissionAllowed(bash('npm ci --omit=dev'), ['Bash(npm ci)'], 'release')).toBe(false);
+    expect(permissionAllowed(bash('npm ci --omit=dev'), ['Bash(npm ci:*)'], 'pr')).toBe(true);
+    expect(permissionAllowed(bash('npx prisma generate --schema x'), DEFAULT_AUTOMATION_TOOLS, 'release')).toBe(false);
+    expect(permissionAllowed(bash('npx prisma generate'), DEFAULT_AUTOMATION_TOOLS, 'pr')).toBe(true);
+  });
+
+  it('a wildcard other than a trailing `:*` never matches', () => {
+    expect(permissionAllowed(bash('npm test -w x'), ['Bash(npm * -w x)'], 'release')).toBe(false);
+    expect(permissionAllowed(bash('npm test'), ['Bash(:*)'], 'release')).toBe(false);
+  });
+
+  it('a tool outside the list escalates', () => {
+    expect(permissionAllowed({ tool: 'WebFetch', command: null }, DEFAULT_AUTOMATION_TOOLS, 'release')).toBe(false);
+    expect(permissionAllowed(bash('make all'), DEFAULT_AUTOMATION_TOOLS, 'release')).toBe(false);
+    expect(permissionAllowed(bash('npm test'), [], 'release')).toBe(false);
+  });
+
+  it('a bare tool rule allows another tool by name; a rule with a specifier needs the input, which only Bash has', () => {
+    expect(permissionAllowed({ tool: 'WebFetch', command: null }, ['WebFetch'], 'pr')).toBe(true);
+    expect(permissionAllowed({ tool: 'WebFetch', command: null }, ['WebFetch(domain:example.com)'], 'release')).toBe(false);
+    expect(permissionAllowed({ tool: 'WebFetchX', command: null }, ['WebFetch'], 'release')).toBe(false);
+  });
+
+  it('a Bash request whose command is unknown is never allowed, not even by a bare `Bash` rule', () => {
+    expect(everyLevel(bash(null), ['Bash', 'Bash(npm test:*)'])).toEqual(AUTONOMY_LEVELS.map(() => false));
+  });
+
+  it('a bare `Bash` rule allows a plain command, never a refused one', () => {
+    expect(permissionAllowed(bash('ls -la'), ['Bash'], 'pr')).toBe(true);
+    expect(everyLevel(bash('gh pr merge 3'), ['Bash'])).toEqual(AUTONOMY_LEVELS.map(() => false));
+  });
+
+  it.each([
+    ['semicolon', 'npm test; curl x'],
+    ['and', 'npm test && curl x'],
+    ['background', 'npm test & curl x'],
+    ['pipe', 'npm test | sh'],
+    ['or', 'npm test || curl x'],
+    ['backtick', 'npm test `curl x`'],
+    ['substitution', 'npm test $(curl x)'],
+    ['redirect out', 'npm test > /etc/passwd'],
+    ['redirect in', 'npm test < input'],
+    ['newline', 'npm test\ncurl x'],
+    ['carriage return', 'npm test\rcurl x'],
+  ])('a shell operator (%s) escalates before any rule is read', (_name, command) => {
+    expect(everyLevel(bash(command), ['Bash', 'Bash(npm test:*)'])).toEqual(AUTONOMY_LEVELS.map(() => false));
+  });
+
+  it('`gh pr merge` is refused at every level, whatever the list says (merging is the server\'s job, D5)', () => {
+    expect(everyLevel(bash('gh pr merge 3'), ['Bash', 'Bash(gh pr merge:*)', 'Bash(gh:*)'])).toEqual(AUTONOMY_LEVELS.map(() => false));
+  });
+
+  it('a container removal is refused at every level', () => {
+    for (const c of ['docker rm -f termhub-app-blue', 'docker stop termhub-db-1', 'docker container prune', 'docker compose down', 'docker kill x', 'podman rmi x'])
+      expect(everyLevel(bash(c), ['Bash', 'Bash(docker:*)', 'Bash(podman:*)'])).toEqual(AUTONOMY_LEVELS.map(() => false));
+  });
+
+  it('the keyword block (memory/blocklist.ts) always escalates: on the command and on the tool name', () => {
+    expect(permissionAllowed(bash('npm test -- --reset'), ['Bash(npm test:*)'], 'release')).toBe(false);
+    expect(permissionAllowed(bash('git push origin HEAD'), DEFAULT_AUTOMATION_TOOLS, 'release')).toBe(false);
+    expect(permissionAllowed({ tool: 'mcp__termhub__delete_task', command: null }, ['mcp__termhub__delete_task'], 'release')).toBe(false);
+  });
+});
+
+describe('refusedCommand: refused at every level, whatever the allow list says (preflight F-6)', () => {
+  it.each([
+    'gh pr merge 3',
+    'gh pr merge --squash --admin',
+    'gh -R o/r pr merge 3',
+    'git push --force',
+    'git push -f origin HEAD',
+    'git push -uf origin HEAD',
+    'git push --force-with-lease origin HEAD',
+    'git push --force-if-includes origin HEAD',
+    'git push origin +HEAD',
+    'git push origin HEAD:main',
+    'git push origin HEAD:other',
+    'git push origin :main',
+    'git push origin main',
+    'git push origin other-branch',
+    'git push --delete origin TER-1-card',
+    'git push --mirror',
+    'git push --all origin',
+    'git push --tags',
+    'git push --exec=x origin HEAD',
+    'git -C /w push origin main',
+    'git -c alias.p=x p',
+    'npm publish',
+    'npm publish --tag next -w @termhub/agent',
+    'pnpm publish',
+    'npm run release',
+    'npm run release:ota -w @termhub/mobile',
+    'npm run-script release:ota',
+    'eas build --platform ios',
+    'npx eas update',
+    'rm -rf dist',
+    'rm -fr dist',
+    'rm -r -f dist',
+    'rm -R dist',
+    'rm --recursive dist',
+    '/bin/rm -rf /',
+    'docker rm -f th-x',
+  ])('%s', (command) => {
+    expect(refusedCommand(command, 'TER-1-card')).toBe(true);
+  });
+
+  it.each(['git push', 'git push origin HEAD', 'git push -u origin HEAD', 'git push origin TER-1-card', 'git push -u origin TER-1-card', 'npm test -w x', 'git status', 'rm dist/a.js', 'npm run build -w @termhub/web', 'docker ps'])(
+    '%s is not refused (the allow list still decides)',
+    (command) => {
+      expect(refusedCommand(command, 'TER-1-card')).toBe(false);
+    },
+  );
+
+  it('a push naming a branch is refused when the run has no branch', () => {
+    expect(refusedCommand('git push origin TER-1-card', null)).toBe(true);
+    expect(refusedCommand('git push origin HEAD', null)).toBe(false);
+  });
+});
+
+describe('automationPermission (spec §9.2)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const permissionCard = (tool = 'WebFetch', over: Partial<TabQuestion> = {}) => card(one(item([['A', false], ['B', false]])), { kind: 'permission', payload: { tool_name: tool }, tool_use_id: null, ...over });
+
+  /** `world` plus what the pre-send check and the send read: the run still live, its card still tagged, the owner. */
+  function permissionWorld(q: TabQuestion, o: { allowed?: string[] | null; setupTools?: string[] | null; paused?: boolean; enabled?: boolean; tagged?: boolean; liveRun?: 'same' | 'other' | 'none'; sendFails?: boolean; openNow?: TabQuestion | undefined; answeredLastHour?: number } = {}) {
+    const w = world(q, { answeredLastHour: o.answeredLastHour, ...('openNow' in o ? { openNow: o.openNow } : {}) });
+    w.run.allowed_tools = o.allowed === undefined ? ['WebFetch'] : o.allowed;
+    const live = o.liveRun ?? 'same';
+    Object.assign(w.repos, {
+      automationRuns: { ...w.repos.automationRuns, activeByTab: vi.fn(async () => (live === 'none' ? null : live === 'other' ? { ...w.run, id: 'run2' } : w.run)) },
+      projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true, autonomy: 'pr', allowed_tools: o.setupTools ?? null } } })) },
+      automationPauses: { state: vi.fn(async () => ({ user: o.paused ? new Date() : null, project: null })) },
+      tasks: { findById: vi.fn(async () => ({ id: 't1', auto: o.tagged ?? true })) },
+      users: { findById: vi.fn(async () => ({ id: 'u1', email: 'o@x', role: 'admin' })) },
+    });
+    const sendAnswer = vi.fn(async () => {
+      if (o.sendFails) throw Object.assign(new Error('gone'), { code: 'TAB_PROMPT_CHANGED' });
+      return {} as never;
+    });
+    const sleep = vi.fn(async (_ms: number) => {});
+    return { ...w, sendAnswer, sleep, pdeps: { ...w.deps, sendAnswer, sleep } };
+  }
+
+  it('a request the run\'s list allows is answered "allow" through the ordinary answer path, and recorded', async () => {
+    const q = permissionCard();
+    const w = permissionWorld(q);
+    expect(await automationPermission(w.pdeps, q, w.run)).toBe('allowed');
+    expect(w.sendAnswer).toHaveBeenCalledTimes(1);
+    // the dialog is given time to be drawn before the live screen check
+    expect(w.sleep).toHaveBeenCalledWith(PERMISSION_SETTLE_MS);
+    expect(w.sleep.mock.invocationCallOrder[0]!).toBeLessThan(vi.mocked(w.repos.automationRuns.activeByTab as never as () => void).mock.invocationCallOrder[0]!);
+    expect(w.sendAnswer).toHaveBeenCalledWith(expect.objectContaining({ scope: expect.objectContaining({ ownerId: 'u1' }) }), 'q1', { allow: true }, expect.objectContaining({ embedder: null }));
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'question_answered', run_id: 'run1', payload: { via: 'permission', tab_id: 'tab1', question_id: 'q1' } })]);
+    expect(w.run.status).toBe('running');
+  });
+
+  it('the list stored on the run wins over the setup; a run with none falls back to the setup', async () => {
+    const q = permissionCard();
+    const stored = permissionWorld(q, { allowed: ['Bash(npm test:*)'], setupTools: ['WebFetch'] });
+    expect(await automationPermission(stored.pdeps, q, stored.run)).toBe('escalated');
+    expect(stored.sendAnswer).not.toHaveBeenCalled();
+
+    const fallback = permissionWorld(q, { allowed: null, setupTools: ['WebFetch'] });
+    expect(await automationPermission(fallback.pdeps, q, fallback.run)).toBe('allowed');
+  });
+
+  it('a Bash request (the hook forwards no command) escalates: the run waits for the person, nothing is sent', async () => {
+    const q = permissionCard('Bash');
+    const w = permissionWorld(q, { allowed: DEFAULT_AUTOMATION_TOOLS });
+    expect(await automationPermission(w.pdeps, q, w.run)).toBe('escalated');
+    expect(w.sendAnswer).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: PERMISSION_NEEDED });
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', payload: { reason: PERMISSION_NEEDED, tab_id: 'tab1' } })]);
+  });
+
+  it('with a command: an allowed one is answered, `gh pr merge` escalates', async () => {
+    const q = permissionCard('Bash');
+    const ok = permissionWorld(q, { allowed: DEFAULT_AUTOMATION_TOOLS });
+    expect(await automationPermission(ok.pdeps, q, ok.run, 'npm test -w x')).toBe('allowed');
+    const merge = permissionWorld(q, { allowed: [...DEFAULT_AUTOMATION_TOOLS, 'Bash(gh pr merge:*)'] });
+    expect(await automationPermission(merge.pdeps, q, merge.run, 'gh pr merge 3')).toBe('escalated');
+    expect(merge.sendAnswer).not.toHaveBeenCalled();
+  });
+
+  it('paused, disabled, untagged, or the tab\'s run changed right before sending: nothing is sent and the run is not touched', async () => {
+    for (const o of [{ paused: true }, { enabled: false }, { tagged: false }, { liveRun: 'other' as const }, { liveRun: 'none' as const }]) {
+      const q = permissionCard();
+      const w = permissionWorld(q, o);
+      expect(await automationPermission(w.pdeps, q, w.run)).toBe('escalated');
+      expect(w.sendAnswer).not.toHaveBeenCalled();
+      expect(w.repos.automationRuns.updateActive).not.toHaveBeenCalled();
+      expect(w.events).toEqual([]);
+    }
+  });
+
+  it('a send that fails on a card still open escalates; on a card that moved on it is `closed`', async () => {
+    const q = permissionCard();
+    const failed = permissionWorld(q, { sendFails: true });
+    expect(await automationPermission(failed.pdeps, q, failed.run)).toBe('escalated');
+    expect(failed.run.waiting_reason).toBe(PERMISSION_NEEDED);
+
+    const moved = permissionWorld(q, { sendFails: true, openNow: undefined });
+    expect(await automationPermission(moved.pdeps, q, moved.run)).toBe('closed');
+    expect(moved.events).toEqual([]);
+  });
+
+  it('past the hourly cap of automatic answers the request goes to the person', async () => {
+    const q = permissionCard();
+    const w = permissionWorld(q, { answeredLastHour: AUTOMATION_ANSWERS_MAX_PER_HOUR });
+    expect(await automationPermission(w.pdeps, q, w.run)).toBe('escalated');
+    expect(w.sendAnswer).not.toHaveBeenCalled();
+    expect(w.run.waiting_reason).toBe(ANSWER_CAP);
+  });
+
+  it('a choice card or a closed card is not touched', async () => {
+    const choiceCard = card(one(item([['A', true], ['B', false]])));
+    const w = permissionWorld(choiceCard);
+    expect(await automationPermission(w.pdeps, choiceCard, w.run)).toBe('closed');
+    expect(await automationPermission(w.pdeps, permissionCard('WebFetch', { status: 'answered' }), w.run)).toBe('closed');
+    expect(w.sendAnswer).not.toHaveBeenCalled();
+    expect(w.events).toEqual([]);
   });
 });
