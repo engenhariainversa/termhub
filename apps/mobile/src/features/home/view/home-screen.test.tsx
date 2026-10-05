@@ -19,6 +19,7 @@ jest.mock('expo-router', () => ({
 }));
 
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
+import { setLocale } from '@/i18n';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { HomeScreen } from './home-screen';
 
@@ -38,6 +39,17 @@ afterEach(async () => {
 });
 
 describe('Home (TER-541)', () => {
+  it('in English, with nothing pinned', async () => {
+    setLocale('en');
+    try {
+      await render(<HomeScreen />);
+      expect(await screen.findByText('No pinned projects', undefined, LOAD)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'View projects' })).toBeTruthy();
+    } finally {
+      await act(async () => setLocale(null));
+    }
+  });
+
   it('with nothing pinned, explains how to pin and leads to Chats', async () => {
     await render(<HomeScreen />);
     expect(await screen.findByText('Nenhum projeto fixado', undefined, LOAD)).toBeTruthy();

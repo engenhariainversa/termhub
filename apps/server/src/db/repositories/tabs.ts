@@ -9,8 +9,11 @@ const EVENTS_KEPT_PER_TAB = 200;
 /** One working interval counts at most this much agent time: bounds a hook that died mid-turn (spec 2026-09-26 progress-panel D2). */
 export const MAX_WORKING_INTERVAL_S = 7200;
 
-/** States that mean a tool is mid-task in that tab — as opposed to `idle`, `error` or never seen. */
-const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background'];
+/**
+ * States that mean a tool is mid-task in that tab — as opposed to `idle`, `error` or never seen. `finished`
+ * counts like `waiting_input`: the agent is still open at its prompt (TER-972).
+ */
+const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background', 'finished'];
 
 const metaOf = (meta: unknown): Record<string, unknown> => (meta && typeof meta === 'object' && !Array.isArray(meta) ? (meta as Record<string, unknown>) : {});
 
@@ -43,6 +46,16 @@ export interface LastAnswer {
 function hasBackgroundTasks(meta: unknown): boolean {
   const count = metaOf(meta).background_tasks;
   return typeof count === 'number' && count > 0;
+}
+
+/** How many of a tab's newest event texts are scanned for cited Markdown paths. */
+const CITED_EVENTS_PER_TAB = 50;
+
+/** A text an agent of a project wrote, with the machine its tab runs on. */
+export interface CitedText {
+  machineId: string;
+  text: string;
+  at: Date;
 }
 
 export class TabsRepository {
@@ -270,6 +283,28 @@ export class TabsRepository {
   async listEvents(tabId: string, limit = 50): Promise<TabEvent[]> {
     const rows = await this.db.tabEvent.findMany({ where: { tabId }, orderBy: { createdAt: 'desc' }, take: limit });
     return rows.map(mapTabEvent);
+  }
+
+  /**
+   * What the agents of a project wrote, for the Markdown paths they cite (spec 2026-10-04 recent Markdown
+   * files D3): each tab's last whole answer and the texts of its newest `eventsPerTab` monitor events,
+   * with the tab's machine, newest first. Read only to find paths; never logged.
+   */
+  async citedTexts(projectId: string, eventsPerTab = CITED_EVENTS_PER_TAB): Promise<CitedText[]> {
+    const tabs = await this.db.tab.findMany({
+      where: { projectId },
+      select: {
+        machineId: true,
+        lastAnswer: { select: { text: true, at: true } },
+        events: { where: { text: { not: null } }, orderBy: { createdAt: 'desc' }, take: eventsPerTab, select: { text: true, createdAt: true } },
+      },
+    });
+    const out: CitedText[] = [];
+    for (const t of tabs) {
+      if (t.lastAnswer) out.push({ machineId: t.machineId, text: t.lastAnswer.text, at: t.lastAnswer.at });
+      for (const e of t.events) if (e.text) out.push({ machineId: t.machineId, text: e.text, at: e.createdAt });
+    }
+    return out.sort((a, b) => b.at.getTime() - a.at.getTime());
   }
 
   /** Clears the monitor state (e.g. the tmux session is gone). */

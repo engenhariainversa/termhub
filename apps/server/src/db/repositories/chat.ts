@@ -150,6 +150,15 @@ export class ChatRepository {
     return row ? mapConversation(row) : undefined;
   }
 
+  /** The user's most recently active conversation in any scope (a test push's tap lands there, TER-913). */
+  async findLatestActiveForUser(userId: string): Promise<ChatConversation | undefined> {
+    const row = await this.db.chatConversation.findFirst({
+      where: { userId, tabId: null, archivedAt: null },
+      orderBy: [{ lastMessageAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return row ? mapConversation(row) : undefined;
+  }
+
   async findByIdForUser(id: string, userId: string): Promise<ChatConversation | undefined> {
     const row = await this.db.chatConversation.findFirst({ where: { id, userId } });
     return row ? mapConversation(row) : undefined;
@@ -182,6 +191,14 @@ export class ChatRepository {
   async findMessagesByIds(conversationId: string, ids: string[]): Promise<ChatMessage[]> {
     if (ids.length === 0) return [];
     const rows = await this.db.chatMessage.findMany({ where: { conversationId, id: { in: ids } } });
+    return rows.map(mapMessage);
+  }
+
+  /** The person's own messages (`role: 'user'`) among `ids`, in any of `userId`'s conversations. An id of
+   *  someone else's, an assistant's or a missing message is dropped (TER-851: `send_input`'s `on_behalf_of`). */
+  async findUserMessagesForUser(ids: string[], userId: string): Promise<ChatMessage[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db.chatMessage.findMany({ where: { id: { in: ids }, role: 'user', conversation: { userId } } });
     return rows.map(mapMessage);
   }
 

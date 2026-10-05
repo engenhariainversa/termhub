@@ -9,12 +9,13 @@ import { createRepositories, type Repositories } from './db/repositories/index.j
 import { createMailer } from './email/mailer.js';
 import { createAccessAllowlist } from './cloudflare/access.js';
 import { AuthService, authRoutes, buildAuthHook, type AuthContext } from './auth/index.js';
-import { applyErrorHandler } from './lib/errors.js';
+import { applyErrorHandler, sendError } from './lib/errors.js';
 import { machineRoutes } from './routes/machines.js';
 import { projectRoutes } from './routes/projects.js';
 import { projectGroupRoutes } from './routes/project-groups.js';
 import { transcriptionRoutes } from './routes/transcriptions.js';
 import { filePreviewRoutes } from './routes/file-preview.js';
+import { fileRecentRoutes } from './routes/file-recent.js';
 import { tabRoutes } from './routes/tabs.js';
 import { projectTaskRoutes, taskRoutes } from './routes/tasks.js';
 import { columnRoutes, projectColumnRoutes } from './routes/columns.js';
@@ -272,6 +273,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('terminals', (a) => tabRoutes(a, repos, { simulators, closeSimulatorTab: (id) => simWs.closeTab(id) }), '/tabs');
       // A text file an agent wrote, read on its machine when the person opens its path (spec 2026-10-04).
       await guarded('terminals', (a) => filePreviewRoutes(a, repos), '/file-preview');
+      await guarded('terminals', (a) => fileRecentRoutes(a, repos), '/file-recent');
       await guarded('terminals', (a) => transcriptionRoutes(a, { transcriptions }), '/transcriptions');
       await guarded('terminals', (a) => monitorRoutes(a, repos), '/monitor');
       await guarded('terminals', (a) => hooksRoutes(a, repos, { waker, onTabEvent: (tabId) => tabChat.poke(tabId) }), '/hooks');
@@ -286,14 +288,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       if (mobile) {
         await guarded(
           'devices',
-          (a) => deviceRoutes(a, repos, { enrolment: mobile.enrolment, revoke: (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer }, id, input) }),
+          (a) => deviceRoutes(a, repos, { enrolment: mobile.enrolment, revoke: (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer }, id, input), push: mobile.push }),
           '/devices',
         );
       }
       await api.register((a) => publicCityRoutes(a, repos), { prefix: '/public' });
       api.get('/health', { config: { public: true } }, async () => ({ ok: true }));
       await api.register((a) => readyRoutes(a, { ping: () => repos.ping(), lifecycle }));
-      api.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: 'Rota não encontrada', code: 'NOT_FOUND' }));
+      api.setNotFoundHandler((request, reply) => sendError(request, reply, 404, 'Rota não encontrada', 'NOT_FOUND'));
     },
     { prefix: '/api' },
   );

@@ -12,6 +12,7 @@ import type {
   Ticket as PrismaTicket,
 } from '../../generated/prisma/client.js';
 import { publicId } from '../../public/public-id.js';
+import { parseLocale, type Locale } from '../../i18n/index.js';
 
 export type UserRole = 'owner' | 'member';
 export type MachineType = 'local' | 'ssh' | 'agent';
@@ -23,7 +24,7 @@ export type TaskType = 'epic' | 'story' | 'task' | 'subtask' | 'bug' | 'spike';
 export type ColumnCategory = Exclude<TaskStatus, 'backlog'>;
 export type TabKind = 'terminal' | 'simulator';
 /** Monitor state of the tool running in a tab (see monitor/state.ts). */
-export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background';
+export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background' | 'finished';
 /** What a working agent is doing, from the tool it is about to call (monitor/activity.ts). */
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 export const TAB_ACTIVITIES: readonly TabActivity[] = ['coding', 'reading', 'researching', 'planning', 'terminal', 'working'];
@@ -60,6 +61,8 @@ export interface User {
   deletion_requested_at: string | null;
   /** when the deletion job removes the account for good; null = no deletion pending */
   deletion_scheduled_at: string | null;
+  /** the language this person chose (TER-405); null = automatic (pt-BR for e-mails and push) */
+  locale: Locale | null;
   created_at: string;
 }
 
@@ -296,6 +299,7 @@ export const mapUser = (u: PrismaUser): User => ({
   review_enabled_by: u.reviewEnabledBy,
   deletion_requested_at: u.deletionRequestedAt?.toISOString() ?? null,
   deletion_scheduled_at: u.deletionScheduledAt?.toISOString() ?? null,
+  locale: parseLocale(u.locale),
   created_at: u.createdAt.toISOString(),
 });
 

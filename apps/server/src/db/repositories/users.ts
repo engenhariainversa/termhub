@@ -2,6 +2,7 @@ import type { PrismaClient } from '../prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { mapUser, type User, type UserRole } from './types.js';
+import type { Locale } from '../../i18n/index.js';
 
 export class UsersRepository {
   constructor(private db: PrismaClient) {}
@@ -147,6 +148,11 @@ export class UsersRepository {
   async chatSuggestions(userId: string): Promise<boolean> {
     const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatSuggestions: true } });
     return u?.chatSuggestions ?? true;
+  }
+
+  /** The language this person chose (TER-405); null = automatic. */
+  async setLocale(userId: string, locale: Locale | null): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { locale } });
   }
 
   async setChatSuggestions(userId: string, enabled: boolean): Promise<void> {

@@ -15,9 +15,11 @@ export function tabSummaryOf(
     name: tab.name,
     project: { id: project.id, key: project.key, name: project.name },
     machine: { id: machine.id, name: machine.name },
-    // the contract's state predates `waiting_background`: still at work, flagged (TER-644), as progress.ts does
-    state: tab.state === 'waiting_background' ? 'working' : tab.state,
+    // the contract's state predates `waiting_background` (still at work, flagged, TER-644) and `finished`
+    // (stopped, flagged, TER-972), as progress.ts does
+    state: tab.state === 'waiting_background' ? 'working' : tab.state === 'finished' ? 'idle' : tab.state,
     background: tab.state === 'waiting_background',
+    finished: tab.state === 'finished',
     state_at: tab.state_at,
     needs_you: needsYou(tab),
     activity: tab.activity,

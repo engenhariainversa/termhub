@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from '../i18n';
 
 export interface ToastInput {
   /** a toast with the same id replaces the one on screen */
@@ -72,24 +73,25 @@ export function useToast(): Pick<ToastState, 'show' | 'dismiss'> {
 export function Toaster() {
   const ctx = useContext(ToastContext);
   const navigate = useNavigate();
+  const { t } = useTranslation();
   if (!ctx || ctx.toasts.length === 0) return null;
   return (
     <div className="pointer-events-none fixed right-3 top-3 z-50 flex w-80 max-w-[calc(100vw-1.5rem)] flex-col gap-2">
-      {ctx.toasts.map((t) => (
-        <div key={t.id} role="status" className="pointer-events-auto flex items-start gap-2 rounded-md border border-attention/40 bg-bg-2 p-3 text-xs shadow-lg">
+      {ctx.toasts.map((toast) => (
+        <div key={toast.id} role="status" className="pointer-events-auto flex items-start gap-2 rounded-md border border-attention/40 bg-bg-2 p-3 text-xs shadow-lg">
           <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-attention" aria-hidden />
           <button
             type="button"
             className="min-w-0 flex-1 text-left"
             onClick={() => {
-              ctx.dismiss(t.id);
-              if (t.href) navigate(t.href);
+              ctx.dismiss(toast.id);
+              if (toast.href) navigate(toast.href);
             }}
           >
-            <p className="truncate font-medium text-fg">{t.title}</p>
-            {t.body && <span className="mt-0.5 line-clamp-3 whitespace-pre-wrap break-words text-fg-muted">{t.body}</span>}
+            <p className="truncate font-medium text-fg">{toast.title}</p>
+            {toast.body && <span className="mt-0.5 line-clamp-3 whitespace-pre-wrap break-words text-fg-muted">{toast.body}</span>}
           </button>
-          <button type="button" className="shrink-0 rounded px-1 text-fg-dim hover:bg-bg-3 hover:text-fg" aria-label="Fechar aviso" onClick={() => ctx.dismiss(t.id)}>
+          <button type="button" className="shrink-0 rounded px-1 text-fg-dim hover:bg-bg-3 hover:text-fg" aria-label={t('Fechar aviso')} onClick={() => ctx.dismiss(toast.id)}>
             ×
           </button>
         </div>

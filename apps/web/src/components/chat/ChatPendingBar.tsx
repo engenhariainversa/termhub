@@ -1,3 +1,4 @@
+import { i18n, useTranslation } from '../../i18n';
 import { memo, useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { ChatEntry } from '../../lib/chat-timeline';
@@ -23,7 +24,7 @@ function pendingItems(entries: ChatEntry[]): PendingItem[] {
     if (e.kind === 'action') return e.action.status === 'pending' ? [{ id: e.action.id, line: e.action.summary, write: e.action.class === 'write' }] : [];
     if (e.kind !== 'tab_question' || e.question.status !== 'open') return [];
     const q = e.question;
-    const line = q.kind === 'permission' ? permissionTitle(q) : `${tabLabel(q)} pergunta: ${q.payload.questions[0]?.question ?? ''}`;
+    const line = q.kind === 'permission' ? permissionTitle(q) : i18n.t('{{tab}} pergunta: {{question}}', { tab: tabLabel(q), question: q.payload.questions[0]?.question ?? '' });
     return [{ id: q.id, line, write: false }];
   });
 }
@@ -48,6 +49,7 @@ export interface ChatPendingBarProps {
  * re-renders the panel, and this bar must not follow.
  */
 export const ChatPendingBar = memo(function ChatPendingBar({ entries, batchDeciding, onApprove, onLocate }: ChatPendingBarProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   // Several panels can be on screen at once (the dock holds one per project): the list's id must be unique.
   const listId = useId();
@@ -90,11 +92,11 @@ export const ChatPendingBar = memo(function ChatPendingBar({ entries, batchDecid
       <div className="flex items-center gap-2 px-3 py-1.5">
         <button type="button" className="flex items-center gap-1 rounded px-1 text-attention hover:bg-bg-3" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((v) => !v)}>
           <ChevronDown size={14} aria-hidden="true" className={open ? 'rotate-180' : ''} />
-          {items.length === 1 ? '1 pendente' : `${items.length} pendentes`}
+          {t('{{count}} pendentes', { count: items.length })}
         </button>
         {writes.length >= 2 && (
           <button type="button" className="btn-ghost ml-auto text-xs" disabled={batchDeciding} onClick={() => onApprove(writes.map((w) => w.id))}>
-            {`Aprovar as reversíveis (${writes.length})`}
+            {t('Aprovar as reversíveis ({{n}})', { n: writes.length })}
           </button>
         )}
       </div>

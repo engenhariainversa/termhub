@@ -20,7 +20,10 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import { Scoped } from '../auth/scope.js';
 import { ControlError, type ControlContext } from './context.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { checkPrompt, CODEX_TAB_MCP_ENABLED, continueLine, launchLine, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder } from './agents.js';
+import { checkPrompt, CODEX_TAB_MCP_ENABLED, continueLine, launchLine, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
+
+/** A Claude agent's first prompt: the lessons reminder, then the origin reminder (TER-851). */
+const started = (prompt: string) => withOriginReminder(withLessonsReminder(prompt));
 
 const machine = (over: Partial<Machine> & { id: string }): Machine => ({
   name: over.id, host: null, ssh_user: null, ssh_port: 22, type: 'agent', os: 'macos', capabilities: ['tmux', 'claude', 'codex'], checked_at: null,
@@ -279,6 +282,16 @@ describe('checkPrompt', () => {
   });
 });
 
+describe('withOriginReminder (TER-851)', () => {
+  it('appends the origin reminder after a blank line', () => {
+    expect(withOriginReminder('write a spec')).toBe(`write a spec\n\n${ORIGIN_REMINDER}`);
+  });
+
+  it('is not added to a resumed session', () => {
+    expect(resumeLine(null, '6d127d73-4bd0-42d6-b4a6-d96899507e62', RESUME_PROMPT)).not.toContain(ORIGIN_REMINDER);
+  });
+});
+
 describe('withLessonsReminder', () => {
   it('appends the reminder after a blank line', () => {
     expect(withLessonsReminder('write a spec')).toBe(`write a spec\n\n${LESSONS_REMINDER}`);
@@ -290,7 +303,7 @@ describe('startAgent', () => {
     const { c } = ctx();
     const r = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
     expect(openTab).toHaveBeenCalledWith(c, { project_id: 'p1', machine_id: 'm1', name: 'claude · pedrogoiania' });
-    expect(sendTextToSession).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'termhub-p1-t9', launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('write a spec')), true);
+    expect(sendTextToSession).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'termhub-p1-t9', launchLine('claude', '/Users/p/.claude-work', started('write a spec')), true);
     expect(r).toEqual({
       tab_id: 't9', tab_name: 'pedrogoiania', project_id: 'p1', tmux_session: 'termhub-p1-t9', tab_url: 'https://app.test/projects/p1', command: 'claude', task_id: null, previous_tab_id: null,
       account: { id: 'a1', label: 'pedrogoiania' }, model: null,
@@ -318,7 +331,7 @@ describe('startAgent', () => {
       const token = parsed.mcpServers.termhub_tab.headers.Authorization.replace('Bearer ', '');
       expect(token).toMatch(/^thb_pat_/);
       const line = sendTextToSession.mock.calls[0][2] as string;
-      expect(line).toBe(launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('write a spec'), { tabId: 'abc', url: MCP_URL }));
+      expect(line).toBe(launchLine('claude', '/Users/p/.claude-work', started('write a spec'), { tabId: 'abc', url: MCP_URL }));
       expect(line).not.toContain(token);
       expect(r.note).toBe(`${NOTE} A aba tem o MCP termhub_tab (search_memory) para consultar a memória do projeto.`);
       expect(repos.apiTokens.revokeForTab).not.toHaveBeenCalled();
@@ -349,7 +362,7 @@ describe('startAgent', () => {
       installTabMcp.mockRejectedValue(new Error('ssh down'));
       const r = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
       expect(repos.apiTokens.revokeForTab).toHaveBeenCalledWith('abc');
-      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), 'termhub-p1-abc', launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('write a spec')), true);
+      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), 'termhub-p1-abc', launchLine('claude', '/Users/p/.claude-work', started('write a spec')), true);
       expect(r.note).toBe(`${NOTE} A aba abriu sem o MCP de memória: não foi possível gravar a configuração na máquina.`);
       expect(log.info).toHaveBeenCalledWith({ tabId: 'abc', machineId: 'm1', installed: false, reason: 'install_failed' }, expect.any(String));
     });
@@ -360,7 +373,7 @@ describe('startAgent', () => {
       const r = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'p' });
       expect(installTabMcp).not.toHaveBeenCalled();
       expect(repos.apiTokens.revokeForTab).toHaveBeenCalledWith('abc');
-      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('p')), true);
+      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), launchLine('claude', '/Users/p/.claude-work', started('p')), true);
       expect(r.note).toContain('A aba abriu sem o MCP de memória');
     });
 
@@ -369,7 +382,7 @@ describe('startAgent', () => {
       installTabMcp.mockRejectedValue(new Error('ssh down'));
       repos.apiTokens.revokeForTab.mockRejectedValue(new Error('db down'));
       await expect(startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'p' })).resolves.toMatchObject({ tab_id: 'abc' });
-      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('p')), true);
+      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), launchLine('claude', '/Users/p/.claude-work', started('p')), true);
     });
 
     it('mints nothing on an agent older than 0.10.0', async () => {
@@ -526,6 +539,13 @@ describe('startAgent', () => {
     expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.stringContaining(LESSONS_REMINDER), true);
   });
 
+  it('refuses a Claude prompt that fits with the lessons reminder but not with the origin reminder, before opening anything', async () => {
+    const { c } = ctx();
+    const prompt = 'x'.repeat(PROMPT_MAX_CHARS - withLessonsReminder('').length);
+    await expect(startAgent(c, { project_id: 'p1', account_id: 'a1', prompt })).rejects.toMatchObject({ code: 'PROMPT_TOO_LONG' });
+    expect(openTab).not.toHaveBeenCalled();
+  });
+
   it('refuses a prompt that fits alone but not with the reminder, with the existing too-long error', async () => {
     const { c } = ctx();
     // fits PROMPT_MAX_CHARS by itself, but not once the reminder is appended
@@ -567,7 +587,7 @@ describe('startAgent with the project setup (TER-589)', () => {
   it('without account_id, starts on the first listed account of the machine with room', async () => {
     const { c } = ctx(undefined, { ai: { accounts: ['a6', 'a1'] } });
     const r = await startAgent(c, { project_id: 'p1', prompt: 'p' });
-    expect(lineOf()).toBe(launchLine('claude', '~/.claude-2', withLessonsReminder('p')));
+    expect(lineOf()).toBe(launchLine('claude', '~/.claude-2', started('p')));
     expect(r.account).toEqual({ id: 'a6', label: 'segunda' });
   });
 
@@ -607,7 +627,7 @@ describe('startAgent with the project setup (TER-589)', () => {
   it('passes the project model for the provider, and an explicit model over it', async () => {
     const { c } = ctx(undefined, { ai: { accounts: ['a1'], models: { claude: 'opus', chatgpt: 'gpt-5-codex' } } });
     const r = await startAgent(c, { project_id: 'p1', prompt: 'p' });
-    expect(lineOf()).toBe(launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('p'), null, 'opus'));
+    expect(lineOf()).toBe(launchLine('claude', '/Users/p/.claude-work', started('p'), null, 'opus'));
     expect(r.model).toBe('opus');
     expect(r.warning).toBeUndefined();
     sendTextToSession.mockClear();

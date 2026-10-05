@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { SimulatorConnection, type SimState } from '../lib/simulator-connection';
 import type { Screen, Simulator, Tab } from '../lib/types';
 import { isAppShortcut } from './Terminal';
 import { DropdownMenu, type MenuItem } from './DropdownMenu';
+import { tk, useTranslation } from '../i18n';
 
 interface Props {
   tab: Tab;
@@ -18,20 +20,21 @@ interface Props {
   onConnected?: () => void;
 }
 
+/** pt-BR keys, shown with `t(STATE_LABEL[state])`. */
 const STATE_LABEL: Record<SimState, string> = {
-  connecting: 'Conectando…',
-  booting: 'Ligando o simulador…',
-  starting: 'Subindo o WebDriverAgent…',
-  ready: 'Conectado',
-  no_device: 'Escolha um simulador',
-  error: 'Erro',
-  offline: 'Offline',
-  closed: 'Encerrado',
+  connecting: tk('Conectando…'),
+  booting: tk('Ligando o simulador…'),
+  starting: tk('Subindo o WebDriverAgent…'),
+  ready: tk('Conectado'),
+  no_device: tk('Escolha um simulador'),
+  error: tk('Erro'),
+  offline: tk('Offline'),
+  closed: tk('Encerrado'),
 };
 
 const QUALITY = {
-  lan: { scale: 50, quality: 50, label: 'LAN' },
-  remote: { scale: 25, quality: 30, label: 'Remoto' },
+  lan: { scale: 50, quality: 50, label: tk('LAN') },
+  remote: { scale: 25, quality: 30, label: tk('Remoto') },
 } as const;
 type QualityKey = keyof typeof QUALITY;
 
@@ -42,6 +45,7 @@ const KEY_BATCH_MS = 50;
 
 /** Seletor de aparelho (usado no estado vazio e na barra). */
 function DevicePicker({ machineId, value, onPick }: { machineId: string; value: string | null; onPick: (udid: string) => void }) {
+  const { t } = useTranslation();
   const [list, setList] = useState<Simulator[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -49,19 +53,19 @@ function DevicePicker({ machineId, value, onPick }: { machineId: string; value: 
     api.machines
       .simulators(machineId)
       .then((r) => !cancelled && setList(r.simulators))
-      .catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : 'Erro ao listar simuladores'));
+      .catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : t('Erro ao listar simuladores')));
     return () => {
       cancelled = true;
     };
-  }, [machineId]);
+  }, [machineId, t]);
   if (error) return <span className="text-xs text-danger">{error}</span>;
   return (
     <select className="input h-7 max-w-[260px] py-0 text-xs" value={value ?? ''} onChange={(e) => e.target.value && onPick(e.target.value)} disabled={!list}>
-      <option value="">{list ? 'Escolha um simulador…' : 'Carregando…'}</option>
+      <option value="">{list ? t('Escolha um simulador…') : t('Carregando…')}</option>
       {list?.map((s) => (
         <option key={s.udid} value={s.udid}>
           {s.name} · {s.runtime}
-          {s.state === 'Booted' ? ' · ligado' : ''}
+          {s.state === 'Booted' ? ` · ${t('ligado')}` : ''}
         </option>
       ))}
     </select>
@@ -71,6 +75,7 @@ function DevicePicker({ machineId, value, onPick }: { machineId: string; value: 
 // `onDock` stays in `Props` for the caller's API (the floating window's own title bar handles
 // docking now), but this component no longer renders a docking control, so it's not destructured.
 export function SimulatorView({ tab, machineId, active, focused, floating, onDetach, onTabChange, onConnected }: Props) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const connRef = useRef<SimulatorConnection | null>(null);
@@ -91,6 +96,12 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
   // assim que a conexão fica pronta (o `send` é um no-op enquanto o socket não está OPEN).
   const pausedRef = useRef(!(active && document.visibilityState === 'visible'));
   const qualityRef = useRef<QualityKey>('lan');
+  // Tapping, typing and the device buttons take terminals:write (TER-576); without it the stream is watch-only.
+  // The server drops those messages too; the connection does not even send them.
+  const { can } = useAuth();
+  const canWrite = can('terminals', 'write');
+  const canWriteRef = useRef(canWrite);
+  canWriteRef.current = canWrite;
 
   // Conexão: uma por tab+udid.
   useEffect(() => {
@@ -139,6 +150,7 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
       },
       onToast: (m) => setToast(m),
     });
+    conn.setWritable(canWriteRef.current);
     connRef.current = conn;
     conn.connect();
     const fpsTimer = setInterval(() => {
@@ -151,6 +163,10 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
       connRef.current = null;
     };
   }, [tab.id, tab.simulator_udid]);
+
+  useEffect(() => {
+    connRef.current?.setWritable(canWrite);
+  }, [canWrite]);
 
   // Aba escondida → pausa o stream. Atualiza o ref (fonte da verdade) e tenta mandar
   // na hora; se o socket ainda não estiver OPEN, o onStatus acima reenvia ao conectar.
@@ -194,7 +210,7 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
   // Mouse: tap curto ou drag amostrado.
   const gesture = useRef<{ points: { x: number; y: number; t: number }[]; last: number } | null>(null);
   const onMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || !canWrite) return;
     canvasRef.current?.focus();
     const p = toPoint(e);
     if (!p) return;
@@ -241,6 +257,7 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
       send({ type: 'drag', points: [{ x: p.x, y: p.y, t }, { x: p.x, y: p.y + dy / 2, t: t + 40 }, { x: p.x, y: p.y + dy, t: t + 80 }] });
     };
     const handler = (e: WheelEvent) => {
+      if (!canWriteRef.current) return;
       e.preventDefault();
       const p = toPoint(e);
       if (!p) return;
@@ -267,6 +284,7 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
     keyBatch.current = '';
   }, [send]);
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!canWrite) return;
     if (isAppShortcut(e.nativeEvent)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (SPECIAL_KEYS.has(e.key)) {
@@ -287,7 +305,7 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
       const { tab: updated } = await api.tabs.update(tab.id, { simulator_udid: udid });
       onTabChange(updated);
     } catch (e) {
-      setToast(e instanceof ApiError ? e.message : 'Erro ao trocar de simulador');
+      setToast(e instanceof ApiError ? e.message : t('Erro ao trocar de simulador'));
     }
   };
 
@@ -302,19 +320,19 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
   const aspect = screen ? `${screen.width} / ${screen.height}` : portrait ? '9 / 19.5' : '19.5 / 9';
 
   const menuItems: MenuItem[] = [
-    { kind: 'item', label: 'Home', disabled: !ready, onSelect: () => send({ type: 'button', name: 'home' }) },
-    { kind: 'item', label: 'Bloquear', disabled: !ready, onSelect: () => send({ type: 'button', name: 'lock' }) },
-    { kind: 'item', label: 'Girar', disabled: !ready, onSelect: () => send({ type: 'rotate', orientation: portrait ? 'landscape' : 'portrait' }) },
-    { kind: 'item', label: 'Screenshot', href: api.tabs.screenshotUrl(tab.id), download: true, disabled: !ready, onSelect: () => {} },
+    { kind: 'item', label: t('Home'), disabled: !ready || !canWrite, onSelect: () => send({ type: 'button', name: 'home' }) },
+    { kind: 'item', label: t('Bloquear'), disabled: !ready || !canWrite, onSelect: () => send({ type: 'button', name: 'lock' }) },
+    { kind: 'item', label: t('Girar'), disabled: !ready || !canWrite, onSelect: () => send({ type: 'rotate', orientation: portrait ? 'landscape' : 'portrait' }) },
+    { kind: 'item', label: t('Screenshot'), href: api.tabs.screenshotUrl(tab.id), download: true, disabled: !ready, onSelect: () => {} },
     { kind: 'separator' },
-    { kind: 'heading', label: 'Qualidade' },
-    { kind: 'radio', label: QUALITY.lan.label, checked: quality === 'lan', onSelect: () => changeQuality('lan') },
-    { kind: 'radio', label: QUALITY.remote.label, checked: quality === 'remote', onSelect: () => changeQuality('remote') },
+    { kind: 'heading', label: t('Qualidade') },
+    { kind: 'radio', label: t(QUALITY.lan.label), checked: quality === 'lan', onSelect: () => changeQuality('lan') },
+    { kind: 'radio', label: t(QUALITY.remote.label), checked: quality === 'remote', onSelect: () => changeQuality('remote') },
     ...(floating
       ? []
       : ([
           { kind: 'separator' },
-          { kind: 'item', label: 'Destacar', onSelect: () => onDetach?.(screen ? screen.width / screen.height : 9 / 19.5) },
+          { kind: 'item', label: t('Destacar'), onSelect: () => onDetach?.(screen ? screen.width / screen.height : 9 / 19.5) },
         ] satisfies MenuItem[])),
   ];
 
@@ -324,23 +342,28 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           {tab.simulator_udid && <DevicePicker machineId={machineId} value={tab.simulator_udid} onPick={(u) => void pickDevice(u)} />}
           <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ready ? 'bg-ok' : state === 'error' || state === 'offline' ? 'bg-danger' : 'bg-warn'}`} />
-          <span className="min-w-0 truncate text-fg-muted">{STATE_LABEL[state]}</span>
-          {ready && <span className="shrink-0 whitespace-nowrap text-fg-dim">{fps} fps</span>}
+          <span className="min-w-0 truncate text-fg-muted">{t(STATE_LABEL[state])}</span>
+          {ready && <span className="shrink-0 whitespace-nowrap text-fg-dim">{fps} fps</span>}{/* i18n-ignore */}
+          {!canWrite && (
+            <span className="shrink-0 whitespace-nowrap rounded bg-bg-3 px-1.5 py-px text-[11px] font-medium text-fg-muted" title={t('Você pode acompanhar este simulador, mas não tocar nem digitar nele: seu papel não tem permissão de escrita em terminais.')}>
+              {t('Somente leitura')}
+            </span>
+          )}
         </div>
         <span className="flex shrink-0 items-center gap-1">
           {(state === 'error' || state === 'offline' || state === 'closed') && (
             <button className="btn-primary px-2 py-0.5" onClick={() => connRef.current?.retryNow()}>
-              Reconectar
+              {t('Reconectar')}
             </button>
           )}
-          <DropdownMenu title="Ações" items={menuItems} />
+          <DropdownMenu title={t('Ações')} items={menuItems} />
         </span>
       </div>
       {toast && <div className="border-b border-warn/30 bg-warn/10 px-3 py-1 text-xs text-warn">{toast}</div>}
       <div ref={wrapRef} className="relative flex min-h-0 flex-1 items-center justify-center bg-black p-3">
         {!tab.simulator_udid ? (
           <div className="flex flex-col items-center gap-2 text-sm text-fg-muted">
-            <p>Esta aba ainda não tem um simulador.</p>
+            <p>{t('Esta aba ainda não tem um simulador.')}</p>
             <DevicePicker machineId={machineId} value={null} onPick={(u) => void pickDevice(u)} />
           </div>
         ) : (
@@ -359,7 +382,7 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
             />
             {!ready && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-sm text-fg-muted">
-                <p>{state === 'error' && message === 'Agente desconectado' ? 'Agente desconectado' : STATE_LABEL[state]}</p>
+                <p>{state === 'error' && message === 'Agente desconectado' ? t('Agente desconectado') : t(STATE_LABEL[state])}</p>
                 {message && message !== 'Agente desconectado' && <p className="text-xs text-danger">{message}</p>}
                 {tail && tail.length > 0 && (
                   <pre className="max-h-48 max-w-[90%] overflow-auto rounded bg-bg-2 p-2 text-[10px] text-fg-dim">{tail.join('\n')}</pre>

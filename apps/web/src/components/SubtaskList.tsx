@@ -1,6 +1,7 @@
 import { useRef, useState, type DragEvent, type FormEvent } from 'react';
 import { api, ApiError } from '../lib/api';
 import type { Task } from '../lib/types';
+import { useTranslation } from '../i18n';
 
 interface Props {
   parent: Task;
@@ -21,6 +22,7 @@ const reindex = (list: Task[]) => list.map((s, i) => ({ ...s, position: i }));
 
 /** Checklist of a task's subtasks: toggle, rename, add, delete and drag to reorder. Owns its API calls. */
 export function SubtaskList({ parent, onChange, onError }: Props) {
+  const { t } = useTranslation();
   const subtasks = [...(parent.subtasks ?? [])].sort((a, b) => a.position - b.position);
   const [draft, setDraft] = useState('');
   const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
@@ -42,7 +44,7 @@ export function SubtaskList({ parent, onChange, onError }: Props) {
     void commit(
       subtasks.map((x) => (x.id === s.id ? { ...x, status } : x)),
       () => api.tasks.update(s.id, { status }),
-      'Erro ao salvar subtarefa',
+      t('Erro ao salvar subtarefa'),
     );
   };
 
@@ -70,7 +72,7 @@ export function SubtaskList({ parent, onChange, onError }: Props) {
     void commit(
       subtasks.map((x) => (x.id === id ? { ...x, title: v } : x)),
       () => api.tasks.update(id, { title: v }),
-      'Erro ao salvar subtarefa',
+      t('Erro ao salvar subtarefa'),
     );
   };
 
@@ -84,7 +86,7 @@ export function SubtaskList({ parent, onChange, onError }: Props) {
       onChange((prev) => [...prev, ...r.subtasks]);
     } catch (err) {
       setDraft(title);
-      onError(err instanceof ApiError ? err.message : 'Erro ao criar subtarefa');
+      onError(err instanceof ApiError ? err.message : t('Erro ao criar subtarefa'));
     }
   };
 
@@ -92,7 +94,7 @@ export function SubtaskList({ parent, onChange, onError }: Props) {
     void commit(
       reindex(subtasks.filter((x) => x.id !== s.id)),
       () => api.tasks.remove(s.id),
-      'Erro ao excluir subtarefa',
+      t('Erro ao excluir subtarefa'),
     );
 
   const dropOn = (e: DragEvent, index: number) => {
@@ -104,16 +106,16 @@ export function SubtaskList({ parent, onChange, onError }: Props) {
     if (!moving || subtasks.indexOf(moving) === index) return;
     const rest = subtasks.filter((s) => s.id !== id);
     rest.splice(index, 0, moving);
-    void commit(reindex(rest), () => api.tasks.reorder(id, index), 'Erro ao reordenar subtarefas');
+    void commit(reindex(rest), () => api.tasks.reorder(id, index), t('Erro ao reordenar subtarefas'));
   };
 
   return (
     <div>
       <label className="label flex items-center gap-2">
-        Subtarefas
+        {t('Subtarefas')}
         {subtasks.length > 0 && (
           <span className="font-normal normal-case text-fg-dim">
-            {done} de {subtasks.length} concluídas
+            {t('{{done}} de {{total}} concluídas', { done, total: subtasks.length })}
           </span>
         )}
       </label>
@@ -152,11 +154,11 @@ export function SubtaskList({ parent, onChange, onError }: Props) {
                 {s.title}
               </span>
             )}
-            {s.status === 'doing' && <span className="shrink-0 rounded bg-accent/15 px-1 text-[10px] text-accent">em andamento</span>}
+            {s.status === 'doing' && <span className="shrink-0 rounded bg-accent/15 px-1 text-[10px] text-accent">{t('em andamento')}</span>}
             <button
               type="button"
-              aria-label={`Excluir subtarefa ${s.title}`}
-              title="Excluir subtarefa"
+              aria-label={t('Excluir subtarefa {{title}}', { title: s.title })}
+              title={t('Excluir subtarefa')}
               className="invisible shrink-0 rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-danger group-hover:visible"
               onClick={() => remove(s)}
             >
@@ -166,7 +168,7 @@ export function SubtaskList({ parent, onChange, onError }: Props) {
         ))}
       </ul>
       <form onSubmit={add} className="mt-1">
-        <input className="input py-1.5 text-xs" placeholder="Adicionar subtarefa (Enter)" value={draft} onChange={(e) => setDraft(e.target.value)} />
+        <input className="input py-1.5 text-xs" placeholder={t('Adicionar subtarefa (Enter)')} value={draft} onChange={(e) => setDraft(e.target.value)} />
       </form>
     </div>
   );

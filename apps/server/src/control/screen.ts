@@ -116,7 +116,8 @@ export interface WaitResult {
 const result = (tab: Tab, timedOut: boolean): WaitResult => ({ tab_id: tab.id, state: tab.state, state_text: tab.state_text, state_at: tab.state_at, timed_out: timedOut });
 
 /**
- * Waits until the tab's tool stops working (reported by its hooks) or the timeout. A timeout is a
+ * Waits until the tab's tool stops working (reported by its hooks) or the timeout. An agent that ended its
+ * turn with a report (`finished`, TER-972) has stopped, like one that asks something. A timeout is a
  * normal answer (`timed_out: true`), not an error — call again to keep waiting. Aborting (client
  * gone) ends the wait the same way and always removes the bus listener.
  *

@@ -17,6 +17,7 @@ import { ControlError, type ControlContext } from './context.js';
 
 export { MEMORY_REF, parseRef, type MemoryRefKind } from '../memory/refs.js';
 import { parseRef, type MemoryRefKind } from '../memory/refs.js';
+import { msg, tk } from '../i18n/index.js';
 
 export interface MemoryResult {
   ref: string;
@@ -242,7 +243,7 @@ async function verifySources(ctx: ControlContext, sources: string[] | undefined)
   if (!sources || sources.length === 0) return [];
   const parsed = sources.map((ref) => ({ ref, parsed: parseRef(ref) }));
   const bad = parsed.find((p) => !p.parsed);
-  if (bad) throw new ControlError('UNKNOWN_SOURCE', `Fonte desconhecida: ${bad.ref}`);
+  if (bad) throw new ControlError('UNKNOWN_SOURCE', msg('Fonte desconhecida: {{ref}}', { ref: bad.ref }));
   const decisionIds = parsed.filter((p) => p.parsed!.kind === 'decision').map((p) => p.parsed!.id);
   const itemIds = parsed.filter((p) => p.parsed!.kind !== 'decision').map((p) => p.parsed!.id);
   const ownerId = ctx.scope.user.id;
@@ -257,11 +258,11 @@ async function verifySources(ctx: ControlContext, sources: string[] | undefined)
     const { kind, id } = p.parsed!;
     if (kind === 'decision') {
       const decision = decisionById.get(id);
-      if (!decision) throw new ControlError('UNKNOWN_SOURCE', `Fonte desconhecida: ${p.ref}`);
+      if (!decision) throw new ControlError('UNKNOWN_SOURCE', msg('Fonte desconhecida: {{ref}}', { ref: p.ref }));
       resolved.push({ ref: p.ref, kind, id, decision });
     } else {
       const item = itemById.get(id);
-      if (!item || item.kind !== kind) throw new ControlError('UNKNOWN_SOURCE', `Fonte desconhecida: ${p.ref}`);
+      if (!item || item.kind !== kind) throw new ControlError('UNKNOWN_SOURCE', msg('Fonte desconhecida: {{ref}}', { ref: p.ref }));
       resolved.push({ ref: p.ref, kind, id, item });
     }
   }
@@ -359,9 +360,9 @@ const sanitiseName = (name: string | null | undefined): string | null => (name =
 /** One proposed answer per question, as `answer_tab_question` takes it: option labels, or free text. */
 export type ProposedAnswer = { selected: string[] } | { text: string };
 
-const NOT_A_CHOICE = 'Só perguntas de múltipla escolha podem ser respondidas por aqui; permissões ficam com o usuário';
-const ANSWER_MISMATCH = 'A resposta não corresponde à pergunta: dê uma resposta por pergunta, com rótulos que existem nas opções (um só numa pergunta de escolha única) ou um texto';
-const QUESTION_CLOSED = 'Esta pergunta já foi respondida ou fechada';
+const NOT_A_CHOICE = tk('Só perguntas de múltipla escolha podem ser respondidas por aqui; permissões ficam com o usuário');
+const ANSWER_MISMATCH = tk('A resposta não corresponde à pergunta: dê uma resposta por pergunta, com rótulos que existem nas opções (um só numa pergunta de escolha única) ou um texto');
+const QUESTION_CLOSED = tk('Esta pergunta já foi respondida ou fechada');
 
 /**
  * Labels → the payload's option indexes (`labelKey`: case, accents and punctuation do not matter),
@@ -516,6 +517,6 @@ export async function answerTabQuestionTool(
   }));
   const updated = await ctx.repos.tabQuestions.setSuggestion(row.id, { items });
   if (!updated) throw new ControlError('QUESTION_CLOSED', QUESTION_CLOSED);
-  await publishTabQuestions(ctx.repos, 'tab_question', [updated]);
+  await publishTabQuestions(ctx.repos, 'tab_question', [updated], { update: true });
   return downgrade ? { mode: 'suggest', downgraded_because: downgrade } : { mode: 'suggest' };
 }

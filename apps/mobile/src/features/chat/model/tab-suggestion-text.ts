@@ -1,10 +1,12 @@
-// Copied from apps/web/src/components/chat/tab-suggestion-text.ts — keep the two in step (same pt-BR copy).
+// Copied from apps/web/src/components/chat/tab-suggestion-text.ts — keep the two in step (same pt-BR copy,
+// which is also the translation key).
+import { t, tk } from '@/i18n';
 import type { TabSuggestion } from './types';
 
 /** Why the text did not reach the tab, by the code the server stored. */
 const FAILURE_TEXT: Record<string, string> = {
-  MACHINE_OFFLINE: 'a máquina está offline',
-  AGENT_OUTDATED: 'o agente da máquina está desatualizado',
+  MACHINE_OFFLINE: tk('a máquina está offline'),
+  AGENT_OUTDATED: tk('o agente da máquina está desatualizado'),
 };
 
 /**
@@ -14,28 +16,32 @@ const FAILURE_TEXT: Record<string, string> = {
 export const suggestionTitle = (s: TabSuggestion): string => {
   if (s.payload.exited) {
     // TER-643: the tab's agent exited without finishing its turn; the card offers the line that resumes it.
-    const who = s.tab_name ? `«${s.tab_name}»` : 'Uma aba';
-    return s.status === 'open' ? `${who} parou: o agente encerrou sem terminar o turno.` : `${who} parou; comando para retomar:`;
+    const who = s.tab_name ? `«${s.tab_name}»` : t('Uma aba');
+    return s.status === 'open' ? t('{{who}} parou: o agente encerrou sem terminar o turno.', { who }) : t('{{who}} parou; comando para retomar:', { who });
   }
+  const tab = s.tab_name;
   if (s.status === 'open') {
-    const who = s.payload.agent === 'codex' ? 'o Codex perguntou:' : 'o Claude Code sugere:';
-    return s.tab_name ? `«${s.tab_name}» terminou — ${who}` : `Uma aba terminou — ${who}`;
+    if (s.payload.agent === 'codex') return tab ? t('«{{tab}}» terminou — o Codex perguntou:', { tab }) : t('Uma aba terminou — o Codex perguntou:');
+    return tab ? t('«{{tab}}» terminou — o Claude Code sugere:', { tab }) : t('Uma aba terminou — o Claude Code sugere:');
   }
   if (s.payload.agent === 'codex') {
     // A Codex reply card asked; the chat's answer (sent, or claimed and failed) is what the card shows under it.
-    const asked = s.tab_name ? `«${s.tab_name}» perguntou` : 'Uma aba perguntou';
-    return s.status === 'answered' || s.status === 'failed' ? `${asked}; você respondeu:` : `${asked}:`;
+    if (s.status === 'answered' || s.status === 'failed') return tab ? t('«{{tab}}» perguntou; você respondeu:', { tab }) : t('Uma aba perguntou; você respondeu:');
+    return tab ? t('«{{tab}}» perguntou:', { tab }) : t('Uma aba perguntou:');
   }
-  return s.tab_name ? `«${s.tab_name}» sugere:` : 'Uma aba sugere:';
+  return tab ? t('«{{tab}}» sugere:', { tab }) : t('Uma aba sugere:');
 };
 
-/** Under an open card's title: a suggestion never needs an answer (spec 2026-09-26 TER-203 §5). */
-export const SUGGESTION_HINT = 'Não precisa responder.';
+/** Under an open card's title: a suggestion never needs an answer (spec 2026-09-26 TER-203 §5). A
+ * translation key, shown as `t(SUGGESTION_HINT)` (`suggestionHint` already translates it). */
+export const SUGGESTION_HINT = tk('Não precisa responder.');
 
-/** A Codex reply card (`payload.agent === 'codex'`) is a question ending the Codex's turn: the person answers. */
-export const CODEX_REPLY_HINT = 'Responda aqui ou na aba.';
-/** The empty input of a Codex reply card, and its accessible name. */
-export const CODEX_REPLY_PLACEHOLDER = 'Sua resposta';
+/** A Codex reply card (`payload.agent === 'codex'`) is a question ending the Codex's turn: the person
+ * answers. A translation key, like `SUGGESTION_HINT`. */
+export const CODEX_REPLY_HINT = tk('Responda aqui ou na aba.');
+/** The empty input of a Codex reply card, and its accessible name: a translation key, shown as
+ * `t(CODEX_REPLY_PLACEHOLDER)`. */
+export const CODEX_REPLY_PLACEHOLDER = tk('Sua resposta');
 
 /** "05:48", in the viewer's time zone; null for a missing or broken timestamp. */
 function clock(iso: string | null | undefined): string | null {
@@ -47,16 +53,17 @@ function clock(iso: string | null | undefined): string | null {
 export const suggestionHint = (s: TabSuggestion): string => {
   if (s.payload.exited) {
     const last = clock(s.payload.last_at);
-    return `${last ? `Última atividade às ${last}. ` : ''}Envie o comando para retomar a sessão na aba, ou dispense.`;
+    const send = t('Envie o comando para retomar a sessão na aba, ou dispense.');
+    return last ? `${t('Última atividade às {{time}}.', { time: last })} ${send}` : send;
   }
-  return s.payload.agent === 'codex' ? CODEX_REPLY_HINT : SUGGESTION_HINT;
+  return t(s.payload.agent === 'codex' ? CODEX_REPLY_HINT : SUGGESTION_HINT);
 };
 
 /** A Codex reply card asks for an answer; every other card holds a line to edit (TER-643: a resume card of Codex too). */
 export const isReplyCard = (s: TabSuggestion): boolean => s.payload.agent === 'codex' && !s.payload.exited;
 
 /** The label over the editable line. */
-export const suggestionFieldLabel = (s: TabSuggestion): string => (s.payload.exited ? 'Comando para retomar (edite ou dispense)' : 'Sugestão do Claude Code (opcional — edite ou dispense)');
+export const suggestionFieldLabel = (s: TabSuggestion): string => (s.payload.exited ? t('Comando para retomar (edite ou dispense)') : t('Sugestão do Claude Code (opcional — edite ou dispense)'));
 
 /** How much of the agent's message a collapsed card shows. */
 export const CONTEXT_PREVIEW_MAX = 400;
@@ -81,15 +88,15 @@ export function suggestionStatusLabel(s: TabSuggestion): string {
     case 'open':
       return '';
     case 'answered':
-      return 'Enviada';
+      return t('Enviada');
     case 'dismissed':
-      return 'Dispensada';
+      return t('Dispensada');
     case 'answered_in_tab':
-      return 'Respondida na aba';
+      return t('Respondida na aba');
     case 'expired':
-      return 'Expirada';
+      return t('Expirada');
     case 'failed':
-      return `Falhou — ${FAILURE_TEXT[s.error_code ?? ''] ?? 'não foi possível digitar na aba'}`;
+      return t('Falhou — {{reason}}', { reason: t(FAILURE_TEXT[s.error_code ?? ''] ?? tk('não foi possível digitar na aba')) });
   }
 }
 

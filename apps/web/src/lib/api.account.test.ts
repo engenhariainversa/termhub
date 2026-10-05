@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from './api';
+import { i18n } from '../i18n';
 
 function answer(status: number, body: unknown) {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status })));
@@ -46,5 +47,30 @@ describe('account deletion API errors', () => {
     answer(403, { error: 'Sua conta está desativada', code: 'ACCOUNT_PENDING_DELETION' });
     await expect(api.machines.list()).rejects.toMatchObject({ status: 403, code: 'ACCOUNT_PENDING_DELETION' });
     expect(events).toEqual(['termhub:pending-deletion']);
+  });
+});
+
+describe('language of the request', () => {
+  afterEach(() => {
+    void i18n.changeLanguage('pt-BR');
+  });
+
+  it('sends Accept-Language with the language on screen', async () => {
+    answer(200, { user: {}, view_as: null });
+    await api.auth.me();
+    void i18n.changeLanguage('en');
+    await api.auth.me();
+    const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
+    expect((calls[0][1].headers as Record<string, string>)['accept-language']).toBe('pt-BR');
+    expect((calls[1][1].headers as Record<string, string>)['accept-language']).toBe('en');
+  });
+
+  it('PATCHes /auth/me/locale with the choice', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
+    await api.auth.setLocale(null);
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/auth/me/locale');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body as string)).toEqual({ locale: null });
   });
 });

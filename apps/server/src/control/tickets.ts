@@ -6,6 +6,7 @@ import { sourceIdentity } from '../setup/schema.js';
 import { lastSync, syncProjectTickets, type SyncResult } from '../setup/tickets-sync.js';
 import type { ControlContext } from './context.js';
 import { cardUrl, taskOut, type TaskOut } from './tasks.js';
+import { msg } from '../i18n/index.js';
 
 // Same rule as inventory's normalizeName, kept local: inventory imports this module (find → resolveTickets).
 const normalizeName = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -108,11 +109,11 @@ export async function resolveTickets(ctx: ControlContext, key: string, projectId
 }
 
 function one(key: string, found: Ticket[], projectNames: Map<string, string>): Ticket {
-  if (found.length === 0) throw new HttpError(404, `Ticket ${key} não encontrado. Rode sync_tickets se ele for novo.`, 'TICKET_NOT_FOUND');
+  if (found.length === 0) throw new HttpError(404, msg('Ticket {{key}} não encontrado. Rode sync_tickets se ele for novo.', { key }), 'TICKET_NOT_FOUND');
   if (found.length > 1) {
     const multiProject = new Set(found.map((t) => t.project_id)).size > 1;
     const names = found.map((t) => (multiProject ? `${projectNames.get(t.project_id) ?? t.project_id} / ${t.key}` : t.key)).join(', ');
-    throw new HttpError(409, `${key} é ambíguo: ${names}. Use a chave completa.`, 'TICKET_AMBIGUOUS');
+    throw new HttpError(409, msg('{{key}} é ambíguo: {{names}}. Use a chave completa.', { key, names }), 'TICKET_AMBIGUOUS');
   }
   return found[0];
 }
@@ -183,7 +184,7 @@ export async function pushTicketStatus(ctx: ControlContext, input: { task_id: st
   const source =
     sources.find((s) => link.integration_id !== null && s.integration_id === link.integration_id && s.scope === link.scope) ??
     sources.find((s) => s.provider === link.provider && s.scope === link.scope);
-  if (!source) throw new HttpError(400, `A fonte de ${link.key} não está mais no setup do projeto`, 'SOURCE_NOT_FOUND');
+  if (!source) throw new HttpError(400, msg('A fonte de {{key}} não está mais no setup do projeto', { key: link.key }), 'SOURCE_NOT_FOUND');
   const integration = await ctx.scoped.integration(source.integration_id);
   const secret = await ctx.repos.integrations.getSecret(source.integration_id);
   if (!secret) throw new HttpError(400, 'Integração sem credencial', 'SOURCE_NOT_FOUND');

@@ -122,3 +122,16 @@ describe('an agent waiting on its own background work (TER-644)', () => {
     expect(agentOnCard.parse(older).background).toBe(false);
   });
 });
+
+describe('an agent that ended its turn with a report (TER-972)', () => {
+  it('is sent as idle with finished: true, so an app that predates the state shows it stopped, and counts as idle', () => {
+    const e = aggregateEpic(epic([card({ id: '2', tab: tab('t1', 'finished') }), card({ id: '3', tab: tab('t2', 'idle') })]), true);
+    expect(e.cards[0]!.agents![0]).toMatchObject({ state: 'idle', finished: true, background: false, needs_you: false });
+    expect(e.cards[1]!.agents![0]).toMatchObject({ state: 'idle', finished: false });
+    expect(e.agents).toEqual({ working: 0, needs_you: 0, idle: 2 });
+    // the shared contract accepts it, and an older payload without the flag reads as false
+    expect(() => progressResponse.parse({ epics: [e], generated_at: at(0).toISOString() })).not.toThrow();
+    const { finished: _f, ...older } = e.cards[0]!.agents![0]!;
+    expect(agentOnCard.parse(older).finished).toBe(false);
+  });
+});

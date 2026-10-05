@@ -12,15 +12,16 @@ import { versionAtLeast } from '../agent/errors.js';
 import { RESTART_CLOSE } from '../ws/drain.js';
 import { createPtySession, type PtySession } from './pty-session.js';
 import { TERMINAL_SCROLL_MIN_AGENT_VERSION, scrollSession } from './session-ops.js';
+import { pickLocale, t, type Locale } from '../i18n/index.js';
 
 /** What the person sees when the terminal could not start: what to do when we know the cause. */
-function openErrorMessage(err: unknown): string {
+function openErrorMessage(err: unknown, locale: Locale): string {
   if (err instanceof AgentRpcError) {
-    if (err.rpcError.code === 'no_tmux') return 'tmux não encontrado nesta máquina. Instale o tmux e tente de novo.';
+    if (err.rpcError.code === 'no_tmux') return t(locale, 'tmux não encontrado nesta máquina. Instale o tmux e tente de novo.');
     // the agent's generic failure is almost always node-pty's spawn-helper, which doctor repairs
-    if (err.rpcError.code === 'internal') return 'Esta máquina não conseguiu abrir o terminal. Rode termhub-agent doctor nela.';
+    if (err.rpcError.code === 'internal') return t(locale, 'Esta máquina não conseguiu abrir o terminal. Rode termhub-agent doctor nela.');
   }
-  return 'Falha ao iniciar terminal';
+  return t(locale, 'Falha ao iniciar terminal');
 }
 
 const controlSchema = z.discriminatedUnion('type', [
@@ -46,19 +47,20 @@ export function registerTerminalWs(router: ReturnType<typeof createUpgradeRouter
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
   const log = deps.log.child({ mod: 'ws' });
 
-  router.add(/^\/ws\/tabs\/([a-z0-9]+)\/?$/, async ({ req, socket, head, url, params, scope }) => {
+  router.add(/^\/ws\/tabs\/([a-z0-9]+)\/?$/, async ({ req, socket, head, url, params, scope, canWrite }) => {
     const tabId = params[0];
     // ownership: a tab outside the caller's scope is a 404, like a missing one
     const found = await new Scoped(deps.repos, scope).tab(tabId).catch(() => null);
     if (!found || found.tab.kind !== 'terminal') return rejectUpgrade(socket, 404, 'Not Found');
     const { tab, project, machine, cwd } = found;
+    const locale = pickLocale(scope.user.locale, req.headers['accept-language']);
 
     const cols = Number(url.searchParams.get('cols')) || 80;
     const rows = Number(url.searchParams.get('rows')) || 24;
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
-      void handleConnection(ws, { tab, project, machine, cwd, cols, rows }, deps, log);
+      void handleConnection(ws, { tab, project, machine, cwd, cols, rows, locale, readonly: !canWrite }, deps, log);
     });
   });
 
@@ -81,7 +83,7 @@ export function registerTerminalWs(router: ReturnType<typeof createUpgradeRouter
 
 async function handleConnection(
   ws: WebSocket,
-  ctx: { tab: Tab; project: Project; machine: Machine; cwd: string; cols: number; rows: number },
+  ctx: { tab: Tab; project: Project; machine: Machine; cwd: string; cols: number; rows: number; locale: Locale; readonly: boolean },
   deps: Deps,
   log: FastifyBaseLogger,
 ) {
@@ -141,12 +143,12 @@ async function handleConnection(
     if (clientGone) return; // the client is already gone — no one to notify
     if (err instanceof AgentOfflineError) {
       log.info({ tabId: ctx.tab.id, machineId: ctx.machine.id }, 'agente desconectado');
-      send({ type: 'error', message: 'Agente desconectado' });
+      send({ type: 'error', message: t(ctx.locale, 'Agente desconectado') });
       ws.close(1011, 'agent offline');
       return;
     }
     log.error({ err, tabId: ctx.tab.id }, 'falha ao iniciar pty');
-    send({ type: 'error', message: openErrorMessage(err) });
+    send({ type: 'error', message: openErrorMessage(err, ctx.locale) });
     ws.close(1011, 'pty spawn failed');
     return;
   }
@@ -163,8 +165,11 @@ async function handleConnection(
   // Nunca logamos conteúdo do terminal: só metadados.
   log.info({ tabId: ctx.tab.id, machineId: ctx.machine.id, pid: session.pid }, 'terminal conectado');
   void deps.repos.projects.touchTerminal(ctx.project.id).catch(() => {});
-  const scroll = canScroll(ctx.machine);
-  send({ type: 'ready', scroll });
+  // A read-only viewer (no terminals:write, TER-576) watches the stream but never acts on the pane:
+  // its keystrokes, resizes and wheel scrolls (copy-mode moves the shared pane) are all dropped.
+  const readonly = ctx.readonly;
+  const scroll = !readonly && canScroll(ctx.machine);
+  send({ type: 'ready', scroll, readonly });
 
   // ── Mouse wheel (TER-465) ──
   // Every tmux call of this connection runs in order on one chain, so a scroll and the "leave copy-mode"
@@ -220,7 +225,7 @@ async function handleConnection(
 
   ws.on('message', (raw, isBinary) => {
     if (isBinary) {
-      onInput(raw as Buffer);
+      if (!readonly) onInput(raw as Buffer);
       return;
     }
     let parsed: unknown;
@@ -231,8 +236,9 @@ async function handleConnection(
     }
     const msg = controlSchema.safeParse(parsed);
     if (!msg.success) return;
-    if (msg.data.type === 'resize') session.resize(msg.data);
-    else if (msg.data.type === 'ping') send({ type: 'pong' });
+    if (msg.data.type === 'resize') {
+      if (!readonly) session.resize(msg.data);
+    } else if (msg.data.type === 'ping') send({ type: 'pong' });
     else if (msg.data.type === 'scroll' && scroll) onScroll(msg.data.lines);
   });
 

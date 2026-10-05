@@ -3,6 +3,8 @@ import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { Device, DeviceEventView, DeviceRequestView } from '../lib/types';
 import { ConfirmDialog } from './Modal';
+import { formatDate, formatTime } from '../lib/format';
+import { i18n, useTranslation } from '../i18n';
 
 /** Same ceiling the server enforces (mobile/enrolment.ts's DEVICE_LIMIT, 409 "Revogue um aparelho
  *  antes"): Aprovar is disabled here too, instead of always waiting for that round-trip. */
@@ -11,8 +13,8 @@ const MAX_DEVICES = 5;
 /** DeviceRequestBanner listens for this to refresh its own summary right after a decision here. */
 const DEVICES_CHANGED_EVENT = 'termhub:devices-changed';
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
-const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+const fmtDate = (iso: string) => formatDate(iso);
+const fmtTime = (iso: string) => formatTime(iso, { hour: '2-digit', minute: '2-digit' });
 
 /** City and country as Cloudflare saw them; empty when neither is known (the IP is always shown apart). */
 function placeOf(r: DeviceRequestView): string {
@@ -25,15 +27,15 @@ const osOf = (r: DeviceRequestView) => `${PLATFORM_LABELS[r.platform] ?? r.platf
 /** "expira em X min", rounded up so a request with seconds left still reads 1 min. */
 function expiresLabel(expiresAt: string, now: number): string {
   const minutes = Math.ceil((new Date(expiresAt).getTime() - now) / 60_000);
-  return minutes > 0 ? `expira em ${minutes} min` : 'expirado';
+  return minutes > 0 ? i18n.t('expira em {{minutes}} min', { minutes }) : i18n.t('expirado');
 }
 
 function situationLabel(d: Device, now = new Date()): string {
   if (d.status === 'active') {
-    if (d.pin_locked_until && new Date(d.pin_locked_until) > now) return `bloqueado por PIN até ${fmtTime(d.pin_locked_until)}`;
-    return 'ativo';
+    if (d.pin_locked_until && new Date(d.pin_locked_until) > now) return i18n.t('bloqueado por PIN até {{time}}', { time: fmtTime(d.pin_locked_until) });
+    return i18n.t('ativo');
   }
-  return d.revoked_reason === 'pin_bruteforce' ? 'revogado (tentativas de PIN)' : 'revogado';
+  return d.revoked_reason === 'pin_bruteforce' ? i18n.t('revogado (tentativas de PIN)') : i18n.t('revogado');
 }
 
 function notifyDevicesChanged(): void {
@@ -46,6 +48,7 @@ function notifyDevicesChanged(): void {
  * server routes this talks to.
  */
 export function DevicesView() {
+  const { t } = useTranslation();
   const { can } = useAuth();
   const [requests, setRequests] = useState<DeviceRequestView[] | null>(null);
   const [devices, setDevices] = useState<Device[] | null>(null);
@@ -70,7 +73,7 @@ export function DevicesView() {
       setDevices(d.devices);
       setEvents(e.events);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao carregar aparelhos');
+      setError(err instanceof ApiError ? err.message : t('Erro ao carregar aparelhos'));
     }
   }, []);
 
@@ -88,7 +91,7 @@ export function DevicesView() {
       setRequests((list) => (list ?? []).filter((x) => x.id !== r.id));
       notifyDevicesChanged();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao recusar o pedido');
+      setError(err instanceof ApiError ? err.message : t('Erro ao recusar o pedido'));
     }
   };
 
@@ -102,7 +105,7 @@ export function DevicesView() {
       setRequests((list) => (list ?? []).filter((x) => x.id !== r.id));
       notifyDevicesChanged();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao aprovar o pedido');
+      setError(err instanceof ApiError ? err.message : t('Erro ao aprovar o pedido'));
     }
   };
 
@@ -116,7 +119,7 @@ export function DevicesView() {
       setDevices((list) => (list ?? []).map((x) => (x.id === d.id ? r.device : x)));
       notifyDevicesChanged();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao revogar o aparelho');
+      setError(err instanceof ApiError ? err.message : t('Erro ao revogar o aparelho'));
     }
   };
 
@@ -134,7 +137,7 @@ export function DevicesView() {
       const r = await api.devices.rename(d.id, name);
       setDevices((list) => (list ?? []).map((x) => (x.id === d.id ? r.device : x)));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao renomear o aparelho');
+      setError(err instanceof ApiError ? err.message : t('Erro ao renomear o aparelho'));
     }
   };
 
@@ -151,14 +154,14 @@ export function DevicesView() {
       {error && <p className="text-sm text-danger">{error}</p>}
 
       {loading ? (
-        <p className="text-sm text-fg-dim">Carregando…</p>
+        <p className="text-sm text-fg-dim">{t('Carregando…')}</p>
       ) : empty ? (
-        <p className="text-sm text-fg-dim">Instale o app termhub no celular e entre com seu e-mail. O pedido de acesso aparece aqui.</p>
+        <p className="text-sm text-fg-dim">{t('Instale o app termhub no celular e entre com seu e-mail. O pedido de acesso aparece aqui.')}</p>
       ) : (
         <>
           {requests.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-sm font-semibold">Pedidos de acesso</h2>
+              <h2 className="text-sm font-semibold">{t('Pedidos de acesso')}</h2>
               <ul className="space-y-3">
                 {requests.map((r) => (
                   <li key={r.id} className="rounded-lg border border-line bg-bg-2 p-4">
@@ -167,23 +170,23 @@ export function DevicesView() {
                       {r.model} · {osOf(r)}
                     </p>
                     <p className="text-xs text-fg-dim">
-                      {placeOf(r) && `${placeOf(r)} · `}IP {r.ip}
+                      {placeOf(r) ? t('{{place}} · IP {{ip}}', { place: placeOf(r), ip: r.ip }) : t('IP {{ip}}', { ip: r.ip })}
                     </p>
                     <p className="mb-1 text-xs text-fg-dim">
-                      Pedido em {fmtDate(r.created_at)} às {fmtTime(r.created_at)} · {expiresLabel(r.expires_at, now)}
+                      {t('Pedido em {{date}} às {{time}} · {{expires}}', { date: fmtDate(r.created_at), time: fmtTime(r.created_at), expires: expiresLabel(r.expires_at, now) })}
                     </p>
                     <code className="font-mono text-2xl tracking-widest">{r.verification_code}</code>
-                    <p className="mt-1 text-sm text-fg-muted">Se você não pediu isso, recuse.</p>
-                    {atLimit && <p className="mt-1 text-xs text-danger">Revogue um aparelho antes</p>}
+                    <p className="mt-1 text-sm text-fg-muted">{t('Se você não pediu isso, recuse.')}</p>
+                    {atLimit && <p className="mt-1 text-xs text-danger">{t('Revogue um aparelho antes')}</p>}
                     <div className="mt-2 flex gap-2">
                       {can('devices', 'update') && (
                         <button className="btn-ghost" onClick={() => void deny(r)}>
-                          Recusar
+                          {t('Recusar')}
                         </button>
                       )}
                       {can('devices', 'update') && (
                         <button className="btn-primary" disabled={atLimit} onClick={() => setApproving(r)}>
-                          Aprovar
+                          {t('Aprovar')}
                         </button>
                       )}
                     </div>
@@ -194,19 +197,19 @@ export function DevicesView() {
           )}
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold">Aparelhos</h2>
+            <h2 className="text-sm font-semibold">{t('Aparelhos')}</h2>
             {devices.length === 0 ? (
-              <p className="text-sm text-fg-dim">Nenhum aparelho ainda.</p>
+              <p className="text-sm text-fg-dim">{t('Nenhum aparelho ainda.')}</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-left text-xs text-fg-dim">
                     <tr>
-                      <th className="py-1 pr-3 font-normal">Nome</th>
-                      <th className="py-1 pr-3 font-normal">Modelo</th>
-                      <th className="py-1 pr-3 font-normal">Adicionado</th>
-                      <th className="py-1 pr-3 font-normal">Visto por último</th>
-                      <th className="py-1 pr-3 font-normal">Situação</th>
+                      <th className="py-1 pr-3 font-normal">{t('Nome')}</th>
+                      <th className="py-1 pr-3 font-normal">{t('Modelo')}</th>
+                      <th className="py-1 pr-3 font-normal">{t('Adicionado')}</th>
+                      <th className="py-1 pr-3 font-normal">{t('Visto por último')}</th>
+                      <th className="py-1 pr-3 font-normal">{t('Situação')}</th>
                       <th className="py-1 font-normal" />
                     </tr>
                   </thead>
@@ -235,12 +238,12 @@ export function DevicesView() {
                           {d.model} · {d.os_version}
                         </td>
                         <td className="py-1.5 pr-3">{fmtDate(d.created_at)}</td>
-                        <td className="py-1.5 pr-3">{d.last_seen_at ? fmtDate(d.last_seen_at) : 'nunca'}</td>
+                        <td className="py-1.5 pr-3">{d.last_seen_at ? fmtDate(d.last_seen_at) : t('nunca')}</td>
                         <td className="py-1.5 pr-3">{situationLabel(d)}</td>
                         <td className="py-1.5 text-right">
                           {d.status === 'active' && can('devices', 'delete') && (
-                            <button className="btn-ghost px-2 py-0.5 text-xs text-danger" aria-label={`Revogar ${d.name}`} onClick={() => setRevoking(d)}>
-                              Revogar
+                            <button className="btn-ghost px-2 py-0.5 text-xs text-danger" aria-label={t('Revogar {{name}}', { name: d.name })} onClick={() => setRevoking(d)}>
+                              {t('Revogar')}
                             </button>
                           )}
                         </td>
@@ -256,7 +259,7 @@ export function DevicesView() {
 
       {!loading && events.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold">Atividade</h2>
+          <h2 className="text-sm font-semibold">{t('Atividade')}</h2>
           <ul className="space-y-1 text-sm text-fg-muted">
             {events.map((e) => (
               <li key={e.id} className="flex justify-between gap-3 border-t border-line py-1.5 first:border-0">
@@ -270,17 +273,17 @@ export function DevicesView() {
 
       <ConfirmDialog
         open={!!approving}
-        title="Aprovar aparelho"
-        message={`O código na tela do celular é ${approving?.verification_code ?? ''}?`}
-        confirmLabel="Aprovar"
+        title={t('Aprovar aparelho')}
+        message={t('O código na tela do celular é {{code}}?', { code: approving?.verification_code ?? '' })}
+        confirmLabel={t('Aprovar')}
         onConfirm={confirmApprove}
         onCancel={() => setApproving(null)}
       />
       <ConfirmDialog
         open={!!revoking}
-        title="Revogar aparelho"
-        message="Ele perde o acesso na hora. Isso não pode ser desfeito."
-        confirmLabel="Revogar"
+        title={t('Revogar aparelho')}
+        message={t('Ele perde o acesso na hora. Isso não pode ser desfeito.')}
+        confirmLabel={t('Revogar')}
         danger
         onConfirm={confirmRevoke}
         onCancel={() => setRevoking(null)}

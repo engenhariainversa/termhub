@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { canHaveSubtasks, cardPath, typeOptions } from '../lib/board';
+import { canHaveSubtasks, cardPath, taskStatusLabel, taskTypeLabel, typeOptions } from '../lib/board';
 import { ticketKey } from '../lib/ticket-link';
-import { PROVIDER_LABEL, TASK_STATUS_LABEL, TASK_TYPE_LABEL, type Task, type TaskColumn, type TaskPatchInput, type TaskType } from '../lib/types';
+import { PROVIDER_LABEL, type Task, type TaskColumn, type TaskPatchInput, type TaskType } from '../lib/types';
 import { CardPullRequests } from './CardPullRequests';
 import { ConfirmDialog, Modal } from './Modal';
 import { SubtaskList } from './SubtaskList';
+import { formatDate, formatDateTime } from '../lib/format';
+import { useTranslation } from '../i18n';
 
 /** Where the column select sends a card. */
 export type PlaceTarget = { column_id: string } | { status: 'backlog' };
@@ -61,6 +63,7 @@ export function TaskEditor({
   onSubtasks,
   onError,
 }: TaskEditorProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? '');
   const [type, setType] = useState<TaskType>(task.type);
@@ -97,19 +100,19 @@ export function TaskEditor({
       <div className="space-y-3">
         <div>
           <label className="label" htmlFor="card-title">
-            Título
+            {t('Título')}
           </label>
           <input id="card-title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className="label" htmlFor="card-type">
-              Tipo
+              {t('Tipo')}
             </label>
             <select id="card-type" className="input" value={type} disabled={types.length === 1} onChange={(e) => setType(e.target.value as TaskType)}>
-              {types.map((t) => (
-                <option key={t} value={t}>
-                  {TASK_TYPE_LABEL[t]}
+              {types.map((option) => (
+                <option key={option} value={option}>
+                  {taskTypeLabel(option)}
                 </option>
               ))}
             </select>
@@ -117,7 +120,7 @@ export function TaskEditor({
           {task.type !== 'epic' && (
             <div>
               <label className="label" htmlFor="card-epic">
-                Épico
+                {t('Épico')}
               </label>
               <select id="card-epic" className="input" value={epicId} onChange={(e) => setEpicId(e.target.value)}>
                 {epics.map((e) => (
@@ -130,7 +133,7 @@ export function TaskEditor({
           )}
           <div>
             <label className="label" htmlFor="card-column">
-              Coluna
+              {t('Coluna')}
             </label>
             <select
               id="card-column"
@@ -138,7 +141,7 @@ export function TaskEditor({
               value={task.column_id ?? ''}
               onChange={(e) => onPlace(e.target.value ? { column_id: e.target.value } : { status: 'backlog' })}
             >
-              <option value="">Backlog</option>
+              <option value="">{t('Backlog')}</option>
               {columns.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -149,14 +152,14 @@ export function TaskEditor({
         </div>
         <div>
           <label className="label" htmlFor="card-description">
-            Descrição
+            {t('Descrição')}
           </label>
           <textarea
             id="card-description"
             className="input min-h-[120px] font-mono text-xs"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Detalhes, links, contexto…"
+            placeholder={t('Detalhes, links, contexto…')}
           />
         </div>
         {task.type !== 'subtask' && (
@@ -168,17 +171,17 @@ export function TaskEditor({
                 checked={Boolean(task.auto)}
                 onChange={(e) => (e.target.checked && task.type === 'epic' ? setConfirmAuto(true) : onSetAuto(e.target.checked))}
               />
-              Trabalho automático
+              {t('Trabalho automático')}
             </label>
             <p className="ml-6 text-xs text-fg-dim">
-              {task.type === 'epic' ? 'Marca todos os cards deste épico (os novos também).' : 'O termhub pega este card sozinho quando ele estiver numa coluna "a fazer".'}
+              {task.type === 'epic' ? t('Marca todos os cards deste épico (os novos também).') : t('O termhub pega este card sozinho quando ele estiver numa coluna "a fazer".')}
             </p>
           </div>
         )}
         <ConfirmDialog
           open={confirmAuto}
-          title="Trabalho automático"
-          message={`Marcar ${epicUntagged} ${epicUntagged === 1 ? 'card' : 'cards'} deste épico para trabalho automático? Os cards novos também serão marcados.`}
+          title={t('Trabalho automático')}
+          message={t('Marcar {{count}} cards deste épico para trabalho automático? Os cards novos também serão marcados.', { count: epicUntagged })}
           onConfirm={() => {
             setConfirmAuto(false);
             onSetAuto(true);
@@ -196,7 +199,7 @@ export function TaskEditor({
               <span className="text-fg-muted">
                 {PROVIDER_LABEL[ref.provider]}: <strong className="text-fg">{ref.state}</strong>
               </span>
-              {ref.status !== task.status && <span className="text-warn">≠ {TASK_STATUS_LABEL[task.status]} aqui</span>}
+              {ref.status !== task.status && <span className="text-warn">{t('≠ {{status}} aqui', { status: taskStatusLabel(task.status) })}</span>}
               <button
                 type="button"
                 className="btn-ghost ml-auto border border-line px-2 py-0.5 text-[11px]"
@@ -204,77 +207,77 @@ export function TaskEditor({
                 onClick={async () => {
                   setPushing('busy');
                   const st = await onPushStatus();
-                  setPushing(st ? `atualizado: ${st}` : 'idle');
+                  setPushing(st ? t('atualizado: {{state}}', { state: st }) : 'idle');
                 }}
-                title="Muda o estado no provedor para refletir a coluna atual. Nada é enviado sem este clique."
+                title={t('Muda o estado no provedor para refletir a coluna atual. Nada é enviado sem este clique.')}
               >
-                {pushing === 'busy' ? 'atualizando…' : `Atualizar no ${PROVIDER_LABEL[ref.provider]}`}
+                {pushing === 'busy' ? t('atualizando…') : t('Atualizar no {{provider}}', { provider: PROVIDER_LABEL[ref.provider] })}
               </button>
             </div>
             {pushing !== 'idle' && pushing !== 'busy' && <p className="mt-1 text-ok">{pushing}</p>}
-            {ref.pushed_at && <p className="mt-1 text-fg-dim">último envio: {new Date(ref.pushed_at).toLocaleString('pt-BR')}</p>}
+            {ref.pushed_at && <p className="mt-1 text-fg-dim">{t('último envio: {{when}}', { when: formatDateTime(ref.pushed_at) })}</p>}
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {terminalHref ? (
             <>
               <Link to={terminalHref} className="btn-ghost border border-line text-ok">
-                ▮_ Ir para o terminal
+                {t('▮_ Ir para o terminal')}
               </Link>
-              <button type="button" className="btn-ghost" aria-label="Desligar a aba deste card" title="A aba continua aberta; só deixa de estar ligada ao card" onClick={onDetachTerminal}>
-                desligar
+              <button type="button" className="btn-ghost" aria-label={t('Desligar a aba deste card')} title={t('A aba continua aberta; só deixa de estar ligada ao card')} onClick={onDetachTerminal}>
+                {t('desligar')}
               </button>
             </>
           ) : (
             <>
               <button type="button" className="btn-ghost border border-line" onClick={onOpenTerminal}>
-                ▮_ Abrir terminal para esta task
+                {t('▮_ Abrir terminal para esta task')}
               </button>
               {linkableTabs.length > 0 && (
                 <>
-                  <select className="input w-auto py-1 text-xs" aria-label="Ligar a uma aba aberta" value={tabToLink} onChange={(e) => setTabToLink(e.target.value)}>
-                    <option value="">Ligar a uma aba aberta…</option>
-                    {linkableTabs.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} · {t.machine_name}
+                  <select className="input w-auto py-1 text-xs" aria-label={t('Ligar a uma aba aberta')} value={tabToLink} onChange={(e) => setTabToLink(e.target.value)}>
+                    <option value="">{t('Ligar a uma aba aberta…')}</option>
+                    {linkableTabs.map((tab) => (
+                      <option key={tab.id} value={tab.id}>
+                        {tab.name} · {tab.machine_name}
                       </option>
                     ))}
                   </select>
                   <button type="button" className="btn-ghost border border-line" disabled={!tabToLink} onClick={() => onLinkTab(tabToLink)}>
-                    Ligar
+                    {t('Ligar')}
                   </button>
                 </>
               )}
             </>
           )}
-          <span className="text-fg-dim">a tab fica ligada ao card e aparece nele</span>
+          <span className="text-fg-dim">{t('a tab fica ligada ao card e aparece nele')}</span>
         </div>
         <div className="flex items-center justify-between gap-2 pt-2 text-xs text-fg-dim">
           <span className="flex items-center gap-2">
-            criado em {new Date(task.created_at).toLocaleDateString('pt-BR')}
+            {t('criado em {{date}}', { date: formatDate(task.created_at) })}
             <button type="button" className="btn-ghost border border-line px-2 py-0.5 text-[11px]" onClick={() => void copyLink()}>
-              {copied === 'ok' ? 'Link copiado' : 'Copiar link'}
+              {copied === 'ok' ? t('Link copiado') : t('Copiar link')}
             </button>
-            {copied === 'fail' && <span className="text-danger">não deu para copiar</span>}
+            {copied === 'fail' && <span className="text-danger">{t('não deu para copiar')}</span>}
           </span>
           <div className="flex gap-2">
             {confirmDelete ? (
               <>
-                <span className="self-center">{(task.subtasks?.length ?? 0) > 0 ? `Excluir com ${task.subtasks!.length} subtarefa(s)?` : 'Excluir?'}</span>
+                <span className="self-center">{(task.subtasks?.length ?? 0) > 0 ? t('Excluir com {{count}} subtarefas?', { count: task.subtasks!.length }) : t('Excluir?')}</span>
                 <button className="btn-danger" onClick={onDelete}>
-                  Sim, excluir
+                  {t('Sim, excluir')}
                 </button>
                 <button className="btn-ghost" onClick={() => setConfirmDelete(false)}>
-                  Não
+                  {t('Não')}
                 </button>
               </>
             ) : (
               <button className="btn-ghost text-danger" onClick={() => setConfirmDelete(true)}>
-                Excluir
+                {t('Excluir')}
               </button>
             )}
             <button className="btn-primary" onClick={save}>
-              Salvar
+              {t('Salvar')}
             </button>
           </div>
         </div>

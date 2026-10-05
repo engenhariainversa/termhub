@@ -1,12 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { deviceActivateBody, deviceRequestBody, pushTokenBody } from '@termhub/mobile-api';
+import { deviceActivateBody, deviceRequestBody, pushTestBody, pushTokenBody } from '@termhub/mobile-api';
 import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError, unauthorized } from '../lib/errors.js';
 import { clientLocation } from '../mobile/auth.js';
 import { REQUEST_SECRET_RE } from '../mobile/codes.js';
 import type { EnrolmentService } from '../mobile/enrolment.js';
+import type { MobilePushService } from '../mobile/push.js';
 import type { RevokeInput } from '../mobile/revocation.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
@@ -84,8 +85,16 @@ export async function mobileDeviceRoutes(app: FastifyInstance, _repos: Repositor
   });
 }
 
-/** `PUT /push-token`, mounted at the mobile API's root (spec §10). */
-export async function mobilePushTokenRoutes(app: FastifyInstance, repos: Repositories) {
+/** `PUT /push-token` and `POST /push-test` (TER-913), mounted at the mobile API's root (spec §10). */
+export async function mobilePushTokenRoutes(app: FastifyInstance, repos: Repositories, push: Pick<MobilePushService, 'testPush'>) {
+  // A test push to the calling device. Not `allowPendingDeletion`: refused like every other route (TER-920).
+  app.post('/push-test', { config: { action: 'update' } }, async (request, reply) => {
+    const body = pushTestBody.parse(request.body ?? {});
+    const mobile = request.mobile;
+    if (!mobile || !('device' in mobile)) throw unauthorized();
+    return reply.code(202).send(await push.testPush(mobile.user, mobile.device, body.kind, body.delay_seconds));
+  });
+
   app.put('/push-token', { config: { action: 'update' } }, async (request) => {
     const { token } = pushTokenBody.parse(request.body ?? {});
     const mobile = request.mobile;

@@ -7,6 +7,8 @@ import { b64url, utf8 } from '../crypto/encoding';
 import type { DeviceKey } from '../key/types';
 import {
   ACCOUNT_PENDING_DELETION,
+  pushTestResponse,
+  type PushTestBody,
   accountDeletionStatus,
   automationSetupResponse,
   cardAutoResponse,
@@ -67,6 +69,7 @@ import {
   type TTokenBody,
 } from './contract';
 import { buildProof } from './dpop';
+import { t } from '@/i18n';
 import { ApiError } from './errors';
 import { createChatSocket } from './socket';
 import { createTabSocket } from './tab-socket';
@@ -103,6 +106,10 @@ export type CreateHttpMobileApiOptions = {
   /** Called on every `403 ACCOUNT_PENDING_DELETION` (TER-720): the account is deactivated until the
    * person cancels its deletion. The singleton passes `accountPendingDeletion.emit`. */
   onAccountPendingDeletion?: () => void;
+  /** The language the app shows (`'pt-BR'` | `'en'`), sent as `Accept-Language` on every call and
+   * socket upgrade so the server answers its errors in it (i18n spec §2). Read per request: a
+   * change in Ajustes applies to the next call. */
+  language?: () => string;
 };
 
 type CallOptions = {
@@ -153,8 +160,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
 
   // `/ws/m/chat?v=1` (P§6.1). `canonicalHtu` drops the query, so the DPoP proof is signed over
   // the bare path regardless of what `wsUrl` appends to it.
+  const languageHeader = (): Record<string, string> => (o.language ? { 'Accept-Language': o.language() } : {});
   const wsUrl = (base: string) => `${base.replace(/^http/, 'ws')}/ws/m/chat?v=1`;
   const socketHeaders = async (a: Auth): Promise<Record<string, string>> => ({
+    ...languageHeader(),
     Authorization: `Bearer ${a.accessToken}`,
     DPoP: await proofFor('GET', '/ws/m/chat', a.accessToken),
   });
@@ -191,15 +200,15 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     try {
       json = text ? JSON.parse(text) : {};
     } catch {
-      throw new ApiError(502, 'BAD_RESPONSE', 'Resposta inesperada do servidor');
+      throw new ApiError(502, 'BAD_RESPONSE', t('Resposta inesperada do servidor'));
     }
     const parsed = schema.safeParse(json);
-    if (!parsed.success) throw new ApiError(502, 'BAD_RESPONSE', 'Resposta inesperada do servidor');
+    if (!parsed.success) throw new ApiError(502, 'BAD_RESPONSE', t('Resposta inesperada do servidor'));
     return parsed.data;
   }
 
   async function call<T>(htm: string, path: string, schema: z.ZodType<T, z.ZodTypeDef, any>, opts: CallOptions = {}): Promise<T> {
-    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json' };
+    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json', ...languageHeader() };
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
     if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
     if (opts.proof !== false) headers.DPoP = await proofFor(htm, path, opts.token ?? null, opts.chal);
@@ -235,7 +244,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
    * query is not part of the proof, `canonicalHtu` drops it), the same single retry on a renewed
    * token. Only ever with a token: nothing is uploaded before enrolment. */
   async function uploadCall<T>(path: string, fileUri: string, mime: string, schema: z.ZodType<T, z.ZodTypeDef, any>, token: string, onProgress?: (fraction: number) => void, retry = true): Promise<T> {
-    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json', Authorization: `Bearer ${token}`, DPoP: await proofFor('POST', path, token) };
+    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json', ...languageHeader(), Authorization: `Bearer ${token}`, DPoP: await proofFor('POST', path, token) };
     const res = await o.transport.upload(o.baseUrl + path, fileUri, mime, headers, onProgress);
     if (res.status >= 200 && res.status < 300) return decode(res.body, schema);
 
@@ -272,6 +281,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     deviceSelf: (a: Auth) => call('GET', '/api/m/v1/devices/self', deviceSelfSchema, { token: a.accessToken }),
     revokeSelf: (a: Auth) => empty('POST', '/api/m/v1/devices/self/revoke', { token: a.accessToken }),
     setPushToken: (a: Auth, token: string) => empty('PUT', '/api/m/v1/push-token', { token: a.accessToken, body: { token } }),
+    pushTest: (a: Auth, body: PushTestBody) => call('POST', '/api/m/v1/push-test', pushTestResponse, { token: a.accessToken, body }),
 
     accountDeletion: (a: Auth) => call('GET', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
     requestAccountDeletion: (a: Auth, body: AccountDeletionBody) => call('POST', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken, body }),
@@ -326,7 +336,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       const path = `/api/m/v1/chat/attachments/${encodeURIComponent(id)}`;
       return {
         uri: o.baseUrl + path,
-        headers: { 'X-Termhub-App': o.app, Authorization: `Bearer ${a.accessToken}`, DPoP: await proofFor('GET', path, a.accessToken) },
+        headers: { 'X-Termhub-App': o.app, ...languageHeader(), Authorization: `Bearer ${a.accessToken}`, DPoP: await proofFor('GET', path, a.accessToken) },
       };
     },
     transcriptionConfig: (a: Auth) => call('GET', '/api/m/v1/transcriptions/config', transcriptionConfigResponse, { token: a.accessToken }),
@@ -407,7 +417,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
           if (fresh) latestToken = fresh;
         }
         const token = fresh ?? auth().accessToken;
-        return { Authorization: `Bearer ${token}`, DPoP: await proofFor('GET', path, token) };
+        return { ...languageHeader(), Authorization: `Bearer ${token}`, DPoP: await proofFor('GET', path, token) };
       };
       const socket = createTabSocket({
         transport: o.transport,

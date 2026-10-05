@@ -1,6 +1,7 @@
 // `REPLY_EXCERPT_MAX` and `replyExcerpt` are copied from packages/mobile-api/src/chat.ts, which this
 // app does not depend on: the server cuts the stored snapshot with that one, and a preview cut any
 // other way would read differently from the quote the message ends up with (TER-447).
+import { i18n, tk } from '../i18n';
 import type { ChatAction, ChatMessage, ChatReplyRef, ReplyCardKind, TabQuestion } from './types';
 
 /** How much of a quoted message a reply keeps and shows. */
@@ -33,23 +34,23 @@ export function replyExcerpt(text: string, attachmentNames: readonly string[] = 
  *  `id` then is. */
 export type ReplyTarget = { id: string; role: ChatReplyRef['role']; excerpt: string; card?: ReplyCardKind };
 
-export const REPLY_AUTHOR: Record<ChatReplyRef['role'], string> = { assistant: 'Concierge', user: 'Você' };
+export const REPLY_AUTHOR: Record<ChatReplyRef['role'], string> = { assistant: tk('Concierge'), user: tk('Você') };
 
 /** What a quote of a card is labelled with, where a message's quote shows its author (TER-849).
  *  Copied from packages/mobile-api (`REPLY_CARD_LABEL`), like the excerpt above. */
-export const REPLY_CARD_LABEL: Record<ReplyCardKind, string> = { action: 'Confirmação', tab_question: 'Pergunta da aba' };
+export const REPLY_CARD_LABEL: Record<ReplyCardKind, string> = { action: tk('Confirmação'), tab_question: tk('Pergunta da aba') };
 
-/** Who or what a quote names: a message's author, or a card's kind. */
+/** Who or what a quote names: a message's author, or a card's kind (translated; the tables hold pt-BR keys). */
 export function replyLabel(reply: { role: ChatReplyRef['role']; card?: ReplyCardKind | { kind: ReplyCardKind } }): string {
   const kind = typeof reply.card === 'string' ? reply.card : reply.card?.kind;
-  return kind ? REPLY_CARD_LABEL[kind] : REPLY_AUTHOR[reply.role];
+  return i18n.t(kind ? REPLY_CARD_LABEL[kind] : REPLY_AUTHOR[reply.role]);
 }
 
 /** The words a tab question card asks, quoted by a reply to it. Copied from packages/mobile-api
  *  (`tabQuestionReplyText`): the server quotes the card with that one. */
 export function tabQuestionReplyText(q: TabQuestion): string {
   if (q.kind === 'choice') return q.payload.questions.map((item) => item.question.trim()).filter(Boolean).join(' · ');
-  return q.payload.question?.trim() || `Permissão para usar ${q.payload.tool_name}`;
+  return q.payload.question?.trim() || i18n.t('Permissão para usar {{tool}}', { tool: q.payload.tool_name });
 }
 
 /** The reference a reply to a confirmation card carries (TER-849): its summary, cut like any quote. */

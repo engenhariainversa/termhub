@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { Button } from '@/ui';
 import { accountFromProject, hostLine, type HostLine as HostLineCopy } from '../model/copy';
 import type { ChatHostState } from '../model/types';
@@ -15,6 +16,7 @@ const TONE: Record<HostLineCopy['tone'], string> = {
  * (`projectId`) offers its own sheet instead, the way to the project's accounts and model (spec
  * 2026-09-30 project AI accounts §8); an account the project chose is never picked here. */
 export function HostLine({ host, canChange, projectId = null }: { host: ChatHostState; canChange: boolean; projectId?: string | null }) {
+  const { t } = useTranslation();
   const [picking, setPicking] = useState(false);
   const line = hostLine(host);
   const pick = canChange && projectId === null && !accountFromProject(host);
@@ -23,12 +25,12 @@ export function HostLine({ host, canChange, projectId = null }: { host: ChatHost
       <Text className={`text-sm ${TONE[line.tone]}`}>{line.text}</Text>
       {pick ? (
         <>
-          <Button label="Trocar máquina ou conta" variant="ghost" onPress={() => setPicking(true)} />
+          <Button label={t('Trocar máquina ou conta')} variant="ghost" onPress={() => setPicking(true)} />
           <HostSheet open={picking} onClose={() => setPicking(false)} />
         </>
       ) : projectId !== null ? (
         <>
-          <Button label="Conta e modelo" variant="ghost" onPress={() => setPicking(true)} />
+          <Button label={t('Conta e modelo')} variant="ghost" onPress={() => setPicking(true)} />
           <HostSheet open={picking} onClose={() => setPicking(false)} project={{ id: projectId, host }} />
         </>
       ) : null}

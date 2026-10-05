@@ -48,7 +48,7 @@ export function requirePinFor(_kind: TabQuestionKind, _answer: TabAnswer): boole
   return false;
 }
 
-export const asHttp = (err: unknown): unknown => (err instanceof ControlError ? new HttpError(409, err.message, err.code) : err);
+export const asHttp = (err: unknown): unknown => (err instanceof ControlError ? new HttpError(409, err.localized, err.code) : err);
 export const codeOf = (err: unknown, fallback = 'SEND_FAILED'): string => (err instanceof ControlError || err instanceof HttpError ? (err.code ?? fallback) : fallback);
 const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -81,7 +81,7 @@ async function runKeyPlan(ctx: ControlContext, tabId: string, steps: KeyStep[], 
     if (i > 0) await sleep(KEY_STEP_PAUSE_MS);
     if ('key' in step) await sendKey(ctx, { tab_id: tabId, key: step.key });
     // This *is* the answer to the prompt the tab is waiting on: past sendInput's WAITING_PERMISSION guard on purpose.
-    else await sendInput(ctx, { tab_id: tabId, text: step.text, enter: false, answering_permission: true });
+    else await sendInput(ctx, { tab_id: tabId, text: step.text, enter: false, answering_permission: true }, null);
   }
 }
 

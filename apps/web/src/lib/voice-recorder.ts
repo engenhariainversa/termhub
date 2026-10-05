@@ -1,3 +1,4 @@
+import { i18n } from '../i18n';
 import { api, ApiError } from './api';
 import type { Transcription } from './types';
 import { voiceStore } from './voice-store';
@@ -23,10 +24,10 @@ export const canRecordVoice = () =>
 /** User-facing message for a getUserMedia failure. */
 export function micErrorMessage(err: unknown): string {
   const name = err instanceof Error ? err.name : '';
-  if (name === 'NotAllowedError' || name === 'SecurityError') return 'Permissão do microfone negada';
-  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'Nenhum microfone encontrado';
-  if (name === 'NotReadableError') return 'O microfone está em uso por outro app';
-  return 'Não foi possível acessar o microfone';
+  if (name === 'NotAllowedError' || name === 'SecurityError') return i18n.t('Permissão do microfone negada');
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return i18n.t('Nenhum microfone encontrado');
+  if (name === 'NotReadableError') return i18n.t('O microfone está em uso por outro app');
+  return i18n.t('Não foi possível acessar o microfone');
 }
 
 export interface Clip {
@@ -163,11 +164,11 @@ async function pollTranscription(job: Transcription, onPhase: (p: TranscribePhas
   let current = job;
   while (current.status === 'pending') {
     onPhase({ phase: 'transcribing', eta: current.eta_seconds ?? null, progress: current.progress ?? 0 });
-    if (signal?.aborted) throw new Error('Transcrição cancelada');
-    if (Date.now() > deadline) throw new Error('A transcrição demorou demais');
+    if (signal?.aborted) throw new Error(i18n.t('Transcrição cancelada'));
+    if (Date.now() > deadline) throw new Error(i18n.t('A transcrição demorou demais'));
     await new Promise((r) => setTimeout(r, POLL_MS));
     current = (await api.transcriptions.get(job.id)).transcription;
   }
-  if (current.status === 'error') throw new Error(current.error || 'Falha ao transcrever o áudio');
+  if (current.status === 'error') throw new Error(current.error || i18n.t('Falha ao transcrever o áudio'));
   return current;
 }
