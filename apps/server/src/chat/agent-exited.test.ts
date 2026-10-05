@@ -11,6 +11,8 @@ vi.mock('./tab-questions.js', () => ({ publishTabQuestions, closeTabQuestions })
 vi.mock('../control/account-swap.js', () => ({ swapPreferences }));
 
 const { EXITED_RESUME_PROMPT, notifyAgentExited, resumeCommandFor } = await import('./agent-exited.js');
+const { AUTOMATION_DENIED_TOOLS } = await import('../control/agents.js');
+const DENY = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => `'${t}'`).join(' ')}`;
 
 const SID = '6d127d73-4bd0-42d6-b4a6-d96899507e62';
 const AT = '2026-10-01T05:48:20.000Z';
@@ -66,17 +68,18 @@ describe('resumeCommandFor (TER-643)', () => {
 });
 
 describe('resumeCommandFor an automatic tab (preflight F-12)', () => {
-  const auto = { permission: { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)'] }, prompt: '[termhub automático] continue' };
+  const auto = { permission: { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)'], branch: null }, prompt: '[termhub automático] continue' };
 
   it('resumes the session with the run\'s permission profile and the given message', async () => {
     const line = await resumeCommandFor(repos().r, tab(), machine, auto);
-    expect(line).toBe(`CLAUDE_CONFIG_DIR="$HOME"/'.claude_b' claude --permission-mode acceptEdits --allowedTools 'Bash(git status:*)' --resume ${SID} -- '[termhub automático] continue'`);
+    expect(line).toBe(`CLAUDE_CONFIG_DIR="$HOME"/'.claude_b' claude --permission-mode acceptEdits --allowedTools 'Bash(git status:*)' ${DENY} --resume ${SID} -- '[termhub automático] continue'`);
   });
 
   it('with no session id, continues the last one with the profile and the message', async () => {
     const line = await resumeCommandFor(repos({ liveToken: true }).r, tab({ agent_session_id: null }), machine, auto);
     expect(line).toContain('--permission-mode acceptEdits --mcp-config "$HOME"/');
-    expect(line).toMatch(/'Bash\(git status:\*\)' --continue -- '\[termhub automático\] continue'$/);
+    expect(line).toContain(`'Bash(git status:*)' ${DENY} --continue -- '[termhub automático] continue'`);
+    expect(line.endsWith(`--continue -- '[termhub automático] continue'`)).toBe(true);
   });
 });
 

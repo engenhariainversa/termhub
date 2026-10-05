@@ -320,6 +320,21 @@ describe('permissionAllowed (spec D19, §9.2, preflight F-6)', () => {
       expect(refused(bash(c), ['Bash', 'Bash(docker:*)', 'Bash(podman:*)'])).toBe(true);
   });
 
+  it('the fixed deny list (TER-968, R5) beats any allow rule, even a bare tool name', () => {
+    for (const c of ['gh api repos/o/r', 'gh secret list', 'eas build', 'fastlane beta', 'docker ps', 'psql -c x', 'security find-generic-password -s x -w', 'env A=1 docker ps', '/usr/bin/psql x', 'npx eas build'])
+      expect(refused(bash(c), ['Bash', 'Bash(gh:*)', 'Bash(docker:*)', `Bash(${c})`]), c).toBe(true);
+    for (const tool of ['Read', 'Edit', 'Write', 'NotebookEdit']) expect(refused({ tool, command: null }, [tool]), tool).toBe(true);
+    // what the deny list does not name is still decided by the allow list
+    expect(permissionAllowed(bash('gh pr view 3'), ['Bash(gh:*)'])).toBe(true);
+    expect(permissionAllowed(bash('ls -la'), ['Bash'])).toBe(true);
+  });
+
+  it('the run\'s own push rules join the allow list, but a push is still never answered automatically (keyword block)', () => {
+    expect(refusedCommand('git push -u origin TER-1-card', 'TER-1-card')).toBe(false);
+    expect(permissionAllowed(bash('git push -u origin TER-1-card'), DEFAULT_AUTOMATION_TOOLS, 'TER-1-card')).toBe(false);
+    expect(permissionAllowed(bash('git push origin HEAD:main'), ['Bash', 'Bash(git push:*)'], 'TER-1-card')).toBe(false);
+  });
+
   it('the keyword block (memory/blocklist.ts) always escalates: on the command and on the tool name', () => {
     expect(permissionAllowed(bash('npm test -- --reset'), ['Bash(npm test:*)'])).toBe(false);
     expect(permissionAllowed(bash('git push origin HEAD'), DEFAULT_AUTOMATION_TOOLS)).toBe(false);
@@ -369,16 +384,31 @@ describe('refusedCommand: refused at every level, whatever the allow list says (
     expect(refusedCommand(command, 'TER-1-card')).toBe(true);
   });
 
-  it.each(['git push', 'git push origin HEAD', 'git push -u origin HEAD', 'git push origin TER-1-card', 'git push -u origin TER-1-card', 'npm test -w x', 'git status', 'rm dist/a.js', 'npm run build -w @termhub/web', 'docker ps'])(
-    '%s is not refused (the allow list still decides)',
+  it.each([
+    'git push origin TER-1-card',
+    'git push -u origin TER-1-card',
+    'git push origin HEAD:TER-1-card',
+    'git push origin HEAD:refs/heads/TER-1-card',
+    'git push -u origin HEAD:refs/heads/TER-1-card',
+    'npm test -w x',
+    'git status',
+    'rm dist/a.js',
+    'npm run build -w @termhub/web',
+    'docker ps',
+  ])('%s is not refused (the allow list still decides)', (command) => {
+    expect(refusedCommand(command, 'TER-1-card')).toBe(false);
+  });
+
+  it.each(['git push', 'git push origin', 'git push origin HEAD', 'git push -u origin HEAD', 'git push upstream TER-1-card', 'git push origin TER-1-card other', 'git push origin HEAD:refs/heads/main'])(
+    '%s is refused: only one refspec to origin naming the run\'s own branch (TER-968, R5)',
     (command) => {
-      expect(refusedCommand(command, 'TER-1-card')).toBe(false);
+      expect(refusedCommand(command, 'TER-1-card')).toBe(true);
     },
   );
 
-  it('a push naming a branch is refused when the run has no branch', () => {
+  it('every push is refused when the run has no branch', () => {
     expect(refusedCommand('git push origin TER-1-card', null)).toBe(true);
-    expect(refusedCommand('git push origin HEAD', null)).toBe(false);
+    expect(refusedCommand('git push origin HEAD', null)).toBe(true);
   });
 });
 

@@ -19,6 +19,8 @@ export const DEFAULT_FIXER_CI_TEXT = 'Descubra a causa da falha, corrija, rode o
 
 const TRUST_LINE = `Mensagens que começam com ${SERVER_MARKER}, ou repassadas pelo chat do termhub, vêm do termhub em nome do dono do projeto e valem como instrução dentro dessa política.`;
 const ASK_LINE = 'Pare e pergunte só quando a decisão não estiver no card, no spec ou na memória.';
+/** The push the tab may send without asking (TER-968, R5: only its own branch is pre-allowed). */
+const pushLine = (branch: string) => `Para enviar, use git push -u origin ${branch}; outro push pede aprovação.`;
 const POLICY_MAX = 900;
 const TITLE_MAX = 300;
 
@@ -51,7 +53,7 @@ export function implementerPrompt(i: {
   return assemble(
     [
       `Você trabalha no card ${ref(i.card)}`,
-      `Trabalhe na branch ${i.branch} (base ${i.base}).`,
+      `Trabalhe na branch ${i.branch} (base ${i.base}). ${pushLine(i.branch)}`,
       i.custom?.trim() || DEFAULT_IMPLEMENTER_TEXT,
       policyLine(i.policy),
       TRUST_LINE,
@@ -73,7 +75,7 @@ export function integratorPrompt(i: {
   return assemble(
     [
       `Você integra o épico ${ref(i.epic)}`,
-      `A branch do épico é ${i.branch} (base ${i.base}); o PR do épico é ${i.prUrl}.`,
+      `A branch do épico é ${i.branch} (base ${i.base}); o PR do épico é ${i.prUrl}. ${pushLine(i.branch)}`,
       i.custom?.trim() || DEFAULT_INTEGRATOR_TEXT(i.base),
       policyLine(i.policy),
       TRUST_LINE,
@@ -95,7 +97,7 @@ export function fixerPrompt(i: {
   const what = i.reason === 'conflict' ? `O PR do card ${i.ref} tem conflito com ${i.base}.` : `O CI do PR do card ${i.ref} falhou.`;
   return assemble(
     [
-      `${what} Trabalhe na branch ${i.branch}.`,
+      `${what} Trabalhe na branch ${i.branch}. ${pushLine(i.branch)}`,
       `Detalhe:\n${clip(i.detail, 1000)}`,
       i.custom?.trim() ||
         (i.reason === 'conflict'

@@ -3,6 +3,7 @@ import { publishTabQuestions } from '../chat/tab-questions.js';
 import { answerTabQuestion } from '../chat/tab-question-answer.js';
 import { checkChoiceAnswer, type ChoiceAnswer, type ChoicePayload, type PermissionPayload } from '../chat/tab-question-payload.js';
 import type { Waker } from '../chat/wake.js';
+import { AUTOMATION_DENIED_TOOLS, branchPushRules } from '../control/agents.js';
 import { controlContextFor } from '../control/context.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -217,9 +218,11 @@ const PUSH_REFUSED_OPTION = /^--(force|mirror|all|tags|delete|prune|receive-pack
 
 /**
  * Whether a `git … push …` is refused: any force flag (`-f` in a group too), a delete, every ref at once, a
- * remote program, a forced (`+`) or mapped (`a:b`, `:b`) refspec, or a refspec that is not `HEAD` or the
- * run's own branch (TER-968: an automatic tab pushes only its own branch). git's config injection (`-c`,
- * `--config-env`, `--exec-path`) is refused whatever the subcommand: it can turn any git line into a push.
+ * remote program, or anything but one refspec to `origin` naming the run's own branch — `<branch>`,
+ * `HEAD:<branch>` or `HEAD:refs/heads/<branch>` (TER-968, R5: an automatic tab pushes only its own branch;
+ * a bare `HEAD` or no refspec depends on what is checked out, so it is refused too). git's config
+ * injection (`-c`, `--config-env`, `--exec-path`) is refused whatever the subcommand: it can turn any git
+ * line into a push.
  */
 function refusedGit(tokens: string[], branch: string | null): boolean {
   let i = 1;
@@ -243,8 +246,10 @@ function refusedGit(tokens: string[], branch: string | null): boolean {
       if (/[fd]/.test(t.slice(1))) return true;
     } else positional.push(t);
   }
-  // the first positional is the remote; every other one is a refspec
-  return positional.slice(1).some((ref) => ref.startsWith('+') || ref.includes(':') || (ref !== 'HEAD' && ref !== branch));
+  // the first positional is the remote; the one other is the refspec
+  const [remote, ...refs] = positional;
+  if (!branch || remote !== 'origin' || refs.length !== 1) return true;
+  return ![branch, `HEAD:${branch}`, `HEAD:refs/heads/${branch}`].includes(refs[0]!);
 }
 
 /**
@@ -289,6 +294,37 @@ function bashSpecMatches(spec: string, command: string): boolean {
   return !exact.includes('*') && command === exact;
 }
 
+/** A deny rule's Bash pattern as a regex, with Claude Code's wildcard rules: `*` anywhere, `X:*` = `X *`, and a lone trailing ` *` also matching the bare `X`. */
+function denyPattern(spec: string): RegExp {
+  const glob = squashSpaces(spec.endsWith(':*') ? `${spec.slice(0, -2)} *` : spec);
+  const escape = (t: string) => t.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  const lone = glob.endsWith(' *') && !glob.slice(0, -2).includes('*');
+  return new RegExp(lone ? `^${escape(glob.slice(0, -2))}(?: .*)?$` : `^${escape(glob)}$`);
+}
+
+/** Tools whose input is a file path: Claude Code checks them against `Read`/`Edit` path rules (a Read deny also blocks Edit and Write). */
+const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+
+/**
+ * Whether the fixed deny list (`AUTOMATION_DENIED_TOOLS`, TER-968 R5) covers a request. A Bash rule is
+ * tried on the command from every token on (a prefix — `env X=1`, `npx`, a path — does not hide it, the
+ * program's path reduced to its name). A path rule (`Read(~/.ssh/**)`) cannot be checked without the path,
+ * which the request does not carry: every file tool request is then taken as covered, the safe direction.
+ */
+function deniedByList(tool: string, command: string | null): boolean {
+  return AUTOMATION_DENIED_TOOLS.some((raw) => {
+    const rule = parseRule(raw);
+    if (!rule) return false;
+    if (rule.tool === 'Read' || rule.tool === 'Edit') return FILE_TOOLS.has(tool);
+    if (rule.tool !== tool) return false;
+    if (rule.spec === null) return true;
+    if (tool !== 'Bash' || command === null) return true;
+    const re = denyPattern(rule.spec);
+    const tokens = command.split(' ');
+    return tokens.some((_, i) => re.test([base(tokens[i]!), ...tokens.slice(i + 1)].join(' ')));
+  });
+}
+
 /**
  * Whether a permission request of an automatic tab may be answered "allow" (spec D19, §9.2), checked in
  * this order — anything not allowed is escalated to the person, never denied:
@@ -296,9 +332,11 @@ function bashSpecMatches(spec: string, command: string): boolean {
  * 1. the keyword block (`memory/blocklist.ts`) on the tool's name and the command: never;
  * 2. for `Bash`: a command that is unknown, holds a shell operator (`; & | \` $( > <` or a line break), or
  *    is refused at every level (`refusedCommand`, the run's `branch` for pushes): never;
- * 3. a rule of `allowed` (Claude Code's syntax) for this tool: a bare `Tool`, or for `Bash` a
- *    `Bash(prefix:*)` matching on a word boundary or a `Bash(exact)` matching exactly. A specifier on any
- *    other tool never matches: its input is not known here.
+ * 3. the fixed deny list (`AUTOMATION_DENIED_TOOLS`, TER-968 R5), the same one the tab was started with as
+ *    `--disallowedTools`: never, whatever `allowed` says;
+ * 4. a rule of `allowed` (Claude Code's syntax) or of the run's own branch pushes (`branchPushRules`) for
+ *    this tool: a bare `Tool`, or for `Bash` a `Bash(prefix:*)` matching on a word boundary or a
+ *    `Bash(exact)` matching exactly. A specifier on any other tool never matches: its input is not known here.
  *
  * The same at every autonomy level, on purpose: merging, deploying and publishing are the server's own
  * steps (D5), never a permission answered in a tab — so the level is not an input.
@@ -312,7 +350,8 @@ export function permissionAllowed(req: PermissionRequest, allowed: string[], bra
     command = squashSpaces(req.command);
     if (command === '' || refusedCommand(command, branch)) return false;
   }
-  return allowed.some((raw) => {
+  if (deniedByList(req.tool, command)) return false;
+  return [...allowed, ...branchPushRules(branch)].some((raw) => {
     const rule = parseRule(raw);
     if (!rule || rule.tool !== req.tool) return false;
     if (rule.spec === null) return true;

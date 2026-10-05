@@ -235,7 +235,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       const epic = !work && task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
       const { base, epicBranch } = work ? { base: work.base, epicBranch: null } : targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup);
       branch = work ? work.branch : cardBranchName(repo?.branch_pattern ?? '{ticket}-{slug}', task);
-      const permission = automationPermission(automation);
+      const permission = automationPermission(automation, branch);
       // the profile is stored on the run: restarts and swaps keep it even if the setup changes (F-12)
       if (!(await write(run, { status: 'starting', machine_id: place.machine.id, account_id: place.account.id, branch, allowed_tools: permission.allowedTools }))) return;
       if (epicBranch) {

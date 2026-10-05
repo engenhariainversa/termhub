@@ -5,10 +5,11 @@ import type { ProjectSetupData } from '../setup/schema.js';
 
 /**
  * The permission profile an automatic run starts with (spec D19): `acceptEdits` plus the project's allow
- * list, or the default one. The dispatcher stores the list on the run (`allowed_tools`).
+ * list, or the default one, and the pushes to the run's own `branch` (TER-968). The dispatcher stores the
+ * list on the run (`allowed_tools`); the push rules come from the run's branch, never from the list.
  */
-export function automationPermission(automation: Pick<ProjectSetupData['automation'], 'allowed_tools'>): AgentPermission {
-  return { mode: 'acceptEdits', allowedTools: automation.allowed_tools ?? DEFAULT_AUTOMATION_TOOLS };
+export function automationPermission(automation: Pick<ProjectSetupData['automation'], 'allowed_tools'>, branch: string | null): AgentPermission {
+  return { mode: 'acceptEdits', allowedTools: automation.allowed_tools ?? DEFAULT_AUTOMATION_TOOLS, branch };
 }
 
 /**
@@ -16,9 +17,9 @@ export function automationPermission(automation: Pick<ProjectSetupData['automati
  * started, so an edit of the project's allow list mid-run does not change a running tab's flags. A run
  * started before the list was stored falls back to the project's current setup.
  */
-export async function runPermission(repos: Repositories, run: Pick<AutomationRun, 'project_id' | 'allowed_tools'>): Promise<AgentPermission> {
-  if (run.allowed_tools) return { mode: 'acceptEdits', allowedTools: run.allowed_tools };
-  return automationPermission((await repos.projectSetup.get(run.project_id)).data.automation);
+export async function runPermission(repos: Repositories, run: Pick<AutomationRun, 'project_id' | 'allowed_tools' | 'branch'>): Promise<AgentPermission> {
+  if (run.allowed_tools) return { mode: 'acceptEdits', allowedTools: run.allowed_tools, branch: run.branch };
+  return automationPermission((await repos.projectSetup.get(run.project_id)).data.automation, run.branch);
 }
 
 /**
