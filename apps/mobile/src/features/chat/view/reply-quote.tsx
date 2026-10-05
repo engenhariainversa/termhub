@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { replyLabel } from '../model/reply';
 import type { ChatMessage } from '../model/types';
 
@@ -12,6 +13,7 @@ const UNAVAILABLE_MS = 3000;
  * a few seconds.
  */
 export function ReplyQuote({ reply, onOpen }: { reply: NonNullable<ChatMessage['reply_to']>; onOpen?(id: string): boolean }) {
+  const { t } = useTranslation();
   const [unavailable, setUnavailable] = useState(false);
   useEffect(() => {
     if (!unavailable) return;
@@ -24,7 +26,7 @@ export function ReplyQuote({ reply, onOpen }: { reply: NonNullable<ChatMessage['
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${reply.card ? 'Ver card original' : 'Ver mensagem original'}: ${author}, ${reply.excerpt}`}
+      accessibilityLabel={reply.card ? t('Ver card original: {{author}}, {{excerpt}}', { author, excerpt: reply.excerpt }) : t('Ver mensagem original: {{author}}, {{excerpt}}', { author, excerpt: reply.excerpt })}
       onPress={() => {
         if (!(target !== null && onOpen?.(target))) setUnavailable(true);
       }}
@@ -36,7 +38,7 @@ export function ReplyQuote({ reply, onOpen }: { reply: NonNullable<ChatMessage['
         <Text className="text-sm text-white/80" numberOfLines={2}>
           {reply.excerpt}
         </Text>
-        {unavailable ? <Text className="pt-0.5 text-xs text-white/80">{reply.card ? 'Card original indisponível' : 'Mensagem original indisponível'}</Text> : null}
+        {unavailable ? <Text className="pt-0.5 text-xs text-white/80">{reply.card ? t('Card original indisponível') : t('Mensagem original indisponível')}</Text> : null}
       </View>
     </Pressable>
   );
