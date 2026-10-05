@@ -288,7 +288,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       if (mobile) {
         await guarded(
           'devices',
-          (a) => deviceRoutes(a, repos, { enrolment: mobile.enrolment, revoke: (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer }, id, input) }),
+          (a) => deviceRoutes(a, repos, { enrolment: mobile.enrolment, revoke: (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer }, id, input), push: mobile.push }),
           '/devices',
         );
       }
