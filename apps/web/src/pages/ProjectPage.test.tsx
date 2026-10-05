@@ -39,6 +39,7 @@ vi.mock('../components/TerminalsView', () => ({ TerminalsView: () => null }));
 vi.mock('../components/TasksBoard', () => ({ TasksBoard: ({ openTaskId }: { openTaskId?: string }) => <div>board {openTaskId ?? ''}</div> }));
 vi.mock('../components/BacklogView', () => ({ BacklogView: () => null }));
 vi.mock('../components/ProgressPanel', () => ({ ProgressPanel: () => <div>progress-panel</div> }));
+vi.mock('../components/PauseAutomationButton', () => ({ PauseAutomationButton: () => null }));
 vi.mock('../components/TicketsView', () => ({ TicketsView: () => null }));
 vi.mock('../components/NotesEditor', () => ({ NotesEditor: () => null }));
 vi.mock('../components/ProjectSettings', () => ({ ProjectSettings: () => null }));
