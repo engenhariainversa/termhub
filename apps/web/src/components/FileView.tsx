@@ -142,7 +142,7 @@ export function FileView({ projectId, path, machineId = null, active, onOpenFile
           </span>
         )}
         <button className="btn-ghost text-xs" onClick={() => void fetchFile()} disabled={load?.phase === 'loading'}>
-          {t('Atualizar')}
+          {t('Atualizar', { context: 'refresh' })}
         </button>
         {ok && (
           <>

@@ -252,7 +252,16 @@ export function scanSource(path, text, { guarded }) {
   const visit = (node) => {
     if (ts.isCallExpression(node) && keyCallee(node.expression) && node.arguments.length > 0) {
       const arg = node.arguments[0];
-      if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) keys.push({ key: arg.text, where: `${path}:${lineOf(arg.getStart(sf)) + 1}` });
+      if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) {
+        // `{ context: 'x' }` picks the en entry `key_x` (one pt-BR word, two English meanings); pt-BR shows the key itself
+        const opts = node.arguments[1];
+        const ctx = opts && ts.isObjectLiteralExpression(opts)
+          ? opts.properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === 'context')
+          : undefined;
+        const suffix = ctx && ts.isStringLiteral(ctx.initializer) ? `_${ctx.initializer.text}` : '';
+        if (ctx && !suffix) problems.push(`${path}:${lineOf(ctx.getStart(sf)) + 1}: context must be a string literal`);
+        keys.push({ key: arg.text + suffix, where: `${path}:${lineOf(arg.getStart(sf)) + 1}` });
+      }
       else if (ts.isTemplateExpression(arg)) problems.push(`${path}:${lineOf(arg.getStart(sf)) + 1}: a key built with \${} cannot be translated; use {{placeholders}}`);
     }
     if ((ts.isJsxSelfClosingElement(node) || ts.isJsxElement(node)) && tagName(node) === 'Trans') {

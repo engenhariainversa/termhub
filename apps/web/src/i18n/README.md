@@ -67,6 +67,13 @@ t('{{count}} usuários', { count: n })
 
 Portuguese counts 0 as "one" (`0 usuário`); add `_zero` when the zero form should read as plural.
 
+## One pt-BR word, two English meanings: `context`
+
+When the same pt-BR text means two things in English ("Atualizar" is *Update* for the agent and
+*Refresh* for a list), keep the key and add a literal `context`: `t('Atualizar', { context: 'refresh' })`.
+pt-BR shows the key; English reads the entry `"Atualizar_refresh": "Refresh"`. The checker
+requires that entry, and it refuses one key translated two ways in two catalogs.
+
 ## Catalogs
 
 `src/locales/en/<area>.json`, one area per folder of the source tree (`shell.json` for the

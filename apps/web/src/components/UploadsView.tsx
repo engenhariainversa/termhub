@@ -178,7 +178,7 @@ export function UploadsView() {
           </p>
         </div>
         <button className="btn-ghost shrink-0" onClick={() => void load()} disabled={loading}>
-          {loading ? t('Atualizando…') : t('Atualizar')}
+          {loading ? t('Atualizando…') : t('Atualizar', { context: 'refresh' })}
         </button>
       </div>
 

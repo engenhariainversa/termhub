@@ -135,7 +135,7 @@ export function ReviewAccountPanel({ user, onChange }: { user: User; onChange: (
               </div>
               <div className="mt-2 flex justify-end">
                 <button type="button" className="btn-primary" disabled={busy} onClick={() => void setReview({ days, revoke_devices: false })}>
-                  {t('Ligar')}
+                  {t('Ligar', { context: 'switch' })}
                 </button>
               </div>
             </div>
