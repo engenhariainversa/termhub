@@ -11,6 +11,7 @@ import { HttpError } from '../lib/errors.js';
 import { confirmationText, deviceRequestText, replyText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { SlidingWindow } from './rate-limit.js';
 import type { MobileSocketRegistry } from './revocation.js';
+import { localeOf, t, tk, type Locale } from '../i18n/index.js';
 
 export interface PushMessage {
   to: string;
@@ -240,9 +241,8 @@ export class MobilePushService {
   /** Called by the enrolment service for a real request: goes to every device, live or not. */
   async deviceRequest(user: User, request: DeviceRequest): Promise<void> {
     try {
-      const text = deviceRequestText(request);
       const devices = await this.deps.repos.devices.listActiveWithPush(user.id);
-      await this.deliver(user.id, 'device_request', text, { kind: 'device_request' }, devices);
+      await this.deliver(user.id, 'device_request', (locale) => deviceRequestText(request, locale), { kind: 'device_request' }, devices);
     } catch (err) {
       this.deps.log.warn({ err: failureLabel(err), userId: user.id, requestId: request.id }, 'mobile push failed');
     }
@@ -257,8 +257,8 @@ export class MobilePushService {
    * `push_test` event. Logs ids, kind and outcome only — never the token.
    */
   async testPush(user: User, device: Device, kind: PushTestKind, delaySeconds: number): Promise<PushTestResponse> {
-    if (!device.push_token) throw new HttpError(409, 'Este aparelho ainda não ativou as notificações.', 'NO_PUSH_TOKEN');
-    if (!this.tests.take(device.id)) throw new HttpError(429, 'Muitas notificações de teste. Espere um minuto e tente de novo.', 'PUSH_TEST_RATE_LIMITED');
+    if (!device.push_token) throw new HttpError(409, tk('Este aparelho ainda não ativou as notificações.'), 'NO_PUSH_TOKEN');
+    if (!this.tests.take(device.id)) throw new HttpError(429, tk('Muitas notificações de teste. Espere um minuto e tente de novo.'), 'PUSH_TEST_RATE_LIMITED');
     const message = await this.testMessage(user, device.push_token, kind);
     const scheduledFor = new Date(this.now().getTime() + delaySeconds * 1000).toISOString();
     if (delaySeconds === 0) return { scheduled_for: scheduledFor, ticket: await this.sendTest(user, device, kind, message) };
@@ -271,18 +271,19 @@ export class MobilePushService {
   }
 
   private async testMessage(user: User, to: string, kind: PushTestKind): Promise<PushMessage> {
-    const test = (t: PushText): PushText => ({ title: `[Teste] ${t.title}`, body: t.body });
+    const locale = localeOf(user.locale);
+    const test = (p: PushText): PushText => ({ title: t(locale, '[Teste] {{title}}', { title: p.title }), body: p.body });
     if (kind === 'device_request') {
-      const text = test(deviceRequestText({ model: 'Aparelho de teste', city: null, country: null }));
+      const text = test(deviceRequestText({ model: t(locale, 'Aparelho de teste'), city: null, country: null }, locale));
       return { to, ...text, data: { kind: 'device_request', test: true } };
     }
     const conversation = await this.deps.repos.chat.findLatestActiveForUser(user.id);
     const projectId = conversation?.project_id ?? null;
-    const ctx = conversation ? await this.names(user.id, projectId, null, null) : { projectName: 'Projeto de teste', tabName: null, machineName: null };
+    const ctx = conversation ? await this.names(user.id, projectId, null, null) : { projectName: t(locale, 'Projeto de teste'), tabName: null, machineName: null };
     const where = conversation ? { conversation_id: conversation.id, project_id: projectId } : {};
-    if (kind === 'tab_question') return { to, ...test(tabQuestionText({ ...ctx, tabName: 'teste' }, 'permission')), data: { kind: 'tab_question', ...where, test: true } };
-    if (kind === 'reply') return { to, ...test(replyText(ctx)), data: { kind: 'reply', ...where, test: true } };
-    return { to, ...test(confirmationText(ctx)), data: { kind: 'confirmation', ...where, test: true } };
+    if (kind === 'tab_question') return { to, ...test(tabQuestionText({ ...ctx, tabName: t(locale, 'teste') }, 'permission', locale)), data: { kind: 'tab_question', ...where, test: true } };
+    if (kind === 'reply') return { to, ...test(replyText(ctx, locale)), data: { kind: 'reply', ...where, test: true } };
+    return { to, ...test(confirmationText(ctx, locale)), data: { kind: 'confirmation', ...where, test: true } };
   }
 
   /** Sends one test push; never throws. Its outcome becomes the device's `push_test` event. */
@@ -343,7 +344,7 @@ export class MobilePushService {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, event.tab_id, event.machine_id);
       const data = { kind: 'confirmation', conversation_id: event.conversation_id, project_id: projectId, action_id: event.action_id };
-      await this.deliver(event.user_id, 'confirmation', confirmationText(ctx), data, await this.offline(event.user_id));
+      await this.deliver(event.user_id, 'confirmation', (locale) => confirmationText(ctx, locale), data, await this.offline(event.user_id));
     } else if (event.type === 'tab_question' && event.question.kind !== 'suggestion' && !event.resurfaced && !event.update) {
       // `update`: the same open card republished because it changed (TER-919) — told once is enough.
       // (A suggestion never rides `tab_question` — it has its own events and is never pushed — the
@@ -353,13 +354,14 @@ export class MobilePushService {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, event.question.tab_id, null);
       const data = { kind: 'tab_question', conversation_id: event.conversation_id, project_id: projectId, tab_question_id: event.question.id };
-      await this.deliver(event.user_id, 'confirmation', tabQuestionText(ctx, event.question.kind), data, await this.offline(event.user_id));
+      const questionKind = event.question.kind;
+      await this.deliver(event.user_id, 'confirmation', (locale) => tabQuestionText(ctx, questionKind, locale), data, await this.offline(event.user_id));
     } else if (event.type === 'run_finished' && event.ok) {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, null, null);
       const data = { kind: 'reply', conversation_id: event.conversation_id, project_id: projectId };
       const send = this.replies.take(event.conversation_id);
-      await this.deliver(event.user_id, 'reply', replyText(ctx), data, send ? await this.offline(event.user_id) : [], `reply:${event.conversation_id}`);
+      await this.deliver(event.user_id, 'reply', (locale) => replyText(ctx, locale), data, send ? await this.offline(event.user_id) : [], `reply:${event.conversation_id}`);
     }
   }
 
@@ -391,10 +393,12 @@ export class MobilePushService {
 
   /** The history row first — it exists even when sending fails — then the push, which carries the
    * row's id as `notification_id` so a tap on it can mark that row read. An account waiting out its
-   * deletion (TER-720) is deactivated: it gets neither (TER-920); a cancel brings pushes back. */
-  private async deliver(userId: string, kind: Kind, text: PushText, data: Record<string, unknown>, devices: Device[], collapseId?: string): Promise<void> {
+   * deletion (TER-720) is deactivated: it gets neither (TER-920); a cancel brings pushes back. The
+   * text is written in the recipient's language (`users.locale`, pt-BR when unset). */
+  private async deliver(userId: string, kind: Kind, textFor: (locale: Locale) => PushText, data: Record<string, unknown>, devices: Device[], collapseId?: string): Promise<void> {
     const owner = await this.deps.repos.users.findById(userId);
     if (!owner || isPendingDeletion(owner)) return;
+    const text = textFor(localeOf(owner.locale));
     const row = await this.deps.repos.userNotifications.create({ user_id: userId, kind, title: text.title, body: text.body, data });
     const targets = devices.filter((d): d is Device & { push_token: string } => !!d.push_token);
     if (targets.length === 0) return;

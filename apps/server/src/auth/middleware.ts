@@ -10,6 +10,7 @@ import { actionForMethod, canAccess } from './permissions.js';
 import { resolveScope } from './scope.js';
 import { isPendingDeletion, pendingDeletion } from '../account/deletion.js';
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, safeEqual } from './tokens.js';
+import { msg } from '../i18n/index.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -97,7 +98,7 @@ export function buildAuthHook(ctx: AuthContext) {
     if (routeConfig.resource) {
       const action = routeConfig.action ?? actionForMethod(request.method);
       if (!(await canAccess(ctx.repos, request.user, routeConfig.resource, action))) {
-        throw forbidden(`Sem permissão: ${routeConfig.resource}:${action}`);
+        throw forbidden(msg('Sem permissão: {{permission}}', { permission: `${routeConfig.resource}:${action}` }));
       }
     }
 

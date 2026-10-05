@@ -15,6 +15,7 @@ import { recordInputOrigin } from '../terminal/input-origin.js';
 import { applyState, publishTabChange } from '../monitor/ingest.js';
 import { publishTabOpened, publishTabRemoved } from '../monitor/tab-events.js';
 import { publicBus } from '../public/bus.js';
+import { tk } from '../i18n/index.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const pasteQuery = z.object({ name: z.string().max(255).optional() });
@@ -70,7 +71,7 @@ export async function tabRoutes(
     try {
       return await swapAccount(repos, request.log, tab, machine, { accountId: body.account_id, auto: false });
     } catch (e) {
-      if (e instanceof ControlError) throw conflict(e.message);
+      if (e instanceof ControlError) throw conflict(e.localized);
       throw e;
     }
   });
@@ -103,7 +104,7 @@ export async function tabRoutes(
     if (!body.text && !body.enter) throw badRequest('Nada a enviar');
     if (body.text) recordInputOrigin(tab.id, body.text, { level: 'person_typed', userId: request.scope.user.id, surface: 'web' });
     const r = await sendKeysToSession(machine, tab.tmux_session, body.text, body.enter);
-    if (!r.ok) throw conflict(r.error ?? 'Não foi possível enviar para o terminal');
+    if (!r.ok) throw conflict(r.error ?? tk('Não foi possível enviar para o terminal'));
     request.log.info({ tabId: tab.id, machineId: machine.id, chars: body.text.length, enter: body.enter }, 'monitor: input sent');
     const updated = tab.state ? await applyState(repos, request.log, tab, tab.state_tool ?? 'termhub', { kind: 'working', text: null, meta: { event: 'input', via: 'termhub' } }) : tab;
     return { ok: true, tab: updated };

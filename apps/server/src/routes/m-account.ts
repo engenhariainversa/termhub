@@ -4,6 +4,7 @@ import type { AccountDeletionService } from '../account/deletion.js';
 import { deletionStatus } from '../account/deletion.js';
 import { HttpError, unauthorized } from '../lib/errors.js';
 import { DeviceLockedError, PinInvalidError, deviceRevoked, type SessionService } from '../mobile/session.js';
+import { requestLocale, t } from '../i18n/index.js';
 
 export interface MobileAccountDeps {
   deletion: AccountDeletionService;
@@ -44,7 +45,7 @@ export async function mobileAccountRoutes(app: FastifyInstance, deps: MobileAcco
       }
       if (pin.code === 'PIN_INVALID') {
         const err = new PinInvalidError(pin.failures);
-        return reply.code(401).send({ error: err.message, code: err.code, failures: err.failures });
+        return reply.code(401).send({ error: t(requestLocale(request), err.localized), code: err.code, failures: err.failures });
       }
       throw deviceRevoked();
     }

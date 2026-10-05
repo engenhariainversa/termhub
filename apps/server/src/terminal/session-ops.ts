@@ -5,6 +5,7 @@ import { agentRpc, requireAgentVersion, requireTranscriptCapable } from '../agen
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { REMOTE_PATH_PREFIX, assertSessionName, runOnMachine, shellQuote } from './machine-exec.js';
+import { tk } from '../i18n/index.js';
 
 /** The agent release that answers tmux.ensure / tmux.sendText / tmux.sendKey (spec §4.3). */
 export const TERMINAL_RPC_MIN_AGENT_VERSION = '0.2.0';
@@ -33,7 +34,7 @@ const TIMEOUT_MS = 10_000;
 async function shell(machine: Machine, script: string): Promise<string> {
   const r = await runOnMachine(machine, { file: 'sh', args: ['-c', script] }, `${REMOTE_PATH_PREFIX}${script}`, TIMEOUT_MS);
   if (r.timedOut) throw new HttpError(504, 'A máquina não respondeu', 'MACHINE_TIMEOUT');
-  if (r.code !== 0) throw new HttpError(502, r.stderr.trim().split('\n')[0] || 'Falha ao falar com o tmux da máquina', 'MACHINE_FAILED');
+  if (r.code !== 0) throw new HttpError(502, r.stderr.trim().split('\n')[0] || tk('Falha ao falar com o tmux da máquina'), 'MACHINE_FAILED');
   return r.stdout;
 }
 
