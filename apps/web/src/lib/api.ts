@@ -415,6 +415,7 @@ export const api = {
   },
   automation: {
     queue: (projectId: string) => request<{ items: AutomationQueueItem[] }>('GET', `/projects/${projectId}/automation/queue`),
+    promptDefaults: () => request<{ implementer: string; integrator: string; fixer: string }>('GET', '/automation/prompt-defaults'),
     pauseState: () => request<AutomationPauseState>('GET', '/automation/state'),
     /** `scope`: `all` ("Pausar tudo") or a project id. `interrupt` also asks to stop the tabs running now. */
     pause: (scope: string, interrupt = false) => request<{ paused_at: string }>('POST', '/automation/pause', { scope, interrupt }),

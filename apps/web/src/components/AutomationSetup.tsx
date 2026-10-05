@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { tk, useTranslation } from '../i18n';
+import { api } from '../lib/api';
 import { AUTONOMY_LABEL, autonomyConfirmText, needsAutonomyConfirm } from '../lib/automation';
 import type { AutomationAutonomy, ProjectAutomation } from '../lib/types';
 import { ConfirmDialog } from './Modal';
@@ -13,6 +14,14 @@ const TYPE_OPTIONS: { type: ProjectAutomation['types'][number]; label: string }[
 
 const LEVELS = Object.keys(AUTONOMY_LABEL) as AutomationAutonomy[];
 
+const PROMPT_MAX = 1200; // server cap (setup schema)
+
+const PROMPT_FIELDS: { role: keyof ProjectAutomation['prompts']; label: string }[] = [
+  { role: 'implementer', label: tk('Prompt do implementador') },
+  { role: 'integrator', label: tk('Prompt do integrador') },
+  { role: 'fixer', label: tk('Prompt de correção') },
+];
+
 interface Props {
   value: ProjectAutomation;
   onChange: (next: ProjectAutomation) => void;
@@ -22,6 +31,15 @@ interface Props {
 export function AutomationSetup({ value, onChange }: Props) {
   const { t } = useTranslation();
   const [pending, setPending] = useState<ProjectAutomation | null>(null);
+  const [defaults, setDefaults] = useState<{ implementer: string; integrator: string; fixer: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.automation.promptDefaults().then((d) => live && setDefaults(d)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  const setPrompt = (role: keyof ProjectAutomation['prompts'], text: string | null) => set('prompts', { ...value.prompts, [role]: text });
 
   /** Turning it on, or raising the level to Deploy or Publicação, waits for a confirmation. */
   const propose = (next: ProjectAutomation) => {
@@ -100,6 +118,29 @@ export function AutomationSetup({ value, onChange }: Props) {
             <NumberInput value={value.summary_hour} min={0} max={23} placeholder={t('Sem resumo')} onChange={(v) => set('summary_hour', v)} />
           </Field>
         </div>
+
+        {PROMPT_FIELDS.map((f) => {
+          const text = value.prompts[f.role];
+          return (
+            <Field key={f.role} label={t(f.label)} hint={t('vazio = texto padrão; o contexto do card e as regras do termhub continuam sendo enviados')}>
+              <textarea
+                className="input min-h-[80px] text-xs"
+                value={text ?? ''}
+                maxLength={PROMPT_MAX}
+                placeholder={defaults?.[f.role]}
+                onChange={(e) => setPrompt(f.role, e.target.value.trim() === '' ? null : e.target.value)}
+              />
+              <div className="mt-1 flex items-center justify-between text-xs text-fg-dim">
+                <span>{(text ?? '').length}/{PROMPT_MAX}</span>
+                {text !== null && (
+                  <button type="button" className="underline hover:text-fg" onClick={() => setPrompt(f.role, null)}>
+                    {t('Restaurar padrão')}
+                  </button>
+                )}
+              </div>
+            </Field>
+          );
+        })}
       </div>
 
       <ConfirmDialog
