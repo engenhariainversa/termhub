@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { automationNeedsConfirm, automationSetupActionId, automationSetupBody, cardAutoBody } from '@termhub/mobile-api';
 import { scoped } from '../auth/scope.js';
 import type { Repositories } from '../db/repositories/index.js';
+import { msg } from '../i18n/index.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import type { SessionService } from '../mobile/session.js';
 import { automationSchema } from '../setup/schema.js';
@@ -32,7 +33,7 @@ export async function mobileAutomationSetupRoutes(app: FastifyInstance, repos: R
     const next = automationSchema.parse(body.automation);
     const current = await repos.projectSetup.get(id);
     if (automationNeedsConfirm(current.data.automation, next)) {
-      if (body.challenge === undefined || body.pin_proof === undefined) throw new HttpError(401, 'Confirme com o PIN para ligar ou ampliar o trabalho automático.', 'PIN_REQUIRED');
+      if (body.challenge === undefined || body.pin_proof === undefined) throw new HttpError(401, msg('Confirme com o PIN para ligar ou ampliar o trabalho automático.'), 'PIN_REQUIRED');
       const ok = await proofOk(deps, request, reply, deviceOf(request), automationSetupActionId(id), 'automation_setup', { challenge: body.challenge, pin_proof: body.pin_proof });
       if (!ok) return reply;
     }
