@@ -354,39 +354,175 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
     });
   });
 
-  it('a pause during a burst: nothing is claimed, started or typed once it is in, within one tick (D24)', async () => {
+  /** One entry of the ordered log of what the dispatchers did around a pause: pause reads, claims, starts. */
+  type Step = { kind: 'read'; instance: string; start: number; end: number; paused: boolean } | { kind: 'claim' | 'start'; instance: string; at: number };
+
+  interface ClaimGate {
+    /** Resolves when the claim may go on; true when it took one of the gate's slots. */
+    before(): Promise<boolean>;
+    after(claimed: boolean, slot: boolean): void;
+  }
+
+  /** Lets `n` successful claims through, across both colours; the others wait until `open()`. */
+  function claimGate(n: number): ClaimGate & { open(): void } {
+    let slots = n;
+    let opened = false;
+    let waiters: Array<() => void> = [];
+    const wake = () => {
+      const w = waiters;
+      waiters = [];
+      for (const f of w) f();
+    };
+    return {
+      async before() {
+        while (!opened) {
+          if (slots > 0) {
+            slots--;
+            return true;
+          }
+          await new Promise<void>((r) => waiters.push(r));
+        }
+        return false;
+      },
+      after(claimed, slot) {
+        if (slot && !claimed) {
+          slots++; // the other colour had the card: the slot goes to the next claim
+          wake();
+        }
+      },
+      open() {
+        opened = true;
+        wake();
+      },
+    };
+  }
+
+  const bound = (t: object, k: string | symbol) => {
+    const v = Reflect.get(t, k) as unknown;
+    return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(t) : v;
+  };
+
+  /**
+   * The colour's repositories with its pause reads (`isPaused` → `automationPauses.state`) and its claims
+   * written to `steps` in order; `gate` may hold a claim back (the claim's own call is logged first) and is
+   * told whether it got the card.
+   */
+  function observed(instance: string, steps: Step[], gate?: ClaimGate): Repositories {
+    const pauses = repos.automationPauses;
+    const runs = repos.automationRuns;
+    return {
+      ...repos,
+      automationPauses: new Proxy(pauses, {
+        get: (t, k) =>
+          k === 'state'
+            ? async (...args: Parameters<typeof pauses.state>) => {
+                const start = ++seq;
+                const r = await t.state(...args);
+                steps.push({ kind: 'read', instance, start, end: ++seq, paused: r.user !== null || r.project !== null });
+                return r;
+              }
+            : bound(t, k),
+      }),
+      automationRuns: new Proxy(runs, {
+        get: (t, k) =>
+          k === 'claim'
+            ? async (...args: Parameters<typeof runs.claim>) => {
+                steps.push({ kind: 'claim', instance, at: ++seq });
+                const slot = (await gate?.before()) ?? false;
+                const run = await t.claim(...args);
+                gate?.after(run !== null, slot);
+                return run;
+              }
+            : bound(t, k),
+      }),
+    } as Repositories;
+  }
+
+  /** A fake `startAgent` that logs its entry (before anything else) and then starts as `fakeStartAgent`. */
+  function loggedStart(instance: string, steps: Step[], onEntry?: () => Promise<void>) {
+    const start = fakeStartAgent(instance);
+    return (async (c: unknown, input: { project_id: string; machine_id: string; task_id?: string }) => {
+      steps.push({ kind: 'start', instance, at: ++seq });
+      await onEntry?.();
+      return start(c, input);
+    }) as unknown as DispatcherDeps['startAgent'];
+  }
+
+  /**
+   * D24 against the ordered log: once the pause has committed (`pausedAt`), a claim or a start may only
+   * follow a pause read that was already under way and answered "not paused" — at most one per such read.
+   * Every read that began after the pause answers "paused".
+   */
+  function expectNothingAfterPause(steps: Step[], pausedAt: number) {
+    const reads = steps.filter((x): x is Extract<Step, { kind: 'read' }> => x.kind === 'read');
+    expect(reads.filter((r) => r.start > pausedAt).every((r) => r.paused)).toBe(true);
+    const inFlight = reads.filter((r) => !r.paused && r.end > pausedAt).length;
+    const late = steps.filter((x) => (x.kind === 'claim' || x.kind === 'start') && x.at > pausedAt);
+    expect(late.length).toBeLessThanOrEqual(inFlight);
+    // and every start, early or late, comes right after a read of its colour that said "not paused"
+    for (const st of steps.filter((x) => x.kind === 'start')) {
+      expect(reads.some((r) => r.instance === st.instance && !r.paused && r.end < (st as { at: number }).at)).toBe(true);
+    }
+  }
+
+  it('a pause during a burst: nothing is claimed or started once it is in, on either colour, and nothing is typed (D24)', async () => {
     await setSetup({ max_parallel: null });
     await cards(20);
+    const steps: Step[] = [];
     let pausedAt = -1;
-    let unstartedAtPause = -1;
-    let gate = 0;
-    const blue = await colour('blue', {
-      startAgent: (async (c: unknown, input: { project_id: string; machine_id: string; task_id?: string }) => {
-        const r = await fakeStartAgent('blue')(c, input);
-        if (++gate === 3) {
-          await pauseAutomation(ctx(), { scope: projectId });
-          pausedAt = seq;
-          // runs claimed but not started yet: only these may still pass a check made before the pause landed
-          unstartedAtPause = await db.automationRun.count({ where: { projectId, status: { in: ['queued', 'starting'] } } });
-        }
-        return r;
-      }) as unknown as DispatcherDeps['startAgent'],
-    });
-    const green = await colour('green');
+    let entries = 0;
+    // three cards are claimed; further claims wait for the pause, so both claim loops and the launches of
+    // the claims they hold are all still to come when it lands
+    const gate = claimGate(3);
+    const pauseOnThirdStart = async () => {
+      if (++entries !== 3) return;
+      await pauseAutomation(ctx(), { scope: projectId });
+      pausedAt = ++seq;
+      gate.open();
+    };
+    const blue = await colour('blue', { repos: observed('blue', steps, gate), startAgent: loggedStart('blue', steps, pauseOnThirdStart) });
+    const green = await colour('green', { repos: observed('green', steps, gate), startAgent: loggedStart('green', steps, pauseOnThirdStart) });
     await Promise.all([tick(blue), tick(green)]);
 
     expect(pausedAt).toBeGreaterThan(0);
-    const late = starts.filter((s) => s.seq > pausedAt);
-    expect(late.length).toBeLessThanOrEqual(unstartedAtPause);
-    expect(starts.length).toBeLessThan(20);
+    expectNothingAfterPause(steps, pausedAt);
+    expect(steps.filter((x) => x.kind === 'start')).toHaveLength(3);
+    expect(await db.automationRun.count({ where: { projectId, status: { in: ['queued', 'starting'] } } })).toBe(0);
 
     // the next tick of either colour, and their followers, do nothing more
-    const before = starts.length;
     const tabs = (await runsOf()).filter((r) => r.tabId).map((r) => r.tabId!);
     for (const t of tabs) await tabState(t, 'stop');
     await Promise.all([tick(blue), tick(green), sweep(blue), sweep(green)]);
-    expect(starts).toHaveLength(before);
+    expectNothingAfterPause(steps, pausedAt);
+    expect(steps.filter((x) => x.kind === 'start')).toHaveLength(3);
     expect(typed).toEqual([]);
+  });
+
+  it('a pause pressed while a card is being prepared stops both colours\' launches before anything is typed', async () => {
+    await cards(6);
+    const steps: Step[] = [];
+    let pausedAt = -1;
+    let pause!: () => void;
+    const paused = new Promise<void>((r) => (pause = r));
+    let prepared = 0;
+    // every preparation, on either colour, waits for the pause, which the first one presses
+    const ensureWorkspace = () =>
+      (async (_m: unknown, i: { projectId: string; ref: string }) => {
+        if (++prepared === 1) {
+          await pauseAutomation(ctx(), { scope: projectId });
+          pausedAt = ++seq;
+          pause();
+        }
+        await paused;
+        return { path: `/w/${i.projectId}/${i.ref}`, created: true };
+      }) as unknown as DispatcherDeps['ensureWorkspace'];
+    const blue = await colour('blue', { repos: observed('blue', steps), startAgent: loggedStart('blue', steps), ensureWorkspace: ensureWorkspace() });
+    const green = await colour('green', { repos: observed('green', steps), startAgent: loggedStart('green', steps), ensureWorkspace: ensureWorkspace() });
+    await Promise.all([tick(blue), tick(green)]);
+
+    expect(pausedAt).toBeGreaterThan(0);
+    expect(steps.filter((x) => x.kind === 'start')).toEqual([]);
+    expectNothingAfterPause(steps, pausedAt);
     expect(await db.automationRun.count({ where: { projectId, status: { in: ['queued', 'starting'] } } })).toBe(0);
   });
 

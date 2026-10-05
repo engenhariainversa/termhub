@@ -3,6 +3,7 @@ symptom: "automatic run resumed twice, or blocked with agent_exited, right after
 tags: [automation, blue-green, follower, tests]
 evidence: fixed
 card: TER-865
+pr: # empty until the PR exists (the key is optional)
 agent: claude
 date: 2026-10-05
 ---
