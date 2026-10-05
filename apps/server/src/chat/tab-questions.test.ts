@@ -288,6 +288,59 @@ describe('openTabQuestion', () => {
   });
 });
 
+describe('openTabQuestion in a tab with an automatic run (agentic board D18)', () => {
+  /** `fakeRepos` plus the automation side: the tab's active run, its project's setup, the pauses, and
+   *  what `automationAnswer` writes (runs, events). */
+  function automaticRepos(o: { run?: boolean; paused?: boolean; enabled?: boolean } = {}) {
+    const repos = fakeRepos({ opened: row({ id: 'q1' }) });
+    const run = { id: 'run1', project_id: 'p1', task_id: 'task1', tab_id: 't1', status: 'running', claimed_by: 'me' };
+    return Object.assign(repos, {
+      automationRuns: { activeByTab: vi.fn(async () => ((o.run ?? true) ? run : null)), updateActive: vi.fn(async () => true) },
+      projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true } } })) },
+      automationPauses: { state: vi.fn(async () => ({ user: o.paused ? new Date() : null, project: null })) },
+      automationEvents: { insert: vi.fn(async (e: object) => ({ ...e, id: 'e1', created_at: '' })) },
+      tabs: { ...repos.tabs, findById: vi.fn(async () => tab) },
+    });
+  }
+
+  it('a card with a recommended option gets the automation countdown, with the switch off and no wake', async () => {
+    vi.mocked(suggestFor).mockResolvedValueOnce(null);
+    const repos = automaticRepos();
+    const waker = { wake: vi.fn(async () => true) };
+    await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' }, { waker });
+    await vi.waitFor(() => expect(repos.tabQuestions.setAutoAnswer).toHaveBeenCalledTimes(1));
+    expect(repos.tabQuestions.setAutoAnswer.mock.calls[0]![1]).toMatchObject({ by: 'automation', answer: { answers: [{ selected: [0] }] }, status: 'scheduled' });
+    expect(waker.wake).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'question_answered' })));
+  });
+
+  it('a card with nothing recommended wakes the chat as automatic work', async () => {
+    vi.mocked(suggestFor).mockResolvedValueOnce(null);
+    const plain = { questions: [{ ...payload.questions[0]!, options: payload.questions[0]!.options.map((op) => ({ ...op, recommended: false })) }] };
+    const repos = automaticRepos();
+    repos.tabQuestions.open.mockResolvedValueOnce({ question: row({ id: 'q1', payload: plain }), closed: [] });
+    const waker = { wake: vi.fn(async () => true) };
+    await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload: plain, tool_use_id: 'toolu_1' }, { waker });
+    await vi.waitFor(() => expect(waker.wake).toHaveBeenCalledTimes(1));
+    expect(waker.wake).toHaveBeenCalledWith(expect.objectContaining({ id: 'q1' }), 'api', { automatic: true });
+    expect(repos.tabQuestions.setAutoAnswer).not.toHaveBeenCalled();
+  });
+
+  it('a manual tab (no run), or a paused or disabled project, behaves exactly as before: the plain wake, nothing scheduled', async () => {
+    for (const o of [{ run: false }, { paused: true }, { enabled: false }]) {
+      vi.mocked(suggestFor).mockResolvedValueOnce(null);
+      const repos = automaticRepos(o);
+      const waker = { wake: vi.fn(async () => true) };
+      await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' }, { waker });
+      expect(waker.wake).toHaveBeenCalledTimes(1);
+      expect(waker.wake).toHaveBeenCalledWith(row({ id: 'q1' }), 'api');
+      await new Promise((r) => setTimeout(r, 10));
+      expect(repos.tabQuestions.setAutoAnswer).not.toHaveBeenCalled();
+      expect(repos.automationEvents.insert).not.toHaveBeenCalled();
+    }
+  });
+});
+
 describe('noteHookEvent', () => {
   it('follows the measured two-background-agent sequence, scoping every close and open', async () => {
     const repos = fakeRepos({ opened: null });

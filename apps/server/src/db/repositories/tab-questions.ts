@@ -21,16 +21,20 @@ export type CloseScope = { agent: string | null; leavesQueue: boolean } | 'all';
  * itself (spec 2026-09-26 concierge memory §3.2). */
 export type AnsweredVia = 'card' | 'auto';
 
+/** Who scheduled an automatic answer (see `AutoAnswer`). */
+export type AutoAnswerBy = 'memory' | 'concierge' | 'automation';
+
 /**
  * A scheduled automatic answer on a still-open `choice` card (spec 2026-09-26 concierge memory §3.2,
  * §6): `by: 'memory'` is the repeat path (a near-verbatim precedent, no LLM call), `'concierge'` is the
- * wake path. `sources` cites what backed it — a `chat_decisions` row (`kind: 'decision'`) or a
+ * wake path, `'automation'` the option the agent marked "(Recomendado)" in a tab with an automatic run
+ * (agentic board spec D18). `sources` cites what backed it — a `chat_decisions` row (`kind: 'decision'`) or a
  * `memory_items` row — so the card can show and forget them. `due_at` is when the sweeper may send it;
  * `status` tracks the countdown itself, independent of the row's own `status`.
  */
 export interface AutoAnswer {
   answer: ChoiceAnswer;
-  by: 'memory' | 'concierge';
+  by: AutoAnswerBy;
   reason: string;
   sources: { kind: 'decision' | MemoryKind; id: string }[];
   due_at: string;
@@ -291,6 +295,13 @@ export class TabQuestionsRepository {
    *  follower leaves such a tab to the card's own answer (agentic board spec §9). */
   async hasOpenQuestion(tabId: string): Promise<boolean> {
     return (await this.db.tabQuestion.count({ where: { tabId, status: 'open', kind: { not: 'suggestion' } }, take: 1 })) > 0;
+  }
+
+  /** The tab's newest question or permission row, whatever its status (suggestions do not count): what the
+   *  automation follower reads to tell a card left unanswered from one still waiting (agentic board §9.1). */
+  async latestQuestionForTab(tabId: string): Promise<TabQuestion | undefined> {
+    const row = await this.db.tabQuestion.findFirst({ where: { tabId, kind: { not: 'suggestion' } }, include: withOwner, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    return row ? mapQuestion(row) : undefined;
   }
 
   async findOpenForTab(tabId: string): Promise<TabQuestion | undefined> {

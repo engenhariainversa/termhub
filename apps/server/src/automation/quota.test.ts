@@ -77,7 +77,7 @@ function world(o: { exhausted?: Map<string, Date>; paused?: boolean; enabled?: b
       activeIds: vi.fn(async (now: Date) => new Set([...exhausted].filter(([, until]) => until > now).map(([id]) => id))),
     },
     tabs: { findById: vi.fn(async () => ({ ...tab })) },
-    tabQuestions: { hasOpenQuestion: vi.fn(async () => false) },
+    tabQuestions: { hasOpenQuestion: vi.fn(async () => false), latestQuestionForTab: vi.fn(async () => undefined) },
     taskPullRequests: { listByTasks: vi.fn(async () => []) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
     projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled, resume_max: 3, allowed_tools: null } } })) },

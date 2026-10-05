@@ -383,5 +383,7 @@
   "· quadro confiado": "· trusted board",
   "Última atividade às {{time}}. Envie o comando para retomar a sessão na aba, ou dispense.": "Last activity at {{time}}. Send the command to resume the session in the tab, or dismiss it.",
   "às {{time}}": "at {{time}}",
-  "↓ novas mensagens": "↓ new messages"
+  "↓ novas mensagens": "↓ new messages",
+  "Resposta automática cancelada: o trabalho automático foi pausado ou desligado.": "Automatic answer cancelled: automatic work was paused or turned off.",
+  "Opção recomendada pelo agente": "Option the agent recommended"
 }

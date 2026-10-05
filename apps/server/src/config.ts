@@ -138,6 +138,9 @@ const envSchema = z.object({
   /** at most this many concierge wake turns per conversation per hour (spec 2026-09-26 concierge
    *  memory D10): each is a run on the person's own Claude account. 0 disables every wake. */
   AUTO_WAKE_MAX_PER_HOUR: z.coerce.number().int().min(0).max(120).default(12),
+  // automatic wakes of the chat for questions in tabs with an automatic run (agentic board spec D18):
+  // their own budget per conversation, so automatic work never spends the person's
+  AUTOMATION_WAKE_MAX_PER_HOUR: z.coerce.number().int().min(0).max(120).default(30),
 
   // Chat concierge (docker/concierge): the container runner. Since the chat moved onto the user's own
   // machine (spec §6, `chat/agent-runner.ts`) these two reach that container alone, and nothing calls
@@ -247,6 +250,7 @@ export const config = {
   autoAnswerDelayMs: env.AUTO_ANSWER_DELAY_SECONDS * 1000,
   autoAnswerMinSimilarity: env.AUTO_ANSWER_MIN_SIMILARITY,
   autoWakeMaxPerHour: env.AUTO_WAKE_MAX_PER_HOUR,
+  automationWakeMaxPerHour: env.AUTOMATION_WAKE_MAX_PER_HOUR,
   /**
    * Settings for the container runner (`httpRunner`) and nothing else: the chat itself no longer reads
    * this, and no code path builds that runner any more (spec §6). What the chat needs is `mcpUrl`

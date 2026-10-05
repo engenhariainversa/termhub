@@ -6,9 +6,10 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { AutomationEventInput } from '../db/repositories/automation-events.js';
 import type { Tab, Task } from '../db/repositories/types.js';
+import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { monitorBus } from '../monitor/bus.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
-import { escalationText, followRun, getRunCard, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
+import { escalationText, followRun, getRunCard, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
 import { automationBus } from './events.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 
@@ -24,6 +25,8 @@ function world(o: {
   enabled?: boolean;
   paused?: boolean;
   openQuestion?: boolean;
+  /** the tab's newest question row (`latestQuestionForTab`) */
+  question?: TabQuestion;
   prs?: Array<{ state: string; head_ref: string; url: string; number: number }>;
 } = {}) {
   const runId = `run${++seq}`;
@@ -50,7 +53,7 @@ function world(o: {
       noteTyped: vi.fn(async (_id: string, at: Date) => void (run.last_typed_at = at)),
     },
     tabs: { findById: vi.fn(async () => tab) },
-    tabQuestions: { hasOpenQuestion: vi.fn(async () => o.openQuestion ?? false) },
+    tabQuestions: { hasOpenQuestion: vi.fn(async () => o.openQuestion ?? o.question?.status === 'open'), latestQuestionForTab: vi.fn(async () => o.question) },
     taskPullRequests: { listByTasks: vi.fn(async () => o.prs ?? []) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
     projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true, resume_max: o.resumeMax ?? 3, allowed_tools: null } } })) },
@@ -470,5 +473,85 @@ describe('Claude\'s trust question (never answered by the automation)', () => {
     expect(escalationText('trust_prompt')).toBe('O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.');
     expect(escalationText('trust_prompt', 'en')).toBe('The agent stopped at the folder trust confirmation; confirm it in the tab to continue.');
     expect(escalationText('resume_cap')).toBeNull();
+  });
+});
+
+describe('a question nothing automatic answered (spec §9.1, D18 step 4; carried from Task 18)', () => {
+  const NOW_MS = Date.parse('2026-10-05T12:00:00.000Z');
+  const iso = (msAgo: number) => new Date(NOW_MS - msAgo).toISOString();
+  const question = (over: Partial<TabQuestion> = {}): TabQuestion => ({
+    id: 'q1', tab_id: 'tab1', project_id: 'p1', conversation_id: 'c1', user_id: 'u1', kind: 'choice',
+    payload: { questions: [{ question: 'Qual?', header: 'H', multi_select: false, options: [{ label: 'A', description: '', recommended: false }, { label: 'B', description: '', recommended: false }] }] },
+    tool_use_id: null, status: 'open', answer: null, error_code: null, answered_by: null, answered_at: null, closed_at: null, injected_at: null,
+    created_at: iso(60_000), suggestion: null, auto_answer: null, answered_via: null, woken_at: null, surfaced_at: null, ...over,
+  });
+  const countdown = (status: 'scheduled' | 'sent' | 'cancelled' | 'failed') => ({ answer: { answers: [{ selected: [0] }] }, by: 'automation' as const, reason: 'r', sources: [], due_at: iso(0), status });
+
+  it('an open card whose countdown failed escalates the run once, with nothing typed', async () => {
+    const w = world({ question: question({ auto_answer: countdown('failed') }) });
+    await sweepRuns(w.deps);
+    await sweepRuns(w.deps);
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: QUESTION_UNANSWERED });
+    expect(w.kinds()).toEqual(['escalated']);
+    expect(w.events[0]!.payload).toEqual({ reason: QUESTION_UNANSWERED, tab_id: 'tab1' });
+    expect(w.type).not.toHaveBeenCalled();
+  });
+
+  it('an open card the woken chat left alone escalates past QUESTION_WAIT_MS, also while the tab shows `working`', async () => {
+    const young = world({ question: question({ created_at: iso(QUESTION_WAIT_MS - 1_000) }), tab: { state: 'working' } });
+    await sweepRuns(young.deps);
+    expect(young.run.status).toBe('running');
+    expect(young.events).toEqual([]);
+
+    const old = world({ question: question({ created_at: iso(QUESTION_WAIT_MS) }), tab: { state: 'working' } });
+    await sweepRuns(old.deps);
+    expect(old.run).toMatchObject({ status: 'waiting', waiting_reason: QUESTION_UNANSWERED });
+    expect(old.type).not.toHaveBeenCalled();
+  });
+
+  it('a countdown still running, or one the person cancelled (the card is theirs), is left alone', async () => {
+    for (const status of ['scheduled', 'sent', 'cancelled'] as const) {
+      const w = world({ question: question({ created_at: iso(QUESTION_WAIT_MS * 3), auto_answer: countdown(status) }) });
+      await sweepRuns(w.deps);
+      expect(w.run.status).toBe('running');
+      expect(w.events).toEqual([]);
+      expect(w.type).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a card that expired while the tab still asks (no hook since) escalates instead of a resume being typed into the question', async () => {
+    for (const status of ['expired', 'failed'] as const) {
+      const w = world({ question: question({ status, closed_at: iso(30 * 60_000) }), tab: { state: 'waiting_input', state_at: iso(40 * 60_000) } });
+      await sweepRuns(w.deps);
+      expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: QUESTION_EXPIRED });
+      expect(w.kinds()).toEqual(['escalated']);
+      expect(w.type).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a closed card the tab moved past (a newer state), or an agent that exited, follows the usual rules', async () => {
+    const moved = world({ question: question({ status: 'expired', closed_at: iso(40 * 60_000) }), tab: { state: 'waiting_input', state_at: iso(30 * 60_000) } });
+    await sweepRuns(moved.deps);
+    expect(moved.run.status).toBe('running');
+    expect(moved.kinds()).toEqual(['run_resumed']);
+
+    const exited = world({ question: question({ status: 'expired', closed_at: iso(30 * 60_000) }), tab: { state: 'idle', state_text: AGENT_EXITED_TEXT, state_at: iso(40 * 60_000) } });
+    await sweepRuns(exited.deps);
+    expect(exited.restartLine).toHaveBeenCalledTimes(1);
+    expect(exited.run.status).toBe('running');
+  });
+
+  it('an answered card, a permission card or no card at all changes nothing', async () => {
+    for (const q of [question({ status: 'answered', closed_at: iso(1_000) }), question({ kind: 'permission', payload: { tool_name: 'Bash' }, created_at: iso(QUESTION_WAIT_MS * 3) }), undefined]) {
+      const w = world({ question: q, tab: { state: 'working' } });
+      await sweepRuns(w.deps);
+      expect(w.run.status).toBe('running');
+      expect(w.events).toEqual([]);
+    }
+  });
+
+  it('both reasons have a text in both languages', () => {
+    expect(escalationText(QUESTION_UNANSWERED, 'en')).toBe('The agent asked a question automatic mode could not answer; answer it on the card.');
+    expect(escalationText(QUESTION_EXPIRED)).toBe('O card da pergunta do agente fechou sem resposta; responda na aba para continuar.');
   });
 });

@@ -3,11 +3,12 @@ import { config } from '../config.js';
 import { controlContextFor, type ControlContext } from '../control/context.js';
 import type { ChatDecision } from '../db/repositories/chat-decisions.js';
 import type { Repositories } from '../db/repositories/index.js';
-import type { AutoAnswer, TabQuestion } from '../db/repositories/tab-questions.js';
+import type { AutoAnswer, AutoAnswerBy, TabQuestion } from '../db/repositories/tab-questions.js';
 import { toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import type { MemoryRefKind } from '../control/memory.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import { autoAnswerBlocked } from '../memory/blocklist.js';
+import { automaticRunOfTab } from '../automation/pause.js';
 import { labelKey, mapAnswer, sameAnswer } from './decision-text.js';
 import { failureLabel } from './service.js';
 import { answerTabQuestion, codeOf, isQuestionRow } from './tab-question-answer.js';
@@ -43,7 +44,7 @@ export type Downgrade = 'switch_off' | 'cancelled_by_person' | 'no_person_preced
 export interface ScheduleInput {
   row: TabQuestion;
   answer: ChoiceAnswer;
-  by: 'memory' | 'concierge';
+  by: AutoAnswerBy;
   reason: string;
   sources: { kind: MemoryRefKind; id: string }[];
 }
@@ -99,6 +100,17 @@ export function precedentBacks(decisions: ChatDecision[], payload: ChoicePayload
 }
 
 /**
+ * Whether an automatic answer may be scheduled or sent on this card: the person's "Responder sozinho"
+ * switch (D8) is on, or the card's tab has an automatic run whose project is on and not paused — there
+ * `automation.enabled` is the opt-in (agentic board spec D18, preflight F-17). Read again at send time.
+ */
+export async function autoAnswerAllowed(repos: Repositories, row: Pick<TabQuestion, 'user_id' | 'tab_id'>): Promise<boolean> {
+  if (await repos.users.chatAutodecide(row.user_id)) return true;
+  // fails closed: a run that cannot be read is no automatic run
+  return (await automaticRunOfTab(repos, row.tab_id).catch(() => null)) !== null;
+}
+
+/**
  * Starts a countdown on a still-open `choice` card (spec §6): `auto_answer` in `scheduled`, due
  * `AUTO_ANSWER_DELAY_SECONDS` (default 60 s) from `now`, then the card is republished so every open
  * screen shows the countdown with "Cancelar" and "Responder agora". `setAutoAnswer` is conditional on
@@ -147,7 +159,7 @@ export async function maybeScheduleRepeat(repos: Repositories, row: TabQuestion,
   const answer: ChoiceAnswer = { answers: items.map((it) => ({ selected: it!.selected, ...(it!.text !== undefined ? { text: it!.text } : {}) })) };
   if (checkChoiceAnswer(payload, answer)) return null;
   if (autoAnswerBlocked(blocklistParts(payload, answer))) return null;
-  if (!(await repos.users.chatAutodecide(row.user_id))) return null;
+  if (!(await autoAnswerAllowed(repos, row))) return null;
   const ids = [...new Set(items.map((it) => it!.decision_id))];
   // The suggestion only says a decision was similar: re-read the ones it cites (the person's own,
   // still there) and check each still backs its answer, option descriptions included.
@@ -168,7 +180,8 @@ const eventFor = (row: TabQuestion): TabQuestionEventType => (row.status === 'op
  * 'auto'` (stored as `answered_via`, no decision recorded: D11) and no embedder. The live screen check,
  * the row's own `open` claim and every other check run as for a click. Then the cited decisions get
  * `auto_count + 1` (best effort: the keys are in the tab). Before sending, the switch (D8) and the cited
- * decisions are re-read: the switch off is `AUTODECIDE_OFF`, a cited decision forgotten meanwhile (by a
+ * decisions are re-read: the switch off is `AUTODECIDE_OFF` (unless the tab has a live automatic run,
+ * `autoAnswerAllowed`); a `by: 'automation'` countdown on a paused or disabled project is `AUTOMATION_OFF`; a cited decision forgotten meanwhile (by a
  * memory or concierge countdown alike) is `PRECEDENT_FORGOTTEN`. Any failure — the user gone, a lost grant
  * (403), the prompt moved (409), the send itself (502) — closes the countdown as `failed` with the code
  * and republishes the card; nothing else is typed. Resolves how many were sent. Logs ids, `by` and codes
@@ -187,8 +200,13 @@ export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { 
     try {
       const user = await repos.users.findById(claimed.user_id);
       if (!user) throw new HttpError(404, 'Usuário não encontrado', 'USER_GONE');
-      // Re-read now, not trusted from when it was scheduled: the switch (D8) and the precedents cited.
-      if (!(await repos.users.chatAutodecide(user.id))) throw new HttpError(409, 'Resposta automática desligada', 'AUTODECIDE_OFF');
+      // Re-read now, not trusted from when it was scheduled: the switch (D8) — or, in a tab with an
+      // automatic run, the project on and not paused (D18, D24) — and the precedents cited. The option
+      // the agent recommended (`by: 'automation'`) goes out only while the run's project is live, whatever
+      // the person's switch says.
+      if (auto.by === 'automation') {
+        if (!(await automaticRunOfTab(repos, claimed.tab_id))) throw new HttpError(409, 'Trabalho automático pausado ou desligado', 'AUTOMATION_OFF');
+      } else if (!(await autoAnswerAllowed(repos, claimed))) throw new HttpError(409, 'Resposta automática desligada', 'AUTODECIDE_OFF');
       const cited = [...new Set(auto.sources.filter((s) => s.kind === 'decision').map((s) => s.id))];
       if (cited.length && (await repos.chatDecisions.findManyForUser(cited, user.id)).length < cited.length) throw new HttpError(409, 'A decisão usada foi esquecida', 'PRECEDENT_FORGOTTEN');
       await (deps.answer ?? answerTabQuestion)(controlContextFor(repos, user), claimed.id, auto.answer, { log, via: 'auto', embedder: null });

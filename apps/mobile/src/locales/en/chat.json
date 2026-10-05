@@ -153,5 +153,7 @@
   "A transcrição demorou demais": "The transcription took too long",
   "Falha ao transcrever o áudio": "Could not transcribe the audio",
   "Nenhuma fala reconhecida": "No speech recognized",
-  "Gravação muito curta": "Recording too short"
+  "Gravação muito curta": "Recording too short",
+  "Resposta automática cancelada: o trabalho automático foi pausado ou desligado.": "Automatic answer cancelled: automatic work was paused or turned off.",
+  "Opção recomendada pelo agente": "Option the agent recommended"
 }

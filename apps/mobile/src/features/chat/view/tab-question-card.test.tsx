@@ -205,6 +205,11 @@ describe('automatic answer countdown (concierge memory spec 2026-09-26 §6/§8)'
     expect(screen.getByText(/0:41/)).toBeTruthy();
   });
 
+  it('a countdown on the option the agent recommended (automatic board work) reads its own reason, translated', async () => {
+    await render(<TabQuestionCard question={card({ auto_answer: auto({ by: 'automation', reason: 'Opção recomendada pelo agente', sources: [] }) })} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+    expect(screen.getByText('Resposta automática em 0:42 — «Sim». Motivo: Opção recomendada pelo agente')).toBeTruthy();
+  });
+
   it('"Cancelar" calls onCancelAutoAnswer with the question id', async () => {
     const onCancelAutoAnswer = jest.fn();
     await render(<TabQuestionCard question={card({ auto_answer: auto() })} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} onCancelAutoAnswer={onCancelAutoAnswer} />);

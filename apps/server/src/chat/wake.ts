@@ -11,7 +11,9 @@ const HOUR_MS = 60 * 60 * 1000;
 
 /** Wakes the project's concierge for an unattended `choice` card (spec 2026-09-26 concierge memory §7). */
 export interface Waker {
-  wake(row: TabQuestion, tabName: string | null): Promise<boolean>;
+  /** `automatic`: the card's tab has a live automatic run (agentic board spec D18) — "Responder sozinho"
+   *  is not required there, and the wake spends the automation's own hourly budget. */
+  wake(row: TabQuestion, tabName: string | null, opts?: { automatic?: boolean }): Promise<boolean>;
 }
 
 /**
@@ -42,6 +44,9 @@ export interface WakerDeps {
   repos: Repositories;
   chat: Pick<ChatService, 'wake'>;
   maxPerHour: number;
+  /** The rolling-hour budget of automatic wakes (`config.automationWakeMaxPerHour`), kept apart from
+   *  `maxPerHour`; 0 disables them. Left out, automatic wakes never happen. */
+  automationMaxPerHour?: number;
   now?: () => number;
   log: Log;
 }
@@ -52,9 +57,10 @@ export interface WakerDeps {
  *
  * 1. the row is still a `choice` card, `open`, with no `auto_answer` (the repeat path, Task 7, already
  *    scheduled one, or the card moved on since it was published);
- * 2. the conversation owner's "Responder sozinho" switch (D8) is on;
+ * 2. the conversation owner's "Responder sozinho" switch (D8) is on — skipped for an `automatic` wake
+ *    (agentic board spec D18: the caller checked the tab has a live automatic run);
  * 3. the conversation's rolling-hour budget (`maxPerHour`, in-memory — a restart resets it, spec §7)
- *    still has room — checked, not yet spent;
+ *    still has room — checked, not yet spent; an `automatic` wake has its own (`automationMaxPerHour`);
  * 4. `markWoken` wins the persisted claim (`woken_at IS NULL`, spec §3.2) — the one thing that survives
  *    a restart or either blue/green color, so a card is never woken for twice. Its own `UPDATE` also
  *    re-checks `status = 'open'` and `auto_answer IS NULL` (fix round 1): the row can move between
@@ -70,28 +76,33 @@ export function createWaker(deps: WakerDeps): Waker {
   const now = deps.now ?? (() => Date.now());
   /** Wake timestamps (ms) of the last hour, per conversation. In-memory on purpose (spec §7). */
   const sent = new Map<string, number[]>();
+  /** The same for automatic wakes: their own budget, so automatic work never eats the person's. */
+  const sentAutomatic = new Map<string, number[]>();
 
-  const budgetAvailable = (conversationId: string): boolean => {
-    if (deps.maxPerHour <= 0) return false;
+  const budgetAvailable = (ledger: Map<string, number[]>, max: number, conversationId: string): boolean => {
+    if (max <= 0) return false;
     const cutoff = now() - HOUR_MS;
-    const kept = (sent.get(conversationId) ?? []).filter((t) => t > cutoff);
-    sent.set(conversationId, kept);
-    return kept.length < deps.maxPerHour;
+    const kept = (ledger.get(conversationId) ?? []).filter((t) => t > cutoff);
+    ledger.set(conversationId, kept);
+    return kept.length < max;
   };
-  const takeBudget = (conversationId: string): void => {
-    const kept = sent.get(conversationId) ?? [];
+  const takeBudget = (ledger: Map<string, number[]>, conversationId: string): void => {
+    const kept = ledger.get(conversationId) ?? [];
     kept.push(now());
-    sent.set(conversationId, kept);
+    ledger.set(conversationId, kept);
   };
 
   return {
-    async wake(row, tabName) {
+    async wake(row, tabName, opts = {}) {
       try {
+        const automatic = opts.automatic === true;
+        const ledger = automatic ? sentAutomatic : sent;
+        const max = automatic ? (deps.automationMaxPerHour ?? 0) : deps.maxPerHour;
         if (row.kind !== 'choice' || row.status !== 'open' || row.auto_answer) return false;
-        if (!(await deps.repos.users.chatAutodecide(row.user_id))) return false;
-        if (!budgetAvailable(row.conversation_id)) return false;
+        if (!automatic && !(await deps.repos.users.chatAutodecide(row.user_id))) return false;
+        if (!budgetAvailable(ledger, max, row.conversation_id)) return false;
         if (!(await deps.repos.tabQuestions.markWoken(row.id))) return false;
-        takeBudget(row.conversation_id);
+        takeBudget(ledger, row.conversation_id);
         const user = await deps.repos.users.findById(row.user_id);
         if (!user) return false;
         const started = await deps.chat.wake(user, row.conversation_id, wakeText(row, tabName));

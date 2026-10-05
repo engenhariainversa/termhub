@@ -25,7 +25,7 @@ const rawInput = z.object({ questions: z.array(rawQuestion).min(1).max(4) });
 export interface TabQuestionOption {
   label: string;
   description: string;
-  /** Claude Code marks the recommended option in its label: "Blue (Recommended)". */
+  /** Claude Code marks the recommended option in its label: "Blue (Recommended)" (or "(Recomendado)"). */
   recommended: boolean;
 }
 export interface TabQuestionItem {
@@ -100,9 +100,9 @@ export type TabQuestionInput =
   | { kind: 'choice'; payload: ChoicePayload; tool_use_id: string | null }
   | { kind: 'permission'; payload: PermissionPayload; tool_use_id: null };
 
-const RECOMMENDED = /\s*\(Recommended\)\s*$/i;
+const RECOMMENDED = /\s*\((?:Recommended|Recomendado)\)\s*$/i;
 
-/** "Blue (Recommended)" → `{ label: "Blue", recommended: true }`. A label that is only the marker stays as it is. */
+/** "Blue (Recommended)" or "Azul (Recomendado)" → `{ label: "Blue", recommended: true }`. A label that is only the marker stays as it is. */
 export function normaliseLabel(label: string): { label: string; recommended: boolean } {
   const trimmed = label.trim();
   const stripped = trimmed.replace(RECOMMENDED, '').trim();

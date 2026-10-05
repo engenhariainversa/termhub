@@ -1041,6 +1041,8 @@ export interface ChatAction {
 export interface AutoDecision {
   reason: string | null;
   sources: { ref: string; question: string | null; answer: string | null }[];
+  /** `'automation'` on a question card answered by automatic board work: the reason is shown translated. */
+  by?: TabQuestionAutoAnswer['by'];
 }
 
 /** Mirrors the server's `SubagentStatus` (apps/server/src/chat/stream.ts). */
@@ -1194,10 +1196,11 @@ export interface TabQuestionSuggestion {
 }
 
 /** A countdown that sends `answer` by itself at `due_at` unless the person cancels it (spec 2026-09-26
- * concierge memory §6). `by: 'memory'` is a near-verbatim repeat, `'concierge'` the concierge's call. */
+ * concierge memory §6). `by: 'memory'` is a near-verbatim repeat, `'concierge'` the concierge's call,
+ * `'automation'` the option the agent recommended in a tab with an automatic run (agentic board D18). */
 export interface TabQuestionAutoAnswer {
   answer: ChoiceAnswer;
-  by: 'memory' | 'concierge';
+  by: 'memory' | 'concierge' | 'automation';
   reason: string;
   sources: { kind: string; id: string }[];
   due_at: string;

@@ -357,6 +357,7 @@ See [.env.example](.env.example). Main ones:
 | `AUTO_ANSWER_DELAY_SECONDS` | seconds a concierge-scheduled automatic answer counts down on the card, cancellable, before it is sent (10–600, default `60`) |
 | `AUTO_ANSWER_MIN_SIMILARITY` | cosine similarity the cited decision's question needs, against the new question, for `answer_tab_question` to schedule `mode: "auto"` (0–1, default `0.80`); below it, or with no embedder, the answer is only suggested |
 | `AUTO_WAKE_MAX_PER_HOUR` | at most this many concierge wake turns per conversation per hour, for an unattended tab question (0–120, default `12`); `0` disables every wake |
+| `AUTOMATION_WAKE_MAX_PER_HOUR` | the same for a question in a tab with an automatic run, counted apart (0–120, default `30`); `0` sends such questions straight to the person |
 | `MOBILE_PUBLIC_URL` | public base of the mobile API (`https://termhub.dev`), the URL every device proof is signed against; unset = `/api/m/v1` and `/ws/m/chat` are off (see [Mobile API](#mobile-api)) |
 | `MOBILE_MIN_APP_VERSION` | oldest app version (`x.y.z`) still served; older apps get `426 APP_TOO_OLD`; unset = any version |
 | `EXPO_PUSH_ACCESS_TOKEN` | Expo access token sent with the phones' push notifications; needed only with Expo's enhanced push security |

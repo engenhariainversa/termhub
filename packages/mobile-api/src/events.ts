@@ -54,6 +54,9 @@ export const chatActionStatus = z.enum(['pending', 'approved', 'denied', 'expire
 export const autoDecisionSchema = z.object({
   reason: z.string().nullable(),
   sources: z.array(z.object({ ref: z.string(), question: z.string().nullable(), answer: z.string().nullable() })),
+  /** `'automation'` on a question card answered by automatic board work (the agent's recommended option):
+   *  its reason is shown translated. Plain string, optional: absent from an older server. */
+  by: z.string().optional(),
 });
 export type TAutoDecision = z.infer<typeof autoDecisionSchema>;
 
@@ -203,7 +206,7 @@ export const tabQuestionSuggestionSchema = z.object({
 export const tabQuestionAutoAnswerSchema = z.object({
   answer: z.object({ answers: z.array(z.object({ selected: z.array(z.number().int()), text: z.string().optional() })) }),
   // Plain strings, like `sources.kind`: a value a newer server adds must not break an installed app.
-  // Known today: `by` 'memory' | 'concierge'; `status` 'scheduled' | 'cancelled' | 'sent' | 'failed'.
+  // Known today: `by` 'memory' | 'concierge' | 'automation'; `status` 'scheduled' | 'cancelled' | 'sent' | 'failed'.
   by: z.string(),
   reason: z.string(),
   sources: z.array(z.object({ kind: z.string(), id: z.string() })),

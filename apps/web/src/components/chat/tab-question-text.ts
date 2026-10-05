@@ -56,6 +56,12 @@ export function choiceAnswerDescription(payload: { questions: TabQuestionItem[] 
   return parts.length > 0 ? parts.join(' / ') : null;
 }
 
+/** A countdown's reason as the card shows it: the option the agent recommended (`by: 'automation'`,
+ * agentic board D18) reads in the reader's language; any other reason is shown as it was given. */
+export function autoAnswerReason(auto: { by?: string; reason: string | null }): string {
+  return auto.by === 'automation' ? i18n.t('Opção recomendada pelo agente') : (auto.reason ?? '');
+}
+
 /** "Não consegui responder sozinho…" (spec 2026-09-26 concierge memory §6/§8, controller ruling): the
  *  countdown's own failure line, shown only while the card is still open. */
 export function autoAnswerFailureText(code?: string | null): string {
@@ -66,6 +72,8 @@ export function autoAnswerFailureText(code?: string | null): string {
       return i18n.t('Resposta automática cancelada: você desligou «Responder sozinho».');
     case 'PRECEDENT_FORGOTTEN':
       return i18n.t('Resposta automática cancelada: o precedente foi esquecido.');
+    case 'AUTOMATION_OFF':
+      return i18n.t('Resposta automática cancelada: o trabalho automático foi pausado ou desligado.');
     default:
       return i18n.t('Não consegui responder sozinho.');
   }

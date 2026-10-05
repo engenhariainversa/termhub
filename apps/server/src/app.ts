@@ -196,7 +196,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // Wakes the project's concierge for an unattended `choice` card (spec 2026-09-26 concierge memory
   // §7): built here, next to `chat`, since it needs a live `ChatService` to inject the wake turn into —
   // the hooks route (ingest path) has no `ChatService` of its own to build one from.
-  const waker = createWaker({ repos, chat, maxPerHour: config.autoWakeMaxPerHour, log: fastify.log });
+  const waker = createWaker({ repos, chat, maxPerHour: config.autoWakeMaxPerHour, automationMaxPerHour: config.automationWakeMaxPerHour, log: fastify.log });
   // The phone's tab chat (spec 2026-10-01): one follower per watched tab, poked by the hooks route below.
   const tabChat = new TabChatHub({ repos, log: fastify.log });
   // Attachments (spec 2026-09-26 §5): the files on the chat-files volume, and the in-process queue

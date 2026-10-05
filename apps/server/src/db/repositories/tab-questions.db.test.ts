@@ -379,6 +379,16 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect(await repo.hasOpenQuestion(tid('thq'))).toBe(true);
   });
 
+  it('latestQuestionForTab reads the newest question or permission, closed ones included, never a suggestion', async () => {
+    expect(await repo.latestQuestionForTab(tid('tlq'))).toBeUndefined();
+    const { question } = await open('tlq');
+    expect((await repo.latestQuestionForTab(tid('tlq')))?.id).toBe(question.id);
+    await repo.expireOne(question.id);
+    expect(await repo.latestQuestionForTab(tid('tlq'))).toMatchObject({ id: question.id, status: 'expired' });
+    await openSuggestion('tlq');
+    expect((await repo.latestQuestionForTab(tid('tlq')))?.id).toBe(question.id);
+  });
+
   it("a suggestion is a row like the others: the tab's open one, closed by the tab's next event", async () => {
     const { question: s } = await openSuggestion('ts1');
     expect(s).toMatchObject({ kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', user_id: userId, tool_use_id: null });
