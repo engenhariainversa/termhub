@@ -9,9 +9,10 @@ import { ExpoPushSender, ExpoReceiptFetcher, MobilePushService, sweepPushReceipt
 const mkDevice = (id: string, token: string): Device => ({ id, user_id: 'u1', push_token: token, status: 'active' }) as unknown as Device;
 const user = { id: 'u1', email: 'ana@example.com' } as unknown as User;
 
-function setup(opts: { devices?: Device[]; live?: string[] } = {}) {
+function setup(opts: { devices?: Device[]; live?: string[]; deletionScheduledAt?: string } = {}) {
   const devices = opts.devices ?? [mkDevice('d1', 'ExponentPushToken[a]'), mkDevice('d2', 'ExponentPushToken[b]')];
   const repos = {
+    users: { findById: vi.fn(async (id: string) => ({ ...user, id, deletion_scheduled_at: opts.deletionScheduledAt ?? null })) },
     devices: { listActiveWithPush: vi.fn(async () => devices), setPushToken: vi.fn(async () => undefined) },
     userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })) },
     pushTickets: { recordMany: vi.fn(async () => undefined) },
@@ -285,6 +286,41 @@ describe('MobilePushService', () => {
     await flush();
     expect(sent).toEqual([]);
     expect(repos.userNotifications.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('MobilePushService — account pending deletion (TER-920)', () => {
+  const question = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'permission' as const, payload: { tool_name: 'Bash' }, status: 'open' as const, answer: null, error_code: null, created_at: '', answered_at: null, closed_at: null };
+
+  it('sends nothing and writes no history row for any event while the deletion is pending', async () => {
+    const t = setup({ deletionScheduledAt: '2026-11-03T00:00:00.000Z' });
+    stop = t.service.start();
+    chatBus.publish(confirmation);
+    chatBus.publish({ type: 'tab_question', user_id: 'u1', conversation_id: 'cp', question } as ChatEvent);
+    chatBus.publish(finished('cp'));
+    await t.service.deviceRequest(user, { id: 'r1', model: 'Pixel 8', city: null, country: null } as unknown as DeviceRequest);
+    await flush();
+    expect(t.repos.users.findById).toHaveBeenCalledWith('u1');
+    expect(t.repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(t.sent).toEqual([]);
+  });
+
+  it('sends nothing for a user that no longer exists', async () => {
+    const t = setup();
+    t.repos.users.findById.mockResolvedValueOnce(undefined as never);
+    stop = t.service.start();
+    chatBus.publish(confirmation);
+    await flush();
+    expect(t.repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(t.sent).toEqual([]);
+  });
+
+  it('pushes again once the deletion is cancelled', async () => {
+    const t = setup();
+    stop = t.service.start();
+    chatBus.publish(confirmation);
+    await flush();
+    expect(t.sent).toHaveLength(1);
   });
 });
 
