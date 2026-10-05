@@ -114,7 +114,7 @@ describe('daily summary (TER-894)', () => {
     expect(f.lines[0]).toBe(
       [
         'Resumo do automático — 05/10/2026',
-        'Desde 04/10 06:00',
+        'Desde 04/10 09:00',
         'Feitos: 3 cards, 2 merges, 1 deploys',
         'Esperando você: TER-9 (O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.); PR #12 (Merge esperando sua aprovação no chat)',
         'Custo estimado do dia: US$ 1.50',
