@@ -630,6 +630,15 @@ describe('MobilePushService — aba terminou (TER-925)', () => {
     expect(t.sent).toEqual([]);
   });
 
+  it('a turn that ends with a plain report (finished, TER-972) is pushed too', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    t.repos.tabs.findById.mockResolvedValue({ id: 't1', project_id: 'p1', machine_id: 'm1', state: 'finished' });
+    stop = t.service.start();
+    await finish(t, 't1', 'finished');
+    expect(t.sent).toHaveLength(1);
+  });
+
   it('a permission prompt or background work in the middle is still the same turn', async () => {
     vi.useFakeTimers();
     const t = setup();

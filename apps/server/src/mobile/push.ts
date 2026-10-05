@@ -127,6 +127,8 @@ export class ExpoReceiptFetcher implements PushReceiptFetcher {
 /** "Aba terminou": one per tab in this window, and the pause before it is sent (TER-925). */
 export const TAB_FINISHED_WINDOW_MS = 5 * 60_000;
 export const TAB_FINISHED_SETTLE_MS = 5_000;
+/** The states a tab's turn ends in (`finished`: a report that asks nothing, TER-972). */
+const TURN_ENDS = new Set<string | null>(['waiting_input', 'finished', 'idle']);
 
 /** A test push's receipt is read this long after the send, then once more if it was not ready. */
 export const TEST_RECEIPT_AFTER_MS = 15_000;
@@ -351,7 +353,8 @@ export class MobilePushService {
     attempt([TEST_RECEIPT_AFTER_MS, TEST_RECEIPT_RETRY_MS]);
   }
 
-  /** A tab that was working ended its turn (`waiting_input`) or its agent (`idle`): maybe "aba terminou". */
+  /** A tab that was working ended its turn (`waiting_input`, or `finished` with a plain report, TER-972)
+   * or its agent (`idle`): maybe "aba terminou". */
   private onTabState({ tab, owner_id }: TabStateChange): void {
     const pending = this.settling.get(tab.id);
     if (tab.state === 'working') {
@@ -361,7 +364,7 @@ export class MobilePushService {
       this.working.add(tab.id);
       return;
     }
-    if (tab.state !== 'waiting_input' && tab.state !== 'idle') {
+    if (!TURN_ENDS.has(tab.state)) {
       // A permission prompt or background work is still the same turn; an error ends it unannounced.
       if (tab.state === 'error') this.working.delete(tab.id);
       return;
@@ -386,7 +389,7 @@ export class MobilePushService {
     const { repos } = this.deps;
     if (!(await repos.users.pushTabFinished(ownerId))) return;
     const tab = await repos.tabs.findById(tabId);
-    if (!tab || (tab.state !== 'waiting_input' && tab.state !== 'idle')) return;
+    if (!tab || !TURN_ENDS.has(tab.state)) return;
     const open = await repos.tabQuestions.findOpenForTab(tabId);
     if (open && open.kind !== 'suggestion') return;
     if (!this.finished.take(tabId)) return;

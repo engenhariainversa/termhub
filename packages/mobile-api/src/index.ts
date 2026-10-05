@@ -11,3 +11,4 @@ export * from './project-ai.js';
 export * from './account.js';
 export * from './tab-chat.js';
 export * from './file-preview.js';
+export * from './file-recent.js';

@@ -103,7 +103,8 @@ export async function sendTabSuggestion(ctx: ControlContext, id: string, raw: un
   const claimed = await ctx.repos.tabQuestions.claimSuggestion(row.id, userId, { text });
   if (!claimed) throw suggestionChanged();
   try {
-    await sendInput(ctx, { tab_id: tab.id, text, enter: true });
+    // The person clicked "Enviar" on this text (they may have edited it): their approval, word for word.
+    await sendInput(ctx, { tab_id: tab.id, text, enter: true }, { level: 'person_approved', userId, actionId: null, approvedAt: new Date() });
   } catch (err) {
     const code = codeOf(err);
     deps.log.warn({ tabQuestionId: row.id, tabId: tab.id, kind: 'suggestion', code }, 'tab suggestion send failed');

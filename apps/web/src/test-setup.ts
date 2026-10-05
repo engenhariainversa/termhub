@@ -10,3 +10,10 @@ import { configure } from '@testing-library/dom';
 // wait and still fails with testing-library's own message. A test that needs several waits in a
 // row is a test with several actions: split it (one action, one wait), do not raise this.
 configure({ asyncUtilTimeout: 5_000 });
+
+// Tests run in pt-BR, the source language, so they query the Portuguese text the code holds; the
+// browser (or Node's own `navigator`) would otherwise pick English. A test that renders in English
+// switches with `i18n.changeLanguage('en')` and switches back.
+import { i18n } from './i18n';
+
+void i18n.changeLanguage('pt-BR');

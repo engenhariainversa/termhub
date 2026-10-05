@@ -3,6 +3,7 @@ import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { Role, WaitlistEntry, WaitlistInviteResult } from '../lib/types';
 import { ConfirmDialog, Modal } from './Modal';
+import { formatDate, formatDateTime } from '../lib/format';
 
 /**
  * Home "Waitlist" tab: sign-ups from the landing page's Cloud section.
@@ -16,7 +17,7 @@ function csv(entries: WaitlistEntry[]): string {
   return [cols.join(','), ...entries.map((e) => cols.map((c) => esc(e[c])).join(','))].join('\n');
 }
 
-const shortDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
+const shortDate = (iso: string) => formatDate(iso);
 
 /** Confirm + role picker for the alpha invite; shows each entry's outcome once sent. */
 function InviteDialog({ entries, roles, onClose, onDone }: { entries: WaitlistEntry[]; roles: Role[]; onClose: () => void; onDone: (results: WaitlistInviteResult[]) => void }) {
@@ -231,7 +232,7 @@ export function WaitlistView() {
                       <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} aria-label={`Selecionar ${e.email}`} />
                     </td>
                   )}
-                  <td className="whitespace-nowrap px-3 py-2 text-xs text-fg-dim">{new Date(e.created_at).toLocaleString('pt-BR')}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-xs text-fg-dim">{formatDateTime(e.created_at)}</td>
                   <td className="px-3 py-2">
                     {e.first_name} {e.last_name}
                   </td>

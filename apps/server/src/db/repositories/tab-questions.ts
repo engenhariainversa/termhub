@@ -1,6 +1,7 @@
 import type { PrismaClient } from '../prisma.js';
 import type { Prisma, TabQuestion as PrismaTabQuestion } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
+import { AT_PROMPT } from '../../monitor/state.js';
 import type { TabQuestionSuggestion } from '../../chat/decision-text.js';
 import type { ChoiceAnswer, ChoicePayload, PermissionAnswer, PermissionPayload, SuggestionAnswer, SuggestionPayload, TabRowKind } from '../../chat/tab-question-payload.js';
 import type { MemoryKind } from './memory-items.js';
@@ -175,8 +176,8 @@ export class TabQuestionsRepository {
    * permission is answered in the tab. A choice is never held and clears every queue mark and list. The tab
    * row is locked first (`lockTab`), so two hooks of one tab land in order. A suggestion row never counts
    * here: it is not part of Claude Code's permission queue (spec 2026-09-25 tab suggestions §6.1). A
-   * suggestion is read seconds after the `Stop`, so it opens only if the tab, under that lock, still waits
-   * for input and shows no question (open, or answered from the chat but still on screen): otherwise
+   * suggestion is read seconds after the `Stop`, so it opens only if the tab, under that lock, is still at
+   * its prompt (`waiting_input` or `finished`) and shows no question (open, or answered from the chat but still on screen): otherwise
    * nothing opens and nothing closes. With no conversation (spec 2026-09-26 §4.1) the same rules run and
    * nothing is inserted; a choice still clears every queue mark and list.
    */
@@ -187,7 +188,9 @@ export class TabQuestionsRepository {
       // process that asked is gone, and the cards it left close below.
       const exited = input.kind === 'suggestion' && (input.payload as { exited?: unknown }).exited === true;
       if (input.kind === 'suggestion') {
-        if (input.conversation_id === null || tab?.state !== (exited ? 'idle' : 'waiting_input')) return { question: null, closed: [] };
+        // A tab that ended its turn with a report (`finished`, TER-972) is at its prompt like one that waits.
+        const atPrompt = !!tab?.state && (exited ? tab.state === 'idle' : (AT_PROMPT as readonly string[]).includes(tab.state));
+        if (input.conversation_id === null || !atPrompt) return { question: null, closed: [] };
         const question = exited ? null : await tx.tabQuestion.findFirst({ where: { tabId: input.tab_id, kind: { not: 'suggestion' }, closedAt: null, status: { in: ['open', 'answered'] } }, select: { id: true } });
         if (question) return { question: null, closed: [] };
       }
