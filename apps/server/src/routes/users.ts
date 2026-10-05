@@ -6,7 +6,7 @@ import type { Role } from '../db/repositories/roles.js';
 import type { Device } from '../db/repositories/devices.js';
 import { badRequest, conflict, HttpError, notFound } from '../lib/errors.js';
 import type { Mailer } from '../email/mailer.js';
-import { alphaInviteMail, inviteMail, type AlphaLocale } from '../email/templates.js';
+import { alphaInviteMail, inviteMail } from '../email/templates.js';
 import type { Mail } from '../email/mailer.js';
 import type { AccessAllowlist } from '../cloudflare/access.js';
 import type { RevokeInput } from '../mobile/revocation.js';
@@ -15,6 +15,7 @@ import { failureLabel } from '../chat/service.js';
 import { config } from '../config.js';
 import { describeDeviceEvent } from './devices.js';
 import type { AccountDeletionService } from '../account/deletion.js';
+import { localeOf, type Locale } from '../i18n/index.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const deviceParams = z.object({ id: z.string().min(1).max(64), deviceId: z.string().min(1).max(64) });
@@ -76,7 +77,7 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
     }
     try {
       await deps.mailer.send(
-        mail ? mail(out.access.synced) : inviteMail(user.email, { invitedBy, appUrl: config.publicUrl, roleLabel: role.label, accessAllowlisted: out.access.synced }),
+        mail ? mail(out.access.synced) : inviteMail(user.email, { invitedBy, appUrl: config.publicUrl, roleLabel: role.label, accessAllowlisted: out.access.synced }, localeOf(user.locale)),
       );
       out.mail.sent = true;
     } catch (err) {
@@ -150,7 +151,8 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
           invited_at: new Date(),
         });
       }
-      const locale: AlphaLocale = entry.locale === 'en' ? 'en' : 'pt';
+      // The waitlist keeps the landing's language ('pt' | 'en'); 'pt' is pt-BR.
+      const locale: Locale = entry.locale === 'en' ? 'en' : 'pt-BR';
       const effects = await runInvite(user, role, request.user?.name ?? 'Alguém', request.log, () =>
         alphaInviteMail(user!.email, { appUrl: config.publicUrl, communityUrl: config.alphaCommunityUrl, firstName: entry.first_name, locale }),
       );

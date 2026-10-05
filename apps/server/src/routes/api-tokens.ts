@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { API_TOKEN_SCOPES, MAX_ACTIVE_TOKENS_PER_USER, newApiToken, toScopes } from '../auth/api-tokens.js';
 import { conflict, notFound } from '../lib/errors.js';
+import { msg } from '../i18n/index.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -24,7 +25,7 @@ export async function apiTokenRoutes(app: FastifyInstance, repos: Repositories, 
     const body = createBody.parse(request.body ?? {});
     const userId = request.user!.id;
     if ((await repos.apiTokens.countActive(userId)) >= MAX_ACTIVE_TOKENS_PER_USER) {
-      throw conflict(`Limite de ${MAX_ACTIVE_TOKENS_PER_USER} tokens ativos: revogue um antes de criar outro`);
+      throw conflict(msg('Limite de {{max}} tokens ativos: revogue um antes de criar outro', { max: MAX_ACTIVE_TOKENS_PER_USER }));
     }
     const { token, hash } = newApiToken();
     const expiresAt = body.expires_in_days ? new Date(Date.now() + body.expires_in_days * DAY_MS) : null;
