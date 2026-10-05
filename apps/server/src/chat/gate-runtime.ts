@@ -419,7 +419,7 @@ async function executeGranted(ctx: ControlContext, call: GatedCall, conversation
  * start with `!` into a `!` command by the time the TUI reads it. `CONTROL_CHARS` is the same check
  * `checkPrompt` uses for a prompt's own text; only `\n` (a pasted multi-line prompt) is allowed. Both
  * checks read the arguments alone, before any read, and the tab must separately report an agent at
- * work (`working`, `waiting_background` or `waiting_input`, from the monitor hooks). A tab that never reported (a shell), an
+ * work (`working`, `waiting_background`, `waiting_input` or `finished`, from the monitor hooks). A tab that never reported (a shell), an
  * agent that ended (`idle`) or errored falls back to a normal question. Two readings deliberately still
  * go through the grant: a tab that does not resolve (missing, or somebody else's) and one waiting on a
  * permission, so `execute()` records them as the `TAB_GONE` / `WAITING_PERMISSION` locks — the model
@@ -432,7 +432,7 @@ const textOutsideGrant = (args: Record<string, unknown>) =>
 async function grantCoversTab(ctx: ControlContext, tabId: string): Promise<boolean> {
   const [tab] = await ctx.repos.tabs.findByIdsForOwner([tabId], ctx.scope.user.id);
   if (!tab) return true; // recorded as TAB_GONE by `execute()`
-  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'waiting_permission';
+  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'finished' || tab.state === 'waiting_permission';
 }
 
 /**
@@ -515,10 +515,11 @@ async function standingGrantCovering(ctx: ControlContext, call: GatedCall): Prom
   return grant.id;
 }
 
-/** Tab states a default close is for (TER-627): the agent is not at work. `null` (a tab that never
- * reported, a bare shell that may be running anything) is not among them, nor `working` read at face
- * value, nor `waiting_permission`, which the person has to see. */
-const STOPPED_TAB_STATES: ReadonlySet<string> = new Set(['waiting_input', 'idle', 'error']);
+/** Tab states a default close is for (TER-627): the agent is not at work — `finished` among them, an agent
+ * that reported and asks nothing (TER-972). `null` (a tab that never reported, a bare shell that may be
+ * running anything) is not among them, nor `working` read at face value, nor `waiting_permission`, which
+ * the person has to see. */
+const STOPPED_TAB_STATES: ReadonlySet<string> = new Set(['waiting_input', 'finished', 'idle', 'error']);
 
 /**
  * A Claude Code `working` tab whose state is stale in the TER-615 sense — no hook event for `STALE_WORKING_MS` — and
@@ -544,7 +545,7 @@ async function idleDespiteWorking(ctx: ControlContext, tab: Tab): Promise<boolea
  * or null: what the chat does without asking for every user who did not restrict it in "Permissões do
  * chat". The standing grant's resolution and guards, owner-scoped, and stricter where a default reaches
  * further than a grant someone chose:
- * - terminal: an agent at work in the tab (`working`, `waiting_background` or `waiting_input`) — typed text on a bare shell is
+ * - terminal: an agent at work in the tab (`working`, `waiting_background`, `waiting_input` or `finished`) — typed text on a bare shell is
  *   `run_command` under another name — never `!`/control characters, never a permission (state or screen);
  * - close_tab: a stopped tab (`STOPPED_TAB_STATES`), or a `working` one the screen shows idle;
  * - link_tab_task: the tab resolves (the tool checks the card itself).
@@ -564,7 +565,7 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
     if (!target) return null;
     tab = target.tab;
   }
-  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input') return null;
+  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input' && tab?.state !== 'finished') return null;
   if (kind === 'close_tab' && !(tab && (STOPPED_TAB_STATES.has(tab.state ?? '') || (tab.state === 'working' && (await idleDespiteWorking(ctx, tab)))))) return null;
   const grantId = defaultGrantId(ctx.scope.user.id, kind);
   const used = await ctx.repos.chatActions.countByGrantSince(grantId, new Date(Date.now() - STANDING_BUDGET_WINDOW_MS));
