@@ -11,6 +11,8 @@ export interface PullRequestInfo {
   title: string;
   head_ref: string;
   head_sha: string;
+  /** the PR's base branch; null on rows synced before it was stored */
+  base_ref: string | null;
   state: PrState;
   draft: boolean;
   merged_at: Date | null;
@@ -24,6 +26,7 @@ export interface TaskPullRequest extends PullRequestInfo {
   ci_summary: CiSummary;
   deploy_state: CiState;
   deploy_url: string | null;
+  changed_level: string | null;
   synced_at: string;
 }
 
@@ -42,6 +45,7 @@ const map = (r: Row): TaskPullRequest => ({
   title: r.title,
   head_ref: r.headRef,
   head_sha: r.headSha,
+  base_ref: r.baseRef,
   state: r.state as PrState,
   draft: r.draft,
   merged_at: r.mergedAt,
@@ -50,6 +54,7 @@ const map = (r: Row): TaskPullRequest => ({
   ci_summary: { ...EMPTY_SUMMARY, ...(r.ciSummary as Partial<CiSummary>) },
   deploy_state: r.deployState as CiState,
   deploy_url: r.deployUrl,
+  changed_level: r.changedLevel,
   synced_at: r.syncedAt.toISOString(),
 });
 
@@ -58,6 +63,7 @@ const prFields = (pr: PullRequestInfo) => ({
   title: pr.title,
   headRef: pr.head_ref,
   headSha: pr.head_sha,
+  baseRef: pr.base_ref,
   state: pr.state,
   draft: pr.draft,
   mergedAt: pr.merged_at,

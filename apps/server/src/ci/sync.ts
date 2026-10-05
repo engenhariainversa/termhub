@@ -31,6 +31,7 @@ const infoOf = (repo: string, p: GithubPull): PullRequestInfo => ({
   title: p.title,
   head_ref: p.head.ref,
   head_sha: p.head.sha,
+  base_ref: p.base?.ref ?? null,
   state: p.merged_at ? 'merged' : p.state,
   draft: p.draft,
   merged_at: p.merged_at ? new Date(p.merged_at) : null,

@@ -534,6 +534,10 @@ model TaskPullRequest {
   draft          Boolean   @default(false)
   mergedAt       DateTime? @map("merged_at")
   mergeCommitSha String?   @map("merge_commit_sha")
+  /// the PR's base branch (where it merges into)
+  baseRef        String?   @map("base_ref")
+  /// highest change level of the PR's files (automation), set by the integrator; null until classified
+  changedLevel   String?   @map("changed_level")
   /// none | running | passed | failed — GitHub Actions runs of head_sha
   ciState        String    @default("none") @map("ci_state")
   /// { total, passed, failed, running, failing: string[] (≤ 5 workflow names) }

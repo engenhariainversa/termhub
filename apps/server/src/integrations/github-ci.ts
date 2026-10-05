@@ -22,6 +22,7 @@ export interface GithubPull {
   merged_at: string | null;
   merge_commit_sha: string | null;
   head: { ref: string; sha: string };
+  base: { ref: string };
 }
 export type PullsPage = { notModified: true } | { notModified: false; etag: string | null; pulls: GithubPull[] };
 
