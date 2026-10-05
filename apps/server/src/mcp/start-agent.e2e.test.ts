@@ -6,7 +6,7 @@ import Fastify from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hashApiToken } from '../auth/api-tokens.js';
 import { canAccess } from '../auth/permissions.js';
-import { withLessonsReminder } from '../control/agents.js';
+import { withLessonsReminder, withOriginReminder } from '../control/agents.js';
 import { config } from '../config.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { normalizeSetup } from '../setup/schema.js';
@@ -193,7 +193,7 @@ describe.skipIf(!realTmux)('start_agent against a real tmux and a fake CLI', () 
     const flat = await screenWith(app, out.tab_id, 'fake-cli args=');
     expect(flat).toContain('fake-cli args=1'); // the prompt is a single argument, not a command line
     // …and arrives exactly as it was sent, with the lessons reminder appended in the same argument (D13).
-    expect(flat).toContain(`fake-cli prompt=[${flatten(withLessonsReminder(prompt))}]`);
+    expect(flat).toContain(`fake-cli prompt=[${flatten(withOriginReminder(withLessonsReminder(prompt)))}]`);
     expect(flat).toContain(`fake-cli cfg=${cfg}`); // the account chosen through CLAUDE_CONFIG_DIR
     expect(flat).toContain(`fake-cli cwd=${cwd}`); // the session runs in the project's directory
     // If the shell had split at `;` or run the substitution, the rest would have been executed.
@@ -215,7 +215,7 @@ describe.skipIf(!realTmux)('start_agent against a real tmux and a fake CLI', () 
     // The newline only makes the shell show its continuation prompt; the argument stays one, and the
     // lessons reminder (D13) still lands inside it, right after the user's own text.
     expect(flat).toContain('fake-cli args=1');
-    expect(flat).toContain(`fake-cli prompt=[${flatten(withLessonsReminder(prompt))}]`);
+    expect(flat).toContain(`fake-cli prompt=[${flatten(withOriginReminder(withLessonsReminder(prompt)))}]`);
   }, 30_000);
 
   it("expands a config dir stored as ~/x on the machine, not here", async () => {
@@ -257,8 +257,8 @@ describe.skipIf(!realTmux)('start_agent against a real tmux and a fake CLI', () 
       expect(apiTokens.create).toHaveBeenCalledWith('u1', expect.objectContaining({ tabId: out.tab_id }), expect.any(String));
 
       const flat = await screenWith(app, out.tab_id, 'fake-cli toklen=');
-      expect(flat).toContain(`fake-cli argv=[--mcp-config ${dir}/mcp.json --allowedTools mcp__termhub_tab__search_memory mcp__termhub_tab__record_lesson -- ${flatten(withLessonsReminder(prompt))}]`);
-      expect(flat).toContain(`fake-cli last=[${flatten(withLessonsReminder(prompt))}]`);
+      expect(flat).toContain(`fake-cli argv=[--mcp-config ${dir}/mcp.json --allowedTools mcp__termhub_tab__search_memory mcp__termhub_tab__record_lesson -- ${flatten(withOriginReminder(withLessonsReminder(prompt)))}]`);
+      expect(flat).toContain(`fake-cli last=[${flatten(withOriginReminder(withLessonsReminder(prompt)))}]`);
       // the pane shows the typed line too: the token is in neither
       expect(flat).not.toContain(token);
       expect(JSON.stringify(out)).not.toContain(token);

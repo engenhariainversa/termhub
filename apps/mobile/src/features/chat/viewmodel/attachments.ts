@@ -2,14 +2,47 @@
 // the hook the composer drives it with. React only, never react-native: the reducer and the checks run
 // under the `logic` jest project.
 import { useCallback, useEffect, useReducer, useRef } from 'react';
-import { ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, formatBytes, kindFromNameAndMime, type AttachmentKind } from '@termhub/mobile-api';
+import { ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, kindFromNameAndMime, type AttachmentKind } from '@termhub/mobile-api';
+import { t, tk } from '@/i18n';
+import { formatNumber } from '@/i18n/format';
 import type { TChatAttachment } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { UploadFile } from '@/services/api/types';
-import { CHAT_MSG } from '../model/messages';
+import { attachmentTooLargeText, CHAT_MSG } from '../model/messages';
 
-// The pt-BR copy lives in the contract package, shared with whatever else speaks about a file.
-export { attachmentStatusText, formatBytes };
+// The contract package keeps a pt-BR copy of these two (`formatBytes`, `attachmentStatusText`) for the
+// server and the web; the app has its own, the same words in the language it shows.
+
+/** `512 B`, `1,2 KB` / `1.2 KB`, `10 MB`: the decimal separator of the language the app shows. */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i += 1;
+  }
+  const text = value >= 100 || Number.isInteger(value) ? String(Math.round(value)) : formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false });
+  return `${text} ${units[i]}`;
+}
+
+/** Why an extraction gave up, by the server's error code (`ExtractError`): translation keys. */
+const ATTACHMENT_FAILURE_REASON: Record<string, string> = {
+  ATTACHMENT_INVALID: tk('arquivo inválido'),
+  TRANSCRIPTION_UNAVAILABLE: tk('transcrição indisponível'),
+  TRANSCRIPTION_FAILED: tk('transcrição falhou'),
+};
+
+/** The line under a chip or a bubble's attachment while the server works on it, or after it gave up. */
+export function attachmentStatusText(a: Pick<TChatAttachment, 'kind' | 'status' | 'error_code'>): string | null {
+  if (a.status === 'pending') return a.kind === 'audio' || a.kind === 'video' ? t('transcrevendo…') : t('processando…');
+  if (a.status === 'failed') {
+    const reason = a.error_code ? ATTACHMENT_FAILURE_REASON[a.error_code] : undefined;
+    return t('falhou: {{reason}}', { reason: t(reason ?? tk('erro')) });
+  }
+  return null;
+}
 
 /** A file as a picker handed it over; the size is unknown for some (a fresh recording). */
 export interface PickedFile extends UploadFile {
@@ -52,7 +85,7 @@ export function checkPick(file: PickedFile): { kind: AttachmentKind } | { refuse
   if (ext === '.doc' || ext === '.xls') return { refused: CHAT_MSG.attachmentLegacyOffice };
   const kind = kindFromNameAndMime(file.name, file.mime);
   if (!kind) return { refused: CHAT_MSG.attachmentType };
-  if (file.bytes !== null && file.bytes > ATTACHMENT_LIMITS[kind]) return { refused: `${CHAT_MSG.attachmentTooLarge} ${formatBytes(ATTACHMENT_LIMITS[kind])}` };
+  if (file.bytes !== null && file.bytes > ATTACHMENT_LIMITS[kind]) return { refused: attachmentTooLargeText(formatBytes(ATTACHMENT_LIMITS[kind])) };
   return { kind };
 }
 

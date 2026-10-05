@@ -3,6 +3,7 @@ import { memo, useCallback } from 'react';
 import { Text, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { filePathOfLink, filePreviewRoute, linkifyMarkdown } from '@/features/file-preview/model/md-paths';
+import { useTranslation } from '@/i18n';
 import type { SchemeName } from '@/theme/tokens';
 import { AppText, Button, useSchemeName } from '@/ui';
 import { failureSentence } from '../model/copy';
@@ -49,6 +50,7 @@ const SettledMarkdown = memo(function SettledMarkdown({ text, scheme, onLink }: 
  * the last blank line is re-parsed (`splitSettled`); the settled prefix keeps its parsed tree. When
  * the final text lands the whole body renders once — the same markdown, so nothing reflows. */
 export const MessageBubble = memo(function MessageBubble({ message, streamed, started, onRetry, onOpenReply, highlighted = false, fileContext }: Props) {
+  const { t } = useTranslation();
   const scheme = useSchemeName();
   const projectId = fileContext?.projectId ?? null;
   const tabId = fileContext?.tabId ?? null;
@@ -77,8 +79,8 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
         </View>
         {message.local === 'failed' ? (
           <View className="flex-row items-center gap-2">
-            <Text className="text-sm text-app-danger">{message.local_error ?? 'Não foi possível enviar.'}</Text>
-            <Button label="Tentar de novo" variant="ghost" onPress={() => onRetry?.(message.id)} />
+            <Text className="text-sm text-app-danger">{message.local_error ?? t('Não foi possível enviar.')}</Text>
+            <Button label={t('Tentar de novo')} variant="ghost" onPress={() => onRetry?.(message.id)} />
           </View>
         ) : null}
       </View>
@@ -102,7 +104,7 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
       {message.error_code !== null ? (
         <Text className="text-sm text-app-danger">{message.error_code === 'USAGE_LIMIT' ? limitSentence(message.notice) : failureSentence(message.error_code)}</Text>
       ) : !body && started ? (
-        <AppText variant="muted">pensando…</AppText>
+        <AppText variant="muted">{t('pensando…')}</AppText>
       ) : !body ? (
         <Text className="text-sm text-app-danger">{failureSentence(null)}</Text>
       ) : null}

@@ -5,7 +5,7 @@
 // transport; `useNotificationsStore.ts` builds the app's one instance.
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { sessionEnded } from '@/features/shared/signals';
+import { appForegrounded, sessionEnded, sessionStarted } from '@/features/shared/signals';
 import type { TChatEvent, TNotificationRow } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { Auth, MobileApi } from '@/services/api/types';
@@ -31,6 +31,12 @@ export interface NotificationsDeps {
    * known — omitted (or returning `null`) falls back to the generic body (`synthetic-row.ts`). */
   projectName?: (projectId: string | null) => string | null;
   now?: () => number;
+  /** The OS side (TER-923): the icon badge and the notification center. Omitted in tests that do not
+   * look at it. */
+  os?: { setBadge(count: number): Promise<void>; dismissDelivered(read: ReadonlySet<string> | 'all'): Promise<void> };
+  /** Reload the history on every session start and every return to the foreground (the app's one
+   * instance does; tests that do not look at it leave it off, so no store reloads behind another). */
+  refreshOnForeground?: boolean;
 }
 
 export interface NotificationsState {
@@ -154,10 +160,36 @@ export function createNotificationsStore(deps: NotificationsDeps) {
     store.setState({ items: [row, ...state.items], unread: state.unread + 1 });
   });
 
+  // The icon and the notification center follow the history (TER-923): the badge is `unread`, and a
+  // delivered push whose row is now read (tapped, read here, or its card handled anywhere) goes away.
+  const os = deps.os;
+  if (os) {
+    store.subscribe((s, prev) => {
+      if (s.unread !== prev.unread) void os.setBadge(s.unread);
+      if (s.items !== prev.items) void os.dismissDelivered(new Set(s.items.filter((r) => r.read_at !== null && !isLocalRowId(r.id)).map((r) => r.id)));
+    });
+  }
+
+  // Back in the app, or a new session: the server's history may have moved (a card handled on the web).
+  // Locked (`auth()` throws): the unlock's `sessionStarted` loads it.
+  const refresh = () => {
+    try {
+      session().auth();
+    } catch {
+      return;
+    }
+    void store.getState().load();
+  };
+  if (deps.refreshOnForeground) {
+    appForegrounded.subscribe(refresh);
+    sessionStarted.subscribe(refresh);
+  }
+
   // Design spec §5.5: the end of a session resets every store that persists per-session data.
   sessionEnded.subscribe(() => {
     generation++;
     store.setState(initialData());
+    if (os) void os.dismissDelivered('all').then(() => os.setBadge(0));
   });
 
   return store;
