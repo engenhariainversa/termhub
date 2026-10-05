@@ -4,7 +4,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { Device } from '../db/repositories/devices.js';
 import type { DeviceRequest } from '../db/repositories/device-requests.js';
 import type { User } from '../db/repositories/types.js';
-import { ExpoPushSender, MobilePushService, type PushMessage, type PushSender } from './push.js';
+import { ExpoPushSender, ExpoReceiptFetcher, MobilePushService, sweepPushReceipts, type PushMessage, type PushReceipt, type PushSender } from './push.js';
 
 const mkDevice = (id: string, token: string): Device => ({ id, user_id: 'u1', push_token: token, status: 'active' }) as unknown as Device;
 const user = { id: 'u1', email: 'ana@example.com' } as unknown as User;
@@ -14,6 +14,7 @@ function setup(opts: { devices?: Device[]; live?: string[] } = {}) {
   const repos = {
     devices: { listActiveWithPush: vi.fn(async () => devices), setPushToken: vi.fn(async () => undefined) },
     userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })) },
+    pushTickets: { recordMany: vi.fn(async () => undefined) },
     projects: { findByIdsForOwner: vi.fn(async () => [{ id: 'p1', name: 'termhub' }]) },
     tabs: { findByIdsForOwner: vi.fn(async () => [{ id: 't1', name: 'api' }]) },
     machines: { findByIdsForOwner: vi.fn(async () => [{ id: 'm1', name: 'jarvis' }]) },
@@ -311,7 +312,7 @@ describe('ExpoPushSender', () => {
     expect(results).toHaveLength(150);
     expect(results[1]).toEqual({ to: 'ExponentPushToken[1]', error: 'DeviceNotRegistered' });
     expect(results[2]).toEqual({ to: 'ExponentPushToken[2]', error: 'Other' });
-    expect(results[0]).toEqual({ to: 'ExponentPushToken[0]', error: undefined });
+    expect(results[0]).toEqual({ to: 'ExponentPushToken[0]', id: 'x' });
   });
 
   it('sends no Authorization header without a token', async () => {
@@ -347,5 +348,99 @@ describe('ExpoPushSender', () => {
   it('throws on a non-2xx answer', async () => {
     const fetchImpl = vi.fn(async () => new Response('bad', { status: 500 }));
     await expect(new ExpoPushSender(null, fetchImpl as never).send([msg(1)])).rejects.toThrow();
+  });
+});
+
+describe('push receipts (TER-924)', () => {
+  it('records the ticket of every accepted push, with its device and token, and none for a refused one', async () => {
+    const t = setup();
+    t.sender.send.mockImplementationOnce(async (messages: PushMessage[]) => [
+      { to: messages[0]!.to, id: 'tk-a' },
+      { to: messages[1]!.to, error: 'DeviceNotRegistered' },
+    ]);
+    await t.service.deviceRequest(user, { id: 'r1', model: 'Pixel 8', city: null, country: null } as unknown as DeviceRequest);
+    expect(t.repos.pushTickets.recordMany).toHaveBeenCalledWith([{ ticket_id: 'tk-a', device_id: 'd1', push_token: 'ExponentPushToken[a]', kind: 'device_request' }]);
+  });
+
+  it('a failure to record tickets is logged and does not stop the dead-token cleanup', async () => {
+    const t = setup();
+    t.repos.pushTickets.recordMany.mockRejectedValueOnce(new Error('db down'));
+    t.sender.send.mockImplementationOnce(async (messages: PushMessage[]) => [{ to: messages[0]!.to, id: 'tk-a' }, { to: messages[1]!.to, error: 'DeviceNotRegistered' }]);
+    await t.service.deviceRequest(user, { id: 'r1', model: 'Pixel 8', city: null, country: null } as unknown as DeviceRequest);
+    expect(t.log.warn).toHaveBeenCalledWith(expect.objectContaining({ kind: 'device_request' }), 'recording push tickets failed');
+    expect(t.repos.devices.setPushToken).toHaveBeenCalledWith('d2', null);
+  });
+
+  function sweepSetup(tickets: { id: string; ticket_id: string; device_id: string; push_token: string; kind: string }[], receipts: Map<string, PushReceipt>) {
+    const repos = {
+      pushTickets: { deleteSentBefore: vi.fn(async () => 0), claimDue: vi.fn(async () => tickets.map((t) => ({ ...t, created_at: '' }))), deleteMany: vi.fn(async () => undefined) },
+      devices: { clearPushTokenIf: vi.fn(async () => true), findById: vi.fn(async (id: string) => ({ id, user_id: 'u1' })) },
+      deviceEvents: { record: vi.fn(async () => undefined) },
+    };
+    const fetcher = { fetch: vi.fn(async () => receipts) };
+    const log = { warn: vi.fn(), info: vi.fn() };
+    return { repos, fetcher, log, run: (now: Date) => sweepPushReceipts({ repos: repos as never, receipts: fetcher, log }, now) };
+  }
+
+  it('reads due receipts: clears a dead token, records push_failed per device, logs codes only, deletes what it read', async () => {
+    const now = new Date('2026-10-05T12:00:00.000Z');
+    const s = sweepSetup(
+      [
+        { id: 'p1', ticket_id: 'tk1', device_id: 'd1', push_token: 'ExponentPushToken[a]', kind: 'reply' },
+        { id: 'p2', ticket_id: 'tk2', device_id: 'd2', push_token: 'ExponentPushToken[b]', kind: 'confirmation' },
+        { id: 'p3', ticket_id: 'tk3', device_id: 'd3', push_token: 'ExponentPushToken[c]', kind: 'reply' },
+        { id: 'p4', ticket_id: 'tk4', device_id: 'd2', push_token: 'ExponentPushToken[b]', kind: 'reply' },
+      ],
+      new Map<string, PushReceipt>([
+        ['tk1', { status: 'error', error: 'DeviceNotRegistered' }],
+        ['tk2', { status: 'error', error: 'InvalidCredentials' }],
+        ['tk4', { status: 'ok' }],
+        // tk3: not ready yet
+      ]),
+    );
+    expect(await s.run(now)).toEqual({ read: 3, failed: 2 });
+    // Sent over 15 min ago, unclaimed for 30 min; anything past Expo's 24 h is dropped first.
+    expect(s.repos.pushTickets.claimDue).toHaveBeenCalledWith(new Date('2026-10-05T11:45:00.000Z'), new Date('2026-10-05T11:30:00.000Z'), now, 1000);
+    expect(s.repos.pushTickets.deleteSentBefore).toHaveBeenCalledWith(new Date('2026-10-04T12:00:00.000Z'));
+    expect(s.fetcher.fetch).toHaveBeenCalledWith(['tk1', 'tk2', 'tk3', 'tk4']);
+    expect(s.repos.devices.clearPushTokenIf).toHaveBeenCalledTimes(1);
+    expect(s.repos.devices.clearPushTokenIf).toHaveBeenCalledWith('d1', 'ExponentPushToken[a]');
+    expect(s.repos.deviceEvents.record).toHaveBeenCalledWith({ user_id: 'u1', device_id: 'd1', kind: 'push_failed', actor: 'system', meta: { code: 'DeviceNotRegistered' } });
+    expect(s.repos.deviceEvents.record).toHaveBeenCalledWith({ user_id: 'u1', device_id: 'd2', kind: 'push_failed', actor: 'system', meta: { code: 'InvalidCredentials' } });
+    expect(s.repos.deviceEvents.record).toHaveBeenCalledTimes(2);
+    expect(s.repos.pushTickets.deleteMany).toHaveBeenCalledWith(['p1', 'p2', 'p4']);
+    expect(s.log.warn).toHaveBeenCalledWith({ deviceId: 'd2', ticketId: 'tk2', kind: 'confirmation', code: 'InvalidCredentials' }, 'mobile push receipt error');
+    expect(JSON.stringify(s.log.warn.mock.calls)).not.toContain('ExponentPushToken');
+  });
+
+  it('nothing due: no call to Expo', async () => {
+    const s = sweepSetup([], new Map());
+    expect(await s.run(new Date())).toEqual({ read: 0, failed: 0 });
+    expect(s.fetcher.fetch).not.toHaveBeenCalled();
+  });
+
+  it('ExpoReceiptFetcher posts ids in chunks of 300 and maps ok, errors and missing receipts', async () => {
+    const fetchImpl = vi.fn(async (_url: string, init: { body: string }) => {
+      const { ids } = JSON.parse(init.body) as { ids: string[] };
+      const data: Record<string, unknown> = {};
+      for (const id of ids) if (id !== 'r5') data[id] = id === 'r1' ? { status: 'error', message: 'x', details: { error: 'MessageTooBig' } } : { status: 'ok' };
+      return new Response(JSON.stringify({ data }), { status: 200 });
+    });
+    const ids = Array.from({ length: 450 }, (_, i) => `r${i}`);
+    const out = await new ExpoReceiptFetcher('tok', fetchImpl as never).fetch(ids);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, { headers: Record<string, string>; body: string }];
+    expect(url).toBe('https://exp.host/--/api/v2/push/getReceipts');
+    expect(init.headers).toMatchObject({ authorization: 'Bearer tok' });
+    expect(JSON.parse(init.body).ids).toHaveLength(300);
+    expect(out.get('r1')).toEqual({ status: 'error', error: 'MessageTooBig' });
+    expect(out.get('r0')).toEqual({ status: 'ok' });
+    expect(out.has('r5')).toBe(false);
+    expect(out.size).toBe(449);
+  });
+
+  it('ExpoReceiptFetcher throws on a non-2xx answer', async () => {
+    const fetchImpl = vi.fn(async () => new Response('', { status: 503 }));
+    await expect(new ExpoReceiptFetcher(null, fetchImpl as never).fetch(['a'])).rejects.toMatchObject({ code: 'EXPO_HTTP_503' });
   });
 });

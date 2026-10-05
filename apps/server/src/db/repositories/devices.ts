@@ -145,6 +145,11 @@ export class DevicesRepository {
     await this.db.device.update({ where: { id }, data: { pushToken: token } });
   }
 
+  /** Clears the push token only while it is still `token`: a newer one registered since stays. */
+  async clearPushTokenIf(id: string, token: string): Promise<boolean> {
+    return (await this.db.device.updateMany({ where: { id, pushToken: token }, data: { pushToken: null } })).count > 0;
+  }
+
   async findByPushToken(token: string): Promise<Device | undefined> {
     const d = await this.db.device.findFirst({ where: { pushToken: token } });
     return d ? mapDevice(d) : undefined;

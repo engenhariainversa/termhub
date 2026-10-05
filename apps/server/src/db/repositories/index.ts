@@ -40,6 +40,7 @@ import { DevicesRepository } from './devices.js';
 import { DeviceSessionsRepository } from './device-sessions.js';
 import { DeviceEventsRepository } from './device-events.js';
 import { UserNotificationsRepository } from './user-notifications.js';
+import { PushTicketsRepository } from './push-tickets.js';
 import { TaskPullRequestsRepository } from './task-pull-requests.js';
 import { AccountDeletionRepository } from './account-deletion.js';
 
@@ -85,6 +86,7 @@ export interface Repositories {
   deviceSessions: DeviceSessionsRepository;
   deviceEvents: DeviceEventsRepository;
   userNotifications: UserNotificationsRepository;
+  pushTickets: PushTicketsRepository;
   taskPullRequests: TaskPullRequestsRepository;
   accountDeletion: AccountDeletionRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
@@ -134,6 +136,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     deviceSessions: new DeviceSessionsRepository(db),
     deviceEvents: new DeviceEventsRepository(db),
     userNotifications: new UserNotificationsRepository(db),
+    pushTickets: new PushTicketsRepository(db),
     taskPullRequests: new TaskPullRequestsRepository(db),
     accountDeletion: new AccountDeletionRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
