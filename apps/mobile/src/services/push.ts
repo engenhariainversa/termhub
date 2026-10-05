@@ -19,7 +19,8 @@ export function configurePush(): void {
       shouldShowList: true,
       // Android hides the heads-up banner of a silent notification.
       shouldPlaySound: true,
-      shouldSetBadge: false,
+      // The server's `badge` is the unread count (TER-923).
+      shouldSetBadge: true,
     }),
   });
 }
@@ -75,3 +76,23 @@ export const pushConversationId = (data: unknown): string | null => dataString(d
 /** The history row a push was sent for (`data.notification_id`), or `null` for a push from a server
  * older than that field. */
 export const pushNotificationId = (data: unknown): string | null => dataString(data, 'notification_id');
+
+/** The app icon's number (TER-923): the history's unread count. Never throws. */
+export async function setIconBadge(count: number): Promise<void> {
+  await Notifications.setBadgeCountAsync(Math.max(0, count)).catch(() => false);
+}
+
+/**
+ * Removes from the notification center every delivered push whose history row is `read` (by its
+ * `data.notification_id`), or every one when `read` is `'all'` (the session ended). Never throws.
+ */
+export async function dismissDelivered(read: ReadonlySet<string> | 'all'): Promise<void> {
+  try {
+    for (const n of await Notifications.getPresentedNotificationsAsync()) {
+      const id = pushNotificationId(n.request.content.data);
+      if (read === 'all' || (id && read.has(id))) await Notifications.dismissNotificationAsync(n.request.identifier);
+    }
+  } catch {
+    // A missing native module or an OS error: the center keeps them, nothing else breaks.
+  }
+}
