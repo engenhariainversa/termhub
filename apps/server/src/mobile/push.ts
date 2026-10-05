@@ -289,6 +289,14 @@ export class MobilePushService {
     return stop;
   }
 
+  /**
+   * The daily summary of the automatic work (spec D26): one push to every device of the owner, tapping opens
+   * the account chat where the message is. The row in the notifications list is kept like any other.
+   */
+  async automationSummary(userId: string, textFor: (locale: Locale) => PushText, data: Record<string, unknown>, collapseId: string): Promise<void> {
+    await this.deliver(userId, 'reply', textFor, data, await this.deps.repos.devices.listActiveWithPush(userId), collapseId);
+  }
+
   /** Called by the enrolment service for a real request: goes to every device, live or not. */
   async deviceRequest(user: User, request: DeviceRequest): Promise<void> {
     try {

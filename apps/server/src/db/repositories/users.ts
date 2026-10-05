@@ -155,6 +155,15 @@ export class UsersRepository {
     await this.db.user.update({ where: { id: userId }, data: { locale } });
   }
 
+  /** The IANA zone the client reported (the daily summary's clock); null when unset. */
+  async timeZone(userId: string): Promise<string | null> {
+    return (await this.db.user.findUnique({ where: { id: userId }, select: { timeZone: true } }))?.timeZone ?? null;
+  }
+
+  async setTimeZone(userId: string, timeZone: string): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { timeZone } });
+  }
+
   async setChatSuggestions(userId: string, enabled: boolean): Promise<void> {
     await this.db.user.update({ where: { id: userId }, data: { chatSuggestions: enabled } });
   }

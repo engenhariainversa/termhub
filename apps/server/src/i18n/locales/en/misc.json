@@ -77,5 +77,14 @@
   "padrão": "default",
   "Orçamento diário do automático atingido (US$ {{spent}} de US$ {{limit}}): nada novo começa até amanhã": "Automatic work daily budget reached (US$ {{spent}} of US$ {{limit}}): nothing new starts until tomorrow",
   "Gasto do automático em 80% do orçamento diário (US$ {{spent}} de US$ {{limit}})": "Automatic work spending at 80% of the daily budget (US$ {{spent}} of US$ {{limit}})",
-  "Orçamento do card estourado; o agente não foi retomado. Confira a aba e retome quando quiser.": "The card's budget is used up; the agent was not resumed. Check the tab and resume when you want."
+  "Orçamento do card estourado; o agente não foi retomado. Confira a aba e retome quando quiser.": "The card's budget is used up; the agent was not resumed. Check the tab and resume when you want.",
+  "Resumo do automático — {{date}}": "Automatic work summary — {{date}}",
+  "Feitos: {{cards}} cards, {{merges}} merges, {{deploys}} deploys": "Done: {{cards}} cards, {{merges}} merges, {{deploys}} deploys",
+  "Esperando você: {{waiting}}": "Waiting on you: {{waiting}}",
+  "Esperando você: {{total}}": "Waiting on you: {{total}}",
+  "nada": "nothing",
+  "Custo estimado do dia: {{cost}}": "Estimated cost of the day: {{cost}}",
+  "US$ {{value}}": "US$ {{value}}",
+  "Um PR": "A PR",
+  "Desde {{since}}": "Since {{since}}"
 }

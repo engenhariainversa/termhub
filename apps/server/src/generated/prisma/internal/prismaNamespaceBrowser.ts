@@ -105,7 +105,8 @@ export const ModelName = {
   DeviceChallenge: 'DeviceChallenge',
   DeviceEvent: 'DeviceEvent',
   PushTicket: 'PushTicket',
-  UserNotification: 'UserNotification'
+  UserNotification: 'UserNotification',
+  AutomationSummary: 'AutomationSummary'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -1041,6 +1042,15 @@ export const UserNotificationScalarFieldEnum = {
 } as const
 
 export type UserNotificationScalarFieldEnum = (typeof UserNotificationScalarFieldEnum)[keyof typeof UserNotificationScalarFieldEnum]
+
+
+export const AutomationSummaryScalarFieldEnum = {
+  userId: 'userId',
+  day: 'day',
+  sentAt: 'sentAt'
+} as const
+
+export type AutomationSummaryScalarFieldEnum = (typeof AutomationSummaryScalarFieldEnum)[keyof typeof AutomationSummaryScalarFieldEnum]
 
 
 export const SortOrder = {
