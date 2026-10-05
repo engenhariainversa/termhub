@@ -15,7 +15,7 @@ import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, T
 import { automationQueue } from '../automation/queue.js';
 import { policyText } from '../automation/policy.js';
 import { listAutomationEvents } from '../automation/events.js';
-import { getRunCard, reportCard, tabHasActiveRun } from '../automation/follower.js';
+import { escalateAutomationRun, getRunCard, reportCard, tabHasActiveRun } from '../automation/follower.js';
 import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { AUTOMATION_EVENTS_PAGE_MAX } from '../db/repositories/automation-events.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
@@ -290,6 +290,14 @@ export const TOOLS: ToolDef[] = [
       reason: z.string().trim().min(1).max(500).optional(),
     },
     run: (ctx, a) => reportCard(ctx, a as { status: 'done' | 'blocked'; pr_url?: string; reason?: string }),
+  },
+  {
+    name: 'escalate_automation_run',
+    description:
+      "Hand an automatic run over to the person (agentic board): use it when a woken tab stopped and you read its last answer and cannot continue it with send_input. run_id is the one the wake message names; reason (pt-BR, one or two sentences) says why. The person is told; the run stops being followed.",
+    scope: 'tasks', resource: 'projects', action: 'update',
+    input: { run_id: id, reason: z.string().trim().min(1).max(500) },
+    run: (ctx, a) => escalateAutomationRun(ctx, a as { run_id: string; reason: string }),
   },
   {
     name: 'get_card',

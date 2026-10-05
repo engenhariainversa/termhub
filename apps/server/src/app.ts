@@ -377,7 +377,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // the follower drives the tabs of this instance's runs (resumes, restarts, the PR fallback). Both colours
   // run it; the claim row picks one per card. It reads the same `lifecycle` the SIGTERM drain flips, so a
   // draining colour claims, types and takes over nothing.
-  const automation = startAutomation({ repos, lifecycle, log: fastify.log });
+  const automation = startAutomation({ repos, lifecycle, log: fastify.log, follower: { wakeStopped: (i) => waker.wakeForStoppedTab(i) } });
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     clearInterval(liveBeat);

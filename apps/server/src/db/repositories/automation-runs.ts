@@ -28,6 +28,8 @@ export interface AutomationRun {
   allowed_tools: string[] | null;
   /** when something was last typed into the run's tab (a resume, a restart): read by whichever colour follows the run */
   last_typed_at: Date | null;
+  /** when the chat was woken for a tab that keeps stopping (one wake per run); null = never */
+  woken_at: Date | null;
   /** the server instance (colour) driving the run */
   claimed_by: string;
   heartbeat_at: Date;
@@ -69,6 +71,7 @@ const map = (r: Row): AutomationRun => ({
   restart_count: r.restartCount,
   allowed_tools: toolsOf(r.allowedTools),
   last_typed_at: r.lastTypedAt,
+  woken_at: r.wokenAt,
   claimed_by: r.claimedBy,
   heartbeat_at: r.heartbeatAt,
   started_at: r.startedAt,
@@ -164,6 +167,12 @@ export class AutomationRunsRepository {
   /** Records that a line was just typed into the run's tab (by id: whichever colour drives the run typed it). */
   async noteTyped(id: string, at: Date): Promise<void> {
     await this.db.automationRun.updateMany({ where: { id }, data: { lastTypedAt: at } });
+  }
+
+  /** Claims the run's one wake: true for the single caller that finds `woken_at` empty on a run this instance drives. */
+  async claimWake(id: string, instance: string, at: Date): Promise<boolean> {
+    const { count } = await this.db.automationRun.updateMany({ where: { id, claimedBy: instance, status: active, wokenAt: null }, data: { wokenAt: at } });
+    return count === 1;
   }
 
   /** Refreshes `heartbeat_at` on every active run this instance drives (the database's clock, like `takeOver`). */
