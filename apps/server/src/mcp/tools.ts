@@ -15,7 +15,7 @@ import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, T
 import { automationQueue } from '../automation/queue.js';
 import { policyText } from '../automation/policy.js';
 import { listAutomationEvents } from '../automation/events.js';
-import { escalateAutomationRun, getRunCard, reportCard, tabHasActiveRun } from '../automation/follower.js';
+import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun } from '../automation/follower.js';
 import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { AUTOMATION_EVENTS_PAGE_MAX } from '../db/repositories/automation-events.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
@@ -298,6 +298,14 @@ export const TOOLS: ToolDef[] = [
     scope: 'tasks', resource: 'projects', action: 'update',
     input: { run_id: id, reason: z.string().trim().min(1).max(500) },
     run: (ctx, a) => escalateAutomationRun(ctx, a as { run_id: string; reason: string }),
+  },
+  {
+    name: 'resume_automation_run',
+    description:
+      "Hand an automatic run that stopped for the person back to automatic work (agentic board): run_id is the run the escalation named. The run goes back to running with a fresh budget of resumes; termhub follows its tab again. A run still running is left as is; an ended one is refused. Nothing is typed into the tab by this call.",
+    scope: 'tasks', resource: 'projects', action: 'update',
+    input: { run_id: id },
+    run: (ctx, a) => resumeAutomationRun(ctx, a as { run_id: string }),
   },
   {
     name: 'get_card',

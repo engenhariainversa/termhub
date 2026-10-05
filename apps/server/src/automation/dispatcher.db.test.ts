@@ -249,6 +249,47 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(await runsOf()).toHaveLength(1);
   });
 
+  it('max_parallel 1: a run escalated to the person (waiting) frees its slot, keeps its card, and the next card starts (TER-888)', async () => {
+    await setSetup({ automation: { max_parallel: 1 } });
+    const busy = await card('Busy');
+    await db.task.update({ where: { id: busy.id }, data: { columnId: (await db.taskColumn.findFirst({ where: { projectId, category: 'doing' } }))!.id, status: 'doing' } });
+    const run = (await repos.automationRuns.claim({ project_id: projectId, task_id: busy.id, role: 'implementer', instance: 'other' }))!;
+    await repos.automationRuns.update(run.id, 'other', { status: 'waiting', waiting_reason: 'question_unanswered' });
+    const next = await card('Next');
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    expect(startAgent.mock.calls.map((c) => (c[1] as { task_id: string }).task_id)).toEqual([next.id]);
+    // the escalated run is still the card's one active run: no second run can be claimed on it
+    expect(await repos.automationRuns.claim({ project_id: projectId, task_id: busy.id, role: 'implementer', instance: 'x' })).toBeNull();
+    // answered: back to running, and it counts again (the ceiling is crossed once, nothing more starts)
+    expect(await repos.automationRuns.resumeWaiting(run.id)).toBe(true);
+    await card('Third');
+    await tickOnce(deps);
+    expect(startAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('updateActive with unlessWaitingFor parks a run once per reason (no second escalation of the same episode)', async () => {
+    const c = await card('Once');
+    const run = (await repos.automationRuns.claim({ project_id: projectId, task_id: c.id, role: 'implementer', instance: 'me' }))!;
+    await repos.automationRuns.update(run.id, 'me', { status: 'running' });
+    const park = (reason: string) => repos.automationRuns.updateActive(run.id, 'me', { status: 'waiting', waiting_reason: reason }, { unlessWaitingFor: reason });
+    expect(await park('question_unanswered')).toBe(true);
+    expect(await park('question_unanswered')).toBe(false);
+    expect(await park('permission_needed')).toBe(true);
+  });
+
+  it('max_parallel 1: a run waiting on its account limit (not an escalation) still holds its slot', async () => {
+    await setSetup({ automation: { max_parallel: 1 } });
+    const busy = await card('Busy');
+    await db.task.update({ where: { id: busy.id }, data: { columnId: (await db.taskColumn.findFirst({ where: { projectId, category: 'doing' } }))!.id, status: 'doing' } });
+    const run = (await repos.automationRuns.claim({ project_id: projectId, task_id: busy.id, role: 'implementer', instance: 'other' }))!;
+    await repos.automationRuns.update(run.id, 'other', { status: 'waiting', waiting_reason: 'quota' });
+    await card('Next');
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    expect(startAgent).not.toHaveBeenCalled();
+  });
+
   it('max_parallel 2 starts the first two cards in board order', async () => {
     await setSetup({ automation: { max_parallel: 2 } });
     await card('A');
@@ -388,7 +429,10 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     }
     expect((await repos.tasks.findById(c.id))!.auto).toBe(false);
     const escalated = (await eventsOf()).filter((e) => e.kind === 'escalated');
-    expect(escalated.map((e) => e.payload)).toEqual([{ reason: 'start_failed', attempts: MAX_START_FAILURES, code: 'LAUNCH_FAILED', untagged: true }]);
+    expect(escalated.map((e) => e.payload)).toEqual([{ reason: 'start_failed', tab_id: null, attempts: MAX_START_FAILURES, code: 'LAUNCH_FAILED', untagged: true }]);
+    // the person learns it in the project chat (no question card: a line of its own)
+    const lines = await db.chatMessage.findMany({ where: { conversation: { projectId } }, select: { text: true } });
+    expect(lines.map((l) => l.text)).toEqual([`Automático parou em ${c.ref}: O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.`]);
 
     await age(RETRY_BACKOFF_MS + 1000);
     const later = makeDeps();

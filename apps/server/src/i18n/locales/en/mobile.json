@@ -41,5 +41,7 @@
   "A aba {{tab}} ({{machine}})": "Tab {{tab}} ({{machine}})",
   "{{project}}: aba terminou": "{{project}}: tab finished",
   "Aba terminou": "Tab finished",
-  "{{tab}} terminou e espera você.": "{{tab}} finished and is waiting for you."
+  "{{tab}} terminou e espera você.": "{{tab}} finished and is waiting for you.",
+  "{{ref}} parou: {{reason}}": "{{ref}} stopped: {{reason}}",
+  "Um card": "A card"
 }

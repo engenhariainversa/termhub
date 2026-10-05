@@ -134,6 +134,8 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       return `pausar o trabalho automático${args.project_id ? ' do projeto' : ' de todos os projetos'}${args.interrupt === true ? ' e interromper as abas que estão nele agora' : ''}`;
     case 'resume_automation':
       return `retomar o trabalho automático${args.project_id ? ' do projeto' : ' de todos os projetos'}`;
+    case 'resume_automation_run':
+      return 'retomar o trabalho automático de um card';
     case 'sync_tickets':
       return 'sincronizar os tickets de todas as fontes';
     case 'import_tickets': {

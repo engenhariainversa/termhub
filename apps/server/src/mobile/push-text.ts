@@ -68,3 +68,11 @@ export function tabQuestionText(ctx: PushContext, kind: 'choice' | 'permission',
     body: kind === 'permission' ? t(locale, '{{tab}} pede permissão para continuar.', { tab }) : t(locale, '{{tab}} fez uma pergunta.', { tab }),
   };
 }
+
+/**
+ * Automatic work stopped on a card and waits for the person (agentic board spec §9.3, D25): the card's
+ * ref and the reason's own text (`escalationReasonText`, already in `locale`), never what the tab showed.
+ */
+export function automationEscalationText(ctx: PushContext, cardRef: string, reason: string, locale: Locale = DEFAULT_LOCALE): PushText {
+  return { title: needsYou(locale, ctx), body: t(locale, '{{ref}} parou: {{reason}}', { ref: cardRef, reason }) };
+}

@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { expireTabLimits } from './tab-limits.js';
 import { automaticRunOfTab } from '../automation/pause.js';
+import { expectVerdict, settleQuestion } from '../automation/question-hold.js';
 import { config } from '../config.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { CloseScope, TabQuestion, TabQuestionCloseStatus } from '../db/repositories/tab-questions.js';
@@ -170,31 +171,37 @@ export async function openTabQuestion(
     }
   }
   if (shown) {
+    // A tab with a live automatic run answers by the agentic board's own order (spec D18, §9.2); every other
+    // tab — a manual one, a paused or disabled project — exactly as before. Read before the card goes out:
+    // for a running run the card's own push waits for automatic work's verdict (`expectVerdict`, D25) and
+    // goes out unless automatic work took the card over.
+    const run = shown.kind === 'choice' || shown.kind === 'permission' ? await automaticRunOfTab(repos, tab.id).catch(() => null) : null;
+    if (run?.status === 'running') expectVerdict(shown.id);
     await publishTabQuestions(repos, 'tab_question', [shown]);
+    const log = deps?.log ?? silentLog;
+    const card = shown;
+    const settle = (owned: boolean) => settleQuestion(card.id, owned);
     if (shown.kind === 'choice') {
-      const log = deps?.log ?? silentLog;
-      // A tab with a live automatic run answers by the agentic board's own order (spec D18); every
-      // other tab — a manual one, a paused or disabled project — exactly as before.
-      const run = await automaticRunOfTab(repos, tab.id).catch(() => null);
       if (run) {
-        const card = shown;
         // loaded lazily: automation/answers reaches the follower, whose imports lead back here
         void import('../automation/answers.js')
           .then(({ automationAnswer }) => automationAnswer({ repos, waker: deps?.waker, log }, card, run))
-          .catch((err) => log.warn({ tabQuestionId: card.id, code: failureLabel(err) }, 'automation: question not handled'));
+          .then((outcome) => settle(outcome !== 'left'))
+          .catch((err) => {
+            settle(false);
+            log.warn({ tabQuestionId: card.id, code: failureLabel(err) }, 'automation: question not handled');
+          });
       } else if (!shown.auto_answer && deps?.waker) void deps.waker.wake(shown, tab.name);
-    } else if (shown.kind === 'permission') {
-      // A permission in a tab with a live automatic run is answered "allow" when the project's rules allow
-      // it, or escalated (agentic board spec §9.2); in any other tab the card waits for the person, as before.
-      const run = await automaticRunOfTab(repos, tab.id).catch(() => null);
-      if (run) {
-        const log = deps?.log ?? silentLog;
-        const card = shown;
-        // loaded lazily, like automationAnswer above
-        void import('../automation/answers.js')
-          .then(({ answerPermissionAutomatically }) => answerPermissionAutomatically({ repos, log }, card, run))
-          .catch((err) => log.warn({ tabQuestionId: card.id, code: failureLabel(err) }, 'automation: permission not handled'));
-      }
+    } else if (shown.kind === 'permission' && run) {
+      // "allow" when the project's rules allow it, or escalate (agentic board spec §9.2); in any other tab the
+      // card waits for the person, as before. Loaded lazily, like automationAnswer above.
+      void import('../automation/answers.js')
+        .then(({ answerPermissionAutomatically }) => answerPermissionAutomatically({ repos, log }, card, run))
+        .then((outcome) => settle(outcome !== 'left'))
+        .catch((err) => {
+          settle(false);
+          log.warn({ tabQuestionId: card.id, code: failureLabel(err) }, 'automation: permission not handled');
+        });
     }
   }
   return shown;

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
 import { monitorBus } from '../monitor/bus.js';
+import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
+import { expectVerdict, resetQuestionHolds, settleQuestion } from '../automation/question-hold.js';
 import type { Tab } from '../db/repositories/types.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Device } from '../db/repositories/devices.js';
@@ -786,5 +788,137 @@ describe('MobilePushService — aba terminou (TER-925)', () => {
     stopIt();
     await vi.advanceTimersByTimeAsync(5_000);
     expect(t.sent).toEqual([]);
+  });
+});
+
+describe('MobilePushService — automatic work escalated (agentic board §9.3, D25)', () => {
+  const escalated = (over: Partial<PublishedAutomationEvent> = {}): PublishedAutomationEvent => ({
+    id: 'e1', project_id: 'p1', task_id: 'k1', run_id: 'r1', kind: 'escalated', payload: { reason: 'question_unanswered', tab_id: 't1' }, created_at: '', owner_id: 'u1', ...over,
+  });
+  const withTask = (t: ReturnType<typeof setup>) =>
+    Object.assign(t.repos, { tasks: { findById: vi.fn(async (id: string) => ({ id, project_id: 'p1', ref: 'TER-7' })) } });
+
+  it('one history row and a push to every device of the owner, live or not: "<projeto> precisa de você" / "<ref> parou: <motivo>" (review I3)', async () => {
+    const t = setup({ live: ['d2'] });
+    withTask(t);
+    stop = t.service.start();
+    automationBus.publish(escalated());
+    await flush();
+    const body = 'TER-7 parou: O agente fez uma pergunta que o modo automático não soube responder; responda no card.';
+    expect(t.repos.userNotifications.create).toHaveBeenCalledTimes(1);
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith({
+      user_id: 'u1', kind: 'confirmation', title: 'termhub precisa de você', body,
+      data: { kind: 'automation_escalation', project_id: 'p1', run_id: 'r1', conversation_id: 'cp' },
+    });
+    expect(t.sent).toHaveLength(1);
+    const data = { kind: 'automation_escalation', project_id: 'p1', run_id: 'r1', conversation_id: 'cp', notification_id: 'n1' };
+    expect(t.sent[0]).toEqual([
+      { to: 'ExponentPushToken[a]', title: 'termhub precisa de você', body, data, badge: 3, collapseId: 'escalation:r1:question_unanswered' },
+      { to: 'ExponentPushToken[b]', title: 'termhub precisa de você', body, data, badge: 3, collapseId: 'escalation:r1:question_unanswered' },
+    ]);
+  });
+
+  it("in the owner's language", async () => {
+    const t = setup({ locale: 'en', devices: [mkDevice('d1', 'ExponentPushToken[a]')] });
+    withTask(t);
+    stop = t.service.start();
+    automationBus.publish(escalated({ payload: { reason: 'resume_cap' } }));
+    await flush();
+    expect(t.sent[0]![0]).toMatchObject({ title: 'termhub needs you', body: 'TER-7 stopped: The agent stopped several times without finishing and the chat could not carry on; check the tab.' });
+  });
+
+  it('once per run and reason; another reason of the same run, or another run, is pushed', async () => {
+    const t = setup({ devices: [mkDevice('d1', 'ExponentPushToken[a]')] });
+    withTask(t);
+    stop = t.service.start();
+    automationBus.publish(escalated());
+    automationBus.publish(escalated({ id: 'e2' }));
+    await flush();
+    expect(t.sent).toHaveLength(1);
+    automationBus.publish(escalated({ id: 'e3', payload: { reason: 'answer_cap' } }));
+    automationBus.publish(escalated({ id: 'e4', run_id: 'r2' }));
+    await flush();
+    expect(t.sent).toHaveLength(3);
+  });
+
+  it('only escalations are pushed: other automation events are not', async () => {
+    const t = setup();
+    withTask(t);
+    stop = t.service.start();
+    for (const kind of ['run_started', 'run_done', 'run_blocked', 'question_answered', 'pr_opened', 'paused'] as const) automationBus.publish(escalated({ kind }));
+    await flush();
+    expect(t.repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(t.sent).toEqual([]);
+  });
+
+  it("a project that is not the owner's names nothing and is not pushed", async () => {
+    const t = setup();
+    withTask(t);
+    t.repos.projects.findByIdsForOwner.mockResolvedValue([]);
+    stop = t.service.start();
+    automationBus.publish(escalated());
+    await flush();
+    expect(t.sent).toEqual([]);
+  });
+
+  it('a new escalation after the run resumed is pushed again, and the resume marks its rows handled (review I1, M2)', async () => {
+    const t = setup({ devices: [mkDevice('d1', 'ExponentPushToken[a]')] });
+    withTask(t);
+    stop = t.service.start();
+    automationBus.publish(escalated());
+    await flush();
+    automationBus.publish(escalated({ id: 'e2', kind: 'run_resumed', payload: { by: 'person' } }));
+    await flush();
+    expect(t.repos.userNotifications.markReadByData).toHaveBeenCalledWith('u1', 'run_id', 'r1', expect.any(Date));
+    automationBus.publish(escalated({ id: 'e3' }));
+    await flush();
+    expect(t.sent.filter((m) => m[0]!.title)).toHaveLength(2);
+  });
+
+  describe('the question card of a tab under automatic work (review I2)', () => {
+    const question = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'choice', payload: { questions: [] }, status: 'open', answer: null, error_code: null, created_at: '', answered_at: null, closed_at: null };
+    const publish = () => chatBus.publish({ type: 'tab_question', user_id: 'u1', conversation_id: 'cp', question } as unknown as ChatEvent);
+    afterEach(() => resetQuestionHolds());
+
+    it('is not pushed when automation took it over', async () => {
+      const t = setup();
+      stop = t.service.start();
+      expectVerdict('q1');
+      publish();
+      settleQuestion('q1', true);
+      await flush();
+      expect(t.sent).toEqual([]);
+    });
+
+    it('is pushed when automation left it, or failed', async () => {
+      const t = setup({ devices: [mkDevice('d1', 'ExponentPushToken[a]')] });
+      stop = t.service.start();
+      expectVerdict('q1');
+      publish();
+      await flush();
+      expect(t.sent).toEqual([]); // waiting for the verdict
+      settleQuestion('q1', false);
+      await flush();
+      expect(t.sent[0]![0]).toMatchObject({ body: 'A aba api fez uma pergunta.' });
+    });
+
+    it('is pushed when no verdict comes in time', async () => {
+      const t = setup({ devices: [mkDevice('d1', 'ExponentPushToken[a]')] });
+      stop = t.service.start();
+      expectVerdict('q1', 20);
+      publish();
+      await flush();
+      await flush();
+      await flush();
+      expect(t.sent).toHaveLength(1);
+    });
+
+    it('nothing holds it (a manual tab, a paused project, a waiting run): pushed at once', async () => {
+      const t = setup({ devices: [mkDevice('d1', 'ExponentPushToken[a]')] });
+      stop = t.service.start();
+      publish();
+      await flush();
+      expect(t.sent).toHaveLength(1);
+    });
   });
 });
