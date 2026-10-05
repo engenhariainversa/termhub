@@ -1265,6 +1265,7 @@ model Device {
   requestId      String?   @unique @map("request_id")
   request        DeviceRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
   createdAt      DateTime  @default(now()) @map("created_at")
+  pushTickets    PushTicket[]
   tokens         DeviceToken[]
   challenges     DeviceChallenge[]
 
@@ -1318,6 +1319,25 @@ model DeviceEvent {
   @@index([userId, createdAt])
   @@index([createdAt])
   @@map("device_events")
+}
+
+/// One Expo push ticket waiting for its receipt (TER-924): APNs/FCM answers come later, through
+/// `getReceipts`. The sweeper reads them ~15 min after the send and deletes the row; Expo keeps a
+/// receipt 24 h, so an older row is dropped unread. `push_token` is the token the push went to, so a
+/// `DeviceNotRegistered` clears only that token, never a newer one.
+model PushTicket {
+  id        String    @id
+  ticketId  String    @map("ticket_id")
+  deviceId  String    @map("device_id")
+  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  pushToken String    @map("push_token")
+  /// confirmation | reply | device_request | test
+  kind      String
+  claimedAt DateTime? @map("claimed_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("push_tickets")
 }
 
 /// Everything ever pushed to a person, for the app's Notificações tab (spec §9). Kept 30 days.
