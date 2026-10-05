@@ -150,6 +150,15 @@ export class ChatRepository {
     return row ? mapConversation(row) : undefined;
   }
 
+  /** The user's most recently active conversation in any scope (a test push's tap lands there, TER-913). */
+  async findLatestActiveForUser(userId: string): Promise<ChatConversation | undefined> {
+    const row = await this.db.chatConversation.findFirst({
+      where: { userId, tabId: null, archivedAt: null },
+      orderBy: [{ lastMessageAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return row ? mapConversation(row) : undefined;
+  }
+
   async findByIdForUser(id: string, userId: string): Promise<ChatConversation | undefined> {
     const row = await this.db.chatConversation.findFirst({ where: { id, userId } });
     return row ? mapConversation(row) : undefined;

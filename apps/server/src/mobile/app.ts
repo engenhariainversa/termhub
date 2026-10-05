@@ -69,7 +69,8 @@ export type GuardedMobile = (resource: Resource, plugin: (a: FastifyInstance) =>
 export function createMobileServices(deps: MobileDeps): MobileServices {
   const sockets = new MobileSocketRegistry();
   const { repos, mailer, log } = deps;
-  const push = new MobilePushService({ repos, sender: new ExpoPushSender(config.mobile?.expoPushToken ?? null), sockets, log });
+  const expoToken = config.mobile?.expoPushToken ?? null;
+  const push = new MobilePushService({ repos, sender: new ExpoPushSender(expoToken), receipts: new ExpoReceiptFetcher(expoToken), sockets, log });
   return {
     jtis: new JtiCache(),
     // A real device request also pushes to the owner's phones (the decoy path never calls the hook).
@@ -143,7 +144,7 @@ export async function registerMobileApi(
             }),
           '/devices',
         );
-        await guarded('devices', (a) => mobilePushTokenRoutes(a, deps.repos), '');
+        await guarded('devices', (a) => mobilePushTokenRoutes(a, deps.repos, services.push), '');
         // Challenge and token renewal: both mobileAuth 'none', /token verifies the device proof itself.
         await guarded('devices', (a) => mobileSessionRoutes(a, deps.repos, { session: services.session, jtis: services.jtis, publicUrl }), '/session');
         // The chat, over the same ChatService as the web; `GET /me` reads under `chat` too (spec §6).

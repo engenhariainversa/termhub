@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { formatVerificationCode } from '@termhub/mobile-api';
+import { formatVerificationCode, pushTestBody } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import type { DeviceRequest } from '../db/repositories/device-requests.js';
 import type { Device } from '../db/repositories/devices.js';
@@ -8,6 +8,7 @@ import type { DeviceEvent } from '../db/repositories/device-events.js';
 import { notFound } from '../lib/errors.js';
 import { clientLocation } from '../mobile/auth.js';
 import type { EnrolmentService } from '../mobile/enrolment.js';
+import type { MobilePushService } from '../mobile/push.js';
 import type { RevokeInput } from '../mobile/revocation.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
@@ -16,6 +17,8 @@ const renameBody = z.object({ name: z.string().trim().min(1).max(60) });
 export interface DeviceRouteDeps {
   enrolment: EnrolmentService;
   revoke: (deviceId: string, input: RevokeInput) => Promise<Device | undefined>;
+  /** "Enviar notificação de teste" (TER-913). */
+  push: Pick<MobilePushService, 'testPush'>;
 }
 
 const toRequestView = (r: DeviceRequest) => ({
@@ -67,6 +70,11 @@ export function describeDeviceEvent(e: DeviceEvent): string {
       if (meta.code === 'DeviceNotRegistered') return 'Notificação recusada: o aparelho não aceita mais avisos (app removido ou notificações desligadas)';
       if (meta.code === 'InvalidCredentials') return 'Notificação não entregue: credencial da Apple ou do Google inválida no servidor';
       return typeof meta.code === 'string' ? `Notificação não entregue (${meta.code})` : 'Notificação não entregue';
+    case 'push_test':
+      if (meta.outcome === 'delivered_to_provider') return 'Notificação de teste: entregue à Apple/Google';
+      if (meta.outcome === 'receipt_pending') return 'Notificação de teste enviada; a Apple/Google ainda não confirmou';
+      if (meta.outcome === 'send_failed') return 'Notificação de teste falhou: o servidor não conseguiu enviar';
+      return typeof meta.outcome === 'string' ? `Notificação de teste falhou: ${meta.outcome}` : 'Notificação de teste';
     case 'review_auto_approved':
       return 'Aprovado automaticamente (conta de revisão)';
     case 'review_changed':
@@ -135,6 +143,16 @@ export async function deviceRoutes(app: FastifyInstance, repos: Repositories, de
     const device = await deps.revoke(id, { reason: 'user', actor: 'user', ip: clientLocation(request).ip });
     if (!device) throw notFound('Aparelho não encontrado');
     return { device };
+  });
+
+  // A test push to one of the signed-in user's own active devices (TER-913). `update`, like the other
+  // device actions: it changes nothing but must not be open to a read-only grant.
+  app.post('/:id/test-push', { config: { action: 'update' } }, async (request, reply) => {
+    const { id } = idParam.parse(request.params);
+    const body = pushTestBody.parse(request.body ?? {});
+    const device = await repos.devices.findActiveById(id);
+    if (!device || device.user_id !== request.user!.id) throw notFound('Aparelho não encontrado');
+    return reply.code(202).send(await deps.push.testPush(request.user!, device, body.kind, body.delay_seconds));
   });
 
   app.get('/events', async (request) => {

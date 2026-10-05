@@ -12,14 +12,18 @@ const user = { id: 'u1', email: 'ana@example.com' } as unknown as User;
 function setup(opts: { devices?: Device[]; live?: string[] } = {}) {
   const devices = opts.devices ?? [mkDevice('d1', 'ExponentPushToken[a]'), mkDevice('d2', 'ExponentPushToken[b]')];
   const repos = {
-    devices: { listActiveWithPush: vi.fn(async () => devices), setPushToken: vi.fn(async () => undefined) },
+    devices: { listActiveWithPush: vi.fn(async () => devices), setPushToken: vi.fn(async () => undefined), clearPushTokenIf: vi.fn(async () => true) },
+    deviceEvents: { record: vi.fn(async () => undefined) },
     userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })) },
     pushTickets: { recordMany: vi.fn(async () => undefined) },
     projects: { findByIdsForOwner: vi.fn(async () => [{ id: 'p1', name: 'termhub' }]) },
     tabs: { findByIdsForOwner: vi.fn(async () => [{ id: 't1', name: 'api' }]) },
     machines: { findByIdsForOwner: vi.fn(async () => [{ id: 'm1', name: 'jarvis' }]) },
     // cp / c9: conversations of project p1; cx: unknown to this user; anything else: the account-wide chat.
-    chat: { findByIdForUser: vi.fn(async (id: string) => (id === 'cx' ? undefined : { id, user_id: 'u1', project_id: id === 'cp' || id === 'c9' ? 'p1' : null })) },
+    chat: {
+      findByIdForUser: vi.fn(async (id: string) => (id === 'cx' ? undefined : { id, user_id: 'u1', project_id: id === 'cp' || id === 'c9' ? 'p1' : null })),
+      findLatestActiveForUser: vi.fn(async () => ({ id: 'cp', user_id: 'u1', project_id: 'p1' }) as { id: string; user_id: string; project_id: string | null } | undefined),
+    },
   };
   const sent: PushMessage[][] = [];
   const sender: PushSender & { send: ReturnType<typeof vi.fn> } = {
@@ -30,8 +34,9 @@ function setup(opts: { devices?: Device[]; live?: string[] } = {}) {
   };
   const sockets = { liveDevices: vi.fn(() => new Set(opts.live ?? [])) };
   const log = { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
-  const service = new MobilePushService({ repos: repos as unknown as Repositories, sender, sockets: sockets as never, log: log as never });
-  return { repos, sender, sent, sockets, log, service };
+  const receipts = { fetch: vi.fn(async (_ids: string[]) => new Map<string, PushReceipt>()) };
+  const service = new MobilePushService({ repos: repos as unknown as Repositories, sender, receipts, sockets: sockets as never, log: log as never });
+  return { repos, sender, sent, sockets, log, service, receipts };
 }
 
 /** Lets the listener's async work (repo calls, send) settle. */
@@ -442,5 +447,109 @@ describe('push receipts (TER-924)', () => {
   it('ExpoReceiptFetcher throws on a non-2xx answer', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 503 }));
     await expect(new ExpoReceiptFetcher(null, fetchImpl as never).fetch(['a'])).rejects.toMatchObject({ code: 'EXPO_HTTP_503' });
+  });
+});
+
+describe('MobilePushService.testPush (TER-913)', () => {
+  const dev = mkDevice('d1', 'ExponentPushToken[a]');
+  const ok = (id = 'tk1') => async (messages: PushMessage[]) => messages.map((m) => ({ to: m.to, id }));
+
+  afterEach(() => vi.useRealTimers());
+
+  it('sends one message to that device even with a live socket, no history row, "[Teste]" title, data.test, the latest conversation', async () => {
+    const t = setup({ live: ['d1'] });
+    const res = await t.service.testPush(user, dev, 'confirmation', 0);
+    expect(res.ticket).toEqual({ status: 'ok' });
+    expect(t.repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(t.sent).toEqual([
+      [
+        {
+          to: 'ExponentPushToken[a]',
+          title: '[Teste] termhub precisa de você',
+          body: 'O chat do projeto termhub pediu sua confirmação.',
+          data: { kind: 'confirmation', conversation_id: 'cp', project_id: 'p1', test: true },
+        },
+      ],
+    ]);
+    expect(t.sent[0]![0]!.data).not.toHaveProperty('notification_id');
+  });
+
+  it.each([
+    ['tab_question', '[Teste] termhub precisa de você', 'A aba teste pede permissão para continuar.'],
+    ['reply', '[Teste] Resposta pronta em termhub', 'O chat do projeto termhub terminou de responder.'],
+  ] as const)('%s uses the real text', async (kind, title, body) => {
+    const t = setup();
+    await t.service.testPush(user, dev, kind, 0);
+    expect(t.sent[0]![0]).toMatchObject({ title, body, data: { kind, conversation_id: 'cp', test: true } });
+  });
+
+  it('device_request names no conversation; with no conversation at all, the tap just opens the app', async () => {
+    const t = setup();
+    await t.service.testPush(user, dev, 'device_request', 0);
+    expect(t.sent[0]![0]).toMatchObject({ title: '[Teste] Novo aparelho pede acesso', data: { kind: 'device_request', test: true } });
+    expect(t.repos.chat.findLatestActiveForUser).not.toHaveBeenCalled();
+    t.repos.chat.findLatestActiveForUser.mockResolvedValueOnce(undefined);
+    await t.service.testPush(user, dev, 'reply', 0);
+    expect(t.sent[1]![0]).toEqual({ to: 'ExponentPushToken[a]', title: '[Teste] Resposta pronta em Projeto de teste', body: 'O chat do projeto Projeto de teste terminou de responder.', data: { kind: 'reply', test: true } });
+  });
+
+  it('409 NO_PUSH_TOKEN for a device without a token', async () => {
+    const t = setup();
+    await expect(t.service.testPush(user, { ...dev, push_token: null } as Device, 'confirmation', 0)).rejects.toMatchObject({ statusCode: 409, code: 'NO_PUSH_TOKEN' });
+    expect(t.sent).toEqual([]);
+  });
+
+  it('429 PUSH_TEST_RATE_LIMITED on the seventh call in a minute, per device', async () => {
+    const t = setup();
+    for (let i = 0; i < 6; i++) await t.service.testPush(user, dev, 'confirmation', 0);
+    await expect(t.service.testPush(user, dev, 'confirmation', 0)).rejects.toMatchObject({ statusCode: 429, code: 'PUSH_TEST_RATE_LIMITED' });
+    await expect(t.service.testPush(user, mkDevice('d2', 'ExponentPushToken[b]'), 'confirmation', 0)).resolves.toBeTruthy();
+  });
+
+  it('a delay answers at once with no ticket and sends later', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-05T00:00:00.000Z') });
+    const t = setup();
+    const res = await t.service.testPush(user, dev, 'confirmation', 10);
+    expect(res).toEqual({ scheduled_for: '2026-10-05T00:00:10.000Z', ticket: null });
+    expect(t.sender.send).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.sender.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('records the receipt as a push_test event ~15 s later: delivered, an error, or pending after a retry', async () => {
+    vi.useFakeTimers();
+    const t = setup();
+    t.sender.send.mockImplementation(ok('tk1'));
+    t.receipts.fetch.mockResolvedValueOnce(new Map([['tk1', { status: 'ok' }]]));
+    await t.service.testPush(user, dev, 'reply', 0);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(t.repos.deviceEvents.record).toHaveBeenLastCalledWith({ user_id: 'u1', device_id: 'd1', kind: 'push_test', actor: 'user', meta: { kind: 'reply', outcome: 'delivered_to_provider' } });
+
+    t.receipts.fetch.mockResolvedValueOnce(new Map([['tk1', { status: 'error', error: 'InvalidCredentials' }]]));
+    await t.service.testPush(user, dev, 'reply', 0);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(t.repos.deviceEvents.record).toHaveBeenLastCalledWith(expect.objectContaining({ meta: { kind: 'reply', outcome: 'InvalidCredentials' } }));
+    expect(t.repos.devices.clearPushTokenIf).not.toHaveBeenCalled();
+
+    t.receipts.fetch.mockResolvedValue(new Map());
+    await t.service.testPush(user, dev, 'reply', 0);
+    await vi.advanceTimersByTimeAsync(15_000 + 60_000);
+    expect(t.repos.deviceEvents.record).toHaveBeenLastCalledWith(expect.objectContaining({ meta: { kind: 'reply', outcome: 'receipt_pending' } }));
+    expect(JSON.stringify(t.log.warn.mock.calls) + JSON.stringify(t.log.info.mock.calls)).not.toContain('ExponentPushToken');
+  });
+
+  it('a ticket error answers it, records it and clears a dead token', async () => {
+    const t = setup();
+    t.sender.send.mockImplementationOnce(async (m: PushMessage[]) => [{ to: m[0]!.to, error: 'DeviceNotRegistered' }]);
+    expect((await t.service.testPush(user, dev, 'confirmation', 0)).ticket).toEqual({ status: 'error', error: 'DeviceNotRegistered' });
+    expect(t.repos.devices.clearPushTokenIf).toHaveBeenCalledWith('d1', 'ExponentPushToken[a]');
+    expect(t.repos.deviceEvents.record).toHaveBeenCalledWith(expect.objectContaining({ kind: 'push_test', meta: { kind: 'confirmation', outcome: 'DeviceNotRegistered' } }));
+  });
+
+  it('a thrown send answers send_failed and never rejects', async () => {
+    const t = setup();
+    t.sender.send.mockRejectedValueOnce(new Error('down'));
+    expect((await t.service.testPush(user, dev, 'confirmation', 0)).ticket).toEqual({ status: 'error', error: 'send_failed' });
+    expect(t.repos.deviceEvents.record).toHaveBeenCalledWith(expect.objectContaining({ meta: { kind: 'confirmation', outcome: 'send_failed' } }));
   });
 });
