@@ -260,7 +260,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_automation_queue',
     description:
-      "List a project's cards tagged \"automático\" in the order automatic work takes them (board order: column, then position). Each item has the card's ref, title, whether it is eligible now and, when it is not, the reason code and its pt-BR text (automation off, paused, type not allowed, not in a todo column, no description, already has an agent, no machine with the worktree capability, repository not configured). Untagged cards and subtasks are not listed.",
+      "List a project's cards tagged \"automático\" in the order automatic work takes them (board order: column, then position). Each item has the card's ref, title, whether it is eligible now and, when it is not, the reason code and its pt-BR text (automation off, paused, type not allowed, not in a todo column, no description, already has an agent, no machine with the worktree capability, repository not configured; or, for an eligible card the dispatcher found no place for: no account with room, machine offline, machine without room, no machine accepting automatic work, followed by each machine and account it left out and why). Untagged cards and subtasks are not listed.",
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id },
     run: async (ctx, a) => ({ items: await automationQueue(ctx, (a as { project_id: string }).project_id) }),

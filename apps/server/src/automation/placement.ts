@@ -33,15 +33,41 @@ export interface TickStarts {
   accounts: Set<string>;
 }
 
+/** Why a linked machine was left out (TER-985: the waiting reason names each one). */
+export type MachineVerdict = 'not_agent' | 'offline' | 'no_worktree' | 'no_claude' | 'not_allowed' | 'no_room';
+/**
+ * Why a Claude account of a usable machine was left out: not in the project's list ("Contas de IA e
+ * modelo"), marked exhausted, at or above `AUTOMATIC_MAX_UTILIZATION`, already given a start this tick,
+ * or on a machine without room.
+ */
+export type AccountVerdict = 'not_listed' | 'exhausted' | 'busy' | 'taken' | 'machine_no_room';
+
+/** What a placement that found nothing looked at: every machine and account it left out, and why. Ids and names only. */
+export interface PlaceDetail {
+  /** how many accounts the project's list has (0 = none chosen in the Setup) */
+  listed: number;
+  machines: Array<{ id: string; name: string; why: MachineVerdict }>;
+  accounts: Array<{ id: string; label: string; machine: string; why: AccountVerdict; peak?: number }>;
+}
+
 export type Placement =
   | { machine: Machine; account: AiAccount; link: ProjectMachine }
   // `later`: every place is taken by a start of this tick; nothing to show, the next tick asks again
-  | { waiting: WaitingReason | 'later' };
+  | { waiting: WaitingReason | 'later'; detail?: PlaceDetail };
 
 /** An agent machine of the project's owner that answers the worktree RPC right now (D10). */
 const capableNow = (m: Machine) => (agents.capabilities(m.id) ?? []).includes(CAPABILITY_WORKTREE);
 /** An agent recent enough for worktrees that is not connected: the card waits for it, not for an update. */
 const capableButOffline = (m: Machine) => !agents.isOnline(m.id) && m.agent_version !== null && versionAtLeast(m.agent_version, WORKTREE_MIN_AGENT_VERSION);
+
+function machineVerdict(m: Machine): MachineVerdict | null {
+  if (m.type !== 'agent') return 'not_agent';
+  if (!agents.isOnline(m.id)) return 'offline';
+  if (!capableNow(m)) return 'no_worktree';
+  if (!m.capabilities.includes('claude')) return 'no_claude';
+  if (!m.automation_allowed) return 'not_allowed';
+  return null;
+}
 
 /**
  * Where an automatic run starts (spec §8 step 3, D10, D14, spike R6): an online agent machine linked to the
@@ -49,51 +75,71 @@ const capableButOffline = (m: Machine) => !agents.isOnline(m.id) && m.agent_vers
  * installed, under the first Claude account of the project's list (in its order) that is on that machine, is
  * not marked exhausted and has room (peak utilization below `AUTOMATIC_MAX_UTILIZATION`; unknown usage
  * counts as room, as for `start_agent`), on a machine with room (`deps.room`). Unlike `start_agent`, it never
- * falls back to a full account: the card waits instead. The cheap checks come first, so a machine is only
- * read (`hw.probe`) when an account would otherwise be chosen on it.
+ * falls back to a full account: the card waits instead, with `detail` naming each machine and account left
+ * out and why (TER-985). The cheap checks come first, so a machine is only read (`hw.probe`) when an account
+ * would otherwise be chosen on it.
  */
 export async function placeRun(deps: PlacementDeps, project: Project, setup: ProjectSetupData, tick?: TickStarts): Promise<Placement> {
   const { repos } = deps;
+  const { ai } = setup;
   if (!project.owner_id) return { waiting: 'no_machine' };
   const links = await repos.projectMachines.listByProject(project.id);
   const linked: Array<{ machine: Machine; link: ProjectMachine }> = [];
   for (const link of links) {
     const machine = await repos.machines.findById(link.machine_id);
-    // ssh and local machines are never chosen (D10); a machine out of the owner's scope neither
-    if (machine && machine.type === 'agent' && machine.owner_id === project.owner_id) linked.push({ machine, link });
+    // a machine out of the owner's scope is never chosen nor named
+    if (machine && machine.owner_id === project.owner_id) linked.push({ machine, link });
   }
-  const capable = linked.filter(({ machine }) => capableNow(machine) && machine.capabilities.includes('claude'));
-  if (capable.length === 0) return { waiting: linked.some(({ machine }) => capableButOffline(machine)) ? 'machine_offline' : 'no_machine' };
-  const ready = capable.filter(({ machine }) => machine.automation_allowed);
-  if (ready.length === 0) return { waiting: 'automation_not_allowed' };
+  const detail: PlaceDetail = { listed: ai.accounts.length, machines: [], accounts: [] };
+  const ready: typeof linked = [];
+  for (const place of linked) {
+    const why = machineVerdict(place.machine);
+    if (why) detail.machines.push({ id: place.machine.id, name: place.machine.name, why });
+    else ready.push(place);
+  }
+  // ssh and local machines are never chosen (D10)
+  const capable = linked.filter(({ machine }) => machine.type === 'agent' && capableNow(machine) && machine.capabilities.includes('claude'));
+  if (capable.length === 0) return { waiting: linked.some(({ machine }) => machine.type === 'agent' && capableButOffline(machine)) ? 'machine_offline' : 'no_machine', detail };
+  if (ready.length === 0) return { waiting: 'automation_not_allowed', detail };
 
   const [listed, exhausted] = await Promise.all([repos.aiAccounts.list(project.owner_id), repos.aiAccountExhaustions.activeIds(deps.now())]);
-  const { ai } = setup;
-  const candidates = ready
-    .flatMap(({ machine }) => accountsOn(ai, listed, machine.id, 'claude'))
-    .filter((a) => !exhausted.has(a.id))
-    .sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
+  const nameOf = new Map(ready.map(({ machine }) => [machine.id, machine.name]));
+  const candidates = ready.flatMap(({ machine }) => accountsOn(ai, listed, machine.id, 'claude')).sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
+  const left = (account: AiAccount, why: AccountVerdict, peak?: number) =>
+    detail.accounts.push({ id: account.id, label: account.label, machine: nameOf.get(account.machine_id) ?? account.machine_id, why, ...(peak === undefined ? {} : { peak }) });
+  const inList = new Set(candidates.map((a) => a.id));
+  for (const a of listed) if (a.provider === 'claude' && nameOf.has(a.machine_id) && !inList.has(a.id)) left(a, 'not_listed');
   let taken = false;
   let crowded = false;
   const roomOf = new Map<string, Promise<boolean>>();
   for (const account of candidates) {
+    if (exhausted.has(account.id)) {
+      left(account, 'exhausted');
+      continue;
+    }
     if (tick && (tick.accounts.has(account.id) || tick.machines.has(account.machine_id))) {
       taken = true;
+      left(account, 'taken');
       continue;
     }
     const peak = await deps.usage(account.id);
-    if (peak !== null && peak >= AUTOMATIC_MAX_UTILIZATION) continue;
+    if (peak !== null && peak >= AUTOMATIC_MAX_UTILIZATION) {
+      left(account, 'busy', Math.round(peak));
+      continue;
+    }
     const place = ready.find(({ machine }) => machine.id === account.machine_id)!;
     if (deps.room) {
       if (!roomOf.has(place.machine.id)) roomOf.set(place.machine.id, deps.room(place.machine, place.link, setup));
       if (!(await roomOf.get(place.machine.id))) {
         crowded = true;
+        if (!detail.machines.some((m) => m.id === place.machine.id)) detail.machines.push({ id: place.machine.id, name: place.machine.name, why: 'no_room' });
+        left(account, 'machine_no_room');
         continue;
       }
     }
     return { machine: place.machine, account, link: place.link };
   }
-  return { waiting: crowded ? 'no_room' : taken ? 'later' : 'no_account' };
+  return crowded ? { waiting: 'no_room', detail } : taken ? { waiting: 'later' } : { waiting: 'no_account', detail };
 }
 
 /** What the queue shows for a waiting card. */
@@ -117,10 +163,10 @@ export const WAITING_TTL_MS = 60_000;
  * Kept in memory on purpose: the claim row is deleted so nothing is written per tick; a restart clears it
  * and the next tick fills it again.
  */
-const waiting = new Map<string, { reason: WaitingReason; at: number }>();
+const waiting = new Map<string, { reason: WaitingReason; detail: PlaceDetail | null; at: number }>();
 
-export function noteWaiting(taskId: string, reason: WaitingReason, now: Date): void {
-  waiting.set(taskId, { reason, at: now.getTime() });
+export function noteWaiting(taskId: string, reason: WaitingReason, now: Date, detail: PlaceDetail | null = null): void {
+  waiting.set(taskId, { reason, detail, at: now.getTime() });
 }
 
 export function clearWaiting(taskId: string): void {
@@ -128,13 +174,18 @@ export function clearWaiting(taskId: string): void {
 }
 
 export function waitingReasonOf(taskId: string, now: Date = new Date()): WaitingReason | null {
+  return waitingOf(taskId, now)?.reason ?? null;
+}
+
+/** The waiting reason and what the placement left out, while fresh. */
+export function waitingOf(taskId: string, now: Date = new Date()): { reason: WaitingReason; detail: PlaceDetail | null } | null {
   const w = waiting.get(taskId);
   if (!w) return null;
   if (now.getTime() - w.at > WAITING_TTL_MS) {
     waiting.delete(taskId);
     return null;
   }
-  return w.reason;
+  return { reason: w.reason, detail: w.detail };
 }
 
 /** Tests only. */

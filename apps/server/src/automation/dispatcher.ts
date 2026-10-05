@@ -361,7 +361,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         // No place now: the claim goes away and the card (and those after it, which would get the same
         // answer) shows why it waits. Not an error, and no event per tick.
         await release(run);
-        for (const rest of queue.slice(i)) noteWaiting(rest.task_id, why, deps.now());
+        for (const rest of queue.slice(i)) noteWaiting(rest.task_id, why, deps.now(), place.detail ?? null);
         return;
       }
       clearWaiting(item.task_id);
