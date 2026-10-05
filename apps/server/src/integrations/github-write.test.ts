@@ -53,6 +53,17 @@ describe('github write client', () => {
     expect(call(f, 1).url).toBe('https://api.github.com/repos/a/b/pulls/9/files?per_page=100&page=2');
   });
 
+  it('does not follow a Link next to another origin', async () => {
+    const f = vi.fn(async () => json(200, [{ filename: 'a.ts' }], { link: '<https://evil.example/files?page=2>; rel="next"' }));
+    expect(await createGithubWriteClient(f).files('t', 'a/b', 9)).toEqual({ paths: ['a.ts'], complete: false });
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads a 200 merge response with merged false', async () => {
+    const f = async () => json(200, { merged: false, message: 'nope' });
+    expect(await createGithubWriteClient(f).merge('t', 'a/b', 9, { sha: 'h', title: 'T', method: 'merge' })).toEqual({ merged: false, sha: null });
+  });
+
   it('flags the file list incomplete at the 3000 cap', async () => {
     let page = 0;
     const f = vi.fn(async () => json(200, Array.from({ length: 100 }, (_, i) => ({ filename: `f${page}-${i}` })), { link: `<https://api.github.com/x?page=${++page + 1}>; rel="next"` }));

@@ -91,7 +91,10 @@ export function createGithubWriteClient(fetchImpl: typeof fetch = fetch): Github
         const res: Response = await call(token, 'GET', url);
         if (!res.ok) throw writeFailure(res);
         for (const f of (await res.json()) as Array<{ filename: string }>) paths.push(f.filename);
-        url = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') ?? '')?.[1] ?? null;
+        const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') ?? '')?.[1] ?? null;
+        // Never send the bearer token to another origin: stop and report the list as incomplete.
+        if (next && new URL(next, API).origin !== API) return { paths, complete: false };
+        url = next;
       }
       return { paths, complete: url === null && paths.length < FILES_CAP };
     },
