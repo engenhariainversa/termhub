@@ -1,3 +1,4 @@
+import { WORKTREE_MIN_AGENT_VERSION } from '@termhub/agent-protocol';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
 import type { ProjectAutomation } from '../setup/schema.js';
 
@@ -19,7 +20,7 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   not_in_todo: 'Fora da coluna A fazer',
   no_description: 'Sem descrição',
   has_agent: 'Já tem um agente',
-  no_capable_machine: 'Nenhuma máquina com agente 0.17 ligada ao projeto',
+  no_capable_machine: `Nenhuma máquina com agente ${WORKTREE_MIN_AGENT_VERSION.split('.').slice(0, 2).join('.')} ligada ao projeto`,
   repo_missing: 'Repositório não configurado no Setup',
 };
 

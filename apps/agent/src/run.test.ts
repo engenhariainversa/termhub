@@ -76,7 +76,7 @@ describe('capabilitiesFor', () => {
   it('claims sim on macOS only', () => {
     expect(capabilitiesFor('macos')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'sim']));
     expect(capabilitiesFor('linux')).not.toContain('sim');
-    expect(capabilitiesFor('linux')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'transcript', 'file_read', 'file_list']));
+    expect(capabilitiesFor('linux')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'transcript', 'file_read', 'file_list', 'worktree']));
   });
 });
 

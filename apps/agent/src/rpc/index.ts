@@ -16,6 +16,7 @@ import * as tools from './tools.js';
 import * as transcript from './transcript.js';
 import * as update from './update.js';
 import * as wda from './wda.js';
+import * as worktree from './worktree.js';
 
 // Re-exported so callers of this module (dispatch.ts) don't need to know RpcFailure actually
 // lives in exec.ts — from the RPC layer's point of view it belongs here.
@@ -57,4 +58,6 @@ export const handlers: Handlers = {
   'tab.mcp.write': tabMcp.write,
   'tab.mcp.remove': tabMcp.remove,
   'transcript.read': transcript.read,
+  'git.worktree.ensure': worktree.ensure,
+  'git.worktree.remove': worktree.remove,
 };
