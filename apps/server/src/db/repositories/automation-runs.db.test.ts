@@ -63,7 +63,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
   it('a finished run frees the card: a new claim succeeds', async () => {
     const first = (await claim('blue'))!;
     expect(await claim('blue')).toBeNull();
-    await runs.update(first.id, { status: 'done', ended_at: new Date() });
+    await runs.update(first.id, 'blue', { status: 'done', ended_at: new Date() });
     const second = await claim('green');
     expect(second).not.toBeNull();
     expect(second!.id).not.toBe(first.id);
@@ -81,19 +81,45 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
   it('update writes the patch; bump returns the new count', async () => {
     const run = (await claim('blue'))!;
     const started = new Date('2026-10-05T10:00:00Z');
-    await runs.update(run.id, { status: 'running', tab_id: 'tab-1', machine_id: machineId, account_id: 'acc-1', branch: 'auto/ter-1', worktree_path: '/w/ter-1', started_at: started });
+    await runs.update(run.id, 'blue', { status: 'running', tab_id: 'tab-1', machine_id: machineId, account_id: 'acc-1', branch: 'auto/ter-1', worktree_path: '/w/ter-1', started_at: started });
     expect(await runs.bump(run.id, 'resume_count')).toBe(1);
     expect(await runs.bump(run.id, 'resume_count')).toBe(2);
     expect(await runs.bump(run.id, 'fix_count')).toBe(1);
     const active = await runs.activeByTab('tab-1');
     expect(active).toMatchObject({ id: run.id, status: 'running', machine_id: machineId, account_id: 'acc-1', branch: 'auto/ter-1', worktree_path: '/w/ter-1', resume_count: 2, fix_count: 1 });
     expect(active!.started_at?.toISOString()).toBe(started.toISOString());
-    await runs.update(run.id, { status: 'waiting', waiting_reason: 'question' });
+    await runs.update(run.id, 'blue', { status: 'waiting', waiting_reason: 'question' });
     expect((await runs.activeByProject(projectId)).map((r) => [r.id, r.waiting_reason])).toEqual([[run.id, 'question']]);
-    await runs.update(run.id, { status: 'blocked' });
+    await runs.update(run.id, 'blue', { status: 'blocked' });
     expect(await runs.activeByTab('tab-1')).toBeNull();
     expect(await runs.activeByProject(projectId)).toEqual([]);
     expect(await runs.countActive(projectId)).toBe(0);
+  });
+
+  it('update writes only while the instance still drives the run; release frees an unstarted claim', async () => {
+    const run = (await claim('blue'))!;
+    expect(await runs.update(run.id, 'green', { status: 'running' })).toBe(false); // taken over by nobody: not green's
+    expect((await runs.findById(run.id))!.status).toBe('queued');
+    expect(await runs.release(run.id, 'green')).toBe(false);
+    expect(await runs.release(run.id, 'blue')).toBe(true);
+    expect(await runs.findById(run.id)).toBeNull();
+    expect(await claim('green')).not.toBeNull(); // the card is free again
+  });
+
+  it('release never deletes a run that started', async () => {
+    const run = (await claim('blue'))!;
+    await runs.update(run.id, 'blue', { status: 'running', tab_id: 'tab-1' });
+    expect(await runs.release(run.id, 'blue')).toBe(false);
+    expect(await runs.findById(run.id)).not.toBeNull();
+  });
+
+  it('after a takeover, the old instance can no longer write the run', async () => {
+    const run = (await claim('blue'))!;
+    await db.automationRun.update({ where: { id: run.id }, data: { heartbeatAt: new Date(Date.now() - 10 * 60_000) } });
+    expect((await runs.takeOver('green', 120_000)).map((r) => r.id)).toEqual([run.id]);
+    expect(await runs.update(run.id, 'blue', { status: 'failed' })).toBe(false);
+    expect(await runs.update(run.id, 'green', { status: 'running' })).toBe(true);
+    expect((await runs.findById(run.id))!).toMatchObject({ status: 'running', claimed_by: 'green' });
   });
 
   it('heartbeat refreshes only the active runs of its instance', async () => {
@@ -122,21 +148,21 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     }));
 
     const staleBefore = new Date(Date.now() - 60_000);
-    const [a, b] = await Promise.all([runs.takeOver('green', staleBefore), runs.takeOver('red', staleBefore)]);
+    const [a, b] = await Promise.all([runs.takeOver('green', 60_000), runs.takeOver('red', 60_000)]);
     const ids = [...a, ...b].map((r) => r.id);
     expect(ids.sort()).toEqual([stale.id, stale2.id].sort()); // no duplicate, no fresh or finished run
     for (const r of [...a.map((x) => ({ ...x, by: 'green' })), ...b.map((x) => ({ ...x, by: 'red' }))]) {
       expect(r.claimed_by).toBe(r.by);
       expect(r.heartbeat_at.getTime()).toBeGreaterThan(staleBefore.getTime());
     }
-    expect(await runs.takeOver('green', staleBefore)).toEqual([]); // taken over already: fresh heartbeat
+    expect(await runs.takeOver('red', 60_000)).toEqual([]); // taken over already: fresh heartbeat
     const untouched = await db.automationRun.findMany({ where: { id: { in: [fresh.id, finished.id] } } });
     expect(untouched.every((r) => r.claimedBy === 'blue')).toBe(true);
   });
 
   it('a deleted card keeps its runs with task_id null; the sweep cancels the active ones and returns their worktrees', async () => {
     const run = (await claim('blue'))!;
-    await runs.update(run.id, { status: 'running', machine_id: machineId, worktree_path: '/w/ter-1' });
+    await runs.update(run.id, 'blue', { status: 'running', machine_id: machineId, worktree_path: '/w/ter-1' });
     const done = await db.automationRun.create({ data: { id: newId(), projectId, taskId, role: 'implementer', status: 'done', claimedBy: 'blue' } });
     await db.task.delete({ where: { id: taskId } });
 

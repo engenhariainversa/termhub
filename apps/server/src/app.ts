@@ -76,6 +76,11 @@ import { startAgentUpdateScheduler } from './agent/latest-version.js';
 import { registerTerminalWs } from './terminal/ws.js';
 import { registerAgentWs } from './agent/ws.js';
 import { agents } from './agent/registry.js';
+import { dispatcherInstanceId, startDispatcher } from './automation/dispatcher.js';
+import { ensureEpicBranch, ensureWorkspace } from './automation/branches.js';
+import { accountPeak } from './automation/placement.js';
+import { startAgent } from './control/agents.js';
+import { createGithubWriteClient } from './integrations/github-write.js';
 import { TranscriptionService } from './terminal/transcription.js';
 import { createUpgradeRouter } from './ws/router.js';
 import { createLifecycle, drain, RESTART_CLOSE, within } from './ws/drain.js';
@@ -372,6 +377,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   });
   // Sends due automatic answers (spec 2026-09-26 concierge memory §6); both colors run it, the claim picks one.
   const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log);
+  // Agentic board (spec §8): starts agents on eligible cards of projects with automation on. Both colours
+  // run it; the claim row picks one per card, and a draining instance stops claiming.
+  const dispatcher = startDispatcher({
+    repos,
+    instance: dispatcherInstanceId(),
+    lifecycle,
+    now: () => new Date(),
+    startAgent,
+    ensureWorkspace,
+    ensureEpicBranch,
+    gh: createGithubWriteClient(),
+    usage: accountPeak(repos),
+    log: fastify.log,
+  });
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     clearInterval(liveBeat);
@@ -388,6 +407,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopMemorySweeper();
     // Before the database closes: a send in flight finishes (or records its failure) first.
     await stopAutoAnswerSweeper();
+    await dispatcher.stop();
     stopTabSuggestions();
     tabChat.close();
     await simulators.shutdownAll();

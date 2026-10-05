@@ -4,10 +4,10 @@ import type { AutomationEvent, AutomationEventInput, Repositories } from '../db/
 import type { User } from '../db/repositories/types.js';
 import { normalizeSetup } from '../setup/schema.js';
 import { automationBus, recordEvent, type AutomationEventPayload } from './events.js';
-import { isPaused, pauseAutomation, resumeAutomation } from './pause.js';
+import { interruptRuns, isPaused, pauseAutomation, resumeAutomation } from './pause.js';
 
 /** In-memory stand-ins for the repositories the pause switch and the event log touch. */
-function fakeRepos(opts: { enabled?: Record<string, boolean> } = {}) {
+function fakeRepos(opts: { enabled?: Record<string, boolean>; runs?: Array<{ id: string; project_id: string; tab_id: string | null }>; tabState?: Record<string, string> } = {}) {
   const projects = [
     { id: 'p1', owner_id: 'u1', name: 'one' },
     { id: 'p2', owner_id: 'u1', name: 'two' },
@@ -36,6 +36,12 @@ function fakeRepos(opts: { enabled?: Record<string, boolean> } = {}) {
       resumeUser: async (id: string) => userPause.delete(id),
       pauseProject: async (id: string, at: Date) => pause(projectPause, id, at),
       resumeProject: async (id: string) => projectPause.delete(id),
+    },
+    automationRuns: {
+      activeByProject: async (projectId: string) => (opts.runs ?? []).filter((r) => r.project_id === projectId),
+    },
+    tabs: {
+      findById: async (id: string) => ({ id, state: opts.tabState?.[id] ?? 'working' }),
     },
     automationEvents: {
       insert: async (e: AutomationEventInput) => {
@@ -104,10 +110,46 @@ describe('pauseAutomation / resumeAutomation', () => {
     expect(events).toEqual([]);
   });
 
-  it('interrupt is only recorded on the event (the dispatcher sends the keys)', async () => {
-    const { ctx, events } = fakeRepos();
-    await pauseAutomation(ctx, { scope: 'p1', interrupt: true });
+  const runs = [
+    { id: 'r1', project_id: 'p1', tab_id: 'tab-1' },
+    { id: 'r2', project_id: 'p1', tab_id: null }, // not started yet: no tab
+    { id: 'r3', project_id: 'p2', tab_id: 'tab-3' },
+    { id: 'r9', project_id: 'p9', tab_id: 'tab-9' },
+  ];
+
+  it('interrupt sends Escape to the tabs of the paused project\'s active runs, and records it', async () => {
+    const { ctx, events } = fakeRepos({ runs });
+    const pressed: string[] = [];
+    await pauseAutomation(ctx, { scope: 'p1', interrupt: true }, { press: async (id) => void pressed.push(id) });
     expect(events[0]!.payload).toEqual({ scope: 'project', interrupt: true });
+    expect(pressed).toEqual(['tab-1']);
+  });
+
+  it('a plain pause sends no key', async () => {
+    const { ctx } = fakeRepos({ runs, enabled: { p1: true, p2: true } });
+    const pressed: string[] = [];
+    await pauseAutomation(ctx, { scope: 'p1' }, { press: async (id) => void pressed.push(id) });
+    await pauseAutomation(ctx, { scope: 'all' }, { press: async (id) => void pressed.push(id) });
+    expect(pressed).toEqual([]);
+  });
+
+  it('"Pausar e interromper" on all reaches every automated project of the person, never another person\'s', async () => {
+    const { ctx } = fakeRepos({ runs, enabled: { p1: true, p2: true, p9: true } });
+    const pressed: string[] = [];
+    await pauseAutomation(ctx, { scope: 'all', interrupt: true }, { press: async (id) => void pressed.push(id) });
+    expect(pressed.sort()).toEqual(['tab-1', 'tab-3']);
+  });
+
+  it('a tab that fails to take the key does not keep the others from stopping', async () => {
+    const { ctx } = fakeRepos({ runs: [...runs, { id: 'r4', project_id: 'p1', tab_id: 'tab-4' }] });
+    const pressed: string[] = [];
+    await pauseAutomation(ctx, { scope: 'p1', interrupt: true }, {
+      press: async (id) => {
+        if (id === 'tab-1') throw new Error('offline');
+        pressed.push(id);
+      },
+    });
+    expect(pressed).toEqual(['tab-4']);
   });
 
   it('"Pausar tudo" records on the projects with automation on, and never on one with it off', async () => {
@@ -124,6 +166,15 @@ describe('pauseAutomation / resumeAutomation', () => {
     const { ctx, events } = fakeRepos();
     await expect(pauseAutomation(ctx, { scope: 'p9' })).rejects.toThrow();
     expect(events).toEqual([]);
+  });
+});
+
+describe('interruptRuns', () => {
+  it('onlyWorking leaves tabs that are not in a turn alone', async () => {
+    const { repos } = fakeRepos({ runs: [{ id: 'r1', project_id: 'p1', tab_id: 'a' }, { id: 'r2', project_id: 'p1', tab_id: 'b' }], tabState: { a: 'working', b: 'waiting_input' } });
+    const pressed: string[] = [];
+    expect(await interruptRuns(repos, ['p1'], { onlyWorking: true, press: async (id) => void pressed.push(id) })).toBe(1);
+    expect(pressed).toEqual(['a']);
   });
 });
 

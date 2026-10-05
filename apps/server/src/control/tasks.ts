@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { dispatchTriggers } from '../automation/events.js';
 import { TaskRuleError } from '../db/repositories/tasks.js';
 import type { ColumnCategory, Task, TaskColumn, TaskStatus, TaskType, TaskWithSubtasks } from '../db/repositories/types.js';
 import { readTicketLink } from '../integrations/ticket-link.js';
@@ -117,6 +118,7 @@ export async function createTask(
   const task = await rules(() =>
     ctx.repos.tasks.createWithSubtasks(input.project_id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id, auto: input.auto }, input.subtasks ?? []),
   );
+  if (task.auto) dispatchTriggers.poke('tag_set');
   return { task: outTree(task), board_url: boardUrl(input.project_id) };
 }
 
@@ -144,6 +146,7 @@ export async function updateTask(
   if (updated && input.auto !== undefined) {
     // After the fields, so an epic change and the tag in one call end up consistent.
     await rules(() => ctx.repos.tasks.setAuto(task.id, input.auto!));
+    if (input.auto) dispatchTriggers.poke('tag_set');
     updated = await ctx.repos.tasks.findById(task.id);
   }
   if (!updated) throw new ControlError('NOT_FOUND', 'Tarefa não encontrada');

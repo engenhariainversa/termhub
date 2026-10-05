@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { dispatchTriggers } from '../automation/events.js';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { badRequest, HttpError } from '../lib/errors.js';
@@ -50,6 +51,7 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
     }
     // the sources may have changed: "Sincronizar agora" right after saving must not answer the cached result
     forgetSync(id);
+    if (saved.data.automation.enabled) dispatchTriggers.poke('setup_saved');
     return { setup: saved };
   });
 

@@ -1,5 +1,6 @@
 import type { ControlContext } from '../control/context.js';
 import type { Repositories } from '../db/repositories/index.js';
+import { sendKeyToSession } from '../terminal/session-ops.js';
 import { recordEvent } from './events.js';
 
 /** `'all'` = every project of the person ("Pausar tudo"); otherwise a project id. */
@@ -22,12 +23,66 @@ export async function automatedProjects(repos: Repositories, ownerId: string): P
   return out;
 }
 
+/** Presses Escape in a tab: stops the agent's current turn (Claude Code and Codex both read it as "interrupt"). */
+export type PressEscape = (tabId: string) => Promise<void>;
+
+/** Escape through the tab's own session, without recreating a session that is gone. */
+export function escapeTab(repos: Repositories): PressEscape {
+  return async (tabId) => {
+    const tab = await repos.tabs.findById(tabId);
+    if (!tab?.tmux_session) return;
+    const machine = await repos.machines.findById(tab.machine_id);
+    if (!machine) return;
+    await sendKeyToSession(machine, tab.tmux_session, 'Escape');
+  };
+}
+
+/**
+ * "Pausar e interromper" (D24): Escape in the tab of every active automatic run of these projects. Best
+ * effort per tab: a machine that is offline or a tab that is gone does not keep the others from stopping.
+ * `onlyWorking`: only tabs in the middle of a turn (the dispatcher's startup pass, which may run again on
+ * every deploy while the pause lasts). Returns how many tabs got the key.
+ */
+export async function interruptRuns(
+  repos: Repositories,
+  projectIds: string[],
+  opts: { press?: PressEscape; onlyWorking?: boolean; log?: { warn(o: object, m: string): void } } = {},
+): Promise<number> {
+  const press = opts.press ?? escapeTab(repos);
+  let sent = 0;
+  for (const projectId of projectIds) {
+    let runs: Awaited<ReturnType<Repositories['automationRuns']['activeByProject']>>;
+    try {
+      runs = await repos.automationRuns.activeByProject(projectId);
+    } catch (e) {
+      // the pause itself is already recorded: a failed read must not undo the answer to it
+      opts.log?.warn({ projectId, err: e instanceof Error ? e.message : String(e) }, 'automation: interrupt could not list runs');
+      continue;
+    }
+    for (const run of runs) {
+      if (!run.tab_id) continue;
+      try {
+        if (opts.onlyWorking && (await repos.tabs.findById(run.tab_id))?.state !== 'working') continue;
+        await press(run.tab_id);
+        sent++;
+      } catch (e) {
+        opts.log?.warn({ tabId: run.tab_id, runId: run.id, err: e instanceof Error ? e.message : String(e) }, 'automation: interrupt failed');
+      }
+    }
+  }
+  return sent;
+}
+
 /**
  * Pauses the automatic work of one project or of all the person's projects. Pausing what is already
- * paused keeps the first timestamp. `interrupt` asks to also stop the tabs running now: here it is only
- * recorded on the event; the dispatcher sends the keys.
+ * paused keeps the first timestamp. `interrupt` also stops the tabs running now: Escape in each active
+ * run's tab (`interruptRuns`), after the pause is recorded so nothing types into them again.
  */
-export async function pauseAutomation(ctx: ControlContext, i: { scope: PauseScope; interrupt?: boolean }): Promise<{ paused_at: string }> {
+export async function pauseAutomation(
+  ctx: ControlContext,
+  i: { scope: PauseScope; interrupt?: boolean },
+  opts: { press?: PressEscape } = {},
+): Promise<{ paused_at: string }> {
   const { repos } = ctx;
   const interrupt = i.interrupt === true;
   if (i.scope === 'all') {
@@ -35,13 +90,16 @@ export async function pauseAutomation(ctx: ControlContext, i: { scope: PauseScop
     const ownerId = ctx.scope.createAs;
     const { paused_at, fresh } = await repos.automationPauses.pauseUser(ownerId, new Date());
     if (fresh || interrupt) {
-      for (const projectId of await automatedProjects(repos, ownerId)) await recordEvent(repos, { project_id: projectId, kind: 'paused', payload: { scope: 'all', interrupt } });
+      const projects = await automatedProjects(repos, ownerId);
+      for (const projectId of projects) await recordEvent(repos, { project_id: projectId, kind: 'paused', payload: { scope: 'all', interrupt } });
+      if (interrupt) await interruptRuns(repos, projects, opts);
     }
     return { paused_at: paused_at.toISOString() };
   }
   const { project } = await ctx.scoped.project(i.scope);
   const { paused_at, fresh } = await repos.automationPauses.pauseProject(project.id, new Date());
   if (fresh || interrupt) await recordEvent(repos, { project_id: project.id, kind: 'paused', payload: { scope: 'project', interrupt } });
+  if (interrupt) await interruptRuns(repos, [project.id], opts);
   return { paused_at: paused_at.toISOString() };
 }
 

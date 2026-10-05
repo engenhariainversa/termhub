@@ -98,3 +98,18 @@ export async function ensureWorkspace(
   const r = await agentRpc(machine, 'git.worktree.ensure', { repo_dir: i.repoDir, root: i.root, path: target, branch: i.branch, base: i.base });
   return { path: r.path, created: r.created };
 }
+
+/**
+ * Removes a card's worktree when it is clean (spec §7 cleanup); the branch stays. `dirty: true` = kept
+ * because it has uncommitted or untracked changes. A path the agent refuses as not one of its worktrees
+ * (`invalid`), or that is gone, is nothing to remove.
+ */
+export async function removeWorkspace(machine: Machine, i: { repoDir: string; root: string; path: string }): Promise<{ removed: boolean; dirty: boolean }> {
+  try {
+    return await agentRpc(machine, 'git.worktree.remove', { repo_dir: i.repoDir, root: i.root, path: i.path });
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === 'MACHINE_INVALID' || code === 'MACHINE_NOT_FOUND') return { removed: false, dirty: false };
+    throw e;
+  }
+}

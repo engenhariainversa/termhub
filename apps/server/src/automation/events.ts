@@ -30,6 +30,29 @@ class AutomationBus {
 
 export const automationBus = new AutomationBus();
 
+/**
+ * Something the dispatcher should look at now instead of at its next tick (spec D11): a card tagged, a
+ * setup saved. Per process; the other colour sees the change at its own tick.
+ */
+class DispatchTriggers {
+  private emitter = new EventEmitter();
+
+  constructor() {
+    this.emitter.setMaxListeners(0);
+  }
+
+  poke(reason: string): void {
+    this.emitter.emit('poke', reason);
+  }
+
+  subscribe(fn: (reason: string) => void): () => void {
+    this.emitter.on('poke', fn);
+    return () => this.emitter.off('poke', fn);
+  }
+}
+
+export const dispatchTriggers = new DispatchTriggers();
+
 /** Keeps only flat values; drops nested values (a JS caller past the type) and over-long strings. */
 function flatPayload(payload: AutomationEventPayload | undefined): AutomationEventPayload {
   const out: AutomationEventPayload = {};

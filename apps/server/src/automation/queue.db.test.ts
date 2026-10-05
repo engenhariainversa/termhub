@@ -108,7 +108,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automationQueue (Postgres
     const reasons = async () => new Map((await automationQueue(ctx(), projectId)).map((i) => [i.task_id, i.reason]));
     expect((await reasons()).get(b.id)).toBe('has_agent');
     expect((await reasons()).get(a1.id)).toBe('no_capable_machine');
-    await repos.automationRuns.update(run.id, { status: 'done', ended_at: new Date() });
+    await repos.automationRuns.update(run.id, 'blue', { status: 'done', ended_at: new Date() });
     expect((await reasons()).get(b.id)).toBe('no_capable_machine');
   });
 
