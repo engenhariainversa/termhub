@@ -12,7 +12,7 @@ import type { TabQuestion as TabQuestionRow } from '../db/repositories/tab-quest
 import { tk } from '../i18n/index.js';
 import { autoAnswerBlocked } from '../memory/blocklist.js';
 import { recordEvent } from './events.js';
-import { ANSWER_CAP, ANSWER_CYCLE, PERMISSION_NEEDED, QUESTION_UNANSWERED, wakeOrEscalate } from './follower.js';
+import { ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, QUESTION_UNANSWERED, wakeOrEscalate } from './follower.js';
 import { automaticRunOfTab } from './pause.js';
 import { runPermission } from './permission.js';
 
@@ -32,15 +32,18 @@ export const RECOMMENDED_REASON = tk('Opção recomendada pelo agente');
 export const AUTOMATION_ANSWERS_MAX_PER_HOUR = 20;
 
 /**
- * TER-970 (R7): the same question answered the same way this many times in a rolling hour is a cycle; the
+ * TER-970 (R7): the same question answered the same way this many times in one run is a cycle; the
  * next ask is not answered and the run is escalated (`answer_cycle`). Per run, hashes only.
  */
 export const ANSWER_CYCLE_MAX = 2;
 
+/** R7: more than this many automatic answers in one run (any time, not a window) escalate as `answer_run_cap`. */
+export const AUTOMATION_ANSWERS_MAX_PER_RUN = 10;
+
 /**
  * A short hash of a question and the way it is about to be answered (its texts, option labels and the
  * picked options or typed text). Stored in the `question_answered` event (`cycle`): the question's text is
- * terminal content and is never kept, the hash cannot be turned back into it.
+ * terminal content and is never kept, the hash only avoids storing it.
  */
 export function questionCycleHash(payload: ChoicePayload, answer: ChoiceAnswer): string {
   const body = JSON.stringify([payload.questions.map((q) => [q.header, q.question, q.multi_select, q.options.map((o) => o.label)]), answer.answers.map((a) => [[...a.selected].sort(), a.text ?? null])]);
@@ -96,16 +99,18 @@ export function recommendedOption(payload: ChoicePayload): string | null {
   return marked.length === 1 ? marked[0]!.label : null;
 }
 
-/** Whether the run used up its automatic answers of the last hour (AUTOMATION_ANSWERS_MAX_PER_HOUR). */
-async function capReached(deps: AnswerDeps, run: AutomationRun): Promise<boolean> {
+/** Which cap the run's automatic answers hit, if any: the hourly one (AUTOMATION_ANSWERS_MAX_PER_HOUR), then the per-run one. */
+async function capReached(deps: AnswerDeps, run: AutomationRun): Promise<string | null> {
   const since = new Date((deps.now?.() ?? new Date()).getTime() - HOUR_MS);
-  return (await deps.repos.automationEvents.countForRun(run.id, 'question_answered', since)) >= AUTOMATION_ANSWERS_MAX_PER_HOUR;
+  const { automationEvents } = deps.repos;
+  if ((await automationEvents.countForRun(run.id, 'question_answered', since)) >= AUTOMATION_ANSWERS_MAX_PER_HOUR) return ANSWER_CAP;
+  if ((await automationEvents.countForRun(run.id, 'question_answered', new Date(0))) >= AUTOMATION_ANSWERS_MAX_PER_RUN) return ANSWER_RUN_CAP;
+  return null;
 }
 
-/** Whether this question was already answered this way `ANSWER_CYCLE_MAX` times by the run in the last hour. */
+/** Whether this question was already answered this way `ANSWER_CYCLE_MAX` times by the run in the run. */
 async function cycleReached(deps: AnswerDeps, run: AutomationRun, hash: string): Promise<boolean> {
-  const since = new Date((deps.now?.() ?? new Date()).getTime() - HOUR_MS);
-  const payloads = await deps.repos.automationEvents.payloadsForRun(run.id, 'question_answered', since);
+  const payloads = await deps.repos.automationEvents.payloadsForRun(run.id, 'question_answered', new Date(0));
   return payloads.filter((p) => p.cycle === hash).length >= ANSWER_CYCLE_MAX;
 }
 
@@ -156,7 +161,8 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
     log.info({ runId: run.id, tabQuestionId: q.id }, why);
     return (await escalate(deps, run, reason)) ? 'escalated' : 'left';
   };
-  if (await capReached(deps, run)) return stop(ANSWER_CAP, 'automation: answer cap reached');
+  const cap = await capReached(deps, run);
+  if (cap) return stop(cap, 'automation: answer cap reached');
 
   const payload = q.payload as ChoicePayload;
   // what would be sent (a memory repeat's answer, or else the recommendation), for the cycle detector
@@ -426,7 +432,8 @@ export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQues
   if (q.kind !== 'permission' || q.status !== 'open') return 'closed';
   const handOver = async (reason: string): Promise<PermissionOutcome> => ((await escalate(deps, run, reason)) ? 'escalated' : 'left');
 
-  if (await capReached(deps, run)) {
+  // the per-run cap is about questions; permission allows only meet the hourly one
+  if ((await capReached(deps, run)) === ANSWER_CAP) {
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: answer cap reached');
     return handOver(ANSWER_CAP);
   }
