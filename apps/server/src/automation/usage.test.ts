@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Machine, Tab } from '../db/repositories/types.js';
 import type { UsageCursor, UsageWrite } from '../db/repositories/tab-usage.js';
-import { dayIn, meterTab, sumTranscriptUsage, type UsageDeps } from './usage.js';
+import { dayIn, meterTab, RUN_END_GRACE_MS, sumTranscriptUsage, type UsageDeps } from './usage.js';
 
 const SESSION = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const SECRET = 'TOP SECRET TRANSCRIPT TEXT';
@@ -41,9 +41,12 @@ const baseTab = {
   ai_account_id: 'acc1',
 } as unknown as Tab;
 
-function setup(opts: { run?: boolean; capabilities?: string[]; zone?: string | null } = {}) {
+type FakeRun = { id: string; task_id: string; account_id: string; status: string; ended_at: Date | null };
+
+function setup(opts: { run?: boolean | Partial<FakeRun>; capabilities?: string[]; zone?: string | null } = {}) {
   const transcript = new FakeTranscript();
   let cursor: UsageCursor | null = null;
+  const noteUnmetered = vi.fn(async () => undefined);
   const record = vi.fn(async (w: UsageWrite) => {
     const same = cursor === null ? w.from === null : w.from !== null && w.from.session_id === cursor.session_id && w.from.offset === cursor.offset;
     if (!same) return false;
@@ -52,8 +55,11 @@ function setup(opts: { run?: boolean; capabilities?: string[]; zone?: string | n
   });
   const deps: UsageDeps = {
     repos: {
-      tabUsage: { cursor: async () => cursor, record, ownerTimeZone: async () => (opts.zone === undefined ? 'America/Sao_Paulo' : opts.zone) },
-      automationRuns: { latestByTab: async () => (opts.run === false ? null : ({ id: 'r1', task_id: 'card1', account_id: 'acc-run' } as never)) },
+      tabUsage: { cursor: async () => cursor, record, noteUnmetered, ownerTimeZone: async () => (opts.zone === undefined ? 'America/Sao_Paulo' : opts.zone) },
+      automationRuns: {
+        latestByTab: async () =>
+          opts.run === false ? null : ({ id: 'r1', task_id: 'card1', account_id: 'acc-run', status: 'running', ended_at: null, ...(typeof opts.run === 'object' ? opts.run : {}) } as never),
+      },
       machines: { findById: async () => machine },
     },
     log: { info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -61,7 +67,7 @@ function setup(opts: { run?: boolean; capabilities?: string[]; zone?: string | n
     agents: { isOnline: () => true, capabilities: () => opts.capabilities ?? ['claude', 'transcript'] },
     now: () => new Date('2026-10-05T02:30:00Z'),
   };
-  return { deps, transcript, record };
+  return { deps, transcript, record, noteUnmetered };
 }
 
 describe('meterTab', () => {
@@ -133,6 +139,33 @@ describe('meterTab', () => {
     expect(manual.transcript.rpc).not.toHaveBeenCalled();
     expect(s.transcript.rpc).not.toHaveBeenCalled();
     expect(old.transcript.rpc).not.toHaveBeenCalled();
+  });
+
+  it('notes a Codex tab of a run without reading anything, so its card shows "—"', async () => {
+    await meterTab(s.deps, { ...baseTab, state_tool: 'codex', agent_session_id: null, agent_transcript_path: null } as Tab);
+    expect(s.transcript.rpc).not.toHaveBeenCalled();
+    expect(s.record).not.toHaveBeenCalled();
+    expect(s.noteUnmetered).toHaveBeenCalledWith({ tab_id: 't1', project_id: 'p1', task_id: 'card1', account_id: 'acc1', day: '2026-10-04' });
+    const manual = setup({ run: false });
+    await meterTab(manual.deps, { ...baseTab, state_tool: 'codex' } as Tab);
+    expect(manual.noteUnmetered).not.toHaveBeenCalled();
+  });
+
+  it('meters while the run owns the tab: active, or ended within the grace; not after a person took it over', async () => {
+    const line = assistant('msg1', 'claude-opus-5-5', { input_tokens: 1 });
+    const now = new Date('2026-10-05T02:30:00Z').getTime();
+    const ended = (ago: number) => setup({ run: { status: 'done', ended_at: new Date(now - ago) } });
+    const recent = ended(RUN_END_GRACE_MS - 1000);
+    const old = ended(RUN_END_GRACE_MS + 1000);
+    const waiting = setup({ run: { status: 'waiting' } });
+    for (const x of [recent, old, waiting]) {
+      x.transcript.append(line);
+      await meterTab(x.deps, baseTab);
+    }
+    expect(recent.record).toHaveBeenCalledTimes(1);
+    expect(waiting.record).toHaveBeenCalledTimes(1);
+    expect(old.transcript.rpc).not.toHaveBeenCalled();
+    expect(old.record).not.toHaveBeenCalled();
   });
 
   it('counts two Stops at once only once', async () => {

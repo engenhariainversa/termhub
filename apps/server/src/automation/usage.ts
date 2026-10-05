@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { agents } from '../agent/registry.js';
 import type { ControlContext } from '../control/context.js';
 import type { Repositories, UsageCursor, UsageSum, UsageTokens } from '../db/repositories/index.js';
+import { ACTIVE_RUN_STATUSES, type AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Tab } from '../db/repositories/types.js';
 import { availabilityOf, READ_MAX_BYTES, type AgentView, type Rpc } from '../tab-chat/reader.js';
 import { agentRpc } from '../agent/errors.js';
@@ -14,14 +15,14 @@ import { costOf } from './prices.js';
  * is summed and only the counts and the new byte offset are stored. The lines are dropped right here and
  * never logged.
  *
- * Only tabs an automation run started are read (impact on other users): reading every Claude tab's
+ * Only tabs an automation run started, while the run owns them, are read (impact on other users): reading every Claude tab's
  * transcript on every Stop would add an agent RPC per turn for everyone, and the cost is shown on the
  * automatic work's screens only.
  */
 
 export interface UsageDeps {
   repos: {
-    tabUsage: Pick<Repositories['tabUsage'], 'cursor' | 'record' | 'ownerTimeZone'>;
+    tabUsage: Pick<Repositories['tabUsage'], 'cursor' | 'record' | 'ownerTimeZone' | 'noteUnmetered'>;
     automationRuns: Pick<Repositories['automationRuns'], 'latestByTab'>;
     machines: Pick<Repositories['machines'], 'findById'>;
   };
@@ -31,6 +32,11 @@ export interface UsageDeps {
   now?: () => Date;
 }
 
+/**
+ * Dedupe by message id is per pass: a message whose lines straddle two passes (a pass stops after
+ * MAX_PAGES) or that Claude Code copied into a new session file would be counted twice. Rare, and the number
+ * is an estimate.
+ */
 /** Strings of a usage line are never needed: the agent cuts them to the smallest it allows. */
 const MAX_STRING = 256;
 /** Pages read in one pass (×256 KB); the rest is read at the next Stop. */
@@ -110,6 +116,18 @@ export function dayIn(zone: string | null, at: Date): string {
   return at.toISOString().slice(0, 10);
 }
 
+/**
+ * How long after its run ended a tab is still the run's: the Stop that ends a run can be read after the run
+ * was marked done. Past it, a person who keeps using the tab by hand is not metered against the card.
+ */
+export const RUN_END_GRACE_MS = 10 * 60_000;
+
+/** Whether the tab's tokens are the automatic work's: its run is active, or ended moments ago. */
+export function runOwnsTab(run: Pick<AutomationRun, 'status' | 'ended_at'>, now: Date): boolean {
+  if ((ACTIVE_RUN_STATUSES as readonly string[]).includes(run.status)) return true;
+  return run.ended_at !== null && now.getTime() - run.ended_at.getTime() <= RUN_END_GRACE_MS;
+}
+
 /** One pass per tab at a time in this process; the repository's cursor check covers the other colour. */
 const inFlight = new Map<string, Promise<void>>();
 
@@ -129,15 +147,24 @@ export function meterTab(deps: UsageDeps, tab: Tab): Promise<void> {
 
 async function meterOnce(deps: UsageDeps, tab: Tab): Promise<void> {
   try {
-    // Codex tabs and tabs without a Claude session have no transcript to read.
-    if (tab.state_tool && tab.state_tool !== 'claude') return;
-    if (!tab.agent_session_id || !tab.agent_transcript_path) return;
+    const codex = tab.state_tool === 'codex';
+    if (tab.state_tool && tab.state_tool !== 'claude' && !codex) return;
+    if (!codex && (!tab.agent_session_id || !tab.agent_transcript_path)) return;
+    const now = (deps.now ?? (() => new Date()))();
     const run = await deps.repos.automationRuns.latestByTab(tab.id);
-    if (!run) return;
+    if (!run || !runOwnsTab(run, now)) return;
+    // A Codex tab has no transcript to read (spec D23): its card shows "—", from a row with no counts.
+    if (codex) {
+      const day = dayIn(await deps.repos.tabUsage.ownerTimeZone(tab.project_id), now);
+      await deps.repos.tabUsage.noteUnmetered({ tab_id: tab.id, project_id: tab.project_id, task_id: run.task_id, account_id: tab.ai_account_id ?? run.account_id, day });
+      return;
+    }
+    const session = tab.agent_session_id;
+    const transcriptPath = tab.agent_transcript_path;
+    if (!session || !transcriptPath) return;
     const machine = await deps.repos.machines.findById(tab.machine_id);
     if (!machine || availabilityOf(tab, machine, deps.agents ?? agents) !== 'ready') return;
 
-    const session = tab.agent_session_id;
     const from: UsageCursor | null = await deps.repos.tabUsage.cursor(tab.id);
     const start = from && from.session_id === session ? from.offset : 0;
     const rpc = deps.rpc ?? defaultRpc;
@@ -145,7 +172,7 @@ async function meterOnce(deps: UsageDeps, tab: Tab): Promise<void> {
     const lines: string[] = [];
     for (let page = 0; page < MAX_PAGES; page++) {
       const res = await rpc(machine, {
-        transcript_path: tab.agent_transcript_path,
+        transcript_path: transcriptPath,
         session_id: session,
         direction: 'forward',
         offset,
@@ -173,7 +200,7 @@ async function meterOnce(deps: UsageDeps, tab: Tab): Promise<void> {
       const c = costOf(model, t);
       if (c !== null) cost = (cost ?? 0) + c;
     }
-    const day = dayIn(await deps.repos.tabUsage.ownerTimeZone(tab.project_id), (deps.now ?? (() => new Date()))());
+    const day = dayIn(await deps.repos.tabUsage.ownerTimeZone(tab.project_id), now);
     const written = await deps.repos.tabUsage.record({
       tab_id: tab.id,
       project_id: tab.project_id,

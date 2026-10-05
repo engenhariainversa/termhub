@@ -7,7 +7,7 @@ import { relativeTime } from '@/features/shared/relative-time';
 import { useTranslation } from '@/i18n';
 import type { TAgentOnCard, TAutomationFeedEvent, TCardProgress, TEpicProgress } from '@/services/api/contract';
 import { AppText, Button, MAX_READABLE_WIDTH, readableColumn, Sheet } from '@/ui';
-import { ciLabel, epicCiLine, formatEstimate, stateLabel } from '../model/format';
+import { ciLabel, epicCiLine, formatEstimate, stateLabel, usageLine } from '../model/format';
 import { feedLine } from '../model/feed';
 import { useProgressStore } from '../viewmodel/useProgressStore';
 
@@ -92,6 +92,7 @@ function Epic({ epic }: { epic: TEpicProgress }) {
           <Bar percent={epic.percent} />
         </View>
         <Text className="text-xs text-zinc-400">{formatEstimate(epic.estimate)}</Text>
+        {usageLine(epic.usage) && <Text className="text-xs text-zinc-400">{usageLine(epic.usage)}</Text>}
         {epic.ci && <Text className="text-xs text-zinc-400">{epicCiLine(epic.ci)}</Text>}
         {epic.ci_error && <Text className="text-xs text-red-400">{epic.ci_error}</Text>}
         {waiting > 0 && <Text className="text-xs text-amber-400">{t('{{count}} agentes esperando você', { count: waiting })}</Text>}
@@ -105,6 +106,7 @@ function Epic({ epic }: { epic: TEpicProgress }) {
             </Pressable>
             <Bar percent={c.percent} />
             <Text className="text-xs text-zinc-400">{`${c.units.done}/${c.units.total} · ${formatEstimate(c.estimate)}`}</Text>
+            {usageLine(c.usage) && <Text className="text-xs text-zinc-400">{usageLine(c.usage)}</Text>}
             {c.agents?.map((a) => <Agent key={a.tab_id} agent={a} />)}
             {c.pull_requests.map((p) => (
               <Pressable key={p.number} onPress={() => void Linking.openURL(p.state === 'merged' && p.deploy_url ? p.deploy_url : p.url)}>

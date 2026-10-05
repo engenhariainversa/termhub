@@ -7,7 +7,7 @@ import type { Task } from '../lib/types';
 const usageMock = vi.fn();
 vi.mock('../lib/api', () => ({ api: { automation: { usage: (...a: unknown[]) => usageMock(...a) } } }));
 
-import { CardUsageCost } from './UsageCost';
+import { CardUsageCost, UsageCost } from './UsageCost';
 
 const line = (input: number, cost: number | null) => ({ input_tokens: input, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, cost_usd: cost });
 const task = (over: Partial<Task>) => ({ id: 'c1', project_id: 'p1', type: 'task', auto: true, ...over }) as Task;
@@ -44,5 +44,10 @@ describe('CardUsageCost', () => {
     await Promise.resolve();
     expect(usageMock).not.toHaveBeenCalled();
     expect(screen.queryByText('Custo do card')).toBeNull();
+  });
+
+  it('a Codex-only card (no tokens read) shows "custo —"', () => {
+    render(<UsageCost usage={{ tokens: 0, cost_usd: null }} />);
+    expect(screen.getByText('custo —')).toBeInTheDocument();
   });
 });

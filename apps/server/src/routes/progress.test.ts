@@ -34,7 +34,8 @@ function build(ownerId: string | null = 'u1', uses = true) {
   const list = vi.fn(async () => rows);
   const feed = vi.fn(async () => feedRows);
   const usesAutomation = vi.fn(async () => uses);
-  const repos = { progress: { list, feed, usesAutomation }, projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) } } as unknown as Repositories;
+  const totalsByTask = vi.fn(async () => new Map([['c1', { tokens: 1000, cost_usd: 0.5 }], ['e1', { tokens: 10, cost_usd: null }]]));
+  const repos = { progress: { list, feed, usesAutomation }, tabUsage: { totalsByTask }, projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) } } as unknown as Repositories;
   const app = Fastify();
   applyErrorHandler(app);
   app.addHook('preHandler', async (request) => {
@@ -42,7 +43,7 @@ function build(ownerId: string | null = 'u1', uses = true) {
     request.user = { id: 'u1', role_id: 'r1' } as never;
   });
   app.register((a) => progressRoutes(a, repos, { now: () => NOW }), { prefix: '/progress' });
-  return { app, list, feed, usesAutomation };
+  return { app, list, feed, usesAutomation, totalsByTask };
 }
 
 beforeEach(() => {
@@ -51,9 +52,12 @@ beforeEach(() => {
 
 describe('GET /progress', () => {
   it('runs no automation query for someone who never ran automatic work', async () => {
-    const { app, list, feed } = build('u1', false);
+    const { app, list, feed, totalsByTask } = build('u1', false);
     const body = (await app.inject({ method: 'GET', url: '/progress' })).json();
     expect(feed).not.toHaveBeenCalled();
+    expect(totalsByTask).not.toHaveBeenCalled();
+    expect(body.epics[0].usage).toBeNull();
+    expect(body.epics[0].cards[0].usage).toBeNull();
     expect(list).toHaveBeenCalledWith(expect.objectContaining({ automatic: false }));
     expect(body.feed).toEqual([]);
   });
@@ -66,6 +70,17 @@ describe('GET /progress', () => {
     expect(body.feed[0]).toMatchObject({ kind: 'escalated', ref: 'TER-2', tab_id: 't1', run_id: 'r1' });
     expect(body.feed[0].reason_text).toContain('confiança');
     expect(body.epics[0].cards[0].agents[0].automatic).toBe(true);
+  });
+
+  it('carries the cost per card and epic (the epic own plus its cards), whatever the feed holds', async () => {
+    const { app, feed, totalsByTask } = build();
+    feed.mockResolvedValue([]);
+    const body = (await app.inject({ method: 'GET', url: '/progress?scope=all' })).json();
+    expect(totalsByTask).toHaveBeenCalledWith(['e1', 'c1', 'e2', 'c2']);
+    expect(body.epics[0].cards[0].usage).toEqual({ tokens: 1000, cost_usd: 0.5 });
+    expect(body.epics[0].usage).toEqual({ tokens: 1010, cost_usd: 0.5 });
+    expect(body.epics[1].usage).toBeNull();
+    expect(body.epics[1].cards[0].usage).toBeNull();
   });
 
   it('returns the active epics of the caller with agents', async () => {

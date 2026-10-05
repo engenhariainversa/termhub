@@ -1,4 +1,4 @@
-import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, ProgressEstimate, ProgressScope, PullRequestBadge } from '@termhub/mobile-api';
+import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, ProgressEstimate, ProgressScope, ProgressUsage, PullRequestBadge } from '@termhub/mobile-api';
 import type { TabState } from '../db/repositories/types.js';
 import type { AutomationEvent } from '../db/repositories/index.js';
 import { ESCALATION_FALLBACK, ESCALATION_TEXT } from '../automation/escalation-text.js';
@@ -99,6 +99,7 @@ export function aggregateCard(card: ProgressCardRow, includeAgents: boolean): Ca
     agents: includeAgents ? agentsOf(card) : null,
     pull_requests: card.pull_requests,
     auto: card.auto,
+    usage: null,
   };
 }
 
@@ -166,7 +167,30 @@ export function aggregateEpic(epic: ProgressEpicRow, includeAgents: boolean): Ep
     cards,
     ci: ciSummary(cards),
     ci_error: null,
+    usage: null,
   };
+}
+
+/**
+ * The automatic tabs' tokens and cost (spec D23) on each card, and on the epic: its own (the integrator's)
+ * plus its cards'. A card or epic with nothing metered keeps `usage: null`. `cost_usd` is the sum of the
+ * priced parts, null when nothing was priced (a Codex tab, an unknown model): "—" on screen.
+ */
+export function withUsage(epic: EpicProgress, totals: Map<string, ProgressUsage>): EpicProgress {
+  if (totals.size === 0) return epic;
+  let sum: ProgressUsage | null = null;
+  const add = (u: ProgressUsage | undefined) => {
+    if (!u) return;
+    const cost = sum?.cost_usd ?? null;
+    sum = { tokens: (sum?.tokens ?? 0) + u.tokens, cost_usd: u.cost_usd === null ? cost : (cost ?? 0) + u.cost_usd };
+  };
+  add(totals.get(epic.id));
+  const cards = epic.cards.map((c) => {
+    const u = totals.get(c.id);
+    add(u);
+    return u ? { ...c, usage: u } : c;
+  });
+  return { ...epic, cards, usage: sum };
 }
 
 /** active: epics with a card in doing; all: every epic with cards, finished last. Needs-you first, then working agents, then ref. */

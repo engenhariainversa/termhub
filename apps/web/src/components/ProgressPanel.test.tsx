@@ -166,22 +166,25 @@ describe('ProgressPanel', () => {
     expect(usageMock).not.toHaveBeenCalled();
   });
 
-  it('shows the estimated cost per card, epic and account where automatic work ran; "—" when nothing was priced', async () => {
+  it('shows the estimated cost per card, epic and account, even with no feed line; "—" when nothing was priced', async () => {
     const line = (input: number, cost: number | null) => ({ input_tokens: input, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, cost_usd: cost });
-    progressMock.mockResolvedValue({ ...response(), feed: [ev({ id: '1' })] });
+    const r = response();
+    r.epics[0].usage = { tokens: 3000, cost_usd: 1.5 };
+    r.epics[0].cards[0].usage = { tokens: 1000, cost_usd: null };
+    progressMock.mockResolvedValue({ ...r, feed: [] });
     usageMock.mockResolvedValue({
       from: null,
       to: null,
       total: line(3000, 1.5),
-      cards: [{ ...line(1000, null), task_id: 'c1', ref: 'TER-183' }],
-      epics: [{ ...line(3000, 1.5), epic_id: 'e1', ref: 'TER-182' }],
+      cards: [],
+      epics: [],
       accounts: [{ ...line(3000, 1.5), account_id: 'a1', label: 'pessoal' }],
     });
     mount();
     expect(await screen.findByText('custo — · 1 mil tokens')).toBeInTheDocument();
-    expect(usageMock).toHaveBeenCalledWith('p1');
     expect(screen.getByText(/custo US\$\s1,50 · 3 mil tokens/)).toBeInTheDocument();
-    expect(screen.getByText(/Custo estimado: US\$\s1,50 · pessoal US\$\s1,50/)).toBeInTheDocument();
+    expect(await screen.findByText(/Custo estimado: US\$\s1,50 · pessoal US\$\s1,50/)).toBeInTheDocument();
+    expect(usageMock).toHaveBeenCalledWith('p1');
   });
 
   it('badges the tab of an automatic run and writes the failures and escalations in one line', async () => {

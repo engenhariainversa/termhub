@@ -102,6 +102,30 @@ export class TabUsageRepository {
     }
   }
 
+  /**
+   * A tab whose tokens cannot be read (a Codex tab, spec D23) still shows on its card, as "—": a day row
+   * with no counts and no cost. Written once per tab and day; nothing else is stored.
+   */
+  async noteUnmetered(w: Pick<UsageWrite, 'tab_id' | 'project_id' | 'task_id' | 'account_id' | 'day'>): Promise<void> {
+    await this.db.$executeRaw`
+      INSERT INTO "tab_usage_days" ("tab_id", "day", "project_id", "task_id", "account_id", "updated_at")
+      VALUES (${w.tab_id}, ${w.day}::date, ${w.project_id}, ${w.task_id}, ${w.account_id}, ${new Date()})
+      ON CONFLICT ("tab_id", "day") DO NOTHING`;
+  }
+
+  /** Every token and the cost of each card, all days; a card with no row is absent. */
+  async totalsByTask(taskIds: string[]): Promise<Map<string, { tokens: number; cost_usd: number | null }>> {
+    if (taskIds.length === 0) return new Map();
+    const rows = await this.db.$queryRaw<Array<{ task_id: string; tokens: bigint; cost: string | null }>>`
+      SELECT "task_id",
+        SUM("input_tokens" + "output_tokens" + "cache_read_tokens" + "cache_write_tokens")::bigint AS tokens,
+        SUM("cost_usd_estimate")::text AS cost
+      FROM "tab_usage_days"
+      WHERE "task_id" = ANY(${taskIds}::text[])
+      GROUP BY "task_id"`;
+    return new Map(rows.map((r) => [r.task_id, { tokens: Number(r.tokens), cost_usd: r.cost === null ? null : Number(r.cost) }]));
+  }
+
   /** A project's usage per card and account, from `from` to `to` (inclusive `YYYY-MM-DD`; open when absent). */
   async sums(projectId: string, range: { from?: string; to?: string } = {}): Promise<UsageSum[]> {
     const rows = await this.db.$queryRaw<

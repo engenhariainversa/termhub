@@ -326,6 +326,13 @@ export interface CardProgress {
   estimate: ProgressEstimate;
   agents: AgentOnCard[] | null;
   pull_requests: PullRequestBadge[];
+  /** what the card's automatic tabs cost (spec D23); null/absent = nothing metered */
+  usage?: ProgressUsage | null;
+}
+/** Tokens and the API-equivalent cost estimate (US$; null = nothing priced, shown as "—"). */
+export interface ProgressUsage {
+  tokens: number;
+  cost_usd: number | null;
 }
 export interface EpicProgress {
   id: string;
@@ -341,6 +348,8 @@ export interface EpicProgress {
   /** distinct PR numbers across the epic's cards; null when none has a PR */
   ci: { open: number; failed: number; running: number; deployed: number } | null;
   ci_error: string | null;
+  /** the epic's own automatic tabs plus its cards'; null/absent = nothing metered */
+  usage?: ProgressUsage | null;
 }
 /** One line of the automatic work's feed (same shape as `@termhub/mobile-api`): the sentence is written from `kind` and these facts. */
 export interface AutomationFeedEvent {

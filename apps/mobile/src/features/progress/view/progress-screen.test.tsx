@@ -50,6 +50,17 @@ describe('Progresso', () => {
     expect(screen.getByLabelText('automático')).toBeTruthy();
   });
 
+  it('shows the estimated cost per epic and card, "—" when nothing was priced', async () => {
+    const progress = mockProgress(Date.now());
+    progress.epics[0]!.usage = { tokens: 2_500_000, cost_usd: 3.25 };
+    progress.epics[0]!.cards[0]!.usage = { tokens: 0, cost_usd: null };
+    jest.spyOn(stores.api, 'progress').mockResolvedValue(progress);
+    await render(<ProgressScreen />);
+    expect(await screen.findByText('custo US$ 3,25 · 2,5 M tokens', {}, LOAD)).toBeTruthy();
+    await act(async () => fireEvent.press(await screen.findByText('Visão gerencial', {}, LOAD)));
+    expect(screen.getByText('custo —')).toBeTruthy();
+  });
+
   it('has no feed section when there is nothing to show', async () => {
     jest.spyOn(stores.api, 'progress').mockResolvedValue({ epics: [], feed: [], generated_at: new Date().toISOString() });
     await render(<ProgressScreen />);

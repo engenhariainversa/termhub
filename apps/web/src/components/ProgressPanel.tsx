@@ -110,10 +110,7 @@ export function PullRequestBadges({ pulls }: { pulls: PullRequestBadge[] }) {
   );
 }
 
-/** What the automatic tabs cost, looked up by card and epic id. */
-type UsageIndex = Pick<AutomationUsage, 'cards' | 'epics'> | null;
-
-function CardRow({ card, projectId, usage }: { card: CardProgress; projectId: string; usage: UsageIndex }) {
+function CardRow({ card, projectId }: { card: CardProgress; projectId: string }) {
   const { t } = useTranslation();
   return (
     <li className="space-y-1 py-2">
@@ -129,7 +126,7 @@ function CardRow({ card, projectId, usage }: { card: CardProgress; projectId: st
       <Bar percent={card.percent} label={`${card.ref} ${card.percent}%`} />
       <div className="flex flex-wrap gap-3">
         <EstimateLine estimate={card.estimate} />
-        <UsageCost line={usage?.cards.find((c) => c.task_id === card.id)} />
+        <UsageCost usage={card.usage} />
       </div>
       <PullRequestBadges pulls={card.pull_requests} />
       {card.agents && card.agents.length > 0 && (
@@ -143,7 +140,7 @@ function CardRow({ card, projectId, usage }: { card: CardProgress; projectId: st
   );
 }
 
-function EpicBlock({ epic, projectId, usage }: { epic: EpicProgress; projectId: string; usage: UsageIndex }) {
+function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string }) {
   const { t } = useTranslation();
   return (
     <section className="space-y-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -170,12 +167,12 @@ function EpicBlock({ epic, projectId, usage }: { epic: EpicProgress; projectId: 
           </span>
         )}
         {epic.ci && <span>{epicCiLine(epic.ci)}</span>}
-        <UsageCost line={usage?.epics.find((e) => e.epic_id === epic.id)} />
+        <UsageCost usage={epic.usage} />
       </div>
       {epic.ci_error && <p className="text-xs text-red-600">{epic.ci_error}</p>}
       <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
         {epic.cards.map((c) => (
-          <CardRow key={c.id} card={c} projectId={projectId} usage={usage} />
+          <CardRow key={c.id} card={c} projectId={projectId} />
         ))}
       </ul>
     </section>
@@ -246,8 +243,8 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
       if (mine !== latest.current) return;
       setData(res);
       setError(null);
-      // The cost is asked only where automatic work ran (the feed has lines): nobody else pays for it.
-      if ((res.feed ?? []).length > 0) {
+      // The per-account line is asked only where something was metered (an epic carries a cost): nobody else pays for it.
+      if (res.epics.some((e) => e.usage)) {
         const u = await loadUsage(projectId);
         if (mine === latest.current) setUsage(u);
       } else setUsage(null);
@@ -303,7 +300,7 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
       <AutomationFeed feed={data?.feed ?? []} />
       <UsageByAccount usage={usage} />
       {epics.map((e) => (
-        <EpicBlock key={e.id} epic={e} projectId={projectId} usage={usage} />
+        <EpicBlock key={e.id} epic={e} projectId={projectId} />
       ))}
     </div>
   );

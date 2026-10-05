@@ -404,5 +404,6 @@
   "Custo do épico": "Epic cost",
   "Custo do card": "Card cost",
   "Custo estimado: {{cost}}": "Estimated cost: {{cost}}",
-  "conta removida": "removed account"
+  "conta removida": "removed account",
+  "custo {{cost}}": "cost {{cost}}"
 }

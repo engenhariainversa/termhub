@@ -94,6 +94,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('tab usage (Postgres)', ()
     expect((await usage.sums(projectId)).every((s) => s.task_id === null)).toBe(true);
   });
 
+  it('notes a Codex tab once per day with no counts, and totals per card', async () => {
+    const w = { tab_id: `t-${projectId}-x`, project_id: projectId, task_id: taskId, account_id: null, day: '2026-10-04' };
+    await usage.noteUnmetered(w);
+    await usage.noteUnmetered(w);
+    expect(await db.tabUsageDay.count({ where: { projectId } })).toBe(1);
+    expect(await usage.totalsByTask([taskId, 'none'])).toEqual(new Map([[taskId, { tokens: 0, cost_usd: null }]]));
+    await usage.record(write({ tab_id: `t-${projectId}-y`, tokens: tok(10, 20, 30, 40), cost_usd: 0.5 }));
+    expect(await usage.totalsByTask([taskId])).toEqual(new Map([[taskId, { tokens: 100, cost_usd: 0.5 }]]));
+    expect(await usage.totalsByTask([])).toEqual(new Map());
+  });
+
   it('reads the owner\'s zone', async () => {
     expect(await usage.ownerTimeZone(projectId)).toBe('America/Sao_Paulo');
     expect(await usage.ownerTimeZone('nope')).toBeNull();

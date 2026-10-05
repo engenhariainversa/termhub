@@ -48,12 +48,16 @@ function repos(current: Tab) {
   const setAgentFields = vi.fn(async (_id: string, patch: { agent_session_id?: string | null; agent_transcript_path?: string | null; ai_account_id?: string | null; rate_limited_at?: Date | null }) =>
     tab({ ...current, ...patch, rate_limited_at: patch.rate_limited_at === undefined ? current.rate_limited_at : patch.rate_limited_at && patch.rate_limited_at.toISOString() }),
   );
+  // no automation run names the tab: the usage meter stops at this lookup
+  const latestByTab = vi.fn(async () => null);
   return {
     r: {
       tabs: { findByTmuxSession: vi.fn(async () => current), recordEvent, setActivity, setAgentFields },
       projects: { findById: vi.fn(async () => ({ id: 'p1', machine_id: 'm1' })) },
       machines: { findById: vi.fn(async () => ({ id: 'm1', owner_id: 'u1' })) },
+      automationRuns: { latestByTab },
     } as unknown as Repositories,
+    latestByTab,
     recordEvent,
     setActivity,
     setAgentFields,
@@ -243,6 +247,21 @@ describe('ingestHookEvent — suggestions', () => {
     await ingestHookEvent(r, log, { machineId: 'm1', tool: 'codex', session: 'th-t1', event: { type: 'agent-turn-complete', 'last-assistant-message': 'ok' } });
     expect(schedule).not.toHaveBeenCalled();
   });
+
+  it("meters the tab's usage on a main-thread Stop (Claude or Codex), never on a subagent's", async () => {
+    const session = { state_tool: 'claude', agent_session_id: '0f8fad5b-d9cb-469f-a165-70867728950e', agent_transcript_path: '~/.claude/projects/x/0f8fad5b-d9cb-469f-a165-70867728950e.jsonl' };
+    const claude = repos(tab(session));
+    await ingestHookEvent(claude.r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: { hook_event_name: 'Stop', agent_id: 'a1b2c3' } });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(claude.latestByTab).not.toHaveBeenCalled();
+    await ingestHookEvent(claude.r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: { hook_event_name: 'Stop' } });
+    await vi.waitFor(() => expect(claude.latestByTab).toHaveBeenCalledWith('t1'));
+    const codex = repos(tab({ state_tool: 'codex' }));
+    await ingestHookEvent(codex.r, log, { machineId: 'm1', tool: 'codex', session: 'th-t1', event: { hook_event_name: 'Stop', last_assistant_message: 'Pronto.' } });
+    await vi.waitFor(() => expect(codex.latestByTab).toHaveBeenCalledWith('t1'));
+    expect((log as unknown as { warn: ReturnType<typeof vi.fn> }).warn).not.toHaveBeenCalledWith(expect.anything(), 'automation: tab usage failed');
+    schedule.mockClear(); // the Claude Stops above scheduled a suggestion check
+  });
 });
 
 describe('ingestHookEvent — a Codex Stop that asks a question', () => {
@@ -391,6 +410,7 @@ describe('ingestHookEvent — a Codex request_user_input answered, through the r
     const r = {
       tabs: { findByTmuxSession: vi.fn(async () => current), recordEvent, setActivity: vi.fn(async () => undefined), setAgentFields: vi.fn() },
       machines: { findById: vi.fn(async () => ({ id: 'm1', owner_id: 'u1' })) },
+      automationRuns: { latestByTab: vi.fn(async () => null) },
     } as unknown as Repositories;
     return { r, state: () => current.state };
   }
