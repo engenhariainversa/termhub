@@ -16,6 +16,8 @@ export const PERMISSIONS_MSG = {
   openSettings: 'Abrir Ajustes do sistema',
   pushTest: 'Enviar notificação de teste',
   pushTestHint: 'Feche o app para ver como ela chega.',
+  tabFinishedSwitch: 'Avisar quando uma aba terminar',
+  tabFinishedHint: 'Um aviso quando uma aba de projeto termina o trabalho e espera você. Tocar nele abre a aba. Vale para todos os seus aparelhos.',
   adsSwitch: 'Medição de anúncios',
   adsHint: 'Usa o identificador de publicidade do aparelho só para medir quais anúncios trouxeram novas pessoas ao termhub.',
 } as const;

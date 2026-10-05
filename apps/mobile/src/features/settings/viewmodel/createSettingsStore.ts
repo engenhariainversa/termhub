@@ -35,6 +35,11 @@ export interface SettingsState {
   /** "Enviar notificação de teste" (TER-913): in flight, then what happened. */
   pushTest: { sending: boolean; note: string | null; error: string | null };
   sendTestPush(): Promise<void>;
+  /** "Avisar quando uma aba terminar" (TER-925), per account; `null` until loaded. */
+  tabFinished: boolean | null;
+  pushSettingsError: string | null;
+  loadPushSettings(): Promise<void>;
+  setTabFinished(on: boolean): Promise<void>;
 }
 
 /** Time to close the app before the test push is sent. */
@@ -53,6 +58,32 @@ export function createSettingsStore(deps: SettingsDeps) {
     loadingDevice: false,
     error: null,
     pushTest: { sending: false, note: null, error: null },
+    tabFinished: null,
+    pushSettingsError: null,
+
+    async loadPushSettings() {
+      const gen = generation;
+      try {
+        const { tab_finished } = await api.pushSettings(session().auth());
+        if (gen === generation) set({ tabFinished: tab_finished, pushSettingsError: null });
+      } catch (e) {
+        if (gen !== generation || session().handleApiError(e)) return;
+        set({ pushSettingsError: e instanceof ApiError ? e.message : NETWORK_MSG });
+      }
+    },
+
+    async setTabFinished(on) {
+      const before = store.getState().tabFinished;
+      set({ tabFinished: on, pushSettingsError: null });
+      try {
+        const { tab_finished } = await api.setPushSettings(session().auth(), { tab_finished: on });
+        set({ tabFinished: tab_finished });
+      } catch (e) {
+        set({ tabFinished: before });
+        if (session().handleApiError(e)) return;
+        set({ pushSettingsError: e instanceof ApiError ? e.message : NETWORK_MSG });
+      }
+    },
 
     async loadDevice() {
       const gen = generation;
@@ -82,7 +113,7 @@ export function createSettingsStore(deps: SettingsDeps) {
 
   sessionEnded.subscribe(() => {
     generation++;
-    store.setState({ device: null, loadingDevice: false, error: null, pushTest: { sending: false, note: null, error: null } });
+    store.setState({ device: null, loadingDevice: false, error: null, pushTest: { sending: false, note: null, error: null }, tabFinished: null, pushSettingsError: null });
   });
 
   return store;

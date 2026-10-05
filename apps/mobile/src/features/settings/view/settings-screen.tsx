@@ -46,6 +46,10 @@ export function SettingsScreen() {
   const server = useSettingsStore((s) => s.server);
   const pushTest = useSettingsStore((s) => s.pushTest);
   const sendTestPush = useSettingsStore((s) => s.sendTestPush);
+  const tabFinished = useSettingsStore((s) => s.tabFinished);
+  const pushSettingsError = useSettingsStore((s) => s.pushSettingsError);
+  const loadPushSettings = useSettingsStore((s) => s.loadPushSettings);
+  const setTabFinished = useSettingsStore((s) => s.setTabFinished);
   const biometricsEnabled = useSessionStore((s) => s.biometricsEnabled);
   const enableBiometrics = useSessionStore((s) => s.enableBiometrics);
   const disableBiometrics = useSessionStore((s) => s.disableBiometrics);
@@ -76,12 +80,13 @@ export function SettingsScreen() {
 
   useEffect(() => {
     void loadDevice();
+    void loadPushSettings();
     // Re-reads the general chat's slot for its current machine, without switching what is
     // actually open (`refresh` never touches `activeProject`, `live` or the socket) — unlike
     // `open(null)`, this is safe even while a project's conversation is genuinely the one on
     // screen underneath the tabs.
     void refreshGeneralChat(null);
-  }, [loadDevice, refreshGeneralChat]);
+  }, [loadDevice, loadPushSettings, refreshGeneralChat]);
 
   // The OS statuses, now and whenever the person comes back from the system settings.
   useEffect(() => {
@@ -144,6 +149,17 @@ export function SettingsScreen() {
           {notificationStatus === 'denied' ? <Button label={PERMISSIONS_MSG.openSettings} variant="secondary" onPress={() => void openSystemSettings()} /> : null}
           {notificationStatus === 'granted' ? (
             <>
+              <View className="flex-row items-center justify-between">
+                <AppText>{PERMISSIONS_MSG.tabFinishedSwitch}</AppText>
+                <Switch
+                  accessibilityLabel={PERMISSIONS_MSG.tabFinishedSwitch}
+                  value={tabFinished === true}
+                  disabled={tabFinished === null}
+                  onValueChange={(value) => void setTabFinished(value)}
+                />
+              </View>
+              <AppText variant="muted">{PERMISSIONS_MSG.tabFinishedHint}</AppText>
+              {pushSettingsError ? <AppText className="text-app-danger">{pushSettingsError}</AppText> : null}
               <Button label={PERMISSIONS_MSG.pushTest} variant="secondary" loading={pushTest.sending} onPress={() => void sendTestPush()} />
               <AppText variant="muted">{pushTest.note ? `${pushTest.note} ${PERMISSIONS_MSG.pushTestHint}` : PERMISSIONS_MSG.pushTestHint}</AppText>
               {pushTest.error ? <AppText className="text-app-danger">{pushTest.error}</AppText> : null}

@@ -3,6 +3,7 @@
 // real (or mocked) server through a `Transport`.
 import type {
   AccountDeletionBody,
+  PushSettings,
   PushTestBody,
   PushTestResponse,
   AccountDeletionStatus,
@@ -92,6 +93,9 @@ export interface MobileApi {
   setPushToken(auth: Auth, token: string): Promise<void>;
   /** A sample push to this device (TER-913). 409 NO_PUSH_TOKEN, 429 PUSH_TEST_RATE_LIMITED. */
   pushTest(auth: Auth, body: PushTestBody): Promise<PushTestResponse>;
+  /** The account's opt-in pushes (TER-925). */
+  pushSettings(auth: Auth): Promise<PushSettings>;
+  setPushSettings(auth: Auth, body: PushSettings): Promise<PushSettings>;
 
   // account deletion (TER-720): the only routes, besides the session ones, that answer while a
   // deletion is pending — every other one is `403 ACCOUNT_PENDING_DELETION` until it is cancelled.

@@ -71,6 +71,18 @@ function dataString(data: unknown, key: string): string | null {
  * `reply`), or `null` — a `device_request` names none. */
 export const pushConversationId = (data: unknown): string | null => dataString(data, 'conversation_id');
 
+/** The tab an "aba terminou" push names (`data.tab_id`, TER-925), or `null`. */
+export const pushTabId = (data: unknown): string | null => dataString(data, 'tab_id');
+
+/** Where a tapped push goes: the tab it names (its session screen), else its conversation, else
+ * nowhere (the app just opens). */
+export function pushRoute(data: unknown): string | null {
+  const tabId = pushTabId(data);
+  if (tabId) return `/session/${tabId}`;
+  const conversationId = pushConversationId(data);
+  return conversationId ? `/chat/${conversationId}` : null;
+}
+
 /** The history row a push was sent for (`data.notification_id`), or `null` for a push from a server
  * older than that field. */
 export const pushNotificationId = (data: unknown): string | null => dataString(data, 'notification_id');
