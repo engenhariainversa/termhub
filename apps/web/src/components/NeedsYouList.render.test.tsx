@@ -11,11 +11,16 @@ const tab = { id: 't1', project_id: 'p1', machine_id: 'm1', name: 'terminal', st
 const items: MonitorItem[] = [{ tab, project: { id: 'p1', name: 'termhub' } as MonitorItem['project'], machine }];
 
 vi.mock('../lib/monitor', () => ({ useMonitor: () => ({ items, needsYou: items, connected: true, reply: vi.fn() }) }));
+const auth = vi.hoisted(() => ({ grants: new Set(['terminals:read', 'terminals:write']) }));
+vi.mock('../lib/auth', () => ({ useAuth: () => ({ can: (r: string, a = 'read') => auth.grants.has(`${r}:${a}`) }) }));
 vi.mock('../lib/data', () => ({ useData: () => ({ statuses: { m1: 'online' }, machines: [machine] }) }));
 
 import { NeedsYouList } from './NeedsYouList';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  auth.grants = new Set(['terminals:read', 'terminals:write']);
+});
 
 describe('NeedsYouList on a narrow screen', () => {
   const mount = () =>
@@ -42,5 +47,20 @@ describe('NeedsYouList on a narrow screen', () => {
     mount();
     const field = screen.getByRole('textbox', { name: 'Resposta (ou só Enter para aceitar)' });
     expect(field).toHaveAttribute('placeholder', 'Resposta (Enter aceita)…');
+  });
+});
+
+// TER-576: replying from the list types into the terminal, which needs terminals:write.
+describe('NeedsYouList without terminals:write', () => {
+  it('shows the waiting tab but no reply form', () => {
+    auth.grants = new Set(['terminals:read', 'terminals:update']);
+    render(
+      <MemoryRouter>
+        <NeedsYouList now={Date.parse(T1) + 120_000} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Claude quer rodar: npm test')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Enviar/ })).not.toBeInTheDocument();
   });
 });
