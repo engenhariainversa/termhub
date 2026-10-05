@@ -12,7 +12,8 @@ export const QUOTA_RESUME_TEXT = 'O limite da conta foi renovado; continue de on
 
 /** The editable middle paragraph of each role's prompt, used when the project has no custom text. */
 export const DEFAULT_IMPLEMENTER_TEXT = 'Leia o card e, se houver, o spec e o plano citados nele. Implemente, rode os testes do projeto e deixe o trabalho commitado.';
-export const DEFAULT_INTEGRATOR_TEXT = 'Confira que os PRs dos cards já foram mesclados na branch do épico, resolva divergências entre eles, rode os testes e deixe o PR do épico pronto para revisão.';
+export const DEFAULT_INTEGRATOR_TEXT = (base: string) =>
+  `Confira que os PRs dos cards já foram mesclados na branch do épico e siga docs/automation/integrator-playbook.md: git fetch origin && git merge origin/${base}; se os dois lados criaram migrations do Prisma, rode node scripts/automation/rename-migrations.mjs ${base} (nunca renomeie nem edite migration que já está em ${base}); cliente Prisma gerado nunca se edita, rode npx prisma generate; lockfile: use o de ${base} e rode npm install; rode as verificações do projeto, faça push e deixe o PR do épico pronto para revisão.`;
 export const DEFAULT_FIXER_CONFLICT_TEXT = (base: string) => `Atualize a branch com ${base}, resolva os conflitos preservando a intenção dos dois lados e faça push.`;
 export const DEFAULT_FIXER_CI_TEXT = 'Descubra a causa da falha, corrija, rode os testes localmente e faça push.';
 
@@ -73,7 +74,7 @@ export function integratorPrompt(i: {
     [
       `Você integra o épico ${ref(i.epic)}`,
       `A branch do épico é ${i.branch} (base ${i.base}); o PR do épico é ${i.prUrl}.`,
-      i.custom?.trim() || DEFAULT_INTEGRATOR_TEXT,
+      i.custom?.trim() || DEFAULT_INTEGRATOR_TEXT(i.base),
       policyLine(i.policy),
       TRUST_LINE,
       `Quando terminar, chame report_card com status done e a URL do PR; se travar, chame report_card com status blocked e o motivo.`,
