@@ -11,6 +11,7 @@ import { removeTabMcp } from '../terminal/tab-mcp.js';
 import type { SimulatorSessionManager } from '../simulator/session-manager.js';
 import { PASTE_MAX_BYTES, saveFileOnMachine } from '../terminal/paste-file.js';
 import { INPUT_MAX_CHARS, sendKeysToSession } from '../monitor/send-keys.js';
+import { recordInputOrigin } from '../terminal/input-origin.js';
 import { applyState, publishTabChange } from '../monitor/ingest.js';
 import { publishTabOpened, publishTabRemoved } from '../monitor/tab-events.js';
 import { publicBus } from '../public/bus.js';
@@ -92,13 +93,15 @@ export async function tabRoutes(
   /**
    * Monitor: types text into the tab's tmux session (and presses Enter) — the "reply from the list"
    * path, no terminal attached needed. Marks the tab as working right away; the tool's next hook confirms.
+   * Typing is terminals:write (TER-576), like the terminal socket's own keystrokes.
    */
-  app.post('/:id/input', { config: { action: 'update' } }, async (request) => {
+  app.post('/:id/input', { config: { action: 'write' } }, async (request) => {
     const { id } = idParam.parse(request.params);
     const { tab, machine } = await scoped(repos, request).tab(id);
     if (tab.kind !== 'terminal' || !tab.tmux_session) throw badRequest('Só tabs de terminal recebem input');
     const body = inputBody.parse(request.body);
     if (!body.text && !body.enter) throw badRequest('Nada a enviar');
+    if (body.text) recordInputOrigin(tab.id, body.text, { level: 'person_typed', userId: request.scope.user.id, surface: 'web' });
     const r = await sendKeysToSession(machine, tab.tmux_session, body.text, body.enter);
     if (!r.ok) throw conflict(r.error ?? 'Não foi possível enviar para o terminal');
     request.log.info({ tabId: tab.id, machineId: machine.id, chars: body.text.length, enter: body.enter }, 'monitor: input sent');
@@ -136,7 +139,7 @@ export async function tabRoutes(
    * File pasted (Cmd+V) or dropped on the terminal: written to ~/.cache/termhub/paste/ on the tab's
    * machine; the returned path is what the frontend pastes into the terminal as text.
    */
-  app.post('/:id/paste-file', { bodyLimit: PASTE_MAX_BYTES, config: { action: 'update' } }, async (request) => {
+  app.post('/:id/paste-file', { bodyLimit: PASTE_MAX_BYTES, config: { action: 'write' } }, async (request) => {
     const { id } = idParam.parse(request.params);
     const { name } = pasteQuery.parse(request.query);
     const { project, machine } = await scoped(repos, request).tab(id);

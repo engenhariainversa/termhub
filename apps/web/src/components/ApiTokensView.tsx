@@ -3,6 +3,7 @@ import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { ApiToken, ApiTokenScope, CreatedApiToken } from '../lib/types';
 import { ConfirmDialog, Modal } from './Modal';
+import { formatDate } from '../lib/format';
 
 const SCOPES: { key: ApiTokenScope; label: string; short: string; hint: string }[] = [
   { key: 'read', label: 'Ler', short: 'ler', hint: 'máquinas, projetos, abas, contas de IA e a tela dos terminais' },
@@ -29,7 +30,7 @@ export function mcpAddCommand(url: string, token: string): string {
   return `claude mcp add --transport http termhub ${url} --header "Authorization: Bearer ${token}"`;
 }
 
-const fmtDate = (iso: string | null, empty: string) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : empty);
+const fmtDate = (iso: string | null, empty: string) => (iso ? formatDate(iso) : empty);
 
 /** Settings → Tokens de API: the signed-in user's own tokens for the MCP endpoint. */
 export function ApiTokensView() {

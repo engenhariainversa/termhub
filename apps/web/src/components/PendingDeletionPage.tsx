@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import { deletionDate } from '../lib/account-deletion';
+import { useTranslation } from '../i18n';
 import { useAuth } from '../lib/auth';
 
 /**
@@ -10,6 +11,7 @@ import { useAuth } from '../lib/auth';
  * Cancelling brings the account back and the normal app with it.
  */
 export function PendingDeletionPage({ scheduledAt }: { scheduledAt: string }) {
+  const { t } = useTranslation();
   const { refresh, logout } = useAuth();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
@@ -22,7 +24,7 @@ export function PendingDeletionPage({ scheduledAt }: { scheduledAt: string }) {
       await api.account.cancelDeletion();
       await refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Não foi possível cancelar a exclusão.');
+      setError(err instanceof ApiError ? err.message : t('Não foi possível cancelar a exclusão.'));
       setBusy(false);
     }
   };
@@ -30,18 +32,19 @@ export function PendingDeletionPage({ scheduledAt }: { scheduledAt: string }) {
   return (
     <div className="flex h-full items-center justify-center p-4">
       <div className="w-full max-w-md rounded-xl border border-line bg-bg-2 p-6 shadow-2xl">
-        <h1 className="mb-2 text-lg font-semibold tracking-tight">Sua conta será excluída em {deletionDate(scheduledAt)}</h1>
+        <h1 className="mb-2 text-lg font-semibold tracking-tight">{t('Sua conta será excluída em {{date}}', { date: deletionDate(scheduledAt) })}</h1>
         <p className="text-sm text-fg-muted">
-          Você pediu para excluir sua conta, e ela está desativada até lá. Nessa data, suas máquinas, projetos, chats e o resto dos seus dados
-          são apagados para sempre. Se mudou de ideia, cancele a exclusão para voltar a usar o termhub como antes.
+          {t(
+            'Você pediu para excluir sua conta, e ela está desativada até lá. Nessa data, suas máquinas, projetos, chats e o resto dos seus dados são apagados para sempre. Se mudou de ideia, cancele a exclusão para voltar a usar o termhub como antes.',
+          )}
         </p>
         {error && <p className="mt-3 text-sm text-danger">{error}</p>}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button type="button" className="btn-ghost" disabled={busy} onClick={() => void logout().then(() => navigate('/login'))}>
-            Sair
+            {t('Sair')}
           </button>
           <button type="button" className="btn-primary" disabled={busy} onClick={() => void cancel()}>
-            {busy ? 'Cancelando…' : 'Cancelar exclusão'}
+            {busy ? t('Cancelando…') : t('Cancelar exclusão')}
           </button>
         </div>
       </div>

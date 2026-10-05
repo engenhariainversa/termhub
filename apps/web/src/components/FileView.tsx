@@ -8,6 +8,7 @@ import { formatBytes } from '../lib/attachments';
 import { renderFileMarkdown } from '../lib/markdown';
 import type { FilePreview, FilePreviewOk } from '../lib/types';
 import { handleCopyClick } from './chat/ChatTurn';
+import { formatDateTime } from '../lib/format';
 
 /** Why a file has no preview, in the words the screen shows (spec 2026-10-04 file preview D8). */
 export const REFUSAL_TEXT: Record<string, string> = {
@@ -129,7 +130,7 @@ export function FileView({ projectId, path, machineId = null, active, onOpenFile
         </span>
         {ok && (
           <span className="text-fg-dim">
-            {ok.machine.name} · {formatBytes(ok.size)} · {new Date(ok.mtime).toLocaleString('pt-BR')}
+            {ok.machine.name} · {formatBytes(ok.size)} · {formatDateTime(ok.mtime)}
           </span>
         )}
         {note && (

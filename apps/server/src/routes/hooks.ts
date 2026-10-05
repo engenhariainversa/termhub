@@ -56,6 +56,9 @@ export async function hooksRoutes(app: FastifyInstance, repos: Repositories, dep
 
     const body = hookEventBody.parse(request.body);
     const result = await ingestHookEvent(repos, request.log, { machineId, tool: body.tool, session: body.session, event: body.event }, deps.waker, deps.onTabEvent);
+    // A prompt termhub typed (TER-851): the hook script prints this body as is, so Claude Code adds the
+    // note to the session's context. Nothing else may come first: the script checks the prefix.
+    if (result.origin_note) return reply.code(200).send({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: result.origin_note } });
     if (!result.ok) return reply.code(202).send({ ok: false, reason: result.reason });
     return { ok: true, tab_id: result.tab.id, state: result.tab.state };
   });
