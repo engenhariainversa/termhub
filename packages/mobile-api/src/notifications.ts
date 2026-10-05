@@ -30,3 +30,10 @@ export const pushTestResponse = z.object({
   ticket: z.union([z.object({ status: z.literal('ok') }), z.object({ status: z.literal('error'), error: z.string() })]).nullable(),
 });
 export type PushTestResponse = z.infer<typeof pushTestResponse>;
+
+/** `GET` / `PUT /api/m/v1/push-settings`: the person's opt-in pushes (TER-925). */
+export const pushSettings = z.object({
+  /** "Avisar quando uma aba terminar": a push when a project tab finishes its turn. Off by default. */
+  tab_finished: z.boolean(),
+});
+export type PushSettings = z.infer<typeof pushSettings>;

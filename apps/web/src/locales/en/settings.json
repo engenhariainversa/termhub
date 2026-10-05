@@ -340,5 +340,21 @@
   "Último uso": "Last used",
   "↓ CSV": "↓ CSV",
   "↻ atualizar": "↻ refresh",
-  "✓ ok": "✓ ok"
+  "✓ ok": "✓ ok",
+  "Confirmação do chat": "Chat confirmation",
+  "Pergunta de aba": "Tab question",
+  "Resposta pronta": "Answer ready",
+  "Pedido de aparelho novo": "New device request",
+  "A notificação de teste falhou: {{code}}": "The test notification failed: {{code}}",
+  "Enviando em {{seconds}} s. Feche o app para ver como ela chega.": "Sending in {{seconds}} s. Close the app to see how it arrives.",
+  "Enviada. Confira o celular.": "Sent. Check your phone.",
+  "Erro ao enviar a notificação de teste": "Could not send the test notification",
+  "Notificação de teste": "Test notification",
+  "Envia um aviso de exemplo para o seu aparelho, sem entrar no histórico de notificações. O resultado aparece em Atividade.": "Sends a sample notification to your device, without adding it to the notification history. The result shows up in Activity.",
+  "Aparelho": "Device",
+  "Tipo de aviso": "Kind of notification",
+  "Quando enviar": "When to send",
+  "Agora": "Now",
+  "Em {{seconds}} s": "In {{seconds}} s",
+  "Enviar notificação de teste": "Send test notification"
 }
