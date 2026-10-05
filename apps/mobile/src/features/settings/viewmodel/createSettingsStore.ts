@@ -4,6 +4,7 @@
 // same shape as the other feature stores; `useSettingsStore.ts` builds the app's one instance.
 import { create } from 'zustand';
 import { sessionEnded } from '@/features/shared/signals';
+import { i18n, t } from '@/i18n';
 import type { TDeviceSelf } from '@/services/api/contract';
 import { TERMHUB_URL } from '@/services/api/config';
 import { ApiError } from '@/services/api/errors';
@@ -34,15 +35,16 @@ export interface SettingsState {
   loadDevice(): Promise<void>;
 }
 
-const NETWORK_MSG = 'Não foi possível falar com o servidor. Tente de novo.';
+const networkMsg = () => t('Não foi possível falar com o servidor. Tente de novo.');
 
 export function createSettingsStore(deps: SettingsDeps) {
   const { api, session } = deps;
+  const server = () => serverLabel(api.mode, deps.baseUrl ?? TERMHUB_URL);
   let generation = 0;
 
   const store = create<SettingsState>()((set) => ({
     mode: api.mode,
-    server: serverLabel(api.mode, deps.baseUrl ?? TERMHUB_URL),
+    server: server(),
     device: null,
     loadingDevice: false,
     error: null,
@@ -57,7 +59,7 @@ export function createSettingsStore(deps: SettingsDeps) {
       } catch (e) {
         if (gen !== generation) return;
         if (session().handleApiError(e)) return;
-        set({ loadingDevice: false, error: e instanceof ApiError ? e.message : NETWORK_MSG });
+        set({ loadingDevice: false, error: e instanceof ApiError ? e.message : networkMsg() });
       }
     },
   }));
@@ -66,6 +68,9 @@ export function createSettingsStore(deps: SettingsDeps) {
     generation++;
     store.setState({ device: null, loadingDevice: false, error: null });
   });
+
+  // The label is copy ("Servidor: …"): it follows a language change.
+  i18n.on('languageChanged', () => store.setState({ server: server() }));
 
   return store;
 }

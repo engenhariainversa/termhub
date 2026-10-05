@@ -3,6 +3,7 @@ import type { CityModel } from '../../office/model';
 import type { PublicCity } from '../../lib/types';
 import { shareInfoFor, type CaptureFormat } from './compose';
 import { CopyLinkButton } from './CopyLinkButton';
+import { useTranslation } from '../../i18n';
 import { canShareFile, downloadFile, shareOrDownload } from './deliver';
 import { captureStill, fileNameFor, type FrameSource } from './images';
 import { baseType, canRecordVideo, extensionFor, instagramReady, recordStory, RecordingCancelled, STORY_VIDEO_MS, type Recording } from './record';
@@ -29,6 +30,7 @@ const PRIMARY = 'rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-whi
  * sound, and the link — all made here, in the visitor's browser, from the scene the page draws.
  */
 export function SharePanel({ scene, city, model, cityUrl, copyUrl, onClose }: { scene: ShareScene; city: PublicCity; model: CityModel; cityUrl: string; copyUrl: string; onClose(): void }) {
+  const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>({ kind: 'menu' });
   const [videoOk] = useState(canRecordVideo);
   const recording = useRef<Recording | null>(null);
@@ -53,9 +55,9 @@ export function SharePanel({ scene, city, model, cityUrl, copyUrl, onClose }: { 
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       // Esc in a field elsewhere on the page (the beta form) belongs to that field
-      const t = e.target as HTMLElement | null;
-      const editing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-      if (editing && !dialog.current?.contains(t)) return;
+      const el = e.target as HTMLElement | null;
+      const editing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+      if (editing && !dialog.current?.contains(el)) return;
       e.stopPropagation();
       e.preventDefault();
       onCloseRef.current();
@@ -137,13 +139,13 @@ export function SharePanel({ scene, city, model, cityUrl, copyUrl, onClose }: { 
 
   const seconds = phase.kind === 'recording' ? Math.floor(phase.elapsedMs / 1000) : 0;
   const total = STORY_VIDEO_MS / 1000;
-  const status = phase.kind === 'busy' ? 'Preparando a imagem…' : phase.kind === 'recording' ? `Gravando… ${seconds} s` : '';
+  const status = phase.kind === 'busy' ? t('Preparando a imagem…') : phase.kind === 'recording' ? t('Gravando… {{seconds}} s', { seconds }) : '';
 
   return (
-    <div ref={dialog} tabIndex={-1} role="dialog" aria-label="Compartilhar a cidade" className="space-y-3 rounded-b-xl border border-line bg-bg-2 p-4 shadow-xl outline-none sm:rounded-lg">
+    <div ref={dialog} tabIndex={-1} role="dialog" aria-label={t('Compartilhar a cidade')} className="space-y-3 rounded-b-xl border border-line bg-bg-2 p-4 shadow-xl outline-none sm:rounded-lg">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-fg">Compartilhar</h2>
-        <button type="button" aria-label="Fechar" className="rounded px-2 text-fg-muted hover:text-fg" onClick={onClose}>
+        <h2 className="text-sm font-semibold text-fg">{t('Compartilhar')}</h2>
+        <button type="button" aria-label={t('Fechar')} className="rounded px-2 text-fg-muted hover:text-fg" onClick={onClose}>
           ×
         </button>
       </div>
@@ -151,18 +153,18 @@ export function SharePanel({ scene, city, model, cityUrl, copyUrl, onClose }: { 
       {phase.kind === 'menu' && (
         <div className="grid gap-2">
           <button type="button" className={OPTION} onClick={() => void still('story')}>
-            Story (imagem)
+            {t('Story (imagem)')}
           </button>
           <button type="button" className={OPTION} onClick={() => void still('post')}>
-            Post (imagem)
+            {t('Post (imagem)')}
           </button>
           <button type="button" className={OPTION} onClick={() => void still('screen')}>
-            Tela 16:9 (imagem)
+            {t('Tela 16:9 (imagem)')}
           </button>
           <button type="button" className={OPTION} disabled={!videoOk} onClick={() => void video()}>
-            Vídeo para story (10 s, com som)
+            {t('Vídeo para story (10 s, com som)')}
           </button>
-          {!videoOk && <p className="text-xs text-fg-dim">Seu navegador não grava vídeo; as imagens continuam disponíveis.</p>}
+          {!videoOk && <p className="text-xs text-fg-dim">{t('Seu navegador não grava vídeo; as imagens continuam disponíveis.')}</p>}
           <CopyLinkButton url={copyUrl} className={OPTION} />
         </div>
       )}
@@ -174,12 +176,12 @@ export function SharePanel({ scene, city, model, cityUrl, copyUrl, onClose }: { 
 
       {phase.kind === 'recording' && (
         <div className="space-y-2">
-          <div role="progressbar" aria-label="Progresso da gravação" aria-valuemin={0} aria-valuemax={total} aria-valuenow={seconds} className="h-1.5 overflow-hidden rounded bg-bg-4">
+          <div role="progressbar" aria-label={t('Progresso da gravação')} aria-valuemin={0} aria-valuemax={total} aria-valuenow={seconds} className="h-1.5 overflow-hidden rounded bg-bg-4">
             <div className="h-full bg-accent transition-[width]" style={{ width: `${Math.min(100, (phase.elapsedMs / STORY_VIDEO_MS) * 100)}%` }} />
           </div>
-          <p className="text-xs text-fg-dim">A cidade continua ao vivo enquanto grava.</p>
+          <p className="text-xs text-fg-dim">{t('A cidade continua ao vivo enquanto grava.')}</p>
           <button type="button" className={ACTION} onClick={() => recording.current?.cancel()}>
-            Cancelar
+            {t('Cancelar')}
           </button>
         </div>
       )}
@@ -189,25 +191,25 @@ export function SharePanel({ scene, city, model, cityUrl, copyUrl, onClose }: { 
           {phase.video ? (
             <video src={phase.preview} controls playsInline className="max-h-72 w-full rounded bg-black" />
           ) : (
-            <img src={phase.preview} alt="Prévia da imagem" className="max-h-72 w-full rounded object-contain" />
+            <img src={phase.preview} alt={t('Prévia da imagem')} className="max-h-72 w-full rounded object-contain" />
           )}
-          {phase.warn && <p className="text-xs text-warn">O Instagram pode não aceitar WebM. No celular, use o Safari ou o Chrome.</p>}
+          {phase.warn && <p className="text-xs text-warn">{t('O Instagram pode não aceitar WebM. No celular, use o Safari ou o Chrome.')}</p>}
           <div className="flex flex-wrap gap-2">
             {canShareFile(phase.file) && (
               <button type="button" className={PRIMARY} onClick={() => void shareOrDownload(phase.file)}>
-                Compartilhar
+                {t('Compartilhar')}
               </button>
             )}
             <button type="button" className={ACTION} onClick={() => downloadFile(phase.file, phase.file.name)}>
-              Baixar
+              {t('Baixar')}
             </button>
             {phase.video ? (
               <button type="button" className={ACTION} onClick={() => void video()}>
-                Gravar de novo
+                {t('Gravar de novo')}
               </button>
             ) : (
               <button type="button" className={ACTION} onClick={() => setPhase({ kind: 'menu' })}>
-                Voltar
+                {t('Voltar')}
               </button>
             )}
           </div>
@@ -217,15 +219,15 @@ export function SharePanel({ scene, city, model, cityUrl, copyUrl, onClose }: { 
       {phase.kind === 'stopped' && (
         <div className="space-y-2">
           <p className="text-sm text-fg-muted">
-            {phase.reason === 'hidden' ? 'A gravação parou porque a página saiu da tela: o navegador pausa a cidade em segundo plano.' : 'Não foi possível gerar o arquivo.'}
+            {phase.reason === 'hidden' ? t('A gravação parou porque a página saiu da tela: o navegador pausa a cidade em segundo plano.') : t('Não foi possível gerar o arquivo.')}
           </p>
           {phase.reason === 'hidden' || phase.video ? (
             <button type="button" className={ACTION} onClick={() => void video()}>
-              Gravar de novo
+              {t('Gravar de novo')}
             </button>
           ) : (
             <button type="button" className={ACTION} onClick={() => setPhase({ kind: 'menu' })}>
-              Voltar
+              {t('Voltar')}
             </button>
           )}
         </div>

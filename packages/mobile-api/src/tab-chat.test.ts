@@ -62,6 +62,7 @@ describe('tab chat contract', () => {
   it('a tab summary takes an availability the enum does not list', () => {
     expect(tabSummary.parse({ ...summary, availability: 'something_new' }).availability).toBe('something_new');
     expect(tabSummary.parse(summary).background).toBe(false);
+    expect(tabSummary.parse(summary).finished).toBe(false);
   });
 
   it('parses one frame of each type and refuses an unknown one', () => {

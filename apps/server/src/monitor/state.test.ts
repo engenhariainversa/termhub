@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LAST_ANSWER_MAX, NEEDS_YOU, STATE_TEXT_MAX, claudeSessionOf, interpretHookEvent, isRateLimit, needsYou, runningBackgroundTasks } from './state.js';
+import { AT_PROMPT, LAST_ANSWER_MAX, NEEDS_YOU, STATE_TEXT_MAX, claudeSessionOf, interpretHookEvent, isRateLimit, needsYou, runningBackgroundTasks } from './state.js';
 import { activityOf } from './activity.js';
 
 describe('interpretHookEvent — claude', () => {
@@ -570,8 +570,9 @@ describe('claude Stop background tasks (spec 2026-09-26 TER-203 §4.1)', () => {
   ])('%s', (_label, background, count) => {
     const i = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Vigiando o CI.', ...(background === undefined ? {} : { background_tasks: background }) });
     expect(i?.text).toBe('Vigiando o CI.');
-    // background work still running is not a wait for the person (TER-644)
-    expect(i?.kind).toBe(count > 0 ? 'waiting_background' : 'waiting_input');
+    // background work still running is not a wait for the person (TER-644); with nothing left running the
+    // turn is over, and this message is a report that asks nothing (TER-972)
+    expect(i?.kind).toBe(count > 0 ? 'waiting_background' : 'finished');
     expect(i?.backgroundTasks).toBe(count > 0 ? count : undefined);
     expect(i?.meta).toEqual(count > 0 ? { event: 'Stop', background_tasks: count } : { event: 'Stop' });
     expect(JSON.stringify(i)).not.toContain('s3cr3t');
@@ -661,5 +662,51 @@ describe('waiting_background is not "needs you" (TER-644)', () => {
     expect(NEEDS_YOU).not.toContain('waiting_background');
     expect(needsYou({ state: 'waiting_background', state_at: at, state_seen_at: null })).toBe(false);
     expect(needsYou({ state: 'waiting_input', state_at: at, state_seen_at: null })).toBe(true);
+  });
+});
+
+describe('a claude Stop that ends with a report is finished, not a wait (TER-972)', () => {
+  const stop = (last: string | undefined, background?: unknown[]) =>
+    interpretHookEvent('claude', { hook_event_name: 'Stop', ...(last === undefined ? {} : { last_assistant_message: last }), ...(background ? { background_tasks: background } : {}) });
+
+  it('a plain report is finished, with its text, its answer and the same meta', () => {
+    const i = stop('Merge e deploy feitos; o card está em Feito.');
+    expect(i).toMatchObject({ kind: 'finished', text: 'Merge e deploy feitos; o card está em Feito.', answer: 'Merge e deploy feitos; o card está em Feito.', meta: { event: 'Stop' } });
+    expect(i?.backgroundTasks).toBeUndefined();
+  });
+
+  it('a message that ends in a question, or offers something, still waits for the person', () => {
+    expect(stop('Deploy feito. Quer que eu feche a aba?')?.kind).toBe('waiting_input');
+    expect(stop('Deploy feito. Se quiser, posso abrir o PR do próximo card.')?.kind).toBe('waiting_input');
+  });
+
+  it('a Stop with no last message still waits for the person', () => {
+    expect(stop(undefined)?.kind).toBe('waiting_input');
+    expect(stop('   ')?.kind).toBe('waiting_input');
+  });
+
+  it('background work still running wins, whatever the message says', () => {
+    const running = [{ id: 'b1', type: 'shell', status: 'running' }];
+    expect(stop('Merge e deploy feitos.', running)?.kind).toBe('waiting_background');
+    expect(stop('Quer que eu espere?', running)?.kind).toBe('waiting_background');
+  });
+
+  it('a subagent Stop is classified the same way and keeps no answer', () => {
+    const i = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Pronto.', agent_id: 'a1' });
+    expect(i).toMatchObject({ kind: 'finished', meta: { event: 'Stop', subagent: true, agent_id: 'a1' } });
+    expect(i?.answer).toBeUndefined();
+  });
+
+  it('Codex and Cursor turns are not classified: they still end as waits', () => {
+    expect(interpretHookEvent('codex', { hook_event_name: 'Stop', last_assistant_message: 'Deploy feito.' })?.kind).toBe('waiting_input');
+    expect(interpretHookEvent('codex', { type: 'agent-turn-complete', 'last-assistant-message': 'Deploy feito.' })?.kind).toBe('waiting_input');
+    expect(interpretHookEvent('cursor', { hook_event_name: 'afterAgentResponse', text: 'Deploy feito.' })?.kind).toBe('waiting_input');
+  });
+
+  it('a finished tab never needs the person, seen or not, and is back at its prompt', () => {
+    const at = '2026-10-05T15:00:00.000Z';
+    expect(NEEDS_YOU).not.toContain('finished');
+    expect(needsYou({ state: 'finished', state_at: at, state_seen_at: null })).toBe(false);
+    expect(AT_PROMPT).toEqual(['waiting_input', 'finished']);
   });
 });

@@ -5,6 +5,7 @@ import Markdown, { type RenderRules } from 'react-native-markdown-display';
 import { markdownStyle } from '@/features/chat/view/markdown-style';
 import { sendFileToChat } from '@/features/chat/model/chat-inbox';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
+import { t, useTranslation } from '@/i18n';
 import { api } from '@/services/api';
 import type { TFilePreviewOk, TFilePreviewQuery } from '@/services/api/contract';
 import { AppText, Banner, Button, Screen, useSchemeName } from '@/ui';
@@ -26,7 +27,7 @@ export const fileRules = (onImage: (src: string) => void): RenderRules => ({
     const alt = String(node.attributes.alt ?? '') || src;
     return (
       <Text key={node.key} accessibilityRole="link" className="text-app-accent underline" onPress={() => onImage(src)}>
-        {`imagem: ${alt}`}
+        {t('imagem: {{alt}}', { alt })}
       </Text>
     );
   },
@@ -42,6 +43,8 @@ export function onFileLink(url: string, dir: string, open: { file(path: string):
 
 /** A Markdown file an agent wrote, read on its machine (spec 2026-10-04 file preview D15). */
 export function FilePreviewScreen() {
+  // Re-renders on a language change; the copy below reads `t` at render time.
+  useTranslation();
   const router = useRouter();
   const scheme = useSchemeName();
   const params = useLocalSearchParams<{ path?: string; project_id?: string; tab_id?: string }>();
@@ -79,7 +82,7 @@ export function FilePreviewScreen() {
       await sendFileToChat(file.project_id, file.name, file.content);
       router.push(`/chat/${file.project_id ?? 'general'}`);
     } catch {
-      setNote('Não foi possível anexar o arquivo.');
+      setNote(t('Não foi possível anexar o arquivo.'));
     }
   };
 
@@ -87,26 +90,26 @@ export function FilePreviewScreen() {
   return (
     <Screen padded={false}>
       <View className="flex-row items-center gap-2 border-b border-app-border px-2 py-2">
-        <Button label="Voltar" variant="ghost" onPress={goBack} />
+        <Button label={t('Voltar')} variant="ghost" onPress={goBack} />
         <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
           {name}
         </AppText>
-        <Button label="Atualizar" variant="ghost" disabled={state.phase === 'loading'} onPress={() => void store.getState().load()} />
+        <Button label={t('Atualizar')} variant="ghost" disabled={state.phase === 'loading'} onPress={() => void store.getState().load()} />
       </View>
       {file ? (
         <View className="gap-1 border-b border-app-border px-4 py-2">
           <AppText variant="muted" className="text-xs" numberOfLines={2}>{`${file.path} · ${file.machine.name}`}</AppText>
           <View className="flex-row flex-wrap gap-2">
-            <Button label="Compartilhar" variant="secondary" onPress={share} />
-            {file.github_url ? <Button label="Abrir no GitHub" variant="secondary" onPress={() => openWeb(file.github_url!)} /> : null}
-            <Button label="Mandar para o chat" variant="secondary" onPress={() => void toChat()} />
+            <Button label={t('Compartilhar')} variant="secondary" onPress={share} />
+            {file.github_url ? <Button label={t('Abrir no GitHub')} variant="secondary" onPress={() => openWeb(file.github_url!)} /> : null}
+            <Button label={t('Mandar para o chat')} variant="secondary" onPress={() => void toChat()} />
           </View>
           {note ? <AppText variant="muted">{note}</AppText> : null}
         </View>
       ) : null}
       <ScrollView testID="file-preview-body" contentContainerClassName="px-4 py-3">
-        {!query.path ? <Banner tone="danger" text="Nenhum arquivo indicado." /> : null}
-        {query.path && state.phase === 'loading' ? <AppText variant="muted">Abrindo arquivo…</AppText> : null}
+        {!query.path ? <Banner tone="danger" text={t('Nenhum arquivo indicado.')} /> : null}
+        {query.path && state.phase === 'loading' ? <AppText variant="muted">{t('Abrindo arquivo…')}</AppText> : null}
         {state.phase === 'refused' ? <Banner tone={state.outdated ? 'info' : 'danger'} text={state.machine ? `${state.text} (${state.machine})` : state.text} /> : null}
         {file ? (
           isMarkdown(file.name) ? (

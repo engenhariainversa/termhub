@@ -1,12 +1,14 @@
+import { i18n, tk } from '../../i18n';
 import type { ChoiceAnswer, TabQuestion, TabQuestionChoice, TabQuestionItem, TabQuestionPermission, TabQuestionSuggestionItem } from '../../lib/types';
+import { formatDate } from '../../lib/format';
 
 /** What `409 TAB_PROMPT_CHANGED` reads as on a card. */
-export const PROMPT_CHANGED_TEXT = 'A aba já não mostra esta pergunta: nada foi enviado.';
+export const PROMPT_CHANGED_TEXT = tk('A aba já não mostra esta pergunta: nada foi enviado.');
 
 /** Why an answer did not reach the tab, by the code the server stored. */
 const FAILURE_TEXT: Record<string, string> = {
-  MACHINE_OFFLINE: 'a máquina está offline',
-  AGENT_OUTDATED: 'o agente da máquina está desatualizado',
+  MACHINE_OFFLINE: tk('a máquina está offline'),
+  AGENT_OUTDATED: tk('o agente da máquina está desatualizado'),
 };
 
 /** "0:42", never negative (a countdown at or past `due_at` reads as 0, not a negative number). */
@@ -59,37 +61,41 @@ export function choiceAnswerDescription(payload: { questions: TabQuestionItem[] 
 export function autoAnswerFailureText(code?: string | null): string {
   switch (code) {
     case 'TAB_PROMPT_CHANGED':
-      return 'Não consegui responder sozinho: a pergunta mudou na aba.';
+      return i18n.t('Não consegui responder sozinho: a pergunta mudou na aba.');
     case 'AUTODECIDE_OFF':
-      return 'Resposta automática cancelada: você desligou «Responder sozinho».';
+      return i18n.t('Resposta automática cancelada: você desligou «Responder sozinho».');
     case 'PRECEDENT_FORGOTTEN':
-      return 'Resposta automática cancelada: o precedente foi esquecido.';
+      return i18n.t('Resposta automática cancelada: o precedente foi esquecido.');
     default:
-      return 'Não consegui responder sozinho.';
+      return i18n.t('Não consegui responder sozinho.');
   }
 }
 
-export const tabLabel = (q: TabQuestion): string => (q.tab_name ? `A aba «${q.tab_name}»` : 'Uma aba');
+export const tabLabel = (q: TabQuestion): string => (q.tab_name ? i18n.t('A aba «{{name}}»', { name: q.tab_name }) : i18n.t('Uma aba'));
 
 /** The title of a choice card: says so when the question came from Codex (`payload.agent`). */
-export const choiceTitle = (q: TabQuestionChoice): string => `${tabLabel(q)} perguntou${q.payload.agent === 'codex' ? ' (o Codex)' : ''}`;
+export const choiceTitle = (q: TabQuestionChoice): string =>
+  q.payload.agent === 'codex' ? i18n.t('{{tab}} perguntou (o Codex)', { tab: tabLabel(q) }) : i18n.t('{{tab}} perguntou', { tab: tabLabel(q) });
 
 /** A permission card's title, also its line in the pending bar (TER-477), so it names the tab: two Codex tabs
  *  must read apart there. Codex's approval is asked in its own words (`payload.question`, shown apart). */
-export const permissionTitle = (q: TabQuestionPermission): string => (q.payload.agent === 'codex' ? `${tabLabel(q)} pede permissão (o Codex)` : `${tabLabel(q)} pede permissão para usar «${q.payload.tool_name}»`);
+export const permissionTitle = (q: TabQuestionPermission): string =>
+  q.payload.agent === 'codex'
+    ? i18n.t('{{tab}} pede permissão (o Codex)', { tab: tabLabel(q) })
+    : i18n.t('{{tab}} pede permissão para usar «{{tool}}»', { tab: tabLabel(q), tool: q.payload.tool_name });
 
 export function statusLabel(q: TabQuestion): string {
   switch (q.status) {
     case 'open':
       return '';
     case 'answered':
-      return 'Respondida';
+      return i18n.t('Respondida');
     case 'answered_in_tab':
-      return 'Respondida na aba';
+      return i18n.t('Respondida na aba');
     case 'expired':
-      return 'Expirada';
+      return i18n.t('Expirada');
     case 'failed':
-      return `Falhou — ${FAILURE_TEXT[q.error_code ?? ''] ?? 'não foi possível digitar na aba'}`;
+      return i18n.t('Falhou — {{reason}}', { reason: i18n.t(FAILURE_TEXT[q.error_code ?? ''] ?? tk('não foi possível digitar na aba')) });
   }
 }
 
@@ -97,7 +103,7 @@ export function statusLabel(q: TabQuestion): string {
 export function answerSummary(q: TabQuestion): string[] {
   if (q.kind === 'permission') {
     if (!q.answer) return [];
-    return [q.answer.allow ? 'Permitido' : q.answer.text ? `Negado: «${q.answer.text}»` : 'Negado'];
+    return [q.answer.allow ? i18n.t('Permitido') : q.answer.text ? i18n.t('Negado: «{{text}}»', { text: q.answer.text }) : i18n.t('Negado')];
   }
   const answers = q.answer?.answers;
   return q.payload.questions.map((item, i) => {
@@ -115,9 +121,9 @@ function suggestionValue(item: TabQuestionItem, hint: TabQuestionSuggestionItem)
 /** "você respondeu «X» a «pergunta» em termhub, 24/09/2026": the past-decision sentence, reused as the
  * countdown's "Fonte:" (spec 2026-09-26 concierge memory §8, controller ruling for `by: 'memory'`). */
 export function suggestionSourceSentence(item: TabQuestionItem, hint: TabQuestionSuggestionItem): string {
-  const date = new Date(hint.source.answered_at).toLocaleDateString('pt-BR');
-  const project = hint.source.project_name ?? 'sem projeto';
-  return `você respondeu «${suggestionValue(item, hint)}» a «${hint.source.question}» em ${project}, ${date}`;
+  const date = formatDate(hint.source.answered_at);
+  const project = hint.source.project_name ?? i18n.t('sem projeto');
+  return i18n.t('você respondeu «{{answer}}» a «{{question}}» em {{project}}, {{date}}', { answer: suggestionValue(item, hint), question: hint.source.question, project, date });
 }
 
 /** "Sugestão da memória" (or "Sugestão do concierge") under a pre-selected question (spec 2026-09-26
@@ -125,8 +131,8 @@ export function suggestionSourceSentence(item: TabQuestionItem, hint: TabQuestio
  * clicked as-is answers what it says here. `item`'s `selected` is already in this question's own option
  * indexes. */
 export function suggestionLine(item: TabQuestionItem, hint: TabQuestionSuggestionItem): string {
-  if (hint.by === 'concierge') return `Sugestão do concierge: «${suggestionValue(item, hint)}». Motivo: ${hint.reason ?? ''}`;
-  return `Sugestão da memória: ${suggestionSourceSentence(item, hint)}`;
+  if (hint.by === 'concierge') return i18n.t('Sugestão do concierge: «{{answer}}». Motivo: {{reason}}', { answer: suggestionValue(item, hint), reason: hint.reason ?? '' });
+  return i18n.t('Sugestão da memória: {{source}}', { source: suggestionSourceSentence(item, hint) });
 }
 
 /** Every event carries the whole card: replace it by id, or append it. */

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useData } from '../lib/data';
-import { PROJECT_STATUS_LABEL } from '../lib/types';
+import { projectStatusLabel } from '../lib/board';
+import { tk, useTranslation } from '../i18n';
 import { TerminalsView } from '../components/TerminalsView';
 import { TasksBoard } from '../components/TasksBoard';
 import { BacklogView } from '../components/BacklogView';
@@ -18,13 +19,13 @@ import { ChatToggleButton } from '../components/chat/ChatToggleButton';
 export type ProjectSection = 'terminals' | 'tasks' | 'backlog' | 'progress' | 'tickets' | 'notes' | 'settings';
 
 const SECTIONS: { key: ProjectSection; label: string; path: string }[] = [
-  { key: 'terminals', label: 'Terminais', path: '' },
-  { key: 'tasks', label: 'Board', path: 'tasks' },
-  { key: 'backlog', label: 'Backlog', path: 'backlog' },
-  { key: 'progress', label: 'Progresso', path: 'progress' },
-  { key: 'tickets', label: 'Tickets', path: 'tickets' },
-  { key: 'notes', label: 'Notas', path: 'notes' },
-  { key: 'settings', label: 'Setup', path: 'settings' },
+  { key: 'terminals', label: tk('Terminais'), path: '' },
+  { key: 'tasks', label: tk('Board'), path: 'tasks' },
+  { key: 'backlog', label: tk('Backlog'), path: 'backlog' },
+  { key: 'progress', label: tk('Progresso'), path: 'progress' },
+  { key: 'tickets', label: tk('Tickets'), path: 'tickets' },
+  { key: 'notes', label: tk('Notas'), path: 'notes' },
+  { key: 'settings', label: tk('Setup'), path: 'settings' },
 ];
 
 interface Props {
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export function ProjectPage({ card }: Props = {}) {
+  const { t } = useTranslation();
   const params = useParams<{ id: string; section?: string }>();
   const id = card?.projectId ?? params.id;
   const section = card ? 'tasks' : params.section;
@@ -57,8 +59,8 @@ export function ProjectPage({ card }: Props = {}) {
     };
   }, [missing, reread, id, refresh]);
 
-  if (loading || (missing && reread !== id)) return <FullScreenMessage>Carregando…</FullScreenMessage>;
-  if (!project) return <FullScreenMessage>Projeto não encontrado.</FullScreenMessage>;
+  if (loading || (missing && reread !== id)) return <FullScreenMessage>{t('Carregando…')}</FullScreenMessage>;
+  if (!project) return <FullScreenMessage>{t('Projeto não encontrado.')}</FullScreenMessage>;
   const projectMachines = machinesOf(project);
   const online = projectMachines.some((m) => statuses[m.id] === 'online');
   const status =
@@ -74,17 +76,17 @@ export function ProjectPage({ card }: Props = {}) {
     <div className="flex h-full flex-col">
       <PageHeader
         title={project.name}
-        subtitle={`${project.key} · ${projectMachines.length === 0 ? 'sem máquina' : projectMachines.map((m) => m.name).join(', ')}`}
+        subtitle={`${project.key} · ${projectMachines.length === 0 ? t('sem máquina') : projectMachines.map((m) => m.name).join(', ')}`}
         subtitleTitle={project.machines.map((l) => `${projectMachines.find((m) => m.id === l.machine_id)?.name ?? l.machine_id}: ${l.cwd}`).join('\n') || undefined}
         tabs={SECTIONS.map((s) => ({
           to: `/projects/${project.id}${s.path ? '/' + s.path : ''}`,
-          label: s.label,
+          label: t(s.label),
           end: true,
           badge: s.key === 'tasks' ? project.open_tasks : undefined,
         }))}
         actions={
           <>
-            {project.status !== 'active' && <span className="rounded bg-bg-4 px-1.5 text-[10px] text-fg-muted">{PROJECT_STATUS_LABEL[project.status]}</span>}
+            {project.status !== 'active' && <span className="rounded bg-bg-4 px-1.5 text-[10px] text-fg-muted">{projectStatusLabel(project.status)}</span>}
             {status && (
               <span
                 className={`h-2 w-2 shrink-0 rounded-full ${status === 'online' ? 'bg-ok' : status === 'offline' ? 'bg-danger' : 'bg-warn animate-pulse'}`}

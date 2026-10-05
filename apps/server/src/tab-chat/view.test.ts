@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { tabSummary } from '@termhub/mobile-api';
 import type { Machine, Project, Tab } from '../db/repositories/types.js';
 import { tabSummaryOf } from './view.js';
 
@@ -16,6 +17,7 @@ describe('tabSummaryOf', () => {
       machine: { id: 'm1', name: 'box' },
       state: 'working',
       background: false,
+      finished: false,
       state_at: '2026-10-01T10:00:00.000Z',
       needs_you: false,
       activity: 'coding',
@@ -26,6 +28,14 @@ describe('tabSummaryOf', () => {
 
   it('a tab waiting on its own background work travels as working, flagged', () => {
     expect(tabSummaryOf(tab({ state: 'waiting_background' }), project, machine, 'ready')).toMatchObject({ state: 'working', background: true, needs_you: false });
+  });
+
+  it('a tab that ended its turn with a report travels as idle, flagged, and never needs you (TER-972)', () => {
+    const summary = tabSummaryOf(tab({ state: 'finished' }), project, machine, 'ready');
+    expect(summary).toMatchObject({ state: 'idle', finished: true, background: false, needs_you: false });
+    // an older payload without the flag reads as false
+    const { finished: _f, ...older } = summary;
+    expect(tabSummary.parse(older).finished).toBe(false);
   });
 
   it('needs you while waiting and not seen since the state began', () => {

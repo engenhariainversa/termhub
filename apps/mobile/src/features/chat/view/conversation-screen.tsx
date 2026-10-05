@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { activeGrantsLabel } from '@/features/chat-grants/model/labels';
+import { useTranslation } from '@/i18n';
 import type { TChatAttachment, TTabQuestionAnswerBody } from '@/services/api/contract';
 import { AppText, Banner, Button, EmptyState, MAX_READABLE_WIDTH, readableColumn, Screen, Sheet } from '@/ui';
 import { inboxKey } from '../model/chat-inbox';
@@ -90,6 +91,7 @@ const MessageRow = memo(function MessageRow({
  * `general` — the store resolves which. `embedded` is the iPad split's right pane (spec 2026-09-28
  * §2.3): no "Voltar", the list next to it is the way out. */
 export function ConversationView({ routeId, embedded = false }: { routeId: string; embedded?: boolean }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const openByRoute = useChatStore((s) => s.openByRoute);
   const activeProject = useChatStore((s) => s.activeProject);
@@ -220,7 +222,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   const onDismissSuggestion = useCallback((id: string) => void dismissTabSuggestion(id), [dismissTabSuggestion]);
   const onAnswerLimit = useCallback((id: string, accountId: string | null) => void answerTabLimit(id, accountId), [answerTabLimit]);
   // "Propor de novo" (TER-477): a plain chat message; the concierge proposes a fresh card through the gate.
-  const onRepropose = useCallback((action: ChatAction) => void send(`Proponha de novo: ${action.summary}`), [send]);
+  const onRepropose = useCallback((action: ChatAction) => void send(t('Proponha de novo: {{summary}}', { summary: action.summary })), [send, t]);
   const onApproveWrites = useCallback((ids: string[]) => void decideMany(ids.map((id) => ({ id, decision: 'approve' as const }))), [decideMany]);
   const timeline = useMemo(
     () => chatTimeline(messages ?? [], actions ?? [], tabQuestions ?? [], tabSuggestions ?? [], tabLimits ?? []),
@@ -350,7 +352,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
     [decidingId, grantIndex, projectGrantIndex, standingGrantIndex, revokingId, answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors, busyLimitIds, limitErrors, highlightId],
   );
 
-  const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? 'Conversa') : 'Chat geral';
+  const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? t('Conversa')) : t('Chat geral');
   const shownError = error ?? slot?.error ?? null;
 
   const confirmReset = () => {
@@ -374,16 +376,16 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
             frame, not its content, and the inverted list keeps its end pinned through that. */}
         <View>
           <View className={`flex-row items-center gap-2 border-b border-app-border py-2 ${embedded ? 'px-4' : 'px-2'}`}>
-            {embedded ? null : <Button label="Voltar" variant="ghost" onPress={goBack} />}
+            {embedded ? null : <Button label={t('Voltar')} variant="ghost" onPress={goBack} />}
             <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
               {title}
             </AppText>
             {/* The subagents panel (spec 2026-09-26 panel §4): the button appears once something is
                 running or being cancelled, and — while the sheet is open — stays even after every one
                 of them ended, so the sheet it opened always has a way to close it again. */}
-            {activeSubagents.length > 0 || subagentsOpen ? <Button label={`Subagentes (${activeSubagents.length})`} variant="ghost" onPress={() => setSubagentsOpen((o) => !o)} /> : null}
+            {activeSubagents.length > 0 || subagentsOpen ? <Button label={t('Subagentes ({{n}})', { n: activeSubagents.length })} variant="ghost" onPress={() => setSubagentsOpen((o) => !o)} /> : null}
             {activeGrantCount > 0 ? <Button label={activeGrantsLabel(activeGrantCount)} variant="ghost" onPress={() => router.push('/chat-grants')} /> : null}
-            <Button label="Nova conversa" variant="ghost" onPress={() => setConfirmingReset(true)} />
+            <Button label={t('Nova conversa')} variant="ghost" onPress={() => setConfirmingReset(true)} />
           </View>
           {/* The account-wide chat shows it only when something stands in the way (offline, no machine, none
               chosen, an old agent): where a ready chat runs, and switching it, live in Ajustes. A project
@@ -404,7 +406,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
           ) : (
             // A tap on the empty thread dismisses the keyboard, as dragging the list does below.
             <Pressable accessible={false} className="flex-1" onPress={Keyboard.dismiss}>
-              <EmptyState title="Nenhuma mensagem ainda" hint="Escreva abaixo para começar a conversa." />
+              <EmptyState title={t('Nenhuma mensagem ainda')} hint={t('Escreva abaixo para começar a conversa.')} />
             </Pressable>
           )
         ) : (
@@ -432,11 +434,11 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
         </View>
       </KeyboardAvoidingView>
       </View>
-      <Sheet open={confirmingReset} onClose={() => setConfirmingReset(false)} title="Começar uma nova conversa?">
+      <Sheet open={confirmingReset} onClose={() => setConfirmingReset(false)} title={t('Começar uma nova conversa?')}>
         <View className="gap-3">
-          <AppText variant="muted">A conversa atual fica arquivada e o chat começa do zero.</AppText>
-          <Button label="Começar nova conversa" variant="danger" onPress={confirmReset} />
-          <Button label="Cancelar" variant="ghost" onPress={() => setConfirmingReset(false)} />
+          <AppText variant="muted">{t('A conversa atual fica arquivada e o chat começa do zero.')}</AppText>
+          <Button label={t('Começar nova conversa')} variant="danger" onPress={confirmReset} />
+          <Button label={t('Cancelar')} variant="ghost" onPress={() => setConfirmingReset(false)} />
         </View>
       </Sheet>
       <SubagentsSheet open={subagentsOpen} onClose={() => setSubagentsOpen(false)} subagents={subagents} cancelFailed={cancelFailed} onCancel={onCancelSubagent} now={subagentsNow} />
