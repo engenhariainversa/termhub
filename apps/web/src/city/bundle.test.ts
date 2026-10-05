@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+// @ts-expect-error -- a plain Node script, no type declarations
+import { scanSource } from '../../scripts/i18n-check.mjs';
 
 const dist = new URL('../../dist-city/assets', import.meta.url).pathname;
 const built = existsSync(dist);
@@ -54,5 +56,24 @@ describe('the public bundle source', () => {
       }
     }
     expect(bad).toEqual([]);
+  });
+});
+
+/**
+ * The city build loads only the city, office and common catalogs (src/i18n/catalogs-city.ts), so every
+ * key the city and the office scene use needs its English entry in one of those three files; one kept
+ * only in another area's file would show in pt-BR on the street.
+ */
+describe('the public bundle catalogs', () => {
+  it('hold every key the city and the office use', () => {
+    const en: Record<string, string> = {};
+    for (const area of ['city', 'office', 'common']) Object.assign(en, JSON.parse(readFileSync(join(SRC, 'locales', 'en', `${area}.json`), 'utf8')));
+    const missing: string[] = [];
+    for (const file of [...sources(join(SRC, 'city')), ...sources(join(SRC, 'office'))]) {
+      for (const { key, where } of scanSource(relative(SRC, file), readFileSync(file, 'utf8'), { guarded: false }).keys as { key: string; where: string }[]) {
+        if (!(key in en) && !(`${key}_one` in en)) missing.push(`${where}: "${key}"`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });

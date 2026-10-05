@@ -81,6 +81,10 @@ chrome, `common.json` for words every screen uses: Salvar, Cancelar, Excluir, Ca
 are merged at load, so parallel PRs do not touch the same file; the same key in two files must
 have the same translation. Keep each file sorted by key.
 
+The public city build loads only `city.json`, `office.json` and `common.json`
+(`src/i18n/catalogs-city.ts`), so a key used under `city/` or `office/` must have its entry in one
+of those; `city/bundle.test.ts` checks it.
+
 ## Dates and numbers
 
 Never pass `'pt-BR'` to `toLocale*` or `Intl`. Use `lib/format.ts`: `formatDate`,
