@@ -54,6 +54,7 @@ export type TabMinAggregateOutputType = {
   agentTranscriptPath: string | null
   aiAccountId: string | null
   rateLimitedAt: Date | null
+  cwd: string | null
   createdByTokenId: string | null
   createdAt: Date | null
 }
@@ -78,6 +79,7 @@ export type TabMaxAggregateOutputType = {
   agentTranscriptPath: string | null
   aiAccountId: string | null
   rateLimitedAt: Date | null
+  cwd: string | null
   createdByTokenId: string | null
   createdAt: Date | null
 }
@@ -102,6 +104,7 @@ export type TabCountAggregateOutputType = {
   agentTranscriptPath: number
   aiAccountId: number
   rateLimitedAt: number
+  cwd: number
   createdByTokenId: number
   createdAt: number
   _all: number
@@ -136,6 +139,7 @@ export type TabMinAggregateInputType = {
   agentTranscriptPath?: true
   aiAccountId?: true
   rateLimitedAt?: true
+  cwd?: true
   createdByTokenId?: true
   createdAt?: true
 }
@@ -160,6 +164,7 @@ export type TabMaxAggregateInputType = {
   agentTranscriptPath?: true
   aiAccountId?: true
   rateLimitedAt?: true
+  cwd?: true
   createdByTokenId?: true
   createdAt?: true
 }
@@ -184,6 +189,7 @@ export type TabCountAggregateInputType = {
   agentTranscriptPath?: true
   aiAccountId?: true
   rateLimitedAt?: true
+  cwd?: true
   createdByTokenId?: true
   createdAt?: true
   _all?: true
@@ -295,6 +301,7 @@ export type TabGroupByOutputType = {
   agentTranscriptPath: string | null
   aiAccountId: string | null
   rateLimitedAt: Date | null
+  cwd: string | null
   createdByTokenId: string | null
   createdAt: Date
   _count: TabCountAggregateOutputType | null
@@ -342,6 +349,7 @@ export type TabWhereInput = {
   agentTranscriptPath?: Prisma.StringNullableFilter<"Tab"> | string | null
   aiAccountId?: Prisma.StringNullableFilter<"Tab"> | string | null
   rateLimitedAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
+  cwd?: Prisma.StringNullableFilter<"Tab"> | string | null
   createdByTokenId?: Prisma.StringNullableFilter<"Tab"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Tab"> | Date | string
   aiAccount?: Prisma.XOR<Prisma.AiAccountNullableScalarRelationFilter, Prisma.AiAccountWhereInput> | null
@@ -372,6 +380,7 @@ export type TabOrderByWithRelationInput = {
   agentTranscriptPath?: Prisma.SortOrderInput | Prisma.SortOrder
   aiAccountId?: Prisma.SortOrderInput | Prisma.SortOrder
   rateLimitedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  cwd?: Prisma.SortOrderInput | Prisma.SortOrder
   createdByTokenId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   aiAccount?: Prisma.AiAccountOrderByWithRelationInput
@@ -405,6 +414,7 @@ export type TabWhereUniqueInput = Prisma.AtLeast<{
   agentTranscriptPath?: Prisma.StringNullableFilter<"Tab"> | string | null
   aiAccountId?: Prisma.StringNullableFilter<"Tab"> | string | null
   rateLimitedAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
+  cwd?: Prisma.StringNullableFilter<"Tab"> | string | null
   createdByTokenId?: Prisma.StringNullableFilter<"Tab"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Tab"> | Date | string
   aiAccount?: Prisma.XOR<Prisma.AiAccountNullableScalarRelationFilter, Prisma.AiAccountWhereInput> | null
@@ -435,6 +445,7 @@ export type TabOrderByWithAggregationInput = {
   agentTranscriptPath?: Prisma.SortOrderInput | Prisma.SortOrder
   aiAccountId?: Prisma.SortOrderInput | Prisma.SortOrder
   rateLimitedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  cwd?: Prisma.SortOrderInput | Prisma.SortOrder
   createdByTokenId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.TabCountOrderByAggregateInput
@@ -467,6 +478,7 @@ export type TabScalarWhereWithAggregatesInput = {
   agentTranscriptPath?: Prisma.StringNullableWithAggregatesFilter<"Tab"> | string | null
   aiAccountId?: Prisma.StringNullableWithAggregatesFilter<"Tab"> | string | null
   rateLimitedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Tab"> | Date | string | null
+  cwd?: Prisma.StringNullableWithAggregatesFilter<"Tab"> | string | null
   createdByTokenId?: Prisma.StringNullableWithAggregatesFilter<"Tab"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Tab"> | Date | string
 }
@@ -488,6 +500,7 @@ export type TabCreateInput = {
   agentSessionId?: string | null
   agentTranscriptPath?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
@@ -518,6 +531,7 @@ export type TabUncheckedCreateInput = {
   agentTranscriptPath?: string | null
   aiAccountId?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
@@ -542,6 +556,7 @@ export type TabUpdateInput = {
   agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
@@ -572,6 +587,7 @@ export type TabUncheckedUpdateInput = {
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
@@ -599,6 +615,7 @@ export type TabCreateManyInput = {
   agentTranscriptPath?: string | null
   aiAccountId?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
 }
@@ -620,6 +637,7 @@ export type TabUpdateManyMutationInput = {
   agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -644,6 +662,7 @@ export type TabUncheckedUpdateManyInput = {
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -678,6 +697,7 @@ export type TabCountOrderByAggregateInput = {
   agentTranscriptPath?: Prisma.SortOrder
   aiAccountId?: Prisma.SortOrder
   rateLimitedAt?: Prisma.SortOrder
+  cwd?: Prisma.SortOrder
   createdByTokenId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
@@ -706,6 +726,7 @@ export type TabMaxOrderByAggregateInput = {
   agentTranscriptPath?: Prisma.SortOrder
   aiAccountId?: Prisma.SortOrder
   rateLimitedAt?: Prisma.SortOrder
+  cwd?: Prisma.SortOrder
   createdByTokenId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
@@ -730,6 +751,7 @@ export type TabMinOrderByAggregateInput = {
   agentTranscriptPath?: Prisma.SortOrder
   aiAccountId?: Prisma.SortOrder
   rateLimitedAt?: Prisma.SortOrder
+  cwd?: Prisma.SortOrder
   createdByTokenId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
@@ -947,6 +969,7 @@ export type TabCreateWithoutMachineInput = {
   agentSessionId?: string | null
   agentTranscriptPath?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
@@ -975,6 +998,7 @@ export type TabUncheckedCreateWithoutMachineInput = {
   agentTranscriptPath?: string | null
   aiAccountId?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
@@ -1031,6 +1055,7 @@ export type TabScalarWhereInput = {
   agentTranscriptPath?: Prisma.StringNullableFilter<"Tab"> | string | null
   aiAccountId?: Prisma.StringNullableFilter<"Tab"> | string | null
   rateLimitedAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
+  cwd?: Prisma.StringNullableFilter<"Tab"> | string | null
   createdByTokenId?: Prisma.StringNullableFilter<"Tab"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Tab"> | Date | string
 }
@@ -1052,6 +1077,7 @@ export type TabCreateWithoutProjectInput = {
   agentSessionId?: string | null
   agentTranscriptPath?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
@@ -1080,6 +1106,7 @@ export type TabUncheckedCreateWithoutProjectInput = {
   agentTranscriptPath?: string | null
   aiAccountId?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
@@ -1130,6 +1157,7 @@ export type TabCreateWithoutEventsInput = {
   agentSessionId?: string | null
   agentTranscriptPath?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
@@ -1159,6 +1187,7 @@ export type TabUncheckedCreateWithoutEventsInput = {
   agentTranscriptPath?: string | null
   aiAccountId?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
@@ -1198,6 +1227,7 @@ export type TabUpdateWithoutEventsInput = {
   agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
@@ -1227,6 +1257,7 @@ export type TabUncheckedUpdateWithoutEventsInput = {
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
@@ -1250,6 +1281,7 @@ export type TabCreateWithoutLastAnswerInput = {
   agentSessionId?: string | null
   agentTranscriptPath?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
@@ -1279,6 +1311,7 @@ export type TabUncheckedCreateWithoutLastAnswerInput = {
   agentTranscriptPath?: string | null
   aiAccountId?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
@@ -1318,6 +1351,7 @@ export type TabUpdateWithoutLastAnswerInput = {
   agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
@@ -1347,6 +1381,7 @@ export type TabUncheckedUpdateWithoutLastAnswerInput = {
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
@@ -1370,6 +1405,7 @@ export type TabCreateWithoutTasksInput = {
   agentSessionId?: string | null
   agentTranscriptPath?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
@@ -1399,6 +1435,7 @@ export type TabUncheckedCreateWithoutTasksInput = {
   agentTranscriptPath?: string | null
   aiAccountId?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
@@ -1438,6 +1475,7 @@ export type TabUpdateWithoutTasksInput = {
   agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
@@ -1467,6 +1505,7 @@ export type TabUncheckedUpdateWithoutTasksInput = {
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
@@ -1490,6 +1529,7 @@ export type TabCreateWithoutAiAccountInput = {
   agentSessionId?: string | null
   agentTranscriptPath?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutTabsInput
@@ -1518,6 +1558,7 @@ export type TabUncheckedCreateWithoutAiAccountInput = {
   agentSessionId?: string | null
   agentTranscriptPath?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
@@ -1570,6 +1611,7 @@ export type TabCreateManyMachineInput = {
   agentTranscriptPath?: string | null
   aiAccountId?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
 }
@@ -1591,6 +1633,7 @@ export type TabUpdateWithoutMachineInput = {
   agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
@@ -1619,6 +1662,7 @@ export type TabUncheckedUpdateWithoutMachineInput = {
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
@@ -1645,6 +1689,7 @@ export type TabUncheckedUpdateManyWithoutMachineInput = {
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -1668,6 +1713,7 @@ export type TabCreateManyProjectInput = {
   agentTranscriptPath?: string | null
   aiAccountId?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
 }
@@ -1689,6 +1735,7 @@ export type TabUpdateWithoutProjectInput = {
   agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
@@ -1717,6 +1764,7 @@ export type TabUncheckedUpdateWithoutProjectInput = {
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
@@ -1743,6 +1791,7 @@ export type TabUncheckedUpdateManyWithoutProjectInput = {
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -1766,6 +1815,7 @@ export type TabCreateManyAiAccountInput = {
   agentSessionId?: string | null
   agentTranscriptPath?: string | null
   rateLimitedAt?: Date | string | null
+  cwd?: string | null
   createdByTokenId?: string | null
   createdAt?: Date | string
 }
@@ -1787,6 +1837,7 @@ export type TabUpdateWithoutAiAccountInput = {
   agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutTabsNestedInput
@@ -1815,6 +1866,7 @@ export type TabUncheckedUpdateWithoutAiAccountInput = {
   agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
@@ -1841,6 +1893,7 @@ export type TabUncheckedUpdateManyWithoutAiAccountInput = {
   agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -1905,6 +1958,7 @@ export type TabSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = ru
   agentTranscriptPath?: boolean
   aiAccountId?: boolean
   rateLimitedAt?: boolean
+  cwd?: boolean
   createdByTokenId?: boolean
   createdAt?: boolean
   aiAccount?: boolean | Prisma.Tab$aiAccountArgs<ExtArgs>
@@ -1936,6 +1990,7 @@ export type TabSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extension
   agentTranscriptPath?: boolean
   aiAccountId?: boolean
   rateLimitedAt?: boolean
+  cwd?: boolean
   createdByTokenId?: boolean
   createdAt?: boolean
   aiAccount?: boolean | Prisma.Tab$aiAccountArgs<ExtArgs>
@@ -1963,6 +2018,7 @@ export type TabSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extension
   agentTranscriptPath?: boolean
   aiAccountId?: boolean
   rateLimitedAt?: boolean
+  cwd?: boolean
   createdByTokenId?: boolean
   createdAt?: boolean
   aiAccount?: boolean | Prisma.Tab$aiAccountArgs<ExtArgs>
@@ -1990,11 +2046,12 @@ export type TabSelectScalar = {
   agentTranscriptPath?: boolean
   aiAccountId?: boolean
   rateLimitedAt?: boolean
+  cwd?: boolean
   createdByTokenId?: boolean
   createdAt?: boolean
 }
 
-export type TabOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "machineId" | "name" | "kind" | "tmuxSession" | "simulatorUdid" | "position" | "state" | "stateText" | "stateTool" | "stateAt" | "stateSeenAt" | "activity" | "activityVerb" | "agentSessionId" | "agentTranscriptPath" | "aiAccountId" | "rateLimitedAt" | "createdByTokenId" | "createdAt", ExtArgs["result"]["tab"]>
+export type TabOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "machineId" | "name" | "kind" | "tmuxSession" | "simulatorUdid" | "position" | "state" | "stateText" | "stateTool" | "stateAt" | "stateSeenAt" | "activity" | "activityVerb" | "agentSessionId" | "agentTranscriptPath" | "aiAccountId" | "rateLimitedAt" | "cwd" | "createdByTokenId" | "createdAt", ExtArgs["result"]["tab"]>
 export type TabInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   aiAccount?: boolean | Prisma.Tab$aiAccountArgs<ExtArgs>
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
@@ -2071,6 +2128,11 @@ export type $TabPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
      * When the tab's Claude stopped on a usage limit (StopFailure rate_limit); cleared when it runs again.
      */
     rateLimitedAt: Date | null
+    /**
+     * Where the tab's session runs when it is not the project's folder (an automation card's worktree, an
+     * absolute path on the machine); null = the project–machine link's cwd. Reused when the session is recreated.
+     */
+    cwd: string | null
     /**
      * API token that opened this tab through /mcp (null: opened in the browser). Used by close_tab and the per-token open-tab limit.
      */
@@ -2524,6 +2586,7 @@ export interface TabFieldRefs {
   readonly agentTranscriptPath: Prisma.FieldRef<"Tab", 'String'>
   readonly aiAccountId: Prisma.FieldRef<"Tab", 'String'>
   readonly rateLimitedAt: Prisma.FieldRef<"Tab", 'DateTime'>
+  readonly cwd: Prisma.FieldRef<"Tab", 'String'>
   readonly createdByTokenId: Prisma.FieldRef<"Tab", 'String'>
   readonly createdAt: Prisma.FieldRef<"Tab", 'DateTime'>
 }

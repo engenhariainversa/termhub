@@ -20,7 +20,7 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import { Scoped } from '../auth/scope.js';
 import { ControlError, type ControlContext } from './context.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { checkPrompt, CODEX_TAB_MCP_ENABLED, continueLine, launchLine, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
+import { checkPrompt, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
 
 /** A Claude agent's first prompt: the lessons reminder, then the origin reminder (TER-851). */
 const started = (prompt: string) => withOriginReminder(withLessonsReminder(prompt));
@@ -723,5 +723,104 @@ describe('linkTabTask', () => {
     await expect(linkTabTask(c, { tab_id: 'nope', task_id: 'k1' })).rejects.toMatchObject({ statusCode: 404, message: 'Tab não encontrada' });
     await expect(linkTabTask(c, { tab_id: 't1', task_id: 'kx' })).rejects.toMatchObject({ statusCode: 404, message: 'Tarefa não encontrada' });
     expect(repos.tasks.setTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('automation launch: permission flags, cwd and setup command (TER-870)', () => {
+  const PERMISSION = { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)', 'Bash(npm test:*)'] };
+  const TOOLS = `'Bash(git status:*)' 'Bash(npm test:*)'`;
+  const TAB_TOOLS = `'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy'`;
+  const WORKTREE = '/home/u/.termhub/worktrees/P1-7';
+
+  it('the default allow list is the closed F-6 list: exact pushes, no generic npm run', () => {
+    expect(DEFAULT_AUTOMATION_TOOLS).toEqual([
+      'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(git fetch:*)', 'Bash(git merge:*)', 'Bash(git log:*)',
+      'Bash(git push -u origin HEAD)', 'Bash(git push origin HEAD)',
+      'Bash(gh pr create:*)', 'Bash(gh pr view:*)', 'Bash(gh pr checks:*)',
+      'Bash(npm test:*)', 'Bash(npm ci)', 'Bash(npm install)', 'Bash(npx prisma generate)',
+      'Bash(node scripts/automation/rename-migrations.mjs:*)', 'Bash(npm run build:*)', 'Bash(npm run typecheck:*)',
+    ]);
+    for (const t of DEFAULT_AUTOMATION_TOOLS) {
+      expect(t).not.toMatch(/push.*:\*/);
+      expect(t).not.toBe('Bash(npm run:*)');
+      expect(t).not.toMatch(/gh pr merge|--force/);
+    }
+  });
+
+  it('without the MCP: acceptEdits, one quoted allow list and `--` before the prompt', () => {
+    expect(launchLine('claude', '/c', 'do it', null, null, PERMISSION)).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits --allowedTools ${TOOLS} -- 'do it'`);
+    expect(launchLine('claude', null, 'do it', null, 'opus', PERMISSION)).toBe(`${CLEAR_CLAUDE}claude --model 'opus' --permission-mode acceptEdits --allowedTools ${TOOLS} -- 'do it'`);
+    // an empty list still ends the options before the prompt
+    expect(launchLine('claude', '/c', 'x', null, null, { mode: 'acceptEdits', allowedTools: [] })).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits -- 'x'`);
+  });
+
+  it('with the MCP: the tab tools and the automation tools share a single --allowedTools', () => {
+    const line = launchLine('claude', '/c', 'do it', { tabId: 'abc', url: MCP_URL }, null, PERMISSION);
+    expect(line).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits --mcp-config "$HOME"/'.termhub/tabs/abc/mcp.json' --allowedTools ${TAB_TOOLS} ${TOOLS} -- 'do it'`);
+    expect(line.split('--allowedTools')).toHaveLength(2);
+  });
+
+  it('never a bypass flag, with every default tool quoted', () => {
+    for (const mcp of [null, { tabId: 'abc', url: MCP_URL }]) {
+      const line = launchLine('claude', null, 'x', mcp, null, { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS });
+      expect(line).not.toMatch(/dangerously|bypassPermissions|skip-permissions/);
+      for (const t of DEFAULT_AUTOMATION_TOOLS) expect(line).toContain(` '${t}'`);
+      expect(line.endsWith(` -- 'x'`)).toBe(true);
+    }
+  });
+
+  it('Codex ignores the permission: the line is the plain one', () => {
+    expect(launchLine('chatgpt', '/c', 'x', null, null, PERMISSION)).toBe(launchLine('chatgpt', '/c', 'x'));
+    expect(launchLine('chatgpt', '/c', 'x', { tabId: 'abc', url: MCP_URL }, null, PERMISSION)).toBe(launchLine('chatgpt', '/c', 'x', { tabId: 'abc', url: MCP_URL }));
+  });
+
+  it('refuses a tool that would read as an option or break the line, and any other mode', () => {
+    for (const bad of ['', ' ', '--dangerously-skip-permissions', 'Bash(x)\nrm', 'a\x1bb']) {
+      expect(() => launchLine('claude', null, 'x', null, null, { mode: 'acceptEdits', allowedTools: [bad] }), JSON.stringify(bad)).toThrow(new ControlError('INVALID_ALLOWED_TOOL', 'Ferramenta permitida inválida'));
+    }
+    expect(() => launchLine('claude', null, 'x', null, null, { mode: 'bypassPermissions' as never, allowedTools: [] })).toThrow(new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido'));
+  });
+
+  it('without internal options the start is byte-identical to before: same openTab call, same line', async () => {
+    const { c } = ctx();
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
+    expect(openTab.mock.calls[0]).toStrictEqual([c, { project_id: 'p1', machine_id: 'm1', name: 'claude · pedrogoiania' }]);
+    expect(sendTextToSession.mock.calls[0][2]).toBe(`CLAUDE_CONFIG_DIR='/Users/p/.claude-work' claude '${started('write a spec').replace(/'/g, "'\\''")}'`);
+    vi.clearAllMocks();
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' }, {});
+    expect(openTab.mock.calls[0]).toHaveLength(2);
+    expect(sendTextToSession.mock.calls[0][2]).toBe(launchLine('claude', '/Users/p/.claude-work', started('write a spec')));
+  });
+
+  it('opens the tab in the worktree and types the setup command, then the line with the flags', async () => {
+    const { c } = ctx();
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'do the card' }, { cwd: WORKTREE, permission: PERMISSION, setupCommand: 'npm ci && npm run build:packages' });
+    expect(openTab).toHaveBeenCalledWith(c, { project_id: 'p1', machine_id: 'm1', name: 'claude · pedrogoiania' }, { cwd: WORKTREE });
+    expect(sendTextToSession.mock.calls[0][2]).toBe(`npm ci && npm run build:packages ; ${launchLine('claude', '/Users/p/.claude-work', started('do the card'), null, null, PERMISSION)}`);
+  });
+
+  it('with the MCP installed, the setup command and the merged allow list', async () => {
+    cfg.mcpUrl = MCP_URL;
+    openTab.mockResolvedValue({ tab_id: 'abc', name: 'pedrogoiania', project_id: 'p1', tmux_session: 'termhub-p1-abc', created: true });
+    const { c } = ctx();
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'do the card' }, { cwd: WORKTREE, permission: PERMISSION, setupCommand: 'pnpm i' });
+    expect(sendTextToSession.mock.calls[0][2]).toBe(`pnpm i ; ${launchLine('claude', '/Users/p/.claude-work', started('do the card'), { tabId: 'abc', url: MCP_URL }, null, PERMISSION)}`);
+  });
+
+  it('a blank setup command adds nothing; promptIsFinal does not append the lessons reminder again', async () => {
+    const { c } = ctx();
+    const prompt = withLessonsReminder('do the card');
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt }, { setupCommand: '  ', promptIsFinal: true });
+    expect(sendTextToSession.mock.calls[0][2]).toBe(launchLine('claude', '/Users/p/.claude-work', withOriginReminder(prompt)));
+  });
+
+  it('refuses a cwd that is not absolute or climbs out, and a multi-line setup, before any tab exists', async () => {
+    const { c } = ctx();
+    for (const cwd of ['relative/dir', '~/wt', '', '/home/u/../etc', '/a/..', '/a\nb']) {
+      await expect(startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { cwd }), JSON.stringify(cwd)).rejects.toMatchObject({ code: 'INVALID_CWD' });
+    }
+    await expect(startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { setupCommand: 'npm ci\nrm -rf /' })).rejects.toMatchObject({ code: 'INVALID_SETUP_COMMAND' });
+    expect(openTab).not.toHaveBeenCalled();
+    expect(sendTextToSession).not.toHaveBeenCalled();
   });
 });

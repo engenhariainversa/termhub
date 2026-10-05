@@ -98,9 +98,55 @@ function tabMcpPath(tabId: string, file: 'mcp.json' | 'token'): string {
  * exactly its tools pre-allowed — not a bypass flag, every other tool still asks. Both options are variadic,
  * so the caller ends them with `--` before the prompt.
  */
-function claudeMcpFlags(tabId: string): string {
-  const allowed = TAB_TOKEN_TOOLS.map((t) => shellQuote(`mcp__${TAB_MCP_SERVER}__${t}`)).join(' ');
+function claudeMcpFlags(tabId: string, extraTools: string[] = []): string {
+  const allowed = [...TAB_TOKEN_TOOLS.map((t) => `mcp__${TAB_MCP_SERVER}__${t}`), ...extraTools].map((t) => shellQuote(t)).join(' ');
   return `--mcp-config ${tabMcpPath(tabId, 'mcp.json')} --allowedTools ${allowed}`;
+}
+
+/**
+ * What an automatic tab may do without asking (spec D19, preflight F-6): edits are accepted
+ * (`acceptEdits`) and only these commands are pre-allowed; everything else still asks. Never a
+ * permission-bypass flag. The pushes are exact rules (no `:*`), so a refspec (`HEAD:main`) or `--force`
+ * is not covered, and there is no generic `npm run:*` (it would cover `release:ota`). The server-side
+ * check of Task 22 also refuses shell operators before matching these.
+ */
+export const DEFAULT_AUTOMATION_TOOLS: string[] = [
+  'Bash(git status:*)',
+  'Bash(git diff:*)',
+  'Bash(git add:*)',
+  'Bash(git commit:*)',
+  'Bash(git fetch:*)',
+  'Bash(git merge:*)',
+  'Bash(git log:*)',
+  'Bash(git push -u origin HEAD)',
+  'Bash(git push origin HEAD)',
+  'Bash(gh pr create:*)',
+  'Bash(gh pr view:*)',
+  'Bash(gh pr checks:*)',
+  'Bash(npm test:*)',
+  'Bash(npm ci)',
+  'Bash(npm install)',
+  'Bash(npx prisma generate)',
+  'Bash(node scripts/automation/rename-migrations.mjs:*)',
+  'Bash(npm run build:*)',
+  'Bash(npm run typecheck:*)',
+];
+
+/** How an automatic tab's Claude is started: `acceptEdits` plus a closed allow list (never a bypass). */
+export interface AgentPermission {
+  mode: 'acceptEdits';
+  allowedTools: string[];
+}
+
+/**
+ * The automation tools as `--allowedTools` values (preflight F-7). Each is quoted when typed; one that starts
+ * with `-` would still be read as another option, and an empty one says nothing, so both are refused.
+ */
+function checkAllowedTools(tools: string[]): string[] {
+  for (const t of tools) {
+    if (!t.trim() || t.trimStart().startsWith('-') || CONTROL_CHARS.test(t) || t.includes('\n')) throw new ControlError('INVALID_ALLOWED_TOOL', 'Ferramenta permitida inválida');
+  }
+  return tools;
 }
 
 /** What the MCP URL may look like to be spliced into a TOML string inside a quoted argument (D9):
@@ -131,10 +177,27 @@ function modelFlag(provider: AiProvider, model: string | null | undefined): stri
  * With `mcp`, the CLI also gets the tab's memory MCP (D8 Claude, D9 Codex): the line names only the file on
  * the machine that holds the token, never the token itself.
  */
-export function launchLine(provider: AiProvider, configDir: string | null, prompt: string, mcp?: { tabId: string; url: string } | null, model?: string | null): string {
+export function launchLine(
+  provider: AiProvider,
+  configDir: string | null,
+  prompt: string,
+  mcp?: { tabId: string; url: string } | null,
+  model?: string | null,
+  permission?: AgentPermission | null,
+): string {
   const { binary: bin, configEnv, flags } = launcher(provider);
   const binary = `${bin}${flags}${modelFlag(provider, model)}`;
   const { clear, prefix } = accountEnv(configEnv, configDir);
+  // Claude only: automation runs only Claude accounts; Codex gets the plain line.
+  if (permission && provider === 'claude') {
+    if (permission.mode !== 'acceptEdits') throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
+    const tools = checkAllowedTools(permission.allowedTools);
+    const mode = `--permission-mode ${permission.mode}`;
+    if (mcp && !MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
+    const allow = mcp ? claudeMcpFlags(mcp.tabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
+    // `--allowedTools` is variadic: `--` always ends the options, so the prompt is never read as a tool.
+    return `${clear}${prefix}${binary} ${mode}${allow ? ` ${allow}` : ''} -- ${shellQuote(prompt)}`;
+  }
   if (!mcp) return `${clear}${prefix}${binary} ${shellQuote(prompt)}`;
   if (!MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
   if (provider === 'claude') return `${clear}${prefix}${binary} ${claudeMcpFlags(mcp.tabId)} -- ${shellQuote(prompt)}`;
@@ -290,22 +353,66 @@ async function attachTask(ctx: ControlContext, taskId: string, tabId: string): P
 }
 
 /**
+ * What only server callers (the automation dispatcher) may pass to `startAgent` — never the MCP tool's
+ * input, whose zod schema does not change (preflight F-9).
+ * - `cwd`: the card's worktree on the machine; the tab is opened there and stays there when its session is
+ *   recreated. Absolute, without `..`; that it lies under the worktree root is the agent's own check
+ *   (`PATH_OUTSIDE_ROOT`) when the worktree was made — `~` only expands on the machine.
+ * - `permission`: `acceptEdits` plus the allow list (`DEFAULT_AUTOMATION_TOOLS`), Claude only.
+ * - `setupCommand`: the project's `runner.setup_command`, typed before the CLI line in the same tab.
+ * - `promptIsFinal`: the prompt already ends with `LESSONS_REMINDER` (automation prompts add it), so it is
+ *   not appended again (preflight F-10).
+ */
+export interface StartAgentInternal {
+  cwd?: string;
+  permission?: AgentPermission;
+  setupCommand?: string | null;
+  promptIsFinal?: boolean;
+}
+
+/** An absolute path on the machine without `..` segments or control bytes (preflight F-9). */
+function checkCwd(cwd: string): string {
+  if (!cwd.startsWith('/') || cwd.split('/').includes('..') || CONTROL_CHARS.test(cwd) || cwd.includes('\n')) {
+    throw new ControlError('INVALID_CWD', 'Pasta de trabalho inválida: use um caminho absoluto, sem ".."');
+  }
+  return cwd;
+}
+
+/**
+ * The line typed into the tab with the setup command first (`<setup> ; <cli line>`): the setup runs, and
+ * the agent starts whether it succeeded or not (it sees the output above). The setup command is typed as
+ * is, the way the owner would type it — it comes from the owner's own project setup, never from MCP input
+ * or a card — while every value of the CLI line went through `shellQuote`. One line only: a newline would
+ * submit half of it.
+ */
+function withSetup(setupCommand: string | null | undefined, line: string): string {
+  const setup = setupCommand?.trim();
+  if (!setup) return line;
+  if (CONTROL_CHARS.test(setup) || setup.includes('\n')) throw new ControlError('INVALID_SETUP_COMMAND', 'O comando de preparo tem quebras de linha ou caracteres de controle; use uma linha só');
+  return `${setup} ; ${line}`;
+}
+
+/**
  * Opens a tab in the project and starts the account's CLI there with the prompt (spec §4.4). Everything
  * that can be checked is checked before the tab exists; once it does, a failure keeps the tab and names it.
+ * `internal` is for server callers only (see `StartAgentInternal`); without it nothing changes.
  */
 export async function startAgent(
   ctx: ControlContext,
   input: { project_id: string; machine_id?: string; account_id?: string; model?: string; prompt: string; task_id?: string; tab_name?: string },
+  internal?: StartAgentInternal,
 ): Promise<StartAgentResult> {
+  const cwd = internal?.cwd === undefined ? undefined : checkCwd(internal.cwd);
+  const permission = internal?.permission ?? null;
   // the reminder is appended and re-checked (spec §8/D13): a prompt that only fits alone is refused
   // with the same too-long error, counting the reminder in what it reports.
-  const reminded = checkPrompt(withLessonsReminder(checkPrompt(input.prompt)));
+  const reminded = internal?.promptIsFinal ? checkPrompt(input.prompt) : checkPrompt(withLessonsReminder(checkPrompt(input.prompt)));
   const { project, machine, account, ai, note: placeNote } = await placeAgent(ctx, input);
   const prompt = account.provider === 'claude' ? checkPrompt(withOriginReminder(reminded)) : reminded;
   const { binary } = launcher(account.provider);
   const model = input.model ?? modelFor(ai, account.provider);
   // checked before the tab exists, like every other refusal
-  launchLine(account.provider, account.config_dir, prompt, null, model);
+  withSetup(internal?.setupCommand, launchLine(account.provider, account.config_dir, prompt, null, model, permission));
   if (!machine.capabilities.includes(binary)) {
     throw new ControlError(
       'TOOL_MISSING',
@@ -325,15 +432,19 @@ export async function startAgent(
 
   const name = (input.tab_name?.trim() || task?.title || `${binary} · ${account.label}`).slice(0, TAB_NAME_MAX);
   // openTab does the readiness checks (online, agent version, tab limit) and keeps the tab if the session fails.
-  const tab = await openTab(ctx, { project_id: project.id, machine_id: machine.id, name });
+  const where = { project_id: project.id, machine_id: machine.id, name };
+  const tab = cwd === undefined ? await openTab(ctx, where) : await openTab(ctx, where, { cwd });
 
   // The line is typed right after `tmux new-session`: the shell may still be starting, but bash and zsh
   // keep typeahead (they never flush the tty on startup), so the text is waiting when the prompt appears.
   const reason = (e: unknown) => (e instanceof Error ? localizedOf(e) : msg('erro desconhecido'));
   const mcp = await tabMcp(ctx, machine, account.provider, tab);
-  const line = mcp.installed
-    ? launchLine(account.provider, account.config_dir, prompt, { tabId: tab.tab_id, url: mcp.url }, model)
-    : launchLine(account.provider, account.config_dir, prompt, null, model);
+  const line = withSetup(
+    internal?.setupCommand,
+    mcp.installed
+      ? launchLine(account.provider, account.config_dir, prompt, { tabId: tab.tab_id, url: mcp.url }, model, permission)
+      : launchLine(account.provider, account.config_dir, prompt, null, model, permission),
+  );
   try {
     await sendTextToSession(machine, tab.tmux_session as string, line, true);
   } catch (e) {

@@ -41,5 +41,6 @@
   "A aba {{tab}} ({{machine}})": "Tab {{tab}} ({{machine}})",
   "{{project}}: aba terminou": "{{project}}: tab finished",
   "Aba terminou": "Tab finished",
-  "{{tab}} terminou e espera você.": "{{tab}} finished and is waiting for you."
+  "{{tab}} terminou e espera você.": "{{tab}} finished and is waiting for you.",
+  "Confirme com o PIN para ligar ou ampliar o trabalho automático.": "Confirm with your PIN to turn on or widen automatic work."
 }

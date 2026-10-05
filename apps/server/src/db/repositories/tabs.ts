@@ -366,7 +366,7 @@ export class TabsRepository {
     return written > 0 ? this.findById(id) : undefined;
   }
 
-  async create(projectId: string, machineId: string, name: string, opts: { kind?: TabKind; simulator_udid?: string | null; created_by_token_id?: string | null } = {}): Promise<Tab> {
+  async create(projectId: string, machineId: string, name: string, opts: { kind?: TabKind; simulator_udid?: string | null; created_by_token_id?: string | null; cwd?: string | null } = {}): Promise<Tab> {
     const id = newId();
     const kind = opts.kind ?? 'terminal';
     const agg = await this.db.tab.aggregate({ where: { projectId }, _max: { position: true } });
@@ -380,6 +380,7 @@ export class TabsRepository {
         tmuxSession: kind === 'terminal' ? `termhub-${projectId}-${id}` : null,
         simulatorUdid: kind === 'simulator' ? (opts.simulator_udid ?? null) : null,
         createdByTokenId: opts.created_by_token_id ?? null,
+        cwd: opts.cwd ?? null,
         position: (agg._max.position ?? -1) + 1,
       },
     });

@@ -89,5 +89,9 @@
   "{{key}} é ambíguo: {{names}}. Use a chave completa.": "{{key}} is ambiguous: {{names}}. Use the full key.",
   "é de mais de 24 h atrás": "is more than 24 h old",
   "A branch {{branch}} não existe no repositório": "Branch {{branch}} does not exist in the repository",
-  "O padrão de branch {{pattern}} não gera um nome de branch válido para {{ref}}": "The branch pattern {{pattern}} does not produce a valid branch name for {{ref}}"
+  "O padrão de branch {{pattern}} não gera um nome de branch válido para {{ref}}": "The branch pattern {{pattern}} does not produce a valid branch name for {{ref}}",
+  "Ferramenta permitida inválida": "Invalid allowed tool",
+  "Modo de permissão inválido": "Invalid permission mode",
+  "Pasta de trabalho inválida: use um caminho absoluto, sem \"..\"": "Invalid working folder: use an absolute path, without \"..\"",
+  "O comando de preparo tem quebras de linha ou caracteres de controle; use uma linha só": "The setup command has line breaks or control characters; use a single line"
 }

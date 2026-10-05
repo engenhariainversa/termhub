@@ -170,6 +170,8 @@ export interface Tab {
   ai_account_id: string | null;
   /** when the tab's Claude stopped on a usage limit (StopFailure rate_limit); cleared when it runs again */
   rate_limited_at: string | null;
+  /** where the tab's session runs when not in the project's folder (a card's worktree); null = the project's */
+  cwd: string | null;
   created_at: string;
 }
 
@@ -377,6 +379,7 @@ export const mapTab = (t: PrismaTab): Tab => ({
   agent_transcript_path: t.agentTranscriptPath,
   ai_account_id: t.aiAccountId,
   rate_limited_at: iso(t.rateLimitedAt),
+  cwd: t.cwd,
   created_at: t.createdAt.toISOString(),
 });
 
