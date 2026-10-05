@@ -70,7 +70,7 @@ export function createSettingsStore(deps: SettingsDeps) {
         if (gen === generation) set({ tabFinished: tab_finished, pushSettingsError: null });
       } catch (e) {
         if (gen !== generation || session().handleApiError(e)) return;
-        set({ pushSettingsError: e instanceof ApiError ? e.message : NETWORK_MSG });
+        set({ pushSettingsError: e instanceof ApiError ? e.message : networkMsg() });
       }
     },
 
@@ -83,7 +83,7 @@ export function createSettingsStore(deps: SettingsDeps) {
       } catch (e) {
         set({ tabFinished: before });
         if (session().handleApiError(e)) return;
-        set({ pushSettingsError: e instanceof ApiError ? e.message : NETWORK_MSG });
+        set({ pushSettingsError: e instanceof ApiError ? e.message : networkMsg() });
       }
     },
 
