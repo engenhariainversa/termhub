@@ -63,6 +63,11 @@ export const CAPABILITY_TRANSCRIPT = 'transcript';
  *  the call: an older agent drops an unknown RPC, which would read as a timeout. */
 export const CAPABILITY_FILE_READ = 'file_read';
 
+/** The agent answers `git.worktree.ensure` / `git.worktree.remove` (spec 2026-10-04 agentic board). Ships in
+ *  agent 0.17.0; the server places automatic work only on a machine that advertises it. */
+export const CAPABILITY_WORKTREE = 'worktree';
+export const WORKTREE_MIN_AGENT_VERSION = '0.17.0';
+
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
 export function streamUserMessageLine(text: string, uuid: string): string {
