@@ -1,6 +1,8 @@
-import { memo } from 'react';
+import { router } from 'expo-router';
+import { memo, useCallback } from 'react';
 import { Text, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
+import { filePathOfLink, filePreviewRoute, linkifyMarkdown } from '@/features/file-preview/model/md-paths';
 import type { SchemeName } from '@/theme/tokens';
 import { AppText, Button, useSchemeName } from '@/ui';
 import { failureSentence } from '../model/copy';
@@ -23,11 +25,21 @@ type Props = {
   onOpenReply?(id: string): boolean;
   /** The row a quote just scrolled to: outlined for a moment. */
   highlighted?: boolean;
+  /** Where a Markdown path in the answer is looked for (spec 2026-10-04 file preview): the chat's project
+   *  or the session's tab. Absent: paths stay plain text. */
+  fileContext?: { projectId?: string | null; tabId?: string | null };
 };
 
+/** A tap on a link of the answer: a Markdown path opens its preview; any other link, the system's way. */
+type OnLink = ((url: string) => boolean) | undefined;
+
 /** The part of a streaming answer that no later delta can change: parsed once per distinct text. */
-const SettledMarkdown = memo(function SettledMarkdown({ text, scheme }: { text: string; scheme: SchemeName }) {
-  return <Markdown style={markdownStyle(scheme)}>{text}</Markdown>;
+const SettledMarkdown = memo(function SettledMarkdown({ text, scheme, onLink }: { text: string; scheme: SchemeName; onLink: OnLink }) {
+  return (
+    <Markdown style={markdownStyle(scheme)} onLinkPress={onLink}>
+      {text}
+    </Markdown>
+  );
 });
 
 /** One row of the thread: the person's text as typed, the assistant's rendered as markdown — its
@@ -36,8 +48,20 @@ const SettledMarkdown = memo(function SettledMarkdown({ text, scheme }: { text: 
  * row's props: a delta re-renders only the bubble it streams into, and inside it only the tail after
  * the last blank line is re-parsed (`splitSettled`); the settled prefix keeps its parsed tree. When
  * the final text lands the whole body renders once — the same markdown, so nothing reflows. */
-export const MessageBubble = memo(function MessageBubble({ message, streamed, started, onRetry, onOpenReply, highlighted = false }: Props) {
+export const MessageBubble = memo(function MessageBubble({ message, streamed, started, onRetry, onOpenReply, highlighted = false, fileContext }: Props) {
   const scheme = useSchemeName();
+  const projectId = fileContext?.projectId ?? null;
+  const tabId = fileContext?.tabId ?? null;
+  const linking = fileContext !== undefined;
+  const onLink = useCallback(
+    (url: string) => {
+      const path = filePathOfLink(url);
+      if (path === null) return true;
+      router.push(filePreviewRoute(path, { projectId, tabId }));
+      return false;
+    },
+    [projectId, tabId],
+  );
 
   if (message.role === 'user') {
     // Dimmed while the server has not accepted it; with the reason and a retry once it refused. What
@@ -63,12 +87,18 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
 
   const streaming = !message.text && !!streamed;
   const body = message.text || streamed || '';
-  const { settled, tail } = streaming ? splitSettled(body) : { settled: '', tail: body };
+  const split = streaming ? splitSettled(body) : { settled: '', tail: body };
+  const settled = linking ? linkifyMarkdown(split.settled) : split.settled;
+  const tail = linking ? linkifyMarkdown(split.tail) : split.tail;
   return (
     <View className={`max-w-[92%] gap-1 self-start rounded-2xl border-2 bg-app-surface px-4 py-2.5 ${highlighted ? 'border-app-accent' : 'border-transparent'}`}>
       {message.notice?.kind === 'account_swap' ? <AppText variant="muted">{swapSentence(message.notice)}</AppText> : null}
-      {settled ? <SettledMarkdown text={settled} scheme={scheme} /> : null}
-      {tail ? <Markdown style={markdownStyle(scheme)}>{tail}</Markdown> : null}
+      {settled ? <SettledMarkdown text={settled} scheme={scheme} onLink={linking ? onLink : undefined} /> : null}
+      {tail ? (
+        <Markdown style={markdownStyle(scheme)} onLinkPress={linking ? onLink : undefined}>
+          {tail}
+        </Markdown>
+      ) : null}
       {message.error_code !== null ? (
         <Text className="text-sm text-app-danger">{message.error_code === 'USAGE_LIMIT' ? limitSentence(message.notice) : failureSentence(message.error_code)}</Text>
       ) : !body && started ? (

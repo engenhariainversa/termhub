@@ -3,6 +3,7 @@ import { Pressable, Text, TextInput, View, type LayoutChangeEvent } from 'react-
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { MAX_ATTACHMENTS_PER_MESSAGE, type TChatAttachment } from '@/services/api/contract';
 import { Icon, type IconName } from '@/ui';
+import { onChatFiles, takeChatFiles } from '../model/chat-inbox';
 import { CHAT_MSG } from '../model/messages';
 import { useAttachmentDrafts, type PickedFile } from '../viewmodel/attachments';
 import { useVoice } from '../viewmodel/use-voice';
@@ -105,6 +106,8 @@ type Props = {
   /** Set while the other side works (a terminal session): ↑ becomes "Interromper", always shown, and a
    * long press on it still sends what is typed (Claude Code queues it). */
   onInterrupt?(): void;
+  /** The chat this box belongs to (`inboxKey`): files sent here from a file preview land as chips. */
+  inbox?: string;
 };
 
 /** A round button of the pill: the symbol on a filled circle (`fill`) or bare. */
@@ -144,7 +147,7 @@ function RoundButton({ label, icon, onPress, onLongPress, disabled = false, fill
  * (TER-447) is previewed on top of the pill, with ✕; the screen keeps the reference and sends it. The text clears as soon as it is
  * sent and comes back if the send fails; the chips only go once the server accepted.
  */
-export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses, replyTo = null, onCancelReply, disabled = false, onInterrupt }: Props) {
+export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses, replyTo = null, onCancelReply, disabled = false, onInterrupt, inbox }: Props) {
   const [text, setText] = useState('');
   const [height, setHeight] = useState(MIN_HEIGHT);
   // Latched: once the text wraps the buttons stay below until the box is emptied. Leaving as soon as
@@ -176,6 +179,19 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
     if (replyId) inputRef.current?.focus();
   }, [replyId]);
   const attachments = useAttachmentDrafts({ upload: uploadAttachment, remove: deleteAttachment, statuses: attachmentStatuses });
+  // A file sent from a preview ("Mandar para o chat") lands as a chip, like a picked one.
+  const addRef = useRef(attachments.add);
+  addRef.current = attachments.add;
+  useEffect(() => {
+    if (inbox === undefined) return;
+    const take = (key: string) => {
+      if (key !== inbox) return;
+      const files = takeChatFiles(inbox);
+      if (files.length > 0) addRef.current(files);
+    };
+    take(inbox);
+    return onChatFiles(take);
+  }, [inbox]);
 
   const hasText = text.trim().length > 0;
   /** A chip that is (or will be) part of the message: uploading or uploaded; a refused one is not. */

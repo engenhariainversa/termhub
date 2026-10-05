@@ -23,6 +23,7 @@ import {
   deviceRequestResponse,
   deviceSelf as deviceSelfSchema,
   emptyResponse,
+  filePreviewResponse,
   hostOptionsResponse,
   lessonForgetSchema,
   lessonItemSchema,
@@ -57,6 +58,7 @@ import {
   type TSetHostBody,
   type TStartSessionBody,
   type TTabChatAction,
+  type TFilePreviewQuery,
   type TTabQuestionAnswerBody,
   type TTabSuggestionSendBody,
   type TTokenBody,
@@ -360,6 +362,13 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
 
     progress: (a: Auth, scope: 'active' | 'all' = 'active') => call('GET', `/api/m/v1/progress?scope=${scope}`, progressResponse, { token: a.accessToken }),
 
+    filePreview: (a: Auth, q: TFilePreviewQuery) => {
+      const p = new URLSearchParams({ path: q.path });
+      if (q.tab_id) p.set('tab_id', q.tab_id);
+      if (q.project_id) p.set('project_id', q.project_id);
+      if (q.machine_id) p.set('machine_id', q.machine_id);
+      return call('GET', `/api/m/v1/file-preview?${p.toString()}`, filePreviewResponse, { token: a.accessToken });
+    },
     tabs: (a: Auth) => call('GET', '/api/m/v1/tabs', tabsResponse, { token: a.accessToken }),
     startSession: (a: Auth, body: TStartSessionBody) => call('POST', '/api/m/v1/tabs', startSessionResponse, { token: a.accessToken, body }),
     tabChat: (a: Auth, tabId: string, before?: string) =>

@@ -31,11 +31,13 @@ type Entry = { kind: 'row'; row: Row } | { kind: 'question'; question: TTabQuest
 const entryKey = (e: Entry) => (e.kind === 'row' ? `r:${e.row.id}` : e.kind === 'question' ? `q:${e.question.id}` : `s:${e.suggestion.id}`);
 
 /** A message row as the chat's bubble: same markdown for the assistant. A row's images are counted. */
-function SessionMessage({ row }: { row: Extract<Row, { kind: 'message' }> }) {
+function SessionMessage({ row, tabId }: { row: Extract<Row, { kind: 'message' }>; tabId: string }) {
   const message = useMemo(() => ({ id: row.id, conversation_id: '', role: row.role, text: row.text, usage: null, error_code: null, created_at: row.at }), [row]);
+  // A Markdown path in the session's answer opens as a preview, read on the tab's machine.
+  const fileContext = useMemo(() => ({ tabId }), [tabId]);
   return (
     <View className="gap-1">
-      {row.text ? <MessageBubble message={message} streamed={undefined} started={false} /> : null}
+      {row.text ? <MessageBubble message={message} streamed={undefined} started={false} fileContext={fileContext} /> : null}
       {row.images > 0 ? (
         <AppText variant="muted" className={row.role === 'user' ? 'self-end' : 'self-start'}>
           {row.images === 1 ? '1 imagem' : `${row.images} imagens`}
@@ -124,7 +126,7 @@ export function SessionView({ tabId }: { tabId: string }) {
           />
         );
       const row = item.row;
-      if (row.kind === 'message') return <SessionMessage row={row} />;
+      if (row.kind === 'message') return <SessionMessage row={row} tabId={tabId} />;
       if (row.kind === 'tools') return <ToolsRow tools={row.tools} />;
       return (
         <AppText variant="muted" className="self-center text-center text-xs">
@@ -132,7 +134,7 @@ export function SessionView({ tabId }: { tabId: string }) {
         </AppText>
       );
     },
-    [answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors, onAnswer, onCancelAutoAnswer, onSendSuggestion, onDismissSuggestion, loadTabQuestionScreen],
+    [answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors, onAnswer, onCancelAutoAnswer, onSendSuggestion, onDismissSuggestion, loadTabQuestionScreen, tabId],
   );
 
   // The composer's chips: the file is saved on the tab's machine; its path is sent as a line of the text.
