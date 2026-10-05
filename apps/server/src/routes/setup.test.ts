@@ -34,6 +34,7 @@ function build(saved: unknown[], ai?: unknown, automation?: unknown) {
       save,
     },
     tickets: { pruneSource },
+    automationEvents: { insert: vi.fn(async (e: object) => ({ id: 'ev', created_at: '', ...e })) },
   } as unknown as Repositories;
   app.register((a) => setupRoutes(a, repos), { prefix: '/projects' });
   return { app, pruneSource, save };

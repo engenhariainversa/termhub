@@ -106,6 +106,29 @@ const MERGE_NEED: Record<string, string> = {
   files_incomplete: 'a lista de arquivos do PR veio incompleta',
 };
 
+/** The level names as the Setup shows them ("Até onde os agentes vão sozinhos"). */
+const AUTONOMY_LABEL: Record<string, string> = { pr: 'Só código e PR', merge: 'Merge com CI verde', deploy: 'Deploy', release: 'Publicação (npm, OTA)' };
+
+const listOf = (v: unknown): string => {
+  const items = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  return items.length ? items.map((x) => `\`${x}\``).join(', ') : 'nenhum';
+};
+
+/** What a `set_automation_policy` card changes (TER-975), field by field, in the order of the Setup screen. */
+function automationPolicyPhrase(args: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (args.enabled === true) parts.push('ligar o trabalho automático do projeto');
+  if (args.enabled === false) parts.push('desligar o trabalho automático do projeto');
+  if (typeof args.autonomy === 'string') parts.push(`nível "${AUTONOMY_LABEL[args.autonomy] ?? args.autonomy}"`);
+  if (args.release_paths !== undefined) parts.push(`caminhos de release: ${listOf(args.release_paths)}`);
+  if (args.store_paths !== undefined) parts.push(`caminhos das lojas: ${listOf(args.store_paths)}`);
+  if (args.release_workflows !== undefined) parts.push(`workflows de release: ${listOf(args.release_workflows)}`);
+  if (args.required_checks !== undefined) parts.push(`checks obrigatórios: ${listOf(args.required_checks)}`);
+  if (args.max_parallel !== undefined) parts.push(`máximo em paralelo: ${typeof args.max_parallel === 'number' ? args.max_parallel : 'sem limite'}`);
+  const what = parts.join('; ');
+  return args.enabled === undefined ? `mudar o Setup do trabalho automático (${what})` : what;
+}
+
 function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<string, Ticket>, integrationById: Map<string, { name: string }>): string {
   const args = (action.args ?? {}) as Record<string, unknown>;
   switch (action.tool) {
@@ -143,6 +166,10 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       return `pausar o trabalho automático${args.project_id ? ' do projeto' : ' de todos os projetos'}${args.interrupt === true ? ' e interromper as abas que estão nele agora' : ''}`;
     case 'resume_automation':
       return `retomar o trabalho automático${args.project_id ? ' do projeto' : ' de todos os projetos'}`;
+    case 'set_automation_policy':
+      return automationPolicyPhrase(args);
+    case 'set_machine_automation':
+      return args.accept === true ? 'fazer a máquina aceitar trabalho automático' : 'fazer a máquina recusar trabalho automático';
     case 'resume_automation_run':
       return 'retomar o trabalho automático de um card';
     case 'automation_merge': {

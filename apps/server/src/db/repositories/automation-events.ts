@@ -25,7 +25,15 @@ export type AutomationEventKind =
   | 'budget_hit'
   | 'budget_warning'
   | 'ci_fix_requested'
-  | 'worktree_cleanup';
+  | 'worktree_cleanup'
+  // TER-975: changes to what automatic work may do, by the chat, an MCP client, the web or the app
+  | 'automation_on'
+  | 'automation_off'
+  | 'setup_changed'
+  | 'tagged'
+  | 'untagged'
+  | 'machine_opt_in'
+  | 'machine_opt_out';
 
 /** Flat on purpose: ids, URLs, counts and reasons — never terminal content, transcripts or prompts. */
 export type AutomationEventPayload = Record<string, string | number | boolean | null>;

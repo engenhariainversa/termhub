@@ -768,3 +768,18 @@ it('reads nothing from memory when no card cites a precedent', async () => {
   await describeActions(repos, [action({ args: { tab_id: 't1', text: 'oi', sources: 'decision:d1' }, tab_id: 't1' })], OWNER);
   expect((repos as { chatDecisions: { findManyForUser: { mock: { calls: unknown[] } } } }).chatDecisions.findManyForUser.mock.calls).toHaveLength(0);
 });
+
+it('spells out what a set_automation_policy card turns on or widens, with the level by its Setup name (TER-975)', async () => {
+  const repos = fakeRepos();
+  const on = action({ tool: 'set_automation_policy', args: { project_id: 'p1', enabled: true, autonomy: 'deploy', max_parallel: 2 }, project_id: 'p1' });
+  const paths = action({ tool: 'set_automation_policy', args: { project_id: 'p1', release_paths: ['apps/agent/package.json'], required_checks: [], max_parallel: null }, project_id: 'p1' });
+  const [a, b] = await describeActions(repos, [on, paths], OWNER);
+  expect(a.summary).toBe('ligar o trabalho automático do projeto; nível "Deploy"; máximo em paralelo: 2 no projeto reactivando');
+  expect(b.summary).toBe('mudar o Setup do trabalho automático (caminhos de release: `apps/agent/package.json`; checks obrigatórios: nenhum; máximo em paralelo: sem limite) no projeto reactivando');
+});
+
+it('names the machine on a set_machine_automation card (TER-975)', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(repos, [action({ tool: 'set_machine_automation', args: { machine_id: 'm1', accept: true }, machine_id: 'm1' })], OWNER);
+  expect(card.summary).toBe('fazer a máquina aceitar trabalho automático no macbook m3');
+});

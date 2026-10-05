@@ -113,6 +113,11 @@ export class MachinesRepository {
     return mapMachine(m);
   }
 
+  /** The machine's "Aceita trabalho automático" switch alone, so nothing else of the row is rewritten. */
+  async setAutomationAllowed(id: string, allowed: boolean): Promise<void> {
+    await this.db.machine.updateMany({ where: { id }, data: { automationAllowed: allowed } });
+  }
+
   /** Agent machines that opted into automatic updates (the scheduler checks online/idle itself). */
   async listAutoUpdate(): Promise<Machine[]> {
     const rows = await this.db.machine.findMany({ where: { type: 'agent', agentAutoUpdate: true }, include: withOwner });

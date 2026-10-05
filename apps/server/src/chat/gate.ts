@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { ChatAction, ChatActionStatus } from '../db/repositories/chat-actions.js';
 import { STANDING_GRANT_KINDS, type StandingGrantKind } from '../db/repositories/chat-standing-grants.js';
+import { hasAutomationPatch } from '../automation/setup-patch.js';
 
 export { STANDING_GRANT_KINDS, type StandingGrantKind };
 
@@ -108,6 +109,18 @@ export function actionClass(tool: string, args: unknown): ActionClass {
   // interrupt it also sends Escape to the tabs running automatic work, which is the person's call.
   if (tool === 'pause_automation') {
     return (args as { interrupt?: unknown } | undefined)?.interrupt === true ? 'write' : 'self_mediated';
+  }
+
+  // TER-975: the automation Setup. Without a field to change it only reads. With one, the static class is
+  // the worst case (a write no grant or default covers, so it asks); the gate runtime reads the current
+  // Setup and lets a brake (off, a lower level, a lower max_parallel) through as self-mediated.
+  if (tool === 'set_automation_policy') {
+    return hasAutomationPatch((args ?? {}) as Record<string, unknown>) ? 'write' : 'read';
+  }
+
+  // The machine's "Aceita trabalho automático": refusing is a brake, accepting asks the person.
+  if (tool === 'set_machine_automation') {
+    return (args as { accept?: unknown } | undefined)?.accept === false ? 'self_mediated' : 'write';
   }
 
   // unlink_project_machine only closes tabs (irreversible) when confirm: true; otherwise it either

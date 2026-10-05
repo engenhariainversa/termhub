@@ -58,6 +58,20 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       return t('{{ref}}: correção do CI pedida', { ref });
     case 'worktree_cleanup':
       return t('{{ref}}: pasta de trabalho limpa', { ref });
+    case 'automation_on':
+      return t('Automático ligado no projeto');
+    case 'automation_off':
+      return t('Automático desligado no projeto');
+    case 'setup_changed':
+      return t('Setup do automático alterado');
+    case 'tagged':
+      return t('{{ref}}: marcado como automático', { ref });
+    case 'untagged':
+      return t('{{ref}}: tirado do automático', { ref });
+    case 'machine_opt_in':
+      return e.machine ? t('{{machine}} passou a aceitar trabalho automático', { machine: e.machine }) : t('Uma máquina passou a aceitar trabalho automático');
+    case 'machine_opt_out':
+      return e.machine ? t('{{machine}} deixou de aceitar trabalho automático', { machine: e.machine }) : t('Uma máquina deixou de aceitar trabalho automático');
     default:
       return null;
   }

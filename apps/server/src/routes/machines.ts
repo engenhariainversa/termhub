@@ -21,6 +21,7 @@ import type { Machine } from '../db/repositories/types.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved, publishTabsRemoved } from '../monitor/tab-events.js';
 import { msg, tk } from '../i18n/index.js';
+import { recordMachineSwitch } from '../automation/setup-tools.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const fsQuery = z.object({ path: z.string().max(4096).optional() });
@@ -152,6 +153,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
       if (owner_id && !(await repos.users.findById(owner_id))) throw badRequest('Usuário inexistente');
     }
     const machine = await repos.machines.update(id, { ...merged, ...(owner_id !== undefined ? { owner_id } : {}) });
+    if (machine && machine.automation_allowed !== current.automation_allowed) await recordMachineSwitch(repos, id, machine.automation_allowed, 'web');
     // A city only ever shows the robots on machines its person owns (public/read.ts), so a
     // transferred machine's robots leave the old owner's city by that rule alone — the projects stay
     // published (they belong to their owners, not to the machine). Any public page showing them

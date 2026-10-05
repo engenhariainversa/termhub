@@ -8,6 +8,7 @@ import { controlContextForRequest } from '../control/context.js';
 import { syncTickets } from '../control/tickets.js';
 import { setupInputSchema, sourceIdentity, withSourcesFromLegacy } from '../setup/schema.js';
 import { forgetSync } from '../setup/tickets-sync.js';
+import { recordSetupChange } from '../automation/setup-tools.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
@@ -46,6 +47,7 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
     if (stored.automation && !sentAutomation) data.automation = stored.automation;
     const kept = new Set(data.ticket_sources.map(sourceIdentity));
     const saved = await repos.projectSetup.save(id, data);
+    if (stored.automation) await recordSetupChange(repos, id, stored.automation, saved.data.automation, 'web');
     for (const gone of before.filter((b) => !kept.has(sourceIdentity(b)))) {
       await repos.tickets.pruneSource(id, { integration_id: gone.integration_id, scope: gone.scope });
     }

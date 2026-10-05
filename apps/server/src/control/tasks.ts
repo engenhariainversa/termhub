@@ -4,6 +4,7 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import type { ColumnCategory, Task, TaskColumn, TaskStatus, TaskType, TaskWithSubtasks } from '../db/repositories/types.js';
 import { readTicketLink } from '../integrations/ticket-link.js';
 import { ControlError, type ControlContext } from './context.js';
+import { recordTagChange, viaOf } from '../automation/setup-tools.js';
 import { msg } from '../i18n/index.js';
 
 /** Field limits, the same the REST routes enforce (`routes/tasks.ts`). */
@@ -118,7 +119,10 @@ export async function createTask(
   const task = await rules(() =>
     ctx.repos.tasks.createWithSubtasks(input.project_id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id, auto: input.auto }, input.subtasks ?? []),
   );
-  if (task.auto) dispatchTriggers.poke('tag_set');
+  if (task.auto) {
+    await recordTagChange(ctx.repos, task, true, 1, viaOf(ctx));
+    dispatchTriggers.poke('tag_set');
+  }
   return { task: outTree(task), board_url: boardUrl(input.project_id) };
 }
 
@@ -145,7 +149,8 @@ export async function updateTask(
   }
   if (updated && input.auto !== undefined) {
     // After the fields, so an epic change and the tag in one call end up consistent.
-    await rules(() => ctx.repos.tasks.setAuto(task.id, input.auto!));
+    const { changed } = await rules(() => ctx.repos.tasks.setAuto(task.id, input.auto!));
+    await recordTagChange(ctx.repos, task, input.auto, changed, viaOf(ctx));
     if (input.auto) dispatchTriggers.poke('tag_set');
     updated = await ctx.repos.tasks.findById(task.id);
   }

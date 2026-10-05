@@ -17,6 +17,8 @@ import { policyText } from '../automation/policy.js';
 import { listAutomationEvents } from '../automation/events.js';
 import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun } from '../automation/follower.js';
 import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
+import { setAutomationPolicy, setMachineAutomation } from '../automation/setup-tools.js';
+import { AUTONOMY_LEVELS } from '../setup/schema.js';
 import { AUTOMATION_EVENTS_PAGE_MAX } from '../db/repositories/automation-events.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
 import { answerTabQuestionTool, listTabQuestions, recordDecision, searchMemory, MEMORY_REF, type MemoryRefKind } from '../control/memory.js';
@@ -275,6 +277,33 @@ export const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: 'set_automation_policy',
+    description:
+      "Read or change the project's automatic-work Setup (\"Trabalho automático\"). With only project_id it reads. Fields left out keep their value: enabled (on/off), autonomy (pr, merge, deploy, release; each includes the previous), release_paths and store_paths (globs, the whole list), release_workflows (GitHub Actions workflow names), required_checks (workflows that must pass on the PR head; [] = every run), max_parallel (cards at once; null = no cap). Turning it on, raising the level, changing a path, workflow or check list, or raising max_parallel always asks the person; turning it off, lowering the level or lowering max_parallel is a brake and runs at once. Answers the saved values, the policy text in pt-BR and which fields changed; every change is written to the automation events. Other Setup fields (card types, budgets, prompts) stay on the Setup screen.",
+    scope: 'terminals', resource: 'projects', action: 'update',
+    strict: true,
+    input: {
+      project_id: id,
+      enabled: z.boolean().optional(),
+      autonomy: z.enum(AUTONOMY_LEVELS).optional(),
+      release_paths: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+      store_paths: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+      release_workflows: z.array(z.string().trim().min(1).max(200)).max(10).optional(),
+      required_checks: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+      max_parallel: z.number().int().min(1).max(100).nullable().optional(),
+    },
+    run: (ctx, a) => setAutomationPolicy(ctx, a as Parameters<typeof setAutomationPolicy>[1]),
+  },
+  {
+    name: 'set_machine_automation',
+    description:
+      "Turn a machine's \"Aceita trabalho automático\" switch on (accept: true) or off (accept: false). Off, automatic work never starts a card there; tabs already running stay. Accepting asks the person first; refusing runs at once. Written to the automation events of every project linked to the machine.",
+    scope: 'terminals', resource: 'machines', action: 'update',
+    strict: true,
+    input: { machine_id: id, accept: z.boolean() },
+    run: (ctx, a) => setMachineAutomation(ctx, a as { machine_id: string; accept: boolean }),
+  },
+  {
     name: 'report_card',
     description:
       "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. Call it once, at the end.",
@@ -342,7 +371,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_automation_events',
     description:
-      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses. Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons, and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
+      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses, and changes to what it may do (automation_on/off, setup_changed, cards tagged/untagged, machine_opt_in/out, each with via: chat, mcp, web or app). Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons, and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
     scope: 'read', resource: 'projects', action: 'read',
     input: { project_id: id, before: z.string().datetime({ offset: true }).optional(), limit: z.number().int().min(1).max(AUTOMATION_EVENTS_PAGE_MAX).optional() },
     run: async (ctx, a) => {

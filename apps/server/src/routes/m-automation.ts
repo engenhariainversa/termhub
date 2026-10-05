@@ -12,6 +12,7 @@ import type { SessionService } from '../mobile/session.js';
 import { automationInputSchema } from '../setup/schema.js';
 import { deviceOf, proofOk } from './m-chat.js';
 import { taskRules } from './tasks.js';
+import { recordSetupChange, recordTagChange } from '../automation/setup-tools.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
@@ -41,6 +42,7 @@ export async function mobileAutomationSetupRoutes(app: FastifyInstance, repos: R
       if (!ok) return reply;
     }
     const saved = await repos.projectSetup.save(id, { ...current.data, automation: next });
+    await recordSetupChange(repos, id, current.data.automation, saved.data.automation, 'app');
     if (saved.data.automation.enabled) dispatchTriggers.poke('setup_saved');
     return { automation: saved.data.automation };
   });
@@ -52,8 +54,9 @@ export async function mobileCardAutoRoutes(app: FastifyInstance, repos: Reposito
   app.put('/:id/auto', async (request) => {
     const { id } = idParam.parse(request.params);
     const { auto } = cardAutoBody.parse(request.body);
-    await scoped(repos, request).task(id);
-    await taskRules(() => repos.tasks.setAuto(id, auto));
+    const { task: card } = await scoped(repos, request).task(id);
+    const { changed } = await taskRules(() => repos.tasks.setAuto(id, auto));
+    await recordTagChange(repos, card, auto, changed, 'app');
     if (auto) dispatchTriggers.poke('tag_set');
     const task = await repos.tasks.findById(id);
     if (!task) throw notFound('Task não encontrada');
