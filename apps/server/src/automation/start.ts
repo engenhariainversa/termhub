@@ -1,3 +1,4 @@
+import { createMachineRoom } from './machine-room.js';
 import { startAgent } from '../control/agents.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { createGithubCiClient } from '../integrations/github-ci.js';
@@ -45,6 +46,7 @@ export function startAutomation(o: {
   // D16: a run on a usage limit waits for its account's reset (or follows the automatic swap)
   const followerDeps: FollowerDeps = { repos, instance, lifecycle, log, onRateLimited: (run, tab) => onRateLimit(followerDeps, run, tab), ...o.follower };
   const stopFollower = o.schedule === false ? () => {} : startFollower(followerDeps);
+  const machineRoom = createMachineRoom({ log });
   const dispatcher = startDispatcher(
     {
       repos,
@@ -59,6 +61,8 @@ export function startAutomation(o: {
       ensureEpicBranch,
       gh: createGithubWriteClient(),
       usage: accountPeak(repos),
+      room: (machine, link, setup) => machineRoom.check(machine, setup.automation.worktrees_dir, link.cwd),
+      startedOn: (id) => machineRoom.invalidate(id),
       log,
       ...o.dispatcher,
     },

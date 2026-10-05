@@ -17,7 +17,7 @@ import { automationBus, dispatchTriggers, recordEvent } from './events.js';
 import { SLOT_FREE_REASONS, START_FAILED } from './escalation-text.js';
 import { escalateRun } from './follower.js';
 import { interruptRuns, isPaused, type PressEscape } from './pause.js';
-import { clearWaiting, noteWaiting, placeRun, type Placement } from './placement.js';
+import { clearWaiting, noteWaiting, placeRun, type Placement, type PlacementDeps, type TickStarts } from './placement.js';
 import { policyText } from './policy.js';
 import { startPermission } from './permission.js';
 import { implementerPrompt } from './prompts.js';
@@ -51,6 +51,10 @@ export interface DispatcherDeps {
   gh: GithubWriteClient;
   /** Peak utilization of the account in percent, from `getAccountUsage`; null = unknown. */
   usage: (accountId: string) => Promise<number | null>;
+  /** R6: whether a machine has room for one more run (`createMachineRoom().check`); absent = not checked. */
+  room?: PlacementDeps['room'];
+  /** Told when a run was placed on a machine, so its next hardware reading is fresh (R6: it includes that run). */
+  startedOn?: (machineId: string) => void;
   removeWorkspace?: typeof removeWorkspaceFn;
   /** Closes a tab a failed start left open with nothing running; default: `closeTab` as the owner. */
   closeTab?: (ctx: ControlContext, tabId: string) => Promise<void>;
@@ -127,6 +131,13 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
   let pass: Promise<void> | null = null;
   let again = false;
   let startupDone = false;
+  /** R6: the machines and accounts that already got a start in this pass (one per machine and per account per tick). */
+  let tickStarts: TickStarts = { machines: new Set(), accounts: new Set() };
+  const placed = (place: Extract<Placement, { machine: unknown }>) => {
+    tickStarts.machines.add(place.machine.id);
+    tickStarts.accounts.add(place.account.id);
+    deps.startedOn?.(place.machine.id);
+  };
 
   const write = (run: AutomationRun, patch: AutomationRunPatch) => repos.automationRuns.update(run.id, instance, patch);
   const release = (run: AutomationRun) => repos.automationRuns.release(run.id, instance);
@@ -321,15 +332,22 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         await release(run);
         continue;
       }
-      const place = await placeRun(deps, project, wanted.setup);
+      const place = await placeRun(deps, project, wanted.setup, tickStarts);
       if ('waiting' in place) {
+        const why = place.waiting;
+        if (why === 'later') {
+          // every place took a start already in this pass: the card stays as it was and the next tick asks again
+          await release(run);
+          return;
+        }
         // No place now: the claim goes away and the card (and those after it, which would get the same
         // answer) shows why it waits. Not an error, and no event per tick.
         await release(run);
-        for (const rest of queue.slice(i)) noteWaiting(rest.task_id, place.waiting, deps.now());
+        for (const rest of queue.slice(i)) noteWaiting(rest.task_id, why, deps.now());
         return;
       }
       clearWaiting(item.task_id);
+      placed(place);
       starting.add(item.task_id);
       const p = launch(ctx, project, wanted.setup, run, wanted.task, place).finally(() => {
         starting.delete(item.task_id);
@@ -351,12 +369,13 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     if (max !== null && (await repos.automationRuns.countOccupyingSlots(project.id, SLOT_FREE_REASONS)) >= max) return 'waiting';
     const run = await repos.automationRuns.claim({ project_id: project.id, task_id: task.id, role: i.role, instance, trigger_sha: i.triggerSha });
     if (!run) return 'taken';
-    const place = await placeRun(deps, project, setup.data);
+    const place = await placeRun(deps, project, setup.data, tickStarts);
     if ('waiting' in place) {
       // no row is kept: the next CI sync asks again (the trigger is still free)
       await release(run);
       return 'waiting';
     }
+    placed(place);
     starting.add(task.id);
     const p = launch(controlContextFor(repos, owner), project, setup.data, run, task, place, { branch: i.branch, base: i.base, prompt: i.prompt }).finally(() => {
       starting.delete(task.id);
@@ -442,6 +461,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
 
   async function passOnce(): Promise<void> {
     if (halted()) return;
+    tickStarts = { machines: new Set(), accounts: new Set() };
     await sweep();
     const projects = await repos.projectSetup.listWithAutomation();
     // D16: only automatic work marks accounts exhausted, so with no project on there is nothing to do

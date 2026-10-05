@@ -54,6 +54,9 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
   let projectId: string;
   let machineId: string;
   let accountId: string;
+  /** R6 allows one start per machine and per account per tick: these tests start many cards, so the project has a place for each. */
+  let accountIds: string[] = [];
+  let machineIds: string[] = [];
   let todoId: string;
   let seq = 0;
   let starts: Act[] = [];
@@ -72,7 +75,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
   async function setSetup(automation: Record<string, unknown> = {}) {
     const { data } = await repos.projectSetup.get(projectId);
     const next = normalizeSetup(
-      { ...data, repo: { integration_id: 'int-1', full_name: 'acme/app' }, ai: { accounts: [accountId], models: {} }, automation: { ...data.automation, enabled: true, ...automation } },
+      { ...data, repo: { integration_id: 'int-1', full_name: 'acme/app' }, ai: { accounts: accountIds, models: {} }, automation: { ...data.automation, enabled: true, ...automation } },
       2,
     );
     await repos.projectSetup.save(projectId, next);
@@ -93,6 +96,16 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
     await repos.projectMachines.link({ project_id: projectId, machine_id: machineId, cwd: '/home/u/app' });
     accountId = (await repos.aiAccounts.create({ provider: 'claude', label: 'main', machine_id: machineId })).id;
     reg.online.add(machineId);
+    accountIds = [accountId];
+    machineIds = [machineId];
+    for (let i = 1; i < 20; i++) {
+      const id = newId();
+      await db.machine.create({ data: { id, name: `m${i}`, type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.18.0' } });
+      await repos.projectMachines.link({ project_id: projectId, machine_id: id, cwd: `/home/u/app${i}` });
+      accountIds.push((await repos.aiAccounts.create({ provider: 'claude', label: `a${i}`, machine_id: id })).id);
+      machineIds.push(id);
+      reg.online.add(id);
+    }
     const seed = await repos.tasks.create(projectId, { title: 'seed' }); // creates the default columns
     todoId = (await db.taskColumn.findFirst({ where: { projectId, category: 'todo' }, orderBy: { position: 'asc' } }))!.id;
     await repos.tasks.delete(seed.id);
@@ -100,7 +113,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
     return async () => {
       for (const stop of stopped.splice(0)) await stop();
       await db.project.delete({ where: { id: projectId } });
-      await db.machine.deleteMany({ where: { id: machineId } });
+      await db.machine.deleteMany({ where: { id: { in: machineIds } } });
       await db.user.delete({ where: { id: ownerId } });
     };
   });
@@ -543,6 +556,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
         ensureEpicBranch: (async () => {}) as unknown as DispatcherDeps['ensureEpicBranch'],
         gh: {} as GithubWriteClient,
         usage: async () => 10,
+        room: async () => true, // the real one reads the machine's hardware
       },
       follower: { type: async (_c, tabId, text) => void typed.push({ instance: 'wired', id: tabId, text, seq: ++seq }), settleMs: 0 },
     });
