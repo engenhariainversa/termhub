@@ -20,7 +20,7 @@ describe('feedLine', () => {
   });
 
   it('has a line for every kind the server records and none for an unknown one', () => {
-    const kinds = ['run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed', 'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'ci_fix_requested', 'worktree_cleanup'];
+    const kinds = ['run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed', 'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup'];
     for (const kind of kinds) expect(feedLine(ev({ kind }))).toBeTruthy();
     expect(feedLine(ev({ kind: 'from_the_future' }))).toBeNull();
   });

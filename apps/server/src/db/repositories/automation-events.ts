@@ -22,6 +22,7 @@ export type AutomationEventKind =
   | 'paused'
   | 'resumed'
   | 'budget_hit'
+  | 'budget_warning'
   | 'ci_fix_requested'
   | 'worktree_cleanup';
 
@@ -104,6 +105,15 @@ export class AutomationEventsRepository {
       if ((err as { code?: string }).code === 'P2002') return null;
       throw err;
     }
+  }
+
+  /** Whether the project has an event of `kind` whose payload holds every pair of `match` (a once-a-day line). */
+  async existsForProject(projectId: string, kind: AutomationEventKind, match: Record<string, string | number>): Promise<boolean> {
+    const n = await this.db.automationEvent.count({
+      where: { projectId, kind, AND: Object.entries(match).map(([k, v]) => ({ payload: { path: [k], equals: v } })) },
+      take: 1,
+    });
+    return n > 0;
   }
 
   /** Replaces the event's payload (a claim settled with its outcome); null when the row is gone. */

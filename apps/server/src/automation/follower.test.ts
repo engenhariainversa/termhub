@@ -24,6 +24,11 @@ function world(o: {
   tab?: Partial<Tab>;
   task?: Partial<Task>;
   resumeMax?: number;
+  /** budgets in USD (null = off) and what the day / the card spent */
+  dailyBudget?: number | null;
+  cardBudget?: number | null;
+  daySpent?: number;
+  cardSpent?: number;
   enabled?: boolean;
   paused?: boolean;
   openQuestion?: boolean;
@@ -68,9 +73,14 @@ function world(o: {
     tabQuestions: { hasOpenQuestion: vi.fn(async () => o.openQuestion ?? o.question?.status === 'open'), latestQuestionForTab: vi.fn(async () => o.question) },
     taskPullRequests: { listByTasks: vi.fn(async () => o.prs ?? []) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
-    projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true, resume_max: o.resumeMax ?? 3, allowed_tools: null } } })) },
+    projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true, resume_max: o.resumeMax ?? 3, allowed_tools: null, daily_budget_usd: o.dailyBudget ?? null, card_budget_usd: o.cardBudget ?? null } } })) },
     automationPauses: { state: vi.fn(async () => ({ user: o.paused ? new Date() : null, project: null })) },
     users: { findById: vi.fn(async () => ({ id: 'u1' })) },
+    tabUsage: {
+      ownerTimeZone: vi.fn(async () => null),
+      costOfDay: vi.fn(async () => o.daySpent ?? 0),
+      totalsByTask: vi.fn(async (ids: string[]) => new Map([[ids[0]!, { tokens: 1, cost_usd: o.cardSpent ?? 0 }]])),
+    },
     machines: { findById: vi.fn(async () => ({ id: 'm1', owner_id: 'u1' })) },
     tasks: {
       findById: vi.fn(async () => task),
@@ -81,6 +91,7 @@ function world(o: {
     },
     automationEvents: {
       insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })),
+      existsForProject: vi.fn(async () => events.some((e) => e.kind === 'budget_hit')),
       lastForRun: vi.fn(async () => (o.escalatedAt ? { kind: 'escalated', created_at: o.escalatedAt } : null)),
     },
     chat: {
@@ -243,6 +254,52 @@ describe('following a run (spec D15, F-13)', () => {
     await followRun({ ...w.deps, lifecycle: { draining: true } }, w.run.id);
     await onTabChange({ ...w.deps, lifecycle: { draining: true } }, { tab: w.tab, project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
     expect(w.type).not.toHaveBeenCalled();
+  });
+});
+
+describe('budgets (TER-892, spike R8)', () => {
+  it('off by default: nothing is read and the stop is resumed as before (M1)', async () => {
+    const w = world({ daySpent: 999, cardSpent: 999 });
+    await followRun(w.deps, w.run.id);
+    expect(w.type).toHaveBeenCalledTimes(1);
+    expect(w.repos.tabUsage.costOfDay).not.toHaveBeenCalled();
+    expect(w.repos.tabUsage.totalsByTask).not.toHaveBeenCalled();
+  });
+
+  it('a day at its budget resumes nothing and keeps the run going; the day after it resumes', async () => {
+    const w = world({ dailyBudget: 10, daySpent: 10 });
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run.status).toBe('running');
+    expect(w.run.resume_count).toBe(0);
+    expect(w.kinds()).toEqual(['budget_hit']);
+    // tomorrow's meter starts from zero
+    const next = world({ dailyBudget: 10, daySpent: 0 });
+    await followRun(next.deps, next.run.id);
+    expect(next.type).toHaveBeenCalledTimes(1);
+  });
+
+  it('an exited agent is not restarted while the day is at its budget', async () => {
+    const w = world({ dailyBudget: 10, daySpent: 12, tab: { state: 'idle', state_text: AGENT_EXITED_TEXT } });
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run.restart_count).toBe(0);
+  });
+
+  it('a card past its own budget is parked and escalated, not resumed', async () => {
+    const w = world({ cardBudget: 5, cardSpent: 5.5 });
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'card_budget' });
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', payload: { reason: 'card_budget', tab_id: 'tab1' } })]);
+    expect(SLOT_FREE_REASONS).toContain('card_budget');
+    expect(escalationText('card_budget')).toContain('Orçamento do card estourado');
+  });
+
+  it('a card under its budget is resumed', async () => {
+    const w = world({ cardBudget: 5, cardSpent: 4 });
+    await followRun(w.deps, w.run.id);
+    expect(w.type).toHaveBeenCalledTimes(1);
   });
 });
 

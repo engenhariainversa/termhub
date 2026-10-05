@@ -42,7 +42,7 @@ describe('resetAt (spec D16)', () => {
 });
 
 /** One running run in a tab stuck on the usage limit of account a1, and fakes that keep what is written. */
-function world(o: { exhausted?: Map<string, Date>; paused?: boolean; enabled?: boolean; task?: Partial<Task>; usage?: AiAccountUsage | null; machineSwaps?: boolean } = {}) {
+function world(o: { exhausted?: Map<string, Date>; paused?: boolean; enabled?: boolean; task?: Partial<Task>; usage?: AiAccountUsage | null; machineSwaps?: boolean; dailyBudget?: number | null; daySpent?: number } = {}) {
   const run: AutomationRun = {
     id: `run-${Math.random().toString(36).slice(2)}`, project_id: 'p1', task_id: 't1', role: 'implementer', status: 'running', waiting_reason: null, tab_id: 'tab1', machine_id: 'm1',
     account_id: 'a1', branch: 'TER-1-card', worktree_path: '/w/TER-1', resume_count: 0, fix_count: 0, restart_count: 0, claimed_by: ME, heartbeat_at: NOW, started_at: NOW,
@@ -81,13 +81,14 @@ function world(o: { exhausted?: Map<string, Date>; paused?: boolean; enabled?: b
     tabQuestions: { hasOpenQuestion: vi.fn(async () => false), latestQuestionForTab: vi.fn(async () => undefined) },
     taskPullRequests: { listByTasks: vi.fn(async () => []) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
-    projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled, resume_max: 3, allowed_tools: null } } })) },
+    projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled, resume_max: 3, allowed_tools: null, daily_budget_usd: o.dailyBudget ?? null, card_budget_usd: null } } })) },
     automationPauses: { state: vi.fn(async () => ({ user: paused ? NOW : null, project: null })) },
     users: { findById: vi.fn(async () => ({ id: 'u1' })) },
+    tabUsage: { ownerTimeZone: vi.fn(async () => null), costOfDay: vi.fn(async () => o.daySpent ?? 0) },
     aiAccounts: { findById: vi.fn(async () => ({ id: 'a1', label: 'pessoal' })) },
     chat: { findLatestActiveForProject: vi.fn(async () => ({ id: 'c1' })), addMessage: vi.fn(async (m: { text: string }) => (messages.push(m.text), { id: 'm', ...m })) },
     tasks: { findById: vi.fn(async () => task) },
-    automationEvents: { insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })) },
+    automationEvents: { existsForProject: vi.fn(async () => true), insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })) },
   } as unknown as Repositories;
   const type = vi.fn(async (_ctx: ControlContext, _tabId: string, _text: string) => {});
   const accountUsage = vi.fn(async () => (o.usage === undefined ? usage([{ utilization: 100, resets_at: at(2 * 3600_000).toISOString() }]) : o.usage));
@@ -168,6 +169,15 @@ describe('a run on a usage limit (spec D16)', () => {
     expect(w.type).toHaveBeenCalledTimes(1);
     expect(w.kinds()).toEqual(['quota_hit', 'quota_reset']);
     expect(w.run.status).toBe('running');
+  });
+
+  it('a day at its budget holds the resume after the reset; the run keeps waiting on quota (TER-892)', async () => {
+    const w = world({ dailyBudget: 5, daySpent: 5 });
+    await followRun(w.deps, w.run.id);
+    w.setNow(at(2 * 3600_000 + 1000));
+    await resumeAfterReset(w.deps);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'quota' });
   });
 
   it('a resume that could not be typed goes back to waiting on quota, marks nothing and is tried again', async () => {

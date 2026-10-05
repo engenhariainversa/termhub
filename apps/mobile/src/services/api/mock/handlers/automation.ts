@@ -20,6 +20,7 @@ const DEFAULT_AUTOMATION: TAutomationSetup = {
   resume_max: 3,
   fix_attempts: 3,
   daily_budget_usd: null,
+  card_budget_usd: null,
   summary_hour: null,
   prompts: { implementer: null, integrator: null, fixer: null },
 };

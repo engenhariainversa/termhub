@@ -209,7 +209,7 @@ export function selectEpics(epics: EpicProgress[], scope: ProgressScope): EpicPr
 /** The kinds the clients have a line for: the feed's 50 count only these (an event the clients would skip must not use a slot). */
 export const FEED_KINDS = [
   'run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed',
-  'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'ci_fix_requested', 'worktree_cleanup',
+  'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** An event with what its sentence names, looked up by the repository. */

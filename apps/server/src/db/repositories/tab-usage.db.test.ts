@@ -2,6 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
+import { AutomationEventsRepository } from './automation-events.js';
 import { TabUsageRepository, type UsageWrite } from './tab-usage.js';
 
 const keyOf = (id: string) => 'U' + id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase();
@@ -108,5 +109,19 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('tab usage (Postgres)', ()
   it('reads the owner\'s zone', async () => {
     expect(await usage.ownerTimeZone(projectId)).toBe('America/Sao_Paulo');
     expect(await usage.ownerTimeZone('nope')).toBeNull();
+  });
+
+  it('sums the project\'s cost on one day (unpriced rows count 0) and looks a once-a-day event up by its day', async () => {
+    await usage.record(write({ tab_id: `t-${projectId}-a`, day: '2026-10-04', cost_usd: 1.25 }));
+    await usage.record(write({ tab_id: `t-${projectId}-b`, day: '2026-10-04', cost_usd: null }));
+    await usage.record(write({ tab_id: `t-${projectId}-c`, day: '2026-10-05', cost_usd: 4 }));
+    expect(await usage.costOfDay(projectId, '2026-10-04')).toBe(1.25);
+    expect(await usage.costOfDay(projectId, '2026-10-05')).toBe(4);
+    expect(await usage.costOfDay(projectId, '2026-10-06')).toBe(0);
+    const events = new AutomationEventsRepository(db);
+    await events.insert({ project_id: projectId, kind: 'budget_warning', payload: { day: '2026-10-04' } });
+    expect(await events.existsForProject(projectId, 'budget_warning', { day: '2026-10-04' })).toBe(true);
+    expect(await events.existsForProject(projectId, 'budget_warning', { day: '2026-10-05' })).toBe(false);
+    expect(await events.existsForProject(projectId, 'budget_hit', { day: '2026-10-04' })).toBe(false);
   });
 });

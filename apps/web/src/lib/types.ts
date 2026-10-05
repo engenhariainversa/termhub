@@ -545,6 +545,8 @@ export interface ProjectAutomation {
   resume_max: number;
   fix_attempts: number;
   daily_budget_usd: number | null;
+  /** a card whose estimate passes this is escalated and not resumed; null = off (spike R8) */
+  card_budget_usd: number | null;
   summary_hour: number | null;
   prompts: { implementer: string | null; integrator: string | null; fixer: string | null };
 }

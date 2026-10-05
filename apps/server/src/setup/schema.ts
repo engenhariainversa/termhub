@@ -124,6 +124,8 @@ export const automationSchema = z.object({
   resume_max: z.number().int().min(0).max(10).default(3),
   fix_attempts: z.number().int().min(0).max(10).default(3),
   daily_budget_usd: z.number().positive().max(100000).nullable().default(null),
+  // spike R8 (TER-971): a card whose estimate passes this is escalated and not resumed; null = off
+  card_budget_usd: z.number().positive().max(100000).nullable().default(null),
   summary_hour: z.number().int().min(0).max(23).nullable().default(null),
   prompts: z.object({ implementer: promptText, integrator: promptText, fixer: promptText }).default({}),
 });

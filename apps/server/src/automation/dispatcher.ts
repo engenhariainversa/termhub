@@ -12,6 +12,7 @@ import type { GithubWriteClient } from '../integrations/github-write.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { cleanupRuns } from './cleanup.js';
 import { cardBranchName, removeWorkspace as removeWorkspaceFn, targetOf, type ensureEpicBranch as ensureEpicBranchFn, type ensureWorkspace as ensureWorkspaceFn } from './branches.js';
+import { budgetReached } from './budget.js';
 import { automationBus, dispatchTriggers, recordEvent } from './events.js';
 import { SLOT_FREE_REASONS, START_FAILED } from './escalation-text.js';
 import { escalateRun } from './follower.js';
@@ -289,6 +290,8 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     if (await isPaused(repos, project.owner_id, projectId)) return;
     const owner = await repos.users.findById(project.owner_id);
     if (!owner) return;
+    // TER-892: a day's budget reached stops the new starts (the runs going on finish their turn)
+    if (await budgetReached(repos, projectId, enabledSetup.automation, deps.now(), log)) return;
     // D12: automation acts as the project's owner.
     const ctx = controlContextFor(repos, owner);
     const queue = (await eligibilityQueue(ctx, projectId)).filter((i) => i.eligible);
@@ -341,6 +344,8 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     if (!project?.owner_id || (await isPaused(repos, project.owner_id, project.id))) return 'halted';
     const [owner, setup, task] = await Promise.all([repos.users.findById(project.owner_id), repos.projectSetup.get(project.id), repos.tasks.findById(i.taskId)]);
     if (!owner || !setup.data.automation.enabled || !task || task.project_id !== project.id) return 'halted';
+    // R8: no new fixer or integrator run once the day's budget is reached; the trigger stays free for tomorrow
+    if (await budgetReached(repos, project.id, setup.data.automation, deps.now(), log)) return 'waiting';
     const max = setup.data.automation.max_parallel;
     if (max !== null && (await repos.automationRuns.countOccupyingSlots(project.id, SLOT_FREE_REASONS)) >= max) return 'waiting';
     const run = await repos.automationRuns.claim({ project_id: project.id, task_id: task.id, role: i.role, instance, trigger_sha: i.triggerSha });

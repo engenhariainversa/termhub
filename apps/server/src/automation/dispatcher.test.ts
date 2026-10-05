@@ -255,6 +255,60 @@ describe('startDispatcher (fakes)', () => {
     expect(resumeQuota).not.toHaveBeenCalled();
   });
 
+  describe('daily budget (TER-892)', () => {
+    const at = new Date('2026-10-05T12:00:00Z');
+    const budgetRepos = (limit: number | null, spent: number) => {
+      const setup = setupSchema.parse({ automation: { enabled: true, daily_budget_usd: limit } });
+      return recordingRepos({
+        ...idle(),
+        projectSetup: { listWithAutomation: async () => [{ project_id: 'p1', data: setup }] },
+        automationRuns: { ...idle().automationRuns, countActive: async () => 0, claim: async () => null },
+        projects: { findById: async () => ({ id: 'p1', owner_id: 'u1' }) },
+        automationPauses: { state: async () => ({ user: null, project: null }) },
+        users: { findById: async () => ({ id: 'u1' }) },
+        aiAccountExhaustions: { clearExpired: async () => [] },
+        tasks: { listByProject: async () => [] },
+        tabUsage: { ownerTimeZone: async () => null, costOfDay: async () => spent },
+        automationEvents: { existsForProject: async () => true },
+      });
+    };
+
+    it('a project at its budget gets no new start (the queue is not even read), and its fixer and integrator wait', async () => {
+      const { repos, calls } = budgetRepos(10, 10);
+      const warn = vi.fn();
+      const d = startDispatcher(deps(repos, { now: () => at, log: { info: () => {}, warn } }), { schedule: false });
+      await d.tick('t');
+      expect(calls).toContain('tabUsage.costOfDay');
+      expect(calls).not.toContain('automationRuns.claim');
+      expect(warn).not.toHaveBeenCalled();
+      const fixer = { projectId: 'p1', taskId: 'c1', role: 'fixer' as const, triggerSha: 'h1', branch: 'b', base: 'main', prompt: 'p' };
+      const more = recordingRepos({
+        projects: { findById: async () => ({ id: 'p1', owner_id: 'u1' }) },
+        automationPauses: { state: async () => ({ user: null, project: null }) },
+        users: { findById: async () => ({ id: 'u1' }) },
+        projectSetup: { get: async () => ({ data: setupSchema.parse({ automation: { enabled: true, daily_budget_usd: 10 } }) }) },
+        tasks: { findById: async () => ({ id: 'c1', project_id: 'p1' }) },
+        tabUsage: { ownerTimeZone: async () => null, costOfDay: async () => 11 },
+        automationEvents: { existsForProject: async () => true },
+      });
+      expect(await startDispatcher(deps(more.repos, { now: () => at }), { schedule: false }).startTriggered(fixer)).toBe('waiting');
+      expect(more.calls).not.toContain('automationRuns.claim');
+      await d.stop();
+    });
+
+    it('under the budget, or with none, the queue is read as usual', async () => {
+      for (const [limit, spent] of [[10, 3], [null, 0]] as const) {
+        const { repos, calls } = budgetRepos(limit, spent);
+        // the queue needs more than these fakes give: reaching it is what counts
+        const d = startDispatcher(deps(repos, { now: () => at, log: { info: () => {}, warn: () => {} } }), { schedule: false });
+        await d.tick('t');
+        await d.stop();
+        expect(calls.some((c) => c.startsWith('tasks.') || c.startsWith('taskColumns.') || c.startsWith('projectMachines.') || c.startsWith('projectSetup.get'))).toBe(true);
+        if (limit === null) expect(calls).not.toContain('tabUsage.costOfDay');
+      }
+    });
+  });
+
   it('the instance id is unique per process start, not a colour name', () => {
     const a = dispatcherInstanceId();
     const b = dispatcherInstanceId();
