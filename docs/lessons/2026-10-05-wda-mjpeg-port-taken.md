@@ -3,7 +3,7 @@ symptom: "iOS simulator tab stuck on \"Reconectando ao simulador…\" with \"fet
 tags: [simulator, wda, mjpeg, ports, macos]
 evidence: observed
 card: TER-983
-pr: <PR URL>
+pr: https://github.com/engenhariainversa/termhub/pull/387
 agent: claude
 date: 2026-10-05
 ---
