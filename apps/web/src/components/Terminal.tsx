@@ -725,8 +725,8 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
           {state === 'reconnecting' && attempt > 0 ? ` (${attempt})` : ''}
         </span>
         {readonly && (
-          <span className="rounded bg-bg-3 px-1.5 py-px font-medium text-fg-muted" title="Você pode acompanhar este terminal, mas não digitar nele: seu papel não tem permissão de escrita em terminais.">
-            Somente leitura
+          <span className="rounded bg-bg-3 px-1.5 py-px font-medium text-fg-muted" title={t('Você pode acompanhar este terminal, mas não digitar nele: seu papel não tem permissão de escrita em terminais.')}>
+            {t('Somente leitura')}
           </span>
         )}
         {(state === 'offline' || state === 'closed') && (
