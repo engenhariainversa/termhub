@@ -18,6 +18,7 @@ import { progressRoutes } from '../routes/progress.js';
 import { projectAiRoutes } from '../routes/project-ai.js';
 import { mobileSessionRoutes } from '../routes/m-session.js';
 import { filePreviewRoutes } from '../routes/file-preview.js';
+import { fileRecentRoutes } from '../routes/file-recent.js';
 import { mobileTabRoutes } from '../routes/m-tabs.js';
 import { mobileTranscriptionRoutes } from '../routes/m-transcriptions.js';
 import { buildMobileAuthHook, type MobileAuthMode } from './auth.js';
@@ -167,6 +168,7 @@ export async function registerMobileApi(
         await guarded('terminals', (a) => mobileTabRoutes(a, deps.repos, { hub: deps.tabChat }), '/tabs');
         // A file an agent wrote, previewed from its path (spec 2026-10-04 file preview): the web's route.
         await guarded('terminals', (a) => filePreviewRoutes(a, deps.repos), '/file-preview');
+        await guarded('terminals', (a) => fileRecentRoutes(a, deps.repos), '/file-recent');
       }
 
       await mobileRoutes(guardedMobile);
