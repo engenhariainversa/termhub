@@ -17,6 +17,7 @@ import { mobileNotificationRoutes } from '../routes/m-notifications.js';
 import { progressRoutes } from '../routes/progress.js';
 import { projectAiRoutes } from '../routes/project-ai.js';
 import { mobileSessionRoutes } from '../routes/m-session.js';
+import { filePreviewRoutes } from '../routes/file-preview.js';
 import { mobileTabRoutes } from '../routes/m-tabs.js';
 import { mobileTranscriptionRoutes } from '../routes/m-transcriptions.js';
 import { buildMobileAuthHook, type MobileAuthMode } from './auth.js';
@@ -160,6 +161,8 @@ export async function registerMobileApi(
         if (deletion) await m.register((a) => mobileAccountRoutes(a, { deletion, session: services.session }), { prefix: '/account' });
         // A terminal tab read as a conversation (spec 2026-10-01 tab chat).
         await guarded('terminals', (a) => mobileTabRoutes(a, deps.repos, { hub: deps.tabChat }), '/tabs');
+        // A file an agent wrote, previewed from its path (spec 2026-10-04 file preview): the web's route.
+        await guarded('terminals', (a) => filePreviewRoutes(a, deps.repos), '/file-preview');
       }
 
       await mobileRoutes(guardedMobile);

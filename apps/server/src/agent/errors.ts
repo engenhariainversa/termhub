@@ -1,4 +1,4 @@
-import { CAPABILITY_SIM, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
+import { CAPABILITY_FILE_READ, CAPABILITY_SIM, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { AgentClosedError, AgentRpcError, AgentTimeoutError } from './connection.js';
@@ -97,6 +97,18 @@ export function requireTranscriptCapable(machine: Machine): void {
       'AGENT_OUTDATED',
     );
   }
+}
+
+/** First agent release that advertises `file_read` (`file.read`, spec 2026-10-04 file preview). */
+export const FILE_READ_MIN_AGENT_VERSION = '0.16.0';
+export const FILE_READ_OUTDATED_MESSAGE = `Atualize o agente desta máquina (npm i -g @termhub/agent, versão ${FILE_READ_MIN_AGENT_VERSION} ou mais nova) para ver arquivos`;
+
+/** Previewing a file needs an agent machine whose connected agent claims `file_read`: an older agent
+ *  drops the RPC, which would read as a timeout. */
+export function requireFileReadCapable(machine: Machine): void {
+  if (machine.type !== 'agent') throw new HttpError(400, 'Esta máquina não usa o agente do termhub', 'UNSUPPORTED_MACHINE');
+  if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
+  if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_FILE_READ)) throw new HttpError(409, FILE_READ_OUTDATED_MESSAGE, 'AGENT_OUTDATED');
 }
 
 /** Calls a named RPC on the machine's agent connection, converting connection/protocol errors via toHttpError. */

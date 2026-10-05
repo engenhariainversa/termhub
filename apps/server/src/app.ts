@@ -14,6 +14,7 @@ import { machineRoutes } from './routes/machines.js';
 import { projectRoutes } from './routes/projects.js';
 import { projectGroupRoutes } from './routes/project-groups.js';
 import { transcriptionRoutes } from './routes/transcriptions.js';
+import { filePreviewRoutes } from './routes/file-preview.js';
 import { tabRoutes } from './routes/tabs.js';
 import { projectTaskRoutes, taskRoutes } from './routes/tasks.js';
 import { columnRoutes, projectColumnRoutes } from './routes/columns.js';
@@ -267,6 +268,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('tickets', (a) => projectTicketRoutes(a, repos), '/projects');
       await guarded('tickets', (a) => taskTicketRoutes(a, repos), '/tasks');
       await guarded('terminals', (a) => tabRoutes(a, repos, { simulators, closeSimulatorTab: (id) => simWs.closeTab(id) }), '/tabs');
+      // A text file an agent wrote, read on its machine when the person opens its path (spec 2026-10-04).
+      await guarded('terminals', (a) => filePreviewRoutes(a, repos), '/file-preview');
       await guarded('terminals', (a) => transcriptionRoutes(a, { transcriptions }), '/transcriptions');
       await guarded('terminals', (a) => monitorRoutes(a, repos), '/monitor');
       await guarded('terminals', (a) => hooksRoutes(a, repos, { waker, onTabEvent: (tabId) => tabChat.poke(tabId) }), '/hooks');
