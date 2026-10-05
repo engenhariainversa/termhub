@@ -70,6 +70,8 @@ export const ModelName = {
   Task: 'Task',
   TaskPullRequest: 'TaskPullRequest',
   AutomationEvent: 'AutomationEvent',
+  AutomationRun: 'AutomationRun',
+  AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
   ProjectSetup: 'ProjectSetup',
@@ -429,6 +431,40 @@ export const AutomationEventScalarFieldEnum = {
 } as const
 
 export type AutomationEventScalarFieldEnum = (typeof AutomationEventScalarFieldEnum)[keyof typeof AutomationEventScalarFieldEnum]
+
+
+export const AutomationRunScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  role: 'role',
+  status: 'status',
+  waitingReason: 'waitingReason',
+  tabId: 'tabId',
+  machineId: 'machineId',
+  accountId: 'accountId',
+  branch: 'branch',
+  worktreePath: 'worktreePath',
+  resumeCount: 'resumeCount',
+  fixCount: 'fixCount',
+  claimedBy: 'claimedBy',
+  heartbeatAt: 'heartbeatAt',
+  startedAt: 'startedAt',
+  endedAt: 'endedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type AutomationRunScalarFieldEnum = (typeof AutomationRunScalarFieldEnum)[keyof typeof AutomationRunScalarFieldEnum]
+
+
+export const AiAccountExhaustionScalarFieldEnum = {
+  accountId: 'accountId',
+  until: 'until',
+  reason: 'reason',
+  createdAt: 'createdAt'
+} as const
+
+export type AiAccountExhaustionScalarFieldEnum = (typeof AiAccountExhaustionScalarFieldEnum)[keyof typeof AiAccountExhaustionScalarFieldEnum]
 
 
 export const NoteScalarFieldEnum = {
