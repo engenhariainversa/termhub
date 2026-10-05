@@ -16,7 +16,13 @@ function fakes(o: { spent?: number; zone?: string | null; cardCost?: number | nu
   const repos = {
     tabUsage: { costOfDay, ownerTimeZone, totalsByTask },
     automationEvents: {
-      existsForProject: vi.fn(async (_p: string, kind: string, match: Record<string, unknown>) => events.some((e) => e.kind === kind && Object.entries(match).every(([k, v]) => e.payload[k] === v))),
+      insertOnce: vi.fn(async (e: { kind: string; payload: Record<string, unknown> }) => {
+        // yields like a database round trip, so concurrent callers interleave; the unique index lets one in
+        await Promise.resolve();
+        if (events.some((x) => x.kind === e.kind && x.payload.day === e.payload.day)) return null;
+        events.push(e);
+        return { ...e, id: 'e', created_at: '' };
+      }),
       insert: vi.fn(async (e: { kind: string; payload: Record<string, unknown> }) => (events.push(e), { ...e, id: 'e', created_at: '' })),
     },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
@@ -48,7 +54,7 @@ describe('daily budget (TER-892)', () => {
     const g = fakes({ spent: 8 });
     expect(await budgetReached(g.repos, 'p1', auto({ daily_budget_usd: 10 }), now)).toBe(false);
     expect(await budgetReached(g.repos, 'p1', auto({ daily_budget_usd: 10 }), now)).toBe(false);
-    expect(g.events).toEqual([{ kind: 'budget_warning', project_id: 'p1', task_id: null, run_id: null, payload: { day: '2026-10-05', spent_usd: 8, limit_usd: 10 } }]);
+    expect(g.events).toEqual([{ kind: 'budget_warning', project_id: 'p1', payload: { day: '2026-10-05', spent_usd: 8, limit_usd: 10 } }]);
     expect(g.lines).toHaveLength(1);
     // the next day warns again
     await budgetReached(g.repos, 'p1', auto({ daily_budget_usd: 10 }), new Date('2026-10-06T12:00:00Z'));
@@ -66,6 +72,16 @@ describe('daily budget (TER-892)', () => {
     off();
     expect(f.events.map((e) => e.kind)).toEqual(['budget_hit']);
     expect(seen).toEqual(['budget_hit']);
+    expect(f.lines).toHaveLength(1);
+  });
+
+  it('concurrent callers (two colours, tick and follower) post the notice once', async () => {
+    const f = fakes({ spent: 10 });
+    const a = auto({ daily_budget_usd: 10 });
+    const now = new Date('2026-10-05T12:00:00Z');
+    const results = await Promise.all([1, 2, 3, 4].map(() => budgetReached(f.repos, 'p1', a, now)));
+    expect(results).toEqual([true, true, true, true]);
+    expect(f.events).toHaveLength(1);
     expect(f.lines).toHaveLength(1);
   });
 

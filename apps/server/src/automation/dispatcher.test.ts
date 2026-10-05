@@ -269,7 +269,7 @@ describe('startDispatcher (fakes)', () => {
         aiAccountExhaustions: { clearExpired: async () => [] },
         tasks: { listByProject: async () => [] },
         tabUsage: { ownerTimeZone: async () => null, costOfDay: async () => spent },
-        automationEvents: { existsForProject: async () => true },
+        automationEvents: { insertOnce: async () => null },
       });
     };
 
@@ -289,7 +289,7 @@ describe('startDispatcher (fakes)', () => {
         projectSetup: { get: async () => ({ data: setupSchema.parse({ automation: { enabled: true, daily_budget_usd: 10 } }) }) },
         tasks: { findById: async () => ({ id: 'c1', project_id: 'p1' }) },
         tabUsage: { ownerTimeZone: async () => null, costOfDay: async () => 11 },
-        automationEvents: { existsForProject: async () => true },
+        automationEvents: { insertOnce: async () => null },
       });
       expect(await startDispatcher(deps(more.repos, { now: () => at }), { schedule: false }).startTriggered(fixer)).toBe('waiting');
       expect(more.calls).not.toContain('automationRuns.claim');

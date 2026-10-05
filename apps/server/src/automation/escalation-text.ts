@@ -28,9 +28,9 @@ export const AGENT_EXITED = 'agent_exited';
 export const CONFLICT_CAP = 'conflict_cap';
 /** A PR whose CI is still red after `fix_attempts` fixes (spec D21, shared with the conflict fixes): a person looks at it. */
 export const CI_CAP = 'ci_cap';
-/** The agent itself said it is stuck (`report_card blocked`). */
 /** R8: the card's estimated cost passed `card_budget_usd`; the run is parked, not resumed. */
 export const CARD_BUDGET = 'card_budget';
+/** The agent itself said it is stuck (`report_card blocked`). */
 export const REPORTED_BLOCKED = 'reported_blocked';
 
 /** The project's deploy workflow failed on a merge the automation made: automation of the project is paused (spec D22). */

@@ -88,7 +88,7 @@ function world(o: { exhausted?: Map<string, Date>; paused?: boolean; enabled?: b
     aiAccounts: { findById: vi.fn(async () => ({ id: 'a1', label: 'pessoal' })) },
     chat: { findLatestActiveForProject: vi.fn(async () => ({ id: 'c1' })), addMessage: vi.fn(async (m: { text: string }) => (messages.push(m.text), { id: 'm', ...m })) },
     tasks: { findById: vi.fn(async () => task) },
-    automationEvents: { existsForProject: vi.fn(async () => true), insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })) },
+    automationEvents: { insertOnce: vi.fn(async (e: AutomationEventInput) => (events.some((x) => x.kind === e.kind && x.payload?.day === e.payload?.day) ? null : (events.push(e), { ...e, id: `e${events.length}`, created_at: '' }))), insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })) },
   } as unknown as Repositories;
   const type = vi.fn(async (_ctx: ControlContext, _tabId: string, _text: string) => {});
   const accountUsage = vi.fn(async () => (o.usage === undefined ? usage([{ utilization: 100, resets_at: at(2 * 3600_000).toISOString() }]) : o.usage));

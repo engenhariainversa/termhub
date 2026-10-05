@@ -91,7 +91,7 @@ function world(o: {
     },
     automationEvents: {
       insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })),
-      existsForProject: vi.fn(async () => events.some((e) => e.kind === 'budget_hit')),
+      insertOnce: vi.fn(async (e: AutomationEventInput) => (events.some((x) => x.kind === e.kind && x.payload?.day === e.payload?.day) ? null : (events.push(e), { ...e, id: `e${events.length}`, created_at: '' }))),
       lastForRun: vi.fn(async () => (o.escalatedAt ? { kind: 'escalated', created_at: o.escalatedAt } : null)),
     },
     chat: {

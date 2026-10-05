@@ -2,7 +2,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import { t } from '../i18n/index.js';
 import type { ProjectAutomation } from '../setup/schema.js';
 import { postAutomationLine } from './chat-line.js';
-import { recordEvent } from './events.js';
+import { publishEvent } from './events.js';
 import { dayIn } from './usage.js';
 
 /** Spike R8: the early warning comes at this share of the daily budget. */
@@ -12,7 +12,7 @@ type Log = { warn: (o: object, m: string) => void };
 
 export interface BudgetRepos {
   tabUsage: Pick<Repositories['tabUsage'], 'ownerTimeZone' | 'costOfDay'>;
-  automationEvents: Pick<Repositories['automationEvents'], 'existsForProject'>;
+  automationEvents: Pick<Repositories['automationEvents'], 'insertOnce'>;
 }
 
 export interface DailyBudget {
@@ -51,8 +51,11 @@ export async function budgetReached(repos: Repositories, projectId: string, auto
   const kind = b.reached ? 'budget_hit' : b.warn ? 'budget_warning' : null;
   if (!kind) return false;
   try {
-    if (await repos.automationEvents.existsForProject(projectId, kind, { day: b.day })) return b.reached;
-    await recordEvent(repos, { project_id: projectId, kind, payload: { day: b.day, spent_usd: Number(usd(b.spent)), limit_usd: b.limit } });
+    // the claim is the unique index `automation_events_budget_once`: only the caller that inserts the row
+    // (on either colour) publishes it and posts the line
+    const claim = await repos.automationEvents.insertOnce({ project_id: projectId, kind, payload: { day: b.day, spent_usd: Number(usd(b.spent)), limit_usd: b.limit } });
+    if (!claim) return b.reached;
+    await publishEvent(repos, claim);
     await postAutomationLine(
       repos,
       projectId,
