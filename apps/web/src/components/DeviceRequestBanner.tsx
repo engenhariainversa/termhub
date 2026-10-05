@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from '../i18n';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
@@ -15,6 +16,7 @@ const DEVICES_CHANGED_EVENT = 'termhub:devices-changed';
  * is treated the same as "nothing pending" rather than shown as an error.
  */
 export function DeviceRequestBanner() {
+  const { t } = useTranslation();
   const { can } = useAuth();
   const allowed = can('devices');
   const [pending, setPending] = useState(0);
@@ -41,9 +43,9 @@ export function DeviceRequestBanner() {
 
   return (
     <div className="bg-attention/10 border-b border-attention/40 px-4 py-2 text-sm">
-      <span>Um aparelho pede acesso à sua conta</span>{' '}
+      <span>{t('Um aparelho pede acesso à sua conta')}</span>{' '}
       <Link to="/settings/devices" className="font-medium text-accent hover:underline">
-        Ver pedido
+        {t('Ver pedido')}
       </Link>
     </div>
   );

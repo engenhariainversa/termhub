@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { MachineStatus } from '../lib/data';
 import type { DashboardItem } from '../lib/types';
+import { formatDate } from '../lib/format';
 
 function relative(iso: string | null): string {
   if (!iso) return 'nunca';
@@ -12,7 +13,7 @@ function relative(iso: string | null): string {
   if (h < 24) return `há ${h} h`;
   const d = Math.floor(h / 24);
   if (d < 30) return `há ${d} dia${d > 1 ? 's' : ''}`;
-  return new Date(iso).toLocaleDateString('pt-BR');
+  return formatDate(iso);
 }
 
 function ProjectCard({ item: { project: p, machines, doing, open_tasks }, statuses }: { item: DashboardItem; statuses: Record<string, MachineStatus> }) {
