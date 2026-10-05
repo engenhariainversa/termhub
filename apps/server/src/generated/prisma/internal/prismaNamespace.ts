@@ -416,6 +416,8 @@ export const ModelName = {
   Task: 'Task',
   TaskPullRequest: 'TaskPullRequest',
   AutomationEvent: 'AutomationEvent',
+  AutomationRun: 'AutomationRun',
+  AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
   ProjectSetup: 'ProjectSetup',
@@ -463,7 +465,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1870,6 +1872,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.AutomationEventCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.AutomationEventCountAggregateOutputType> | number
+        }
+      }
+    }
+    AutomationRun: {
+      payload: Prisma.$AutomationRunPayload<ExtArgs>
+      fields: Prisma.AutomationRunFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.AutomationRunFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.AutomationRunFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload>
+        }
+        findFirst: {
+          args: Prisma.AutomationRunFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.AutomationRunFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload>
+        }
+        findMany: {
+          args: Prisma.AutomationRunFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload>[]
+        }
+        create: {
+          args: Prisma.AutomationRunCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload>
+        }
+        createMany: {
+          args: Prisma.AutomationRunCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.AutomationRunCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload>[]
+        }
+        delete: {
+          args: Prisma.AutomationRunDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload>
+        }
+        update: {
+          args: Prisma.AutomationRunUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload>
+        }
+        deleteMany: {
+          args: Prisma.AutomationRunDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.AutomationRunUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.AutomationRunUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload>[]
+        }
+        upsert: {
+          args: Prisma.AutomationRunUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunPayload>
+        }
+        aggregate: {
+          args: Prisma.AutomationRunAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAutomationRun>
+        }
+        groupBy: {
+          args: Prisma.AutomationRunGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationRunGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.AutomationRunCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationRunCountAggregateOutputType> | number
+        }
+      }
+    }
+    AiAccountExhaustion: {
+      payload: Prisma.$AiAccountExhaustionPayload<ExtArgs>
+      fields: Prisma.AiAccountExhaustionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.AiAccountExhaustionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.AiAccountExhaustionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload>
+        }
+        findFirst: {
+          args: Prisma.AiAccountExhaustionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.AiAccountExhaustionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload>
+        }
+        findMany: {
+          args: Prisma.AiAccountExhaustionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload>[]
+        }
+        create: {
+          args: Prisma.AiAccountExhaustionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload>
+        }
+        createMany: {
+          args: Prisma.AiAccountExhaustionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.AiAccountExhaustionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload>[]
+        }
+        delete: {
+          args: Prisma.AiAccountExhaustionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload>
+        }
+        update: {
+          args: Prisma.AiAccountExhaustionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload>
+        }
+        deleteMany: {
+          args: Prisma.AiAccountExhaustionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.AiAccountExhaustionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.AiAccountExhaustionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload>[]
+        }
+        upsert: {
+          args: Prisma.AiAccountExhaustionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiAccountExhaustionPayload>
+        }
+        aggregate: {
+          args: Prisma.AiAccountExhaustionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAiAccountExhaustion>
+        }
+        groupBy: {
+          args: Prisma.AiAccountExhaustionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AiAccountExhaustionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.AiAccountExhaustionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AiAccountExhaustionCountAggregateOutputType> | number
         }
       }
     }
@@ -4593,6 +4743,40 @@ export const AutomationEventScalarFieldEnum = {
 export type AutomationEventScalarFieldEnum = (typeof AutomationEventScalarFieldEnum)[keyof typeof AutomationEventScalarFieldEnum]
 
 
+export const AutomationRunScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  role: 'role',
+  status: 'status',
+  waitingReason: 'waitingReason',
+  tabId: 'tabId',
+  machineId: 'machineId',
+  accountId: 'accountId',
+  branch: 'branch',
+  worktreePath: 'worktreePath',
+  resumeCount: 'resumeCount',
+  fixCount: 'fixCount',
+  claimedBy: 'claimedBy',
+  heartbeatAt: 'heartbeatAt',
+  startedAt: 'startedAt',
+  endedAt: 'endedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type AutomationRunScalarFieldEnum = (typeof AutomationRunScalarFieldEnum)[keyof typeof AutomationRunScalarFieldEnum]
+
+
+export const AiAccountExhaustionScalarFieldEnum = {
+  accountId: 'accountId',
+  until: 'until',
+  reason: 'reason',
+  createdAt: 'createdAt'
+} as const
+
+export type AiAccountExhaustionScalarFieldEnum = (typeof AiAccountExhaustionScalarFieldEnum)[keyof typeof AiAccountExhaustionScalarFieldEnum]
+
+
 export const NoteScalarFieldEnum = {
   id: 'id',
   projectId: 'projectId',
@@ -5566,6 +5750,8 @@ export type GlobalOmitConfig = {
   task?: Prisma.TaskOmit
   taskPullRequest?: Prisma.TaskPullRequestOmit
   automationEvent?: Prisma.AutomationEventOmit
+  automationRun?: Prisma.AutomationRunOmit
+  aiAccountExhaustion?: Prisma.AiAccountExhaustionOmit
   note?: Prisma.NoteOmit
   integration?: Prisma.IntegrationOmit
   projectSetup?: Prisma.ProjectSetupOmit

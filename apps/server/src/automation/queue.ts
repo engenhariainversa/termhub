@@ -21,12 +21,14 @@ export interface QueueItem {
 export async function automationQueue(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<QueueItem[]> {
   const { project: row } = await ctx.scoped.project(projectId);
   const { repos } = ctx;
-  const [cards, columns, setup, links] = await Promise.all([
+  const [cards, columns, setup, links, runs] = await Promise.all([
     repos.tasks.listByProject(projectId),
     repos.taskColumns.list(projectId),
     repos.projectSetup.get(projectId),
     repos.projectMachines.listByProject(projectId),
+    repos.automationRuns.activeByProject(projectId),
   ]);
+  const running = new Set(runs.map((r) => r.task_id));
   const { automation, repo } = setup.data;
   const column = new Map(columns.map((c) => [c.id, c]));
   const tagged = cards.filter((c) => c.auto);
@@ -56,7 +58,7 @@ export async function automationQueue(ctx: ControlContext, projectId: string, lo
         description: c.description,
         subtask_count: c.subtask_counts.total,
         tab_alive: Boolean(tab),
-        active_run: false, // Task 11 adds the runs table
+        active_run: running.has(c.id),
       },
       project,
     });

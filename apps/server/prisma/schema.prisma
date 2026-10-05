@@ -263,6 +263,7 @@ model Project {
   pullRequests   TaskPullRequest[]
   standingGrants ChatStandingGrant[]
   automationEvents AutomationEvent[]
+  automationRuns   AutomationRun[]
 
   @@index([ownerId])
   @@map("projects")
@@ -506,6 +507,7 @@ model Task {
   column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
   pullRequests TaskPullRequest[]
   automationEvents AutomationEvent[]
+  automationRuns   AutomationRun[]
 
   @@unique([projectId, externalKey])
   @@unique([projectId, number])
@@ -567,6 +569,52 @@ model AutomationEvent {
 
   @@index([projectId, createdAt(sort: Desc)], map: "automation_events_project_created_idx")
   @@map("automation_events")
+}
+
+/// One automatic run on a card (agentic board, spec D11): who claimed it (`claimed_by`, the server
+/// instance — blue or green), what it is doing, and where (tab, machine, account, worktree).
+/// At most one active run per card, across both colours during a deploy: a partial unique index
+/// `CREATE UNIQUE INDEX automation_runs_one_active_per_task ON automation_runs (task_id) WHERE status IN
+/// ('queued', 'starting', 'running', 'waiting')` (see the migration). Prisma's schema language has no
+/// partial-index syntax and `prisma migrate diff` ignores partial indexes (see ChatConversation), so it
+/// is not declared here. Deleting the card nulls `task_id`; the sweep (`cancelOrphaned`) cancels those runs.
+model AutomationRun {
+  id            String    @id
+  projectId     String    @map("project_id")
+  taskId        String?   @map("task_id")
+  /// implementer | integrator | fixer
+  role          String
+  /// queued | starting | running | waiting | done | blocked | failed | cancelled
+  status        String
+  waitingReason String?   @map("waiting_reason")
+  tabId         String?   @map("tab_id")
+  machineId     String?   @map("machine_id")
+  accountId     String?   @map("account_id")
+  branch        String?
+  worktreePath  String?   @map("worktree_path")
+  resumeCount   Int       @default(0) @map("resume_count")
+  fixCount      Int       @default(0) @map("fix_count")
+  claimedBy     String    @map("claimed_by")
+  heartbeatAt   DateTime  @default(now()) @map("heartbeat_at") @db.Timestamptz
+  startedAt     DateTime? @map("started_at") @db.Timestamptz
+  endedAt       DateTime? @map("ended_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task          Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status], map: "automation_runs_project_status_idx")
+  @@map("automation_runs")
+}
+
+/// An AI account at its usage limit until `until` (agentic board, spec D21): the dispatcher skips it.
+model AiAccountExhaustion {
+  accountId String    @id @map("account_id")
+  until     DateTime  @db.Timestamptz
+  reason    String
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  account   AiAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("ai_account_exhaustions")
 }
 
 model Note {
@@ -637,6 +685,8 @@ model AiAccount {
   /// Conversations running on this account; deleting the account nulls the column.
   chatConversations ChatConversation[]
   tabs      Tab[]
+  /// Set while the account is at its usage limit (automatic work skips it).
+  exhaustion AiAccountExhaustion?
 
   @@index([machineId])
   @@map("ai_accounts")

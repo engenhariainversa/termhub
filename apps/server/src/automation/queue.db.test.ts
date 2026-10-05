@@ -101,4 +101,21 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automationQueue (Postgres
     expect(items.every((i) => i.reason === 'automation_off')).toBe(true);
     expect(await repos.automationEvents.listByProject(projectId, { limit: 10 })).toEqual([]);
   });
+  it('a card with an active run reads has_agent; a finished run frees it', async () => {
+    await setAutomation(true);
+    const { a1, b } = await twoColumns();
+    const run = (await repos.automationRuns.claim({ project_id: projectId, task_id: b.id, role: 'implementer', instance: 'blue' }))!;
+    const reasons = async () => new Map((await automationQueue(ctx(), projectId)).map((i) => [i.task_id, i.reason]));
+    expect((await reasons()).get(b.id)).toBe('has_agent');
+    expect((await reasons()).get(a1.id)).toBe('no_capable_machine');
+    await repos.automationRuns.update(run.id, { status: 'done', ended_at: new Date() });
+    expect((await reasons()).get(b.id)).toBe('no_capable_machine');
+  });
+
+  it('a project with automation off reads automation_off even with an active run', async () => {
+    await setAutomation(false);
+    const { b } = await twoColumns();
+    await repos.automationRuns.claim({ project_id: projectId, task_id: b.id, role: 'implementer', instance: 'blue' });
+    expect((await automationQueue(ctx(), projectId)).every((i) => i.reason === 'automation_off')).toBe(true);
+  });
 });

@@ -144,6 +144,22 @@ export type TaskPullRequest = Prisma.TaskPullRequestModel
  */
 export type AutomationEvent = Prisma.AutomationEventModel
 /**
+ * Model AutomationRun
+ * One automatic run on a card (agentic board, spec D11): who claimed it (`claimed_by`, the server
+ * instance — blue or green), what it is doing, and where (tab, machine, account, worktree).
+ * At most one active run per card, across both colours during a deploy: a partial unique index
+ * `CREATE UNIQUE INDEX automation_runs_one_active_per_task ON automation_runs (task_id) WHERE status IN
+ * ('queued', 'starting', 'running', 'waiting')` (see the migration). Prisma's schema language has no
+ * partial-index syntax and `prisma migrate diff` ignores partial indexes (see ChatConversation), so it
+ * is not declared here. Deleting the card nulls `task_id`; the sweep (`cancelOrphaned`) cancels those runs.
+ */
+export type AutomationRun = Prisma.AutomationRunModel
+/**
+ * Model AiAccountExhaustion
+ * An AI account at its usage limit until `until` (agentic board, spec D21): the dispatcher skips it.
+ */
+export type AiAccountExhaustion = Prisma.AiAccountExhaustionModel
+/**
  * Model Note
  * 
  */

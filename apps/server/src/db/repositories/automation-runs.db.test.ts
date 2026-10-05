@@ -1,0 +1,188 @@
+import { PrismaPg } from '@prisma/adapter-pg';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { PrismaClient } from '../../generated/prisma/client.js';
+import { newId } from '../../lib/ids.js';
+import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
+import { AutomationRunsRepository } from './automation-runs.js';
+
+const keyOf = (id: string) => 'R' + id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase();
+
+// Needs a migrated Postgres: TERMHUB_DB_TESTS=1 DATABASE_URL=…
+describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and account exhaustions (Postgres)', () => {
+  let db: PrismaClient;
+  let runs: AutomationRunsRepository;
+  let exhaustions: AiAccountExhaustionsRepository;
+  let userId: string;
+  let projectId: string;
+  let taskId: string;
+  let machineId: string;
+
+  beforeAll(() => {
+    db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+    runs = new AutomationRunsRepository(db);
+    exhaustions = new AiAccountExhaustionsRepository(db);
+  });
+
+  beforeEach(async () => {
+    userId = newId();
+    projectId = newId();
+    taskId = newId();
+    machineId = newId();
+    await db.user.create({ data: { id: userId, email: `${userId}@test.local`, name: 'u' } });
+    await db.project.create({ data: { id: projectId, ownerId: userId, key: keyOf(projectId), name: 'p' } });
+    await db.task.create({ data: { id: taskId, projectId, title: 't' } });
+    await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId: userId } });
+    return async () => {
+      await db.project.deleteMany({ where: { id: projectId } });
+      await db.machine.deleteMany({ where: { id: machineId } });
+      await db.user.delete({ where: { id: userId } });
+    };
+  });
+
+  afterAll(async () => {
+    await db?.$disconnect();
+  });
+
+  const claim = (instance: string, task = taskId) => runs.claim({ project_id: projectId, task_id: task, role: 'implementer', instance });
+
+  it('two concurrent claims on one card: exactly one wins, the other reads "already taken" (null)', async () => {
+    const results = await Promise.all([claim('blue'), claim('green')]);
+    const won = results.filter((r) => r !== null);
+    expect(won).toHaveLength(1);
+    expect(results.filter((r) => r === null)).toHaveLength(1);
+    expect(won[0]).toMatchObject({ task_id: taskId, project_id: projectId, role: 'implementer', status: 'queued', resume_count: 0, fix_count: 0 });
+    expect(await db.automationRun.count({ where: { taskId } })).toBe(1);
+  });
+
+  it('many concurrent claims across two colours still leave one active run', async () => {
+    const results = await Promise.all(Array.from({ length: 8 }, (_, i) => claim(i % 2 ? 'blue' : 'green')));
+    expect(results.filter((r) => r !== null)).toHaveLength(1);
+    expect(await runs.countActive(projectId)).toBe(1);
+  });
+
+  it('a finished run frees the card: a new claim succeeds', async () => {
+    const first = (await claim('blue'))!;
+    expect(await claim('blue')).toBeNull();
+    await runs.update(first.id, { status: 'done', ended_at: new Date() });
+    const second = await claim('green');
+    expect(second).not.toBeNull();
+    expect(second!.id).not.toBe(first.id);
+    expect(await db.automationRun.count({ where: { taskId } })).toBe(2);
+  });
+
+  it('runs on different cards do not collide', async () => {
+    const other = newId();
+    await db.task.create({ data: { id: other, projectId, title: 'other' } });
+    expect(await claim('blue')).not.toBeNull();
+    expect(await claim('blue', other)).not.toBeNull();
+    expect(await runs.countActive(projectId)).toBe(2);
+  });
+
+  it('update writes the patch; bump returns the new count', async () => {
+    const run = (await claim('blue'))!;
+    const started = new Date('2026-10-05T10:00:00Z');
+    await runs.update(run.id, { status: 'running', tab_id: 'tab-1', machine_id: machineId, account_id: 'acc-1', branch: 'auto/ter-1', worktree_path: '/w/ter-1', started_at: started });
+    expect(await runs.bump(run.id, 'resume_count')).toBe(1);
+    expect(await runs.bump(run.id, 'resume_count')).toBe(2);
+    expect(await runs.bump(run.id, 'fix_count')).toBe(1);
+    const active = await runs.activeByTab('tab-1');
+    expect(active).toMatchObject({ id: run.id, status: 'running', machine_id: machineId, account_id: 'acc-1', branch: 'auto/ter-1', worktree_path: '/w/ter-1', resume_count: 2, fix_count: 1 });
+    expect(active!.started_at?.toISOString()).toBe(started.toISOString());
+    await runs.update(run.id, { status: 'waiting', waiting_reason: 'question' });
+    expect((await runs.activeByProject(projectId)).map((r) => [r.id, r.waiting_reason])).toEqual([[run.id, 'question']]);
+    await runs.update(run.id, { status: 'blocked' });
+    expect(await runs.activeByTab('tab-1')).toBeNull();
+    expect(await runs.activeByProject(projectId)).toEqual([]);
+    expect(await runs.countActive(projectId)).toBe(0);
+  });
+
+  it('heartbeat refreshes only the active runs of its instance', async () => {
+    const other = newId();
+    await db.task.create({ data: { id: other, projectId, title: 'other' } });
+    const mine = (await claim('blue'))!;
+    const theirs = (await claim('green', other))!;
+    const old = new Date(Date.now() - 10 * 60_000);
+    await db.automationRun.updateMany({ where: { id: { in: [mine.id, theirs.id] } }, data: { heartbeatAt: old } });
+    await runs.heartbeat('blue');
+    const rows = await db.automationRun.findMany({ where: { projectId } });
+    expect(rows.find((r) => r.id === mine.id)!.heartbeatAt.getTime()).toBeGreaterThan(old.getTime());
+    expect(rows.find((r) => r.id === theirs.id)!.heartbeatAt.getTime()).toBe(old.getTime());
+  });
+
+  it('takeOver moves stale runs to the new instance once, even when two instances race', async () => {
+    const tasks = [taskId, newId(), newId()];
+    for (const t of tasks.slice(1)) await db.task.create({ data: { id: t, projectId, title: t } });
+    const stale = (await claim('blue', tasks[0]))!;
+    const stale2 = (await claim('blue', tasks[1]))!;
+    const fresh = (await claim('blue', tasks[2]))!;
+    const old = new Date(Date.now() - 10 * 60_000);
+    await db.automationRun.updateMany({ where: { id: { in: [stale.id, stale2.id] } }, data: { heartbeatAt: old } });
+    const finished = (await db.automationRun.create({
+      data: { id: newId(), projectId, taskId: tasks[2], role: 'implementer', status: 'done', claimedBy: 'blue', heartbeatAt: old },
+    }));
+
+    const staleBefore = new Date(Date.now() - 60_000);
+    const [a, b] = await Promise.all([runs.takeOver('green', staleBefore), runs.takeOver('red', staleBefore)]);
+    const ids = [...a, ...b].map((r) => r.id);
+    expect(ids.sort()).toEqual([stale.id, stale2.id].sort()); // no duplicate, no fresh or finished run
+    for (const r of [...a.map((x) => ({ ...x, by: 'green' })), ...b.map((x) => ({ ...x, by: 'red' }))]) {
+      expect(r.claimed_by).toBe(r.by);
+      expect(r.heartbeat_at.getTime()).toBeGreaterThan(staleBefore.getTime());
+    }
+    expect(await runs.takeOver('green', staleBefore)).toEqual([]); // taken over already: fresh heartbeat
+    const untouched = await db.automationRun.findMany({ where: { id: { in: [fresh.id, finished.id] } } });
+    expect(untouched.every((r) => r.claimedBy === 'blue')).toBe(true);
+  });
+
+  it('a deleted card keeps its runs with task_id null; the sweep cancels the active ones and returns their worktrees', async () => {
+    const run = (await claim('blue'))!;
+    await runs.update(run.id, { status: 'running', machine_id: machineId, worktree_path: '/w/ter-1' });
+    const done = await db.automationRun.create({ data: { id: newId(), projectId, taskId, role: 'implementer', status: 'done', claimedBy: 'blue' } });
+    await db.task.delete({ where: { id: taskId } });
+
+    const swept = await runs.cancelOrphaned();
+    expect(swept.filter((s) => s.id === run.id || s.id === done.id)).toEqual([{ id: run.id, project_id: projectId, machine_id: machineId, worktree_path: '/w/ter-1' }]);
+    const rows = await db.automationRun.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' } });
+    expect(rows.map((r) => [r.id, r.taskId, r.status])).toEqual([
+      [run.id, null, 'cancelled'],
+      [done.id, null, 'done'],
+    ]);
+    expect(rows[0]!.endedAt).not.toBeNull();
+    expect((await runs.cancelOrphaned()).some((s) => s.id === run.id)).toBe(false);
+  });
+
+  it('runs go with their project', async () => {
+    await claim('blue');
+    await db.project.delete({ where: { id: projectId } });
+    expect(await db.automationRun.count({ where: { projectId } })).toBe(0);
+  });
+
+  describe('ai account exhaustions', () => {
+    const account = async () => (await db.aiAccount.create({ data: { id: newId(), provider: 'claude', label: 'a', machineId } })).id;
+
+    it('activeIds ignores expired rows; clearExpired deletes and returns them', async () => {
+      const [live, expired] = [await account(), await account()];
+      const now = new Date('2026-10-05T12:00:00Z');
+      await exhaustions.mark(live, new Date('2026-10-05T15:00:00Z'), 'usage_limit');
+      await exhaustions.mark(expired, new Date('2026-10-05T11:00:00Z'), 'usage_limit');
+      const active = await exhaustions.activeIds(now);
+      expect(active.has(live)).toBe(true);
+      expect(active.has(expired)).toBe(false);
+      expect((await exhaustions.clearExpired(now)).filter((id) => id === live || id === expired)).toEqual([expired]);
+      expect(await db.aiAccountExhaustion.findUnique({ where: { accountId: expired } })).toBeNull();
+      expect(await db.aiAccountExhaustion.findUnique({ where: { accountId: live } })).not.toBeNull();
+    });
+
+    it('mark again moves the deadline (one row per account); the row goes with the account', async () => {
+      const id = await account();
+      const now = new Date('2026-10-05T12:00:00Z');
+      await exhaustions.mark(id, new Date('2026-10-05T11:00:00Z'), 'usage_limit');
+      expect((await exhaustions.activeIds(now)).has(id)).toBe(false);
+      await exhaustions.mark(id, new Date('2026-10-05T18:00:00Z'), 'weekly_limit');
+      expect((await exhaustions.activeIds(now)).has(id)).toBe(true);
+      expect(await db.aiAccountExhaustion.findUnique({ where: { accountId: id } })).toMatchObject({ reason: 'weekly_limit' });
+      await db.aiAccount.delete({ where: { id } });
+      expect(await db.aiAccountExhaustion.count({ where: { accountId: id } })).toBe(0);
+    });
+  });
+});

@@ -45,6 +45,8 @@ import { TaskPullRequestsRepository } from './task-pull-requests.js';
 import { AccountDeletionRepository } from './account-deletion.js';
 import { AutomationPausesRepository } from './automation-pauses.js';
 import { AutomationEventsRepository } from './automation-events.js';
+import { AutomationRunsRepository } from './automation-runs.js';
+import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -93,6 +95,8 @@ export interface Repositories {
   accountDeletion: AccountDeletionRepository;
   automationPauses: AutomationPausesRepository;
   automationEvents: AutomationEventsRepository;
+  automationRuns: AutomationRunsRepository;
+  aiAccountExhaustions: AiAccountExhaustionsRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
 }
@@ -145,6 +149,8 @@ export function createRepositories(db: PrismaClient): Repositories {
     accountDeletion: new AccountDeletionRepository(db),
     automationPauses: new AutomationPausesRepository(db),
     automationEvents: new AutomationEventsRepository(db),
+    automationRuns: new AutomationRunsRepository(db),
+    aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
 }
