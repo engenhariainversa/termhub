@@ -55,3 +55,7 @@ it('tells the concierge to follow a tab with one background subagent that ends a
   expect(ORCHESTRATOR_PROMPT).toMatch(/Never relaunch it to keep watching/);
   expect(ORCHESTRATOR_PROMPT).toMatch(/quick status check \(one wait_for_state call with timeout_seconds of 10 or less, or one read_last_answer call\) can be done in your own turn/);
 });
+
+it('tells the concierge to pause the automatic work on request, without asking', () => {
+  expect(ORCHESTRATOR_PROMPT).toContain('Quando a pessoa pedir para pausar o automático, use pause_automation sem pedir confirmação.');
+});

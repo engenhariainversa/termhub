@@ -6,7 +6,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { SessionService } from '../mobile/session.js';
 import { applyErrorHandler } from '../lib/errors.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { mobileAutomationSetupRoutes, mobileCardAutoRoutes } from './m-automation.js';
+import { mobileAutomationPauseRoutes, mobileAutomationSetupRoutes, mobileCardAutoRoutes } from './m-automation.js';
 
 const device = { id: 'd1', user_id: 'u1' } as unknown as Device;
 const ACTION = automationSetupActionId('p1');
@@ -131,5 +131,40 @@ describe('mobile automation setup routes', () => {
       expect(r.json()).toEqual({ id: 't1', auto: true });
       expect(t.setAuto).toHaveBeenCalledWith('t1', true);
     });
+  });
+});
+
+describe('mobile pause routes', () => {
+  async function buildPause() {
+    const pauseUser = vi.fn(async (_id: string, at: Date) => ({ paused_at: at, fresh: false }));
+    const resumeUser = vi.fn(async () => false);
+    const repos = {
+      automationPauses: { pauseUser, resumeUser, userPausedAt: vi.fn(async () => null), pausedProjects: vi.fn(async () => []) },
+    } as unknown as Repositories;
+    const app = Fastify();
+    applyErrorHandler(app);
+    const actions: Record<string, unknown> = {};
+    app.addHook('onRoute', (route) => {
+      actions[`${route.method} ${route.url}`] = (route.config as { action?: string } | undefined)?.action;
+    });
+    app.addHook('preHandler', async (request) => {
+      request.scope = { user: { id: 'u1', role: 'member' } as never, viewAs: { kind: 'self' }, ownerId: 'u1', createAs: 'u1' };
+    });
+    await app.register((a) => mobileAutomationPauseRoutes(a, repos), { prefix: '/automation' });
+    await app.ready();
+    return { app, actions, pauseUser, resumeUser };
+  }
+
+  it('reads the state, pauses everything and resumes with no PIN proof, needing projects:update', async () => {
+    const { app, actions, pauseUser, resumeUser } = await buildPause();
+    expect(actions['POST /automation/pause']).toBe('update');
+    expect(actions['POST /automation/resume']).toBe('update');
+    expect((await app.inject({ method: 'GET', url: '/automation/state' })).json()).toEqual({ paused_at: null, projects: [] });
+    const paused = await app.inject({ method: 'POST', url: '/automation/pause', payload: { scope: 'all' } });
+    expect(paused.statusCode).toBe(200);
+    expect(pauseUser).toHaveBeenCalledWith('u1', expect.any(Date));
+    expect((await app.inject({ method: 'POST', url: '/automation/resume', payload: { scope: 'all' } })).statusCode).toBe(204);
+    expect(resumeUser).toHaveBeenCalledWith('u1');
+    await app.close();
   });
 });

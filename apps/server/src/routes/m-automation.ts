@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { automationNeedsConfirm, automationSetupActionId, automationSetupBody, cardAutoBody } from '@termhub/mobile-api';
+import { automationNeedsConfirm, automationSetupActionId, automationSetupBody, cardAutoBody, pauseBody, resumeBody } from '@termhub/mobile-api';
+import { automationPauseState, pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { scoped } from '../auth/scope.js';
+import { controlContextForRequest } from '../control/context.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import type { SessionService } from '../mobile/session.js';
@@ -52,5 +54,22 @@ export async function mobileCardAutoRoutes(app: FastifyInstance, repos: Reposito
     const task = await repos.tasks.findById(id);
     if (!task) throw notFound('Task não encontrada');
     return { id: task.id, auto: task.auto };
+  });
+}
+
+/**
+ * The pause switch on the phone, mounted at `/automation` of the mobile API (resource `projects`): the
+ * same state and the same two actions as the web's. No PIN: pausing only stops work, and resuming is
+ * confirmed in the app, not signed.
+ */
+export async function mobileAutomationPauseRoutes(app: FastifyInstance, repos: Repositories) {
+  app.get('/state', async (request) => automationPauseState(controlContextForRequest(repos, request)));
+  app.post('/pause', { config: { action: 'update' } }, async (request) => {
+    const body = pauseBody.parse(request.body);
+    return pauseAutomation(controlContextForRequest(repos, request), body);
+  });
+  app.post('/resume', { config: { action: 'update' } }, async (request, reply) => {
+    await resumeAutomation(controlContextForRequest(repos, request), resumeBody.parse(request.body));
+    return reply.code(204).send();
   });
 }

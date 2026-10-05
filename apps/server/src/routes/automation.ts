@@ -5,7 +5,7 @@ import { AUTOMATION_EVENTS_PAGE_MAX } from '../db/repositories/index.js';
 import { controlContextForRequest } from '../control/context.js';
 import { automationQueue } from '../automation/queue.js';
 import { listAutomationEvents } from '../automation/events.js';
-import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
+import { automationPauseState, pauseAutomation, resumeAutomation } from '../automation/pause.js';
 
 const id = z.string().min(1).max(64);
 const idParam = z.object({ id });
@@ -39,6 +39,7 @@ const resumeBody = z.object({ scope });
 
 /** Mounted on /automation (resource `projects`, action `update`): the pause switch. */
 export async function automationPauseRoutes(app: FastifyInstance, repos: Repositories) {
+  app.get('/state', async (request) => automationPauseState(controlContextForRequest(repos, request)));
   app.post('/pause', { config: { action: 'update' } }, async (request) => {
     return pauseAutomation(controlContextForRequest(repos, request), pauseBody.parse(request.body));
   });

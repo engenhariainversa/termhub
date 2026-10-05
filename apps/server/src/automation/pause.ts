@@ -57,3 +57,15 @@ export async function resumeAutomation(ctx: ControlContext, i: { scope: PauseSco
   const { project } = await ctx.scoped.project(i.scope);
   if (await repos.automationPauses.resumeProject(project.id)) await recordEvent(repos, { project_id: project.id, kind: 'resumed', payload: { scope: 'project' } });
 }
+
+/** What the pause switch shows to a client: the person's "Pausar tudo" and the projects paused on their own. */
+export interface AutomationPauseView {
+  paused_at: string | null;
+  projects: Array<{ id: string; paused_at: string }>;
+}
+
+export async function automationPauseState(ctx: ControlContext): Promise<AutomationPauseView> {
+  const { repos } = ctx;
+  const [user, projects] = await Promise.all([repos.automationPauses.userPausedAt(ctx.scope.createAs), repos.automationPauses.pausedProjects(ctx.scope.ownerId)]);
+  return { paused_at: user ? user.toISOString() : null, projects: projects.map((p) => ({ id: p.id, paused_at: p.paused_at.toISOString() })) };
+}
