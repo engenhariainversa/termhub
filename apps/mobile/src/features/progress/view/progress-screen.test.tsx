@@ -11,6 +11,7 @@ jest.mock('expo-router', () => ({
 }));
 
 import { useProgressStore } from '@/features/progress/viewmodel/useProgressStore';
+import { setLocale } from '@/i18n';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { ProgressScreen } from './progress-screen';
 
@@ -28,6 +29,17 @@ afterEach(() => {
 });
 
 describe('Progresso', () => {
+  it('in English: the agents waiting and the estimate', async () => {
+    setLocale('en');
+    try {
+      await render(<ProgressScreen />);
+      expect(await screen.findByText('Visão gerencial', {}, LOAD)).toBeTruthy();
+      expect(screen.getByText('1 agent waiting for you')).toBeTruthy();
+    } finally {
+      await act(async () => setLocale(null));
+    }
+  });
+
   it('loads on focus and shows the epic, its percent and who waits for the user', async () => {
     const load = jest.spyOn(stores.api, 'progress');
     await render(<ProgressScreen />);

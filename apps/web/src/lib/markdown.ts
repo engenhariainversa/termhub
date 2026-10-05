@@ -1,3 +1,4 @@
+import { i18n } from '../i18n';
 import { Marked, marked } from 'marked';
 import DOMPurify from 'dompurify';
 
@@ -60,7 +61,7 @@ const fileMarked = new Marked({
   breaks: false,
   renderer: {
     image({ href, text }) {
-      const label = `imagem: ${text || href}`;
+      const label = i18n.t('imagem: {{name}}', { name: text || href });
       const a = document.createElement('a');
       a.setAttribute('href', href);
       a.textContent = label;

@@ -1,3 +1,4 @@
+import { setLocale } from '@/i18n';
 import { dirOf, fileLinkTarget, refusalText } from './refusals';
 
 describe('file preview model', () => {
@@ -12,5 +13,15 @@ describe('file preview model', () => {
     expect(fileLinkTarget('/tmp/a.md', 'docs')).toEqual({ kind: 'file', path: '/tmp/a.md' });
     expect(fileLinkTarget('https://termhub.dev', 'docs')).toEqual({ kind: 'web', url: 'https://termhub.dev' });
     for (const href of ['javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,x', '//evil/a.md', '#t', './foto.png']) expect(fileLinkTarget(href, 'docs')).toBeNull();
+  });
+});
+
+describe('in English', () => {
+  afterEach(() => setLocale(null));
+
+  it('says each refusal in English, and something generic for an unknown one', () => {
+    setLocale('en');
+    expect(refusalText('too_large')).toBe('The file is over 512 KB, the preview limit.');
+    expect(refusalText('nova_razao')).toBe('Could not open this file.');
   });
 });

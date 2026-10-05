@@ -1,3 +1,4 @@
+import { i18n } from '../i18n';
 /**
  * Browser-side safety net for dictation: every second of audio the recorder produces is written to
  * IndexedDB, so a page refresh (or a crashed tab) mid-recording or mid-transcription does not lose
@@ -33,7 +34,7 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 function open(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') return reject(new Error('IndexedDB indisponível'));
+    if (typeof indexedDB === 'undefined') return reject(new Error(i18n.t('IndexedDB indisponível')));
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -41,8 +42,8 @@ function open(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(CHUNKS)) db.createObjectStore(CHUNKS, { keyPath: ['tabId', 'seq'] });
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB falhou'));
-    req.onblocked = () => reject(new Error('IndexedDB bloqueado'));
+    req.onerror = () => reject(req.error ?? new Error(i18n.t('IndexedDB falhou')));
+    req.onblocked = () => reject(new Error(i18n.t('IndexedDB bloqueado')));
   });
   dbPromise.catch(() => (dbPromise = null));
   return dbPromise;
@@ -51,15 +52,15 @@ function open(): Promise<IDBDatabase> {
 function done(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error('IndexedDB falhou'));
-    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB abortou'));
+    tx.onerror = () => reject(tx.error ?? new Error(i18n.t('IndexedDB falhou')));
+    tx.onabort = () => reject(tx.error ?? new Error(i18n.t('IndexedDB abortou')));
   });
 }
 
 function result<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB falhou'));
+    req.onerror = () => reject(req.error ?? new Error(i18n.t('IndexedDB falhou')));
   });
 }
 

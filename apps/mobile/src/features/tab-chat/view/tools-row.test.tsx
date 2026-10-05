@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { setLocale } from '@/i18n';
 import type { ToolRow } from '../model/timeline';
 import { ToolsRow } from './tools-row';
 
@@ -34,4 +35,20 @@ it('one tool alone shows its name and summary, with no count', async () => {
   expect(screen.queryByText(/ferramenta/)).toBeNull();
   await fireEvent.press(screen.getByLabelText('Bash: concluída'));
   expect(screen.getByText('842 passed')).toBeTruthy();
+});
+
+describe('in English', () => {
+  afterEach(async () => {
+    await act(async () => setLocale(null));
+  });
+
+  it('counts the tools and names their status in English', async () => {
+    setLocale('en');
+    await render(<ToolsRow tools={tools} />);
+    expect(screen.getByText('3 tools')).toBeTruthy();
+    expect(screen.getByText('in progress')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('3 tools'));
+    expect(screen.getByLabelText('Bash: done')).toBeTruthy();
+    expect(screen.getByLabelText('Read: error')).toBeTruthy();
+  });
 });

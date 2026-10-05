@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, Switch, Text, TextInput, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import type { TProjectAiOption } from '@/services/api/contract';
 import { AppText, Banner, Button, Screen } from '@/ui';
 import {
@@ -48,26 +49,27 @@ function Choice({ label, selected, onPress }: { label: string; selected: boolean
 }
 
 function ModelChoice({ provider, model, onChange }: { provider: Provider; model: ModelDraft; onChange(patch: Partial<ModelDraft>): void }) {
+  const { t } = useTranslation();
   const name = PROVIDER_LABEL[provider];
   const error = modelError(model);
   const warning = modelWarning(provider, model);
   return (
     <View className="gap-2">
-      <AppText variant="label">{`Modelo do ${name}`}</AppText>
+      <AppText variant="label">{t('Modelo do {{name}}', { name })}</AppText>
       <View accessibilityRole="radiogroup" className="flex-row flex-wrap gap-2">
-        <Choice label="Padrão do CLI" selected={model.choice === 'default'} onPress={() => onChange({ choice: 'default' })} />
+        <Choice label={t('Padrão do CLI')} selected={model.choice === 'default'} onPress={() => onChange({ choice: 'default' })} />
         {provider === 'claude' ? CLAUDE_ALIASES.map((alias) => <Choice key={alias} label={alias} selected={model.choice === alias} onPress={() => onChange({ choice: alias })} />) : null}
-        <Choice label="Outro id…" selected={model.choice === 'other'} onPress={() => onChange({ choice: 'other' })} />
+        <Choice label={t('Outro id…')} selected={model.choice === 'other'} onPress={() => onChange({ choice: 'other' })} />
       </View>
       {model.choice === 'other' ? (
         <TextInput
-          accessibilityLabel={`Id do modelo do ${name}`}
+          accessibilityLabel={t('Id do modelo do {{name}}', { name })}
           value={model.other}
           onChangeText={(other) => onChange({ other })}
           autoCapitalize="none"
           autoCorrect={false}
           maxLength={100}
-          placeholder="id do modelo"
+          placeholder={t('id do modelo')}
           className={INPUT}
         />
       ) : null}
@@ -81,6 +83,7 @@ function ModelChoice({ provider, model, onChange }: { provider: Provider; model:
  * host sheet: the project's accounts in priority order (Subir / Descer / Remover, no drag and drop), the
  * other accounts its machines offer, and the model per provider. */
 export function ProjectAiView({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { saved, draft, loadError, saving, saveError, notice, canSave, load, edit, save } = useProjectAi(projectId, projectAiDeps);
 
@@ -100,18 +103,18 @@ export function ProjectAiView({ projectId }: { projectId: string }) {
     <Screen scroll>
       <View className="gap-6 pb-10">
         <View className="flex-row items-center gap-2">
-          <Button label="Voltar" variant="ghost" onPress={() => router.back()} />
+          <Button label={t('Voltar')} variant="ghost" onPress={() => router.back()} />
           <AppText variant="title" className="flex-1">
             {PROJECT_AI_MSG.title}
           </AppText>
         </View>
         {loadError ? <Banner tone="danger" text={loadError} /> : null}
         {saved === null || draft === null ? (
-          loadError ? <Button label="Tentar de novo" variant="secondary" onPress={() => void load()} /> : <ActivityIndicator />
+          loadError ? <Button label={t('Tentar de novo')} variant="secondary" onPress={() => void load()} /> : <ActivityIndicator />
         ) : (
           <>
             <View className="gap-2">
-              <AppText variant="label">Contas do projeto</AppText>
+              <AppText variant="label">{t('Contas do projeto')}</AppText>
               {included.length === 0 ? (
                 <AppText variant="muted">{PROJECT_AI_MSG.empty}</AppText>
               ) : (
@@ -119,9 +122,9 @@ export function ProjectAiView({ projectId }: { projectId: string }) {
                   <View key={o.id} className="gap-2 rounded-xl border border-app-border bg-app-surface2 px-3 py-2">
                     <AppText>{`${i + 1}. ${accountLabel(o)}`}</AppText>
                     <View className="flex-row flex-wrap gap-2">
-                      <RowAction label="Subir" name={o.label} disabled={i === 0} onPress={() => edit((d) => moveAccount(d, o.id, -1))} />
-                      <RowAction label="Descer" name={o.label} disabled={i === included.length - 1} onPress={() => edit((d) => moveAccount(d, o.id, 1))} />
-                      <RowAction label="Remover" name={o.label} onPress={() => edit((d) => removeAccount(d, o.id))} />
+                      <RowAction label={t('Subir')} name={o.label} disabled={i === 0} onPress={() => edit((d) => moveAccount(d, o.id, -1))} />
+                      <RowAction label={t('Descer')} name={o.label} disabled={i === included.length - 1} onPress={() => edit((d) => moveAccount(d, o.id, 1))} />
+                      <RowAction label={t('Remover')} name={o.label} onPress={() => edit((d) => removeAccount(d, o.id))} />
                     </View>
                   </View>
                 ))
@@ -129,11 +132,11 @@ export function ProjectAiView({ projectId }: { projectId: string }) {
             </View>
             {others.length > 0 ? (
               <View className="gap-2">
-                <AppText variant="label">Outras contas das máquinas do projeto</AppText>
+                <AppText variant="label">{t('Outras contas das máquinas do projeto')}</AppText>
                 {others.map((o: TProjectAiOption) => (
                   <View key={o.id} className="flex-row items-center justify-between gap-2 rounded-xl border border-app-border px-3 py-2">
                     <AppText className="flex-1">{accountLabel(o)}</AppText>
-                    <Switch accessibilityLabel={`Incluir ${o.label}`} value={false} onValueChange={(on) => (on ? edit((d) => addAccount(d, o.id)) : undefined)} />
+                    <Switch accessibilityLabel={t('Incluir {{name}}', { name: o.label })} value={false} onValueChange={(on) => (on ? edit((d) => addAccount(d, o.id)) : undefined)} />
                   </View>
                 ))}
               </View>
@@ -143,7 +146,7 @@ export function ProjectAiView({ projectId }: { projectId: string }) {
             ))}
             {saveError ? <Banner tone="danger" text={saveError} /> : null}
             {notice ? <AppText variant="muted">{notice}</AppText> : null}
-            <Button label="Salvar" onPress={() => void save()} disabled={!canSave} loading={saving} />
+            <Button label={t('Salvar')} onPress={() => void save()} disabled={!canSave} loading={saving} />
           </>
         )}
       </View>

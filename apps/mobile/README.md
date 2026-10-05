@@ -45,6 +45,8 @@ src/services/
 
 src/ui/       Screen, Text, Button, Field, PinInput, Sheet, Card, Banner… (NativeWind v4)
 src/theme/tokens.ts  the termhub palette (CSS variables), both colour schemes
+src/i18n/     i18next setup, the language choice, date/number helpers (see "Languages")
+src/locales/  the English catalogs (and pt-BR plural forms), one JSON file per area
 test/         jest setup, fakes for MMKV/SecureStore/expo-device/expo-local-authentication/expo-notifications/the
               hardware key module, and shared test helpers (`test/helpers/enrolled-session.ts`,
               `test/helpers/ui-stores.ts`)
@@ -176,7 +178,10 @@ sent). In mock mode, `~/relatorio-termhub-10-dias.md`, `notas.txt`, `~/.ssh/nota
 - **Registration.** At every session start (activation or unlock, never a silent renewal), and right after the primer gets a grant, the session store asks for the phone's Expo push token and sends it, fire-and-forget. The token is read only once the permission is granted: the OS prompt comes from the notification primer (after the first message the server accepts, or on the Notificações tab) or from Ajustes, never from a session start. A simulator, a permission not granted or a build without `extra.eas.projectId` has no token, and nothing is sent. Mock mode keeps sending the fake `ExponentPushToken[mock-…]`.
 - **Tokens are per EAS project.** `getExpoPushTokenAsync` needs `extra.eas.projectId` (`app.json`, project `0614ffa1-…` of the `engenharia-inversa` Expo account). If that id changes, every phone's token changes with it.
 - **Taps.** `app/_layout.tsx` opens `data.conversation_id` the same way as a `termhub://chat/<id>` deep link, straight away when unlocked or after the PIN otherwise; a cold start from a tap works the same way. A `device_request` push names no conversation and just opens the app. Every push also carries `data.notification_id`, its row in the Notificações history: the tap marks that row read (`markPushRead`, once unlocked).
+- **"Aba terminou" (TER-925, opt-in).** Ajustes → Notificações → "Avisar quando uma aba terminar" (per account, off by default, `GET`/`PUT push-settings`): the server pushes when a project tab that was working ends its turn or its agent, unless a question card is open on it, at most once per tab every 5 minutes. Its `data.tab_id` makes the tap open that tab's session screen (`/session/<id>`); older app versions open the project's chat instead.
 - **In the foreground** a push is still shown as a banner: the server only skips phones with a live chat socket, so one that arrives while the app is open is about something the screen may not be showing.
+
+- **Test push (TER-913).** Ajustes → Notificações → "Enviar notificação de teste" (only once notifications are granted) asks the server for a sample `confirmation` push to this phone in 10 s, time to close the app. The web's Aparelhos page does the same for any of your active phones, with a choice of kind and delay. A test push carries "[Teste]" in its title and `data.test: true`, ignores the live-socket rule, opens your latest conversation on tap and never enters the Notificações history. About 15 s after the send, the server reads Expo's receipt and records the outcome in the device's trail (Aparelhos → Atividade): "entregue à Apple/Google" or the error code (e.g. `InvalidCredentials` = the APNs/FCM key below is missing or wrong). Ajustes → Versão also shows the running bundle (`OTA: <update id>` or `OTA: binário`), for test notes.
 
 Delivery to real phones needs credentials on the Expo project, set once with `eas credentials` (or expo.dev → the project → Credentials), logged in to `engenharia-inversa` (see the root `CLAUDE.md`, "Mobile (EAS)"): an **APNs key** for `dev.termhub.app` (iOS) and a **FCM V1 service account key** of the Firebase project `apptermhub` (Android). If the Expo account enables enhanced push security, the server's `EXPO_PUSH_ACCESS_TOKEN` must be an access token of that same account.
 
@@ -223,9 +228,21 @@ The build is universal (`ios.supportsTablet: true`): the iPhone stays in portrai
 
 An `ios/` folder generated before this change stays iPhone-only (prebuild does not rewrite it): after pulling, re-run `npx expo prebuild --clean` before building (e.g. `npm run ios`); `npm run release:ios` already prebuilds with `--clean`, so a TestFlight build picks it up by itself.
 
+## Languages (i18n)
+
+The app speaks pt-BR (the source language and the fallback) and English (spec `docs/superpowers/specs/2026-10-04-i18n-english-design.md`). `src/i18n` sets up `i18next` + `react-i18next` (plain JS, so a language change ships over OTA):
+
+- **The pt-BR text is the key.** Views call `const { t } = useTranslation()` and write `t('Salvar')`; models, viewmodels and services import `t` from `@/i18n` and call it when the text is built. English lives in `src/locales/en/<area>.json`, one file per area of the source tree, merged in `src/i18n/resources.ts`; `src/locales/pt-BR/` holds only plural forms (`t('{{count}} abas', { count })` needs `_one`/`_other` in both languages). A label kept in a table is marked with `tk('…')` and translated where it is shown.
+- **Which language:** Ajustes → Idioma (Automático / Português (Brasil) / English), kept in MMKV on this device (it survives "Sair e remover este aparelho"); automatic follows the phone's language from `Intl` (no `expo-localization`, which is native): `pt*` → pt-BR, `en*` → English, anything else → pt-BR. Hermes has no `Intl.PluralRules`, so `src/i18n/plural-rules.ts` installs the CLDR rules of both languages.
+- **The server answers in the same language:** every HTTP call and socket upgrade sends `Accept-Language`, so API errors arrive translated; the app never re-translates server text.
+- **Dates and numbers** go through `src/i18n/format.ts` (`formatDate`, `formatTime`, …); no locale literal in `toLocale*`/`Intl`.
+- **`npm run i18n:check -w @termhub/mobile`** (also a jest test) fails on a key with no English entry, placeholders that differ, an unused entry, and — in the folders listed in `GUARDED` (all of `app/` and `src/`) — JSX text, text attributes (`title`, `label`, `placeholder`, `accessibilityLabel`…) or `Alert.alert` text outside `t()`. `// i18n-ignore` skips a line.
+- **Tests run in pt-BR** (`TERMHUB_TEST_LOCALE` in the jest setup), so they query the Portuguese text; a test that needs English calls `setLocale('en')` and `setLocale(null)` afterwards.
+- The native permission texts in `app.json` (camera, microphone, Face ID…) stay pt-BR: translating them needs native localisation files and a new store build.
+
 ## Conventions
 
-- Code, comments and commits in English; every string a person sees in pt-BR.
+- Code, comments and commits in English; every string a person sees goes through `t()` with the pt-BR text as key, and its English entry is added in the same change.
 - Bundle / package id `dev.termhub.app`, URL scheme `termhub`.
 - Pure logic (`model/`) and viewmodels must not import React Native or `expo-router`: the `logic` jest project runs them in plain Node and fails otherwise.
 - The monorepo pins a single React version (root `package.json` `overrides`); Expo SDK upgrades bump it for every workspace.

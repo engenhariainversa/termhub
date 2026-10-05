@@ -78,6 +78,8 @@ model User {
   chatAutodecide     Boolean            @default(false) @map("chat_autodecide")
   /// "Responder perguntas do Codex pelo chat": off by default, the Codex reply card opens only for users who opt in.
   chatCodexReplies   Boolean            @default(false) @map("chat_codex_replies")
+  /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
+  pushTabFinished    Boolean            @default(false) @map("push_tab_finished")
   memoryItems        MemoryItem[]
   verifiedMemoryItems MemoryItem[] @relation("MemoryItemVerifier")
   standingGrants     ChatStandingGrant[]
@@ -90,6 +92,8 @@ model User {
   automationPausedAt  DateTime? @map("automation_paused_at") @db.Timestamptz
   /// IANA time zone (e.g. America/Sao_Paulo) for the automation's daily summary hour. Null = the server's.
   timeZone            String?   @map("time_zone")
+  /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
+  locale              String?
 
   @@index([roleId])
   @@index([deletionScheduledAt])
@@ -1296,6 +1300,7 @@ model Device {
   requestId      String?   @unique @map("request_id")
   request        DeviceRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
   createdAt      DateTime  @default(now()) @map("created_at")
+  pushTickets    PushTicket[]
   tokens         DeviceToken[]
   challenges     DeviceChallenge[]
 
@@ -1349,6 +1354,25 @@ model DeviceEvent {
   @@index([userId, createdAt])
   @@index([createdAt])
   @@map("device_events")
+}
+
+/// One Expo push ticket waiting for its receipt (TER-924): APNs/FCM answers come later, through
+/// `getReceipts`. The sweeper reads them ~15 min after the send and deletes the row; Expo keeps a
+/// receipt 24 h, so an older row is dropped unread. `push_token` is the token the push went to, so a
+/// `DeviceNotRegistered` clears only that token, never a newer one.
+model PushTicket {
+  id        String    @id
+  ticketId  String    @map("ticket_id")
+  deviceId  String    @map("device_id")
+  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  pushToken String    @map("push_token")
+  /// confirmation | reply | device_request | test
+  kind      String
+  claimedAt DateTime? @map("claimed_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("push_tickets")
 }
 
 /// Everything ever pushed to a person, for the app's Notificações tab (spec §9). Kept 30 days.

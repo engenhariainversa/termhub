@@ -4,6 +4,7 @@ import { FlatList, Linking, Pressable, RefreshControl, Text, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PauseCard } from '@/features/automation/view/pause-card';
 import { relativeTime } from '@/features/shared/relative-time';
+import { useTranslation } from '@/i18n';
 import type { TAgentOnCard, TCardProgress, TEpicProgress } from '@/services/api/contract';
 import { AppText, Button, MAX_READABLE_WIDTH, readableColumn, Sheet } from '@/ui';
 import { ciLabel, epicCiLine, formatEstimate, stateLabel } from '../model/format';
@@ -18,6 +19,7 @@ function Bar({ percent }: { percent: number }) {
 }
 
 function Agent({ agent }: { agent: TAgentOnCard }) {
+  useTranslation();
   const since = agent.state_at ? ` · ${relativeTime(agent.state_at, Date.now())}` : '';
   return (
     <Text className={agent.needs_you ? 'text-xs text-amber-400' : 'text-xs text-zinc-400'}>
@@ -28,14 +30,16 @@ function Agent({ agent }: { agent: TAgentOnCard }) {
 
 /** "automático": the card is tagged for automatic work. */
 function AutoBadge() {
+  const { t } = useTranslation();
   return (
-    <Text accessibilityLabel="automático" className="rounded bg-indigo-400/20 px-1 text-[10px] text-indigo-300">
-      automático
+    <Text accessibilityLabel={t('automático')} className="rounded bg-indigo-400/20 px-1 text-[10px] text-indigo-300">
+      {t('automático')}
     </Text>
   );
 }
 
 function Epic({ epic }: { epic: TEpicProgress }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<TCardProgress | null>(null);
   const toggleAuto = () => {
@@ -58,12 +62,12 @@ function Epic({ epic }: { epic: TEpicProgress }) {
         <Text className="text-xs text-zinc-400">{formatEstimate(epic.estimate)}</Text>
         {epic.ci && <Text className="text-xs text-zinc-400">{epicCiLine(epic.ci)}</Text>}
         {epic.ci_error && <Text className="text-xs text-red-400">{epic.ci_error}</Text>}
-        {waiting > 0 && <Text className="text-xs text-amber-400">{waiting === 1 ? '1 agente esperando você' : `${waiting} agentes esperando você`}</Text>}
+        {waiting > 0 && <Text className="text-xs text-amber-400">{t('{{count}} agentes esperando você', { count: waiting })}</Text>}
       </Pressable>
       {open &&
         epic.cards.map((c) => (
           <View key={c.id} className="mt-3 gap-1">
-            <Pressable onLongPress={() => setMenuFor(c)} accessibilityLabel={`${c.ref} ${c.title}`} accessibilityHint="Segure para o trabalho automático" className="flex-row items-center gap-2">
+            <Pressable onLongPress={() => setMenuFor(c)} accessibilityLabel={`${c.ref} ${c.title}`} accessibilityHint={t('Segure para o trabalho automático')} className="flex-row items-center gap-2">
               <Text className="flex-1 text-sm text-white">{`${c.ref} ${c.title}`}</Text>
               {c.auto ? <AutoBadge /> : null}
             </Pressable>
@@ -72,16 +76,17 @@ function Epic({ epic }: { epic: TEpicProgress }) {
             {c.agents?.map((a) => <Agent key={a.tab_id} agent={a} />)}
             {c.pull_requests.map((p) => (
               <Pressable key={p.number} onPress={() => void Linking.openURL(p.state === 'merged' && p.deploy_url ? p.deploy_url : p.url)}>
+                {/* i18n-ignore */}
                 <Text className="text-xs text-indigo-300">{`PR #${p.number} · ${ciLabel(p)}`}</Text>
               </Pressable>
             ))}
           </View>
         ))}
-      <Sheet open={menuFor !== null} onClose={() => setMenuFor(null)} title="Trabalho automático">
+      <Sheet open={menuFor !== null} onClose={() => setMenuFor(null)} title={t('Trabalho automático')}>
         <View className="gap-4">
           {menuFor ? <AppText variant="muted">{`${menuFor.ref} ${menuFor.title}`}</AppText> : null}
-          <Button label={menuFor?.auto ? 'Tirar do trabalho automático' : 'Marcar como automático'} onPress={toggleAuto} />
-          <Button label="Cancelar" variant="ghost" onPress={() => setMenuFor(null)} />
+          <Button label={menuFor?.auto ? t('Tirar do trabalho automático') : t('Marcar como automático')} onPress={toggleAuto} />
+          <Button label={t('Cancelar')} variant="ghost" onPress={() => setMenuFor(null)} />
         </View>
       </Sheet>
     </View>
@@ -98,6 +103,7 @@ const SAFE_EDGES = ['top', 'left', 'right'] as const;
 
 /** The Progresso tab (spec 2026-09-26 progress-panel D10): active epics across projects, read-only. */
 export function ProgressScreen() {
+  const { t } = useTranslation();
   const epics = useProgressStore((s) => s.epics);
   const loading = useProgressStore((s) => s.loading);
   const refreshing = useProgressStore((s) => s.refreshing);
@@ -127,7 +133,7 @@ export function ProgressScreen() {
             {error ? <Text className="px-4 pt-4 text-sm text-red-400">{error}</Text> : null}
           </>
         }
-        ListEmptyComponent={!loading ? <Text className="px-4 pt-8 text-center text-sm text-zinc-500">Nenhum épico em andamento</Text> : null}
+        ListEmptyComponent={!loading ? <Text className="px-4 pt-8 text-center text-sm text-zinc-500">{t('Nenhum épico em andamento')}</Text> : null}
       />
     </SafeAreaView>
   );

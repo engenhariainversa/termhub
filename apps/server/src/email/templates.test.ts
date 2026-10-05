@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { accountDeletedMail, alphaInviteMail, deletionCancelledMail, deletionDateLabel, deletionLinkMail, deletionRequestedMail, deviceRequestMail, deviceRevokedMail } from './templates.js';
+import {
+  accountDeletedMail,
+  alphaInviteMail,
+  deletionCancelledMail,
+  deletionDateLabel,
+  deletionLinkMail,
+  deletionRequestedMail,
+  deviceRequestMail,
+  deviceRevokedMail,
+  inviteMail,
+  loginCodeMail,
+} from './templates.js';
 
 const opts = { appUrl: 'https://app.termhub.dev', communityUrl: 'https://77a.it/comunidadetermhub', firstName: 'Ana' };
 
@@ -100,5 +111,89 @@ describe('account deletion e-mails (TER-720, TER-728)', () => {
     const done = accountDeletedMail('a@x.dev');
     expect(done.subject).toBe('Sua conta do termhub foi excluída');
     expect(done.html).not.toContain('href=');
+  });
+});
+
+/** No Portuguese left in an English e-mail: the words every pt-BR template uses. */
+const PT_WORDS = /\b(você|sua|seu|conta|código|aparelho|exclusão|e-mail\.|ignore este|Acessar|Entrar)\b/i;
+
+describe('every template in English (TER-405)', () => {
+  const appUrl = 'https://app.termhub.dev';
+
+  it('login code', () => {
+    const mail = loginCodeMail('a@b.c', '123456', 10, 'en');
+    expect(mail.subject).toBe('123456 — your termhub sign-in code');
+    expect(mail.text).toBe('Your termhub sign-in code is: 123456\n\nIt expires in 10 minutes. If you did not ask for this code, ignore this e-mail.');
+    expect(mail.html).toContain('lang="en"');
+    expect(mail.html).toContain('Your sign-in code is');
+    expect(mail.html).not.toMatch(PT_WORDS);
+    expect(loginCodeMail('a@b.c', '123456', 10).subject).toBe('123456 — seu código de acesso ao termhub');
+  });
+
+  it('device request', () => {
+    const mail = deviceRequestMail('a@b.c', { deviceLabel: 'iPhone 15 (iOS 18.1)', code: 'K7F2QD', place: 'Lisbon, PT', ip: '1.2.3.4', appUrl }, 'en');
+    expect(mail.subject).toBe('A device is asking for access to your account');
+    expect(mail.text).toContain('Device: iPhone 15 (iOS 18.1)');
+    expect(mail.text).toContain('Location: Lisbon, PT (IP 1.2.3.4)');
+    expect(mail.text).toContain('Code: K7F-2QD');
+    expect(mail.text).toContain(`View request: ${appUrl}/settings/devices`);
+    expect(mail.html).toContain('>View request</a>');
+    expect(mail.html).toContain('lang="en"');
+    expect(mail.text).not.toMatch(PT_WORDS);
+  });
+
+  it('device revoked, with the date written in English', () => {
+    const mail = deviceRevokedMail('a@b.c', { deviceLabel: 'Ana (iPhone 15)', at: new Date('2026-09-24T15:30:00.000Z') }, 'en');
+    expect(mail.subject).toBe('A device was removed from your account after wrong PIN attempts');
+    expect(mail.text).toContain('When: 9/24/26');
+    expect(mail.text).toContain('Nothing else changed in your account');
+    expect(mail.text).not.toMatch(PT_WORDS);
+  });
+
+  it('invite, with the role and the Cloudflare Access line', () => {
+    const mail = inviteMail('a@b.c', { invitedBy: 'Pedro <x>', appUrl, roleLabel: 'Member', accessAllowlisted: true }, 'en');
+    expect(mail.subject).toBe('Pedro <x> invited you to termhub');
+    expect(mail.text).toContain('Pedro <x> invited you to termhub as Member.');
+    expect(mail.text).toContain(`Open: ${appUrl}`);
+    expect(mail.text).toContain('Cloudflare Access');
+    expect(mail.html).toContain('<strong>Pedro &lt;x&gt;</strong> invited you to termhub as <strong>Member</strong>.');
+    expect(mail.html).toContain('>Open termhub</a>');
+    expect(mail.text).not.toMatch(PT_WORDS);
+    const pt = inviteMail('a@b.c', { invitedBy: 'Pedro', appUrl, roleLabel: 'Membro', accessAllowlisted: false });
+    expect(pt.text.startsWith('Pedro convidou você para o termhub como Membro.\n\nAcesse: https://app.termhub.dev')).toBe(true);
+    expect(pt.html).toContain('<strong>Pedro</strong> convidou você para o termhub como <strong>Membro</strong>.');
+  });
+
+  it('alpha invite takes the app locale too (pt-BR or en)', () => {
+    expect(alphaInviteMail('a@b.c', { ...opts, locale: 'en' }).subject).toBe("You're in the termhub alpha 🚀");
+    const pt = alphaInviteMail('a@b.c', { ...opts, locale: 'pt-BR' });
+    expect(pt.html).toContain('lang="pt-BR"');
+    expect(pt.html).toContain('feito em Goiânia');
+  });
+
+  it('deletion requested, with the date in English', () => {
+    const at = new Date('2026-11-01T02:00:00.000Z');
+    expect(deletionDateLabel(at, 'en')).toBe('October 31, 2026');
+    const mail = deletionRequestedMail('a@b.c', { scheduledAt: at, appUrl }, 'en');
+    expect(mail.subject).toBe('We received the request to delete your account');
+    expect(mail.text).toContain('deleted for good on October 31, 2026.');
+    expect(mail.text).toContain('"Cancel deletion"');
+    expect(mail.text).toContain('Sign in and cancel the deletion: https://app.termhub.dev');
+    expect(mail.html).toContain('lang="en"');
+    expect(mail.text).not.toMatch(PT_WORDS);
+  });
+
+  it('deletion cancelled, account deleted and deletion link', () => {
+    const cancelled = deletionCancelledMail('a@b.c', { appUrl }, 'en');
+    expect(cancelled.subject).toBe('Your account deletion was cancelled');
+    expect(cancelled.text).toContain('Open termhub: https://app.termhub.dev');
+    const done = accountDeletedMail('a@b.c', 'en');
+    expect(done.subject).toBe('Your termhub account was deleted');
+    expect(done.text).toContain('This is the last e-mail you get from termhub.');
+    const link = deletionLinkMail('a@b.c', { link: 'https://termhub.dev/excluir-conta/?token=abc', ttlMinutes: 30 }, 'en');
+    expect(link.subject).toBe('Confirm the deletion of your termhub account');
+    expect(link.text).toContain('within the next 30 minutes');
+    expect(link.text).toContain('Confirm deletion: https://termhub.dev/excluir-conta/?token=abc');
+    for (const m of [cancelled, done, link]) expect(m.text.replace(/https:\/\/\S+/g, '')).not.toMatch(PT_WORDS);
   });
 });
