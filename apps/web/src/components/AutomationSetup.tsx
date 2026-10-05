@@ -94,6 +94,9 @@ export function AutomationSetup({ value, onChange }: Props) {
         <Field label={t('Workflows de release')} hint={t('um por linha')}>
           <ListInput value={value.release_workflows} onChange={(v) => set('release_workflows', v)} /* i18n-ignore */ placeholder="publish-agent.yml" />
         </Field>
+        <Field label={t('Checks obrigatórios')} hint={t('workflows, um por linha; vazio = todas as execuções do PR passam')}>
+          <ListInput value={value.required_checks ?? []} onChange={(v) => set('required_checks', v)} /* i18n-ignore */ placeholder="ci.yml" />
+        </Field>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t('Padrão da branch do épico')} hint={t('use {ref}')}>

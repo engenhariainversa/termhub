@@ -481,6 +481,8 @@ export interface ProjectAutomation {
   release_paths: string[];
   store_paths: string[];
   release_workflows: string[];
+  /** workflows that must pass on the PR head before termhub merges it; [] = every run (spike R1) */
+  required_checks: string[];
   epic_branch_pattern: string;
   worktrees_dir: string;
   allowed_tools: string[] | null;
