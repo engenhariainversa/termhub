@@ -1,3 +1,4 @@
+import { i18n, tk, useTranslation } from '../../i18n';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ChatActionCard } from './ChatActionCard';
@@ -37,22 +38,22 @@ const SUBAGENTS_REFRESH_MS = 30_000;
  * (`ChatHost`). Every state that is not `ready` has one: a disabled composer must always say why.
  */
 const COMPOSER_REASON: Record<Exclude<ChatHostState['kind'], 'ready'>, string> = {
-  no_machine: 'cadastre uma máquina para conversar',
-  not_chosen: 'escolha a máquina do chat',
-  offline: 'a máquina do chat está offline',
-  agent_too_old: 'atualize o agente da máquina',
+  no_machine: tk('cadastre uma máquina para conversar'),
+  not_chosen: tk('escolha a máquina do chat'),
+  offline: tk('a máquina do chat está offline'),
+  agent_too_old: tk('atualize o agente da máquina'),
 };
 
 /**
  * The four 409s a send (or a decision) comes back with when the host cannot run it. Each carries its
- * own pt-BR sentence, so nothing here composes one; what this set decides is that the answer was not a
+ * own sentence (in the request's language), so nothing here composes one; what this set decides is that the answer was not a
  * failure of the click — the decision is already durably recorded server-side.
  */
 const HOST_CODES = new Set(['CHAT_NO_MACHINE', 'CHAT_HOST_NOT_CHOSEN', 'CHAT_HOST_OFFLINE', 'CHAT_AGENT_TOO_OLD']);
 /** How many early events (see `early` in the panel) are held while the conversation id is unknown. */
 const EARLY_EVENTS_CAP = 500;
 /** A run that could not even be attempted (`run_finished` with no message id): nobody awaits it, so the panel says it. */
-const SETUP_FAILED_TEXT = 'O concierge não conseguiu começar a resposta. Tente de novo.';
+const SETUP_FAILED_TEXT = tk('O concierge não conseguiu começar a resposta. Tente de novo.');
 
 /** A re-grant of the same kind on the same project replaces the older one, as on the server. */
 const upsertStandingGrant = (prev: ChatStandingGrant[], grant: ChatStandingGrant): ChatStandingGrant[] => [
@@ -100,6 +101,7 @@ const TabSuggestionRow = memo(function TabSuggestionRow({
  * only ever renders the events of its own conversation (see `mine` below).
  */
 export function ChatPanel({ projectId }: { projectId: string | null }) {
+  const { t } = useTranslation();
   /**
    * The signed-in user, and never the one an admin is "viewing as": the chat is strictly the signed-in
    * user's own (`request.scope.user`, not `request.scope.ownerId`), so this is what the machines and
@@ -293,7 +295,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     // A project deleted in another tab, or any other read failure, must not leave an unhandled
     // rejection and a silently empty panel: `loaded` stays false (no "peça algo…" over a conversation
     // that never opened) and the error line the panel already has for sends says why.
-    load().catch((e) => setError(e instanceof ApiError ? e.message : 'Não foi possível abrir a conversa'));
+    load().catch((e) => setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível abrir a conversa')));
   }, [load]);
 
   /**
@@ -317,7 +319,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       } else if (e.type === 'message_removed') setMessages((prev) => (prev.some((m) => m.id === e.message_id) ? prev.filter((m) => m.id !== e.message_id) : prev));
       else if (e.type === 'run_finished' && e.message_id === null && !e.ok) {
         // The run could not even be attempted, and nobody awaits it any more: this is where it is said.
-        setError(SETUP_FAILED_TEXT);
+        setError(i18n.t(SETUP_FAILED_TEXT));
         void load().catch(() => undefined);
       }
     },
@@ -429,12 +431,12 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       if (e instanceof ApiError && e.code !== undefined && HOST_CODES.has(e.code)) {
         const status = decision === 'deny' ? 'denied' : 'approved';
         setActions((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
-        setQueuedNotes((prev) => ({ ...prev, [id]: `${e.message} A decisão já está registrada e será aplicada quando o chat voltar a rodar.` }));
+        setQueuedNotes((prev) => ({ ...prev, [id]: i18n.t('{{reason}} A decisão já está registrada e será aplicada quando o chat voltar a rodar.', { reason: e.message }) }));
         // …and the host line above the thread must agree with that sentence. The grant itself (for
         // approve_tab) was only created if the server got that far before the busy/offline answer;
         // this re-read is what brings it in when it was.
         await load();
-      } else setActionError(e instanceof ApiError ? e.message : 'Não foi possível registrar a decisão');
+      } else setActionError(e instanceof ApiError ? e.message : i18n.t('Não foi possível registrar a decisão'));
     } finally {
       setDecidingId(null);
     }
@@ -457,9 +459,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         const statusOf = new Map(decisions.map((d) => [d.id, d.decision === 'deny' ? ('denied' as const) : ('approved' as const)]));
         setActions((prev) => prev.map((a) => (statusOf.has(a.id) ? { ...a, status: statusOf.get(a.id)! } : a)));
         const first = decisions[0]?.id;
-        if (first) setQueuedNotes((prev) => ({ ...prev, [first]: `${e.message} A decisão já está registrada e será aplicada quando o chat voltar a rodar.` }));
+        if (first) setQueuedNotes((prev) => ({ ...prev, [first]: i18n.t('{{reason}} A decisão já está registrada e será aplicada quando o chat voltar a rodar.', { reason: e.message }) }));
         await load();
-      } else setActionError(e instanceof ApiError ? e.message : 'Não foi possível registrar as decisões');
+      } else setActionError(e instanceof ApiError ? e.message : i18n.t('Não foi possível registrar as decisões'));
     } finally {
       setBatchDeciding(false);
     }
@@ -488,7 +490,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         setGrants((prev) => prev.filter((g) => g.id !== grantId));
         setProjectGrants((prev) => prev.filter((g) => g.id !== grantId));
         setStandingGrants((prev) => prev.filter((g) => g.id !== grantId));
-      } else setActionError(e instanceof ApiError ? e.message : 'Não foi possível revogar a permissão');
+      } else setActionError(e instanceof ApiError ? e.message : i18n.t('Não foi possível revogar a permissão'));
     } finally {
       setRevokingId(null);
     }
@@ -502,7 +504,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       const { tab_question } = await api.answerTabQuestion(id, body);
       setTabQuestions((prev) => upsertTabQuestion(prev, tab_question));
     } catch (e) {
-      const text = e instanceof ApiError && e.code === 'TAB_PROMPT_CHANGED' ? PROMPT_CHANGED_TEXT : e instanceof ApiError ? e.message : 'Não foi possível responder';
+      const text = e instanceof ApiError && e.code === 'TAB_PROMPT_CHANGED' ? i18n.t(PROMPT_CHANGED_TEXT) : e instanceof ApiError ? e.message : i18n.t('Não foi possível responder');
       setQuestionErrors((prev) => ({ ...prev, [id]: text }));
     } finally {
       setAnsweringQuestionId(null);
@@ -519,7 +521,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       const { tab_question } = await api.cancelAutoAnswer(id);
       setTabQuestions((prev) => upsertTabQuestion(prev, tab_question));
     } catch (e) {
-      const text = e instanceof ApiError && e.code === 'NOT_SCHEDULED' ? 'A resposta automática já foi enviada.' : e instanceof ApiError ? e.message : 'Não foi possível cancelar';
+      const text = e instanceof ApiError && e.code === 'NOT_SCHEDULED' ? i18n.t('A resposta automática já foi enviada.') : e instanceof ApiError ? e.message : i18n.t('Não foi possível cancelar');
       setQuestionErrors((prev) => ({ ...prev, [id]: text }));
     } finally {
       setAnsweringQuestionId(null);
@@ -548,14 +550,14 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       const { tab_suggestion } = await act();
       setTabSuggestions((prev) => upsertTabSuggestion(prev, tab_suggestion));
     } catch (e) {
-      const text = e instanceof ApiError && e.code === 'TAB_PROMPT_CHANGED' ? SUGGESTION_CHANGED_TEXT : e instanceof ApiError ? e.message : fallback;
+      const text = e instanceof ApiError && e.code === 'TAB_PROMPT_CHANGED' ? i18n.t(SUGGESTION_CHANGED_TEXT) : e instanceof ApiError ? e.message : fallback;
       setSuggestionErrors((prev) => ({ ...prev, [id]: text }));
     } finally {
       setBusySuggestionId(null);
     }
   }, []);
-  const sendSuggestion = useCallback((id: string, text: string) => void actOnSuggestion(id, () => api.sendTabSuggestion(id, text), 'Não foi possível enviar'), [actOnSuggestion]);
-  const dismissSuggestion = useCallback((id: string) => void actOnSuggestion(id, () => api.dismissTabSuggestion(id), 'Não foi possível dispensar'), [actOnSuggestion]);
+  const sendSuggestion = useCallback((id: string, text: string) => void actOnSuggestion(id, () => api.sendTabSuggestion(id, text), i18n.t('Não foi possível enviar')), [actOnSuggestion]);
+  const dismissSuggestion = useCallback((id: string) => void actOnSuggestion(id, () => api.dismissTabSuggestion(id), i18n.t('Não foi possível dispensar')), [actOnSuggestion]);
 
   /** A usage-limit card (TER-589): "Trocar para X" swaps the tab, "Esperar" closes the card. A failed swap keeps it open. */
   const answerLimit = useCallback(async (id: string, accountId: string | null) => {
@@ -565,7 +567,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       const { tab_limit } = await api.answerTabLimit(id, accountId);
       setTabLimits((prev) => upsertById(prev, tab_limit));
     } catch (e) {
-      setLimitErrors((prev) => ({ ...prev, [id]: e instanceof ApiError ? e.message : 'Não foi possível trocar a conta' }));
+      setLimitErrors((prev) => ({ ...prev, [id]: e instanceof ApiError ? e.message : i18n.t('Não foi possível trocar a conta') }));
     } finally {
       setBusyLimitId(null);
     }
@@ -612,8 +614,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       subagentsToggleRef.current?.focus();
     };
     const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (subagentsPanelRef.current?.contains(t) || subagentsToggleRef.current?.contains(t)) return;
+      const target = e.target as Node;
+      if (subagentsPanelRef.current?.contains(target) || subagentsToggleRef.current?.contains(target)) return;
       setSubagentsOpen(false);
     };
     window.addEventListener('keydown', onKey);
@@ -653,7 +655,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       // The picker closes again: left open it would say "carregando…" over a list that is never coming.
       // The reason stays on screen, and the button that opened it is how it is tried again.
       setPicking(false);
-      setHostError(e instanceof ApiError ? e.message : 'Não foi possível ler as suas máquinas');
+      setHostError(e instanceof ApiError ? e.message : i18n.t('Não foi possível ler as suas máquinas'));
       return;
     }
     try {
@@ -686,7 +688,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       // re-read is what brings the conversation back exactly as it is now stored.
       await load();
     } catch (e) {
-      setHostError(e instanceof ApiError ? e.message : 'Não foi possível trocar a máquina ou a conta do chat');
+      setHostError(e instanceof ApiError ? e.message : i18n.t('Não foi possível trocar a máquina ou a conta do chat'));
     } finally {
       setChangingHost(false);
     }
@@ -808,7 +810,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         // A typed message is no longer answered CHAT_BUSY — several can be in flight at once — but a
         // 503 CONCIERGE_DISABLED still carries its own pt-BR message, shown as-is, and so does a host
         // problem (offline, no machine); anything else falls back to a generic line.
-        setError(e instanceof ApiError ? e.message : 'Não foi possível enviar a mensagem');
+        setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível enviar a mensagem'));
         if (quoted) setReplyTo((current) => current ?? quoted);
         // The server may have dropped the empty assistant row it had already announced (a run that
         // never started at all), so re-read instead of keeping a bubble that will never fill.
@@ -823,7 +825,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
 
   /** "Propor de novo" on an expired or stale card (TER-477): an ordinary message of this conversation,
    *  so the concierge proposes it again through the gate, on a fresh card. */
-  const repropose = useCallback((a: ChatAction) => void send(`Proponha de novo: ${a.summary}`, []), [send]);
+  const repropose = useCallback((a: ChatAction) => void send(i18n.t('Proponha de novo: {{summary}}', { summary: a.summary }), []), [send]);
   /** Scrolling to a card from the pending bar is the reader leaving the bottom: stop following first, so
    *  a streamed line does not pin the thread back down mid-scroll. */
   const unstick = useCallback(() => {
@@ -859,7 +861,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setCompactNote(null);
       await load();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Não foi possível começar uma nova conversa');
+      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível começar uma nova conversa'));
     } finally {
       setResetting(false);
     }
@@ -879,7 +881,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       await api.compactChat(projectId);
     } catch (e) {
       setCompacting(false);
-      setError(e instanceof ApiError ? e.message : 'Não foi possível compactar a conversa');
+      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível compactar a conversa'));
     }
   }, [projectId]);
   // `send` (declared above, for `/compact` typed in the box) reaches the current `compact` through this.
@@ -929,7 +931,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
             aria-controls="chat-subagents-panel"
             onClick={() => setSubagentsOpen((open) => !open)}
           >
-            {`Subagentes (${activeSubagents.length})`}
+            {t('Subagentes ({{n}})', { n: activeSubagents.length })}
           </button>
         )}
         {activeGrantCount > 0 && (
@@ -938,14 +940,14 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           </Link>
         )}
         <button type="button" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50" disabled={answering || resetting || compacting || messages.length === 0} onClick={() => setConfirmReset(true)}>
-          Nova conversa
+          {t('Nova conversa')}
         </button>
         {subagentsOpen && (
           <div
             id="chat-subagents-panel"
             ref={subagentsPanelRef}
             role="dialog"
-            aria-label="Subagentes"
+            aria-label={t('Subagentes')}
             className="absolute right-0 top-full z-10 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-bg-1 p-2 shadow-lg"
           >
             <ChatSubagents subagents={subagents} failed={cancelFailed} onCancel={cancelSubagent} now={subagentsNow} />
@@ -954,9 +956,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       </div>
       <ConfirmDialog
         open={confirmReset}
-        title="Nova conversa"
-        message="O contexto atual desta conversa será descartado. As mensagens saem da tela e o concierge começa do zero."
-        confirmLabel="Começar de novo"
+        title={t('Nova conversa')}
+        message={t('O contexto atual desta conversa será descartado. As mensagens saem da tela e o concierge começa do zero.')}
+        confirmLabel={t('Começar de novo')}
         onCancel={() => setConfirmReset(false)}
         onConfirm={() => void reset()}
       />
@@ -992,15 +994,15 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         <div className="mt-2 rounded border border-line bg-bg-2 p-3 text-sm text-fg-muted">
           {host.kind === 'no_machine' || host.kind === 'not_chosen' ? (
             <>
-              O chat dos projetos roda na mesma máquina do chat geral.{' '}
+              {t('O chat dos projetos roda na mesma máquina do chat geral.')}{' '}
               <Link to="/chat" className="text-accent hover:underline">
-                Escolher a máquina do chat
+                {t('Escolher a máquina do chat')}
               </Link>
             </>
           ) : host.kind === 'offline' ? (
-            `A máquina ${host.machine.name} está offline.`
+            t('A máquina {{name}} está offline.', { name: host.machine.name })
           ) : (
-            `O agente da máquina ${host.machine.name} precisa ser atualizado para o chat do projeto.`
+            t('O agente da máquina {{name}} precisa ser atualizado para o chat do projeto.', { name: host.machine.name })
           )}
         </div>
       )}
@@ -1020,7 +1022,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
             <p className="pt-6 text-center text-sm text-danger">{error}</p>
           ) : loaded && messages.length === 0 && (host === null || host.kind === 'ready') ? (
             <p className="pt-6 text-center text-sm text-fg-dim">
-              {projectId === null ? 'Peça algo às suas máquinas: o concierge lê os terminais e pede sua autorização antes de qualquer alteração.' : 'Pergunte sobre este projeto: o concierge lê os terminais dele e pede sua autorização antes de qualquer alteração.'}
+              {projectId === null ? t('Peça algo às suas máquinas: o concierge lê os terminais e pede sua autorização antes de qualquer alteração.') : t('Pergunte sobre este projeto: o concierge lê os terminais dele e pede sua autorização antes de qualquer alteração.')}
             </p>
           ) : undefined
         }
@@ -1106,7 +1108,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       {/* A host that cannot run the message is why the box refuses, and the box says so. The send and
        *  decision errors go in its status line too: a line that mounts above the thread shifts it.
        *  `projectId` travels with every upload, so a file lands in this project's conversation. */}
-      <ChatComposer onSend={send} replyTo={replyTo} onCancelReply={cancelReply} blockedReason={host && host.kind !== 'ready' ? COMPOSER_REASON[host.kind] : null} status={error ?? actionError} notice={compacting ? 'Compactando a conversa…' : compactNote} projectId={projectId} attachmentStatuses={attachmentStatuses} />
+      <ChatComposer onSend={send} replyTo={replyTo} onCancelReply={cancelReply} blockedReason={host && host.kind !== 'ready' ? t(COMPOSER_REASON[host.kind]) : null} status={error ?? actionError} notice={compacting ? t('Compactando a conversa…') : compactNote} projectId={projectId} attachmentStatuses={attachmentStatuses} />
     </div>
   );
 }
