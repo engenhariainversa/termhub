@@ -64,6 +64,15 @@ describe('syncProjectCi', () => {
     expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ head_ref: 'epic/TER-4-big-epic', base_ref: 'main' }), ['epic4']);
   });
 
+  it('with automation off, links exactly as before: an epic PR naming only the epic is on no card, and card refs in a PR still link the cards', async () => {
+    const { deps, replaceLinks, github } = setup();
+    const epicPull = pull({ number: 9, title: 'TER-4: integrate epic/TER-4-big-epic', body: 'Part of TER-4.\n\nCard PRs merged into the epic branch: #6, #7.', head: { ref: 'epic/TER-4-big-epic', sha: 'e' }, base: { ref: 'main' } });
+    vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [epicPull, pull()] });
+    await syncProjectCi(deps, 'p1');
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 9 }), []);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), ['card2']);
+  });
+
   it('never links an epic otherwise: automation off, a manual epic, or a head that is not the epic\'s own branch', async () => {
     const on = { enabled: true, epic_branch_pattern: 'epic/{ref}-{slug}' };
     const cases = [

@@ -37,19 +37,24 @@ export function epicReady(i: { cards: Array<{ type: TaskType; status: TaskStatus
 /** The epic PR's title (preflight F-14: git artifacts are in English). */
 export const epicPullTitle = (epic: { ref: string }, epicBranch: string) => `${epic.ref}: integrate ${epicBranch}`;
 
-/** The epic PR's body (F-14): English, "Part of" (never a closing keyword), the cards and their PRs, the impact line. */
-export function epicPullBody(epic: { ref: string; title: string }, epicBranch: string, base: string, cards: Task[], prs: TaskPullRequest[]): string {
-  const lines = cards.map((c) => {
-    const numbers = prs.filter((p) => p.task_id === c.id && p.state === 'merged').map((p) => `#${p.number}`);
-    return `- ${c.ref} ${c.title}${numbers.length > 0 ? ` (${numbers.join(', ')})` : ''}`;
-  });
+/**
+ * The epic PR's body (F-14): English, "Part of" (never a closing keyword), the card PRs merged into the epic
+ * branch, the impact line. It names no card and no title (only the epic's ref and PR numbers): the CI sync
+ * links a PR to every card its text names, so a project that later turns automation off keeps linking exactly
+ * as before — this PR stays on no card.
+ */
+export function epicPullBody(epic: { ref: string }, epicBranch: string, base: string, cards: Task[], prs: TaskPullRequest[]): string {
+  const ids = new Set(cards.map((c) => c.id));
+  const numbers = [...new Set(prs.filter((p) => ids.has(p.task_id) && p.state === 'merged').map((p) => p.number))].sort((a, b) => a - b);
   return [
-    `Part of ${epic.ref}: ${epic.title}`,
-    `Integrates the epic branch \`${epicBranch}\` into \`${base}\`. Cards:`,
-    lines.join('\n'),
+    `Part of ${epic.ref}.`,
+    `Integrates the epic branch \`${epicBranch}\` into \`${base}\`.`,
+    numbers.length > 0 ? `Card PRs merged into the epic branch: ${numbers.map((n) => `#${n}`).join(', ')}.` : null,
     'Impact on other users: see each card PR.',
     'Opened by termhub (automatic).',
-  ].join('\n\n');
+  ]
+    .filter((l): l is string => l !== null)
+    .join('\n\n');
 }
 
 const codeOf = (e: unknown): string => {

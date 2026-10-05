@@ -97,8 +97,8 @@ describe('integrateEpic', () => {
     expect(repo).toBe('acme/app');
     expect(args).toMatchObject({ head: EPIC_BRANCH, base: 'main', draft: false, title: `TER-1: integrate ${EPIC_BRANCH}` });
     expect(args.body).toContain('Part of TER-1');
-    expect(args.body).toContain('- TER-5 Card TER-5 (#7)');
-    expect(args.body).toContain('- TER-6 Card TER-6 (#8)');
+    expect(args.body).toContain('Card PRs merged into the epic branch: #7, #8.');
+    expect(args.body).not.toMatch(/TER-(?!1\b)\d+/); // no card ref: the sync never links it to a card
     expect(args.body).toContain('Impact on other users: see each card PR.');
     expect(args.body).not.toMatch(/\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\b/i);
     expect(args.body).not.toContain('TER-9'); // another epic's card
