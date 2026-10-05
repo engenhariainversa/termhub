@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError } from './api';
 import { track } from './analytics';
+import { readStoredLocale, setLocale as applyLocale, type Locale } from '../i18n';
 import type { AuthConfig, User, ViewAs } from './types';
 
 interface AuthState {
@@ -23,6 +24,19 @@ interface AuthState {
   publicCityUrl: string | null;
   /** refetches /auth/me (e.g. after cancelling a pending account deletion) */
   refresh: () => Promise<void>;
+  /** the account's language choice (null = automatic): applied at once, kept in this browser and saved on the account */
+  setLocale: (locale: Locale | null) => Promise<void>;
+}
+
+/**
+ * The account's language wins over this browser's: someone who picked English elsewhere sees English
+ * here too. A server older than the i18n release sends no `locale` at all; then the browser's own
+ * choice stays as it is.
+ */
+function followAccountLocale(user: User | null | undefined) {
+  if (!user || !('locale' in user) || user.locale === undefined) return;
+  const choice = user.locale ?? null;
+  if (choice !== readStoredLocale()) applyLocale(choice);
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -44,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setConfig(cfg);
         setUser(me?.user ?? null);
+        followAccountLocale(me?.user);
         setViewAsState(me?.view_as ?? null);
       } catch {
         if (!cancelled) setUser(null);
@@ -80,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const { user } = await api.auth.login(email, password);
+    followAccountLocale(user);
     setUser(user);
     track('login', { method: 'password' });
   }, []);
@@ -91,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyCode = useCallback(async (email: string, code: string) => {
     const { user } = await api.auth.verifyCode(email, code);
+    followAccountLocale(user);
     setUser(user);
     track('login', { method: 'code' });
   }, []);
@@ -113,6 +130,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user);
   }, []);
 
+  const setLocale = useCallback(async (locale: Locale | null) => {
+    const previous = readStoredLocale();
+    applyLocale(locale);
+    try {
+      await api.auth.setLocale(locale);
+      setUser((u) => (u ? { ...u, locale } : u));
+    } catch (err) {
+      // the screen goes back to what the account still holds, and the caller shows why
+      applyLocale(previous);
+      throw err;
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     const me = await api.auth.me();
     setUser(me.user);
@@ -120,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, config, login, sendCode, verifyCode, logout, viewAs, setViewAs, can, setNickname, publicCityUrl: config?.public_city_url ?? null, refresh }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, loading, config, login, sendCode, verifyCode, logout, viewAs, setViewAs, can, setNickname, publicCityUrl: config?.public_city_url ?? null, refresh, setLocale }}>{children}</AuthContext.Provider>
   );
 }
 

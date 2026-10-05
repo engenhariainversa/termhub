@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import type { Machine, MachineHooks } from '../lib/types';
+import { formatDateTime } from '../lib/format';
 
 /**
  * What the machine's tabs are reporting, in one sentence. A tab only reaches the monitor once its
@@ -87,7 +88,7 @@ export function MonitorHooksCard({ machine }: { machine: Machine }) {
     <div className="rounded-md border border-line bg-bg p-2 text-xs">
       <div className="flex items-center gap-2">
         <p className="font-medium text-fg-muted">Monitor das tabs</p>
-        <span className="text-fg-dim">{hooks ? (installed ? `instalado em ${new Date(hooks.installed_at!).toLocaleString('pt-BR')}` : 'não instalado') : '…'}</span>
+        <span className="text-fg-dim">{hooks ? (installed ? `instalado em ${formatDateTime(hooks.installed_at!)}` : 'não instalado') : '…'}</span>
         <span className="ml-auto flex gap-1">
           {installed && (
             <button type="button" className="btn-ghost px-2 py-0.5" onClick={() => void remove()} disabled={busy}>

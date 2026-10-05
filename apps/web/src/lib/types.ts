@@ -26,6 +26,8 @@ export interface User {
   last_login_at: string | null;
   /** the address of this user's public city (`/city/@<nickname>`); null until claimed */
   nickname: string | null;
+  /** the language the person picked ('pt-BR' | 'en'); null = automatic; absent on servers older than the i18n release */
+  locale?: 'pt-BR' | 'en' | null;
   /** store-review mode: while in the future, this account's mobile device requests auto-approve */
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until; only the user-admin routes (/api/users) send it */
