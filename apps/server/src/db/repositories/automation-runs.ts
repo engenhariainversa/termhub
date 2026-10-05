@@ -115,6 +115,29 @@ export class AutomationRunsRepository {
   }
 
   /**
+   * A marker that a server-started trigger was escalated (the conflict cap of a PR head): written ended
+   * (`blocked`), so it never takes the card's one active run, and once per (card, role, trigger) by the
+   * `one_per_trigger` index. Null when it exists already.
+   */
+  async insertMarker(i: { project_id: string; task_id: string; role: RunRole; instance: string; trigger_sha: string; waiting_reason: string }): Promise<AutomationRun | null> {
+    try {
+      const row = await this.db.automationRun.create({
+        data: { id: newId(), projectId: i.project_id, taskId: i.task_id, role: i.role, status: 'blocked', waitingReason: i.waiting_reason, claimedBy: i.instance, triggerSha: i.trigger_sha, endedAt: new Date() },
+      });
+      return map(row);
+    } catch (e) {
+      if ((e as { code?: string }).code === 'P2002') return null;
+      throw e;
+    }
+  }
+
+  /** When the card's most recent run that ended did so (markers included); null when none ended. */
+  async lastEndedAt(taskId: string): Promise<Date | null> {
+    const row = await this.db.automationRun.findFirst({ where: { taskId, endedAt: { not: null } }, orderBy: { endedAt: 'desc' }, select: { endedAt: true } });
+    return row?.endedAt ?? null;
+  }
+
+  /**
    * Writes the patch while `instance` still drives the run: after a takeover by another instance the row
    * is theirs, and this one's late writes are dropped. False when nothing was written.
    */

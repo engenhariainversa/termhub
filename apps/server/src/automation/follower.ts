@@ -263,14 +263,14 @@ async function placeDoneCard(repos: Repositories, run: AutomationRun, log: Log):
   }
 }
 
-/** Ends the run `done` (a report or an open PR from its branch) and places its card. False when another
- *  instance wrote it first. */
-async function finishDone(repos: Repositories, run: AutomationRun, via: 'report_card' | 'pull_request', pr: { url: string; number?: number } | null, log: Log): Promise<boolean> {
+/** Ends the run `done` (a report, a PR from its branch, or its card's PR merged) and places its card (not
+ *  after a merge: the merge already moved it to done). False when another instance wrote it first. */
+async function finishDone(repos: Repositories, run: AutomationRun, via: 'report_card' | 'pull_request' | 'merged', pr: { url: string; number?: number } | null, log: Log): Promise<boolean> {
   if (!(await writeRun(repos, run, { status: 'done', waiting_reason: null, ended_at: new Date() }))) return false;
-  await placeDoneCard(repos, run, log);
+  if (via !== 'merged') await placeDoneCard(repos, run, log);
   const base = { project_id: run.project_id, task_id: run.task_id, run_id: run.id };
   await recordEvent(repos, { ...base, kind: 'run_done', payload: { via, tab_id: run.tab_id, pr_url: pr?.url ?? null } }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_done not recorded'));
-  if (pr) {
+  if (pr && via !== 'merged') {
     await recordEvent(repos, { ...base, kind: 'pr_opened', payload: { pr_url: pr.url, ...(pr.number !== undefined ? { number: pr.number } : {}), branch: run.branch } }).catch((e: unknown) =>
       log.warn({ runId: run.id, code: errorCode(e) }, 'automation: pr_opened not recorded'),
     );
@@ -290,13 +290,53 @@ async function finishBlocked(repos: Repositories, run: AutomationRun, code: stri
   return true;
 }
 
-/** The PR fallback of D17: an open PR the CI sync linked to the card, from the run's branch. Not for an
- *  integrator or a fixer: their PR existed before the run started (the server opened the epic PR; a fixer
- *  answers a conflict or a red CI on an open PR), so it says nothing about the run. */
+/** The PR fallback of D17: a PR the CI sync linked to the card, from the run's branch — open, or merged
+ *  since the run began (a person, or the executor, merged it while the run was still on: final review I2).
+ *  Not for an integrator or a fixer: their PR existed before the run started (the server opened the epic PR;
+ *  a fixer answers a conflict or a red CI on an open PR), so it says nothing about the run. */
 async function openPrOfRun(repos: Repositories, run: AutomationRun): Promise<{ url: string; number: number } | null> {
   if (!run.task_id || !run.branch || run.role === 'integrator' || run.role === 'fixer') return null;
-  const pr = (await repos.taskPullRequests.listByTasks([run.task_id])).find((p) => p.state === 'open' && p.head_ref === run.branch);
+  const ofRun = (p: { state: string; merged_at: Date | null }) => p.state === 'open' || (p.state === 'merged' && p.merged_at !== null && p.merged_at.getTime() >= run.created_at.getTime());
+  const pr = (await repos.taskPullRequests.listByTasks([run.task_id])).find((p) => p.head_ref === run.branch && ofRun(p));
   return pr ? { url: pr.url, number: pr.number } : null;
+}
+
+/** `automation_runs.waiting_reason` of a run cancelled because its card lost its tag. */
+export const UNTAGGED = 'untagged';
+/** `automation_runs.waiting_reason` of a run cancelled because its tab was closed (final review I1). */
+export const TAB_CLOSED = 'tab_closed';
+
+/**
+ * Ends an active run `cancelled` (its card untagged, its tab closed): nothing more is typed, the card and
+ * the `max_parallel` slot are free again, and a cleanup already due is no longer held by it. Recorded as
+ * `run_cancelled`. The worktree stays (the next run of the card reuses it); its branch was never touched.
+ * False when the run had already ended or moved to another instance.
+ */
+export async function cancelRun(repos: Repositories, run: AutomationRun, reason: string, log: Log = noopLog): Promise<boolean> {
+  if (!(await writeRun(repos, run, { status: 'cancelled', waiting_reason: reason, ended_at: new Date() }))) return false;
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_cancelled', payload: { reason, tab_id: run.tab_id } }).catch((e: unknown) =>
+    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_cancelled not recorded'),
+  );
+  log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, reason }, 'automation: run cancelled');
+  return true;
+}
+
+/**
+ * The card's PR was merged (merge executor, final review I2): its `running` or `waiting` runs end `done` right
+ * away, so nothing is resumed into a merged card's tab and their cleanup is not held by them. The runs of
+ * every role end: the PR they worked for is in. Never throws.
+ */
+export async function endRunsOfMergedCard(repos: Repositories, projectId: string, taskId: string, pr: { url: string; number: number }, log: Log = noopLog): Promise<number> {
+  let ended = 0;
+  try {
+    for (const run of await repos.automationRuns.activeByProject(projectId)) {
+      if (run.task_id !== taskId || (run.status !== 'running' && run.status !== 'waiting')) continue;
+      if (await finishDone(repos, run, 'merged', pr, log)) ended++;
+    }
+  } catch (e) {
+    log.warn({ taskId, code: errorCode(e) }, 'automation: runs of a merged card not ended');
+  }
+  return ended;
 }
 
 const rateLimited = (tab: Tab) => tab.rate_limited_at !== null || (tab.state_text ?? '').startsWith(RATE_LIMIT_TEXT);
@@ -322,9 +362,7 @@ async function mayAct(deps: FollowerDeps, run: AutomationRun, log: Log): Promise
   const [task, setup] = await Promise.all([repos.tasks.findById(run.task_id), repos.projectSetup.get(run.project_id)]);
   if (!task || !setup.data.automation.enabled) return null;
   if (!task.auto) {
-    if (await writeRun(repos, run, { status: 'cancelled', waiting_reason: 'untagged', ended_at: new Date() })) {
-      log.info({ runId: run.id, taskId: task.id, tabId: run.tab_id }, 'automation: card untagged, run not resumed');
-    }
+    await cancelRun(repos, run, UNTAGGED, log);
     return null;
   }
   const paused = await isPaused(repos, project.owner_id, run.project_id);
@@ -522,7 +560,13 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
       const run = await deps.repos.automationRuns.findById(runId);
       if (!run || (run.status !== 'running' && run.status !== 'waiting') || run.claimed_by !== deps.instance || !run.tab_id) return;
       const tab = await deps.repos.tabs.findById(run.tab_id);
-      if (!tab) return;
+      // the tab was closed (its row is gone): the agent is gone with it, and nothing could ever end the run
+      if (!tab) return void (await cancelRun(deps.repos, run, TAB_CLOSED, log));
+      if (run.status === 'waiting' && run.task_id) {
+        // a parked run whose card lost its tag is the person's now, like a running one at its next stop
+        const task = await deps.repos.tasks.findById(run.task_id);
+        if (task && !task.auto) return void (await cancelRun(deps.repos, run, UNTAGGED, log));
+      }
       if (!tab.state_at) {
         // start watchdog: no hook at all since the start — Claude waits on the trust question of a new
         // worktree (it comes before any hook). Parked for the person, never typed into.

@@ -10,6 +10,7 @@ import type { GithubWriteClient } from '../integrations/github-write.js';
 import { newId } from '../lib/ids.js';
 import { normalizeSetup } from '../setup/schema.js';
 import { MAX_START_FAILURES, RETRY_BACKOFF_MS, startDispatcher, type DispatcherDeps } from './dispatcher.js';
+import { followRun, TAB_CLOSED, UNTAGGED } from './follower.js';
 import { pauseAutomation } from './pause.js';
 import { resetWaiting } from './placement.js';
 import { automationQueue } from './queue.js';
@@ -629,5 +630,100 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     await d.tick('t');
     await d.settle();
     expect((await runsOf()).find((r) => r.taskId === stuck.id)?.status).toBe('running'); // claimed again and started
+  });
+
+  describe('runs that must end, and starts that must not be lost (final review I1, I4)', () => {
+    const followerDeps = (instance: string) => ({ repos, instance, lifecycle: { draining: false }, settleMs: 0, type: vi.fn(async () => {}) });
+
+    it('a run whose tab was closed is cancelled with an event; the card and the slot are free again', async () => {
+      await setSetup({ automation: { max_parallel: 1 } });
+      const first = await card('First');
+      const second = await card('Second');
+      const { deps, startAgent } = makeDeps(); // its tabs are never real rows: as if closed right after the start
+      await tickOnce(deps);
+      expect(startAgent).toHaveBeenCalledTimes(1);
+      const [run] = await runsOf();
+      await followRun(followerDeps(deps.instance), run!.id);
+      expect(await db.automationRun.findUnique({ where: { id: run!.id } })).toMatchObject({ status: 'cancelled', waitingReason: TAB_CLOSED });
+      expect((await eventsOf()).filter((e) => e.kind === 'run_cancelled')).toEqual([expect.objectContaining({ runId: run!.id, payload: { reason: TAB_CLOSED, tab_id: run!.tabId } })]);
+      // the slot is free: the next tick starts a card again (max_parallel 1)
+      await tickOnce(deps);
+      expect(startAgent).toHaveBeenCalledTimes(2);
+      expect([first.id, second.id]).toContain((await runsOf()).find((r) => r.status === 'running')?.taskId);
+    });
+
+    it('a cleanup due on a run whose tab was closed settles once the run is cancelled', async () => {
+      const c = await card();
+      const { deps, removeWorkspace } = makeDeps();
+      await tickOnce(deps);
+      const [run] = await runsOf();
+      await repos.automationRuns.markCleanupDue([c.id]);
+      await tickOnce(deps);
+      expect(removeWorkspace).not.toHaveBeenCalled(); // held by the active run
+      await followRun(followerDeps(deps.instance), run!.id);
+      await tickOnce(deps);
+      expect(removeWorkspace).toHaveBeenCalledTimes(1);
+      expect((await db.automationRun.findUnique({ where: { id: run!.id } }))!.cleanupState).toBe('done');
+    });
+
+    it('a run parked for the person on a card that lost its tag is cancelled', async () => {
+      const c = await card();
+      const tab = await repos.tabs.create(projectId, machineId, 'auto');
+      const run = (await repos.automationRuns.claim({ project_id: projectId, task_id: c.id, role: 'implementer', instance: 'me' }))!;
+      await repos.automationRuns.update(run.id, 'me', { status: 'waiting', waiting_reason: 'permission_needed', tab_id: tab.id });
+      await db.tab.update({ where: { id: tab.id }, data: { state: 'working', stateAt: new Date() } });
+      await followRun(followerDeps('me'), run.id);
+      expect((await db.automationRun.findUnique({ where: { id: run.id } }))!.status).toBe('waiting');
+      await repos.tasks.setAuto(c.id, false);
+      await followRun(followerDeps('me'), run.id);
+      expect(await db.automationRun.findUnique({ where: { id: run.id } })).toMatchObject({ status: 'cancelled', waitingReason: UNTAGGED });
+      expect((await eventsOf()).map((e) => e.kind)).toEqual(['run_cancelled']);
+    });
+
+    it('takeover: a starting run that already has a tab is adopted as running and followed, not deleted', async () => {
+      const c = await card();
+      const run = (await repos.automationRuns.claim({ project_id: projectId, task_id: c.id, role: 'implementer', instance: 'dead' }))!;
+      await repos.automationRuns.update(run.id, 'dead', { status: 'starting', tab_id: 'tab-live', branch: 'b' });
+      await db.automationRun.updateMany({ where: { projectId }, data: { heartbeatAt: new Date(Date.now() - 5 * 60_000) } });
+      const onTakeOver = vi.fn();
+      const { deps, startAgent } = makeDeps({ onTakeOver });
+      const d = startDispatcher(deps, { schedule: false });
+      await d.heartbeat();
+      const row = await db.automationRun.findUnique({ where: { id: run.id } });
+      expect(row).toMatchObject({ status: 'running', claimedBy: deps.instance, tabId: 'tab-live' });
+      expect(row!.startedAt).toBeInstanceOf(Date);
+      expect(onTakeOver).toHaveBeenCalledWith(expect.objectContaining({ id: run.id, status: 'running' }));
+      expect((await eventsOf()).find((e) => e.kind === 'run_started')?.payload).toMatchObject({ tab_id: 'tab-live', adopted: true });
+      // the card keeps its one run: no second start
+      await d.tick('t');
+      await d.settle();
+      expect(startAgent).not.toHaveBeenCalled();
+    });
+
+    it('a running write that throws once is tried again: the run is running', async () => {
+      await card();
+      const { deps } = makeDeps();
+      const runs = Object.create(repos.automationRuns) as Repositories['automationRuns'];
+      let failed = 0;
+      runs.update = async (id, instance, patch) => {
+        if (patch.status === 'running' && failed++ === 0) throw new Error('db hiccup');
+        return repos.automationRuns.update(id, instance, patch);
+      };
+      await tickOnce({ ...deps, repos: { ...repos, automationRuns: runs } });
+      expect((await runsOf())[0]).toMatchObject({ status: 'running' });
+    });
+
+    it('a running write that keeps throwing: the tab is closed and the run is not left starting', async () => {
+      const c = await card();
+      const { deps, closeTab } = makeDeps();
+      const runs = Object.create(repos.automationRuns) as Repositories['automationRuns'];
+      runs.update = async (id, instance, patch) => {
+        if (patch.status === 'running') throw new Error('db down for this write');
+        return repos.automationRuns.update(id, instance, patch);
+      };
+      await tickOnce({ ...deps, repos: { ...repos, automationRuns: runs } });
+      expect(closeTab).toHaveBeenCalledWith(expect.anything(), `tab-${c.id}`);
+      expect((await runsOf())[0]).toMatchObject({ status: 'failed', waitingReason: 'RUN_NOT_RECORDED', tabId: `tab-${c.id}` });
+    });
   });
 });

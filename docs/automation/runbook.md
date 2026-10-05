@@ -52,7 +52,10 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
 4. Optional: `SMOKE_API_TOKEN` in jarvis's `.env` turns on the authenticated step of the deploy smoke test
    (`deploy/README.md`). Without it the step is skipped; rollback still works.
 5. GitHub ruleset on `main` (requires the maintainer's explicit approval, do not apply without it):
-   require a PR, require the `CI e Deploy` check, block force pushes and deletion. This is the real
+   require a PR, require the `CI e Deploy` check, "Require branches to be up to date before merging",
+   block force pushes and deletion. The up-to-date rule closes the gap between the executor's compare and
+   its merge (the base may move in between): GitHub refuses the merge (405), and the next pass updates the
+   branch and waits for CI again. This is the real
    backstop: the deny list and the merge gate live in termhub, the ruleset is enforced by GitHub even if
    the automation or its token misbehaves.
 
@@ -71,9 +74,13 @@ Project Setup, "Trabalho automático" section. Fields not listed keep their defa
 | Pasta dos worktrees (`worktrees_dir`) | default `~/.termhub/worktrees`, or a folder outside every checkout; the trust prompt above applies to it |
 | Hora do resumo diário (`summary_hour`) | an hour of the day, 0 to 23 (e.g. 18); empty = no summary |
 | Orçamento diário / por card (USD) | leave empty the first week, then set from the measured days (spike section 2) |
-| Máximo em paralelo, Retomadas por card, Tentativas de correção do CI | defaults (no cap, 3, 3) |
+| Máximo em paralelo (`max_parallel`) | 1 or 2 the first week, not "no cap": every `release` merge redeploys termhub, and each deploy interrupts the starts in flight (three in a row untag a card). Raise it once a week went by without that |
+| Retomadas por card, Tentativas de correção do CI | defaults (3, 3) |
 
-Also under the project's repository section: `repo.deploy_workflow` = `CI e Deploy`.
+Also under the project's repository section: `repo.deploy_workflow` = `CI e Deploy`. Leave the runner's
+`setup_command` empty. Never set it to something that can run longer than 3 minutes (an `npm ci` on a fresh
+worktree, say): the start watchdog reads 3 minutes without a hook as Claude's folder-trust question, so every
+run would be parked as `trust_prompt` and send an escalation push before the agent even began.
 
 Notes:
 
@@ -107,9 +114,14 @@ Notes:
 - "Pausar e interromper as abas" (the arrow next to the button): the same, and the automatic tabs are
   interrupted.
 - Chat: say "pausar tudo" to the chat agent. Same effect as the button.
-- Per project: unchecking `enabled` in Setup stops new cards for that project only.
+- Per project: unchecking `enabled` in Setup stops new cards for that project only. Runs already active stay
+  active: nothing is typed into them while it is off, and they are followed (resumed, merged) again as soon
+  as `enabled` is checked again. To stop a card for good, remove its tag or close its tab (below).
 - A failed deploy on a merge the automation made pauses the project by itself (`deploy_failed`).
-- Removing the automatic tag from a card stops it from being resumed.
+- Removing the automatic tag from a card ends its run (`cancelled`, `untagged` in the feed history) the next
+  time the follower looks at it, whether the run was working or parked for you. The tab is left open.
+- Closing an automatic run's tab ends its run the same way (`cancelled`, `tab_closed`), within a sweep
+  (30 s): the card and its `max_parallel` slot are free again. The worktree and the branch stay.
 
 ## 7. Reading the feed and the summary
 
@@ -149,6 +161,10 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 | `deploy_failed_not_paused` | Same, and the pause could not be applied | Pause the project yourself first, then section 10 |
 | `release_failed` | A release workflow failed after a merge; nothing is paused | Section 10 |
 
+`ci_cap` and `conflict_cap` also come before the cap when a fix ended without a push (the PR head did not
+move after its fixer, or after the fix typed into the card's own run): the escalation then carries
+`cause: fixer_no_push`, once per PR head. Read the fixer's tab to see why it stopped.
+
 ## 10. After a failed deploy or release
 
 - Deploy: `deploy/post-deploy.sh` runs the smoke test and rolls back to the previous colour on its own. The
@@ -179,7 +195,13 @@ git branch -D <the card's branch>              # only when its PR is merged or a
 ```
 
 Never run these on jarvis against a path outside `worktrees_dir`, and never touch the production
-containers. If the card should run again, remove the stuck run's tab and tag the card again.
+containers.
+
+A run that is stuck (its tab hangs, or it waits on something you do not want to answer) is ended by closing
+its tab: the run becomes `cancelled` (`tab_closed`) within 30 s, and the card and the slot are free. Its
+worktree stays, with whatever the agent left uncommitted; nothing is lost from the branch. If the card should
+run again, move it back to the "A fazer" column with its tag on: the next run reuses that worktree and
+branch. A cleanup that was waiting on the stuck run (after a merge) goes on by itself once the run ends.
 
 ## 12. Known limits
 

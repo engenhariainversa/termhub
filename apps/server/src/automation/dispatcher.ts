@@ -34,6 +34,9 @@ export const STALE_MS = 2 * 60_000;
 export const RETRY_BACKOFF_MS = 10 * 60_000;
 /** Failed starts in a row after which the card's tag is removed until a person tags it again. */
 export const MAX_START_FAILURES = 3;
+/** Tries of the write that marks a started run `running`, and the wait before the next (times the try). */
+export const MARK_RUNNING_TRIES = 3;
+export const MARK_RUNNING_RETRY_MS = 500;
 /** How long `stop()` waits for starts in flight before letting the process close. */
 const STOP_WAIT_MS = 10_000;
 
@@ -162,14 +165,29 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     return { token, repo: repo.full_name };
   }
 
-  /** The run is live in `tabId`: write it, then tell the feed (best effort: a lost event never turns a live run into a failed one). */
-  async function markRunning(project: Project, run: AutomationRun, task: Task, place: Extract<Placement, { machine: unknown }>, tabId: string, branch: string, linked: boolean): Promise<void> {
-    let wrote: boolean;
-    try {
-      wrote = await write(run, { status: 'running', tab_id: tabId, started_at: deps.now() });
-    } catch (e) {
-      log.warn({ runId: run.id, taskId: task.id, tabId, code: errorCode(e) }, 'automation: run started but its row was not updated');
-      return;
+  /**
+   * The run is live in `tabId`: write it, then tell the feed (best effort: a lost event never turns a live run
+   * into a failed one). A write that throws is tried again (final review I4): left `starting`, the run would be
+   * heartbeated by this live instance and never followed nor taken over. When every try fails, the tab is
+   * closed (the agent in it would work unfollowed) and the run is marked failed if the database lets it.
+   */
+  async function markRunning(ctx: ControlContext, project: Project, run: AutomationRun, task: Task, place: Extract<Placement, { machine: unknown }>, tabId: string, branch: string, linked: boolean): Promise<void> {
+    let wrote = false;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        wrote = await write(run, { status: 'running', tab_id: tabId, started_at: deps.now() });
+        break;
+      } catch (e) {
+        log.warn({ runId: run.id, taskId: task.id, tabId, attempt, code: errorCode(e) }, 'automation: run started but its row was not updated');
+        if (attempt >= MARK_RUNNING_TRIES) {
+          await closeTab(ctx, tabId).catch((err: unknown) => log.warn({ runId: run.id, tabId, code: errorCode(err) }, 'automation: tab of an unrecorded start not closed'));
+          await write(run, { status: 'failed', waiting_reason: 'RUN_NOT_RECORDED', ended_at: deps.now(), tab_id: tabId }).catch((err: unknown) =>
+            log.warn({ runId: run.id, code: errorCode(err) }, 'automation: unrecorded start not marked failed'),
+          );
+          return;
+        }
+        await new Promise((r) => setTimeout(r, MARK_RUNNING_RETRY_MS * attempt));
+      }
     }
     if (!wrote) {
       log.warn({ runId: run.id, taskId: task.id, tabId }, 'automation: run taken over by another instance while it started');
@@ -197,7 +215,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     const tabId = tabIdOfError(e);
     if (tabId && code === 'TASK_LINK_FAILED') {
       log.warn({ runId: run.id, taskId: task.id, tabId }, 'automation: agent started but the card was not linked');
-      await markRunning(project, run, task, place, tabId, branch ?? '', false);
+      await markRunning(ctx, project, run, task, place, tabId, branch ?? '', false);
       return;
     }
     log.warn({ runId: run.id, taskId: task.id, machineId: place.machine.id, tabId, code }, 'automation: start failed');
@@ -293,7 +311,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       await startFailed(ctx, project, run, task, place, branch, e);
       return;
     }
-    await markRunning(project, run, task, place, tabId, branch, true);
+    await markRunning(ctx, project, run, task, place, tabId, branch, true);
   }
 
   async function dispatchProject(projectId: string, enabledSetup: ProjectSetupData): Promise<void> {
@@ -519,16 +537,26 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     // A draining instance is on its way out: it keeps its own runs alive until it exits, but takes none.
     if (halted()) return;
     for (const run of await repos.automationRuns.takeOver(instance, STALE_MS)) {
-      // A run that never got past starting has nobody starting it any more: free the card for a new claim.
-      // A tab may exist if the instance died right after opening it; then the card left `todo` (and is
-      // linked to the tab), so it is not claimed again.
-      if (run.status === 'queued' || run.status === 'starting') {
+      if ((run.status === 'queued' || run.status === 'starting') && !run.tab_id) {
+        // never got a tab: nobody is starting it any more, so the card is free for a new claim
         await release(run);
         log.info({ runId: run.id, taskId: run.task_id }, 'automation: released an unstarted run of a silent instance');
-      } else {
-        log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id }, 'automation: took over a run');
-        deps.onTakeOver?.(run);
+        continue;
       }
+      if (run.status === 'queued' || run.status === 'starting') {
+        // the silent instance opened the tab (and may have launched the agent) but never wrote `running`
+        // (final review I4): adopted as running and followed here. A tab that is gone, or an agent that never
+        // reports a state, is then ended or escalated by the follower like any other run.
+        if (!(await write(run, { status: 'running', started_at: run.started_at ?? deps.now() }))) continue;
+        await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_started', payload: { tab_id: run.tab_id, machine_id: run.machine_id, account_id: run.account_id, branch: run.branch, adopted: true } }).catch(
+          (e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_started not recorded'),
+        );
+        log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id }, 'automation: adopted a started run of a silent instance');
+        deps.onTakeOver?.({ ...run, status: 'running' });
+        continue;
+      }
+      log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id }, 'automation: took over a run');
+      deps.onTakeOver?.(run);
     }
   }
 
@@ -557,7 +585,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     beat.unref?.();
     timers.push(every, beat);
     // a run that ended frees a slot; a lifted pause lets the queue go (D11)
-    unsubscribe.push(automationBus.subscribe((e) => (e.kind === 'resumed' || e.kind === 'run_done' || e.kind === 'run_blocked' ? poke(e.kind) : undefined)));
+    unsubscribe.push(automationBus.subscribe((e) => (e.kind === 'resumed' || e.kind === 'run_done' || e.kind === 'run_blocked' || e.kind === 'run_cancelled' ? poke(e.kind) : undefined)));
     unsubscribe.push(dispatchTriggers.subscribe(poke));
     poke('boot');
   }

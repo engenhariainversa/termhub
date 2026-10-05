@@ -9,7 +9,7 @@ import type { Tab, Task } from '../db/repositories/types.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { monitorBus } from '../monitor/bus.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
-import { escalateAutomationRun, escalationReasonText, escalationText, resumeAutomationRun, SLOT_FREE_REASONS, ANSWER_CAP, followRun, getRunCard, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
+import { cancelRun, endRunsOfMergedCard, TAB_CLOSED, UNTAGGED, escalateAutomationRun, escalationReasonText, escalationText, resumeAutomationRun, SLOT_FREE_REASONS, ANSWER_CAP, followRun, getRunCard, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
 import { stoppedTabWakeText, type StoppedTabWake } from '../chat/wake.js';
 import { automationBus } from './events.js';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
@@ -34,7 +34,7 @@ function world(o: {
   openQuestion?: boolean;
   /** the tab's newest question row (`latestQuestionForTab`) */
   question?: TabQuestion;
-  prs?: Array<{ state: string; head_ref: string; url: string; number: number }>;
+  prs?: Array<{ state: string; head_ref: string; url: string; number: number; merged_at?: Date | null }>;
   /** when the run's newest `escalated` event was recorded (`lastForRun`) */
   escalatedAt?: string;
   /** the owner's active project conversation; null = none */
@@ -977,5 +977,86 @@ describe('escalation to the person: the chat line, the slot, the resume (spec §
     const w = world();
     await reportCard(tabCtx(w.repos), { status: 'blocked', reason: 'Falta a chave da API.' });
     expect(lines(w)[0]).toMatchObject({ text: 'Automático parou em TER-1: Falta a chave da API.' });
+  });
+});
+
+describe('runs that must end (final review I1, I2)', () => {
+  it('a running run whose tab was closed ends cancelled: nothing typed, the card and slot free, an event', async () => {
+    const w = world();
+    vi.mocked(w.repos.tabs.findById).mockResolvedValue(undefined);
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'cancelled', waiting_reason: TAB_CLOSED });
+    expect(w.run.ended_at).toBeInstanceOf(Date);
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'run_cancelled', run_id: w.run.id, payload: { reason: TAB_CLOSED, tab_id: 'tab1' } })]);
+    // ended: a later sweep finds nothing to follow
+    await sweepRuns(w.deps);
+    expect(w.events).toHaveLength(1);
+  });
+
+  it('a run parked for the person whose tab was closed ends the same way', async () => {
+    const w = world({ run: { status: 'waiting', waiting_reason: 'permission_needed' } });
+    vi.mocked(w.repos.tabs.findById).mockResolvedValue(undefined);
+    await sweepRuns(w.deps);
+    expect(w.run).toMatchObject({ status: 'cancelled', waiting_reason: TAB_CLOSED });
+  });
+
+  it('a parked run whose card lost its tag is cancelled, even while the tab works', async () => {
+    const w = world({ run: { status: 'waiting', waiting_reason: 'resume_cap' }, task: { auto: false }, tab: { state: 'working' } });
+    await sweepRuns(w.deps);
+    expect(w.run).toMatchObject({ status: 'cancelled', waiting_reason: UNTAGGED });
+    expect(w.kinds()).toEqual(['run_cancelled']);
+    expect(w.type).not.toHaveBeenCalled();
+  });
+
+  it('a parked run on a card still tagged stays parked', async () => {
+    const w = world({ run: { status: 'waiting', waiting_reason: 'resume_cap' } });
+    await sweepRuns(w.deps);
+    expect(w.run.status).toBe('waiting');
+    expect(w.events).toEqual([]);
+  });
+
+  it('a running run on an untagged card is cancelled at its stop, with the event too', async () => {
+    const w = world({ task: { auto: false } });
+    await followRun(w.deps, w.run.id);
+    expect(w.run).toMatchObject({ status: 'cancelled', waiting_reason: UNTAGGED });
+    expect(w.kinds()).toEqual(['run_cancelled']);
+  });
+
+  it('cancelRun ends a run once', async () => {
+    const w = world();
+    expect(await cancelRun(w.repos, { ...w.run }, TAB_CLOSED)).toBe(true);
+    expect(await cancelRun(w.repos, { ...w.run }, TAB_CLOSED)).toBe(false);
+    expect(w.kinds()).toEqual(['run_cancelled']);
+  });
+
+  it('a PR from the run\'s branch merged while the run was on ends it done (parked or at a stop)', async () => {
+    const later = new Date(Date.now() + 60_000);
+    for (const status of ['running', 'waiting'] as const) {
+      const w = world({ run: { status, waiting_reason: status === 'waiting' ? 'permission_needed' : null }, prs: [{ state: 'merged', head_ref: 'TER-1-card', url: 'u', number: 4, merged_at: later }] });
+      await followRun(w.deps, w.run.id);
+      expect(w.run.status).toBe('done');
+      expect(w.type).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a PR of the branch merged before the run began says nothing about it', async () => {
+    const w = world({ prs: [{ state: 'merged', head_ref: 'TER-1-card', url: 'u', number: 4, merged_at: new Date('2026-01-01T00:00:00Z') }] });
+    await followRun(w.deps, w.run.id);
+    expect(w.run.status).toBe('running');
+    expect(w.type).toHaveBeenCalledTimes(1);
+  });
+
+  it('endRunsOfMergedCard ends the card\'s running or waiting run done, with no pr_opened and the card left where the merge put it', async () => {
+    const w = world({ run: { status: 'waiting', waiting_reason: 'permission_needed' }, task: { status: 'todo', tab_id: null } });
+    (w.repos.automationRuns as unknown as { activeByProject: unknown }).activeByProject = vi.fn(async () => [{ ...w.run }]);
+    expect(await endRunsOfMergedCard(w.repos, 'p1', 't1', { url: 'u', number: 4 })).toBe(1);
+    expect(w.run.status).toBe('done');
+    expect(w.kinds()).toEqual(['run_done']);
+    expect(w.events[0]!.payload).toMatchObject({ via: 'merged', pr_url: 'u' });
+    expect(w.repos.tasks.setTab).not.toHaveBeenCalled();
+    expect(w.repos.tasks.startWork).not.toHaveBeenCalled();
+    // another card's run is left alone
+    expect(await endRunsOfMergedCard(w.repos, 'p1', 't-other', { url: 'u', number: 4 })).toBe(0);
   });
 });

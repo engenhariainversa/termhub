@@ -56,6 +56,19 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await db.automationRun.count({ where: { taskId } })).toBe(1);
   });
 
+  it('a marker (final review I3): written ended, once per trigger, beside an active run of the card; lastEndedAt reads it', async () => {
+    expect(await runs.lastEndedAt(taskId)).toBeNull();
+    const active = (await claim('blue'))!;
+    const marker = (i: string) => runs.insertMarker({ project_id: projectId, task_id: taskId, role: 'fixer', instance: i, trigger_sha: 'conflict_cap:h1', waiting_reason: 'conflict_cap' });
+    const [a, b] = await Promise.all([marker('blue'), marker('green')]);
+    const won = [a, b].filter((m) => m !== null);
+    expect(won).toEqual([expect.objectContaining({ status: 'blocked', waiting_reason: 'conflict_cap', trigger_sha: 'conflict_cap:h1' })]);
+    expect(won[0]!.ended_at).toBeInstanceOf(Date);
+    expect((await runs.findById(active.id))!.status).toBe('queued');
+    expect(await runs.countTriggered(taskId, 'fixer', 'conflict_cap')).toBe(0);
+    expect((await runs.lastEndedAt(taskId))!.getTime()).toBe(won[0]!.ended_at!.getTime());
+  });
+
   it('a triggered run (spike R2): one per (card, role, PR head), never again after it ended, a new head gets its own', async () => {
     const fixer = (instance: string, sha: string) => runs.claim({ project_id: projectId, task_id: taskId, role: 'fixer', instance, trigger_sha: sha });
     const results = await Promise.all([fixer('blue', 'h1'), fixer('green', 'h1')]);
