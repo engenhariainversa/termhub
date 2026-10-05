@@ -232,7 +232,7 @@ describe('the answer cap (review I2)', () => {
     for (let i = 0; i <= AUTOMATION_ANSWERS_MAX_PER_RUN; i++) outcomes.push(await automationAnswer(w.deps, card(one(item([['A', true], ['B', false]], `Pergunta ${i}?`)), { id: `q${i}` }), w.run));
     expect(outcomes.slice(0, AUTOMATION_ANSWERS_MAX_PER_RUN).every((o) => o === 'recommended')).toBe(true);
     expect(outcomes.at(-1)).toBe('escalated');
-    expect(w.run.waiting_reason).toBe(ANSWER_CAP);
+    expect(w.run.waiting_reason).toBe(ANSWER_RUN_CAP);
   });
 });
 
