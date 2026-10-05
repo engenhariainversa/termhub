@@ -77,6 +77,26 @@ export async function recordEvent(
   if (project?.owner_id) automationBus.publish({ ...row, owner_id: project.owner_id });
 }
 
+/**
+ * Takes a once-only event (a unique index guards its kind, like `ci_fix_requested`) without telling anyone:
+ * null when another call, on this colour or the other, holds it. The caller settles it (`settleEvent`) once
+ * it acted, or gives it back (`automationEvents.remove`) so a later pass may take it again.
+ */
+export async function claimEvent(
+  repos: Repositories,
+  e: { project_id: string; task_id: string; kind: AutomationEventKind; payload: AutomationEventPayload },
+): Promise<AutomationEvent | null> {
+  return repos.automationEvents.insertOnce({ project_id: e.project_id, task_id: e.task_id, run_id: null, kind: e.kind, payload: flatPayload(e.payload) });
+}
+
+/** Writes the claimed event's outcome and pushes it to the owner's sockets, as `recordEvent` does. */
+export async function settleEvent(repos: Repositories, claim: AutomationEvent, payload: AutomationEventPayload): Promise<void> {
+  const row = await repos.automationEvents.setPayload(claim.id, flatPayload(payload));
+  if (!row) return;
+  const project = await repos.projects.findById(row.project_id);
+  if (project?.owner_id) automationBus.publish({ ...row, owner_id: project.owner_id });
+}
+
 /** A project's events, newest first, for the activity feed (`before` pages back). */
 export async function listAutomationEvents(ctx: ControlContext, projectId: string, opts: { before?: string; limit?: number } = {}): Promise<AutomationEvent[]> {
   const { project } = await ctx.scoped.project(projectId);

@@ -26,6 +26,8 @@ export const START_FAILED = 'start_failed';
 export const AGENT_EXITED = 'agent_exited';
 /** A PR still in conflict after `fix_attempts` fixer runs (merge executor, spike R2): a person resolves it. */
 export const CONFLICT_CAP = 'conflict_cap';
+/** A PR whose CI is still red after `fix_attempts` fixes (spec D21, shared with the conflict fixes): a person looks at it. */
+export const CI_CAP = 'ci_cap';
 /** The agent itself said it is stuck (`report_card blocked`). */
 export const REPORTED_BLOCKED = 'reported_blocked';
 
@@ -50,6 +52,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [DEPLOY_FAILED]: tk('O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.'),
   [DEPLOY_FAILED_NOT_PAUSED]: tk('O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.'),
   [RELEASE_FAILED]: tk('Um workflow de publicação falhou depois do merge; confira a execução.'),
+  [CI_CAP]: tk('O CI do PR continua falhando depois das tentativas de correção; confira o PR.'),
   [CONFLICT_CAP]: tk('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
 };
 

@@ -290,9 +290,10 @@ async function finishBlocked(repos: Repositories, run: AutomationRun, code: stri
 }
 
 /** The PR fallback of D17: an open PR the CI sync linked to the card, from the run's branch. Not for an
- *  integrator: the server opened the epic PR before the run started, so it says nothing about the run. */
+ *  integrator or a fixer: their PR existed before the run started (the server opened the epic PR; a fixer
+ *  answers a conflict or a red CI on an open PR), so it says nothing about the run. */
 async function openPrOfRun(repos: Repositories, run: AutomationRun): Promise<{ url: string; number: number } | null> {
-  if (!run.task_id || !run.branch || run.role === 'integrator') return null;
+  if (!run.task_id || !run.branch || run.role === 'integrator' || run.role === 'fixer') return null;
   const pr = (await repos.taskPullRequests.listByTasks([run.task_id])).find((p) => p.state === 'open' && p.head_ref === run.branch);
   return pr ? { url: pr.url, number: pr.number } : null;
 }

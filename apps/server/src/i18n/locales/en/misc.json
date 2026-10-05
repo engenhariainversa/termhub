@@ -65,5 +65,7 @@
   "Automático mesclou o PR #{{n}} de {{ref}}: {{url}}": "Automatic work merged PR #{{n}} of {{ref}}: {{url}}",
   "O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.": "The deploy failed after the merge; automatic work on the project was paused. Check the deploy and resume once it is resolved.",
   "Um workflow de publicação falhou depois do merge; confira a execução.": "A publishing workflow failed after the merge; check the run.",
-  "O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.": "The deploy failed after the merge and automatic work on the project could not be paused; pause the project and check the deploy."
+  "O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.": "The deploy failed after the merge and automatic work on the project could not be paused; pause the project and check the deploy.",
+  "O CI do PR continua falhando depois das tentativas de correção; confira o PR.": "The PR's CI is still failing after the fix attempts; check the PR.",
+  "CI vermelho depois das tentativas de correção": "CI still red after the fix attempts"
 }

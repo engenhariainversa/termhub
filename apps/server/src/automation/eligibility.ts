@@ -22,7 +22,8 @@ export type IneligibleReason =
   | 'merge_base_pending'
   | 'merge_updating'
   | 'merge_no_write'
-  | 'merge_conflict_cap';
+  | 'merge_conflict_cap'
+  | 'merge_ci_cap';
 
 /** What the card shows when it is tagged but does not run (spec §5). `not_in_todo` is not shown: backlog, doing and done are not "waiting". */
 export const REASON_TEXT: Record<IneligibleReason, string> = {
@@ -44,6 +45,7 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   merge_updating: tk('Atualizando o PR com a branch base'),
   merge_no_write: tk('Integração do GitHub sem permissão de escrita'),
   merge_conflict_cap: tk('PR com conflito depois das tentativas de correção'),
+  merge_ci_cap: tk('CI vermelho depois das tentativas de correção'),
 };
 
 export interface EligibilityInput {

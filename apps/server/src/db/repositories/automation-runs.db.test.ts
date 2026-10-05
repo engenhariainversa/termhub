@@ -72,6 +72,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await claim('blue')).not.toBeNull();
   });
 
+  it('sums the fixes typed into the card\'s runs (red CI, D21)', async () => {
+    expect(await runs.sumFixCount(taskId)).toBe(0);
+    const first = (await claim('blue'))!;
+    await runs.bump(first.id, 'fix_count');
+    await runs.bump(first.id, 'fix_count');
+    await runs.update(first.id, 'blue', { status: 'done', ended_at: new Date() });
+    const second = (await claim('blue'))!;
+    await runs.bump(second.id, 'fix_count');
+    expect(await runs.sumFixCount(taskId)).toBe(3);
+  });
+
   it('an epic\'s integrator runs (Task 26): one per epic branch head, and their statuses for the cap', async () => {
     const integrator = (instance: string, sha: string) => runs.claim({ project_id: projectId, task_id: taskId, role: 'integrator', instance, trigger_sha: sha });
     const results = await Promise.all([integrator('blue', 'e1'), integrator('green', 'e1')]);

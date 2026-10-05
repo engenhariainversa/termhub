@@ -160,6 +160,13 @@ describe('following a run (spec D15, F-13)', () => {
     expect(w.type).toHaveBeenCalledTimes(1);
   });
 
+  it('a fixer stopping with its PR open is resumed, not ended (the PR existed before the fixer started)', async () => {
+    const w = world({ run: { role: 'fixer', branch: 'TER-1-card' }, prs: [{ state: 'open', head_ref: 'TER-1-card', url: 'https://github.com/o/r/pull/9', number: 9 }] });
+    await followRun(w.deps, w.run.id);
+    expect(w.run.status).toBe('running');
+    expect(w.type).toHaveBeenCalledTimes(1);
+  });
+
   it('a PR from another branch, or closed, does not end the run', async () => {
     const w = world({ prs: [{ state: 'open', head_ref: 'other', url: 'u1', number: 1 }, { state: 'closed', head_ref: 'TER-1-card', url: 'u2', number: 2 }] });
     await followRun(w.deps, w.run.id);

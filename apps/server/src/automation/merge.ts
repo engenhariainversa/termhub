@@ -1,5 +1,8 @@
 import { z } from 'zod';
+import { AGENT_EXITED_TEXT } from '../chat/agent-exited.js';
 import { chatBus } from '../chat/bus.js';
+import { isAccountSwapState } from '../control/account-swap.js';
+import { controlContextFor, type ControlContext } from '../control/context.js';
 import { askForAutomation } from '../chat/gate-runtime.js';
 import { FAILED, latestPerWorkflow, matchesWorkflow, type WorkflowRun } from '../ci/rules.js';
 import { setCiError } from '../ci/status.js';
@@ -7,21 +10,22 @@ import type { Repositories } from '../db/repositories/index.js';
 import { ACTIVE_RUN_STATUSES } from '../db/repositories/automation-runs.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import type { TaskPullRequest } from '../db/repositories/task-pull-requests.js';
-import type { Project, Task } from '../db/repositories/types.js';
+import type { Project, Tab, Task } from '../db/repositories/types.js';
 import { localeOf, t } from '../i18n/index.js';
 import { GithubCiError, type GithubCiClient } from '../integrations/github-ci.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
+import { RATE_LIMIT_TEXT } from '../monitor/state.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { epicBranchName, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
-import { CONFLICT_CAP } from './escalation-text.js';
-import { recordEvent } from './events.js';
-import { escalateRun } from './follower.js';
+import { CI_CAP, CONFLICT_CAP } from './escalation-text.js';
+import { claimEvent, recordEvent, settleEvent } from './events.js';
+import { defaultType, escalateDelivery, escalateRun } from './follower.js';
 import { clearMergeWait, noteMergeWait, type MergeWait } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { allows, requiredLevel, type NeededLevel } from './policy.js';
-import { fixerPrompt } from './prompts.js';
+import { fixerPrompt, serverMessage } from './prompts.js';
 
 /** The chat card's tool: a merge above the project's level waits for the person (spec D7). */
 export const MERGE_TOOL = 'automation_merge';
@@ -36,8 +40,10 @@ export interface MergeDeps {
   lifecycle: { readonly draining: boolean };
   /** This process's instance id: the cap marker run is written under it. */
   instance: string;
-  /** Starts the conflict fixer: the dispatcher's `startTriggered`. */
+  /** Starts a fixer (a conflict or a red CI): the dispatcher's `startTriggered`. */
   startFixer(i: TriggeredRun): Promise<TriggeredStart>;
+  /** Types a line into the tab of the run that owns a red PR, as the project's owner. Default: the follower's `defaultType`. */
+  type?: (ctx: ControlContext, tabId: string, text: string) => Promise<void>;
   now?: () => Date;
   log?: Log;
   /** Green readings per PR (`<project>:<repo>#<n>` → head sha): with no `required_checks`, a merge needs two
@@ -180,7 +186,8 @@ const sameTarget = (c: PullCtx, row: TaskPullRequest, pull: { head_ref: string; 
  * For each open PR of an automatic card's own branch (`candidateOf`) whose CI is green: merges it (squash,
  * the PR's own title) when the project's level allows what its files need, or asks the owner once per PR head
  * with an irreversible card. Store paths, and a file list GitHub could not give whole, always ask. A PR in
- * conflict gets one fixer run per head, up to `fix_attempts`. Red CI is not handled here. Nothing happens
+ * conflict gets one fixer run per head, and a red CI one fix request per head (`onRedCi`), both up to
+ * `fix_attempts` together. Nothing happens
  * while the instance drains, the project is paused, or its automation is off.
  */
 export async function runMergeExecutor(deps: MergeDeps, projectId: string): Promise<void> {
@@ -236,9 +243,10 @@ async function handlePull(c: PullCtx): Promise<void> {
   const row = c.rows[0]!;
   const seen = deps.seen ?? defaultSeen;
   const seenKey = `${c.project.id}:${repo}#${row.number}`;
-  // `none` is never green; red CI belongs to the fixer of the red-CI task
+  // `none` is never green
   if (row.ci_state === 'failed' || row.ci_state === 'none') {
     seen.delete(seenKey);
+    if (row.ci_state === 'failed') await onRedCi(c, row);
     return;
   }
   if (!(await checksGreen(c, row, seen, seenKey))) return;
@@ -360,7 +368,7 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   const { repos } = deps;
   const log = deps.log ?? noopLog;
   const task = c.primary;
-  const used = await repos.automationRuns.countTriggered(task.id, 'fixer', CONFLICT_CAP);
+  const used = await fixesUsed(repos, task.id);
   if (used >= c.setup.automation.fix_attempts) {
     // the marker takes this head's trigger: the escalation happens once per head, on whichever colour
     const marker = await repos.automationRuns.claim({ project_id: c.project.id, task_id: task.id, role: 'fixer', instance: deps.instance, trigger_sha: row.head_sha });
@@ -374,6 +382,113 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: row.head_sha, branch: row.head_ref, base, prompt });
   if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a conflict');
 }
+
+/**
+ * The fixes a card's PR already had (spec D21): its conflict and red-CI fixer runs (keyed by the PR head;
+ * the conflict cap's marker run is not one) and the red-CI fixes typed into its own runs (`fix_count`).
+ * One cap, `fix_attempts`, for both.
+ */
+async function fixesUsed(repos: Repositories, taskId: string): Promise<number> {
+  const [runs, typed] = await Promise.all([repos.automationRuns.countTriggered(taskId, 'fixer', CONFLICT_CAP), repos.automationRuns.sumFixCount(taskId)]);
+  return runs + typed;
+}
+
+/** What the red-CI message names: the failing workflows' names (never a log line), or a neutral word. */
+const failingJobs = (row: TaskPullRequest) => {
+  const names = row.ci_summary.failing.map((n) => n.trim()).filter((n) => n.length > 0);
+  return names.length > 0 ? names.join(', ') : 'checks do PR';
+};
+
+/** A claim no colour settled within this long was left by a process that stopped mid-way: it may be taken again. */
+export const CI_CLAIM_STALE_MS = 10 * 60_000;
+
+/**
+ * A red CI on the PR's head (spec D21, F-27): asked to fix once per head SHA. Pause, drain, `enabled` and
+ * the card's tag are read fresh first; then the card's `ci_fix_requested` event for (PR, SHA) is claimed —
+ * a unique index makes that insert the one claim across colours — before anything is typed, started or
+ * escalated, and settled with the outcome (`via`). Under `fix_attempts` (shared with the conflict fixes):
+ * typed into the run that owns the PR when its tab can take it (`[termhub automático] O CI falhou em
+ * <jobs>…`, then `fix_count` bumped), else a fixer run keyed by the head when the card has no active run.
+ * An active run whose tab cannot take a line now (a question, a limit, an exit), no place for the fixer, or
+ * a stop found right before typing gives the claim back: the next sync asks again. At the cap: escalated,
+ * once per head. Only job names are sent, never logs.
+ */
+async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
+  const { deps } = c;
+  const { repos } = deps;
+  const log = deps.log ?? noopLog;
+  const task = c.primary;
+  const sha = row.head_sha;
+
+  // D24 and the tag (spec §13), read fresh before anything is claimed, typed, started or escalated
+  if (await stopped(c)) return;
+  const fresh = await repos.tasks.findById(task.id);
+  if (!fresh?.auto) return;
+
+  const key = { pr: row.number, sha };
+  const about = { project_id: c.project.id, task_id: task.id, kind: 'ci_fix_requested' as const };
+  let claim = await claimEvent(repos, { ...about, payload: { ...key, url: row.url, via: 'pending' } });
+  if (!claim) {
+    // a claim nobody settled (the process stopped mid-way) is taken again once it is stale
+    const stale = await repos.automationEvents.removeStale(task.id, 'ci_fix_requested', { ...key, via: 'pending' }, new Date(now(deps).getTime() - CI_CLAIM_STALE_MS));
+    if (stale === 0) return;
+    claim = await claimEvent(repos, { ...about, payload: { ...key, url: row.url, via: 'pending' } });
+    if (!claim) return;
+  }
+  const held = claim;
+  const settle = (via: 'typed' | 'fixer' | 'escalated', extra: Record<string, string | number> = {}) => settleEvent(repos, held, { ...key, url: row.url, via, ...extra });
+  const giveBack = () => repos.automationEvents.remove(held.id);
+
+  let acted = false;
+  try {
+    const used = await fixesUsed(repos, task.id);
+    if (used >= c.setup.automation.fix_attempts) {
+      waitOn(c, 'merge_ci_cap');
+      acted = true;
+      await settle('escalated', { attempts: used });
+      await escalateDelivery(repos, { project_id: c.project.id, task_id: task.id }, CI_CAP, log, { pr: row.number, url: row.url, sha, attempts: used });
+      return;
+    }
+    const jobs = failingJobs(row);
+
+    const owner = (await repos.automationRuns.activeByProject(c.project.id)).find((r) => r.task_id === task.id);
+    if (owner) {
+      if (owner.status !== 'running' || !owner.tab_id || owner.branch !== row.head_ref) return void (await giveBack());
+      const tab = await repos.tabs.findById(owner.tab_id);
+      if (!tab || !takesLine(tab) || (await repos.tabQuestions.hasOpenQuestion(tab.id))) return void (await giveBack());
+      const user = await repos.users.findById(c.project.owner_id);
+      if (!user || (await stopped(c))) return void (await giveBack());
+      await (deps.type ?? defaultType)(controlContextFor(repos, user), tab.id, serverMessage(`O CI falhou em ${jobs}. Corrija e faça push.`));
+      acted = true;
+      const count = await repos.automationRuns.bump(owner.id, 'fix_count');
+      await repos.automationRuns.noteTyped(owner.id, now(deps));
+      await settle('typed', { run_id: owner.id, count });
+      log.info({ projectId: c.project.id, taskId: task.id, runId: owner.id, pr: row.number }, 'automation: red CI sent to the run that owns the PR');
+      return;
+    }
+
+    const base = row.base_ref ?? c.baseBranch;
+    const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${jobs}`, custom: c.setup.automation.prompts.fixer });
+    const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: sha, branch: row.head_ref, base, prompt });
+    // waiting for a place or halted: the next sync asks again. Taken: a fixer already holds this head's trigger.
+    if (started === 'waiting' || started === 'halted') return void (await giveBack());
+    acted = true;
+    await settle('fixer');
+    if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a red CI');
+  } catch (e) {
+    // nothing reached the tab, the fixer or the person yet: the head is asked again at the next sync
+    if (!acted) await giveBack().catch(() => {});
+    throw e;
+  }
+}
+
+/** Whether a line typed into the tab reaches the agent now: it is on, and not on a limit, a swap or an exit. */
+const takesLine = (tab: Tab) =>
+  (tab.state === 'waiting_input' || tab.state === 'working' || tab.state === 'waiting_background') &&
+  tab.rate_limited_at === null &&
+  !(tab.state_text ?? '').startsWith(RATE_LIMIT_TEXT) &&
+  !isAccountSwapState(tab.state_text) &&
+  tab.state_text !== AGENT_EXITED_TEXT;
 
 /** Above the level (D7): one irreversible card per PR head in the owner's project chat, and its event. */
 async function askApproval(c: PullCtx, row: TaskPullRequest, base: string, needed: NeededLevel | 'files_incomplete'): Promise<void> {

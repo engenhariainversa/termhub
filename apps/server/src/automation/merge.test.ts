@@ -48,7 +48,10 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
     prs: o.prs ?? [pr()],
     paused: o.paused ?? false,
     actions: [] as ChatAction[],
-    runs: [] as Array<{ id: string; task_id: string; role: string; trigger_sha: string | null; status: string; waiting_reason: string | null }>,
+    runs: [] as Array<{ id: string; task_id: string; role: string; trigger_sha: string | null; status: string; waiting_reason: string | null; tab_id: string | null; branch: string | null; fix_count: number }>,
+    tabs: {} as Record<string, { id: string; state: string | null; state_text: string | null; rate_limited_at: string | null }>,
+    openQuestion: false,
+    eventSeq: 0,
     events: [] as Array<{ kind: string; task_id?: string | null; payload?: Record<string, unknown> }>,
     messages: [] as string[],
   };
@@ -96,7 +99,27 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
         state.events.push(e);
         return { id: 'ev', created_at: '', ...e };
       }),
+      // the unique index of ci_fix_requested (task, pr, sha); a tick before the check lets two passes interleave
+      insertOnce: vi.fn(async (e: { kind: string; task_id: string; payload: Record<string, unknown> }) => {
+        await Promise.resolve();
+        if (state.events.some((x) => x.kind === e.kind && x.task_id === e.task_id && x.payload?.pr === e.payload.pr && x.payload?.sha === e.payload.sha)) return null;
+        const row = { id: `ev${++state.eventSeq}`, created_at: '', ...e };
+        state.events.push(row);
+        return row;
+      }),
+      setPayload: vi.fn(async (id: string, payload: Record<string, unknown>) => {
+        const row = state.events.find((x) => (x as { id?: string }).id === id);
+        if (!row) return null;
+        row.payload = payload;
+        return row;
+      }),
+      remove: vi.fn(async (id: string) => {
+        state.events = state.events.filter((x) => (x as { id?: string }).id !== id);
+      }),
+      removeStale: vi.fn(async () => 0),
     },
+    tabs: { findById: vi.fn(async (id: string) => state.tabs[id]) },
+    tabQuestions: { hasOpenQuestion: vi.fn(async () => state.openQuestion) },
     automationRuns: {
       // the branches the cards' automatic runs worked on
       branchesOfTask: vi.fn(async (taskId: string) => (taskId === 'c3' ? [] : [BRANCH[taskId]!])),
@@ -105,7 +128,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
       countTriggered: vi.fn(async (taskId: string, role: string, except: string) => (o.triggered ?? 0) + state.runs.filter((r) => r.task_id === taskId && r.role === role && r.trigger_sha && r.waiting_reason !== except).length),
       claim: vi.fn(async (i: { task_id: string; role: string; trigger_sha?: string }) => {
         if (state.runs.some((r) => r.task_id === i.task_id && r.role === i.role && r.trigger_sha === i.trigger_sha)) return null;
-        const r = { id: `r${state.runs.length + 1}`, project_id: 'p1', task_id: i.task_id, role: i.role, trigger_sha: i.trigger_sha ?? null, status: 'queued', waiting_reason: null, tab_id: null, claimed_by: 'test' };
+        const r = { id: `r${state.runs.length + 1}`, project_id: 'p1', task_id: i.task_id, role: i.role, trigger_sha: i.trigger_sha ?? null, status: 'queued', waiting_reason: null, tab_id: null, branch: null, fix_count: 0, claimed_by: 'test' };
         state.runs.push(r);
         return r;
       }),
@@ -113,6 +136,10 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
         Object.assign(state.runs.find((r) => r.id === id)!, patch);
         return true;
       }),
+      activeByProject: vi.fn(async () => state.runs.filter((r) => ['queued', 'starting', 'running', 'waiting'].includes(r.status))),
+      sumFixCount: vi.fn(async (taskId: string) => state.runs.filter((r) => r.task_id === taskId).reduce((n, r) => n + r.fix_count, 0)),
+      bump: vi.fn(async (id: string) => ++state.runs.find((r) => r.id === id)!.fix_count),
+      noteTyped: vi.fn(async () => {}),
     },
   } as unknown as Repositories;
 
@@ -138,12 +165,17 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
     findOpenPull: vi.fn(),
   };
   const ci = { listRuns: vi.fn(async (_t: string, _r: string, _sha: string): Promise<WorkflowRun[]> => [run('ci', 'completed', 'success')]) };
-  const startFixer = vi.fn(async () => 'started' as const);
+  // a started fixer is a run keyed by the head; it ends at once here (each test drives the runs it needs active)
+  const startFixer = vi.fn(async (i: { taskId: string; triggerSha: string; branch: string }): Promise<'started' | 'taken' | 'waiting' | 'halted'> => {
+    state.runs.push({ id: `r${state.runs.length + 1}`, task_id: i.taskId, role: 'fixer', trigger_sha: i.triggerSha, status: 'done', waiting_reason: null, tab_id: null, branch: i.branch, fix_count: 0 });
+    return 'started';
+  });
+  const type = vi.fn(async (_ctx: unknown, _tab: string, _text: string) => {});
   const lifecycle = { draining: false };
   // one green reading already seen for h1: the merge happens on this pass (the two-readings rule has its own test)
   const seen = new Map([['p1:acme/app#7', 'h1']]);
-  const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, seen, now: () => new Date('2026-10-05T12:00:00Z') };
-  return { state, repos, gh, ci, startFixer, lifecycle, seen, deps, pullFor };
+  const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, type, seen, now: () => new Date('2026-10-05T12:00:00Z') };
+  return { state, repos, gh, ci, startFixer, type, lifecycle, seen, deps, pullFor };
 }
 
 const approve = (a: ChatAction) => {
@@ -201,13 +233,15 @@ describe('runMergeExecutor', () => {
     }
   });
 
-  it('red CI, or no CI at all, does nothing here', async () => {
-    for (const ci_state of ['failed', 'none', 'running'] as const) {
+  it('no CI at all, or CI still running, does nothing here', async () => {
+    for (const ci_state of ['none', 'running'] as const) {
       const w = world({ prs: [pr({ ci_state })] });
       await runMergeExecutor(w.deps, 'p1');
       expect(w.gh.pull).not.toHaveBeenCalled();
       expect(w.gh.merge).not.toHaveBeenCalled();
       expect(w.state.actions).toHaveLength(0);
+      expect(w.startFixer).not.toHaveBeenCalled();
+      expect(w.type).not.toHaveBeenCalled();
     }
   });
 
@@ -711,5 +745,184 @@ describe('mergeApproved', () => {
     w.state.actions.push({ id: 'x1', tool: 'close_tab', status: 'approved', args: {}, conversation_id: 'conv1' } as unknown as ChatAction);
     await mergeApproved(w.deps, 'x1');
     expect(w.repos.chatActions.claimApproved).not.toHaveBeenCalled();
+  });
+});
+
+describe('red CI (spec D21)', () => {
+  const red = (sha: string, failing = ['ci', 'e2e']) => pr({ head_sha: sha, ci_state: 'failed', ci_summary: { total: 2, passed: 0, failed: failing.length, running: 0, failing } });
+  const requests = (w: ReturnType<typeof world>) => w.state.events.filter((e) => e.kind === 'ci_fix_requested');
+  const NOW = new Date('2026-10-05T12:00:00Z');
+
+  /** The implementer run that opened the PR, still on in its tab. */
+  function owningRun(w: ReturnType<typeof world>, tab: Partial<{ state: string | null; state_text: string | null; rate_limited_at: string | null }> = {}) {
+    w.state.runs.push({ id: 'impl', task_id: 'c1', role: 'implementer', trigger_sha: null, status: 'running', waiting_reason: null, tab_id: 'tab1', branch: BRANCH.c1!, fix_count: 0 });
+    w.state.tabs.tab1 = { id: 'tab1', state: 'waiting_input', state_text: null, rate_limited_at: null, ...tab };
+  }
+
+  it('the owning run alive: typed into its tab with the failing job names only, fix_count bumped; the same SHA on two syncs is one request', async () => {
+    const w = world({ prs: [red('h1')] });
+    owningRun(w);
+    await runMergeExecutor(w.deps, 'p1');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.type).toHaveBeenCalledTimes(1);
+    expect(w.type).toHaveBeenCalledWith(expect.anything(), 'tab1', '[termhub automático] O CI falhou em ci, e2e. Corrija e faça push.');
+    expect(w.startFixer).not.toHaveBeenCalled();
+    expect(w.state.runs.find((r) => r.id === 'impl')!.fix_count).toBe(1);
+    expect(requests(w)).toEqual([expect.objectContaining({ task_id: 'c1', payload: expect.objectContaining({ pr: 7, sha: 'h1', via: 'typed', run_id: 'impl', count: 1 }) })]);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(w.gh.pull).not.toHaveBeenCalled();
+  });
+
+  it('the implementer run ended: a fixer run keyed by the PR head with the CI prompt; once per SHA', async () => {
+    const w = world({ prs: [red('h1', ['Build web'])] });
+    await runMergeExecutor(w.deps, 'p1');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.startFixer).toHaveBeenCalledTimes(1);
+    expect(w.startFixer).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1', taskId: 'c1', role: 'fixer', triggerSha: 'h1', branch: BRANCH.c1, base: EPIC_BRANCH }));
+    const { prompt } = (w.startFixer.mock.calls[0] as unknown as [{ prompt: string }])[0];
+    expect(prompt).toContain('O CI do PR do card TER-5 falhou.');
+    expect(prompt).toContain('Jobs com falha: Build web');
+    expect(w.type).not.toHaveBeenCalled();
+    expect(requests(w)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ pr: 7, sha: 'h1', via: 'fixer' }) })]);
+  });
+
+  it('a CI that keeps failing: three red SHAs get three fix requests, the fourth escalates once (Review Focus 3)', async () => {
+    const w = world({ prs: [red('h1')] });
+    owningRun(w);
+    await runMergeExecutor(w.deps, 'p1');
+    // the implementer ends; each new red head gets a fixer
+    w.state.runs.find((r) => r.id === 'impl')!.status = 'done';
+    for (const sha of ['h2', 'h3']) {
+      w.state.prs = [red(sha)];
+      await runMergeExecutor(w.deps, 'p1');
+    }
+    expect(w.type).toHaveBeenCalledTimes(1);
+    expect(w.startFixer).toHaveBeenCalledTimes(2);
+    w.state.prs = [red('h4')];
+    await runMergeExecutor(w.deps, 'p1');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.type).toHaveBeenCalledTimes(1);
+    expect(w.startFixer).toHaveBeenCalledTimes(2);
+    expect(requests(w).map((e) => e.payload?.via)).toEqual(['typed', 'fixer', 'fixer', 'escalated']);
+    expect(w.state.events.filter((e) => e.kind === 'escalated')).toEqual([
+      expect.objectContaining({ task_id: 'c1', payload: expect.objectContaining({ reason: 'ci_cap', pr: 7, sha: 'h4', attempts: 3 }) }),
+    ]);
+    expect(w.state.messages).toEqual(['Automático parou em TER-5: O CI do PR continua falhando depois das tentativas de correção; confira o PR.']);
+    expect(mergeWaitOf('c1', NOW)).toBe('merge_ci_cap');
+  });
+
+  it('conflict fixers count against the same cap', async () => {
+    const w = world({ prs: [red('h1')], triggered: 3 });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.startFixer).not.toHaveBeenCalled();
+    expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(1);
+  });
+
+  it('fix_attempts 0 escalates at once: nothing typed, no fixer', async () => {
+    const w = world({ setup: setupWith({ fix_attempts: 0 }), prs: [red('h1')] });
+    owningRun(w);
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.startFixer).not.toHaveBeenCalled();
+    expect(w.state.events.filter((e) => e.kind === 'escalated')).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'ci_cap', attempts: 0 }) })]);
+  });
+
+  it('automation off, or paused: nothing typed, started, recorded or escalated', async () => {
+    for (const o of [{ setup: setupWith({ enabled: false }) }, { paused: true }]) {
+      const w = world({ ...o, prs: [red('h1')] });
+      owningRun(w);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.type).not.toHaveBeenCalled();
+      expect(w.startFixer).not.toHaveBeenCalled();
+      expect(w.state.events).toEqual([]);
+    }
+  });
+
+  it('an owning tab that cannot take a line now (a question, a limit, an exit) is asked again on a later sync, not reported', async () => {
+    const cases: Array<(w: ReturnType<typeof world>) => void> = [
+      (w) => void (w.state.openQuestion = true),
+      (w) => void (w.state.tabs.tab1!.rate_limited_at = '2026-10-05T11:59:00Z'),
+      (w) => void Object.assign(w.state.tabs.tab1!, { state: 'idle', state_text: 'Agente encerrado sem terminar o turno' }),
+    ];
+    for (const block of cases) {
+      const w = world({ prs: [red('h1')] });
+      owningRun(w);
+      block(w);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.type).not.toHaveBeenCalled();
+      expect(w.startFixer).not.toHaveBeenCalled();
+      expect(requests(w)).toEqual([]);
+    }
+  });
+
+  it('no place for the fixer yet: not reported, asked again at the next sync', async () => {
+    const w = world({ prs: [red('h1')] });
+    w.startFixer.mockResolvedValueOnce('waiting');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(requests(w)).toEqual([]);
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.startFixer).toHaveBeenCalledTimes(2);
+    expect(requests(w)).toHaveLength(1);
+  });
+
+  it('two colours on the same red head at once: one line typed, one fix counted, one request (F-27)', async () => {
+    const w = world({ prs: [red('h1')] });
+    owningRun(w);
+    await Promise.all([runMergeExecutor(w.deps, 'p1'), runMergeExecutor({ ...w.deps, seen: new Map() }, 'p1')]);
+    expect(w.type).toHaveBeenCalledTimes(1);
+    expect(w.state.runs.find((r) => r.id === 'impl')!.fix_count).toBe(1);
+    expect(requests(w)).toHaveLength(1);
+  });
+
+  it('two colours at the cap at once: one escalation', async () => {
+    const w = world({ prs: [red('h1')], triggered: 3 });
+    await Promise.all([runMergeExecutor(w.deps, 'p1'), runMergeExecutor({ ...w.deps, seen: new Map() }, 'p1')]);
+    expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(1);
+    expect(w.state.messages).toHaveLength(1);
+  });
+
+  it('a pause or untag that lands during the pass: not even the cap escalates', async () => {
+    const off = world({ setup: setupWith({ fix_attempts: 0 }), prs: [red('h1')] });
+    vi.mocked(off.repos.projectSetup.get).mockResolvedValueOnce({ data: setupWith({ fix_attempts: 0 }) } as never).mockResolvedValue({ data: setupWith({ fix_attempts: 0, enabled: false }) } as never);
+    const untagged = world({ setup: setupWith({ fix_attempts: 0 }), prs: [red('h1')] });
+    let reads = 0;
+    vi.mocked(untagged.repos.tasks.findById).mockImplementation((async (id: string) => (id === 'c1' && ++reads > 1 ? { ...CARD, auto: false } : id === 'c1' ? CARD : EPIC)) as never);
+    for (const w of [off, untagged]) {
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.state.events).toEqual([]);
+      expect(w.state.messages).toEqual([]);
+    }
+  });
+
+  it('a line that fails to type counts nothing and gives the head back: the next sync types it', async () => {
+    const w = world({ prs: [red('h1')] });
+    owningRun(w);
+    w.type.mockRejectedValueOnce(new Error('tab gone'));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.state.runs.find((r) => r.id === 'impl')!.fix_count).toBe(0);
+    expect(requests(w)).toEqual([]);
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.type).toHaveBeenCalledTimes(2);
+    expect(w.state.runs.find((r) => r.id === 'impl')!.fix_count).toBe(1);
+    expect(requests(w)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ via: 'typed' }) })]);
+  });
+
+  it('an active run on another branch: nothing typed or started, the head is given back', async () => {
+    const w = world({ prs: [red('h1')] });
+    owningRun(w);
+    w.state.runs.find((r) => r.id === 'impl')!.branch = 'other';
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.startFixer).not.toHaveBeenCalled();
+    expect(requests(w)).toEqual([]);
+  });
+
+  it('typed CI fixes count against the conflict cap too', async () => {
+    const w = world();
+    w.state.runs.push({ id: 'impl', task_id: 'c1', role: 'implementer', trigger_sha: null, status: 'done', waiting_reason: null, tab_id: 'tab1', branch: BRANCH.c1!, fix_count: 3 });
+    w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: false, mergeable_state: 'dirty', head_sha: 'h1', base_ref: EPIC_BRANCH }));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.startFixer).not.toHaveBeenCalled();
+    expect(w.state.events.filter((e) => e.kind === 'escalated')).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'conflict_cap', attempts: 3 }) })]);
   });
 });

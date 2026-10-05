@@ -577,6 +577,8 @@ model AutomationEvent {
   task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([projectId, createdAt(sort: Desc)], map: "automation_events_project_created_idx")
+  // plus "automation_events_ci_fix_once": unique (task_id, payload->>'pr', payload->>'sha') WHERE kind =
+  // 'ci_fix_requested', in its migration only (partial, on expressions)
   @@map("automation_events")
 }
 

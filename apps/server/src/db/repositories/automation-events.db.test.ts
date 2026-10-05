@@ -61,6 +61,34 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation events and pau
     expect(await db.automationEvent.count({ where: { projectId } })).toBe(0);
   });
 
+  it('a ci_fix_requested claim is taken once per card, PR and head SHA, even by concurrent callers (F-27)', async () => {
+    const claim = (pr: number, sha: string) => events.insertOnce({ project_id: projectId, task_id: taskId, kind: 'ci_fix_requested', payload: { pr, sha, via: 'pending' } });
+    const results = await Promise.all(Array.from({ length: 8 }, () => claim(7, 'h1')));
+    const won = results.filter((r) => r !== null);
+    expect(won).toHaveLength(1);
+    // another head, another PR: their own claims
+    expect(await claim(7, 'h2')).not.toBeNull();
+    expect(await claim(8, 'h1')).not.toBeNull();
+    // other kinds are never limited
+    expect(await events.insertOnce({ project_id: projectId, task_id: taskId, kind: 'escalated', payload: { pr: 7, sha: 'h1' } })).not.toBeNull();
+    expect(await events.insertOnce({ project_id: projectId, task_id: taskId, kind: 'escalated', payload: { pr: 7, sha: 'h1' } })).not.toBeNull();
+
+    // settled: the outcome replaces the payload, and the head stays taken
+    expect(await events.setPayload(won[0]!.id, { pr: 7, sha: 'h1', via: 'typed' })).toMatchObject({ payload: { pr: 7, sha: 'h1', via: 'typed' } });
+    expect(await claim(7, 'h1')).toBeNull();
+    // given back: taken again
+    await events.remove(won[0]!.id);
+    const again = await claim(7, 'h1');
+    expect(again).not.toBeNull();
+
+    // a pending claim is removed only once it is older than the cutoff, and a settled one never
+    const past = new Date(Date.now() + 60_000);
+    expect(await events.removeStale(taskId, 'ci_fix_requested', { pr: 7, sha: 'h1', via: 'pending' }, new Date(Date.now() - 60_000))).toBe(0);
+    expect(await events.removeStale(taskId, 'ci_fix_requested', { pr: 7, sha: 'h1', via: 'pending' }, past)).toBe(1);
+    await events.setPayload((await claim(7, 'h1'))!.id, { pr: 7, sha: 'h1', via: 'fixer' });
+    expect(await events.removeStale(taskId, 'ci_fix_requested', { pr: 7, sha: 'h1', via: 'pending' }, past)).toBe(0);
+  });
+
   it('purges events older than the cutoff only', async () => {
     const old = await events.insert({ project_id: projectId, kind: 'paused' });
     await db.automationEvent.update({ where: { id: old.id }, data: { createdAt: new Date(Date.now() - 31 * 24 * 3600_000) } });
