@@ -1,3 +1,5 @@
+import { tk } from '../i18n';
+
 export type MachineType = 'local' | 'ssh' | 'agent';
 export type ProjectStatus = 'active' | 'paused' | 'archived';
 
@@ -487,15 +489,17 @@ export interface ProjectSetup {
   updated_at: string | null;
 }
 
+/** Brand names: shown as is in every language. */
 export const PROVIDER_LABEL: Record<IntegrationProvider, string> = { github: 'GitHub', linear: 'Linear', jira: 'Jira' };
 
+/** pt-BR keys; shown with `t(APPROVAL_LABEL[k].label)` / `t(APPROVAL_LABEL[k].hint)`. */
 export const APPROVAL_LABEL: Record<keyof ProjectSetupData['approvals'], { label: string; hint: string }> = {
-  spec: { label: 'Aprovar a spec', hint: 'antes de o agente planejar' },
-  plan: { label: 'Aprovar o plano', hint: 'antes de implementar' },
-  pr: { label: 'Aprovar o PR', hint: 'com o screenshot/evidência' },
-  merge: { label: 'Fazer o merge', hint: 'após o PR aprovado' },
-  tool_permissions: { label: 'Permissões de ferramentas', hint: 'pedidos do Claude para rodar comandos/editar' },
-  questions: { label: 'Perguntas do agente', hint: 'dúvidas em aberto durante a run' },
+  spec: { label: tk('Aprovar a spec'), hint: tk('antes de o agente planejar') },
+  plan: { label: tk('Aprovar o plano'), hint: tk('antes de implementar') },
+  pr: { label: tk('Aprovar o PR'), hint: tk('com o screenshot/evidência') },
+  merge: { label: tk('Fazer o merge'), hint: tk('após o PR aprovado') },
+  tool_permissions: { label: tk('Permissões de ferramentas'), hint: tk('pedidos do Claude para rodar comandos/editar') },
+  questions: { label: tk('Perguntas do agente'), hint: tk('dúvidas em aberto durante a run') },
 };
 
 export interface Note {
@@ -511,28 +515,6 @@ export interface DashboardItem {
   doing: Task[];
   open_tasks: number;
 }
-
-export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
-  backlog: 'Backlog',
-  todo: 'A fazer',
-  doing: 'Fazendo',
-  done: 'Feito',
-};
-
-export const TASK_TYPE_LABEL: Record<TaskType, string> = {
-  epic: 'Épico',
-  story: 'História',
-  task: 'Tarefa',
-  subtask: 'Subtarefa',
-  bug: 'Bug',
-  spike: 'Spike',
-};
-
-export const COLUMN_CATEGORY_LABEL: Record<ColumnCategory, string> = {
-  todo: 'A fazer',
-  doing: 'Fazendo',
-  done: 'Feito',
-};
 
 export type TabKind = 'terminal' | 'simulator';
 
@@ -573,14 +555,15 @@ export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idl
 
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 
+/** pt-BR keys; shown with `t(TAB_STATE_LABEL[state])`. */
 export const TAB_STATE_LABEL: Record<TabState, string> = {
-  working: 'trabalhando',
-  waiting_input: 'esperando resposta',
-  waiting_permission: 'pedindo permissão',
-  idle: 'terminou',
-  error: 'erro',
-  waiting_background: 'aguardando segundo plano',
-  finished: 'concluído',
+  working: tk('trabalhando'),
+  waiting_input: tk('esperando resposta'),
+  waiting_permission: tk('pedindo permissão'),
+  idle: tk('terminou'),
+  error: tk('erro'),
+  waiting_background: tk('aguardando segundo plano'),
+  finished: tk('concluído'),
 };
 
 /** States in which the tool is waiting for the person. */
@@ -769,12 +752,6 @@ export interface AuthConfig {
   public_city_url: string;
 }
 
-export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
-  active: 'Ativo',
-  paused: 'Pausado',
-  archived: 'Arquivado',
-};
-
 export type AiProvider = 'claude' | 'chatgpt' | 'gemini' | 'antigravity';
 
 export interface AiAccount {
@@ -806,6 +783,7 @@ export interface AiAccountUsage {
   stale?: boolean;
 }
 
+/** Brand names: shown as is in every language. */
 export const AI_PROVIDER_LABEL: Record<AiProvider, string> = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini', antigravity: 'Antigravity' };
 
 /** GET /machines/:id/hardware */

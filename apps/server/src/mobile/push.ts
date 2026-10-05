@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { isPendingDeletion } from '../account/deletion.js';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
 import { failureLabel } from '../chat/service.js';
 import type { Device } from '../db/repositories/devices.js';
@@ -8,7 +9,7 @@ import type { User } from '../db/repositories/types.js';
 import { confirmationText, deviceRequestText, replyText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { SlidingWindow } from './rate-limit.js';
 import type { MobileSocketRegistry } from './revocation.js';
-import { DEFAULT_LOCALE, localeOf, type Locale } from '../i18n/index.js';
+import { localeOf, type Locale } from '../i18n/index.js';
 
 export interface PushMessage {
   to: string;
@@ -18,19 +19,43 @@ export interface PushMessage {
   collapseId?: string;
 }
 
+/** One message's ticket: `id` names its receipt (TER-924); `error` is Expo's per-ticket error code. */
+export interface PushTicketResult {
+  to: string;
+  id?: string;
+  error?: 'DeviceNotRegistered' | string;
+}
+
 export interface PushSender {
-  /** One result per message, in order; `error` is Expo's per-ticket error code when there is one. */
-  send(messages: PushMessage[]): Promise<{ to: string; error?: 'DeviceNotRegistered' | string }[]>;
+  /** One result per message, in order. */
+  send(messages: PushMessage[]): Promise<PushTicketResult[]>;
+}
+
+/** A receipt: what APNs/FCM made of the push, as Expo reports it later. */
+export type PushReceipt = { status: 'ok' } | { status: 'error'; error: string };
+
+export interface PushReceiptFetcher {
+  /** The receipts Expo has for `ids`; an id missing from the map has none yet. */
+  fetch(ids: string[]): Promise<Map<string, PushReceipt>>;
 }
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const EXPO_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
 const EXPO_CHUNK = 100;
+const EXPO_RECEIPT_CHUNK = 300;
 
 interface ExpoTicket {
+  id?: string;
   status?: string;
   message?: string;
   details?: { error?: string };
 }
+
+const expoHeaders = (accessToken: string | null): Record<string, string> => {
+  const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
+  if (accessToken) headers.authorization = `Bearer ${accessToken}`;
+  return headers;
+};
 
 /** How long one chunk may take before it is abandoned (a hung Expo must not pin a background task). */
 const EXPO_TIMEOUT_MS = 10_000;
@@ -45,15 +70,13 @@ export class ExpoPushSender implements PushSender {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async send(messages: PushMessage[]): Promise<{ to: string; error?: string }[]> {
-    const results: { to: string; error?: string }[] = [];
+  async send(messages: PushMessage[]): Promise<PushTicketResult[]> {
+    const results: PushTicketResult[] = [];
     for (let i = 0; i < messages.length; i += EXPO_CHUNK) {
       const chunk = messages.slice(i, i + EXPO_CHUNK);
-      const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
-      if (this.accessToken) headers.authorization = `Bearer ${this.accessToken}`;
       const res = await this.fetchImpl(EXPO_PUSH_URL, {
         method: 'POST',
-        headers,
+        headers: expoHeaders(this.accessToken),
         signal: AbortSignal.timeout(EXPO_TIMEOUT_MS),
         body: JSON.stringify(
           chunk.map((m) => ({ to: m.to, title: m.title, body: m.body, data: m.data, sound: 'default', priority: 'high', ...(m.collapseId ? { collapseId: m.collapseId } : {}) })),
@@ -63,11 +86,104 @@ export class ExpoPushSender implements PushSender {
       const tickets = ((await res.json()) as { data?: ExpoTicket[] }).data ?? [];
       chunk.forEach((m, j) => {
         const t = tickets[j];
-        results.push({ to: m.to, error: t?.details?.error ?? (t?.status === 'error' ? t.message : undefined) });
+        const error = t?.details?.error ?? (t?.status === 'error' ? t.message : undefined);
+        results.push({ to: m.to, ...(t?.status === 'ok' && t.id ? { id: t.id } : {}), ...(error ? { error } : {}) });
       });
     }
     return results;
   }
+}
+
+/** Reads receipts from the Expo Push Service, in chunks of 300 ids, each with a 10 s timeout. */
+export class ExpoReceiptFetcher implements PushReceiptFetcher {
+  constructor(
+    private readonly accessToken: string | null,
+    private readonly fetchImpl: typeof fetch = fetch,
+  ) {}
+
+  async fetch(ids: string[]): Promise<Map<string, PushReceipt>> {
+    const out = new Map<string, PushReceipt>();
+    for (let i = 0; i < ids.length; i += EXPO_RECEIPT_CHUNK) {
+      const chunk = ids.slice(i, i + EXPO_RECEIPT_CHUNK);
+      const res = await this.fetchImpl(EXPO_RECEIPTS_URL, {
+        method: 'POST',
+        headers: expoHeaders(this.accessToken),
+        signal: AbortSignal.timeout(EXPO_TIMEOUT_MS),
+        body: JSON.stringify({ ids: chunk }),
+      });
+      if (!res.ok) throw Object.assign(new Error(`Expo receipts answered ${res.status}`), { code: `EXPO_HTTP_${res.status}` });
+      const data = ((await res.json()) as { data?: Record<string, ExpoTicket> }).data ?? {};
+      for (const id of chunk) {
+        const r = data[id];
+        if (!r) continue;
+        out.set(id, r.status === 'ok' ? { status: 'ok' } : { status: 'error', error: r.details?.error ?? 'Unknown' });
+      }
+    }
+    return out;
+  }
+}
+
+/** A receipt is read once the ticket is this old: Expo says they are ready within 15 minutes. */
+export const RECEIPT_AFTER_MS = 15 * 60_000;
+/** A claim whose receipt was not ready yet (or whose sweeper died) is taken again after this. */
+const RECEIPT_RECLAIM_MS = 30 * 60_000;
+/** Expo keeps a receipt for 24 hours. */
+const RECEIPT_KEPT_MS = 24 * 60 * 60_000;
+const RECEIPT_SWEEP_MS = 5 * 60_000;
+const RECEIPT_BATCH = 1000;
+
+export interface PushReceiptSweepDeps {
+  repos: Pick<Repositories, 'pushTickets' | 'devices' | 'deviceEvents'>;
+  receipts: PushReceiptFetcher;
+  log: Pick<FastifyBaseLogger, 'info' | 'warn'>;
+}
+
+/**
+ * One pass over the tickets whose receipt should be ready (TER-924): `DeviceNotRegistered` clears that
+ * device's token (only if it is still the one the push went to), and every error — a dead token, an
+ * APNs/FCM credential problem (`InvalidCredentials`), `MessageTooBig` — is logged with its code and
+ * recorded once per device as a `push_failed` event, which Aparelhos shows. Tickets with a receipt are
+ * deleted; the others wait for a later pass, until Expo's 24 h are over. Logs ids and codes, never a token.
+ */
+export async function sweepPushReceipts(deps: PushReceiptSweepDeps, now = new Date()): Promise<{ read: number; failed: number }> {
+  const { repos, log } = deps;
+  await repos.pushTickets.deleteSentBefore(new Date(now.getTime() - RECEIPT_KEPT_MS));
+  const tickets = await repos.pushTickets.claimDue(new Date(now.getTime() - RECEIPT_AFTER_MS), new Date(now.getTime() - RECEIPT_RECLAIM_MS), now, RECEIPT_BATCH);
+  if (tickets.length === 0) return { read: 0, failed: 0 };
+  const receipts = await deps.receipts.fetch(tickets.map((t) => t.ticket_id));
+  const done: string[] = [];
+  const failures = new Map<string, { code: string; push_token: string }>();
+  for (const t of tickets) {
+    const r = receipts.get(t.ticket_id);
+    if (!r) continue;
+    done.push(t.id);
+    if (r.status === 'error') {
+      log.warn({ deviceId: t.device_id, ticketId: t.ticket_id, kind: t.kind, code: r.error }, 'mobile push receipt error');
+      failures.set(t.device_id, { code: r.error, push_token: t.push_token });
+    }
+  }
+  for (const [deviceId, f] of failures) {
+    if (f.code === 'DeviceNotRegistered') await repos.devices.clearPushTokenIf(deviceId, f.push_token);
+    const device = await repos.devices.findById(deviceId);
+    await repos.deviceEvents.record({ user_id: device?.user_id ?? null, device_id: deviceId, kind: 'push_failed', actor: 'system', meta: { code: f.code } });
+  }
+  await repos.pushTickets.deleteMany(done);
+  if (done.length) log.info({ read: done.length, failed: failures.size }, 'mobile push receipts read');
+  return { read: done.length, failed: failures.size };
+}
+
+/** Every 5 minutes, one pass at a time per process; safe on both colors (`claimDue`). */
+export function startPushReceiptSweeper(deps: PushReceiptSweepDeps): () => void {
+  let running = false;
+  const timer = setInterval(() => {
+    if (running) return;
+    running = true;
+    void sweepPushReceipts(deps)
+      .catch((err) => deps.log.warn({ code: failureLabel(err) }, 'mobile push receipt sweep failed'))
+      .finally(() => (running = false));
+  }, RECEIPT_SWEEP_MS);
+  timer.unref();
+  return () => clearInterval(timer);
 }
 
 export interface MobilePushDeps {
@@ -114,9 +230,8 @@ export class MobilePushService {
   /** Called by the enrolment service for a real request: goes to every device, live or not. */
   async deviceRequest(user: User, request: DeviceRequest): Promise<void> {
     try {
-      const text = deviceRequestText(request, localeOf(user.locale));
       const devices = await this.deps.repos.devices.listActiveWithPush(user.id);
-      await this.deliver(user.id, 'device_request', text, { kind: 'device_request' }, devices);
+      await this.deliver(user.id, 'device_request', (locale) => deviceRequestText(request, locale), { kind: 'device_request' }, devices);
     } catch (err) {
       this.deps.log.warn({ err: failureLabel(err), userId: user.id, requestId: request.id }, 'mobile push failed');
     }
@@ -133,8 +248,9 @@ export class MobilePushService {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, event.tab_id, event.machine_id);
       const data = { kind: 'confirmation', conversation_id: event.conversation_id, project_id: projectId, action_id: event.action_id };
-      await this.deliver(event.user_id, 'confirmation', confirmationText(ctx, await this.localeFor(event.user_id)), data, await this.offline(event.user_id));
-    } else if (event.type === 'tab_question' && event.question.kind !== 'suggestion' && !event.resurfaced) {
+      await this.deliver(event.user_id, 'confirmation', (locale) => confirmationText(ctx, locale), data, await this.offline(event.user_id));
+    } else if (event.type === 'tab_question' && event.question.kind !== 'suggestion' && !event.resurfaced && !event.update) {
+      // `update`: the same open card republished because it changed (TER-919) — told once is enough.
       // (A suggestion never rides `tab_question` — it has its own events and is never pushed — the
       // kind check only narrows the view's type.)
       // Same channel as a confirmation — the history row keeps that kind, which every app version
@@ -142,23 +258,14 @@ export class MobilePushService {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, event.question.tab_id, null);
       const data = { kind: 'tab_question', conversation_id: event.conversation_id, project_id: projectId, tab_question_id: event.question.id };
-      await this.deliver(event.user_id, 'confirmation', tabQuestionText(ctx, event.question.kind, await this.localeFor(event.user_id)), data, await this.offline(event.user_id));
+      const questionKind = event.question.kind;
+      await this.deliver(event.user_id, 'confirmation', (locale) => tabQuestionText(ctx, questionKind, locale), data, await this.offline(event.user_id));
     } else if (event.type === 'run_finished' && event.ok) {
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, null, null);
       const data = { kind: 'reply', conversation_id: event.conversation_id, project_id: projectId };
       const send = this.replies.take(event.conversation_id);
-      await this.deliver(event.user_id, 'reply', replyText(ctx, await this.localeFor(event.user_id)), data, send ? await this.offline(event.user_id) : [], `reply:${event.conversation_id}`);
-    }
-  }
-
-  /** The recipient's language (`users.locale`); pt-BR when unset or when the row cannot be read —
-   *  a push is still worth sending in the default language. */
-  private async localeFor(userId: string): Promise<Locale> {
-    try {
-      return localeOf((await this.deps.repos.users.findById(userId))?.locale);
-    } catch {
-      return DEFAULT_LOCALE;
+      await this.deliver(event.user_id, 'reply', (locale) => replyText(ctx, locale), data, send ? await this.offline(event.user_id) : [], `reply:${event.conversation_id}`);
     }
   }
 
@@ -189,20 +296,33 @@ export class MobilePushService {
   }
 
   /** The history row first — it exists even when sending fails — then the push, which carries the
-   * row's id as `notification_id` so a tap on it can mark that row read. */
-  private async deliver(userId: string, kind: Kind, text: PushText, data: Record<string, unknown>, devices: Device[], collapseId?: string): Promise<void> {
+   * row's id as `notification_id` so a tap on it can mark that row read. An account waiting out its
+   * deletion (TER-720) is deactivated: it gets neither (TER-920); a cancel brings pushes back. The
+   * text is written in the recipient's language (`users.locale`, pt-BR when unset). */
+  private async deliver(userId: string, kind: Kind, textFor: (locale: Locale) => PushText, data: Record<string, unknown>, devices: Device[], collapseId?: string): Promise<void> {
+    const owner = await this.deps.repos.users.findById(userId);
+    if (!owner || isPendingDeletion(owner)) return;
+    const text = textFor(localeOf(owner.locale));
     const row = await this.deps.repos.userNotifications.create({ user_id: userId, kind, title: text.title, body: text.body, data });
     const targets = devices.filter((d): d is Device & { push_token: string } => !!d.push_token);
     if (targets.length === 0) return;
     const pushData = { ...data, notification_id: row.id };
     const messages: PushMessage[] = targets.map((d) => ({ to: d.push_token, title: text.title, body: text.body, data: pushData, ...(collapseId ? { collapseId } : {}) }));
-    let results: { to: string; error?: string }[];
+    let results: PushTicketResult[];
     try {
       results = await this.deps.sender.send(messages);
     } catch (err) {
       this.deps.log.warn({ err: failureLabel(err), userId, kind, devices: targets.length }, 'mobile push send failed');
       return;
     }
+    // Each accepted ticket waits for its receipt (TER-924): APNs/FCM refusals only show up there.
+    const tickets = results.flatMap((r) => {
+      const device = r.id ? targets.find((d) => d.push_token === r.to) : undefined;
+      return device && r.id ? [{ ticket_id: r.id, device_id: device.id, push_token: r.to, kind }] : [];
+    });
+    await this.deps.repos.pushTickets
+      .recordMany(tickets)
+      .catch((err) => this.deps.log.warn({ err: failureLabel(err), userId, kind }, 'recording push tickets failed'));
     for (const r of results) {
       if (r.error !== 'DeviceNotRegistered') continue;
       const device = targets.find((d) => d.push_token === r.to);

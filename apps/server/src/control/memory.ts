@@ -517,6 +517,6 @@ export async function answerTabQuestionTool(
   }));
   const updated = await ctx.repos.tabQuestions.setSuggestion(row.id, { items });
   if (!updated) throw new ControlError('QUESTION_CLOSED', QUESTION_CLOSED);
-  await publishTabQuestions(ctx.repos, 'tab_question', [updated]);
+  await publishTabQuestions(ctx.repos, 'tab_question', [updated], { update: true });
   return downgrade ? { mode: 'suggest', downgraded_because: downgrade } : { mode: 'suggest' };
 }

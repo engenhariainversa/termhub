@@ -1,3 +1,4 @@
+import { i18n, tk } from '../../i18n';
 import { memo, useMemo } from 'react';
 import type { MouseEvent } from 'react';
 import { appNavigate } from '../../lib/app-navigate';
@@ -15,48 +16,50 @@ import { MessageAttachments } from './MessageAttachments';
 const COPY_FEEDBACK_MS = 1500;
 
 /** What an answer that stopped says when nothing was said about why. */
-const GENERIC_FAILURE = 'A resposta não terminou — tente de novo.';
+const GENERIC_FAILURE = tk('A resposta não terminou — tente de novo.');
 
 /**
  * One sentence per stored failure: what happened, and what to do about it. Short, because this is read
  * on a phone under an answer that stopped — and specific, because "a resposta não terminou" told a
  * person whose machine has no `claude` installed exactly nothing. An unknown code (a server newer than
- * this bundle) falls back to the generic line rather than showing a label.
+ * this bundle) falls back to the generic line rather than showing a label. pt-BR keys, translated by
+ * `failureLine`.
  */
 const FAILURE_LINE: Record<ChatErrorCode, string> = {
   RUNNER_FAILED: GENERIC_FAILURE,
-  TOKEN_FAILED: 'O servidor não conseguiu criar a credencial do concierge. Tente de novo.',
-  CLI_MISSING: 'Essa máquina não tem o Claude Code instalado. Instale o claude nela e mande a mensagem de novo.',
-  CLI_REJECTED: 'O Claude Code dessa máquina recusou os parâmetros do chat. Atualize o claude nela e tente de novo.',
-  MISSING_SESSION: 'A sessão do Claude nessa máquina não existe mais. Mande a mensagem de novo para começar uma nova.',
-  RUN_FAILED: 'O Claude parou no meio da resposta. Mande a mensagem de novo.',
+  TOKEN_FAILED: tk('O servidor não conseguiu criar a credencial do concierge. Tente de novo.'),
+  CLI_MISSING: tk('Essa máquina não tem o Claude Code instalado. Instale o claude nela e mande a mensagem de novo.'),
+  CLI_REJECTED: tk('O Claude Code dessa máquina recusou os parâmetros do chat. Atualize o claude nela e tente de novo.'),
+  MISSING_SESSION: tk('A sessão do Claude nessa máquina não existe mais. Mande a mensagem de novo para começar uma nova.'),
+  RUN_FAILED: tk('O Claude parou no meio da resposta. Mande a mensagem de novo.'),
   // Unreachable on a stored row today, and kept anyway: the agent only ever sends `killed` in answer
   // to the server's own `close`, and the connection layer swallows that ack (a locally closed channel
   // reports no exit), so nothing writes KILLED. The sentence stays because the label is the protocol's
   // and a future path may store it — but nobody should write a test that expects this on screen, since
   // it would be a test for a state the server cannot produce.
-  KILLED: 'A resposta foi interrompida antes de terminar. Mande a mensagem de novo.',
-  HOST_GONE: 'A máquina do chat saiu do ar no meio da resposta. Ligue-a e mande a mensagem de novo.',
+  KILLED: tk('A resposta foi interrompida antes de terminar. Mande a mensagem de novo.'),
+  HOST_GONE: tk('A máquina do chat saiu do ar no meio da resposta. Ligue-a e mande a mensagem de novo.'),
   // Not a machine that went away: it is up, and this sentence must not send anyone looking for a
   // problem with it. What unblocks the chat is closing a few terminals, and nothing else.
-  HOST_BUSY: 'A máquina do chat está com terminais demais abertos e não sobrou espaço para a conversa. Feche algumas abas e mande a mensagem de novo.',
-  AGENT_TOO_OLD: 'O agente dessa máquina ainda não sabe rodar o chat. Atualize o agente e tente de novo.',
+  HOST_BUSY: tk('A máquina do chat está com terminais demais abertos e não sobrou espaço para a conversa. Feche algumas abas e mande a mensagem de novo.'),
+  AGENT_TOO_OLD: tk('O agente dessa máquina ainda não sabe rodar o chat. Atualize o agente e tente de novo.'),
   // The answer's notice says more (which account, when it resets): see `failureLine`.
-  USAGE_LIMIT: limitSentence(undefined),
-  MODEL_UNAVAILABLE: 'O Claude Code dessa máquina não reconhece o modelo escolhido para o chat. Escolha outro modelo ou atualize o claude nela.',
-  AUTH_FAILED: 'A conta do Claude deste chat não está logada nessa máquina. Faça o login nela (claude, depois /login) e mande a mensagem de novo.',
+  USAGE_LIMIT: tk('A conta do Claude deste chat atingiu o limite de uso. Espere o limite voltar e mande a mensagem de novo.'),
+  MODEL_UNAVAILABLE: tk('O Claude Code dessa máquina não reconhece o modelo escolhido para o chat. Escolha outro modelo ou atualize o claude nela.'),
+  AUTH_FAILED: tk('A conta do Claude deste chat não está logada nessa máquina. Faça o login nela (claude, depois /login) e mande a mensagem de novo.'),
 };
 
 /** The sentence under a stopped answer: the limit's own, with its reset time, or the code's. */
 function failureLine(message: ChatMessage): string {
   if (message.error_code === 'USAGE_LIMIT') return limitSentence(message.notice);
-  return (message.error_code && FAILURE_LINE[message.error_code]) || GENERIC_FAILURE;
+  return i18n.t((message.error_code && FAILURE_LINE[message.error_code]) || GENERIC_FAILURE);
 }
 
-/** The two things a copy attempt can end as, in the words the block shows and the ones it announces. */
+/** The two things a copy attempt can end as, in the words the block shows and the ones it announces
+ * (pt-BR keys, translated by `flashCopy`). */
 const COPY_OUTCOME = {
-  copied: { label: 'copiado', announced: 'Código copiado', name: 'Código copiado' },
-  failed: { label: 'falhou', announced: 'Não foi possível copiar o código', name: 'Não foi possível copiar' },
+  copied: { label: tk('copiado'), announced: tk('Código copiado'), name: tk('Código copiado') },
+  failed: { label: tk('falhou'), announced: tk('Não foi possível copiar o código'), name: tk('Não foi possível copiar') },
 } as const;
 
 /**
@@ -105,16 +108,16 @@ export function handleCopyClick(event: MouseEvent<HTMLDivElement>): void {
  * `decorateCodeBlocks` mounted with the block. Reverts on its own after `COPY_FEEDBACK_MS`. */
 function flashCopy(button: HTMLElement, outcome: (typeof COPY_OUTCOME)[keyof typeof COPY_OUTCOME]): void {
   const live = button.closest('figure')?.querySelector('[data-copy-live]') ?? null;
-  if (live) live.textContent = outcome.announced;
+  if (live) live.textContent = i18n.t(outcome.announced);
 
   const label = button.querySelector('[data-copy-label]');
   const original = label?.textContent ?? null;
-  if (label) label.textContent = outcome.label;
-  button.setAttribute('aria-label', outcome.name);
+  if (label) label.textContent = i18n.t(outcome.label);
+  button.setAttribute('aria-label', i18n.t(outcome.name));
   window.setTimeout(() => {
     if (live) live.textContent = '';
     if (label) label.textContent = original;
-    button.setAttribute('aria-label', 'Copiar código');
+    button.setAttribute('aria-label', i18n.t('Copiar código'));
   }, COPY_FEEDBACK_MS);
 }
 
@@ -163,7 +166,7 @@ export interface ChatTurnProps {
  * paying ~51 ms per delta, on the same main thread the answer is being written on.
  */
 export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, waiting, failed, onOpenReply, onReply, highlighted = false, projectId = null }: ChatTurnProps) {
-  const body = message.role === 'user' ? '' : message.text || streaming || (waiting ? 'pensando…' : '');
+  const body = message.role === 'user' ? '' : message.text || streaming || (waiting ? i18n.t('pensando…') : '');
   /**
    * While the answer streams (nothing stored yet), the body is split at its last finished block: the
    * settled prefix is parsed once and kept by its text, and only the tail is parsed again on each

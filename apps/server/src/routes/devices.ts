@@ -63,6 +63,10 @@ export function describeDeviceEvent(e: DeviceEvent): string {
       return 'Aparelho revogado';
     case 'push_token_set':
       return 'Notificações ativadas neste aparelho';
+    case 'push_failed':
+      if (meta.code === 'DeviceNotRegistered') return 'Notificação recusada: o aparelho não aceita mais avisos (app removido ou notificações desligadas)';
+      if (meta.code === 'InvalidCredentials') return 'Notificação não entregue: credencial da Apple ou do Google inválida no servidor';
+      return typeof meta.code === 'string' ? `Notificação não entregue (${meta.code})` : 'Notificação não entregue';
     case 'review_auto_approved':
       return 'Aprovado automaticamente (conta de revisão)';
     case 'review_changed':

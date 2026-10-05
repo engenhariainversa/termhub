@@ -17,6 +17,13 @@ export const sessionEnded = signal();
 export const appBackgrounded = signal();
 
 /**
+ * Fired when the app comes back to the foreground (`AppState` `active`, emitted by `app/_layout.tsx`).
+ * The permissions store re-reads the OS statuses: notifications turned on in the system settings
+ * register the push token at once (TER-921).
+ */
+export const appForegrounded = signal();
+
+/**
  * Fired when a session starts — activation after "Criar PIN", or an unlock (permission prompts
  * spec §3.1). The permissions store re-reads the OS statuses and re-applies the ad consent.
  */

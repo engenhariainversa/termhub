@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useEffect, useState } from 'react';
 import { replyLabel } from '../../lib/chat-reply';
 import type { ChatReplyRef } from '../../lib/types';
@@ -11,6 +12,7 @@ const UNAVAILABLE_MS = 3000;
  * few seconds instead of doing nothing.
  */
 export function ChatReplyQuote({ reply, onOpen }: { reply: ChatReplyRef; onOpen?: (id: string) => boolean }) {
+  const { t } = useTranslation();
   const [unavailable, setUnavailable] = useState(false);
   useEffect(() => {
     if (!unavailable) return;
@@ -23,7 +25,7 @@ export function ChatReplyQuote({ reply, onOpen }: { reply: ChatReplyRef; onOpen?
   return (
     <button
       type="button"
-      aria-label={`${reply.card ? 'Ver card original' : 'Ver mensagem original'}: ${author}, ${reply.excerpt}`}
+      aria-label={reply.card ? t('Ver card original: {{author}}, {{excerpt}}', { author, excerpt: reply.excerpt }) : t('Ver mensagem original: {{author}}, {{excerpt}}', { author, excerpt: reply.excerpt })}
       onClick={() => {
         if (!(target !== null && onOpen?.(target))) setUnavailable(true);
       }}
@@ -33,7 +35,7 @@ export function ChatReplyQuote({ reply, onOpen }: { reply: ChatReplyRef; onOpen?
       <span className="line-clamp-2 whitespace-normal text-fg-dim">{reply.excerpt}</span>
       {unavailable && (
         <span role="status" className="mt-0.5 block text-fg-dim">
-          {reply.card ? 'Card original indisponível' : 'Mensagem original indisponível'}
+          {reply.card ? t('Card original indisponível') : t('Mensagem original indisponível')}
         </span>
       )}
     </button>

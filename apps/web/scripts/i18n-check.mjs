@@ -7,7 +7,8 @@
  *    (or `_one`/`_other` plural forms, mirrored in `src/locales/pt-BR/*.json`), with the same
  *    `{{placeholders}}` as the key; and every catalog entry must still be used somewhere.
  *
- * 2. Guard. In the files and folders listed in GUARDED (the parts of the app already translated),
+ * 2. Guard. In the files and folders listed in GUARDED (the whole app: a source file outside it is a
+ *    problem too, so a new top-level folder cannot slip by untranslated),
  *    JSX text and the copy attributes below may not hold letters outside `t()`. A legit literal (a
  *    brand, code, a symbol word) is allowed with an `i18n-ignore` comment on its line or the line
  *    above (`// i18n-ignore`, or `{/* i18n-ignore *\/}` inside JSX).
@@ -20,41 +21,10 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 /**
- * Paths under `src/` the untranslated-copy guard covers: a folder (trailing `/`) or a file. Add a
- * folder or file once every string in it goes through `t()`; at the end, this is every folder.
+ * Paths under `src/` the untranslated-copy guard covers: a folder (trailing `/`) or a file. The whole
+ * app is translated, so this is every top-level folder and file; a new one goes here too.
  */
-export const GUARDED = [
-  'App.tsx',
-  'main.tsx',
-  'i18n/',
-  'components/Layout.tsx',
-  'components/MainNav.tsx',
-  'components/Sidebar.tsx',
-  'components/SidebarRail.tsx',
-  'components/SettingsSidebar.tsx',
-  'components/ProfileButton.tsx',
-  'components/ProfileView.tsx',
-  'components/LanguageSetting.tsx',
-  'components/PageHeader.tsx',
-  'components/ChatLayout.tsx',
-  'components/GroupHeader.tsx',
-  'components/ProjectRow.tsx',
-  'components/ProjectGroupsMenu.tsx',
-  'components/ErrorBoundary.tsx',
-  'components/PendingDeletionPage.tsx',
-  'components/ViewAsSwitch.tsx',
-  'components/Modal.tsx',
-  'components/CookieBanner.tsx',
-  'components/DeviceRequestBanner.tsx',
-  'components/NeedsYouToasts.tsx',
-  'components/NicknamePrompt.tsx',
-  'lib/toast.tsx',
-  'lib/view-as.ts',
-  'pages/LoginPage.tsx',
-  'pages/SettingsPage.tsx',
-  'lib/settings-sections.ts',
-  'lib/format.ts',
-];
+export const GUARDED = ['App.tsx', 'main.tsx', 'test-commit.ts', 'city/', 'components/', 'i18n/', 'lib/', 'office/', 'pages/'];
 
 /** JSX attributes that carry copy a person reads (or hears). */
 export const COPY_ATTRIBUTES = new Set(['title', 'placeholder', 'aria-label', 'alt', 'label', 'confirmLabel', 'message', 'subtitle']);
@@ -146,7 +116,16 @@ export function scanSource(path, text, { guarded }) {
   const visit = (node) => {
     if (ts.isCallExpression(node) && keyCallee(node.expression) && node.arguments.length > 0) {
       const arg = node.arguments[0];
-      if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) keys.push({ key: arg.text, where: `${path}:${lineOf(arg.getStart(sf)) + 1}` });
+      if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) {
+        // `{ context: 'x' }` picks the en entry `key_x` (one pt-BR word, two English meanings); pt-BR shows the key itself
+        const opts = node.arguments[1];
+        const ctx = opts && ts.isObjectLiteralExpression(opts)
+          ? opts.properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === 'context')
+          : undefined;
+        const suffix = ctx && ts.isStringLiteral(ctx.initializer) ? `_${ctx.initializer.text}` : '';
+        if (ctx && !suffix) problems.push(`${path}:${lineOf(ctx.getStart(sf)) + 1}: context must be a string literal`);
+        keys.push({ key: arg.text + suffix, where: `${path}:${lineOf(arg.getStart(sf)) + 1}` });
+      }
       else if (ts.isTemplateExpression(arg)) problems.push(`${path}:${lineOf(arg.getStart(sf)) + 1}: a key built with \${} cannot be translated; use {{placeholders}}`);
     }
     if ((ts.isJsxSelfClosingElement(node) || ts.isJsxElement(node)) && tagName(node) === 'Trans') {
@@ -208,7 +187,9 @@ export function runCheck({ root = DEFAULT_ROOT, guarded = GUARDED } = {}) {
   const used = new Map();
   for (const file of sourceFiles(src)) {
     const rel = posix(relative(src, file));
-    const r = scanSource(posix(relative(root, file)), readFileSync(file, 'utf8'), { guarded: isGuarded(rel, guarded) });
+    const isG = isGuarded(rel, guarded);
+    if (!isG) problems.push(`${posix(relative(root, file))}: not under GUARDED; add its top-level folder or file to GUARDED in scripts/i18n-check.mjs`);
+    const r = scanSource(posix(relative(root, file)), readFileSync(file, 'utf8'), { guarded: isG });
     problems.push(...r.problems);
     for (const k of r.keys) if (!used.has(k.key)) used.set(k.key, k.where);
   }
