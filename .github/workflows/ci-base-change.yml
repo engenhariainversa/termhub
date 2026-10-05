@@ -8,7 +8,7 @@ name: CI na troca de base
 on:
   pull_request:
     types: [edited]
-    branches: [main]
+    branches: [main, 'epic/**']
 
 jobs:
   # Not `check`: on a title edit this job is skipped, and a skipped `check` next to the real
