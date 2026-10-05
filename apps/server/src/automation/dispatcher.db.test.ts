@@ -393,6 +393,22 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(await eventsOf()).toEqual([]); // waiting is not an event
   });
 
+  it('TER-985: no account chosen in the project Setup: the queue names the machine and each account left out', async () => {
+    const c = await card();
+    await repos.aiAccounts.create({ provider: 'claude', label: 'pessoal', machine_id: machineId, config_dir: '~/.claude-pessoal' });
+    const { data } = await repos.projectSetup.get(projectId);
+    await repos.projectSetup.save(projectId, normalizeSetup({ ...data, ai: { accounts: [], models: {} } }, 2));
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(await runsOf()).toEqual([]);
+    const item = (await automationQueue(ctx(), projectId)).find((i) => i.task_id === c.id);
+    expect(item).toMatchObject({ eligible: false, reason: 'no_account' });
+    expect(item?.reason_text).toBe(
+      'Sem conta com folga: nenhuma conta escolhida em Setup → Contas de IA e modelo; conta main (m): fora das contas do projeto no Setup; conta pessoal (m): fora das contas do projeto no Setup',
+    );
+  });
+
   it('every account exhausted or full: no start, and the queue reads no_account', async () => {
     const c = await card();
     await repos.aiAccountExhaustions.mark(accountId, new Date(Date.now() + 60 * 60_000), 'rate_limit');

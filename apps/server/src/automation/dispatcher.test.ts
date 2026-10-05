@@ -325,7 +325,7 @@ describe('startDispatcher (fakes)', () => {
       projects: { findById: async () => ({ id: 'p1', owner_id: 'u1' }) },
       automationPauses: { state: async () => ({ user: null, project: over.paused ? new Date() : null }) },
       users: { findById: async () => ({ id: 'u1' }) },
-      projectSetup: { get: async () => ({ data: { automation: { enabled: over.enabled ?? true, max_parallel: null } } }) },
+      projectSetup: { get: async () => ({ data: { automation: { enabled: over.enabled ?? true, max_parallel: null }, ai: { accounts: [], models: {} } } }) },
       tasks: { findById: async () => ({ id: 'c1', project_id: 'p1' }) },
       automationRuns: { claim: async () => over.claim ?? null, release: async () => true },
       projectMachines: { listByProject: async () => [] },

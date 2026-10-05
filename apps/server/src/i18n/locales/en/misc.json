@@ -90,5 +90,19 @@
   "Custo estimado do dia: {{cost}}": "Estimated cost of the day: {{cost}}",
   "US$ {{value}}": "US$ {{value}}",
   "Um PR": "A PR",
-  "Desde {{since}}": "Since {{since}}"
+  "Desde {{since}}": "Since {{since}}",
+  "não é uma máquina com agente": "not an agent machine",
+  "agente desligado": "agent offline",
+  "agente sem worktree (precisa da 0.18)": "agent without worktrees (needs 0.18)",
+  "sem o Claude instalado": "Claude not installed",
+  "não aceita trabalho automático": "does not accept automatic work",
+  "sem folga (memória/disco/carga)": "no room (memory/disk/load)",
+  "fora das contas do projeto no Setup": "not among the project's accounts in Setup",
+  "no limite de uso": "at its usage limit",
+  "uso em {{peak}}% (o automático para em 80%)": "usage at {{peak}}% (automatic work stops at 80%)",
+  "já recebeu um início nesta rodada": "already got a start in this round",
+  "máquina sem folga": "machine without room",
+  "nenhuma conta escolhida em Setup → Contas de IA e modelo": "no account chosen in Setup → AI accounts and model",
+  "máquina {{machine}}: {{why}}": "machine {{machine}}: {{why}}",
+  "conta {{account}} ({{machine}}): {{why}}": "account {{account}} ({{machine}}): {{why}}"
 }

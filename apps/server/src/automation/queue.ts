@@ -5,7 +5,8 @@ import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 import { eligibilityOf, REASON_TEXT, type IneligibleReason } from './eligibility.js';
 import { mergeWaitOf } from './merge-wait.js';
 import { isPaused } from './pause.js';
-import { WAITING_AS_REASON, waitingReasonOf } from './placement.js';
+import { WAITING_AS_REASON, waitingOf } from './placement.js';
+import { placeDetailText } from './waiting-text.js';
 
 export interface QueueItem {
   task_id: string;
@@ -19,7 +20,8 @@ export interface QueueItem {
 /**
  * The tagged cards of a project in board order (column position, then card position: the order is the
  * priority), each with its eligibility. Untagged cards and subtasks are not in the queue. An eligible card
- * the dispatcher found no place for shows why it waits (`no_account`, …) instead.
+ * the dispatcher found no place for shows why it waits (`no_account`, …) instead, with each machine and
+ * account it left out (TER-985).
  */
 export async function automationQueue(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<QueueItem[]> {
   const now = new Date();
@@ -27,10 +29,11 @@ export async function automationQueue(ctx: ControlContext, projectId: string, lo
     // a card past `todo` whose PR the merge executor holds says why it is not merged yet
     const merge = item.reason === 'not_in_todo' ? mergeWaitOf(item.task_id, now) : null;
     if (merge) return { ...item, reason: merge, reason_text: t(locale, REASON_TEXT[merge]) };
-    const waiting = item.eligible ? waitingReasonOf(item.task_id, now) : null;
+    const waiting = item.eligible ? waitingOf(item.task_id, now) : null;
     if (!waiting) return item;
-    const reason = WAITING_AS_REASON[waiting];
-    return { ...item, eligible: false, reason, reason_text: t(locale, REASON_TEXT[reason]) };
+    const reason = WAITING_AS_REASON[waiting.reason];
+    const detail = waiting.detail ? placeDetailText(locale, waiting.detail) : '';
+    return { ...item, eligible: false, reason, reason_text: detail ? `${t(locale, REASON_TEXT[reason])}: ${detail}` : t(locale, REASON_TEXT[reason]) };
   });
 }
 

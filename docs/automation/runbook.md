@@ -50,9 +50,14 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
    production host, and the automation must never start cards there. Check it on every machine that
    should not run cards, and on the others make sure it is checked. The chat can flip it too
    (`set_machine_automation`, section 4a): unchecking runs at once, checking asks you first.
-4. Optional: `SMOKE_API_TOKEN` in jarvis's `.env` turns on the authenticated step of the deploy smoke test
+4. Project accounts. In the project Setup, "Contas de IA e modelo", check the Claude accounts automatic
+   runs may use and click "Salvar contas e modelo". The automation only starts under accounts in that list,
+   in its order; it never falls back to a machine's own login. Accounts shown there unchecked are only
+   offered, not chosen: with the list empty, every card waits as "Sem conta com folga", and the reason
+   says "nenhuma conta escolhida em Setup → Contas de IA e modelo" (TER-985).
+5. Optional: `SMOKE_API_TOKEN` in jarvis's `.env` turns on the authenticated step of the deploy smoke test
    (`deploy/README.md`). Without it the step is skipped; rollback still works.
-5. GitHub ruleset on `main` (requires the maintainer's explicit approval, do not apply without it):
+6. GitHub ruleset on `main` (requires the maintainer's explicit approval, do not apply without it):
    require a PR, require the `CI e Deploy` check, "Require branches to be up to date before merging",
    block force pushes and deletion. The up-to-date rule closes the gap between the executor's compare and
    its merge (the base may move in between): GitHub refuses the merge (405), and the next pass updates the
