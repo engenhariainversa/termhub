@@ -316,6 +316,9 @@ model Tab {
   aiAccountId         String?   @map("ai_account_id")
   /// When the tab's Claude stopped on a usage limit (StopFailure rate_limit); cleared when it runs again.
   rateLimitedAt       DateTime? @map("rate_limited_at")
+  /// Where the tab's session runs when it is not the project's folder (an automation card's worktree, an
+  /// absolute path on the machine); null = the project–machine link's cwd. Reused when the session is recreated.
+  cwd                 String?
   aiAccount           AiAccount? @relation(fields: [aiAccountId], references: [id], onDelete: SetNull)
   /// API token that opened this tab through /mcp (null: opened in the browser). Used by close_tab and the per-token open-tab limit.
   createdByTokenId String?  @map("created_by_token_id")

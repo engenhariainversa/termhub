@@ -93,6 +93,23 @@ describe('openTab', () => {
     expect(r).toMatchObject({ tab_id: 't1', machine_id: 'm1', created: true });
   });
 
+  it('with a cwd from the server, keeps it on the tab and starts the session there (TER-870)', async () => {
+    const ctx = ctxWith();
+    await openTab(ctx, { project_id: 'p1' }, { cwd: '/home/u/.termhub/worktrees/APP-7' });
+    expect(ctx.repos.tabs.create).toHaveBeenCalledWith('p1', 'm1', expect.any(String), { created_by_token_id: 'tok1', cwd: '/home/u/.termhub/worktrees/APP-7' });
+    expect(ensureSession).toHaveBeenCalledWith(machine, 'termhub-p1-t1', '/home/u/.termhub/worktrees/APP-7');
+  });
+
+  it('without a cwd (manual and MCP tabs), the tab row and the session folder are as before (TER-870)', async () => {
+    for (const internal of [undefined, {}]) {
+      vi.clearAllMocks();
+      const ctx = ctxWith();
+      await openTab(ctx, { project_id: 'p1' }, internal);
+      expect(ctx.repos.tabs.create.mock.calls[0][3]).toStrictEqual({ created_by_token_id: 'tok1' });
+      expect(ensureSession).toHaveBeenCalledWith(machine, 'termhub-p1-t1', '/home/u/app');
+    }
+  });
+
   it('openTab needs machine_id when the project has two machines and reports it in the result', async () => {
     const ctx = ctxWith();
     (ctx.repos.projectMachines.listByProject as ReturnType<typeof vi.fn>).mockResolvedValueOnce([

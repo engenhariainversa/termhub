@@ -59,10 +59,16 @@ async function settleByScreen(machine: Machine, session: string, lines: number, 
   }
 }
 
-/** Opens a tab and starts its tmux session detached, so it is alive without a browser attached. */
+/**
+ * Opens a tab and starts its tmux session detached, so it is alive without a browser attached.
+ * `internal.cwd` (server callers only — the MCP tool's input has no such field): the session starts there
+ * instead of the project's folder, and the tab keeps it, so a recreated session reopens there too
+ * (`scoped.tab()` resolves `tab.cwd ?? link.cwd`). The caller has validated it (`startAgent`).
+ */
 export async function openTab(
   ctx: ControlContext,
   input: { project_id: string; machine_id?: string; name?: string },
+  internal?: { cwd?: string },
 ): Promise<{ tab_id: string; name: string; project_id: string; machine_id: string; tmux_session: string | null; created: boolean }> {
   const { project, machine, link } = await ctx.scoped.projectMachineFor(input.project_id, input.machine_id);
   await assertReady(machine);
@@ -76,11 +82,12 @@ export async function openTab(
 
   const existing = await ctx.repos.tabs.listByProject(project.id);
   const name = input.name?.trim() || nextTerminalName(existing.map((t) => t.name));
-  const tab = await ctx.repos.tabs.create(project.id, machine.id, name, { created_by_token_id: ctx.token?.id ?? null });
+  const cwd = internal?.cwd;
+  const tab = await ctx.repos.tabs.create(project.id, machine.id, name, { created_by_token_id: ctx.token?.id ?? null, ...(cwd !== undefined ? { cwd } : {}) });
   publishTabOpened(tab, machine);
 
   try {
-    const { created } = await ensureSession(machine, tab.tmux_session as string, link.cwd);
+    const { created } = await ensureSession(machine, tab.tmux_session as string, cwd ?? link.cwd);
     return { tab_id: tab.id, name: tab.name, project_id: project.id, machine_id: machine.id, tmux_session: tab.tmux_session, created };
   } catch (e) {
     // The tab is kept on purpose (spec §4.4): the error carries its id so the screen can be inspected.

@@ -119,7 +119,8 @@ export class Scoped {
     const { project, machine, link } = await this.projectMachine(tab.project_id, tab.machine_id).catch((err: unknown) => {
       throw err instanceof HttpError ? notFound('Tab não encontrada') : err;
     });
-    return { tab, project, machine, cwd: link.cwd };
+    // A tab started in a card's worktree keeps it (automation); every other tab runs in the project's folder.
+    return { tab, project, machine, cwd: tab.cwd ?? link.cwd };
   }
 
   async task(id: string): Promise<{ task: Task; project: Project }> {

@@ -298,6 +298,7 @@ export const TabScalarFieldEnum = {
   agentTranscriptPath: 'agentTranscriptPath',
   aiAccountId: 'aiAccountId',
   rateLimitedAt: 'rateLimitedAt',
+  cwd: 'cwd',
   createdByTokenId: 'createdByTokenId',
   createdAt: 'createdAt'
 } as const
