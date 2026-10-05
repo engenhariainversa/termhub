@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { AutomationBadge } from './AutomationBadge';
 import { PauseBanner } from './PauseAutomationButton';
+import { feedLine } from '../lib/automation-feed';
 import { useMonitor } from '../lib/monitor';
 import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, releaseLabel, stateLabel, withLiveTab } from '../lib/progress';
 import { relativeTime } from '../lib/time';
 import { i18n, useTranslation } from '../i18n';
-import type { AgentOnCard, CardProgress, EpicProgress, ProgressEstimate, ProgressResponse, ProgressScope, PullRequestBadge } from '../lib/types';
+import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, ProgressEstimate, ProgressResponse, ProgressScope, PullRequestBadge } from '../lib/types';
 
 /** Percentages move at subtask pace; tab states come live from the monitor (spec D9). */
 export const PROGRESS_REFRESH_MS = 15_000;
@@ -57,6 +59,7 @@ function AgentChip({ agent, projectId }: { agent: AgentOnCard; projectId: string
         {since}
       </span>
       {agent.subtask_ref && <span className="text-zinc-500">{agent.subtask_ref}</span>}
+      {agent.automatic && <AutomationBadge />}
       {agent.rate_limited && <span className="text-red-600">{t('limite de uso')}</span>}
     </Link>
   );
@@ -170,6 +173,37 @@ function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string 
   );
 }
 
+/** The automatic work's feed (spec D25): what the agents did, newest first. Shown only when there is something to show. */
+export function AutomationFeed({ feed }: { feed: AutomationFeedEvent[] }) {
+  const { t } = useTranslation();
+  const lines = feed.map((e) => ({ e, text: feedLine(e) })).filter((l): l is { e: AutomationFeedEvent; text: string } => l.text !== null);
+  if (lines.length === 0) return null;
+  return (
+    <section aria-label={t('Automático')} className="space-y-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <h2 className="text-base font-semibold">{t('Automático')}</h2>
+      <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
+        {lines.map(({ e, text }) => (
+          <li key={e.id} className="flex flex-wrap items-baseline gap-x-2 py-1.5 text-sm">
+            <span className={e.kind === 'escalated' || e.kind === 'deploy_failed' || e.kind === 'release_failed' || e.kind === 'run_blocked' ? 'text-amber-700 dark:text-amber-400' : ''}>{text}</span>
+            {e.url && (
+              <a href={e.url} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
+                {e.pr !== null ? t('PR #{{number}}', { number: e.pr }) : t('abrir')}
+              </a>
+            )}
+            {e.tab_id && (
+              <Link to={`/projects/${e.project_id}?tab=${e.tab_id}`} className="text-xs text-accent hover:underline">
+                {t('abrir aba')}
+              </Link>
+            )}
+            {e.run_id && <span className="text-xs text-zinc-500" title={t('execução {{id}}', { id: e.run_id })}>{`#${e.run_id.slice(-6)}`}</span>}
+            <span className="ml-auto text-xs text-zinc-500">{relativeTime(e.created_at)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Project section "Progresso" (spec 2026-09-26 progress-panel §4.6). Read-only. */
 export function ProgressPanel({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
@@ -236,6 +270,7 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
         </div>
       )}
       {data && epics.length === 0 && <p className="text-sm text-zinc-500">{t('Nenhum épico em andamento')}</p>}
+      <AutomationFeed feed={data?.feed ?? []} />
       {epics.map((e) => (
         <EpicBlock key={e.id} epic={e} projectId={projectId} />
       ))}

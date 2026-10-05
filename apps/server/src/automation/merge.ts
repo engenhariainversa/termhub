@@ -541,7 +541,7 @@ async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: '
       project_id: c.project.id,
       task_id: task.id,
       kind: 'merged',
-      payload: { pr: row.number, url: row.url, sha: result.sha, level: needed, by, moved_to_done: moved, ...(kept ? { worktree_kept: true } : {}) },
+      payload: { pr: row.number, url: row.url, sha: result.sha, base: row.base_ref, level: needed, by, moved_to_done: moved, ...(kept ? { worktree_kept: true } : {}) },
     });
   }
   log.info({ projectId: c.project.id, pr: row.number, by }, 'automation: PR merged');

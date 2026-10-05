@@ -5,9 +5,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PauseCard } from '@/features/automation/view/pause-card';
 import { relativeTime } from '@/features/shared/relative-time';
 import { useTranslation } from '@/i18n';
-import type { TAgentOnCard, TCardProgress, TEpicProgress } from '@/services/api/contract';
+import type { TAgentOnCard, TAutomationFeedEvent, TCardProgress, TEpicProgress } from '@/services/api/contract';
 import { AppText, Button, MAX_READABLE_WIDTH, readableColumn, Sheet } from '@/ui';
 import { ciLabel, epicCiLine, formatEstimate, stateLabel } from '../model/format';
+import { feedLine } from '../model/feed';
 import { useProgressStore } from '../viewmodel/useProgressStore';
 
 function Bar({ percent }: { percent: number }) {
@@ -22,9 +23,12 @@ function Agent({ agent }: { agent: TAgentOnCard }) {
   useTranslation();
   const since = agent.state_at ? ` · ${relativeTime(agent.state_at, Date.now())}` : '';
   return (
-    <Text className={agent.needs_you ? 'text-xs text-amber-400' : 'text-xs text-zinc-400'}>
-      {`${agent.tab_name} · ${stateLabel(agent.state, agent.background, agent.finished)}${since} · ${agent.machine_name}`}
-    </Text>
+    <View className="flex-row flex-wrap items-center gap-2">
+      <Text className={agent.needs_you ? 'text-xs text-amber-400' : 'text-xs text-zinc-400'}>
+        {`${agent.tab_name} · ${stateLabel(agent.state, agent.background, agent.finished)}${since} · ${agent.machine_name}`}
+      </Text>
+      {agent.automatic ? <AutoBadge /> : null}
+    </View>
   );
 }
 
@@ -35,6 +39,34 @@ function AutoBadge() {
     <Text accessibilityLabel={t('automático')} className="rounded bg-indigo-400/20 px-1 text-[10px] text-indigo-300">
       {t('automático')}
     </Text>
+  );
+}
+
+/** The automatic work's feed (spec D25): what the agents did, newest first. Absent when there is nothing to show. */
+function Feed({ feed }: { feed: TAutomationFeedEvent[] }) {
+  const { t } = useTranslation();
+  const lines = feed.map((e) => ({ e, text: feedLine(e) })).filter((l): l is { e: TAutomationFeedEvent; text: string } => l.text !== null);
+  if (lines.length === 0) return null;
+  return (
+    <View testID="progress-feed" className="mx-4 my-2 gap-2 rounded-xl bg-zinc-900 p-4">
+      <Text accessibilityRole="header" className="text-base font-semibold text-white">
+        {t('Automático')}
+      </Text>
+      {lines.map(({ e, text }) => (
+        <View key={e.id} className="gap-0.5">
+          <Text className={e.kind === 'escalated' || e.kind === 'deploy_failed' || e.kind === 'release_failed' || e.kind === 'run_blocked' ? 'text-sm text-amber-400' : 'text-sm text-zinc-200'}>{text}</Text>
+          <View className="flex-row flex-wrap items-center gap-2">
+            <Text className="text-xs text-zinc-500">{relativeTime(e.created_at, Date.now())}</Text>
+            {e.run_id ? <Text className="text-xs text-zinc-500" accessibilityLabel={t('execução {{id}}', { id: e.run_id })}>{`#${e.run_id.slice(-6)}`}</Text> : null}
+            {e.url ? (
+              <Pressable onPress={() => void Linking.openURL(e.url as string)} accessibilityRole="link">
+                <Text className="text-xs text-indigo-300">{e.pr !== null ? t('PR #{{number}}', { number: e.pr }) : t('abrir')}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -105,6 +137,7 @@ const SAFE_EDGES = ['top', 'left', 'right'] as const;
 export function ProgressScreen() {
   const { t } = useTranslation();
   const epics = useProgressStore((s) => s.epics);
+  const feed = useProgressStore((s) => s.feed);
   const loading = useProgressStore((s) => s.loading);
   const refreshing = useProgressStore((s) => s.refreshing);
   const error = useProgressStore((s) => s.error);
@@ -131,6 +164,7 @@ export function ProgressScreen() {
               <PauseCard testID="progress-pause-card" />
             </View>
             {error ? <Text className="px-4 pt-4 text-sm text-red-400">{error}</Text> : null}
+            <Feed feed={feed} />
           </>
         }
         ListEmptyComponent={!loading ? <Text className="px-4 pt-8 text-center text-sm text-zinc-500">{t('Nenhum épico em andamento')}</Text> : null}

@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { sessionEnded } from '@/features/shared/signals';
 import { t } from '@/i18n';
-import type { TEpicProgress } from '@/services/api/contract';
+import type { TAutomationFeedEvent, TEpicProgress } from '@/services/api/contract';
 import type { Auth, MobileApi } from '@/services/api/types';
 
 export const PROGRESS_POLL_MS = 20_000;
@@ -16,6 +16,8 @@ export interface SessionApi {
 
 export interface ProgressState {
   epics: TEpicProgress[];
+  /** The automatic work's feed, newest first; empty for someone with no automatic work. */
+  feed: TAutomationFeedEvent[];
   /** A load is in flight (first load, focus, background poll). */
   loading: boolean;
   /** A pull-to-refresh is in flight — only `refresh()` sets it, so the poll never shows the spinner. */
@@ -36,6 +38,7 @@ export function createProgressStore(deps: { api: MobileApi; session: () => Sessi
   let generation = 0;
   const store = create<ProgressState>()((set, get) => ({
     epics: [],
+    feed: [],
     loading: false,
     refreshing: false,
     error: null,
@@ -45,7 +48,7 @@ export function createProgressStore(deps: { api: MobileApi; session: () => Sessi
       try {
         const res = await deps.api.progress(deps.session().auth(), 'active');
         if (mine !== generation) return;
-        set({ epics: res.epics, loading: false, error: null });
+        set({ epics: res.epics, feed: res.feed, loading: false, error: null });
       } catch (err) {
         if (deps.session().handleApiError(err)) {
           get().stopPolling();
@@ -89,7 +92,7 @@ export function createProgressStore(deps: { api: MobileApi; session: () => Sessi
   sessionEnded.subscribe(() => {
     generation++;
     store.getState().stopPolling();
-    store.setState({ epics: [], error: null, loading: false, refreshing: false });
+    store.setState({ epics: [], feed: [], error: null, loading: false, refreshing: false });
   });
 
   return store;
