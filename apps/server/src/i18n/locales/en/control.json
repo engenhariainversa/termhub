@@ -87,5 +87,7 @@
   "pergunta não registrada": "question not recorded",
   "{{binary}} não foi detectado em {{machine}} (list_machines mostra o que cada máquina tem). Se está instalado: com agente, atualize o termhub-agent (0.2.3 ou mais novo) e deixe-o reconectar; em máquina local/ssh, abra a lista de máquinas no app para refazer a detecção.": "{{binary}} was not detected on {{machine}} (list_machines shows what each machine has). If it is installed: with the agent, update termhub-agent (0.2.3 or newer) and let it reconnect; on a local/ssh machine, open the machine list in the app to run the detection again.",
   "{{key}} é ambíguo: {{names}}. Use a chave completa.": "{{key}} is ambiguous: {{names}}. Use the full key.",
-  "é de mais de 24 h atrás": "is more than 24 h old"
+  "é de mais de 24 h atrás": "is more than 24 h old",
+  "A branch {{branch}} não existe no repositório": "Branch {{branch}} does not exist in the repository",
+  "O padrão de branch {{pattern}} não gera um nome de branch válido para {{ref}}": "The branch pattern {{pattern}} does not produce a valid branch name for {{ref}}"
 }

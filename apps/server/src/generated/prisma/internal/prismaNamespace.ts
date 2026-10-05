@@ -4720,6 +4720,8 @@ export const TaskPullRequestScalarFieldEnum = {
   draft: 'draft',
   mergedAt: 'mergedAt',
   mergeCommitSha: 'mergeCommitSha',
+  baseRef: 'baseRef',
+  changedLevel: 'changedLevel',
   ciState: 'ciState',
   ciSummary: 'ciSummary',
   deployState: 'deployState',

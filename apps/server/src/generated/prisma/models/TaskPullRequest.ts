@@ -48,6 +48,8 @@ export type TaskPullRequestMinAggregateOutputType = {
   draft: boolean | null
   mergedAt: Date | null
   mergeCommitSha: string | null
+  baseRef: string | null
+  changedLevel: string | null
   ciState: string | null
   deployState: string | null
   deployUrl: string | null
@@ -68,6 +70,8 @@ export type TaskPullRequestMaxAggregateOutputType = {
   draft: boolean | null
   mergedAt: Date | null
   mergeCommitSha: string | null
+  baseRef: string | null
+  changedLevel: string | null
   ciState: string | null
   deployState: string | null
   deployUrl: string | null
@@ -88,6 +92,8 @@ export type TaskPullRequestCountAggregateOutputType = {
   draft: number
   mergedAt: number
   mergeCommitSha: number
+  baseRef: number
+  changedLevel: number
   ciState: number
   ciSummary: number
   deployState: number
@@ -119,6 +125,8 @@ export type TaskPullRequestMinAggregateInputType = {
   draft?: true
   mergedAt?: true
   mergeCommitSha?: true
+  baseRef?: true
+  changedLevel?: true
   ciState?: true
   deployState?: true
   deployUrl?: true
@@ -139,6 +147,8 @@ export type TaskPullRequestMaxAggregateInputType = {
   draft?: true
   mergedAt?: true
   mergeCommitSha?: true
+  baseRef?: true
+  changedLevel?: true
   ciState?: true
   deployState?: true
   deployUrl?: true
@@ -159,6 +169,8 @@ export type TaskPullRequestCountAggregateInputType = {
   draft?: true
   mergedAt?: true
   mergeCommitSha?: true
+  baseRef?: true
+  changedLevel?: true
   ciState?: true
   ciSummary?: true
   deployState?: true
@@ -267,6 +279,8 @@ export type TaskPullRequestGroupByOutputType = {
   draft: boolean
   mergedAt: Date | null
   mergeCommitSha: string | null
+  baseRef: string | null
+  changedLevel: string | null
   ciState: string
   ciSummary: runtime.JsonValue
   deployState: string
@@ -311,6 +325,8 @@ export type TaskPullRequestWhereInput = {
   draft?: Prisma.BoolFilter<"TaskPullRequest"> | boolean
   mergedAt?: Prisma.DateTimeNullableFilter<"TaskPullRequest"> | Date | string | null
   mergeCommitSha?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
+  baseRef?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
+  changedLevel?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
   ciState?: Prisma.StringFilter<"TaskPullRequest"> | string
   ciSummary?: Prisma.JsonFilter<"TaskPullRequest">
   deployState?: Prisma.StringFilter<"TaskPullRequest"> | string
@@ -334,6 +350,8 @@ export type TaskPullRequestOrderByWithRelationInput = {
   draft?: Prisma.SortOrder
   mergedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   mergeCommitSha?: Prisma.SortOrderInput | Prisma.SortOrder
+  baseRef?: Prisma.SortOrderInput | Prisma.SortOrder
+  changedLevel?: Prisma.SortOrderInput | Prisma.SortOrder
   ciState?: Prisma.SortOrder
   ciSummary?: Prisma.SortOrder
   deployState?: Prisma.SortOrder
@@ -361,6 +379,8 @@ export type TaskPullRequestWhereUniqueInput = Prisma.AtLeast<{
   draft?: Prisma.BoolFilter<"TaskPullRequest"> | boolean
   mergedAt?: Prisma.DateTimeNullableFilter<"TaskPullRequest"> | Date | string | null
   mergeCommitSha?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
+  baseRef?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
+  changedLevel?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
   ciState?: Prisma.StringFilter<"TaskPullRequest"> | string
   ciSummary?: Prisma.JsonFilter<"TaskPullRequest">
   deployState?: Prisma.StringFilter<"TaskPullRequest"> | string
@@ -384,6 +404,8 @@ export type TaskPullRequestOrderByWithAggregationInput = {
   draft?: Prisma.SortOrder
   mergedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   mergeCommitSha?: Prisma.SortOrderInput | Prisma.SortOrder
+  baseRef?: Prisma.SortOrderInput | Prisma.SortOrder
+  changedLevel?: Prisma.SortOrderInput | Prisma.SortOrder
   ciState?: Prisma.SortOrder
   ciSummary?: Prisma.SortOrder
   deployState?: Prisma.SortOrder
@@ -413,6 +435,8 @@ export type TaskPullRequestScalarWhereWithAggregatesInput = {
   draft?: Prisma.BoolWithAggregatesFilter<"TaskPullRequest"> | boolean
   mergedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"TaskPullRequest"> | Date | string | null
   mergeCommitSha?: Prisma.StringNullableWithAggregatesFilter<"TaskPullRequest"> | string | null
+  baseRef?: Prisma.StringNullableWithAggregatesFilter<"TaskPullRequest"> | string | null
+  changedLevel?: Prisma.StringNullableWithAggregatesFilter<"TaskPullRequest"> | string | null
   ciState?: Prisma.StringWithAggregatesFilter<"TaskPullRequest"> | string
   ciSummary?: Prisma.JsonWithAggregatesFilter<"TaskPullRequest">
   deployState?: Prisma.StringWithAggregatesFilter<"TaskPullRequest"> | string
@@ -432,6 +456,8 @@ export type TaskPullRequestCreateInput = {
   draft?: boolean
   mergedAt?: Date | string | null
   mergeCommitSha?: string | null
+  baseRef?: string | null
+  changedLevel?: string | null
   ciState?: string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: string
@@ -455,6 +481,8 @@ export type TaskPullRequestUncheckedCreateInput = {
   draft?: boolean
   mergedAt?: Date | string | null
   mergeCommitSha?: string | null
+  baseRef?: string | null
+  changedLevel?: string | null
   ciState?: string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: string
@@ -474,6 +502,8 @@ export type TaskPullRequestUpdateInput = {
   draft?: Prisma.BoolFieldUpdateOperationsInput | boolean
   mergedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   mergeCommitSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  baseRef?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  changedLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   ciState?: Prisma.StringFieldUpdateOperationsInput | string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
@@ -497,6 +527,8 @@ export type TaskPullRequestUncheckedUpdateInput = {
   draft?: Prisma.BoolFieldUpdateOperationsInput | boolean
   mergedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   mergeCommitSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  baseRef?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  changedLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   ciState?: Prisma.StringFieldUpdateOperationsInput | string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
@@ -518,6 +550,8 @@ export type TaskPullRequestCreateManyInput = {
   draft?: boolean
   mergedAt?: Date | string | null
   mergeCommitSha?: string | null
+  baseRef?: string | null
+  changedLevel?: string | null
   ciState?: string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: string
@@ -537,6 +571,8 @@ export type TaskPullRequestUpdateManyMutationInput = {
   draft?: Prisma.BoolFieldUpdateOperationsInput | boolean
   mergedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   mergeCommitSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  baseRef?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  changedLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   ciState?: Prisma.StringFieldUpdateOperationsInput | string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
@@ -558,6 +594,8 @@ export type TaskPullRequestUncheckedUpdateManyInput = {
   draft?: Prisma.BoolFieldUpdateOperationsInput | boolean
   mergedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   mergeCommitSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  baseRef?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  changedLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   ciState?: Prisma.StringFieldUpdateOperationsInput | string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
@@ -595,6 +633,8 @@ export type TaskPullRequestCountOrderByAggregateInput = {
   draft?: Prisma.SortOrder
   mergedAt?: Prisma.SortOrder
   mergeCommitSha?: Prisma.SortOrder
+  baseRef?: Prisma.SortOrder
+  changedLevel?: Prisma.SortOrder
   ciState?: Prisma.SortOrder
   ciSummary?: Prisma.SortOrder
   deployState?: Prisma.SortOrder
@@ -620,6 +660,8 @@ export type TaskPullRequestMaxOrderByAggregateInput = {
   draft?: Prisma.SortOrder
   mergedAt?: Prisma.SortOrder
   mergeCommitSha?: Prisma.SortOrder
+  baseRef?: Prisma.SortOrder
+  changedLevel?: Prisma.SortOrder
   ciState?: Prisma.SortOrder
   deployState?: Prisma.SortOrder
   deployUrl?: Prisma.SortOrder
@@ -640,6 +682,8 @@ export type TaskPullRequestMinOrderByAggregateInput = {
   draft?: Prisma.SortOrder
   mergedAt?: Prisma.SortOrder
   mergeCommitSha?: Prisma.SortOrder
+  baseRef?: Prisma.SortOrder
+  changedLevel?: Prisma.SortOrder
   ciState?: Prisma.SortOrder
   deployState?: Prisma.SortOrder
   deployUrl?: Prisma.SortOrder
@@ -746,6 +790,8 @@ export type TaskPullRequestCreateWithoutProjectInput = {
   draft?: boolean
   mergedAt?: Date | string | null
   mergeCommitSha?: string | null
+  baseRef?: string | null
+  changedLevel?: string | null
   ciState?: string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: string
@@ -767,6 +813,8 @@ export type TaskPullRequestUncheckedCreateWithoutProjectInput = {
   draft?: boolean
   mergedAt?: Date | string | null
   mergeCommitSha?: string | null
+  baseRef?: string | null
+  changedLevel?: string | null
   ciState?: string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: string
@@ -817,6 +865,8 @@ export type TaskPullRequestScalarWhereInput = {
   draft?: Prisma.BoolFilter<"TaskPullRequest"> | boolean
   mergedAt?: Prisma.DateTimeNullableFilter<"TaskPullRequest"> | Date | string | null
   mergeCommitSha?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
+  baseRef?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
+  changedLevel?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
   ciState?: Prisma.StringFilter<"TaskPullRequest"> | string
   ciSummary?: Prisma.JsonFilter<"TaskPullRequest">
   deployState?: Prisma.StringFilter<"TaskPullRequest"> | string
@@ -836,6 +886,8 @@ export type TaskPullRequestCreateWithoutTaskInput = {
   draft?: boolean
   mergedAt?: Date | string | null
   mergeCommitSha?: string | null
+  baseRef?: string | null
+  changedLevel?: string | null
   ciState?: string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: string
@@ -857,6 +909,8 @@ export type TaskPullRequestUncheckedCreateWithoutTaskInput = {
   draft?: boolean
   mergedAt?: Date | string | null
   mergeCommitSha?: string | null
+  baseRef?: string | null
+  changedLevel?: string | null
   ciState?: string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: string
@@ -903,6 +957,8 @@ export type TaskPullRequestCreateManyProjectInput = {
   draft?: boolean
   mergedAt?: Date | string | null
   mergeCommitSha?: string | null
+  baseRef?: string | null
+  changedLevel?: string | null
   ciState?: string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: string
@@ -922,6 +978,8 @@ export type TaskPullRequestUpdateWithoutProjectInput = {
   draft?: Prisma.BoolFieldUpdateOperationsInput | boolean
   mergedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   mergeCommitSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  baseRef?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  changedLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   ciState?: Prisma.StringFieldUpdateOperationsInput | string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
@@ -943,6 +1001,8 @@ export type TaskPullRequestUncheckedUpdateWithoutProjectInput = {
   draft?: Prisma.BoolFieldUpdateOperationsInput | boolean
   mergedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   mergeCommitSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  baseRef?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  changedLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   ciState?: Prisma.StringFieldUpdateOperationsInput | string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
@@ -963,6 +1023,8 @@ export type TaskPullRequestUncheckedUpdateManyWithoutProjectInput = {
   draft?: Prisma.BoolFieldUpdateOperationsInput | boolean
   mergedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   mergeCommitSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  baseRef?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  changedLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   ciState?: Prisma.StringFieldUpdateOperationsInput | string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
@@ -983,6 +1045,8 @@ export type TaskPullRequestCreateManyTaskInput = {
   draft?: boolean
   mergedAt?: Date | string | null
   mergeCommitSha?: string | null
+  baseRef?: string | null
+  changedLevel?: string | null
   ciState?: string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: string
@@ -1002,6 +1066,8 @@ export type TaskPullRequestUpdateWithoutTaskInput = {
   draft?: Prisma.BoolFieldUpdateOperationsInput | boolean
   mergedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   mergeCommitSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  baseRef?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  changedLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   ciState?: Prisma.StringFieldUpdateOperationsInput | string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1023,6 +1089,8 @@ export type TaskPullRequestUncheckedUpdateWithoutTaskInput = {
   draft?: Prisma.BoolFieldUpdateOperationsInput | boolean
   mergedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   mergeCommitSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  baseRef?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  changedLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   ciState?: Prisma.StringFieldUpdateOperationsInput | string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1043,6 +1111,8 @@ export type TaskPullRequestUncheckedUpdateManyWithoutTaskInput = {
   draft?: Prisma.BoolFieldUpdateOperationsInput | boolean
   mergedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   mergeCommitSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  baseRef?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  changedLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   ciState?: Prisma.StringFieldUpdateOperationsInput | string
   ciSummary?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1066,6 +1136,8 @@ export type TaskPullRequestSelect<ExtArgs extends runtime.Types.Extensions.Inter
   draft?: boolean
   mergedAt?: boolean
   mergeCommitSha?: boolean
+  baseRef?: boolean
+  changedLevel?: boolean
   ciState?: boolean
   ciSummary?: boolean
   deployState?: boolean
@@ -1089,6 +1161,8 @@ export type TaskPullRequestSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   draft?: boolean
   mergedAt?: boolean
   mergeCommitSha?: boolean
+  baseRef?: boolean
+  changedLevel?: boolean
   ciState?: boolean
   ciSummary?: boolean
   deployState?: boolean
@@ -1112,6 +1186,8 @@ export type TaskPullRequestSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   draft?: boolean
   mergedAt?: boolean
   mergeCommitSha?: boolean
+  baseRef?: boolean
+  changedLevel?: boolean
   ciState?: boolean
   ciSummary?: boolean
   deployState?: boolean
@@ -1135,6 +1211,8 @@ export type TaskPullRequestSelectScalar = {
   draft?: boolean
   mergedAt?: boolean
   mergeCommitSha?: boolean
+  baseRef?: boolean
+  changedLevel?: boolean
   ciState?: boolean
   ciSummary?: boolean
   deployState?: boolean
@@ -1142,7 +1220,7 @@ export type TaskPullRequestSelectScalar = {
   syncedAt?: boolean
 }
 
-export type TaskPullRequestOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "taskId" | "repo" | "number" | "url" | "title" | "headRef" | "headSha" | "state" | "draft" | "mergedAt" | "mergeCommitSha" | "ciState" | "ciSummary" | "deployState" | "deployUrl" | "syncedAt", ExtArgs["result"]["taskPullRequest"]>
+export type TaskPullRequestOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "taskId" | "repo" | "number" | "url" | "title" | "headRef" | "headSha" | "state" | "draft" | "mergedAt" | "mergeCommitSha" | "baseRef" | "changedLevel" | "ciState" | "ciSummary" | "deployState" | "deployUrl" | "syncedAt", ExtArgs["result"]["taskPullRequest"]>
 export type TaskPullRequestInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   task?: boolean | Prisma.TaskDefaultArgs<ExtArgs>
@@ -1182,6 +1260,14 @@ export type $TaskPullRequestPayload<ExtArgs extends runtime.Types.Extensions.Int
     draft: boolean
     mergedAt: Date | null
     mergeCommitSha: string | null
+    /**
+     * the PR's base branch (where it merges into)
+     */
+    baseRef: string | null
+    /**
+     * highest change level of the PR's files (automation), set by the integrator; null until classified
+     */
+    changedLevel: string | null
     /**
      * none | running | passed | failed — GitHub Actions runs of head_sha
      */
@@ -1634,6 +1720,8 @@ export interface TaskPullRequestFieldRefs {
   readonly draft: Prisma.FieldRef<"TaskPullRequest", 'Boolean'>
   readonly mergedAt: Prisma.FieldRef<"TaskPullRequest", 'DateTime'>
   readonly mergeCommitSha: Prisma.FieldRef<"TaskPullRequest", 'String'>
+  readonly baseRef: Prisma.FieldRef<"TaskPullRequest", 'String'>
+  readonly changedLevel: Prisma.FieldRef<"TaskPullRequest", 'String'>
   readonly ciState: Prisma.FieldRef<"TaskPullRequest", 'String'>
   readonly ciSummary: Prisma.FieldRef<"TaskPullRequest", 'Json'>
   readonly deployState: Prisma.FieldRef<"TaskPullRequest", 'String'>

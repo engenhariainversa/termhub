@@ -7,7 +7,7 @@ import { syncProjectCi } from './sync.js';
 
 const pull = (over: Partial<GithubPull> = {}): GithubPull => ({
   number: 7, html_url: 'https://github.com/acme/app/pull/7', title: 'Painel TER-2', body: 'Also TER-3 and TER-1 and TER-99', state: 'open', draft: false,
-  merged_at: null, merge_commit_sha: null, head: { ref: 'TER-2-panel', sha: 'abc' }, ...over,
+  merged_at: null, merge_commit_sha: null, head: { ref: 'TER-2-panel', sha: 'abc' }, base: { ref: 'epic/TER-1-x' }, ...over,
 });
 const cards: Record<number, { id: string; type: string; parent_id: string | null }> = {
   1: { id: 'epic', type: 'epic', parent_id: null },
@@ -45,6 +45,12 @@ describe('syncProjectCi', () => {
     expect(await syncProjectCi(deps, 'p1')).toEqual({ pulls: 1, checked: 0 });
     expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ repo: 'acme/app', number: 7, state: 'open', head_sha: 'abc' }), ['card2']);
     expect(etags.get('p1')).toBe('e2');
+  });
+
+  it('stores the PR base branch', async () => {
+    const { deps, replaceLinks } = setup();
+    await syncProjectCi(deps, 'p1');
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ base_ref: 'epic/TER-1-x' }), ['card2']);
   });
 
   it('calls replaceLinks with no cards when the PR names none, so old links go', async () => {
