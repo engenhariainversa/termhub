@@ -3,6 +3,7 @@ symptom: "Unable to find role=\"combobox\" and name \"Aba deste painel\" / expec
 tags: [web, react, tests, flaky, useEffect, waitFor]
 evidence: fixed
 card: TER-911
+pr: https://github.com/engenhariainversa/termhub/pull/303
 agent: claude
 date: 2026-10-04
 ---
