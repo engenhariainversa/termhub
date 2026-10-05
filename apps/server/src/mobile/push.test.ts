@@ -14,7 +14,7 @@ const user = { id: 'u1', email: 'ana@example.com' } as unknown as User;
 function setup(opts: { devices?: Device[]; live?: string[]; deletionScheduledAt?: string } = {}) {
   const devices = opts.devices ?? [mkDevice('d1', 'ExponentPushToken[a]'), mkDevice('d2', 'ExponentPushToken[b]')];
   const repos = {
-    users: { findById: vi.fn(async (id: string) => ({ ...user, id, deletion_scheduled_at: opts.deletionScheduledAt ?? null })) },
+    users: { findById: vi.fn(async (id: string) => ({ ...user, id, deletion_scheduled_at: opts.deletionScheduledAt ?? null })), pushTabFinished: vi.fn(async () => true) },
     devices: { listActiveWithPush: vi.fn(async () => devices), setPushToken: vi.fn(async () => undefined), clearPushTokenIf: vi.fn(async () => true) },
     deviceEvents: { record: vi.fn(async () => undefined) },
     userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })) },
@@ -24,7 +24,6 @@ function setup(opts: { devices?: Device[]; live?: string[]; deletionScheduledAt?
       findByIdsForOwner: vi.fn(async () => [{ id: 't1', name: 'api' }]),
       findById: vi.fn(async (id: string) => ({ id, project_id: 'p1', machine_id: 'm1', state: 'waiting_input' }) as { id: string; project_id: string; machine_id: string; state: string } | undefined),
     },
-    users: { pushTabFinished: vi.fn(async () => true) },
     tabQuestions: { findOpenForTab: vi.fn(async () => undefined as { kind: string } | undefined) },
     machines: { findByIdsForOwner: vi.fn(async () => [{ id: 'm1', name: 'jarvis' }]) },
     // cp / c9: conversations of project p1; cx: unknown to this user; anything else: the account-wide chat.
