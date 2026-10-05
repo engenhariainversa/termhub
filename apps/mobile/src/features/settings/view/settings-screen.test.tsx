@@ -199,6 +199,17 @@ describe('Notificações e Privacidade (permission prompts spec §2)', () => {
     expect(await screen.findByText('Enviada. Ela chega em 10 s. Feche o app para ver como ela chega.')).toBeTruthy();
   });
 
+  it('granted: the "aba terminou" switch reads and changes the account setting (TER-925)', async () => {
+    stores.permissionDeps.notificationStatus.mockResolvedValueOnce('granted');
+    await render(<SettingsScreen />);
+    const toggle = await screen.findByRole('switch', { name: 'Avisar quando uma aba terminar' });
+    await waitFor(() => expect(toggle.props.disabled).toBeFalsy());
+    expect(toggle.props.value).toBe(false);
+    await act(async () => fireEvent(toggle, 'valueChange', true));
+    await waitFor(() => expect(stores.settings.getState().tabFinished).toBe(true));
+    await act(async () => stores.settings.getState().setTabFinished(false));
+  });
+
   it('not granted: no test push button', async () => {
     stores.permissionDeps.notificationStatus.mockResolvedValueOnce('denied');
     await render(<SettingsScreen />);
