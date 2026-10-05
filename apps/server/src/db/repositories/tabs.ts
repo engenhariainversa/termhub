@@ -9,8 +9,11 @@ const EVENTS_KEPT_PER_TAB = 200;
 /** One working interval counts at most this much agent time: bounds a hook that died mid-turn (spec 2026-09-26 progress-panel D2). */
 export const MAX_WORKING_INTERVAL_S = 7200;
 
-/** States that mean a tool is mid-task in that tab — as opposed to `idle`, `error` or never seen. */
-const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background'];
+/**
+ * States that mean a tool is mid-task in that tab — as opposed to `idle`, `error` or never seen. `finished`
+ * counts like `waiting_input`: the agent is still open at its prompt (TER-972).
+ */
+const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background', 'finished'];
 
 const metaOf = (meta: unknown): Record<string, unknown> => (meta && typeof meta === 'object' && !Array.isArray(meta) ? (meta as Record<string, unknown>) : {});
 

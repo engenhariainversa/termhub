@@ -38,9 +38,13 @@ export const tabSummary = z.object({
   name: z.string(),
   project: z.object({ id: z.string(), key: z.string(), name: z.string() }),
   machine: z.object({ id: z.string(), name: z.string() }),
-  /** `waiting_background` travels as `working` with `background: true`, as in `agentOnCard` (progress.ts). */
+  /**
+   * `waiting_background` travels as `working` with `background: true`, and `finished` as `idle` with
+   * `finished: true`, as in `agentOnCard` (progress.ts).
+   */
   state: progressTabState.nullable(),
   background: z.boolean().default(false),
+  finished: z.boolean().default(false),
   state_at: z.string().nullable(),
   needs_you: z.boolean(),
   activity: z.string().nullable(),
