@@ -24,6 +24,7 @@ import { progressRoutes } from './routes/progress.js';
 import { officeRoutes } from './routes/office.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { setupRoutes } from './routes/setup.js';
+import { projectAutomationRoutes } from './routes/automation.js';
 import { projectAiRoutes } from './routes/project-ai.js';
 import { projectTicketRoutes, taskTicketRoutes } from './routes/tickets.js';
 import { aiAccountRoutes } from './routes/ai-accounts.js';
@@ -258,6 +259,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('notes', (a) => noteRoutes(a, repos), '/projects');
       await guarded('tasks', (a) => taskRoutes(a, repos), '/tasks');
       await guarded('tasks', (a) => projectColumnRoutes(a, repos), '/projects');
+      await guarded('tasks', (a) => projectAutomationRoutes(a, repos), '/projects');
       await guarded('tasks', (a) => columnRoutes(a, repos), '/columns');
       await guarded('projects', (a) => dashboardRoutes(a, repos), '/dashboard');
       await guarded('tasks', (a) => progressRoutes(a, repos), '/progress');
