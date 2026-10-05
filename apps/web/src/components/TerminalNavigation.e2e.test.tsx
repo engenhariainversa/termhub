@@ -60,6 +60,7 @@ import { Sidebar } from './Sidebar';
 import { TerminalsView } from './TerminalsView';
 import { editorTabsKey, resetEditorTabsCache } from '../lib/editor-tabs';
 import { layoutKey } from '../lib/layout';
+import { actRightAfterCommit } from '../test-commit';
 
 const terminal = (id: string, name: string, position: number, over: Partial<Tab> = {}): Tab =>
   ({ id, name, project_id: 'p1', machine_id: 'm1', kind: 'terminal', tmux_session: `th-${id}`, position, alive: true, state: 'working', state_at: '2026-10-04T10:00:00.000Z', state_seen_at: null, rate_limited_at: null, ...over }) as Tab;
@@ -230,6 +231,18 @@ describe('terminals like a code editor (TER-904)', () => {
     await waitFor(() => expect(tabNames()).toEqual(['Ana', 'Bia', 'Caio']));
     expect(screen.getByTestId('terminal-t3')).toHaveAttribute('data-active', 'true');
     expect(screen.getByTestId('terminal-t1')).toHaveAttribute('data-active', 'true');
+  });
+
+  it('keeps a layout picked the moment the tabs appear (the saved layout loads in that same commit)', async () => {
+    localStorage.setItem(editorTabsKey('p1'), JSON.stringify({ open: ['t1', 't2'], preview: null }));
+    renderPage();
+    await actRightAfterCommit(
+      () => tabNames().join() === 'Ana,Bia',
+      () => fireEvent.click(screen.getByRole('radio', { name: 'Duas colunas' })),
+    );
+    await act(async () => {});
+    expect(screen.getByRole('radio', { name: 'Duas colunas' })).toBeChecked();
+    expect(screen.getAllByRole('combobox', { name: 'Aba deste painel' }).length).toBeGreaterThan(0);
   });
 
   it('with every tab closed, the area lists the terminals to open (the sidebar may be collapsed)', async () => {
