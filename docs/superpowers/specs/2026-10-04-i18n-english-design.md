@@ -27,7 +27,7 @@ app they cannot read.
 | Keys | **The pt-BR text is the key** (`t('Salvar alterações')`, `t('{{n}} abas abertas', { n })`), i18next with `keySeparator: false`, `nsSeparator: false`. Catalogs hold only the other languages. | pt-BR is the product language and stays readable in the code; a missing English entry falls back to the pt-BR text instead of showing a key; existing tests that query Portuguese text keep working; a reviewer sees what the screen says. |
 | Plurals | `count` with i18next plural suffixes. A plural key has entries in **both** `pt-BR` and `en` catalogs (`"{{count}} abas_one": "{{count}} aba"`). | The bare key is only right for one form. |
 | Catalog files | `src/locales/<lang>/<area>.json` per app, merged at load (one area per folder of the source tree). | Areas are translated in parallel PRs without conflicts on one big file. |
-| Extraction and check | `npm run i18n:check -w <app>`: a script scans `t('…')` / `t("…")` / `t(\`…\`)` literal keys and fails when an English entry is missing, when its `{{placeholders}}` differ from the key's, or when a catalog entry is no longer used. It runs as a unit test, so CI catches it. Dynamic keys (`t(variable)`) are not allowed; a list of labels becomes a map of `t()` calls. | Translation drift is caught before merge, not in production. |
+| Extraction and check | `npm run i18n:check -w <app>`: a script scans `t('…')` / `t("…")` / `t(\`…\`)` literal keys and fails when an English entry is missing, when its `{{placeholders}}` differ from the key's, or when a catalog entry is no longer used. It runs as a unit test, so CI catches it. A label kept in a table or constant is marked with `tk('Perfil')` (returns its argument unchanged, so the script finds it) and translated where it is shown with `t(section.label)`; any other `t(variable)` is a bug. | Translation drift is caught before merge, not in production. |
 | Untranslated copy guard | The same script flags JSX text and the `title`, `placeholder`, `aria-label`, `alt`, `label` attributes that hold letters outside `t()`. It runs on the folders already translated (a list in the script) and on every folder at the end. | Keeps new screens from coming back in pt only. |
 | Where the choice lives | `users.locale` (`text`, nullable, `'pt-BR' \| 'en'`; null = automatic), returned by `/auth/me` and set by `PATCH /auth/me/locale { locale }` (next to `PATCH /auth/me/nickname`). The web also keeps it in `localStorage` (`termhub:locale`) for the login screen. The phone keeps its own choice in MMKV. | E-mails and push texts are sent when no browser is around, so the server must know. Same per-user pattern as `chat_suggestions`. |
 | Detection (web and phone) | Explicit choice (account, else device storage) → the system/browser languages in order: first `pt*` → `pt-BR`, first `en*` → `en` → `pt-BR`. | The card: fallback pt-BR. A Spanish browser reads Portuguese better than English until TER-406. |
@@ -51,6 +51,7 @@ export type Locale = 'pt-BR' | 'en';
 export const LOCALES: Locale[] = ['pt-BR', 'en'];
 export function resolveLocale(choice: Locale | null, systemLanguages: readonly string[]): Locale;
 export function setLocale(next: Locale | null): void; // null = automatic; persists and changes i18next
+export const tk = <T extends string>(text: T): T => text; // marks a pt-BR key kept in data
 export { useTranslation } from 'react-i18next';
 
 // apps/server/src/i18n/index.ts
@@ -78,7 +79,53 @@ the old container never reads it.
 - `i18n:check` as a test in each app.
 - Existing tests run in `pt-BR` (the test setup pins it), so they keep querying Portuguese text; a few new tests render key screens in `en`.
 
-## 6. Impact on other users
+## 6. Glossary (pt-BR → en)
+
+One word per concept across web, phone, e-mails and server, so translators in parallel PRs agree.
+Product and proper names stay as they are: termhub, Claude, Codex, Cursor, tmux, concierge (lowercase in copy, "Concierge" at the start of a sentence), termhub Cloud, TypeToAccess.
+
+| pt-BR | en |
+|---|---|
+| Máquina(s) | Machine(s) |
+| Projeto(s) | Project(s) |
+| aba / tab | tab |
+| card / cartão | card |
+| quadro | board |
+| backlog | backlog |
+| A fazer / Fazendo / Feito | To do / In progress / Done |
+| épico, história, tarefa, bug, spike, subtarefa | epic, story, task, bug, spike, subtask |
+| Configurações (web) / Ajustes (phone) | Settings |
+| Perfil | Profile |
+| Minha cidade / cidade | My city / city |
+| Integrações | Integrations |
+| Tokens de API | API tokens |
+| Aparelho(s) | Device(s) |
+| Permissões do chat | Chat permissions |
+| Contas de IA | AI accounts |
+| Usuários / Convidar | Users / Invite |
+| Papéis / Roles | Roles |
+| Arquivos | Files |
+| Memória do chat | Chat memory |
+| Progresso | Progress |
+| Notificações | Notifications |
+| Favoritos | Favorites |
+| agente (Claude/Codex numa aba) | agent |
+| agent (termhub-agent na máquina) | agent (termhub agent when ambiguous) |
+| monitor das tabs | tab monitor |
+| pedido de permissão / aprovação | permission request / approval |
+| pergunta (da aba) | question |
+| aguardando você | waiting for you |
+| Entrar / Sair | Sign in / Sign out |
+| código de acesso | sign-in code |
+| PIN | PIN |
+| lista de espera | waitlist |
+| Excluir conta | Delete account |
+| Salvar / Cancelar / Excluir / Fechar | Save / Cancel / Delete / Close |
+| Reconectando… | Reconnecting… |
+
+Tone: short, plain, sentence case, no exclamation marks, "you" for the person. Keep the pt-BR punctuation marks that carry meaning (… for ongoing actions).
+
+## 7. Impact on other users
 
 - People whose browser or phone is set to English see termhub in English after the deploy (automatic is the default). Everyone else, including other languages, keeps pt-BR. Anyone can pin a language in Settings / Ajustes, per user (web, also used for e-mails and push) or per device (phone).
 - E-mails and push notifications follow the account's language; with none chosen they stay in pt-BR.
