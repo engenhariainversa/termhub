@@ -130,7 +130,7 @@ export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositorie
             // validation, around the one place a tool actually runs. On a gated token a write is
             // answered as pending instead of being executed — the row in chat_actions remembers it,
             // and this request does not wait for the user (spec §5.2). One audit row either way.
-            const gated = await applyGate(ctx, { token, tool: tool.name, args: callArgs, tool_use_id: toolUseIdOf(extra._meta), run: () => tool.run(ctx, callArgs, extra.signal) });
+            const gated = await applyGate(ctx, { token, tool: tool.name, args: callArgs, tool_use_id: toolUseIdOf(extra._meta), run: (approval) => tool.run(approval ? { ...ctx, approval } : ctx, callArgs, extra.signal) });
             if (gated.ok) {
               // A tool that already answers MCP content (read_attachment's image or paged text) is passed through as it is.
               out = isToolContent(gated.value) ? { content: gated.value.content } : text(JSON.stringify(gated.value, null, 2));

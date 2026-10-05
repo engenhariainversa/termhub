@@ -7,8 +7,10 @@ import { HttpError, localizedOf } from '../lib/errors.js';
 import { nextTerminalName } from '../lib/tab-names.js';
 import { killTmuxSession } from '../terminal/machine-exec.js';
 import { removeTabMcp } from '../terminal/tab-mcp.js';
+import { recordInputOrigin, type InputOrigin } from '../terminal/input-origin.js';
 import { ensureSession, INPUT_MAX_CHARS, sendKeyToSession, sendTextToSession, TERMINAL_RPC_MIN_AGENT_VERSION } from '../terminal/session-ops.js';
 import { ControlError, type ControlContext } from './context.js';
+import { deriveInputOrigin, verifyOnBehalfOf } from './input-origin.js';
 import { assertTerminal, clamp, offline, SCREEN_DEFAULT_LINES, SCREEN_MAX_LINES, waitForState } from './screen.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved } from '../monitor/tab-events.js';
@@ -94,9 +96,20 @@ export async function openTab(
   }
 }
 
-/** Types text into the tab. `enter` defaults to true: the point is almost always to submit it. */
-export async function sendInput(ctx: ControlContext, input: { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean }): Promise<{ tab_id: string; sent: true }> {
+/**
+ * Types text into the tab. `enter` defaults to true: the point is almost always to submit it.
+ *
+ * Records who wrote the text (TER-851) so the tab's hook can tell the session: `origin` when the caller
+ * knows it (a termhub screen), derived from `ctx` otherwise, `null` for termhub's own keystrokes that
+ * are not a prompt (`/clear`, an answer typed into a question dialog).
+ */
+export async function sendInput(
+  ctx: ControlContext,
+  input: { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean; on_behalf_of?: string[] },
+  origin?: InputOrigin | null,
+): Promise<{ tab_id: string; sent: true }> {
   if (input.text.length > INPUT_MAX_CHARS) throw new ControlError('TEXT_TOO_LONG', msg('Texto longo demais: {{length}} caracteres, máximo {{max}}', { length: input.text.length, max: INPUT_MAX_CHARS }));
+  const onBehalfOf = await verifyOnBehalfOf(ctx, input.on_behalf_of);
   const { tab, machine, cwd, session } = await terminal(ctx, input.tab_id);
   if (tab.state === 'waiting_permission' && !input.answering_permission) {
     throw new ControlError(
@@ -108,6 +121,7 @@ export async function sendInput(ctx: ControlContext, input: { tab_id: string; te
   }
   await ensureSession(machine, session, cwd);
   const enter = input.enter ?? true;
+  if (origin !== null) recordInputOrigin(tab.id, input.text, origin ?? deriveInputOrigin(ctx, onBehalfOf));
   // An embedded newline means a multi-line prompt: paste it so the TUI reads the newline as part
   // of the text, not as Enter submitting a half-typed line (spec: bracketed paste).
   if (input.text.includes('\n')) {
@@ -153,6 +167,7 @@ export async function runCommand(
   const lines = clamp(input.lines, SCREEN_DEFAULT_LINES, SCREEN_MAX_LINES);
 
   await ensureSession(machine, session, cwd);
+  recordInputOrigin(tab.id, input.command, deriveInputOrigin(ctx));
   await sendTextToSession(machine, session, input.command, true);
 
   const deadline = Date.now() + timeoutMs;

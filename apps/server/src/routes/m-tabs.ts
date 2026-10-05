@@ -152,7 +152,7 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     const { id } = idParam.parse(request.params);
     const { text } = tabMessageBody.parse(request.body);
     const { tab } = await scoped(repos, request).tab(id);
-    await control(() => sendInput(ctxOf(request), { tab_id: tab.id, text }));
+    await control(() => sendInput(ctxOf(request), { tab_id: tab.id, text }, { level: 'person_typed', userId: request.scope.user.id, surface: 'app' }));
     request.log.info({ tabId: tab.id, textLen: text.length }, 'tab chat: message sent');
     deps.hub.poke(tab.id);
     return { sent: true as const };
@@ -170,10 +170,10 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
         await control(() => sendKey(ctx, { tab_id: tab.id, key: 'Escape' }));
         break;
       case 'clear':
-        await control(() => sendInput(ctx, { tab_id: tab.id, text: '/clear' }));
+        await control(() => sendInput(ctx, { tab_id: tab.id, text: '/clear' }, null));
         break;
       case 'compact':
-        await control(() => sendInput(ctx, { tab_id: tab.id, text: '/compact' }));
+        await control(() => sendInput(ctx, { tab_id: tab.id, text: '/compact' }, null));
         break;
       case 'cycle_mode': {
         // An older agent's schema refuses the key: say "update" instead of a bare 400 from the machine.
