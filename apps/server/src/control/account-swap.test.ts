@@ -22,7 +22,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { RESUME_PROMPT, resumeLine } from './agents.js';
+import { DEFAULT_AUTOMATION_TOOLS, RESUME_PROMPT, resumeLine } from './agents.js';
 import {
   AUTO_SWAP_COOLDOWN_MS,
   AUTO_SWAP_DELAY_MS,
@@ -83,6 +83,7 @@ function makeRepos() {
     aiAccounts: { list: vi.fn(async () => accounts) },
     machines: { findById: vi.fn(async () => machine()) },
     apiTokens: { hasLiveForTab: vi.fn(async () => false) },
+    automationRuns: { activeByTab: vi.fn(async (): Promise<{ project_id: string } | null> => null) },
     projectSetup: { get: vi.fn(async (projectId: string) => ({ project_id: projectId, version: 2, data: normalizeSetup(projectSetup, 2), updated_at: null })) },
     projectMachines: { find: vi.fn(async (_p: string, m: string) => (linked.includes(m) ? { machine_id: m } : undefined)) },
   };
@@ -252,6 +253,16 @@ describe('swapAccount', () => {
     expect(repos.apiTokens.hasLiveForTab).toHaveBeenCalledWith('t1');
     const line = resumeLine(null, SID, RESUME_PROMPT, 't1');
     expect(line).toContain("--mcp-config \"$HOME\"/'.termhub/tabs/t1/mcp.json'");
+    expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);
+  });
+
+  it('a tab running automatic work keeps acceptEdits and the allow list on the new account (F-12)', async () => {
+    const { repos, r } = makeRepos();
+    repos.automationRuns.activeByTab.mockResolvedValue({ project_id: 'p1' });
+    stored = baseTab({ state: 'idle' });
+    await drive(swapAccount(r, log, baseTab(), machine(), { auto: false }));
+    const line = resumeLine(null, SID, RESUME_PROMPT, null, undefined, { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS });
+    expect(line).toContain('--permission-mode acceptEdits');
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);
   });
 

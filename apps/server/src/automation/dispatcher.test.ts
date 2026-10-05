@@ -64,6 +64,18 @@ describe('startDispatcher (fakes)', () => {
     expect(calls).toEqual(['automationRuns.heartbeat']); // its own runs stay alive until it exits
   });
 
+  it('tells the follower of each running run it took over, and releases the unstarted ones', async () => {
+    const running = { id: 'r1', status: 'running', task_id: 't1', tab_id: 'tab1' };
+    const queued = { id: 'r2', status: 'queued', task_id: 't2', tab_id: null };
+    const { repos } = recordingRepos({ ...idle(), automationRuns: { ...idle().automationRuns, takeOver: async () => [running, queued], release: async () => true } });
+    const onTakeOver = vi.fn();
+    const d = startDispatcher(deps(repos, { onTakeOver }), { schedule: false });
+    await d.heartbeat();
+    await d.stop();
+    expect(onTakeOver).toHaveBeenCalledTimes(1);
+    expect(onTakeOver).toHaveBeenCalledWith(running);
+  });
+
   it('with no project on automation, a tick only runs the sweep and lists the enabled projects', async () => {
     const { repos, calls } = recordingRepos(idle());
     const startAgent = vi.fn();

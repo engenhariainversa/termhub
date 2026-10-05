@@ -142,10 +142,11 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
       permission: { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS },
       setupCommand: 'npm ci',
       promptIsFinal: true,
+      onTabOpened: expect.any(Function),
     });
 
     const [run] = await runsOf();
-    expect(run).toMatchObject({ taskId: c.id, status: 'running', tabId: `tab-${c.id}`, machineId, accountId, branch: `${c.ref}-card`, worktreePath: `/home/u/.termhub/worktrees/${projectId}/${c.ref}` });
+    expect(run).toMatchObject({ taskId: c.id, status: 'running', tabId: `tab-${c.id}`, machineId, accountId, branch: `${c.ref}-card`, worktreePath: `/home/u/.termhub/worktrees/${projectId}/${c.ref}`, allowedTools: DEFAULT_AUTOMATION_TOOLS });
     expect(run!.startedAt).not.toBeNull();
     const events = await eventsOf();
     expect(events.map((e) => [e.kind, e.taskId, e.runId])).toEqual([['run_started', c.id, run!.id]]);
@@ -153,6 +154,20 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     // the next tick does not start it again
     await tickOnce(deps);
     expect(startAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('the run knows its tab before the agent line is typed (the tab tools are listed at start, F-8)', async () => {
+    const c = await card();
+    let seenAtOpen: unknown;
+    const startAgent = vi.fn(async (_ctx: unknown, _input: unknown, internal: { onTabOpened?: (id: string) => Promise<void> }) => {
+      await internal.onTabOpened?.('tab-early');
+      seenAtOpen = (await repos.automationRuns.activeByTab('tab-early'))?.status;
+      return { tab_id: 'tab-early' } as never;
+    });
+    const { deps } = makeDeps({ startAgent: startAgent as unknown as DispatcherDeps['startAgent'] });
+    await tickOnce(deps);
+    expect(seenAtOpen).toBe('starting');
+    expect((await runsOf())[0]).toMatchObject({ taskId: c.id, status: 'running', tabId: 'tab-early' });
   });
 
   it('two dispatchers ticking at once start the card once', async () => {

@@ -287,6 +287,12 @@ export class TabQuestionsRepository {
     return rows.map(mapQuestion);
   }
 
+  /** Whether the tab has an open question or permission card (suggestions do not count): the automation
+   *  follower leaves such a tab to the card's own answer (agentic board spec §9). */
+  async hasOpenQuestion(tabId: string): Promise<boolean> {
+    return (await this.db.tabQuestion.count({ where: { tabId, status: 'open', kind: { not: 'suggestion' } }, take: 1 })) > 0;
+  }
+
   async findOpenForTab(tabId: string): Promise<TabQuestion | undefined> {
     const row = await this.db.tabQuestion.findFirst({ where: { tabId, status: 'open' }, include: withOwner, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
     return row ? mapQuestion(row) : undefined;

@@ -10,7 +10,7 @@ const tab = { id: 'tab1', project_id: 'p1' };
 
 describe('constants', () => {
   it('pins the allowlist, scopes, excluded kinds and TTL of the spec (D2, D3, D6)', () => {
-    expect(TAB_TOKEN_TOOLS).toEqual(['search_memory', 'record_lesson', 'get_automation_policy']);
+    expect(TAB_TOKEN_TOOLS).toEqual(['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card']);
     expect(TAB_TOKEN_SCOPES).toEqual(['read', 'memory']);
     expect(TAB_EXCLUDED_KINDS).toEqual(['message', 'action']);
     expect(TAB_TOKEN_TTL_MS).toBe(30 * 24 * 60 * 60 * 1000);
@@ -87,6 +87,14 @@ describe('tabRefusalMessage', () => {
     expect(tabRefusalMessage('list_tabs')).toContain('list_tabs');
     expect(tabRefusalMessage('x'.repeat(100))).not.toContain('x'.repeat(65));
   });
+
+  it('names the run-only tools as such, and says a run-only tool needs a tab with automatic work (F-8)', () => {
+    expect(tabRefusalMessage('list_tabs')).toBe(
+      'O token desta aba só usa as ferramentas permitidas (search_memory, record_lesson, get_automation_policy, e report_card e get_card numa aba com trabalho automático); list_tabs não está disponível aqui',
+    );
+    expect(tabRefusalMessage('report_card')).toBe('report_card só está disponível numa aba com trabalho automático em andamento');
+    expect(tabRefusalMessage('get_card', 'en')).toBe('get_card is only available in a tab running automatic work');
+  });
 });
 
 describe('mintTabToken', () => {
@@ -127,5 +135,19 @@ describe('allowedTools for a tab token', () => {
     const names = (await allowedTools(ctxWith(undefined), ['read', 'memory'])).map((t) => t.name);
     expect(names).toContain('list_tabs');
     expect(names).toContain('record_decision');
+    // the run-only tab tools never reach an ordinary token, whatever its scopes and grants
+    expect(names).not.toContain('report_card');
+    expect(names).not.toContain('get_card');
+  });
+
+  it('lists report_card and get_card only for a tab whose own tab has an active automatic run (F-8)', async () => {
+    const withRun = (run: { project_id: string } | null): ControlContext =>
+      ({ ...ctxWith(tab), repos: { automationRuns: { activeByTab: async (id: string) => (id === 'tab1' ? run : null) } } }) as unknown as ControlContext;
+    const listed = async (ctx: ControlContext) => (await allowedTools(ctx, ['read', 'memory'])).map((t) => t.name);
+    expect(await listed(withRun({ project_id: 'p1' }))).toEqual(expect.arrayContaining(['report_card', 'get_card']));
+    expect(await listed(withRun(null))).not.toContain('report_card');
+    expect(await listed(withRun({ project_id: 'other' }))).not.toContain('get_card');
+    // the condition fails closed: no repository answer, no tool
+    expect(await listed(ctxWith(tab))).not.toContain('report_card');
   });
 });

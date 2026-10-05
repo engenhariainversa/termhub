@@ -22,6 +22,10 @@ export interface AutomationRun {
   worktree_path: string | null;
   resume_count: number;
   fix_count: number;
+  /** agent restarts after an exit (spec D15: one, then the run is blocked) */
+  restart_count: number;
+  /** the `--allowedTools` the agent was started with (preflight F-12); null on runs started before it was stored */
+  allowed_tools: string[] | null;
   /** the server instance (colour) driving the run */
   claimed_by: string;
   heartbeat_at: Date;
@@ -31,7 +35,7 @@ export interface AutomationRun {
 }
 
 export type AutomationRunPatch = Partial<
-  Pick<AutomationRun, 'status' | 'waiting_reason' | 'tab_id' | 'machine_id' | 'account_id' | 'branch' | 'worktree_path' | 'started_at' | 'ended_at'>
+  Pick<AutomationRun, 'status' | 'waiting_reason' | 'tab_id' | 'machine_id' | 'account_id' | 'branch' | 'worktree_path' | 'started_at' | 'ended_at' | 'allowed_tools'>
 >;
 
 /** An active run whose card was deleted, cancelled by the sweep: where its worktree may still be. */
@@ -41,6 +45,9 @@ export interface OrphanedRun {
   machine_id: string | null;
   worktree_path: string | null;
 }
+
+/** A stored allow list, or null when absent or not a list of strings. */
+const toolsOf = (v: unknown): string[] | null => (Array.isArray(v) && v.every((t) => typeof t === 'string') ? (v as string[]) : null);
 
 type Row = Awaited<ReturnType<PrismaClient['automationRun']['findFirstOrThrow']>>;
 const map = (r: Row): AutomationRun => ({
@@ -57,6 +64,8 @@ const map = (r: Row): AutomationRun => ({
   worktree_path: r.worktreePath,
   resume_count: r.resumeCount,
   fix_count: r.fixCount,
+  restart_count: r.restartCount,
+  allowed_tools: toolsOf(r.allowedTools),
   claimed_by: r.claimedBy,
   heartbeat_at: r.heartbeatAt,
   started_at: r.startedAt,
@@ -66,7 +75,7 @@ const map = (r: Row): AutomationRun => ({
 
 /** A raw `RETURNING *` row of automation_runs (snake_case columns). */
 type RawRow = Omit<AutomationRun, 'role' | 'status'> & { role: string; status: string };
-const mapRaw = (r: RawRow): AutomationRun => ({ ...r, role: r.role as RunRole, status: r.status as RunStatus });
+const mapRaw = (r: RawRow): AutomationRun => ({ ...r, role: r.role as RunRole, status: r.status as RunStatus, allowed_tools: toolsOf(r.allowed_tools) });
 
 const active = { in: [...ACTIVE_RUN_STATUSES] };
 
@@ -109,7 +118,20 @@ export class AutomationRunsRepository {
         worktreePath: patch.worktree_path,
         startedAt: patch.started_at,
         endedAt: patch.ended_at,
+        allowedTools: patch.allowed_tools ?? undefined,
       },
+    });
+    return count === 1;
+  }
+
+  /**
+   * `update`, only while the run is still active: the one write that ends (or parks) a run. Two paths that
+   * end the same run at once — the agent's `report_card` and the PR fallback — write once between them.
+   */
+  async updateActive(id: string, instance: string, patch: AutomationRunPatch): Promise<boolean> {
+    const { count } = await this.db.automationRun.updateMany({
+      where: { id, claimedBy: instance, status: active },
+      data: { status: patch.status, waitingReason: patch.waiting_reason, endedAt: patch.ended_at },
     });
     return count === 1;
   }
@@ -130,9 +152,9 @@ export class AutomationRunsRepository {
   }
 
   /** Increments the counter and returns its new value. */
-  async bump(id: string, field: 'resume_count' | 'fix_count'): Promise<number> {
-    const key = field === 'resume_count' ? 'resumeCount' : 'fixCount';
-    const row = await this.db.automationRun.update({ where: { id }, data: { [key]: { increment: 1 } }, select: { resumeCount: true, fixCount: true } });
+  async bump(id: string, field: 'resume_count' | 'fix_count' | 'restart_count'): Promise<number> {
+    const key = field === 'resume_count' ? 'resumeCount' : field === 'fix_count' ? 'fixCount' : 'restartCount';
+    const row = await this.db.automationRun.update({ where: { id }, data: { [key]: { increment: 1 } }, select: { resumeCount: true, fixCount: true, restartCount: true } });
     return row[key];
   }
 
@@ -186,7 +208,12 @@ export class AutomationRunsRepository {
     return row ? map(row) : null;
   }
 
-  async activeByProject(projectId: string): Promise<AutomationRun[]> {
+  /** The `running` and `waiting` runs this instance drives: what its follower looks at again on each sweep. */
+  async followedBy(instance: string): Promise<AutomationRun[]> {
+    return (await this.db.automationRun.findMany({ where: { claimedBy: instance, status: { in: ['running', 'waiting'] } }, orderBy: { createdAt: 'asc' } })).map(map);
+  }
+
+    async activeByProject(projectId: string): Promise<AutomationRun[]> {
     return (await this.db.automationRun.findMany({ where: { projectId, status: active }, orderBy: { createdAt: 'asc' } })).map(map);
   }
 

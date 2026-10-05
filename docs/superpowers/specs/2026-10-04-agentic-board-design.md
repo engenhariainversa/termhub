@@ -302,8 +302,9 @@ relayed by the chat come from the termhub on behalf of the project owner (TER-85
 | Two colours tick at once | The partial unique index lets one insert win. |
 | Server restarts mid-run | Runs keep their rows; heartbeats expire; the new instance takes them over and re-subscribes; tabs are untouched. |
 | Card moved out of `todo` by a person while queued | Claim re-checks eligibility inside the transaction; a run never starts on a card that left. |
-| Card's tag removed while running | The run finishes its current turn and is not resumed (like a pause for that card). |
+| Card's tag removed while running | The run finishes its current turn and is not resumed (like a pause for that card): at that stop the run ends `cancelled` (`untagged`) and the card is the person's. |
 | Card deleted | Run `cancelled`; worktree removed if clean. |
+| 3 failed starts in a row | The card's tag is removed and the run is escalated (`escalated`, reason `start_failed`); a person tags it again once the cause is fixed. Starts are retried at most every 10 min, on either colour. |
 | Machine goes offline | Run `waiting` (`machine_offline`); resumed when it returns; after 1 h, the card is released for another machine. |
 | Worktree already exists with another branch | `ensure` fails with `WORKTREE_CONFLICT`; run `blocked` with the reason. |
 | GitHub token missing or revoked | Card waits with "Integração do GitHub sem acesso"; the merge executor does nothing. |

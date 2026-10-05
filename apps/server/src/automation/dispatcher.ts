@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { hostname } from 'node:os';
-import { DEFAULT_AUTOMATION_TOOLS, tabIdOfError, type startAgent as startAgentFn } from '../control/agents.js';
+import { tabIdOfError, type startAgent as startAgentFn } from '../control/agents.js';
 import { closeTab as closeTabFn } from '../control/terminals.js';
 import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
 import { cardUrl } from '../control/tasks.js';
@@ -15,6 +15,7 @@ import { automationBus, dispatchTriggers, recordEvent } from './events.js';
 import { interruptRuns, isPaused, type PressEscape } from './pause.js';
 import { clearWaiting, noteWaiting, placeRun, type Placement } from './placement.js';
 import { policyText } from './policy.js';
+import { automationPermission } from './permission.js';
 import { implementerPrompt } from './prompts.js';
 import { eligibilityQueue } from './queue.js';
 
@@ -50,6 +51,9 @@ export interface DispatcherDeps {
   closeTab?: (ctx: ControlContext, tabId: string) => Promise<void>;
   /** Escape in a tab ("Pausar e interromper"); default: the tab's own session. */
   pressEscape?: PressEscape;
+  /** Told of each running run this instance took over from a silent one: the follower looks at its tab now
+   *  (a stop that happened while nobody followed the run would otherwise wait for the next state change). */
+  onTakeOver?: (run: AutomationRun) => void;
   log?: Log;
 }
 
@@ -192,7 +196,9 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       const epic = task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
       const { base, epicBranch } = targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup);
       branch = cardBranchName(repo?.branch_pattern ?? '{ticket}-{slug}', task);
-      if (!(await write(run, { status: 'starting', machine_id: place.machine.id, account_id: place.account.id, branch }))) return;
+      const permission = automationPermission(automation);
+      // the profile is stored on the run: restarts and swaps keep it even if the setup changes (F-12)
+      if (!(await write(run, { status: 'starting', machine_id: place.machine.id, account_id: place.account.id, branch, allowed_tools: permission.allowedTools }))) return;
       if (epicBranch) {
         const gh = await githubToken(project, setup);
         await deps.ensureEpicBranch({ gh: deps.gh, ...gh }, repo?.base_branch ?? 'main', epicBranch);
@@ -217,7 +223,14 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         ctx,
         { project_id: project.id, machine_id: place.machine.id, account_id: place.account.id, task_id: task.id, prompt },
         // setup command only from the project's runner, cwd only from the run's worktree (Task 14 rule)
-        { cwd: ws.path, permission: { mode: 'acceptEdits', allowedTools: automation.allowed_tools ?? DEFAULT_AUTOMATION_TOOLS }, setupCommand: runner.setup_command, promptIsFinal: true },
+        {
+          cwd: ws.path,
+          permission,
+          setupCommand: runner.setup_command,
+          promptIsFinal: true,
+          // the run knows its tab before the agent starts: its tab MCP then lists report_card and get_card
+          onTabOpened: async (id) => void (await write(run, { tab_id: id })),
+        },
       );
       tabId = started.tab_id;
     } catch (e) {
@@ -368,6 +381,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         log.info({ runId: run.id, taskId: run.task_id }, 'automation: released an unstarted run of a silent instance');
       } else {
         log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id }, 'automation: took over a run');
+        deps.onTakeOver?.(run);
       }
     }
   }

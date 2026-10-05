@@ -18,7 +18,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
   let conversationId: string;
   const machineId = newId();
   /** Real tab rows (the suggestion rule reads the tab), keyed by the short names the tests use. */
-  const tabIds: Record<string, string> = Object.fromEntries(['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'ts9', 'tq1', 'tx1'].map((k) => [k, newId()]));
+  const tabIds: Record<string, string> = Object.fromEntries(['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'ts9', 'tq1', 'tx1', 'thq'].map((k) => [k, newId()]));
   const tid = (k: string) => tabIds[k] ?? k;
 
   beforeAll(async () => {
@@ -34,7 +34,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     conversationId = (await chat.getOrCreateForProject(userId, projectId)).id;
     // A suggestion opens only on a real tab that waits for input: these are the tabs the suggestion tests use.
     await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId: userId } });
-    await db.tab.createMany({ data: ['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'tq1', 'tx1'].map((id) => ({ id: tabIds[id]!, projectId, machineId, name: id, state: 'waiting_input' as const })) });
+    await db.tab.createMany({ data: ['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'tq1', 'tx1', 'thq'].map((id) => ({ id: tabIds[id]!, projectId, machineId, name: id, state: 'waiting_input' as const })) });
     await db.tab.create({ data: { id: tabIds.ts9!, projectId, machineId, name: 'ts9', state: 'working' } });
   });
 
@@ -367,6 +367,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
   });
 
   const openSuggestion = (tabId: string, text = 'commit it') => repo.open({ tab_id: tid(tabId), project_id: projectId, conversation_id: conversationId, kind: 'suggestion', payload: { text }, tool_use_id: null, agent_id: null });
+
+  it('hasOpenQuestion counts open questions and permissions, never suggestions (agentic board follower)', async () => {
+    await openSuggestion('thq');
+    expect(await repo.hasOpenQuestion(tid('thq'))).toBe(false);
+    const { question } = await open('thq');
+    expect(await repo.hasOpenQuestion(tid('thq'))).toBe(true);
+    await repo.closeOne(question.id, 'answered_in_tab');
+    expect(await repo.hasOpenQuestion(tid('thq'))).toBe(false);
+    await openPermission('thq', 'Bash');
+    expect(await repo.hasOpenQuestion(tid('thq'))).toBe(true);
+  });
 
   it("a suggestion is a row like the others: the tab's open one, closed by the tab's next event", async () => {
     const { question: s } = await openSuggestion('ts1');

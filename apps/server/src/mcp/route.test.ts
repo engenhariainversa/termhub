@@ -706,6 +706,15 @@ describe('tab token (TER-212)', () => {
     expect(names.sort()).toEqual(['get_automation_policy', 'record_lesson', 'search_memory']);
   });
 
+  it('refuses report_card from a tab with no automatic run, saying why (F-8)', async () => {
+    const { app, apiTokens } = build({ token: tabToken(), grants, tabs });
+    const res = (await rpc(app, call('report_card', { status: 'done' }))).json().result;
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toBe('report_card só está disponível numa aba com trabalho automático em andamento');
+    await flush();
+    expect(apiTokens.recordEvent).toHaveBeenCalledWith(expect.objectContaining({ tool: 'report_card', ok: false, error_code: 'TOOL_NOT_ALLOWED' }));
+  });
+
   it('refuses list_tabs as a pt-BR tool error, audited as TOOL_NOT_ALLOWED', async () => {
     const { app, apiTokens } = build({ token: tabToken(), grants, tabs });
     const res = (await rpc(app, call('list_tabs', { project_id: 'p1' }))).json().result;
