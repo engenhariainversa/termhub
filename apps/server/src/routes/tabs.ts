@@ -92,8 +92,9 @@ export async function tabRoutes(
   /**
    * Monitor: types text into the tab's tmux session (and presses Enter) — the "reply from the list"
    * path, no terminal attached needed. Marks the tab as working right away; the tool's next hook confirms.
+   * Typing is terminals:write (TER-576), like the terminal socket's own keystrokes.
    */
-  app.post('/:id/input', { config: { action: 'update' } }, async (request) => {
+  app.post('/:id/input', { config: { action: 'write' } }, async (request) => {
     const { id } = idParam.parse(request.params);
     const { tab, machine } = await scoped(repos, request).tab(id);
     if (tab.kind !== 'terminal' || !tab.tmux_session) throw badRequest('Só tabs de terminal recebem input');
@@ -136,7 +137,7 @@ export async function tabRoutes(
    * File pasted (Cmd+V) or dropped on the terminal: written to ~/.cache/termhub/paste/ on the tab's
    * machine; the returned path is what the frontend pastes into the terminal as text.
    */
-  app.post('/:id/paste-file', { bodyLimit: PASTE_MAX_BYTES, config: { action: 'update' } }, async (request) => {
+  app.post('/:id/paste-file', { bodyLimit: PASTE_MAX_BYTES, config: { action: 'write' } }, async (request) => {
     const { id } = idParam.parse(request.params);
     const { name } = pasteQuery.parse(request.query);
     const { project, machine } = await scoped(repos, request).tab(id);

@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
 import { useMonitor } from '../lib/monitor';
 import { useData } from '../lib/data';
 import { ApiError } from '../lib/api';
@@ -27,6 +28,8 @@ function stateStyle(state: TabState | null): string {
       return 'bg-bg-4 text-fg-muted';
     case 'error':
       return 'bg-danger/15 text-danger';
+    // done, asking nothing (TER-972): falls through to the green of a healthy tab
+    case 'finished':
     default:
       return 'bg-ok/15 text-ok';
   }
@@ -35,6 +38,7 @@ function stateStyle(state: TabState | null): string {
 function Item({ item, now }: { item: MonitorItem; now: number }) {
   const { t } = useTranslation();
   const { reply } = useMonitor();
+  const { can } = useAuth();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +46,8 @@ function Item({ item, now }: { item: MonitorItem; now: number }) {
   // The highlight follows "needs you" (drops once seen); the quick-reply form follows the raw
   // state — the tool is still actually waiting for an answer either way, seen or not.
   const waiting = tabNeedsYou(tab);
-  const canReply = !!tab.state && NEEDS_YOU.includes(tab.state);
+  // Replying types into the terminal: it takes terminals:write (TER-576), like typing in the tab itself.
+  const canReply = !!tab.state && NEEDS_YOU.includes(tab.state) && can('terminals', 'write');
 
   const send = async (e: FormEvent, value = text) => {
     e.preventDefault();
@@ -115,7 +120,7 @@ export interface MachineGroup {
 
 /**
  * One accordion per machine, split into three buckets, in this render order: waiting (needs you,
- * highlighted) → seen (still waiting_*, but already looked at) → finished (idle/error). The ones
+ * highlighted) → seen (still waiting_*, but already looked at) → finished (idle/finished/error). The ones
  * with someone waiting open (and sort first); the rest collapsed. Pure — unit-tested directly.
  */
 export function groupMachineItems(items: MonitorItem[]): MachineGroup[] {
@@ -129,7 +134,7 @@ export function groupMachineItems(items: MonitorItem[]): MachineGroup[] {
     const st = item.tab.state;
     if (tabNeedsYou(item.tab)) g.waiting.push(item);
     else if (st && NEEDS_YOU.includes(st)) g.seen.push(item); // waiting_*, already seen
-    else if (st === 'idle' || st === 'error') g.finished.push(item);
+    else if (st === 'idle' || st === 'finished' || st === 'error') g.finished.push(item);
     else g.working += 1;
   }
   const oldestWaiting = (g: MachineGroup) => (g.waiting.length ? Math.min(...g.waiting.map((i) => new Date(i.tab.state_at ?? 0).getTime())) : Number.POSITIVE_INFINITY);

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { SimulatorConnection, type SimState } from '../lib/simulator-connection';
 import type { Screen, Simulator, Tab } from '../lib/types';
 import { isAppShortcut } from './Terminal';
@@ -95,6 +96,12 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
   // assim que a conexão fica pronta (o `send` é um no-op enquanto o socket não está OPEN).
   const pausedRef = useRef(!(active && document.visibilityState === 'visible'));
   const qualityRef = useRef<QualityKey>('lan');
+  // Tapping, typing and the device buttons take terminals:write (TER-576); without it the stream is watch-only.
+  // The server drops those messages too; the connection does not even send them.
+  const { can } = useAuth();
+  const canWrite = can('terminals', 'write');
+  const canWriteRef = useRef(canWrite);
+  canWriteRef.current = canWrite;
 
   // Conexão: uma por tab+udid.
   useEffect(() => {
@@ -143,6 +150,7 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
       },
       onToast: (m) => setToast(m),
     });
+    conn.setWritable(canWriteRef.current);
     connRef.current = conn;
     conn.connect();
     const fpsTimer = setInterval(() => {
@@ -155,6 +163,10 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
       connRef.current = null;
     };
   }, [tab.id, tab.simulator_udid]);
+
+  useEffect(() => {
+    connRef.current?.setWritable(canWrite);
+  }, [canWrite]);
 
   // Aba escondida → pausa o stream. Atualiza o ref (fonte da verdade) e tenta mandar
   // na hora; se o socket ainda não estiver OPEN, o onStatus acima reenvia ao conectar.
@@ -198,7 +210,7 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
   // Mouse: tap curto ou drag amostrado.
   const gesture = useRef<{ points: { x: number; y: number; t: number }[]; last: number } | null>(null);
   const onMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || !canWrite) return;
     canvasRef.current?.focus();
     const p = toPoint(e);
     if (!p) return;
@@ -245,6 +257,7 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
       send({ type: 'drag', points: [{ x: p.x, y: p.y, t }, { x: p.x, y: p.y + dy / 2, t: t + 40 }, { x: p.x, y: p.y + dy, t: t + 80 }] });
     };
     const handler = (e: WheelEvent) => {
+      if (!canWriteRef.current) return;
       e.preventDefault();
       const p = toPoint(e);
       if (!p) return;
@@ -271,6 +284,7 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
     keyBatch.current = '';
   }, [send]);
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!canWrite) return;
     if (isAppShortcut(e.nativeEvent)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (SPECIAL_KEYS.has(e.key)) {
@@ -306,9 +320,9 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
   const aspect = screen ? `${screen.width} / ${screen.height}` : portrait ? '9 / 19.5' : '19.5 / 9';
 
   const menuItems: MenuItem[] = [
-    { kind: 'item', label: t('Home'), disabled: !ready, onSelect: () => send({ type: 'button', name: 'home' }) },
-    { kind: 'item', label: t('Bloquear'), disabled: !ready, onSelect: () => send({ type: 'button', name: 'lock' }) },
-    { kind: 'item', label: t('Girar'), disabled: !ready, onSelect: () => send({ type: 'rotate', orientation: portrait ? 'landscape' : 'portrait' }) },
+    { kind: 'item', label: t('Home'), disabled: !ready || !canWrite, onSelect: () => send({ type: 'button', name: 'home' }) },
+    { kind: 'item', label: t('Bloquear'), disabled: !ready || !canWrite, onSelect: () => send({ type: 'button', name: 'lock' }) },
+    { kind: 'item', label: t('Girar'), disabled: !ready || !canWrite, onSelect: () => send({ type: 'rotate', orientation: portrait ? 'landscape' : 'portrait' }) },
     { kind: 'item', label: t('Screenshot'), href: api.tabs.screenshotUrl(tab.id), download: true, disabled: !ready, onSelect: () => {} },
     { kind: 'separator' },
     { kind: 'heading', label: t('Qualidade') },
@@ -330,6 +344,11 @@ export function SimulatorView({ tab, machineId, active, focused, floating, onDet
           <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ready ? 'bg-ok' : state === 'error' || state === 'offline' ? 'bg-danger' : 'bg-warn'}`} />
           <span className="min-w-0 truncate text-fg-muted">{t(STATE_LABEL[state])}</span>
           {ready && <span className="shrink-0 whitespace-nowrap text-fg-dim">{fps} fps</span>}{/* i18n-ignore */}
+          {!canWrite && (
+            <span className="shrink-0 whitespace-nowrap rounded bg-bg-3 px-1.5 py-px text-[11px] font-medium text-fg-muted" title={t('Você pode acompanhar este simulador, mas não tocar nem digitar nele: seu papel não tem permissão de escrita em terminais.')}>
+              {t('Somente leitura')}
+            </span>
+          )}
         </div>
         <span className="flex shrink-0 items-center gap-1">
           {(state === 'error' || state === 'offline' || state === 'closed') && (

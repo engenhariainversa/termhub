@@ -154,7 +154,7 @@ function pickState(t: Tab | undefined): Partial<Tab> {
   return t ? { state: t.state, state_seen_at: t.state_seen_at, state_at: t.state_at, alive: t.alive } : {};
 }
 
-/** The words the office's figures stand for: trabalhando, esperando você, aguardando segundo plano, parado. */
+/** The words the office's figures stand for: trabalhando, esperando você, aguardando segundo plano, concluído, parado. */
 export function tabStateText(t: Pick<Tab, 'kind' | 'alive' | 'state'>): string {
   if (t.kind === 'simulator') return t.alive ? i18n.t('simulador ligado') : i18n.t('simulador desligado');
   if (!t.alive) return i18n.t('sem sessão');
@@ -168,6 +168,8 @@ const DOT: Record<string, string> = {
   idle: 'bg-zinc-400',
   error: 'bg-red-500',
   waiting_background: 'bg-sky-400',
+  // done with a report, asking nothing (TER-972): green, never the "esperando você" amber
+  finished: 'bg-emerald-500',
 };
 
 function StateDot({ tab }: { tab: Pick<Tab, 'alive' | 'state'> }) {
@@ -330,8 +332,8 @@ function EpicRow({ epic, onOpenAgent, onHighlight }: { epic: EpicSummary; onOpen
 /** An agent on the epic: hovering lights up its figure in the office, a click opens its terminal. */
 function AgentChip({ agent, onOpen, onHighlight }: { agent: AgentOnCard; onOpen: () => void; onHighlight: (tabId: string | null) => void }) {
   const { t } = useTranslation();
-  const label = stateLabel(agent.state, agent.background);
-  const tone = agent.needs_you ? DOT.waiting_input : agent.background ? DOT.waiting_background : DOT.working;
+  const label = stateLabel(agent.state, agent.background, agent.finished);
+  const tone = agent.needs_you ? DOT.waiting_input : agent.background ? DOT.waiting_background : agent.finished ? DOT.finished : DOT.working;
   return (
     <button
       type="button"

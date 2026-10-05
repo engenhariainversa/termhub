@@ -18,6 +18,8 @@ const STATE_DOT: Record<string, string> = {
   error: 'bg-red-500',
   // waiting on its own background work: neutral, never the colour of "esperando você" (TER-644)
   background: 'bg-sky-400',
+  // done with a report, asking nothing: green, never the colour of "esperando você" (TER-972)
+  finished: 'bg-emerald-500',
 };
 
 function Bar({ percent, label }: { percent: number; label: string }) {
@@ -46,10 +48,10 @@ function AgentChip({ agent, projectId }: { agent: AgentOnCard; projectId: string
       to={`/projects/${projectId}?tab=${agent.tab_id}`}
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${agent.needs_you ? 'border-amber-500 bg-amber-50 dark:bg-amber-950' : 'border-zinc-300 dark:border-zinc-700'}`}
     >
-      <span className={`h-2 w-2 rounded-full ${agent.background ? STATE_DOT.background : agent.state ? STATE_DOT[agent.state] : 'bg-zinc-300'}`} aria-hidden />
+      <span className={`h-2 w-2 rounded-full ${agent.background ? STATE_DOT.background : agent.finished ? STATE_DOT.finished : agent.state ? STATE_DOT[agent.state] : 'bg-zinc-300'}`} aria-hidden />
       <span>{agent.tab_name}</span>
       <span>
-        {stateLabel(agent.state, agent.background)}
+        {stateLabel(agent.state, agent.background, agent.finished)}
         {agent.state === 'working' && !agent.background && agent.activity_verb ? ` (${agent.activity_verb})` : ''}
         {since}
       </span>

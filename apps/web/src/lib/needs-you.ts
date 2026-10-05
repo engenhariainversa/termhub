@@ -34,6 +34,8 @@ export function tabDotClass(alive: boolean, tab: NeedsYouTab | null | undefined)
   if (tab?.state === 'error') return 'bg-danger';
   // waiting on its own background work (TER-644): neutral, not the "needs you" orange
   if (tab?.state === 'waiting_background') return alive ? 'bg-fg-muted' : 'bg-fg-dim';
+  // done, with a report and no question (TER-972): green, never pulsing
+  if (tab?.state === 'finished') return alive ? 'bg-ok' : 'bg-fg-dim';
   return alive ? 'bg-ok' : 'bg-fg-dim';
 }
 

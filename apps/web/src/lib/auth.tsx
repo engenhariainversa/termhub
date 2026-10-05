@@ -17,7 +17,7 @@ interface AuthState {
   /** admin only: switch the data scope and reload the app so every list/socket follows */
   setViewAs: (user_id: string | null) => Promise<void>;
   /** true when the signed-in user's role grants resource:action (admins: always) */
-  can: (resource: string, action?: 'create' | 'read' | 'update' | 'delete') => boolean;
+  can: (resource: string, action?: 'create' | 'read' | 'update' | 'delete' | 'write') => boolean;
   /** claims the signed-in user's public-city nickname; rejects with ApiError (400/409) on refusal */
   setNickname: (nickname: string) => Promise<void>;
   /** where this instance's public cities live (from the server, never a hardcoded host); null until known */
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const can = useCallback(
-    (resource: string, action: 'create' | 'read' | 'update' | 'delete' = 'read') => {
+    (resource: string, action: 'create' | 'read' | 'update' | 'delete' | 'write' = 'read') => {
       if (!user) return false;
       if (user.role_info?.is_admin) return true;
       return (user.permissions ?? []).includes(`${resource}:${action}`);
