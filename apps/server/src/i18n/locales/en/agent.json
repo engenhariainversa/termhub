@@ -6,6 +6,7 @@
   "tmux não encontrado na máquina": "tmux not found on the machine",
   "Parâmetros inválidos para a máquina": "Invalid parameters for the machine",
   "Falha na máquina": "The machine failed",
+  "Caminho fora da pasta de worktrees": "Path outside the worktrees folder",
   "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova)": "Update this machine's agent (npm i -g @termhub/agent, version {{version}} or newer)",
   "Esta máquina não é um Mac com Xcode": "This machine is not a Mac with Xcode",
   "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para usar o simulador": "Update this machine's agent (npm i -g @termhub/agent, version {{version}} or newer) to use the simulator",
@@ -14,6 +15,5 @@
   "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para ver arquivos": "Update this machine's agent (npm i -g @termhub/agent, version {{version}} or newer) to view files",
   "Falha ao atualizar o agente: {{reason}}. Se persistir, rode na máquina: npm i -g @termhub/agent@latest": "Could not update the agent: {{reason}}. If it keeps failing, run on the machine: npm i -g @termhub/agent@latest",
   "A instalação do agente demorou demais; verifique na máquina": "Installing the agent took too long; check on the machine",
-  "npm não encontrado na máquina; rode: npm i -g @termhub/agent@latest": "npm not found on the machine; run: npm i -g @termhub/agent@latest",
-  "Caminho fora da pasta de worktrees": "Path outside the worktrees folder"
+  "npm não encontrado na máquina; rode: npm i -g @termhub/agent@latest": "npm not found on the machine; run: npm i -g @termhub/agent@latest"
 }

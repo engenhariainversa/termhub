@@ -3,6 +3,7 @@
 // only while the controls are visible. Pausing never asks for the PIN; the view confirms before resuming.
 import { create } from 'zustand';
 import { sessionEnded } from '@/features/shared/signals';
+import { t } from '@/i18n';
 import type { TChatEvent, TPauseState } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { Auth, MobileApi } from '@/services/api/types';
@@ -45,7 +46,7 @@ export function createPauseStore(deps: { api: MobileApi; session: () => PauseSes
         await run(deps.session().auth());
         await get().load();
       } catch (err) {
-        if (!deps.session().handleApiError(err)) set({ error: err instanceof ApiError ? err.message : PAUSE_MSG.failed });
+        if (!deps.session().handleApiError(err)) set({ error: err instanceof ApiError ? err.message : t(PAUSE_MSG.failed) });
       } finally {
         set({ busy: false });
       }

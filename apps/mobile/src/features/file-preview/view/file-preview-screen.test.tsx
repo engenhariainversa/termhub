@@ -57,6 +57,16 @@ describe('FilePreviewScreen', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
+  it('reads the file on the machine the route names, and keeps it for links inside the file', async () => {
+    mockParams = { path: 'docs/a.md', project_id: 'p1', machine_id: 'm2' };
+    mockFilePreview.mockResolvedValue(ok('# a'));
+    await render(<FilePreviewScreen />);
+    await screen.findByText(/# a/);
+    expect(mockFilePreview).toHaveBeenCalledWith({ accessToken: 't' }, { path: 'docs/a.md', project_id: 'p1', tab_id: undefined, machine_id: 'm2' });
+    lastMarkdown().onLinkPress?.('b.md');
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/file-preview', params: { path: 'docs/b.md', project_id: 'p1', machine_id: 'm2' } });
+  });
+
   it('shows a .txt file as plain text', async () => {
     mockFilePreview.mockResolvedValue(ok('# não é título', { name: 'notas.txt' }));
     await render(<FilePreviewScreen />);

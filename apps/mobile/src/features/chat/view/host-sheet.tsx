@@ -1,6 +1,7 @@
 import { useRouter, type Href } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { fileRecentRoute } from '@/features/file-recent/model/format';
 import { useTranslation } from '@/i18n';
 import { AppText, Sheet } from '@/ui';
 import { hostAccountLine } from '../model/copy';
@@ -35,6 +36,10 @@ function ProjectHostSheet({ open, onClose, projectId, host }: { open: boolean; o
     onClose();
     router.push(`/project-automation/${encodeURIComponent(projectId)}` as Href);
   };
+  const openFiles = () => {
+    onClose();
+    router.push(fileRecentRoute(projectId));
+  };
   return (
     <Sheet open={open} onClose={onClose} title={t('Onde o chat roda')}>
       <View className="gap-3">
@@ -42,8 +47,11 @@ function ProjectHostSheet({ open, onClose, projectId, host }: { open: boolean; o
         <Pressable accessibilityRole="button" accessibilityLabel={t('Contas e modelo do projeto')} onPress={openProjectAi} className="rounded-xl bg-app-surface2 px-4 py-3">
           <AppText>{t('Contas e modelo do projeto')}</AppText>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Trabalho automático" onPress={openAutomation} className="rounded-xl bg-app-surface2 px-4 py-3">
-          <AppText>Trabalho automático</AppText>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('Trabalho automático')} onPress={openAutomation} className="rounded-xl bg-app-surface2 px-4 py-3">
+          <AppText>{t('Trabalho automático')}</AppText>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('Arquivos do projeto')} onPress={openFiles} className="rounded-xl bg-app-surface2 px-4 py-3">
+          <AppText>{t('Arquivos do projeto')}</AppText>
         </Pressable>
       </View>
     </Sheet>
