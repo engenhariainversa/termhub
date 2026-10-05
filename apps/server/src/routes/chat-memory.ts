@@ -10,6 +10,7 @@ import { notFound } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
 import { indexProjectNote } from '../memory/note.js';
 import { excerpt } from '../memory/text.js';
+import { requestLocale, t } from '../i18n/index.js';
 
 const listQuery = z.object({ q: z.string().trim().max(200).optional(), cursor: z.string().max(500).optional() });
 const notesQuery = z.object({ cursor: z.string().max(500).optional() });
@@ -227,6 +228,6 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
       return { ok: true };
     }
     await repos.memoryItems.hideSource(id, ownerId);
-    return { ok: true, note: 'O arquivo continua no repositório; apague-o por um PR para sumir de vez' };
+    return { ok: true, note: t(requestLocale(request), 'O arquivo continua no repositório; apague-o por um PR para sumir de vez') };
   });
 }

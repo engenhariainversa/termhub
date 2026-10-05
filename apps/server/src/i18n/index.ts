@@ -116,7 +116,12 @@ function requestUser(request: FastifyRequest): MaybeUser | null {
   return r.user ?? r.mobile?.user ?? r.mcp?.ctx.scope.user ?? null;
 }
 
+/** The person's choice → `Accept-Language` → pt-BR (for a WebSocket upgrade, which is not a Fastify request). */
+export function pickLocale(userLocale: unknown, acceptLanguage: string | string[] | undefined): Locale {
+  return parseLocale(userLocale) ?? negotiateLocale(acceptLanguage) ?? DEFAULT_LOCALE;
+}
+
 /** A request's language: the signed-in user's choice → `Accept-Language` → pt-BR. */
 export function requestLocale(request: FastifyRequest): Locale {
-  return parseLocale(requestUser(request)?.locale) ?? negotiateLocale(request.headers['accept-language']) ?? DEFAULT_LOCALE;
+  return pickLocale(requestUser(request)?.locale, request.headers['accept-language']);
 }

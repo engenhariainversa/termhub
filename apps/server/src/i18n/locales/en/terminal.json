@@ -33,5 +33,8 @@
   "Nome de arquivo inválido": "Invalid file name",
   "Listagem de arquivos ainda não disponível em máquinas com agente": "Listing files is not available on machines with the agent yet",
   "Falha ao conectar via SSH": "Could not connect over SSH",
-  "Falha ao listar os arquivos": "Could not list the files"
+  "Falha ao listar os arquivos": "Could not list the files",
+  "tmux não encontrado nesta máquina. Instale o tmux e tente de novo.": "tmux not found on this machine. Install tmux and try again.",
+  "Esta máquina não conseguiu abrir o terminal. Rode termhub-agent doctor nela.": "This machine could not open the terminal. Run termhub-agent doctor on it.",
+  "Falha ao iniciar terminal": "Could not start the terminal"
 }

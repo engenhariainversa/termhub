@@ -12,15 +12,16 @@ import { versionAtLeast } from '../agent/errors.js';
 import { RESTART_CLOSE } from '../ws/drain.js';
 import { createPtySession, type PtySession } from './pty-session.js';
 import { TERMINAL_SCROLL_MIN_AGENT_VERSION, scrollSession } from './session-ops.js';
+import { pickLocale, t, type Locale } from '../i18n/index.js';
 
 /** What the person sees when the terminal could not start: what to do when we know the cause. */
-function openErrorMessage(err: unknown): string {
+function openErrorMessage(err: unknown, locale: Locale): string {
   if (err instanceof AgentRpcError) {
-    if (err.rpcError.code === 'no_tmux') return 'tmux não encontrado nesta máquina. Instale o tmux e tente de novo.';
+    if (err.rpcError.code === 'no_tmux') return t(locale, 'tmux não encontrado nesta máquina. Instale o tmux e tente de novo.');
     // the agent's generic failure is almost always node-pty's spawn-helper, which doctor repairs
-    if (err.rpcError.code === 'internal') return 'Esta máquina não conseguiu abrir o terminal. Rode termhub-agent doctor nela.';
+    if (err.rpcError.code === 'internal') return t(locale, 'Esta máquina não conseguiu abrir o terminal. Rode termhub-agent doctor nela.');
   }
-  return 'Falha ao iniciar terminal';
+  return t(locale, 'Falha ao iniciar terminal');
 }
 
 const controlSchema = z.discriminatedUnion('type', [
@@ -52,13 +53,14 @@ export function registerTerminalWs(router: ReturnType<typeof createUpgradeRouter
     const found = await new Scoped(deps.repos, scope).tab(tabId).catch(() => null);
     if (!found || found.tab.kind !== 'terminal') return rejectUpgrade(socket, 404, 'Not Found');
     const { tab, project, machine, cwd } = found;
+    const locale = pickLocale(scope.user.locale, req.headers['accept-language']);
 
     const cols = Number(url.searchParams.get('cols')) || 80;
     const rows = Number(url.searchParams.get('rows')) || 24;
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
-      void handleConnection(ws, { tab, project, machine, cwd, cols, rows }, deps, log);
+      void handleConnection(ws, { tab, project, machine, cwd, cols, rows, locale }, deps, log);
     });
   });
 
@@ -81,7 +83,7 @@ export function registerTerminalWs(router: ReturnType<typeof createUpgradeRouter
 
 async function handleConnection(
   ws: WebSocket,
-  ctx: { tab: Tab; project: Project; machine: Machine; cwd: string; cols: number; rows: number },
+  ctx: { tab: Tab; project: Project; machine: Machine; cwd: string; cols: number; rows: number; locale: Locale },
   deps: Deps,
   log: FastifyBaseLogger,
 ) {
@@ -141,12 +143,12 @@ async function handleConnection(
     if (clientGone) return; // the client is already gone — no one to notify
     if (err instanceof AgentOfflineError) {
       log.info({ tabId: ctx.tab.id, machineId: ctx.machine.id }, 'agente desconectado');
-      send({ type: 'error', message: 'Agente desconectado' });
+      send({ type: 'error', message: t(ctx.locale, 'Agente desconectado') });
       ws.close(1011, 'agent offline');
       return;
     }
     log.error({ err, tabId: ctx.tab.id }, 'falha ao iniciar pty');
-    send({ type: 'error', message: openErrorMessage(err) });
+    send({ type: 'error', message: openErrorMessage(err, ctx.locale) });
     ws.close(1011, 'pty spawn failed');
     return;
   }
