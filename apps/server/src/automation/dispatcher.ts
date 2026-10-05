@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { hostname } from 'node:os';
-import { DEFAULT_AUTOMATION_TOOLS, type startAgent as startAgentFn } from '../control/agents.js';
+import { DEFAULT_AUTOMATION_TOOLS, tabIdOfError, type startAgent as startAgentFn } from '../control/agents.js';
+import { closeTab as closeTabFn } from '../control/terminals.js';
 import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
 import { cardUrl } from '../control/tasks.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -23,8 +24,10 @@ export const TRIGGER_DEBOUNCE_MS = 1_000;
 /** Spec §8 step 7: heartbeats every 30 s; a run silent for 2 min is taken over by another instance. */
 export const HEARTBEAT_MS = 30_000;
 export const STALE_MS = 2 * 60_000;
-/** A card whose start failed is not tried again by this process for this long (a restart clears it). */
+/** A card whose start failed is not tried again for this long (read from the runs table: both colours keep it). */
 export const RETRY_BACKOFF_MS = 10 * 60_000;
+/** Failed starts in a row after which the card's tag is removed until a person tags it again. */
+export const MAX_START_FAILURES = 3;
 /** How long `stop()` waits for starts in flight before letting the process close. */
 const STOP_WAIT_MS = 10_000;
 
@@ -43,6 +46,8 @@ export interface DispatcherDeps {
   /** Peak utilization of the account in percent, from `getAccountUsage`; null = unknown. */
   usage: (accountId: string) => Promise<number | null>;
   removeWorkspace?: typeof removeWorkspaceFn;
+  /** Closes a tab a failed start left open with nothing running; default: `closeTab` as the owner. */
+  closeTab?: (ctx: ControlContext, tabId: string) => Promise<void>;
   /** Escape in a tab ("Pausar e interromper"); default: the tab's own session. */
   pressEscape?: PressEscape;
   log?: Log;
@@ -84,7 +89,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
   const { repos, instance } = deps;
   const log = deps.log ?? noopLog;
   const removeWorkspace = deps.removeWorkspace ?? removeWorkspaceFn;
-  const backoff = new Map<string, number>();
+  const closeTab = deps.closeTab ?? (async (ctx: ControlContext, tabId: string) => void (await closeTabFn(ctx, { tab_id: tabId, force: true })));
   const inflight = new Set<Promise<void>>();
   const starting = new Set<string>();
   let stopped = false;
@@ -115,13 +120,78 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     return { token, repo: repo.full_name };
   }
 
-  /** Prepare and start one claimed run (spec §8 steps 4–5). Any failure ends the run `failed` with its code. */
+  /** The run is live in `tabId`: write it, then tell the feed (best effort: a lost event never turns a live run into a failed one). */
+  async function markRunning(project: Project, run: AutomationRun, task: Task, place: Extract<Placement, { machine: unknown }>, tabId: string, branch: string, linked: boolean): Promise<void> {
+    let wrote: boolean;
+    try {
+      wrote = await write(run, { status: 'running', tab_id: tabId, started_at: deps.now() });
+    } catch (e) {
+      log.warn({ runId: run.id, taskId: task.id, tabId, code: errorCode(e) }, 'automation: run started but its row was not updated');
+      return;
+    }
+    if (!wrote) {
+      log.warn({ runId: run.id, taskId: task.id, tabId }, 'automation: run taken over by another instance while it started');
+      return;
+    }
+    await recordEvent(repos, {
+      project_id: project.id,
+      task_id: task.id,
+      run_id: run.id,
+      kind: 'run_started',
+      payload: { tab_id: tabId, machine_id: place.machine.id, account_id: place.account.id, branch, ...(linked ? {} : { card_linked: false }) },
+    }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_started not recorded'));
+    log.info({ runId: run.id, taskId: task.id, tabId, machineId: place.machine.id, linked }, 'automation: run started');
+  }
+
+  /**
+   * A start that failed. When the agent is already running (`TASK_LINK_FAILED`: only the card link failed)
+   * the run stays active with its tab, so the card is never claimed twice and the pause still reaches it.
+   * Otherwise a tab left open with nothing in it is closed, the run ends `failed` (its code and tab kept),
+   * and after `MAX_START_FAILURES` failed starts in a row the card's tag is removed: a person tags it again
+   * once the cause is fixed. The wait between attempts is read from the database, so both colours keep it.
+   */
+  async function startFailed(ctx: ControlContext, project: Project, run: AutomationRun, task: Task, place: Extract<Placement, { machine: unknown }>, branch: string | null, e: unknown): Promise<void> {
+    const code = errorCode(e);
+    const tabId = tabIdOfError(e);
+    if (tabId && code === 'TASK_LINK_FAILED') {
+      log.warn({ runId: run.id, taskId: task.id, tabId }, 'automation: agent started but the card was not linked');
+      await markRunning(project, run, task, place, tabId, branch ?? '', false);
+      return;
+    }
+    log.warn({ runId: run.id, taskId: task.id, machineId: place.machine.id, tabId, code }, 'automation: start failed');
+    if (tabId) {
+      await closeTab(ctx, tabId).catch((err: unknown) => log.warn({ runId: run.id, tabId, code: errorCode(err) }, 'automation: tab of a failed start not closed'));
+    }
+    try {
+      if (!(await write(run, { status: 'failed', waiting_reason: code, ended_at: deps.now(), ...(tabId ? { tab_id: tabId } : {}) }))) return;
+    } catch (err) {
+      log.warn({ runId: run.id, code: errorCode(err) }, 'automation: failed start not recorded');
+      return;
+    }
+    await recordEvent(repos, { project_id: project.id, task_id: task.id, run_id: run.id, kind: 'run_blocked', payload: { code, stage: 'start' } }).catch((err: unknown) =>
+      log.warn({ runId: run.id, code: errorCode(err) }, 'automation: run_blocked not recorded'),
+    );
+    try {
+      const { consecutive } = await repos.automationRuns.startFailures(task.id, RETRY_BACKOFF_MS);
+      if (consecutive >= MAX_START_FAILURES) {
+        await repos.tasks.setAuto(task.id, false);
+        await recordEvent(repos, { project_id: project.id, task_id: task.id, run_id: run.id, kind: 'escalated', payload: { reason: 'start_failed', attempts: consecutive, code, untagged: true } });
+        log.warn({ runId: run.id, taskId: task.id, attempts: consecutive }, 'automation: card untagged after failed starts');
+      }
+    } catch (err) {
+      log.warn({ runId: run.id, taskId: task.id, code: errorCode(err) }, 'automation: start failure cap not applied');
+    }
+  }
+
+  /** Prepare and start one claimed run (spec §8 steps 4–5). Only the preparation and the start itself count as a failed start. */
   async function launch(ctx: ControlContext, project: Project, setup: ProjectSetupData, run: AutomationRun, task: Task, place: Extract<Placement, { machine: unknown }>): Promise<void> {
     const { automation, repo, runner } = setup;
+    let branch: string | null = null;
+    let tabId: string;
     try {
       const epic = task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
       const { base, epicBranch } = targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup);
-      const branch = cardBranchName(repo?.branch_pattern ?? '{ticket}-{slug}', task);
+      branch = cardBranchName(repo?.branch_pattern ?? '{ticket}-{slug}', task);
       if (!(await write(run, { status: 'starting', machine_id: place.machine.id, account_id: place.account.id, branch }))) return;
       if (epicBranch) {
         const gh = await githubToken(project, setup);
@@ -138,6 +208,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         description: task.description,
       });
       // D24: the last check before anything is typed. The worktree stays; the next claim reuses it.
+      // (A pause landing while startAgent runs still lets this one prompt through: within D24's 5 s.)
       if (halted() || (await isPaused(repos, project.owner_id, project.id))) {
         await release(run);
         return;
@@ -148,27 +219,12 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         // setup command only from the project's runner, cwd only from the run's worktree (Task 14 rule)
         { cwd: ws.path, permission: { mode: 'acceptEdits', allowedTools: automation.allowed_tools ?? DEFAULT_AUTOMATION_TOOLS }, setupCommand: runner.setup_command, promptIsFinal: true },
       );
-      if (!(await write(run, { status: 'running', tab_id: started.tab_id, started_at: deps.now() }))) return;
-      await recordEvent(repos, {
-        project_id: project.id,
-        task_id: task.id,
-        run_id: run.id,
-        kind: 'run_started',
-        payload: { tab_id: started.tab_id, machine_id: place.machine.id, account_id: place.account.id, branch },
-      });
-      log.info({ runId: run.id, taskId: task.id, tabId: started.tab_id, machineId: place.machine.id }, 'automation: run started');
+      tabId = started.tab_id;
     } catch (e) {
-      const code = errorCode(e);
-      backoff.set(task.id, deps.now().getTime() + RETRY_BACKOFF_MS);
-      log.warn({ runId: run.id, taskId: task.id, machineId: place.machine.id, code }, 'automation: start failed');
-      try {
-        if (await write(run, { status: 'failed', waiting_reason: code, ended_at: deps.now() })) {
-          await recordEvent(repos, { project_id: project.id, task_id: task.id, run_id: run.id, kind: 'run_blocked', payload: { code, stage: 'start' } });
-        }
-      } catch (err) {
-        log.warn({ runId: run.id, err: err instanceof Error ? err.message : String(err) }, 'automation: could not record the failed start');
-      }
+      await startFailed(ctx, project, run, task, place, branch, e);
+      return;
     }
+    await markRunning(project, run, task, place, tabId, branch, true);
   }
 
   async function dispatchProject(projectId: string, enabledSetup: ProjectSetupData): Promise<void> {
@@ -181,13 +237,13 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     const ctx = controlContextFor(repos, owner);
     const queue = (await eligibilityQueue(ctx, projectId)).filter((i) => i.eligible);
     const max = enabledSetup.automation.max_parallel;
-    const now = () => deps.now().getTime();
 
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i]!;
       if (halted()) return;
-      if ((backoff.get(item.task_id) ?? 0) > now()) continue;
       if (starting.has(item.task_id)) continue;
+      // a failed start waits RETRY_BACKOFF_MS before the next attempt, on whichever colour (database clock)
+      if ((await repos.automationRuns.startFailures(item.task_id, RETRY_BACKOFF_MS)).recent) continue;
       if (max !== null && (await repos.automationRuns.countActive(projectId)) >= max) return;
       // D24: a pause pressed during this pass stops the claims right here.
       if (await isPaused(repos, project.owner_id, projectId)) return;

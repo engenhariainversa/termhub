@@ -159,6 +159,28 @@ export class AutomationRunsRepository {
     return rows.map(mapRaw);
   }
 
+  /**
+   * The card's failed starts, read from the database so both colours agree (the dispatcher's retry rule):
+   * `consecutive` = failed runs since the last run that did not fail (newest first), `recent` = one of them
+   * ended less than `backoffMs` ago on the database's clock.
+   */
+  async startFailures(taskId: string, backoffMs: number): Promise<{ consecutive: number; recent: boolean }> {
+    const rows = await this.db.automationRun.findMany({ where: { taskId }, orderBy: { createdAt: 'desc' }, take: 20, select: { status: true } });
+    let consecutive = 0;
+    for (const r of rows) {
+      if (r.status !== 'failed') break;
+      consecutive++;
+    }
+    if (consecutive === 0) return { consecutive, recent: false };
+    const [hit] = await this.db.$queryRaw<Array<{ recent: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM "automation_runs"
+        WHERE "task_id" = ${taskId} AND "status" = 'failed'
+          AND "ended_at" > now() - make_interval(secs => CAST(${backoffMs / 1000} AS double precision))
+      ) AS "recent"`;
+    return { consecutive, recent: hit?.recent === true };
+  }
+
   async activeByTab(tabId: string): Promise<AutomationRun | null> {
     const row = await this.db.automationRun.findFirst({ where: { tabId, status: active }, orderBy: { createdAt: 'desc' } });
     return row ? map(row) : null;

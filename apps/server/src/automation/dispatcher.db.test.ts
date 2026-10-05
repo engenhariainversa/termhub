@@ -8,7 +8,7 @@ import type { Task, User } from '../db/repositories/types.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import { newId } from '../lib/ids.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { RETRY_BACKOFF_MS, startDispatcher, type DispatcherDeps } from './dispatcher.js';
+import { MAX_START_FAILURES, RETRY_BACKOFF_MS, startDispatcher, type DispatcherDeps } from './dispatcher.js';
 import { pauseAutomation } from './pause.js';
 import { resetWaiting } from './placement.js';
 import { automationQueue } from './queue.js';
@@ -94,6 +94,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     const ensureWorkspace = vi.fn(async (_m: unknown, i: { projectId: string; ref: string }) => ({ path: `/home/u/.termhub/worktrees/${i.projectId}/${i.ref}`, created: true }));
     const ensureEpicBranch = vi.fn(async () => {});
     const removeWorkspace = vi.fn(async () => ({ removed: true, dirty: false }));
+    const closeTab = vi.fn(async (_ctx: unknown, _tabId: string) => {});
     const deps = {
       repos,
       instance: `test-${newId()}`,
@@ -103,11 +104,12 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
       ensureWorkspace: ensureWorkspace as unknown as DispatcherDeps['ensureWorkspace'],
       ensureEpicBranch: ensureEpicBranch as unknown as DispatcherDeps['ensureEpicBranch'],
       removeWorkspace: removeWorkspace as unknown as DispatcherDeps['removeWorkspace'],
+      closeTab,
       gh: {} as GithubWriteClient,
       usage: vi.fn(async () => 10),
       ...over,
     } satisfies DispatcherDeps;
-    return { deps, startAgent, ensureWorkspace, ensureEpicBranch, removeWorkspace };
+    return { deps, startAgent, ensureWorkspace, ensureEpicBranch, removeWorkspace, closeTab };
   }
 
   async function tickOnce(deps: DispatcherDeps) {
@@ -277,28 +279,97 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect((await db.projectSetup.findUnique({ where: { projectId } }))!.updatedAt).toEqual(before!.updatedAt);
   });
 
-  it('a start that throws: run failed with the code, run_blocked, and no retry for 10 minutes', async () => {
+  /** Moves the card's failed runs back in time, as if the retry wait had passed. */
+  const age = (ms: number) => db.automationRun.updateMany({ where: { projectId, status: 'failed' }, data: { endedAt: new Date(Date.now() - ms) } });
+  const tabError = (code: string, tabId: string) => Object.defineProperty(Object.assign(new Error(code), { code }), 'tab_id', { value: tabId, enumerable: false });
+
+  it('a start that throws: run failed with the code, run_blocked, and no retry for 10 minutes on either colour', async () => {
     const c = await card();
-    let now = new Date();
-    const { deps, startAgent } = makeDeps({ now: () => now });
+    const { deps, startAgent } = makeDeps();
     startAgent.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 'TOOL_MISSING' }));
     const d = startDispatcher(deps, { schedule: false });
     await d.tick('t');
     await d.settle();
     const [run] = await runsOf();
-    expect(run).toMatchObject({ status: 'failed', waitingReason: 'TOOL_MISSING' });
+    expect(run).toMatchObject({ status: 'failed', waitingReason: 'TOOL_MISSING', tabId: null });
     expect(run!.endedAt).not.toBeNull();
     const events = await eventsOf();
     expect(events.map((e) => [e.kind, e.taskId, e.runId, e.payload])).toEqual([['run_blocked', c.id, run!.id, { code: 'TOOL_MISSING', stage: 'start' }]]);
 
     await d.tick('again');
     await d.settle();
+    // the other colour, with no memory of the failure, waits too
+    const other = makeDeps();
+    await tickOnce(other.deps);
     expect(startAgent).toHaveBeenCalledTimes(1);
+    expect(other.startAgent).not.toHaveBeenCalled();
 
-    now = new Date(now.getTime() + RETRY_BACKOFF_MS + 1000);
+    await age(RETRY_BACKOFF_MS + 1000);
     await d.tick('later');
     await d.settle();
     expect(startAgent).toHaveBeenCalledTimes(2);
+  });
+
+  it('LAUNCH_FAILED: the empty tab is closed and kept on the failed run', async () => {
+    await card();
+    const { deps, startAgent, closeTab } = makeDeps();
+    startAgent.mockRejectedValueOnce(tabError('LAUNCH_FAILED', 'tab-empty'));
+    await tickOnce(deps);
+    expect(closeTab).toHaveBeenCalledWith(expect.anything(), 'tab-empty');
+    expect((await runsOf())[0]).toMatchObject({ status: 'failed', waitingReason: 'LAUNCH_FAILED', tabId: 'tab-empty' });
+  });
+
+  it('TASK_LINK_FAILED: the agent runs, so the run stays active with its tab and no colour claims the card again', async () => {
+    const c = await card();
+    const { deps, startAgent, closeTab } = makeDeps();
+    startAgent.mockRejectedValueOnce(tabError('TASK_LINK_FAILED', 'tab-live'));
+    await tickOnce(deps);
+    expect(closeTab).not.toHaveBeenCalled();
+    const [run] = await runsOf();
+    expect(run).toMatchObject({ status: 'running', tabId: 'tab-live' });
+    expect((await eventsOf()).map((e) => [e.kind, (e.payload as Record<string, unknown>).card_linked])).toEqual([['run_started', false]]);
+
+    const other = makeDeps();
+    await tickOnce(other.deps);
+    expect(other.startAgent).not.toHaveBeenCalled();
+    expect(await runsOf()).toHaveLength(1);
+
+    // and the kill switch reaches it
+    const pressed: string[] = [];
+    await pauseAutomation(ctx(), { scope: projectId, interrupt: true }, { press: async (id) => void pressed.push(id) });
+    expect(pressed).toEqual(['tab-live']);
+    expect(c.id).toBe(run!.taskId);
+  });
+
+  it(`after ${MAX_START_FAILURES} failed starts in a row the card loses its tag and the failure escalates`, async () => {
+    const c = await card();
+    for (let n = 1; n <= MAX_START_FAILURES; n++) {
+      const { deps, startAgent } = makeDeps();
+      startAgent.mockRejectedValueOnce(tabError('LAUNCH_FAILED', `tab-${n}`));
+      await age(RETRY_BACKOFF_MS + 1000);
+      await tickOnce(deps);
+      expect(startAgent).toHaveBeenCalledTimes(1);
+    }
+    expect((await repos.tasks.findById(c.id))!.auto).toBe(false);
+    const escalated = (await eventsOf()).filter((e) => e.kind === 'escalated');
+    expect(escalated.map((e) => e.payload)).toEqual([{ reason: 'start_failed', attempts: MAX_START_FAILURES, code: 'LAUNCH_FAILED', untagged: true }]);
+
+    await age(RETRY_BACKOFF_MS + 1000);
+    const later = makeDeps();
+    await tickOnce(later.deps);
+    expect(later.startAgent).not.toHaveBeenCalled(); // untagged: out of the queue until a person tags it again
+  });
+
+  it('a failure to record run_started never turns the live run into a failed one', async () => {
+    await card();
+    const { deps, startAgent } = makeDeps();
+    const events = Object.create(repos.automationEvents) as Repositories['automationEvents'];
+    events.insert = async () => {
+      throw new Error('events table down');
+    };
+    await tickOnce({ ...deps, repos: { ...repos, automationEvents: events } });
+    expect(startAgent).toHaveBeenCalledTimes(1);
+    expect((await runsOf())[0]).toMatchObject({ status: 'running' });
   });
 
   describe('the card changed between the queue and the claim (F-23)', () => {
