@@ -12,6 +12,7 @@ import { PageHeader } from '../components/PageHeader';
 import { buildCityModel, missingTabIds, resolveFocus, sameFocus, type BuildingModel, type CityModel, type FocusTarget } from '../office/model';
 import { OfficeScene } from '../office/scene/OfficeScene';
 import { useOfficeCity } from '../office/useOfficeCity';
+import { Trans, tk, useTranslation } from '../i18n';
 
 const EMPTY_CITY: CityModel = { buildings: [], needsYou: 0 };
 
@@ -31,6 +32,7 @@ function withoutRoom(params: URLSearchParams): string {
  * is a detail of a desk here, never a place.
  */
 export function OfficePage() {
+  const { t } = useTranslation();
   const { projectId } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -165,11 +167,11 @@ export function OfficePage() {
   }, []);
 
   if (!allowed) return <Navigate to="/" replace />;
-  if (!office) return <Message>{readFailed ? 'Não foi possível carregar o escritório. Tentando de novo…' : 'Carregando…'}</Message>;
+  if (!office) return <Message>{readFailed ? t('Não foi possível carregar o escritório. Tentando de novo…') : t('Carregando…')}</Message>;
   if (office.projects.length === 0) {
     return (
       <Message>
-        Nenhum projeto ainda. <Link className="text-accent hover:underline" to="/">Crie o primeiro</Link> para ver o escritório.
+        <Trans i18nKey="Nenhum projeto ainda. <0>Crie o primeiro</0> para ver o escritório." components={[<Link key="l" className="text-accent hover:underline" to="/" />]} />
       </Message>
     );
   }
@@ -179,7 +181,7 @@ export function OfficePage() {
   // the building the camera is standing at, as the city drew it: null in the city
   const here = target.kind === 'building' ? (city.buildings.find((b) => b.id === target.projectId) ?? null) : null;
   const trail: Array<{ label: string; go?: () => void }> = [];
-  if (count > 1) trail.push({ label: 'Cidade', go: () => go(null, true) });
+  if (count > 1) trail.push({ label: t('Cidade'), go: () => go(null, true) });
   if (here) trail.push({ label: here.name });
   const shareResult = shareResultFor(target, user?.id, user?.nickname ?? null, publicCityUrl, cityLink.link?.short_url ?? null, office.projects.map((b) => b.project));
 
@@ -187,17 +189,17 @@ export function OfficePage() {
     <div className="flex h-full flex-col">
       {!focus && (
         <PageHeader
-          title="Escritório"
+          title={t('Escritório')}
           extra={<Trail parts={trail} />}
           actions={
             <span className="flex items-center gap-3 text-xs text-fg-muted">
               <StatusNotices building={here} connected={connected} stale={stale} />
               <ShareButton result={shareResult} />
               <button className={`rounded px-2 py-1 hover:bg-bg-3 hover:text-fg ${sound.on ? 'text-fg' : ''}`} aria-expanded={soundOpen} onClick={() => setSoundOpen((open) => !open)}>
-                {sound.on ? 'som ligado' : 'som desligado'}
+                {sound.on ? t('som ligado') : t('som desligado')}
               </button>
-              <button className="rounded px-2 py-1 hover:bg-bg-3 hover:text-fg" onClick={() => setFocus(true)} title="Modo foco (F)">
-                modo foco
+              <button className="rounded px-2 py-1 hover:bg-bg-3 hover:text-fg" onClick={() => setFocus(true)} title={t('Modo foco (F)')}>
+                {t('modo foco')}
               </button>
             </span>
           }
@@ -211,10 +213,10 @@ export function OfficePage() {
             <StatusNotices building={here} connected={connected} stale={stale} />
             <ShareButton result={shareResult} />
             <button className={`rounded hover:text-fg ${sound.on ? 'text-fg' : ''}`} aria-expanded={soundOpen} onClick={() => setSoundOpen((open) => !open)}>
-              {sound.on ? 'som ligado' : 'som desligado'}
+              {sound.on ? t('som ligado') : t('som desligado')}
             </button>
             <button className="rounded hover:text-fg" onClick={() => setFocus(false)}>
-              sair do foco (Esc)
+              {t('sair do foco (Esc)')}
             </button>
           </div>
         )}
@@ -223,7 +225,7 @@ export function OfficePage() {
             <SoundPanel on={sound.on} onToggle={sound.toggle} mix={sound.mix} onChange={sound.setMix} onClose={() => setSoundOpen(false)} videos={false} />
           </div>
         )}
-        {failed && <Overlay>Seu navegador não conseguiu desenhar o escritório.</Overlay>}
+        {failed && <Overlay>{t('Seu navegador não conseguiu desenhar o escritório.')}</Overlay>}
       </div>
     </div>
   );
@@ -235,8 +237,9 @@ export function OfficePage() {
  * single project there is no city to go back to, so that part is not rendered at all.
  */
 function Trail({ parts }: { parts: Array<{ label: string; go?: () => void }> }) {
+  const { t } = useTranslation();
   return (
-    <nav aria-label="Trilha" className="flex items-center gap-1">
+    <nav aria-label={t('Trilha')} className="flex items-center gap-1">
       {parts.map((part, i) => (
         <span key={`${i}:${part.label}`} className="flex items-center gap-1">
           {i > 0 && (
@@ -263,9 +266,9 @@ function Trail({ parts }: { parts: Array<{ label: string; go?: () => void }> }) 
  * frozen picture that looks live. A building's own trouble is only said at its rest — in the city
  * its sign carries the notice.
  */
-const TMUX_SILENT = 'sem resposta do tmux: estado pode estar desatualizado';
+const TMUX_SILENT = tk('sem resposta do tmux: estado pode estar desatualizado');
 /** A re-read failed: the city on screen is the last one read, kept rather than blanked. */
-const STALE = 'Escritório desatualizado: não foi possível atualizar';
+const STALE = tk('Escritório desatualizado: não foi possível atualizar');
 
 /** The distinct machines of a building's desks that are offline, by name, in desk order. */
 function offlineMachines(building: BuildingModel): string[] {
@@ -273,30 +276,31 @@ function offlineMachines(building: BuildingModel): string[] {
 }
 
 function StatusNotices({ building, connected, stale }: { building: BuildingModel | null; connected: boolean; stale: boolean }) {
+  const { t } = useTranslation();
   const offline = building?.notice === 'offline' ? offlineMachines(building) : [];
   // counted in the header, named on hover and for screen readers: the names can be long
-  const offlineLabel = offline.length > 1 ? `máquinas offline: ${offline.join(', ')}` : `máquina offline: ${offline.join(', ')}`;
+  const offlineLabel = t('máquinas offline: {{names}}', { count: offline.length, names: offline.join(', ') });
   return (
     <>
       {stale && (
-        <span className="flex items-center gap-1 whitespace-nowrap text-warn" role="status" aria-label={STALE} title={STALE}>
+        <span className="flex items-center gap-1 whitespace-nowrap text-warn" role="status" aria-label={t(STALE)} title={t(STALE)}>
           <TriangleAlert size={14} aria-hidden="true" />
-          desatualizado
+          {t('desatualizado')}
         </span>
       )}
       {building?.notice === 'offline' && (
         <span className="whitespace-nowrap text-warn" aria-label={offlineLabel} title={offlineLabel}>
-          {offline.length > 1 ? `${offline.length} máquinas offline` : 'máquina offline'}
+          {t('{{count}} máquinas offline', { count: offline.length })}
         </span>
       )}
       {building?.notice === 'silent' && (
         // compact: the header's actions must fit a narrow window; the whole sentence is on hover and for screen readers
-        <span className="flex items-center gap-1 whitespace-nowrap text-warn" role="status" aria-label={TMUX_SILENT} title={TMUX_SILENT}>
+        <span className="flex items-center gap-1 whitespace-nowrap text-warn" role="status" aria-label={t(TMUX_SILENT)} title={t(TMUX_SILENT)}>
           <TriangleAlert size={14} aria-hidden="true" />
-          tmux sem resposta
+          {t('tmux sem resposta')}
         </span>
       )}
-      {!connected && <span className="text-warn">reconectando…</span>}
+      {!connected && <span className="text-warn">{t('reconectando…')}</span>}
     </>
   );
 }
@@ -356,6 +360,7 @@ type ShareStatus = 'idle' | 'copied' | 'failed';
  * that belongs to a city this viewer's own nickname cannot address (view-as/view-all).
  */
 function ShareButton({ result }: { result: ShareResult }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<ShareStatus>('idle');
 
   useEffect(() => {
@@ -366,15 +371,15 @@ function ShareButton({ result }: { result: ShareResult }) {
 
   if (result.kind === 'unpublished') {
     return (
-      <span className="rounded px-2 py-1 text-fg-dim" title="Publique um projeto para gerar o link público">
-        nada publicado aqui ainda
+      <span className="rounded px-2 py-1 text-fg-dim" title={t('Publique um projeto para gerar o link público')}>
+        {t('nada publicado aqui ainda')}
       </span>
     );
   }
   if (result.kind === 'foreign') {
     return (
-      <span className="rounded px-2 py-1 text-fg-dim" title="Só o dono de um projeto pode compartilhar o link dele">
-        pertence a outra pessoa
+      <span className="rounded px-2 py-1 text-fg-dim" title={t('Só o dono de um projeto pode compartilhar o link dele')}>
+        {t('pertence a outra pessoa')}
       </span>
     );
   }
@@ -392,7 +397,7 @@ function ShareButton({ result }: { result: ShareResult }) {
 
   return (
     <button className="rounded px-2 py-1 hover:bg-bg-3 hover:text-fg" onClick={() => void copy()} title={link}>
-      {status === 'copied' ? 'link copiado' : status === 'failed' ? 'selecione e copie' : 'compartilhar'}
+      {status === 'copied' ? t('link copiado') : status === 'failed' ? t('selecione e copie') : t('compartilhar')}
     </button>
   );
 }

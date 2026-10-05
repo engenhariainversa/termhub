@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from './api';
+import { i18n } from '../i18n';
 import type { CityLink } from './types';
 
 export interface CityLinkState {
@@ -50,7 +51,7 @@ export function useCityLink(active: boolean): CityLinkState {
       setLink(await call());
       return true;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Não foi possível salvar. Tente de novo.');
+      setError(err instanceof ApiError ? err.message : i18n.t('Não foi possível salvar. Tente de novo.'));
       return false;
     } finally {
       setSaving(false);

@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import { expoPushToken, notificationStatus, pushConversationId, pushNotificationId, pushRoute, requestNotifications } from './push';
+import { dismissDelivered, setIconBadge, expoPushToken, notificationStatus, pushConversationId, pushNotificationId, pushRoute, requestNotifications } from './push';
 
 // A getter, so the switch reaches `push.ts` through Babel's namespace copy of the module.
 jest.mock('expo-device', () => {
@@ -89,4 +89,26 @@ it('pushRoute: the tab of an "aba terminou" push first, else the conversation, e
   expect(pushRoute({ kind: 'reply', conversation_id: 'c1' })).toBe('/chat/c1');
   expect(pushRoute({ kind: 'device_request' })).toBeNull();
   expect(pushRoute({ tab_id: '' , conversation_id: 'c1' })).toBe('/chat/c1');
+});
+
+describe('icon badge and notification center (TER-923)', () => {
+  const presented = (identifier: string, data: unknown) => ({ request: { identifier, content: { data } } });
+
+  it('setIconBadge never goes below 0 and never throws', async () => {
+    await setIconBadge(-2);
+    expect(notifications.setBadgeCountAsync).toHaveBeenLastCalledWith(0);
+    notifications.setBadgeCountAsync!.mockRejectedValueOnce(new Error('native'));
+    await expect(setIconBadge(3)).resolves.toBeUndefined();
+  });
+
+  it('dismissDelivered removes the pushes of read rows, or all of them', async () => {
+    notifications.getPresentedNotificationsAsync!.mockResolvedValue([presented('x1', { notification_id: 'n1' }), presented('x2', { notification_id: 'n2' }), presented('x3', {})]);
+    await dismissDelivered(new Set(['n2']));
+    expect(notifications.dismissNotificationAsync!.mock.calls).toEqual([['x2']]);
+    notifications.dismissNotificationAsync!.mockClear();
+    await dismissDelivered('all');
+    expect(notifications.dismissNotificationAsync!.mock.calls).toEqual([['x1'], ['x2'], ['x3']]);
+    notifications.getPresentedNotificationsAsync!.mockRejectedValueOnce(new Error('native'));
+    await expect(dismissDelivered('all')).resolves.toBeUndefined();
+  });
 });

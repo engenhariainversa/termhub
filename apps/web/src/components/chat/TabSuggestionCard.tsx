@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { memo, useState } from 'react';
 import type { TabSuggestion } from '../../lib/types';
 import { CODEX_REPLY_PLACEHOLDER, CONTEXT_PREVIEW_MAX, isReplyCard, lastParagraph, suggestionFieldLabel, suggestionHint, suggestionStatusLabel, suggestionTitle } from './tab-suggestion-text';
@@ -6,7 +7,7 @@ export interface TabSuggestionCardProps {
   suggestion: TabSuggestion;
   /** This card's send or dismiss is in flight: every control is disabled. */
   busy: boolean;
-  /** Why the last send or dismiss did not go through (pt-BR). */
+  /** Why the last send or dismiss did not go through (the server's text, or the panel's own translated one). */
   error?: string | null;
   onSend: (text: string) => void;
   onDismiss: () => void;
@@ -18,6 +19,7 @@ export interface TabSuggestionCardProps {
  * editable, Enviar / Dispensar. Presentational: the requests live in `ChatPanel`. Plain text only.
  */
 export const TabSuggestionCard = memo(function TabSuggestionCard({ suggestion, busy, error, onSend, onDismiss }: TabSuggestionCardProps) {
+  const { t } = useTranslation();
   const [text, setText] = useState(suggestion.payload.text);
   const open = suggestion.status === 'open';
   const trimmed = text.trim();
@@ -32,7 +34,7 @@ export const TabSuggestionCard = memo(function TabSuggestionCard({ suggestion, b
       {open ? (
         <>
           {codex ? (
-            <input type="text" aria-label={CODEX_REPLY_PLACEHOLDER} placeholder={CODEX_REPLY_PLACEHOLDER} className="input mt-2" maxLength={2000} value={text} disabled={busy} onChange={(e) => setText(e.target.value)} />
+            <input type="text" aria-label={t(CODEX_REPLY_PLACEHOLDER)} placeholder={t(CODEX_REPLY_PLACEHOLDER)} className="input mt-2" maxLength={2000} value={text} disabled={busy} onChange={(e) => setText(e.target.value)} />
           ) : (
             <label className="mt-2 block text-xs text-fg-dim">
               {suggestionFieldLabel(suggestion)}
@@ -41,10 +43,10 @@ export const TabSuggestionCard = memo(function TabSuggestionCard({ suggestion, b
           )}
           <div className="mt-2 flex gap-2">
             <button type="button" className="btn-primary" disabled={busy || !trimmed} onClick={() => onSend(trimmed)}>
-              Enviar
+              {t('Enviar')}
             </button>
             <button type="button" className="btn-ghost" disabled={busy} onClick={onDismiss}>
-              Dispensar
+              {t('Dispensar')}
             </button>
           </div>
         </>
@@ -61,6 +63,7 @@ export const TabSuggestionCard = memo(function TabSuggestionCard({ suggestion, b
 
 /** The agent's message, plain text in a quote: its last paragraph, the whole of it on demand. */
 function SuggestionContext({ text }: { text: string }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const short = lastParagraph(text, CONTEXT_PREVIEW_MAX);
   return (
@@ -68,7 +71,7 @@ function SuggestionContext({ text }: { text: string }) {
       <p className="whitespace-pre-wrap">{expanded ? text : short}</p>
       {short !== text && (
         <button type="button" className="mt-1 text-xs text-accent hover:underline" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
-          {expanded ? 'Recolher' : 'Ver mensagem inteira'}
+          {expanded ? t('Recolher') : t('Ver mensagem inteira')}
         </button>
       )}
     </blockquote>

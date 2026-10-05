@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { Button, Sheet } from '@/ui';
 import { TAB_CHAT_MSG } from '../model/messages';
 import { MONOSPACE } from './tools-row';
@@ -7,6 +8,7 @@ import { MONOSPACE } from './tools-row';
 /** "Ver tela" (spec 2026-10-01 tab chat §6): the tab's pane as plain text, in monospace, scrolled
  * sideways rather than wrapped, with "Atualizar". Read when opened, never kept. */
 export function RawScreenSheet({ open, onClose, load }: { open: boolean; onClose(): void; load(): Promise<string | null> }) {
+  const { t } = useTranslation();
   const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -29,7 +31,7 @@ export function RawScreenSheet({ open, onClose, load }: { open: boolean; onClose
   }, [open, refresh]);
 
   return (
-    <Sheet open={open} onClose={onClose} title="Tela">
+    <Sheet open={open} onClose={onClose} title={t('Tela')}>
       <View className="gap-3">
         {failed ? <Text className="text-sm text-app-danger">{TAB_CHAT_MSG.screenFailed}</Text> : null}
         {text !== null ? (
@@ -43,8 +45,8 @@ export function RawScreenSheet({ open, onClose, load }: { open: boolean; onClose
         ) : loading ? (
           <ActivityIndicator />
         ) : null}
-        <Button label="Atualizar" variant="secondary" onPress={() => void refresh()} loading={loading && text !== null} />
-        <Button label="Fechar" variant="ghost" onPress={onClose} />
+        <Button label={t('Atualizar')} variant="secondary" onPress={() => void refresh()} loading={loading && text !== null} />
+        <Button label={t('Fechar')} variant="ghost" onPress={onClose} />
       </View>
     </Sheet>
   );

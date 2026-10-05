@@ -148,7 +148,7 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
       // every open screen hears it. After the switch is stored, so nothing new is scheduled behind it;
       // one already claimed (`sent`) is the sender's, which re-reads the switch and fails AUTODECIDE_OFF.
       const cancelled = await repos.tabQuestions.cancelScheduledForUser(userId);
-      if (cancelled.length > 0) await publishTabQuestions(repos, 'tab_question', cancelled);
+      if (cancelled.length > 0) await publishTabQuestions(repos, 'tab_question', cancelled, { update: true });
     }
     return memory(userId);
   });

@@ -26,6 +26,7 @@
 // visit re-reads everything from scratch anyway.
 import { create } from 'zustand';
 import { sessionEnded } from '@/features/shared/signals';
+import { t } from '@/i18n';
 import type { TChatDecision, TChatMemory, TConciergeNote, TLessonItem } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { Auth, MobileApi } from '@/services/api/types';
@@ -209,7 +210,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
       } catch (e) {
         if (gen !== myGen) return;
         if (session().handleApiError(e)) return;
-        set({ error: isApiError(e) ? e.message : 'Não foi possível carregar a memória do chat' });
+        set({ error: isApiError(e) ? e.message : t('Não foi possível carregar a memória do chat') });
       }
     };
 
@@ -226,7 +227,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
       } catch (e) {
         if (lessonsGen !== myGen) return;
         if (session().handleApiError(e)) return;
-        set({ lessonsError: isApiError(e) ? e.message : 'Não foi possível carregar as lições' });
+        set({ lessonsError: isApiError(e) ? e.message : t('Não foi possível carregar as lições') });
       }
     };
 
@@ -259,7 +260,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
           if (gen !== myGen) return;
           set({ loadingMore: false });
           if (session().handleApiError(e)) return;
-          set({ error: isApiError(e) ? e.message : 'Não foi possível carregar mais decisões' });
+          set({ error: isApiError(e) ? e.message : t('Não foi possível carregar mais decisões') });
         }
       },
 
@@ -274,7 +275,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
         } catch (e) {
           set({ switching: false });
           if (session().handleApiError(e)) return;
-          set({ error: isApiError(e) ? e.message : 'Não foi possível alterar a sugestão de respostas' });
+          set({ error: isApiError(e) ? e.message : t('Não foi possível alterar a sugestão de respostas') });
         }
       },
 
@@ -289,7 +290,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
           set({ memory: updated });
         } catch (e) {
           set({ memory: previous }); // rollback
-          if (!session().handleApiError(e)) set({ error: isApiError(e) ? e.message : 'Não foi possível alterar a configuração' });
+          if (!session().handleApiError(e)) set({ error: isApiError(e) ? e.message : t('Não foi possível alterar a configuração') });
         } finally {
           settingAutodecide = false;
         }
@@ -306,7 +307,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
           set({ memory: updated });
         } catch (e) {
           set({ memory: previous }); // rollback
-          if (!session().handleApiError(e)) set({ error: isApiError(e) ? e.message : 'Não foi possível alterar a configuração' });
+          if (!session().handleApiError(e)) set({ error: isApiError(e) ? e.message : t('Não foi possível alterar a configuração') });
         } finally {
           settingCodexReplies = false;
         }
@@ -321,7 +322,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
         } catch (e) {
           set({ forgettingId: null });
           if (session().handleApiError(e)) return;
-          set({ error: isApiError(e) ? e.message : 'Não foi possível esquecer a decisão' });
+          set({ error: isApiError(e) ? e.message : t('Não foi possível esquecer a decisão') });
         }
       },
 
@@ -332,7 +333,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
           set({ notes: page.notes, notesCursor: page.next_cursor });
         } catch (e) {
           if (session().handleApiError(e)) return;
-          set({ notesError: isApiError(e) ? e.message : 'Não foi possível carregar as anotações do concierge' });
+          set({ notesError: isApiError(e) ? e.message : t('Não foi possível carregar as anotações do concierge') });
         }
       },
 
@@ -346,7 +347,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
         } catch (e) {
           set({ loadingMoreNotes: false });
           if (session().handleApiError(e)) return;
-          set({ notesError: isApiError(e) ? e.message : 'Não foi possível carregar mais anotações' });
+          set({ notesError: isApiError(e) ? e.message : t('Não foi possível carregar mais anotações') });
         }
       },
 
@@ -359,7 +360,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
         } catch (e) {
           set({ forgettingNoteId: null });
           if (session().handleApiError(e)) return;
-          set({ notesError: isApiError(e) ? e.message : 'Não foi possível esquecer a anotação' });
+          set({ notesError: isApiError(e) ? e.message : t('Não foi possível esquecer a anotação') });
         }
       },
 
@@ -389,7 +390,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
           if (lessonsGen !== myGen) return;
           set({ loadingMoreLessons: false });
           if (session().handleApiError(e)) return;
-          set({ lessonsError: isApiError(e) ? e.message : 'Não foi possível carregar mais lições' });
+          set({ lessonsError: isApiError(e) ? e.message : t('Não foi possível carregar mais lições') });
         }
       },
 
@@ -402,7 +403,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
         } catch (e) {
           set({ verifyingLessonId: null });
           if (session().handleApiError(e)) return;
-          set({ lessonsError: isApiError(e) ? e.message : 'Não foi possível verificar a lição' });
+          set({ lessonsError: isApiError(e) ? e.message : t('Não foi possível verificar a lição') });
         }
       },
 
@@ -415,7 +416,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
         } catch (e) {
           set({ forgettingLessonId: null });
           if (session().handleApiError(e)) return;
-          set({ lessonsError: isApiError(e) ? e.message : 'Não foi possível esquecer a lição' });
+          set({ lessonsError: isApiError(e) ? e.message : t('Não foi possível esquecer a lição') });
         }
       },
 

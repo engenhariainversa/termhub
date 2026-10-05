@@ -341,6 +341,14 @@ relayed by the chat come from the termhub on behalf of the project owner (TER-85
 5. Rollback. D22 stops at "pause and escalate" after a failed deploy. Whether to roll back by itself
    (`deploy/blue-green.sh --rollback`) is left to the spike TER-900.
 
+**Resolved on 2026-10-04**
+
+1. Default autonomy is `pr` for everyone; termhub sets `release` in its own setup.
+2. Stores stay out.
+3. D19 as written: `acceptEdits` plus an allow list, no bypass.
+4. No "Revisar" column: a PR per card plus the daily summary.
+5. Rollback: see the spike `docs/superpowers/specs/2026-10-04-automation-safety-spike.md`.
+
 ## 16. Out of scope
 
 Store submissions; automatic rollback (spike first); Codex/Cursor cost; machines without the agent;

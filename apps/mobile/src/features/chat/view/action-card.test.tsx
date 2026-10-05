@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { setLocale } from '@/i18n';
 import type { ChatAction } from '../model/types';
 import { ActionCard } from './action-card';
 
@@ -204,5 +205,30 @@ describe('ActionCard: "Decisão automática" (TER-641)', () => {
       await render(<ActionCard action={card(patch)} busy={false} onDecide={jest.fn()} revoking={false} onRevoke={jest.fn()} />);
       expect(screen.queryByRole('button', { name: 'Decisão automática' })).toBeNull();
     }
+  });
+});
+
+describe('ActionCard in English (i18n)', () => {
+  beforeEach(() => setLocale('en'));
+  afterEach(() => setLocale(null));
+
+  it('shows the pending card, its buttons and the standing offer in English', async () => {
+    const SEND_INPUT: ChatAction = { ...BASE_ACTION, tool: 'send_input', args: { tab_id: 't-api', text: 'npm test' }, tab_id: 't-api' };
+    await render(<ActionCard action={SEND_INPUT} busy={false} onDecide={jest.fn()} revoking={false} onRevoke={jest.fn()} />);
+    expect(screen.getByText('Confirmation request')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Always allow in this tab' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Always allow keys and text in tabs in this project' })).toBeTruthy();
+    // The server-composed summary is never translated by the app.
+    expect(screen.getByText(BASE_ACTION.summary)).toBeTruthy();
+  });
+
+  it('says how a granted call ended, and why an expired one did', async () => {
+    await render(<ActionCard action={{ ...BASE_ACTION, status: 'executed', grant_id: 'g1' }} busy={false} onDecide={jest.fn()} revoking={false} onRevoke={jest.fn()} />);
+    expect(screen.getByText('done · board trusted')).toBeTruthy();
+    await render(<ActionCard action={{ ...BASE_ACTION, status: 'expired' }} busy={false} onDecide={jest.fn()} revoking={false} onRevoke={jest.fn()} onRepropose={jest.fn()} />);
+    expect(screen.getByText('expired without an answer')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Propose again' })).toBeTruthy();
   });
 });

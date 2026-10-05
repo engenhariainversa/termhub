@@ -4,6 +4,7 @@
 // same shape as the other feature stores; `useSettingsStore.ts` builds the app's one instance.
 import { create } from 'zustand';
 import { sessionEnded } from '@/features/shared/signals';
+import { i18n, t } from '@/i18n';
 import type { TDeviceSelf } from '@/services/api/contract';
 import { TERMHUB_URL } from '@/services/api/config';
 import { ApiError } from '@/services/api/errors';
@@ -45,15 +46,16 @@ export interface SettingsState {
 /** Time to close the app before the test push is sent. */
 export const PUSH_TEST_DELAY_SECONDS = 10;
 
-const NETWORK_MSG = 'Não foi possível falar com o servidor. Tente de novo.';
+const networkMsg = () => t('Não foi possível falar com o servidor. Tente de novo.');
 
 export function createSettingsStore(deps: SettingsDeps) {
   const { api, session } = deps;
+  const server = () => serverLabel(api.mode, deps.baseUrl ?? TERMHUB_URL);
   let generation = 0;
 
   const store = create<SettingsState>()((set) => ({
     mode: api.mode,
-    server: serverLabel(api.mode, deps.baseUrl ?? TERMHUB_URL),
+    server: server(),
     device: null,
     loadingDevice: false,
     error: null,
@@ -95,7 +97,7 @@ export function createSettingsStore(deps: SettingsDeps) {
       } catch (e) {
         if (gen !== generation) return;
         if (session().handleApiError(e)) return;
-        set({ loadingDevice: false, error: e instanceof ApiError ? e.message : NETWORK_MSG });
+        set({ loadingDevice: false, error: e instanceof ApiError ? e.message : networkMsg() });
       }
     },
 
@@ -103,10 +105,10 @@ export function createSettingsStore(deps: SettingsDeps) {
       set({ pushTest: { sending: true, note: null, error: null } });
       try {
         await api.pushTest(session().auth(), { kind: 'confirmation', delay_seconds: PUSH_TEST_DELAY_SECONDS });
-        set({ pushTest: { sending: false, note: `Enviada. Ela chega em ${PUSH_TEST_DELAY_SECONDS} s.`, error: null } });
+        set({ pushTest: { sending: false, note: t('Enviada. Ela chega em {{seconds}} s.', { seconds: PUSH_TEST_DELAY_SECONDS }), error: null } });
       } catch (e) {
         if (session().handleApiError(e)) return set({ pushTest: { sending: false, note: null, error: null } });
-        set({ pushTest: { sending: false, note: null, error: e instanceof ApiError ? e.message : NETWORK_MSG } });
+        set({ pushTest: { sending: false, note: null, error: e instanceof ApiError ? e.message : networkMsg() } });
       }
     },
   }));
@@ -115,6 +117,9 @@ export function createSettingsStore(deps: SettingsDeps) {
     generation++;
     store.setState({ device: null, loadingDevice: false, error: null, pushTest: { sending: false, note: null, error: null }, tabFinished: null, pushSettingsError: null });
   });
+
+  // The label is copy ("Servidor: …"): it follows a language change.
+  i18n.on('languageChanged', () => store.setState({ server: server() }));
 
   return store;
 }

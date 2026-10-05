@@ -1,3 +1,4 @@
+import { i18n } from '../i18n';
 // Decorates the sanitised HTML `renderMarkdown` returns with a header (language + copy button) on
 // every fenced code block. This runs *after* the sanitiser (see `markdown.ts`), on the one piece of
 // that HTML that is still model-written text: a fence's `language-*` class, taken verbatim from the
@@ -13,7 +14,6 @@
 // someone allows `svg` for an inline diagram that fails loudly instead of quietly becoming a hole.
 
 const LANGUAGE_TOKEN = /^[a-z0-9+#-]{1,20}$/i;
-const FALLBACK_LABEL = 'código';
 const DECORATED_ATTR = 'data-code-block';
 
 /** The label for a fence's language class, or null when there is none to trust. */
@@ -43,7 +43,7 @@ export function decorateCodeBlocks(html: string): string {
     const code = pre.querySelector('code');
     if (!code) continue;
 
-    const language = codeLanguage(code.getAttribute('class')) ?? FALLBACK_LABEL;
+    const language = codeLanguage(code.getAttribute('class')) ?? i18n.t('código');
 
     const figure = doc.createElement('figure');
     figure.setAttribute(DECORATED_ATTR, '');
@@ -60,12 +60,12 @@ export function decorateCodeBlocks(html: string): string {
     const button = doc.createElement('button');
     button.setAttribute('type', 'button');
     button.setAttribute('data-copy', '');
-    button.setAttribute('aria-label', 'Copiar código');
+    button.setAttribute('aria-label', i18n.t('Copiar código'));
     button.className = 'code-block__copy';
 
     const buttonLabel = doc.createElement('span');
     buttonLabel.setAttribute('data-copy-label', '');
-    buttonLabel.textContent = 'copiar';
+    buttonLabel.textContent = i18n.t('copiar');
     button.appendChild(buttonLabel);
 
     // The block's own live region, part of it from the moment it is built rather than created when a
