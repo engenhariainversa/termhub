@@ -36,22 +36,24 @@ Server tests that need Postgres follow the existing harness (see `docs/lessons/2
 
 ## Task T1 (TER-934): Spike — pin Claude Code's behavior (no production code)
 
+**Done 2026-10-05:** results in spec section 11 (threshold > 800 characters, exact match holds, all five end-to-end cases as expected, Codex not tested end to end).
+
 **Files:** a short results section appended to the spec (`## 11. Spike results`); a lesson if something surprises.
 
-- [ ] Start Claude Code in a throwaway tmux session on a machine with the monitor hooks (or a local settings.json with a hook that dumps stdin to a file under the scratchpad).
-- [ ] Type single-line texts of 200, 400, 600, 800 characters with `tmux send-keys -l`; record from which length the transcript shows `<pasted_content>`.
-- [ ] For a pasted one, record what `UserPromptSubmit.prompt` holds: the raw text, the text wrapped in `<pasted_content>`, or a placeholder (`[Pasted text #1 …]`). This fixes the normalization in T2.
-- [ ] Type while the session is working: does each queued message get its own `UserPromptSubmit`, or one merged prompt?
-- [ ] Return `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"termhub origin note: …"}}` from a test hook and confirm how the model sees it (system note, outside the user's message).
-- [ ] Run the four end-to-end cases of spec §8 with a hand-written note and a harmless action ("create the file x.txt"), with a first prompt that says "do not create files until the person authorizes it". Record each outcome.
-- [ ] Repeat the note test with Codex (`~/.codex/hooks.json`, `UserPromptSubmit`) and record whether `additionalContext` is honored.
-- [ ] Append the results to the spec; if the paste threshold or the prompt shape makes D3 (exact match) impossible, stop and report before T2.
+- [x] Start Claude Code in a throwaway tmux session on a machine with the monitor hooks (or a local settings.json with a hook that dumps stdin to a file under the scratchpad).
+- [x] Type single-line texts of 200, 400, 600, 800 characters with `tmux send-keys -l`; record from which length the transcript shows `<pasted_content>`.
+- [x] For a pasted one, record what `UserPromptSubmit.prompt` holds: the raw text, the text wrapped in `<pasted_content>`, or a placeholder (`[Pasted text #1 …]`). This fixes the normalization in T2.
+- [x] Type while the session is working: does each queued message get its own `UserPromptSubmit`, or one merged prompt?
+- [x] Return `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"termhub origin note: …"}}` from a test hook and confirm how the model sees it (system note, outside the user's message).
+- [x] Run the four end-to-end cases of spec §8 with a hand-written note and a harmless action ("create the file x.txt"), with a first prompt that says "do not create files until the person authorizes it". Record each outcome.
+- [x] Repeat the note test with Codex (`~/.codex/hooks.json`, `UserPromptSubmit`) and record whether `additionalContext` is honored.
+- [x] Append the results to the spec; if the paste threshold or the prompt shape makes D3 (exact match) impossible, stop and report before T2.
 
 ## Task T2 (TER-935): Server — origin registry
 
 **Files:** create `apps/server/src/terminal/input-origin.ts`, `apps/server/src/terminal/input-origin.test.ts`.
 
-- [ ] Write failing tests: record + take matches once; second take returns null; expired record (fake timers, `ORIGIN_TTL`) returns null; per-tab cap of 5 drops the oldest; another tab never matches; normalization (`\r\n`, trailing whitespace, the paste wrapper as found in T1).
+- [ ] Write failing tests: record + take matches once; second take returns null; expired record (fake timers, `ORIGIN_TTL`) returns null; per-tab cap of 5 drops the oldest; another tab never matches; normalization (`\r\n`; the paste wrapper exactly as spec §5.1 gives it, with and without the two leading newlines of a queued paste).
 - [ ] Implement `Origin` (spec §5.1), `recordInputOrigin(tabId, text, origin)`, `takeInputOrigin(tabId, prompt)`, `normalizePrompt()`. Module-level `Map`, lazy sweep. Export `ORIGIN_TTL_MS` and `ORIGIN_MAX_PER_TAB`.
 - [ ] Run the tests; commit `Server: in-memory registry of typed-input origins`.
 
