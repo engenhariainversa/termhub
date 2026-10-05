@@ -61,11 +61,11 @@ function Epic({ epic }: { epic: TEpicProgress }) {
       </Pressable>
       {open &&
         epic.cards.map((c) => (
-          <Pressable key={c.id} onLongPress={() => setMenuFor(c)} accessibilityLabel={`${c.ref} ${c.title}`} accessibilityHint="Segure para o trabalho automático" className="mt-3 gap-1">
-            <View className="flex-row items-center gap-2">
+          <View key={c.id} className="mt-3 gap-1">
+            <Pressable onLongPress={() => setMenuFor(c)} accessibilityLabel={`${c.ref} ${c.title}`} accessibilityHint="Segure para o trabalho automático" className="flex-row items-center gap-2">
               <Text className="flex-1 text-sm text-white">{`${c.ref} ${c.title}`}</Text>
               {c.auto ? <AutoBadge /> : null}
-            </View>
+            </Pressable>
             <Bar percent={c.percent} />
             <Text className="text-xs text-zinc-400">{`${c.units.done}/${c.units.total} · ${formatEstimate(c.estimate)}`}</Text>
             {c.agents?.map((a) => <Agent key={a.tab_id} agent={a} />)}
@@ -74,7 +74,7 @@ function Epic({ epic }: { epic: TEpicProgress }) {
                 <Text className="text-xs text-indigo-300">{`PR #${p.number} · ${ciLabel(p)}`}</Text>
               </Pressable>
             ))}
-          </Pressable>
+          </View>
         ))}
       <Sheet open={menuFor !== null} onClose={() => setMenuFor(null)} title="Trabalho automático">
         <View className="gap-4">
