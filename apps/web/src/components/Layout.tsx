@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useTranslation } from '../i18n';
 import { useAuth } from '../lib/auth';
 import { DataProvider } from '../lib/data';
 import { FocusProvider, useFocusMode } from '../lib/focus';
@@ -29,8 +30,9 @@ const SIDEBAR_KEY = 'termhub:sidebar-collapsed';
  */
 export function AppShell() {
   const { user, loading } = useAuth();
+  const { t } = useTranslation();
 
-  if (loading) return <FullScreenMessage>Carregando…</FullScreenMessage>;
+  if (loading) return <FullScreenMessage>{t('Carregando…')}</FullScreenMessage>;
   if (!user) return <Navigate to="/login" replace />;
   // A deactivated account (deletion pending) gets only the page that lets it cancel.
   if (user.deletion_scheduled_at) return <PendingDeletionPage scheduledAt={user.deletion_scheduled_at} />;
@@ -110,6 +112,7 @@ function LayoutRow({ collapsed, setCollapsed, onLeaveSettings }: { collapsed: bo
  * it) instead of pushing the content aside; the stored preference is left for wide windows.
  */
 export function Chrome({ collapsed, setCollapsed, onLeaveSettings }: { collapsed: boolean; setCollapsed: (v: boolean) => void; onLeaveSettings: () => void }) {
+  const { t } = useTranslation();
   const { focus } = useFocusMode();
   const { pathname } = useLocation();
   const settings = isSettingsPath(pathname);
@@ -128,7 +131,7 @@ export function Chrome({ collapsed, setCollapsed, onLeaveSettings }: { collapsed
         {overlay && (
           <>
             <div data-testid="sidebar-backdrop" aria-hidden="true" className="fixed inset-0 z-40 bg-black/50" onClick={closeOverlay} />
-            <div role="dialog" aria-modal="true" aria-label="Menu" className="fixed inset-y-0 left-0 z-50 flex max-w-[85vw] shadow-2xl">
+            <div role="dialog" aria-modal="true" aria-label={t('Menu')} className="fixed inset-y-0 left-0 z-50 flex max-w-[85vw] shadow-2xl">
               {settings ? <SettingsSidebar onBack={onLeaveSettings} onCollapse={closeOverlay} /> : <Sidebar onCollapse={closeOverlay} />}
             </div>
           </>
