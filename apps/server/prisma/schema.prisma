@@ -264,6 +264,7 @@ model Project {
   standingGrants ChatStandingGrant[]
   automationEvents AutomationEvent[]
   automationRuns   AutomationRun[]
+  tabUsageDays     TabUsageDay[]
 
   @@index([ownerId])
   @@map("projects")
@@ -511,6 +512,7 @@ model Task {
   pullRequests TaskPullRequest[]
   automationEvents AutomationEvent[]
   automationRuns   AutomationRun[]
+  tabUsageDays     TabUsageDay[]
 
   @@unique([projectId, externalKey])
   @@unique([projectId, number])
@@ -627,7 +629,46 @@ model AutomationRun {
   task          Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status], map: "automation_runs_project_status_idx")
+  @@index([tabId])
   @@map("automation_runs")
+}
+
+/// Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was
+/// read and up to which byte. One row per tab; the counts live in `tab_usage_days`. No foreign key to
+/// tabs: the per-day rows outlive a closed tab, so a card keeps its cost after its tab is gone.
+model TabUsage {
+  tabId            String   @id @map("tab_id")
+  sessionId        String   @map("session_id")
+  transcriptOffset BigInt   @map("transcript_offset")
+  updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@map("tab_usage")
+}
+
+/// Tokens a tab spent on one day (in its project owner's time zone at write time; UTC when unknown) and
+/// their API-equivalent cost estimate (null = no priced model). Counts only, never transcript content.
+/// `task_id` and `account_id` are those of the tab's automation run and AI account at the last write.
+model TabUsageDay {
+  tabId            String   @map("tab_id")
+  day              DateTime @db.Date
+  projectId        String   @map("project_id")
+  taskId           String?  @map("task_id")
+  accountId        String?  @map("account_id")
+  /// the last model counted on this row
+  model            String?
+  inputTokens      BigInt   @default(0) @map("input_tokens")
+  outputTokens     BigInt   @default(0) @map("output_tokens")
+  cacheReadTokens  BigInt   @default(0) @map("cache_read_tokens")
+  cacheWriteTokens BigInt   @default(0) @map("cache_write_tokens")
+  costUsdEstimate  Decimal? @map("cost_usd_estimate") @db.Decimal(14, 6)
+  updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task             Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@id([tabId, day])
+  @@index([projectId, day])
+  @@index([taskId])
+  @@map("tab_usage_days")
 }
 
 /// An AI account at its usage limit until `until` (agentic board, spec D21): the dispatcher skips it.

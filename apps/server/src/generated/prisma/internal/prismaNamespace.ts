@@ -417,6 +417,8 @@ export const ModelName = {
   TaskPullRequest: 'TaskPullRequest',
   AutomationEvent: 'AutomationEvent',
   AutomationRun: 'AutomationRun',
+  TabUsage: 'TabUsage',
+  TabUsageDay: 'TabUsageDay',
   AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
@@ -465,7 +467,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1946,6 +1948,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.AutomationRunCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.AutomationRunCountAggregateOutputType> | number
+        }
+      }
+    }
+    TabUsage: {
+      payload: Prisma.$TabUsagePayload<ExtArgs>
+      fields: Prisma.TabUsageFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TabUsageFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TabUsageFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload>
+        }
+        findFirst: {
+          args: Prisma.TabUsageFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TabUsageFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload>
+        }
+        findMany: {
+          args: Prisma.TabUsageFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload>[]
+        }
+        create: {
+          args: Prisma.TabUsageCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload>
+        }
+        createMany: {
+          args: Prisma.TabUsageCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TabUsageCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload>[]
+        }
+        delete: {
+          args: Prisma.TabUsageDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload>
+        }
+        update: {
+          args: Prisma.TabUsageUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload>
+        }
+        deleteMany: {
+          args: Prisma.TabUsageDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TabUsageUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TabUsageUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload>[]
+        }
+        upsert: {
+          args: Prisma.TabUsageUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsagePayload>
+        }
+        aggregate: {
+          args: Prisma.TabUsageAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTabUsage>
+        }
+        groupBy: {
+          args: Prisma.TabUsageGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TabUsageGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TabUsageCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TabUsageCountAggregateOutputType> | number
+        }
+      }
+    }
+    TabUsageDay: {
+      payload: Prisma.$TabUsageDayPayload<ExtArgs>
+      fields: Prisma.TabUsageDayFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TabUsageDayFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TabUsageDayFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload>
+        }
+        findFirst: {
+          args: Prisma.TabUsageDayFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TabUsageDayFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload>
+        }
+        findMany: {
+          args: Prisma.TabUsageDayFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload>[]
+        }
+        create: {
+          args: Prisma.TabUsageDayCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload>
+        }
+        createMany: {
+          args: Prisma.TabUsageDayCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TabUsageDayCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload>[]
+        }
+        delete: {
+          args: Prisma.TabUsageDayDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload>
+        }
+        update: {
+          args: Prisma.TabUsageDayUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload>
+        }
+        deleteMany: {
+          args: Prisma.TabUsageDayDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TabUsageDayUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TabUsageDayUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload>[]
+        }
+        upsert: {
+          args: Prisma.TabUsageDayUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabUsageDayPayload>
+        }
+        aggregate: {
+          args: Prisma.TabUsageDayAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTabUsageDay>
+        }
+        groupBy: {
+          args: Prisma.TabUsageDayGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TabUsageDayGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TabUsageDayCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TabUsageDayCountAggregateOutputType> | number
         }
       }
     }
@@ -4778,6 +4928,34 @@ export const AutomationRunScalarFieldEnum = {
 export type AutomationRunScalarFieldEnum = (typeof AutomationRunScalarFieldEnum)[keyof typeof AutomationRunScalarFieldEnum]
 
 
+export const TabUsageScalarFieldEnum = {
+  tabId: 'tabId',
+  sessionId: 'sessionId',
+  transcriptOffset: 'transcriptOffset',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TabUsageScalarFieldEnum = (typeof TabUsageScalarFieldEnum)[keyof typeof TabUsageScalarFieldEnum]
+
+
+export const TabUsageDayScalarFieldEnum = {
+  tabId: 'tabId',
+  day: 'day',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  accountId: 'accountId',
+  model: 'model',
+  inputTokens: 'inputTokens',
+  outputTokens: 'outputTokens',
+  cacheReadTokens: 'cacheReadTokens',
+  cacheWriteTokens: 'cacheWriteTokens',
+  costUsdEstimate: 'costUsdEstimate',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TabUsageDayScalarFieldEnum = (typeof TabUsageDayScalarFieldEnum)[keyof typeof TabUsageDayScalarFieldEnum]
+
+
 export const AiAccountExhaustionScalarFieldEnum = {
   accountId: 'accountId',
   until: 'until',
@@ -5565,6 +5743,34 @@ export type ListEnumTaskTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$Pri
 
 
 /**
+ * Reference to a field of type 'BigInt'
+ */
+export type BigIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BigInt'>
+    
+
+
+/**
+ * Reference to a field of type 'BigInt[]'
+ */
+export type ListBigIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BigInt[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Decimal'
+ */
+export type DecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal'>
+    
+
+
+/**
+ * Reference to a field of type 'Decimal[]'
+ */
+export type ListDecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal[]'>
+    
+
+
+/**
  * Reference to a field of type 'AiProvider'
  */
 export type EnumAiProviderFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AiProvider'>
@@ -5762,6 +5968,8 @@ export type GlobalOmitConfig = {
   taskPullRequest?: Prisma.TaskPullRequestOmit
   automationEvent?: Prisma.AutomationEventOmit
   automationRun?: Prisma.AutomationRunOmit
+  tabUsage?: Prisma.TabUsageOmit
+  tabUsageDay?: Prisma.TabUsageDayOmit
   aiAccountExhaustion?: Prisma.AiAccountExhaustionOmit
   note?: Prisma.NoteOmit
   integration?: Prisma.IntegrationOmit

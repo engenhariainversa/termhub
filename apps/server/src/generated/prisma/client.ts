@@ -155,6 +155,20 @@ export type AutomationEvent = Prisma.AutomationEventModel
  */
 export type AutomationRun = Prisma.AutomationRunModel
 /**
+ * Model TabUsage
+ * Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was
+ * read and up to which byte. One row per tab; the counts live in `tab_usage_days`. No foreign key to
+ * tabs: the per-day rows outlive a closed tab, so a card keeps its cost after its tab is gone.
+ */
+export type TabUsage = Prisma.TabUsageModel
+/**
+ * Model TabUsageDay
+ * Tokens a tab spent on one day (in its project owner's time zone at write time; UTC when unknown) and
+ * their API-equivalent cost estimate (null = no priced model). Counts only, never transcript content.
+ * `task_id` and `account_id` are those of the tab's automation run and AI account at the last write.
+ */
+export type TabUsageDay = Prisma.TabUsageDayModel
+/**
  * Model AiAccountExhaustion
  * An AI account at its usage limit until `until` (agentic board, spec D21): the dispatcher skips it.
  */
