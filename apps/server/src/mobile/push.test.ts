@@ -14,7 +14,7 @@ function setup(opts: { devices?: Device[]; live?: string[] } = {}) {
   const repos = {
     devices: { listActiveWithPush: vi.fn(async () => devices), setPushToken: vi.fn(async () => undefined), clearPushTokenIf: vi.fn(async () => true) },
     deviceEvents: { record: vi.fn(async () => undefined) },
-    userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })) },
+    userNotifications: { create: vi.fn(async (input: object) => ({ id: 'n1', ...input })), countUnread: vi.fn(async () => 3), markReadByData: vi.fn(async () => 1) },
     pushTickets: { recordMany: vi.fn(async () => undefined) },
     projects: { findByIdsForOwner: vi.fn(async () => [{ id: 'p1', name: 'termhub' }]) },
     tabs: { findByIdsForOwner: vi.fn(async () => [{ id: 't1', name: 'api' }]) },
@@ -93,6 +93,7 @@ describe('MobilePushService', () => {
       title: 'termhub precisa de você',
       body: 'O chat do projeto termhub pediu confirmação para agir na aba api (jarvis).',
       data: { kind: 'confirmation', conversation_id: 'cp', project_id: 'p1', action_id: 'a1', notification_id: 'n1' },
+      badge: 3,
     });
     for (const m of messages) {
       expect(m.data).not.toHaveProperty('summary');
@@ -116,6 +117,7 @@ describe('MobilePushService', () => {
       title: 'termhub precisa de você',
       body: 'O chat geral pediu confirmação para agir na aba api (jarvis).',
       data: { kind: 'confirmation', conversation_id: 'c1', project_id: null, action_id: 'a1', notification_id: 'n1' },
+      badge: 3,
     });
     expect(JSON.stringify(t.repos.userNotifications.create.mock.calls)).not.toContain('p-foreign');
     expect(JSON.stringify(t.sent)).not.toContain('p-foreign');
@@ -181,6 +183,7 @@ describe('MobilePushService', () => {
       title: 'Novo aparelho pede acesso',
       body: 'iPhone 15 (São Paulo) pediu acesso à sua conta. Confira o código e aprove ou recuse na web.',
       data: { kind: 'device_request', notification_id: 'n1' },
+      badge: 3,
     });
   });
 
@@ -281,15 +284,16 @@ describe('MobilePushService', () => {
     expect(sent).toHaveLength(0);
   });
 
-  it('answered and closed tab questions push nothing', async () => {
+  it('answered and closed tab questions write no row and show nothing: their rows go read, the badge follows (TER-923)', async () => {
     const { service, sent, repos } = setup();
     stop = service.start();
     const question = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'permission' as const, payload: { tool_name: 'Bash' }, status: 'answered' as const, answer: { allow: true }, error_code: null, created_at: '', answered_at: '', closed_at: null };
     chatBus.publish({ type: 'tab_question_answered', user_id: 'u1', conversation_id: 'cp', question });
     chatBus.publish({ type: 'tab_question_closed', user_id: 'u1', conversation_id: 'cp', question });
     await flush();
-    expect(sent).toEqual([]);
     expect(repos.userNotifications.create).not.toHaveBeenCalled();
+    expect(repos.userNotifications.markReadByData).toHaveBeenCalledWith('u1', 'tab_question_id', 'q1', expect.any(Date));
+    expect(sent.flat().every((m) => m.title === undefined && m.badge === 3 && m.data.kind === 'badge')).toBe(true);
   });
 });
 
@@ -551,5 +555,41 @@ describe('MobilePushService.testPush (TER-913)', () => {
     t.sender.send.mockRejectedValueOnce(new Error('down'));
     expect((await t.service.testPush(user, dev, 'confirmation', 0)).ticket).toEqual({ status: 'error', error: 'send_failed' });
     expect(t.repos.deviceEvents.record).toHaveBeenCalledWith(expect.objectContaining({ meta: { kind: 'confirmation', outcome: 'send_failed' } }));
+  });
+});
+
+describe('badge and handled cards (TER-923)', () => {
+  it('a decided or ended action marks its rows read and sends a badge-only update to every phone with a token', async () => {
+    const t = setup({ live: ['d1'] });
+    t.repos.userNotifications.countUnread.mockResolvedValue(1);
+    stop = t.service.start();
+    chatBus.publish({ type: 'decision', user_id: 'u1', conversation_id: 'cp', action_id: 'a1', status: 'approved' });
+    await flush();
+    expect(t.repos.userNotifications.markReadByData).toHaveBeenCalledWith('u1', 'action_id', 'a1', expect.any(Date));
+    expect(t.sent).toEqual([
+      [
+        { to: 'ExponentPushToken[a]', data: { kind: 'badge' }, badge: 1 },
+        { to: 'ExponentPushToken[b]', data: { kind: 'badge' }, badge: 1 },
+      ],
+    ]);
+    chatBus.publish({ type: 'action_status', user_id: 'u1', conversation_id: 'cp', action_id: 'a2', status: 'expired', error_code: null });
+    await flush();
+    expect(t.repos.userNotifications.markReadByData).toHaveBeenLastCalledWith('u1', 'action_id', 'a2', expect.any(Date));
+  });
+
+  it('nothing to mark read: no push', async () => {
+    const t = setup();
+    t.repos.userNotifications.markReadByData.mockResolvedValue(0);
+    stop = t.service.start();
+    chatBus.publish({ type: 'decision', user_id: 'u1', conversation_id: 'cp', action_id: 'a1', status: 'denied' });
+    await flush();
+    expect(t.sent).toEqual([]);
+  });
+
+  it('ExpoPushSender sends a badge-only message without title, sound or priority', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: [{ status: 'ok', id: 'x' }] }), { status: 200 }));
+    await new ExpoPushSender(null, fetchImpl as never).send([{ to: 'ExponentPushToken[a]', data: { kind: 'badge' }, badge: 0 }]);
+    const body = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body).toEqual([{ to: 'ExponentPushToken[a]', data: { kind: 'badge' }, badge: 0 }]);
   });
 });
