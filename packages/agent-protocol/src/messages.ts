@@ -63,6 +63,10 @@ export const CAPABILITY_TRANSCRIPT = 'transcript';
  *  the call: an older agent drops an unknown RPC, which would read as a timeout. */
 export const CAPABILITY_FILE_READ = 'file_read';
 
+/** The agent answers `file.list` (spec 2026-10-04 recent Markdown files, TER-953). The server requires it
+ *  before the call; a machine whose agent lacks it is skipped and the list says to update the agent. */
+export const CAPABILITY_FILE_LIST = 'file_list';
+
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
 export function streamUserMessageLine(text: string, uuid: string): string {

@@ -9,6 +9,8 @@ export interface TerminalConnectionHandlers {
   onExit?: (code: number) => void;
   /** what the server said went wrong (e.g. the machine could not start the terminal) */
   onError?: (message: string) => void;
+  /** on every `ready`: whether the server treats this socket as read-only (no terminals:write) */
+  onReadonly?: (readonly: boolean) => void;
 }
 
 const MAX_ATTEMPTS = 8;
@@ -39,6 +41,10 @@ export class TerminalConnection {
    * until then and for an older server or agent — the wheel then stays with xterm.js, as before.
    */
   canScroll = false;
+  /** The client knows the user lacks terminals:write (TER-576): set by the view from the role. */
+  private writable = true;
+  /** The server said so in `ready` (`readonly: true`): it drops input, resize and scroll from this socket. */
+  private serverReadonly = false;
   /** Our place in the handshake gate (TER-902): waiting for a slot, or holding one until the handshake settles. */
   private ticket: GateTicket | null = null;
   /** The terminal is on screen: its handshake goes ahead of the hidden ones. */
@@ -124,9 +130,11 @@ export class TerminalConnection {
         return;
       }
       try {
-        const msg = JSON.parse(String(ev.data)) as { type: string; code?: number; message?: string; scroll?: boolean };
+        const msg = JSON.parse(String(ev.data)) as { type: string; code?: number; message?: string; scroll?: boolean; readonly?: boolean };
         if (msg.type === 'ready') {
           this.canScroll = msg.scroll === true;
+          this.serverReadonly = msg.readonly === true;
+          this.handlers.onReadonly?.(this.serverReadonly);
           this.attempt = 0;
           this.restarting = false;
           this.setState('connected');
@@ -202,18 +210,32 @@ export class TerminalConnection {
     this.open();
   }
 
+  /**
+   * Read-only terminal (TER-576): nothing typed, no resize, no scroll goes out — the user can only watch.
+   * True when the role lacks terminals:write (`setWritable(false)`) or the last `ready` said `readonly`.
+   */
+  get readonly(): boolean {
+    return !this.writable || this.serverReadonly;
+  }
+
+  setWritable(writable: boolean) {
+    this.writable = writable;
+  }
+
   send(data: string) {
+    if (this.readonly) return;
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(this.encoder.encode(data));
   }
 
   sendResize(cols: number, rows: number) {
     this.size = { cols, rows };
+    if (this.readonly) return;
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
   }
 
   /** Scrolls the tab's tmux pane by `lines` (< 0 up, > 0 down); does nothing unless `canScroll`. */
   sendScroll(lines: number) {
-    if (!this.canScroll || lines === 0 || this.ws?.readyState !== WebSocket.OPEN) return;
+    if (!this.canScroll || this.readonly || lines === 0 || this.ws?.readyState !== WebSocket.OPEN) return;
     const capped = Math.max(-SCROLL_MAX_LINES, Math.min(SCROLL_MAX_LINES, Math.trunc(lines)));
     if (capped !== 0) this.ws.send(JSON.stringify({ type: 'scroll', lines: capped }));
   }

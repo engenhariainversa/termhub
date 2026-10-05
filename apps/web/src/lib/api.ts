@@ -1,3 +1,4 @@
+import { currentLocale, i18n } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview } from './types';
 
 export class ApiError extends Error {
@@ -17,7 +18,8 @@ export function readCookie(name: string): string | undefined {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { accept: 'application/json' };
+  // the server answers errors (and anything it words) in the language on screen
+  const headers: Record<string, string> = { accept: 'application/json', 'accept-language': currentLocale() };
   const raw = body instanceof Blob;
   if (raw) headers['content-type'] = body.type || 'application/octet-stream';
   else if (body !== undefined) headers['content-type'] = 'application/json';
@@ -48,7 +50,7 @@ function errorFrom(status: number, data: unknown): ApiError {
   if (status === 401 && d.code !== 'REAUTH_FAILED') window.dispatchEvent(new CustomEvent('termhub:unauthorized'));
   // The account asked to be deleted (maybe from another device): the auth layer refetches /auth/me and shows the gate.
   if (status === 403 && d.code === 'ACCOUNT_PENDING_DELETION') window.dispatchEvent(new CustomEvent('termhub:pending-deletion'));
-  return new ApiError(status, d.error ?? `Erro ${status}`, d.code, d.issues);
+  return new ApiError(status, d.error ?? i18n.t('Erro {{status}}', { status }), d.code, d.issues);
 }
 
 /**
@@ -60,7 +62,7 @@ function errorFrom(status: number, data: unknown): ApiError {
 function upload<T>(path: string, body: Blob, onProgress?: (fraction: number) => void, signal?: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new ApiError(0, 'Envio cancelado', 'ABORTED'));
+      reject(new ApiError(0, i18n.t('Envio cancelado'), 'ABORTED'));
       return;
     }
     const xhr = new XMLHttpRequest();
@@ -68,14 +70,15 @@ function upload<T>(path: string, body: Blob, onProgress?: (fraction: number) => 
     xhr.withCredentials = true;
     xhr.responseType = 'text';
     xhr.setRequestHeader('accept', 'application/json');
+    xhr.setRequestHeader('accept-language', currentLocale());
     xhr.setRequestHeader('content-type', body.type || 'application/octet-stream');
     const csrf = readCookie('termhub_csrf');
     if (csrf) xhr.setRequestHeader('x-csrf-token', csrf);
     xhr.upload.onprogress = (ev) => {
       if (ev.lengthComputable && onProgress) onProgress(ev.loaded / ev.total);
     };
-    xhr.onerror = () => reject(new ApiError(0, 'Sem conexão com o servidor', 'NETWORK'));
-    xhr.onabort = () => reject(new ApiError(0, 'Envio cancelado', 'ABORTED'));
+    xhr.onerror = () => reject(new ApiError(0, i18n.t('Sem conexão com o servidor'), 'NETWORK'));
+    xhr.onabort = () => reject(new ApiError(0, i18n.t('Envio cancelado'), 'ABORTED'));
     xhr.onload = () => {
       let data: unknown = null;
       try {
@@ -113,6 +116,8 @@ export const api = {
      *  reserved word, 409 NICKNAME_TAKEN when somebody else already holds it, 409 NICKNAME_LOCKED
      *  when the account already has one (a claimed address is never changed). */
     setNickname: (nickname: string) => request<{ user: User }>('PATCH', '/auth/me/nickname', { nickname }),
+    /** The language for this account (e-mails, push and the web on every browser); null = automatic. 204. */
+    setLocale: (locale: 'pt-BR' | 'en' | null) => request<null>('PATCH', '/auth/me/locale', { locale }),
     /** The city address and its short link. May create the partner link on the way (the server rate-limits that). */
     cityLink: () => request<CityLink>('GET', '/auth/me/city-link'),
     /** 400 SHORT_LINK_INVALID, 400 SHORT_LINK_MISMATCH (the message says where the link really goes), 502 SHORT_LINK_UNREACHABLE */

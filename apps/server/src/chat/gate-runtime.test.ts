@@ -55,3 +55,29 @@ it('answer_tab_question runs at once on a gated token too', async () => {
   expect(insertPending).not.toHaveBeenCalled();
   expect(collected).toEqual([]);
 });
+
+/** TER-851: only a card the person clicked makes the text the call types theirs. */
+function ctxWithApprovedRow(grantId: string | null) {
+  const decidedAt = new Date(Date.now() - 60_000).toISOString();
+  const row = { id: 'act1', conversation_id: 'c1', status: 'approved', grant_id: grantId, decided_at: decidedAt, created_at: decidedAt, tab_id: null };
+  const repos = {
+    chatActions: { findOpenByKey: vi.fn(async () => row), claimApproved: vi.fn(async () => true), markExecuted: vi.fn(async () => undefined) },
+  } as unknown as Repositories;
+  const ctx = { repos, scope: { user: { id: 'u1' } } } as unknown as ControlContext;
+  return { ctx, decidedAt };
+}
+
+it('runs a clicked card with the approval, so what it types is marked as the person’s', async () => {
+  const { ctx, decidedAt } = ctxWithApprovedRow(null);
+  const run = vi.fn(async () => ({ ok: true }));
+  const outcome = await applyGate(ctx, { token: { gated: true, chat_conversation_id: 'c1' }, tool: 'create_task', args: { project_id: 'p1', title: 't' }, run });
+  expect(outcome.ok).toBe(true);
+  expect(run).toHaveBeenCalledWith({ actionId: 'act1', approvedAt: new Date(decidedAt) });
+});
+
+it('runs a row a grant approved without the approval', async () => {
+  const { ctx } = ctxWithApprovedRow('default:board');
+  const run = vi.fn(async () => ({ ok: true }));
+  await applyGate(ctx, { token: { gated: true, chat_conversation_id: 'c1' }, tool: 'create_task', args: { project_id: 'p1', title: 't' }, run });
+  expect(run).toHaveBeenCalledWith(undefined);
+});

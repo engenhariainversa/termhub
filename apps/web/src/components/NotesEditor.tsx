@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
+import { formatDateTime } from '../lib/format';
 
 interface Props {
   projectId: string;
@@ -156,7 +157,7 @@ export function NotesEditor({ projectId }: Props) {
         ))}
         <span className={`ml-auto ${saveState === 'error' ? 'text-danger' : 'text-fg-dim'}`}>
           {status}
-          {updatedAt && saveState !== 'dirty' && saveState !== 'saving' ? ` · ${new Date(updatedAt).toLocaleString('pt-BR')}` : ''}
+          {updatedAt && saveState !== 'dirty' && saveState !== 'saving' ? ` · ${formatDateTime(updatedAt)}` : ''}
         </span>
       </div>
       <div className={`grid min-h-0 flex-1 ${mode === 'split' ? 'grid-cols-2' : 'grid-cols-1'}`}>

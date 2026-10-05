@@ -1,11 +1,12 @@
 import { memo } from 'react';
 import type { TabLimit } from '../../lib/types';
+import { formatTime } from '../../lib/format';
 
 /** "03:20", in the viewer's clock; null when the reading did not say. */
 function resetTime(iso: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return Number.isNaN(d.getTime()) ? null : formatTime(d, { hour: '2-digit', minute: '2-digit' });
 }
 
 /** The card's sentence (spec 2026-09-30 project AI accounts §7.2). Shared with the tests. */

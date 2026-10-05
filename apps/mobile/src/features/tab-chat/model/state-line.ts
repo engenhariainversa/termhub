@@ -2,13 +2,15 @@
 import type { TTabSummary } from '@/services/api/contract';
 
 /** "Esperando você" whenever the tab needs the person; "Trabalhando · Bash" while it works, with the
- * tool it runs; "Em segundo plano" while it only waits on its own background work; "Erro"; else "Parado". */
-export function stateLine(tab: Pick<TTabSummary, 'state' | 'background' | 'needs_you' | 'activity'>): string {
+ * tool it runs; "Em segundo plano" while it only waits on its own background work; "Erro"; "Concluído"
+ * once it ended its turn with a report and asks nothing (TER-972); else "Parado". */
+export function stateLine(tab: Pick<TTabSummary, 'state' | 'background' | 'finished' | 'needs_you' | 'activity'>): string {
   if (tab.needs_you || tab.state === 'waiting_input' || tab.state === 'waiting_permission') return 'Esperando você';
   if (tab.state === 'working') {
     if (tab.background) return 'Em segundo plano';
     return tab.activity ? `Trabalhando · ${tab.activity}` : 'Trabalhando';
   }
   if (tab.state === 'error') return 'Erro';
+  if (tab.state === 'idle' && tab.finished) return 'Concluído';
   return 'Parado';
 }

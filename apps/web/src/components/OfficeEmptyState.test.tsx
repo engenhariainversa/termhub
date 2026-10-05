@@ -61,7 +61,7 @@ const terminal = (id: string, name: string, position: number, over: Partial<Tab>
   ({ id, name, project_id: 'p1', machine_id: 'm1', kind: 'terminal', position, alive: true, state: 'working', state_at: '2026-10-04T10:00:00.000Z', state_seen_at: null, activity: null, activity_verb: null, rate_limited_at: null, ...over }) as Tab;
 
 const agent = (tab_id: string, over: Partial<AgentOnCard> = {}): AgentOnCard => ({
-  tab_id, tab_name: tab_id, machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: null, background: false, needs_you: false, activity: null, activity_verb: null, rate_limited: false, ...over,
+  tab_id, tab_name: tab_id, machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: null, background: false, finished: false, needs_you: false, activity: null, activity_verb: null, rate_limited: false, ...over,
 });
 const card = (id: string, status: CardProgress['status'], agents: AgentOnCard[] = []): CardProgress =>
   ({ id, ref: id, title: id, type: 'task', status, column_name: null, units: { done: 0, total: 1 }, percent: 0, started_at: null, done_at: null, active_seconds: 0, estimate: { kind: 'none', reason: 'not_started' }, agents, pull_requests: [] }) as CardProgress;
