@@ -21,5 +21,13 @@
   "Preparação do WDA já está em andamento": "WDA setup is already in progress",
   "Máquina inacessível via SSH": "Machine unreachable over SSH",
   "Falha ao coletar o hardware": "Could not collect the hardware",
-  "Resposta inesperada da máquina": "Unexpected response from the machine"
+  "Resposta inesperada da máquina": "Unexpected response from the machine",
+  "Trabalho automático desligado no projeto": "Automatic work is off for the project",
+  "Automático pausado": "Automatic work paused",
+  "Tipo não permitido no automático": "Type not allowed for automatic work",
+  "Fora da coluna A fazer": "Not in the To do column",
+  "Sem descrição": "No description",
+  "Já tem um agente": "Already has an agent",
+  "Nenhuma máquina com agente 0.17 ligada ao projeto": "No machine with agent 0.17 linked to the project",
+  "Repositório não configurado no Setup": "Repository not set up in Setup"
 }

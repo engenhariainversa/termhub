@@ -1,6 +1,7 @@
 import { CAPABILITY_WORKTREE } from '@termhub/agent-protocol';
 import { agents } from '../agent/registry.js';
 import type { ControlContext } from '../control/context.js';
+import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 import { eligibilityOf, REASON_TEXT, type IneligibleReason } from './eligibility.js';
 
 export interface QueueItem {
@@ -16,7 +17,7 @@ export interface QueueItem {
  * The tagged cards of a project in board order (column position, then card position: the order is the
  * priority), each with its eligibility. Untagged cards and subtasks are not in the queue.
  */
-export async function automationQueue(ctx: ControlContext, projectId: string): Promise<QueueItem[]> {
+export async function automationQueue(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<QueueItem[]> {
   await ctx.scoped.project(projectId);
   const { repos } = ctx;
   const [cards, columns, setup, links] = await Promise.all([
@@ -66,7 +67,7 @@ export async function automationQueue(ctx: ControlContext, projectId: string): P
       title: c.title,
       eligible: verdict.eligible,
       reason,
-      reason_text: reason ? REASON_TEXT[reason] : null,
+      reason_text: reason ? t(locale, REASON_TEXT[reason]) : null,
       col: col?.position ?? Number.MAX_SAFE_INTEGER,
       pos: c.position,
     });
