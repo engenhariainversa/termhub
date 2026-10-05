@@ -5,6 +5,7 @@
  */
 import { tabNeedsYou } from '../lib/needs-you';
 import type { OfficeTab, OfficeTaskCounts, Project, Tab, TabActivity, TabState } from '../lib/types';
+import { i18n, tk } from '../i18n';
 
 /**
  * What the model reads of a tab, and nothing more. `OfficeTab` satisfies it, and so does a robot of
@@ -108,10 +109,17 @@ export const SUBTITLE_CAP = 30;
 
 const POSE: Record<TabState, Pose> = { working: 'type', waiting_input: 'raise', waiting_permission: 'raise', idle: 'sleep', error: 'shake', waiting_background: 'sit' };
 
-const ACTIVITY_LABEL: Record<TabActivity, string> = { coding: 'codando', reading: 'lendo arquivos', researching: 'pesquisando', planning: 'planejando', terminal: 'no terminal', working: 'trabalhando' };
-/** What a working person is doing, under them on the floor — pt-BR, or null when nothing is known. */
+const ACTIVITY_LABEL: Record<TabActivity, string> = {
+  coding: tk('codando'),
+  reading: tk('lendo arquivos'),
+  researching: tk('pesquisando'),
+  planning: tk('planejando'),
+  terminal: tk('no terminal'),
+  working: tk('trabalhando'),
+};
+/** What a working person is doing, under them on the floor — in the language on screen, or null when nothing is known. */
 export function activityLabel(activity: TabActivity | null): string | null {
-  return activity ? ACTIVITY_LABEL[activity] : null;
+  return activity ? i18n.t(ACTIVITY_LABEL[activity]) : null;
 }
 
 /** A verb and an activity label side by side stay about as wide as the longest desk label plus a word. */
@@ -154,7 +162,10 @@ const oneLine = (s: string) => s.trim().replace(/\s+/g, ' ');
 export function deskMachineLine(machine: DeskMachine | null): string {
   if (!machine) return '';
   const name = oneLine(machine.name);
-  if (!machine.online) return `${truncateLabel(name, SUBTITLE_CAP - ' · offline'.length)} · offline`;
+  if (!machine.online) {
+    const offline = ` · ${i18n.t('offline')}`;
+    return `${truncateLabel(name, SUBTITLE_CAP - offline.length)}${offline}`;
+  }
   const subtitle = machine.subtitle ? oneLine(machine.subtitle) : '';
   const both = subtitle ? `${name} · ${subtitle}` : '';
   return both && Array.from(both).length <= SUBTITLE_CAP ? both : truncateLabel(name, SUBTITLE_CAP);

@@ -3,6 +3,7 @@
  * D11). A path counts when it ends in `.md` or `.markdown`, is absolute, `~/…` or relative, and is not
  * part of a URL. The app has the same rules and the same table of cases (`apps/mobile`, `md-paths.ts`).
  */
+import { i18n } from '../i18n';
 
 // Characters a path segment may hold here: letters (accents too), digits and `._@+-`. No spaces, quotes or
 // brackets, so a path in prose or in backticks ends where a reader sees it end.
@@ -68,7 +69,7 @@ export function linkifyMdPaths(html: string, hrefFor: (path: string) => string):
       const a = doc.createElement('a');
       a.setAttribute('href', hrefFor(m.path));
       a.setAttribute(MD_PATH_ATTR, m.path);
-      a.setAttribute('title', 'Abrir prévia do arquivo');
+      a.setAttribute('title', i18n.t('Abrir prévia do arquivo'));
       a.className = 'md-path';
       a.textContent = text.slice(m.start, m.end);
       frag.append(a);
