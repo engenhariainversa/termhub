@@ -171,6 +171,13 @@ the browser (http/https only). Actions: **Compartilhar** (the share sheet also c
 sent). In mock mode, `~/relatorio-termhub-10-dias.md`, `notas.txt`, `~/.ssh/notas.md`,
 `~/grande.md` and `~/antigo/x.md` show each state.
 
+**Arquivos** (TER-953): a project chat's host line (and its "Conta e modelo" sheet) leads to
+`/file-recent` (`features/file-recent`), the project's recent Markdown files across its machines through
+`GET /api/m/v1/file-recent` (spec `docs/superpowers/specs/2026-10-04-recent-md-files-design.md`): chips
+per group (Specs, Planos, Lições, Jurídico, Outros) and Citados, pull-to-refresh, and a notice for each
+machine left out (offline, an agent too old to list files, no termhub agent). A tap opens the preview on
+the machine that listed the file; a file over the preview's limit is listed but does not open.
+
 ## Push notifications
 
 `expo-notifications` (spec §9). The server sends through the Expo Push Service to the token the app registers with `PUT push-token`; `src/services/push.ts` reads that token:
@@ -178,6 +185,7 @@ sent). In mock mode, `~/relatorio-termhub-10-dias.md`, `notas.txt`, `~/.ssh/nota
 - **Registration.** At every session start (activation or unlock, never a silent renewal), and right after the primer gets a grant, the session store asks for the phone's Expo push token and sends it, fire-and-forget. The token is read only once the permission is granted: the OS prompt comes from the notification primer (after the first message the server accepts, or on the Notificações tab) or from Ajustes, never from a session start. A simulator, a permission not granted or a build without `extra.eas.projectId` has no token, and nothing is sent. Mock mode keeps sending the fake `ExponentPushToken[mock-…]`.
 - **Tokens are per EAS project.** `getExpoPushTokenAsync` needs `extra.eas.projectId` (`app.json`, project `0614ffa1-…` of the `engenharia-inversa` Expo account). If that id changes, every phone's token changes with it.
 - **Taps.** `app/_layout.tsx` opens `data.conversation_id` the same way as a `termhub://chat/<id>` deep link, straight away when unlocked or after the PIN otherwise; a cold start from a tap works the same way. A `device_request` push names no conversation and just opens the app. Every push also carries `data.notification_id`, its row in the Notificações history: the tap marks that row read (`markPushRead`, once unlocked).
+- **"Aba terminou" (TER-925, opt-in).** Ajustes → Notificações → "Avisar quando uma aba terminar" (per account, off by default, `GET`/`PUT push-settings`): the server pushes when a project tab that was working ends its turn or its agent, unless a question card is open on it, at most once per tab every 5 minutes. Its `data.tab_id` makes the tap open that tab's session screen (`/session/<id>`); older app versions open the project's chat instead.
 - **In the foreground** a push is still shown as a banner: the server only skips phones with a live chat socket, so one that arrives while the app is open is about something the screen may not be showing.
 
 - **Test push (TER-913).** Ajustes → Notificações → "Enviar notificação de teste" (only once notifications are granted) asks the server for a sample `confirmation` push to this phone in 10 s, time to close the app. The web's Aparelhos page does the same for any of your active phones, with a choice of kind and delay. A test push carries "[Teste]" in its title and `data.test: true`, ignores the live-socket rule, opens your latest conversation on tap and never enters the Notificações history. About 15 s after the send, the server reads Expo's receipt and records the outcome in the device's trail (Aparelhos → Atividade): "entregue à Apple/Google" or the error code (e.g. `InvalidCredentials` = the APNs/FCM key below is missing or wrong). Ajustes → Versão also shows the running bundle (`OTA: <update id>` or `OTA: binário`), for test notes.

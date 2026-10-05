@@ -1,6 +1,9 @@
 {
   "Excluir com {{count}} subtarefas?_one": "Excluir com {{count}} subtarefa?",
   "Excluir com {{count}} subtarefas?_other": "Excluir com {{count}} subtarefas?",
+  "Marcar {{count}} cards deste épico para trabalho automático? Os cards novos também serão marcados._one": "Marcar {{count}} card deste épico para trabalho automático? Os cards novos também serão marcados.",
+  "Marcar {{count}} cards deste épico para trabalho automático? Os cards novos também serão marcados._other": "Marcar {{count}} cards deste épico para trabalho automático? Os cards novos também serão marcados.",
+  "Marcar {{count}} cards deste épico para trabalho automático? Os cards novos também serão marcados._zero": "Marcar {{count}} cards deste épico para trabalho automático? Os cards novos também serão marcados.",
   "há {{count}} dias_one": "há {{count}} dia",
   "há {{count}} dias_other": "há {{count}} dias",
   "{{count}} abertas →_one": "{{count}} aberta →",

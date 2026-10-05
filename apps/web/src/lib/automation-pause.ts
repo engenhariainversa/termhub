@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { api } from './api';
+import { formatTime } from './format';
 import { useMonitor } from './monitor';
 import type { AutomationPauseState } from './types';
 
@@ -68,7 +69,7 @@ export function pausedSince(s: AutomationPauseState | null, projectId?: string):
 
 /** "10:42" in the browser's clock, for "Automático pausado desde 10:42." */
 export function pauseClock(iso: string): string {
-  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return formatTime(iso);
 }
 
 /** The automatic work's pause switch, shared by every component showing it (one subscription, one refresh per frame). */

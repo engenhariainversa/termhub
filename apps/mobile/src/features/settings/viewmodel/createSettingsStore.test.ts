@@ -74,3 +74,27 @@ describe('sendTestPush (TER-913)', () => {
     expect(store.getState().pushTest).toEqual({ sending: false, note: 'Enviada. Ela chega em 10 s.', error: null });
   });
 });
+
+describe('"aba terminou" setting (TER-925)', () => {
+  it('loads off, turns on through the mock server, and resets on sessionEnded', async () => {
+    const { store } = await setup();
+    expect(store.getState().tabFinished).toBeNull();
+    await store.getState().loadPushSettings();
+    expect(store.getState().tabFinished).toBe(false);
+    await store.getState().setTabFinished(true);
+    expect(store.getState().tabFinished).toBe(true);
+    await store.getState().loadPushSettings();
+    expect(store.getState().tabFinished).toBe(true);
+    sessionEnded.emit();
+    expect(store.getState().tabFinished).toBeNull();
+  });
+
+  it('a failed change goes back and says why', async () => {
+    const { store, api } = await setup();
+    await store.getState().loadPushSettings();
+    jest.spyOn(api, 'setPushSettings').mockRejectedValue(new ApiError(500, 'INTERNAL', 'Erro interno'));
+    await store.getState().setTabFinished(true);
+    expect(store.getState().tabFinished).toBe(false);
+    expect(store.getState().pushSettingsError).toBe('Erro interno');
+  });
+});

@@ -8,6 +8,7 @@ import { TasksBoard } from '../components/TasksBoard';
 import { BacklogView } from '../components/BacklogView';
 import { ProgressPanel } from '../components/ProgressPanel';
 import { NotesEditor } from '../components/NotesEditor';
+import { RecentFiles } from '../components/RecentFiles';
 import { TicketsView } from '../components/TicketsView';
 import { ProjectSettings } from '../components/ProjectSettings';
 import { PublishControl } from '../components/PublishControl';
@@ -17,7 +18,7 @@ import { PauseAutomationButton } from '../components/PauseAutomationButton';
 import { useChatScope } from '../lib/project-chat';
 import { ChatToggleButton } from '../components/chat/ChatToggleButton';
 
-export type ProjectSection = 'terminals' | 'tasks' | 'backlog' | 'progress' | 'tickets' | 'notes' | 'settings';
+export type ProjectSection = 'terminals' | 'tasks' | 'backlog' | 'progress' | 'tickets' | 'notes' | 'files' | 'settings';
 
 const SECTIONS: { key: ProjectSection; label: string; path: string }[] = [
   { key: 'terminals', label: tk('Terminais'), path: '' },
@@ -26,6 +27,7 @@ const SECTIONS: { key: ProjectSection; label: string; path: string }[] = [
   { key: 'progress', label: tk('Progresso'), path: 'progress' },
   { key: 'tickets', label: tk('Tickets'), path: 'tickets' },
   { key: 'notes', label: tk('Notas'), path: 'notes' },
+  { key: 'files', label: tk('Arquivos'), path: 'files' },
   { key: 'settings', label: tk('Setup'), path: 'settings' },
 ];
 
@@ -108,6 +110,7 @@ export function ProjectPage({ card }: Props = {}) {
         {current === 'progress' && <ProgressPanel key={`progress-${project.id}`} projectId={project.id} />}
         {current === 'tickets' && <TicketsView key={`tickets-${project.id}`} project={project} />}
         {current === 'notes' && <NotesEditor key={`notes-${project.id}`} projectId={project.id} />}
+        {current === 'files' && <RecentFiles key={`files-${project.id}`} projectId={project.id} />}
         {current === 'settings' && (
           // Keyed without `machines`: a link/unlink/cwd-save must not remount this whole subtree —
           // it would wipe the "N tabs fechadas" notice, a row's "Salvo." message and unsaved

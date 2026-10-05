@@ -37,5 +37,9 @@
   "{{device}} pediu acesso à sua conta. Confira o código e aprove ou recuse na web.": "{{device}} asked for access to your account. Check the code and approve or decline on the web.",
   "{{name}} precisa de você": "{{name}} needs you",
   "{{tab}} fez uma pergunta.": "{{tab}} asked a question.",
-  "{{tab}} pede permissão para continuar.": "{{tab}} asks for permission to continue."
+  "{{tab}} pede permissão para continuar.": "{{tab}} asks for permission to continue.",
+  "A aba {{tab}} ({{machine}})": "Tab {{tab}} ({{machine}})",
+  "{{project}}: aba terminou": "{{project}}: tab finished",
+  "Aba terminou": "Tab finished",
+  "{{tab}} terminou e espera você.": "{{tab}} finished and is waiting for you."
 }
