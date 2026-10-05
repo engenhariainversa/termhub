@@ -11,7 +11,7 @@ import { ACTIVE_RUN_STATUSES } from '../db/repositories/automation-runs.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import type { TaskPullRequest } from '../db/repositories/task-pull-requests.js';
 import type { Project, Tab, Task } from '../db/repositories/types.js';
-import { localeOf, t } from '../i18n/index.js';
+import { t } from '../i18n/index.js';
 import { GithubCiError, type GithubCiClient } from '../integrations/github-ci.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
@@ -21,6 +21,7 @@ import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
 import { cleanupRuns, type CleanupDeps } from './cleanup.js';
 import { CI_CAP, CONFLICT_CAP } from './escalation-text.js';
+import { postAutomationLine } from './chat-line.js';
 import { claimEvent, recordEvent, settleEvent } from './events.js';
 import { defaultType, escalateDelivery, escalateRun } from './follower.js';
 import { clearMergeWait, noteMergeWait, type MergeWait } from './merge-wait.js';
@@ -541,7 +542,7 @@ async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: '
       project_id: c.project.id,
       task_id: task.id,
       kind: 'merged',
-      payload: { pr: row.number, url: row.url, sha: result.sha, level: needed, by, moved_to_done: moved, ...(kept ? { worktree_kept: true } : {}) },
+      payload: { pr: row.number, url: row.url, sha: result.sha, base: row.base_ref, level: needed, by, moved_to_done: moved, ...(kept ? { worktree_kept: true } : {}) },
     });
   }
   log.info({ projectId: c.project.id, pr: row.number, by }, 'automation: PR merged');
@@ -571,18 +572,8 @@ async function cleanupAfterMerge(c: PullCtx, task: Task): Promise<boolean> {
 
 /** The chat hears of each merge (spec D25), in the owner's most recent project conversation. */
 async function postMergeLine(c: PullCtx, row: TaskPullRequest): Promise<void> {
-  const { repos } = c.deps;
-  const owner = await repos.users.findById(c.project.owner_id);
-  if (!owner) return;
-  const locale = localeOf(owner.locale);
-  const conversation = (await repos.chat.findLatestActiveForProject(c.project.id, owner.id)) ?? (await repos.chat.getOrCreateForProject(owner.id, c.project.id));
   const refs = c.tasks.map((t) => t.ref).join(', ');
-  const message = await repos.chat.addMessage({
-    conversation_id: conversation.id,
-    role: 'assistant',
-    text: t(locale, 'Automático mesclou o PR #{{n}} de {{ref}}: {{url}}', { n: row.number, ref: refs, url: row.url }),
-  });
-  chatBus.publish({ type: 'message', user_id: owner.id, conversation_id: conversation.id, message });
+  await postAutomationLine(c.deps.repos, c.project.id, (locale) => t(locale, 'Automático mesclou o PR #{{n}} de {{ref}}: {{url}}', { n: row.number, ref: refs, url: row.url }), c.deps.log);
 }
 
 /** Closes the approval card with its outcome and tells every open screen. */

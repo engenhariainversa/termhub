@@ -295,6 +295,8 @@ export interface AgentOnCard {
   activity: string | null;
   activity_verb: string | null;
   rate_limited: boolean;
+  /** the tab was started by an automatic run (agentic board) */
+  automatic: boolean;
 }
 /** A GitHub PR linked to a card, with its CI and deploy status (spec 2026-09-26 progress-panel §5.2). */
 export interface PullRequestBadge {
@@ -340,8 +342,32 @@ export interface EpicProgress {
   ci: { open: number; failed: number; running: number; deployed: number } | null;
   ci_error: string | null;
 }
+/** One line of the automatic work's feed (same shape as `@termhub/mobile-api`): the sentence is written from `kind` and these facts. */
+export interface AutomationFeedEvent {
+  id: string;
+  kind: string;
+  created_at: string;
+  project_id: string;
+  task_id: string | null;
+  run_id: string | null;
+  tab_id: string | null;
+  ref: string | null;
+  epic: string | null;
+  machine: string | null;
+  account: string | null;
+  branch: string | null;
+  workflow: string | null;
+  version: string | null;
+  pr: number | null;
+  url: string | null;
+  until: string | null;
+  reason_text: string | null;
+  paused: boolean | null;
+}
 export interface ProgressResponse {
   epics: EpicProgress[];
+  /** the last 50 automatic events, newest first; absent from a server that predates it */
+  feed?: AutomationFeedEvent[];
   generated_at: string;
 }
 

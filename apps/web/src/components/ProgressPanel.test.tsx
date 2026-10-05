@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProgressResponse, Tab } from '../lib/types';
@@ -25,7 +25,7 @@ const response = (): ProgressResponse => ({
       id: 'c1', ref: 'TER-183', title: 'Painel de progresso', type: 'story', status: 'doing', column_name: 'Fazendo',
       units: { done: 3, total: 5 }, percent: 60, started_at: null, done_at: null, active_seconds: 1800,
       estimate: { kind: 'range', low_s: 1200, high_s: 2700, basis: 'agent_time', samples: 3 },
-      agents: [{ tab_id: 't1', tab_name: 'spec', machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: '2026-09-27T11:50:00.000Z', background: false, finished: false, needs_you: false, activity: 'coding', activity_verb: 'Coding', rate_limited: false }],
+      agents: [{ tab_id: 't1', tab_name: 'spec', machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: '2026-09-27T11:50:00.000Z', background: false, finished: false, needs_you: false, activity: 'coding', activity_verb: 'Coding', rate_limited: false, automatic: false }],
       pull_requests: [],
     }],
     ci: null, ci_error: null,
@@ -133,5 +133,47 @@ describe('ProgressPanel', () => {
     progressMock.mockRejectedValue(new Error('boom'));
     mount();
     expect(await screen.findByText('Não foi possível carregar o progresso.')).toBeInTheDocument();
+  });
+
+  const ev = (over: Record<string, unknown>) => ({
+    id: 'x', kind: 'run_started', created_at: '2026-09-27T11:55:00.000Z', project_id: 'p1', task_id: 'c1', run_id: 'run-abcdef123456', tab_id: 't1', ref: 'TER-183',
+    epic: 'Visão gerencial', machine: 'jarvis', account: 'pessoal', branch: null, workflow: null, version: null, pr: null, url: null, until: null, reason_text: null, paused: null, ...over,
+  });
+
+  it('shows the Automático feed, newest first, with the run id and the tab link', async () => {
+    progressMock.mockResolvedValue({
+      ...response(),
+      feed: [ev({ id: '2', kind: 'merged', branch: 'main', pr: 9, url: 'https://gh/pr/9' }), ev({ id: '1' })],
+    });
+    mount();
+    const feed = await screen.findByRole('region', { name: 'Automático' });
+    const items = within(feed).getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('TER-183: merge feito na main');
+    expect(items[1]).toHaveTextContent('TER-183 iniciado em jarvis (pessoal)');
+    expect(within(items[0]).getByRole('link', { name: 'PR #9' })).toHaveAttribute('href', 'https://gh/pr/9');
+    expect(within(items[1]).getByRole('link', { name: 'abrir aba' })).toHaveAttribute('href', '/projects/p1?tab=t1');
+    expect(items[1]).toHaveTextContent('#123456');
+  });
+
+  it('shows no feed section for someone with no automatic work', async () => {
+    progressMock.mockResolvedValue({ ...response(), feed: [] });
+    mount();
+    await screen.findByText('Visão gerencial');
+    expect(screen.queryByRole('region', { name: 'Automático' })).toBeNull();
+  });
+
+  it('badges the tab of an automatic run and writes the failures and escalations in one line', async () => {
+    const r = response();
+    r.epics[0].cards[0].agents![0].automatic = true;
+    progressMock.mockResolvedValue({
+      ...r,
+      feed: [ev({ id: '3', kind: 'escalated', reason_text: 'O agente parou na confirmação.' }), ev({ id: '2', kind: 'deploy_failed', paused: true }), ev({ id: '1', kind: 'release_ok', workflow: 'npm', version: '1.2.0' })],
+    });
+    mount();
+    const feed = await screen.findByRole('region', { name: 'Automático' });
+    expect(within(feed).getByText('TER-183 precisa de você: O agente parou na confirmação.')).toBeInTheDocument();
+    expect(within(feed).getByText('Deploy falhou (Visão gerencial) — automático pausado no projeto')).toBeInTheDocument();
+    expect(within(feed).getByText('Publicado npm 1.2.0')).toBeInTheDocument();
+    expect(screen.getAllByText('automático').length).toBeGreaterThan(0);
   });
 });

@@ -289,6 +289,7 @@ export type TProgressResponse = z.infer<typeof progressResponse>;
 export type TEpicProgress = z.infer<typeof epicProgress>;
 export type TCardProgress = z.infer<typeof cardProgress>;
 export type TAgentOnCard = z.infer<typeof agentOnCard>;
+export type { AutomationFeedEvent as TAutomationFeedEvent } from '@termhub/mobile-api';
 export type TProgressEstimate = z.infer<typeof progressEstimate>;
 export type TPullRequestBadge = z.infer<typeof pullRequestBadge>;
 export type TCancelSubagentResponse = z.infer<typeof cancelSubagentResponse>;

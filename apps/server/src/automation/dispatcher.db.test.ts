@@ -152,6 +152,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(run!.startedAt).not.toBeNull();
     const events = await eventsOf();
     expect(events.map((e) => [e.kind, e.taskId, e.runId])).toEqual([['run_started', c.id, run!.id]]);
+    // run_started feeds Progresso only: it never posts a chat line (spec D25)
+    expect(await db.chatMessage.count({ where: { conversation: { projectId } } })).toBe(0);
 
     // the next tick does not start it again
     await tickOnce(deps);

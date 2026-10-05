@@ -53,6 +53,8 @@ export const agentOnCard = z.object({
   activity: z.string().nullable(),
   activity_verb: z.string().nullable(),
   rate_limited: z.boolean(),
+  /** the tab was started by an automatic run (agentic board): shown with the "automático" badge */
+  automatic: z.boolean().default(false),
 });
 
 export const cardProgress = z.object({
@@ -91,12 +93,51 @@ export const epicProgress = z.object({
   ci_error: z.string().nullable().default(null),
 });
 
-export const progressResponse = z.object({ epics: z.array(epicProgress), generated_at: z.string() });
+/**
+ * One line of the automatic work's feed (`automation_events`, newest first), resolved for display: the
+ * clients write the sentence from `kind` and these facts. `kind` stays a string so a kind a newer server
+ * adds still parses on an older app (the client skips what it has no line for).
+ */
+export const automationFeedEvent = z.object({
+  id: z.string(),
+  kind: z.string(),
+  created_at: z.string(),
+  project_id: z.string(),
+  task_id: z.string().nullable(),
+  run_id: z.string().nullable(),
+  tab_id: z.string().nullable(),
+  /** the card's reference ("TER-12") */
+  ref: z.string().nullable(),
+  /** the epic's title, for the deploy lines */
+  epic: z.string().nullable(),
+  machine: z.string().nullable(),
+  account: z.string().nullable(),
+  branch: z.string().nullable(),
+  /** the release workflow (the package), and the version it published */
+  workflow: z.string().nullable(),
+  version: z.string().nullable(),
+  pr: z.number().nullable(),
+  url: z.string().nullable(),
+  /** the account's limit ends / the work stays paused until (ISO) */
+  until: z.string().nullable(),
+  /** why a run needs the person, already in the reader's language */
+  reason_text: z.string().nullable(),
+  /** a failed deploy: the project's automatic work was paused by it (false when the pause could not be applied) */
+  paused: z.boolean().nullable().default(null),
+});
+
+export const progressResponse = z.object({
+  epics: z.array(epicProgress),
+  /** the last 50 automatic events of the caller's projects; empty for someone with no automatic work */
+  feed: z.array(automationFeedEvent).default([]),
+  generated_at: z.string(),
+});
 
 export type ProgressScope = z.infer<typeof progressScope>;
 export type ProgressEstimate = z.infer<typeof progressEstimate>;
 export type AgentOnCard = z.infer<typeof agentOnCard>;
 export type PullRequestBadge = z.infer<typeof pullRequestBadge>;
+export type AutomationFeedEvent = z.infer<typeof automationFeedEvent>;
 export type CardProgress = z.infer<typeof cardProgress>;
 export type EpicProgress = z.infer<typeof epicProgress>;
 export type ProgressResponse = z.infer<typeof progressResponse>;

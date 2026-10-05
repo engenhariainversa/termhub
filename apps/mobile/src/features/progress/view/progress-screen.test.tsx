@@ -12,6 +12,7 @@ jest.mock('expo-router', () => ({
 
 import { useProgressStore } from '@/features/progress/viewmodel/useProgressStore';
 import { setLocale } from '@/i18n';
+import { mockProgress } from '@/services/api/mock/handlers/progress';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { ProgressScreen } from './progress-screen';
 
@@ -21,7 +22,7 @@ beforeAll(async () => {
   await enrolStores();
 });
 beforeEach(() => {
-  useProgressStore.setState({ epics: [], loading: false, refreshing: false, error: null });
+  useProgressStore.setState({ epics: [], feed: [], loading: false, refreshing: false, error: null });
 });
 afterEach(() => {
   useProgressStore.getState().stopPolling();
@@ -29,6 +30,33 @@ afterEach(() => {
 });
 
 describe('Progresso', () => {
+  it('shows the Automático feed, newest first, and the badge on the automatic tab', async () => {
+    await render(<ProgressScreen />);
+    const feed = await screen.findByTestId('progress-feed', {}, LOAD);
+    expect(within(feed).getByText('TER-183: PR aberto')).toBeTruthy();
+    expect(within(feed).getByText('TER-183 iniciado em jarvis (pessoal)')).toBeTruthy();
+    expect(within(feed).getByText('PR #12')).toBeTruthy();
+    expect(within(feed).getAllByText('#abcdef').length).toBe(2);
+    const texts = within(feed).getAllByText(/TER-183/).map((n) => n.props.children);
+    expect(texts[0]).toBe('TER-183: PR aberto');
+  });
+
+  it('badges the tab an automatic run started', async () => {
+    const progress = mockProgress(Date.now());
+    progress.epics[0]!.cards[0]!.agents![0]!.automatic = true;
+    jest.spyOn(stores.api, 'progress').mockResolvedValue(progress);
+    await render(<ProgressScreen />);
+    await act(async () => fireEvent.press(await screen.findByText('Visão gerencial', {}, LOAD)));
+    expect(screen.getByLabelText('automático')).toBeTruthy();
+  });
+
+  it('has no feed section when there is nothing to show', async () => {
+    jest.spyOn(stores.api, 'progress').mockResolvedValue({ epics: [], feed: [], generated_at: new Date().toISOString() });
+    await render(<ProgressScreen />);
+    await waitFor(() => expect(screen.getByText('Nenhum épico em andamento')).toBeTruthy(), LOAD);
+    expect(screen.queryByTestId('progress-feed')).toBeNull();
+  });
+
   it('in English: the agents waiting and the estimate', async () => {
     setLocale('en');
     try {
@@ -98,7 +126,7 @@ describe('Progresso', () => {
   });
 
   it('shows the empty state', async () => {
-    jest.spyOn(stores.api, 'progress').mockResolvedValue({ epics: [], generated_at: '' });
+    jest.spyOn(stores.api, 'progress').mockResolvedValue({ epics: [], feed: [], generated_at: '' });
     await render(<ProgressScreen />);
     expect(await screen.findByText('Nenhum épico em andamento', {}, LOAD)).toBeTruthy();
   });

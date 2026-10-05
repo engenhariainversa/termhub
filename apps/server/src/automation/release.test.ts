@@ -163,6 +163,7 @@ describe('followMerged: release workflows', () => {
     expect(kinds(byFile.events)).toEqual(['release_ok']);
     expect(byFile.events[0].payload).toEqual({ pr: 7, sha: 'm1', url: 'https://github.com/acme/app/actions/runs/9', workflow: 'publish-agent.yml', version: '0.19.0' });
     expect(byFile.github.fileAt).toHaveBeenCalledWith('tok', 'acme/app', 'package.json', 'm1');
+    expect(byFile.messages).toEqual(['Publicado publish-agent.yml 0.19.0']);
 
     const byName = world({ releaseWorkflows: ['Publish @termhub/agent'], byCommit: { m1: [publish()] } });
     await followMerged(byName.deps, byName.ctx, pr({ deploy_state: 'passed' }));
@@ -221,5 +222,19 @@ describe('deliveryPending', () => {
     expect(deliveryPending(setup({}), pr({ deploy_state: 'passed', release_runs: [{ workflow: 'publish-agent.yml', state: 'passed', url: null, version: null }] }))).toBe(false);
     expect(deliveryPending(setup({}), pr({ deploy_state: 'passed', changed_level: 'deploy' }))).toBe(false);
     expect(deliveryPending(setup({ enabled: false }), pr({ deploy_state: 'passed' }))).toBe(false);
+  });
+});
+
+describe('the chat hears of deliveries (spec D25)', () => {
+  it('a finished deploy posts one line; a failed one posts only its escalation line', async () => {
+    const ok = world({ byCommit: { m1: [run({ conclusion: 'success' })] } });
+    await followMerged(ok.deps, ok.ctx, pr());
+    expect(kinds(ok.events)).toEqual(['deploy_ok']);
+    expect(ok.messages).toHaveLength(1);
+    expect(ok.messages[0]).toContain('Deploy concluído');
+    const failed = world({ byCommit: { m1: [run({ conclusion: 'failure' })] } });
+    await followMerged(failed.deps, failed.ctx, pr());
+    expect(failed.messages).toHaveLength(1);
+    expect(failed.messages[0]).not.toContain('Deploy concluído');
   });
 });

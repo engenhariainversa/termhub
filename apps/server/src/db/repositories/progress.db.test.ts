@@ -2,6 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
+import { serializeAutomationDb } from '../../../test/automation-db-lock.js';
 import { ProgressRepository } from './progress.js';
 
 const keyOf = (id: string) => 'G' + id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase();
@@ -119,5 +120,60 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ProgressRepository.list (
     expect(await repo.list({ owner: null, projectId: otherProjectId })).toEqual([]);
     await db.project.update({ where: { id: projectId }, data: { status: 'archived' } });
     expect(await repo.list({ owner: ownerId, projectId })).toEqual([]);
+  });
+});
+
+describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation feed and automatic tabs (Postgres)', () => {
+  serializeAutomationDb();
+  let db: PrismaClient;
+  let ownerId: string;
+  let projectId: string;
+  let machineId: string;
+
+  beforeAll(() => {
+    db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+  });
+  afterAll(async () => db?.$disconnect());
+
+  beforeEach(async () => {
+    ownerId = newId();
+    projectId = newId();
+    machineId = newId();
+    await db.user.create({ data: { id: ownerId, email: `${ownerId}@test.local`, name: 'u' } });
+    await db.project.create({ data: { id: projectId, ownerId, key: keyOf(projectId), name: 'p' } });
+    await db.machine.create({ data: { id: machineId, name: 'jarvis', type: 'agent', ownerId } });
+    return async () => {
+      await db.project.deleteMany({ where: { id: projectId } });
+      await db.machine.deleteMany({ where: { id: machineId } });
+      await db.user.delete({ where: { id: ownerId } });
+    };
+  });
+
+  it('flags only the tab an automatic run started, and lists the owner events newest first with the card and machine', async () => {
+    const epic = await db.task.create({ data: { id: newId(), projectId, title: 'Épico', type: 'epic' } });
+    const card = await db.task.create({ data: { id: newId(), projectId, title: 'c', type: 'task', status: 'doing', epicId: epic.id } });
+    const mk = (name: string) => db.tab.create({ data: { id: newId(), projectId, machineId, name } });
+    const [auto, manual] = [await mk('auto'), await mk('manual')];
+    await db.task.update({ where: { id: card.id }, data: { tabId: auto.id } });
+    const run = await db.automationRun.create({ data: { id: newId(), projectId, taskId: card.id, role: 'implementer', status: 'running', claimedBy: 'test', tabId: auto.id, machineId, branch: 'auto/x' } });
+    await db.automationEvent.create({ data: { id: newId(), projectId, taskId: card.id, runId: run.id, kind: 'run_started', payload: { machine_id: machineId }, createdAt: new Date('2026-10-05T10:00:00Z') } });
+    await db.automationEvent.create({ data: { id: newId(), projectId, taskId: card.id, runId: run.id, kind: 'pr_opened', payload: { pr_url: 'https://x/1' }, createdAt: new Date('2026-10-05T11:00:00Z') } });
+
+    const repo = new ProgressRepository(db);
+    const [e] = await repo.list({ owner: ownerId, projectId });
+    expect(e.cards[0].tab).toMatchObject({ id: auto.id, automatic: true });
+    await db.task.update({ where: { id: card.id }, data: { tabId: manual.id } });
+    expect((await repo.list({ owner: ownerId, projectId }))[0].cards[0].tab).toMatchObject({ id: manual.id, automatic: false });
+
+    const feed = await repo.feed({ owner: ownerId, projectId: null, limit: 50 });
+    expect(feed.map((f) => f.event.kind)).toEqual(['pr_opened', 'run_started']);
+    expect(feed[1]).toMatchObject({ ref: expect.stringMatching(/-\d+$/), epic: 'Épico', machine: 'jarvis', tab_id: auto.id, branch: 'auto/x' });
+    expect(await repo.feed({ owner: ownerId, projectId: null, limit: 1 })).toHaveLength(1);
+    // a kind no client has a line for takes no slot of the 50
+    await db.automationEvent.create({ data: { id: newId(), projectId, taskId: card.id, runId: run.id, kind: 'from_the_future', payload: {}, createdAt: new Date('2026-10-05T12:00:00Z') } });
+    expect((await repo.feed({ owner: ownerId, projectId: null, limit: 50 })).map((f) => f.event.kind)).toEqual(['pr_opened', 'run_started']);
+    expect(await repo.usesAutomation({ owner: ownerId, projectId: null })).toBe(true);
+    expect(await repo.usesAutomation({ owner: newId(), projectId: null })).toBe(false);
+    expect(await repo.feed({ owner: newId(), projectId: null, limit: 50 })).toEqual([]);
   });
 });

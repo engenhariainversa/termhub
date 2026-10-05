@@ -1,5 +1,8 @@
-import type { AgentOnCard, CardProgress, EpicProgress, ProgressEstimate, ProgressScope, PullRequestBadge } from '@termhub/mobile-api';
+import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, ProgressEstimate, ProgressScope, PullRequestBadge } from '@termhub/mobile-api';
 import type { TabState } from '../db/repositories/types.js';
+import type { AutomationEvent } from '../db/repositories/index.js';
+import { ESCALATION_FALLBACK, ESCALATION_TEXT } from '../automation/escalation-text.js';
+import { t, type Locale } from '../i18n/index.js';
 import { NEEDS_YOU } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
 
@@ -15,6 +18,8 @@ export interface ProgressTabRow {
   activity: string | null;
   activity_verb: string | null;
   rate_limited_at: Date | null;
+  /** started by an automatic run (any `automation_runs` row names it) */
+  automatic: boolean;
 }
 export interface ProgressSubtaskRow { id: string; ref: string; status: TaskStatus; done_at: Date | null; tab: ProgressTabRow | null }
 export interface ProgressCardRow {
@@ -63,6 +68,7 @@ function agentOf(tab: ProgressTabRow, subtaskRef: string | null): AgentOnCard {
     activity: tab.activity,
     activity_verb: tab.activity_verb,
     rate_limited: tab.rate_limited_at !== null,
+    automatic: tab.automatic,
   };
 }
 
@@ -174,4 +180,57 @@ export function selectEpics(epics: EpicProgress[], scope: ProgressScope): EpicPr
       (b.agents?.working ?? 0) - (a.agents?.working ?? 0) ||
       a.ref.localeCompare(b.ref, undefined, { numeric: true }),
   );
+}
+
+/** The kinds the clients have a line for: the feed's 50 count only these (an event the clients would skip must not use a slot). */
+export const FEED_KINDS = [
+  'run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed',
+  'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'ci_fix_requested', 'worktree_cleanup',
+] as const satisfies readonly AutomationEvent['kind'][];
+
+/** An event with what its sentence names, looked up by the repository. */
+export interface FeedRow {
+  event: AutomationEvent;
+  ref: string | null;
+  epic: string | null;
+  machine: string | null;
+  account: string | null;
+  tab_id: string | null;
+  branch: string | null;
+}
+
+const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
+
+/**
+ * The feed lines (newest first, as read): the facts of each event, the escalation reason in the reader's language.
+ * Without `includeAgents` (no terminals:read) the machine, the tab and the branch stay out, like the agents' chips.
+ */
+export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): AutomationFeedEvent[] {
+  return rows.map(({ event: e, ref, epic, machine, account, tab_id, branch }) => {
+    const p = e.payload;
+    const reason = str(p.reason);
+    return {
+      id: e.id,
+      kind: e.kind,
+      created_at: e.created_at,
+      project_id: e.project_id,
+      task_id: e.task_id,
+      run_id: e.run_id,
+      tab_id: includeAgents ? (str(p.tab_id) ?? tab_id) : null,
+      ref,
+      epic,
+      machine: includeAgents ? machine : null,
+      account,
+      // a merge names the branch it landed on; every other line, the run's own
+      branch: e.kind === 'merged' ? str(p.base) : includeAgents ? (str(p.branch) ?? branch) : null,
+      workflow: str(p.workflow),
+      version: str(p.version),
+      pr: num(p.pr) ?? num(p.number),
+      url: str(p.url) ?? str(p.pr_url),
+      until: str(p.until),
+      paused: typeof p.paused === 'boolean' ? p.paused : null,
+      reason_text: e.kind === 'escalated' ? t(locale, (reason && ESCALATION_TEXT[reason]) || ESCALATION_FALLBACK) : null,
+    };
+  });
 }

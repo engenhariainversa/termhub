@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { agentOnCard, progressResponse, type PullRequestBadge } from '@termhub/mobile-api';
-import { aggregateCard, aggregateEpic, selectEpics, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
+import { aggregateCard, aggregateEpic, feedOf, selectEpics, type FeedRow, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
 
 const at = (min: number) => new Date(Date.UTC(2026, 8, 27, 12, 0) + min * 60_000);
-const tab = (id: string, state: ProgressTabRow['state']): ProgressTabRow => ({ id, name: `aba ${id}`, machine_name: 'jarvis', state, state_at: at(0), activity: null, activity_verb: null, rate_limited_at: null });
+const tab = (id: string, state: ProgressTabRow['state']): ProgressTabRow => ({ id, name: `aba ${id}`, machine_name: 'jarvis', state, state_at: at(0), activity: null, activity_verb: null, rate_limited_at: null, automatic: false });
 const card = (over: Partial<ProgressCardRow> & { id: string }): ProgressCardRow => ({
   ref: `TER-${over.id}`, title: over.id, type: 'story', status: 'doing', position: 0, column_name: 'Fazendo',
   started_at: null, done_at: null, active_seconds: 0, tab: null, subtasks: [], pull_requests: [], auto: false, ...over,
@@ -133,5 +133,38 @@ describe('an agent that ended its turn with a report (TER-972)', () => {
     expect(() => progressResponse.parse({ epics: [e], generated_at: at(0).toISOString() })).not.toThrow();
     const { finished: _f, ...older } = e.cards[0]!.agents![0]!;
     expect(agentOnCard.parse(older).finished).toBe(false);
+  });
+});
+
+describe('automatic tabs and the feed', () => {
+  it('flags the agent of a tab an automatic run started', () => {
+    const c = aggregateCard(card({ id: '2', tab: { ...tab('t1', 'working'), automatic: true }, subtasks: [sub('3', 'todo', { tab: tab('t2', 'working') })] }), true);
+    expect(c.agents?.map((a) => [a.tab_id, a.automatic])).toEqual([['t1', true], ['t2', false]]);
+    expect(agentOnCard.parse(c.agents![0]).automatic).toBe(true);
+  });
+
+  const row = (id: string, kind: FeedRow['event']['kind'], payload: FeedRow['event']['payload'] = {}, over: Partial<FeedRow> = {}): FeedRow => ({
+    event: { id, project_id: 'p1', task_id: 't1', run_id: 'r1', kind, payload, created_at: at(Number(id)).toISOString() },
+    ref: 'TER-9', epic: 'Épico', machine: 'jarvis', account: 'pessoal', tab_id: 'tab1', branch: 'auto/ter-9',
+    ...over,
+  });
+
+  it('keeps the order it is given (newest first) and carries the facts of each line', () => {
+    const feed = feedOf([row('3', 'merged', { pr: 7, url: 'https://x/pr/7' }), row('2', 'run_started', { branch: 'auto/other' }), row('1', 'release_ok', { workflow: 'npm', version: '1.2.3' })], 'pt-BR');
+    expect(feed.map((e) => e.id)).toEqual(['3', '2', '1']);
+    expect(feed[0]).toMatchObject({ kind: 'merged', ref: 'TER-9', pr: 7, url: 'https://x/pr/7', reason_text: null });
+    expect(feed[1]).toMatchObject({ machine: 'jarvis', account: 'pessoal', branch: 'auto/other', tab_id: 'tab1' });
+    expect(feed[2]).toMatchObject({ workflow: 'npm', version: '1.2.3' });
+  });
+
+  it('writes the escalation reason in the reader language, with a fallback for an unknown one', () => {
+    const [pt, en, unknown] = [feedOf([row('1', 'escalated', { reason: 'trust_prompt' })], 'pt-BR')[0], feedOf([row('1', 'escalated', { reason: 'trust_prompt' })], 'en')[0], feedOf([row('1', 'escalated', { reason: 'novo' })], 'pt-BR')[0]];
+    expect(pt.reason_text).toContain('confiança');
+    expect(en.reason_text).not.toBe(pt.reason_text);
+    expect(unknown.reason_text).toBe('O trabalho automático parou e espera você.');
+  });
+
+  it('names the branch a merge landed on', () => {
+    expect(feedOf([row('1', 'merged', { base: 'main', branch: 'zzz' })], 'pt-BR')[0].branch).toBe('main');
   });
 });

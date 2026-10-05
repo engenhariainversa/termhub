@@ -67,5 +67,12 @@
   "Um workflow de publicação falhou depois do merge; confira a execução.": "A publishing workflow failed after the merge; check the run.",
   "O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.": "The deploy failed after the merge and automatic work on the project could not be paused; pause the project and check the deploy.",
   "O CI do PR continua falhando depois das tentativas de correção; confira o PR.": "The PR's CI is still failing after the fix attempts; check the PR.",
-  "CI vermelho depois das tentativas de correção": "CI still red after the fix attempts"
+  "CI vermelho depois das tentativas de correção": "CI still red after the fix attempts",
+  "Deploy concluído ({{epic}}): {{url}}": "Deploy finished ({{epic}}): {{url}}",
+  "Publicado {{package}} {{version}}": "Published {{package}} {{version}}",
+  "Publicado {{package}}": "Published {{package}}",
+  "Conta {{account}} no limite até {{time}}": "Account {{account}} at its limit until {{time}}",
+  "Conta {{account}} no limite": "Account {{account}} at its limit",
+  "Conta {{account}} voltou a funcionar": "Account {{account}} is working again",
+  "padrão": "default"
 }
