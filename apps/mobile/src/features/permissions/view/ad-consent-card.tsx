@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { AppText, Button } from '@/ui';
 import { PERMISSIONS_MSG as MSG } from '../model/messages';
 import { showAdCard } from '../viewmodel/createPermissionsStore';
@@ -7,6 +8,8 @@ import { usePermissionsStore } from '../viewmodel/usePermissionsStore';
 /** The ad measurement consent (permission prompts spec §3.4), on Home until decided: "Continuar"
  * always opens ATT on iOS; Android has no ATT, so it keeps "Permitir" / "Agora não". */
 export function AdConsentCard() {
+  // Re-renders on a language change; PERMISSIONS_MSG's getters read it.
+  useTranslation();
   const visible = usePermissionsStore(showAdCard);
   const acceptAds = usePermissionsStore((s) => s.acceptAds);
   const platform = usePermissionsStore((s) => s.platform);

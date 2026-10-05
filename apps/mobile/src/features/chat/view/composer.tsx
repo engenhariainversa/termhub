@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { MAX_ATTACHMENTS_PER_MESSAGE, type TChatAttachment } from '@/services/api/contract';
+import { useTranslation } from '@/i18n';
 import { Icon, type IconName } from '@/ui';
 import { onChatFiles, takeChatFiles } from '../model/chat-inbox';
 import { CHAT_MSG } from '../model/messages';
@@ -148,6 +149,7 @@ function RoundButton({ label, icon, onPress, onLongPress, disabled = false, fill
  * sent and comes back if the send fails; the chips only go once the server accepted.
  */
 export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses, replyTo = null, onCancelReply, disabled = false, onInterrupt, inbox }: Props) {
+  const { t } = useTranslation();
   const [text, setText] = useState('');
   const [height, setHeight] = useState(MIN_HEIGHT);
   // Latched: once the text wraps the buttons stay below until the box is emptied. Leaving as soon as
@@ -253,7 +255,7 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   const showSend = hasText || hasChips || voice.state === 'off';
   const sendDisabled = !canSend || busy;
   const statusText = busy
-    ? 'transcrevendo…'
+    ? t('transcrevendo…')
     : attachments.uploading
       ? CHAT_MSG.attachmentUploading
       : invalid
@@ -306,14 +308,14 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
         >
           {recording ? (
             <>
-              <RoundButton label="Cancelar gravação" icon={CANCEL_ICON} onPress={voice.cancel} fill="bg-app-surface" tone="text" />
+              <RoundButton label={t('Cancelar gravação')} icon={CANCEL_ICON} onPress={voice.cancel} fill="bg-app-surface" tone="text" />
               <View className="flex-1 flex-row items-center gap-2">
                 <RecordingWave level={voice.level} seconds={voice.seconds} />
                 <Text className="text-xs text-app-muted">{formatClock(voice.seconds)}</Text>
               </View>
-              <RoundButton label="Parar" icon={STOP_ICON} onPress={voice.stop} fill="bg-app-bg" tone="text" />
+              <RoundButton label={t('Parar')} icon={STOP_ICON} onPress={voice.stop} fill="bg-app-bg" tone="text" />
               <RoundButton
-                label="Parar e enviar"
+                label={t('Parar e enviar')}
                 icon={SEND_ICON}
                 onPress={() => {
                   sendAfterDictation.current = true;
@@ -328,7 +330,7 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
               <Pressable
                 ref={attachRef}
                 accessibilityRole="button"
-                accessibilityLabel="Anexar"
+                accessibilityLabel={t('Anexar')}
                 accessibilityState={{ disabled: attachOff }}
                 disabled={attachOff}
                 onPress={openMenu}
@@ -345,11 +347,11 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
               ) : null}
               {/* The microphone is a plain symbol, like the one next to ChatGPT's box; ↑ is the filled
                   circle in the text colour, so it inverts with the theme (white on the dark one). */}
-              {showMic ? <RoundButton label="Ditar" icon={MIC_ICON} onPress={voice.start} disabled={micDisabled} tone="text" /> : null}
+              {showMic ? <RoundButton label={t('Ditar')} icon={MIC_ICON} onPress={voice.start} disabled={micDisabled} tone="text" /> : null}
               {onInterrupt ? (
-                <RoundButton label="Interromper" icon={STOP_ICON} onPress={onInterrupt} onLongPress={() => void submit()} disabled={disabled} fill="bg-app-text" tone="bg" />
+                <RoundButton label={t('Interromper')} icon={STOP_ICON} onPress={onInterrupt} onLongPress={() => void submit()} disabled={disabled} fill="bg-app-text" tone="bg" />
               ) : showSend ? (
-                <RoundButton label="Enviar" icon={SEND_ICON} onPress={() => void submit()} disabled={sendDisabled} fill="bg-app-text" tone="bg" />
+                <RoundButton label={t('Enviar')} icon={SEND_ICON} onPress={() => void submit()} disabled={sendDisabled} fill="bg-app-text" tone="bg" />
               ) : null}
             </>
           )}
@@ -364,8 +366,8 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
               value={text}
               onChangeText={changeText}
               editable={!disabled}
-              placeholder="Mensagem"
-              accessibilityLabel="Mensagem"
+              placeholder={t('Mensagem')}
+              accessibilityLabel={t('Mensagem')}
               multiline
               onLayout={onInputLayout}
               scrollEnabled={height >= MAX_HEIGHT}

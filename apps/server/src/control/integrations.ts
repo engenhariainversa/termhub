@@ -78,10 +78,10 @@ async function repoIntegration(ctx: ControlContext, repo: RepoBlock | null): Pro
 }
 
 /** The project's repository setup (integration, `owner/repo`, base branch, deploy workflow). */
-export async function getProjectSetup(ctx: ControlContext, input: { project_id: string }): Promise<{ project_id: string; repo: RepoBlock | null; integration: IntegrationOut | null; updated_at: string | null }> {
+export async function getProjectSetup(ctx: ControlContext, input: { project_id: string }): Promise<{ project_id: string; repo: RepoBlock | null; automation: ProjectSetupData['automation']; integration: IntegrationOut | null; updated_at: string | null }> {
   const { project } = await ctx.scoped.project(input.project_id);
   const setup = await ctx.repos.projectSetup.get(project.id);
-  return { project_id: project.id, repo: setup.data.repo, integration: await repoIntegration(ctx, setup.data.repo), updated_at: setup.updated_at };
+  return { project_id: project.id, repo: setup.data.repo, automation: setup.data.automation, integration: await repoIntegration(ctx, setup.data.repo), updated_at: setup.updated_at };
 }
 
 /**

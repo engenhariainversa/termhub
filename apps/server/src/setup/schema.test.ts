@@ -75,3 +75,38 @@ describe('setup ai block (TER-589)', () => {
     expect(d.runner.worktree).toBe(false);
   });
 });
+
+describe('setup automation block (TER-879)', () => {
+  it('a setup saved before the block reads automation as off with the spec defaults', () => {
+    const s = normalizeSetup({ repo: null }, 2);
+    expect(s.automation).toEqual({
+      enabled: false, types: ['story', 'task', 'bug'], autonomy: 'pr', release_paths: [], store_paths: [],
+      release_workflows: [], epic_branch_pattern: 'epic/{ref}-{slug}', worktrees_dir: '~/.termhub/worktrees',
+      allowed_tools: null, max_parallel: null, resume_max: 3, fix_attempts: 3, daily_budget_usd: null,
+      summary_hour: null, prompts: { implementer: null, integrator: null, fixer: null },
+    });
+  });
+
+  it('refuses an epic branch pattern without {ref}', () => {
+    expect(setupInputSchema.safeParse({ automation: { epic_branch_pattern: 'epic/{slug}' } }).success).toBe(false);
+    expect(setupInputSchema.safeParse({ automation: { epic_branch_pattern: 'e/{ref}' } }).success).toBe(true);
+  });
+
+  it('refuses epic and subtask in types', () => {
+    expect(setupInputSchema.safeParse({ automation: { types: ['epic'] } }).success).toBe(false);
+    expect(setupInputSchema.safeParse({ automation: { types: ['subtask'] } }).success).toBe(false);
+    expect(setupInputSchema.safeParse({ automation: { types: ['spike', 'bug'] } }).success).toBe(true);
+    expect(setupInputSchema.safeParse({ automation: { types: [] } }).success).toBe(false);
+  });
+
+  it('caps custom prompts at 1200 characters', () => {
+    expect(setupInputSchema.safeParse({ automation: { prompts: { fixer: 'x'.repeat(1200) } } }).success).toBe(true);
+    expect(setupInputSchema.safeParse({ automation: { prompts: { fixer: 'x'.repeat(1201) } } }).success).toBe(false);
+  });
+
+  it('keeps the other blocks when automation is invalid', () => {
+    const d = normalizeSetup({ automation: { enabled: 'yes' }, runner: { worktree: false } }, 2);
+    expect(d.automation.enabled).toBe(false);
+    expect(d.runner.worktree).toBe(false);
+  });
+});

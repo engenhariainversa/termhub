@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { useTranslation } from '@/i18n';
 import { Icon, type IconName } from '@/ui';
 
 /** Released past this, the drag answers the message. */
@@ -38,6 +39,7 @@ function travel(t: number): number {
  * or TalkBack, so the row also offers "Responder" as an accessibility action.
  */
 export function SwipeToReply({ onReply, children }: { onReply(): void; children: ReactNode }) {
+  const { t } = useTranslation();
   const x = useSharedValue(0);
   const armed = useSharedValue(false);
   const still = useReducedMotion();
@@ -74,7 +76,7 @@ export function SwipeToReply({ onReply, children }: { onReply(): void; children:
     <GestureDetector gesture={pan}>
       <View
         testID="swipe-to-reply-row"
-        accessibilityActions={[{ name: 'reply', label: 'Responder' }]}
+        accessibilityActions={[{ name: 'reply', label: t('Responder') }]}
         onAccessibilityAction={(e) => {
           if (e.nativeEvent.actionName === 'reply') onReply();
         }}
