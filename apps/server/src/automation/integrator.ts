@@ -73,7 +73,8 @@ export async function integrateEpic(deps: IntegratorDeps, epic: Task, setup: Pro
   const project = await repos.projects.findById(epic.project_id);
   if (!project?.owner_id || (await isPaused(repos, project.owner_id, project.id))) return;
 
-  const runs = await repos.automationRuns.triggeredStatuses(epic.id, 'integrator');
+  // a run cancelled by a pause or a sweep did no integration: it does not count against the cap
+  const runs = (await repos.automationRuns.triggeredStatuses(epic.id, 'integrator')).filter((s) => s !== 'cancelled');
   if (runs.includes('done') || runs.length >= INTEGRATOR_CAP || runs.some((s) => (ACTIVE_RUN_STATUSES as readonly string[]).includes(s))) return;
 
   let epicBranch: string;
@@ -87,6 +88,9 @@ export async function integrateEpic(deps: IntegratorDeps, epic: Task, setup: Pro
   const cards = (board ?? (await repos.tasks.listByProject(project.id))).filter((t) => t.epic_id === epic.id && t.parent_id === null && t.type !== 'epic');
   const prs = await repos.taskPullRequests.listByTasks(cards.map((c) => c.id));
   if (!epicReady({ cards, prs, epicBranch })) return;
+  // a person closed or merged the epic PR: that is their decision, and termhub does not open another
+  const epicPrs = await repos.taskPullRequests.listByTasks([epic.id]);
+  if (epicPrs.some((p) => p.head_ref === epicBranch && p.base_ref === baseBranch && p.state !== 'open')) return;
 
   const access = await githubAccess(repos, project, setup);
   if (!access) return;

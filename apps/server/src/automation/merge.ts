@@ -4,6 +4,7 @@ import { askForAutomation } from '../chat/gate-runtime.js';
 import { FAILED, latestPerWorkflow, matchesWorkflow, type WorkflowRun } from '../ci/rules.js';
 import { setCiError } from '../ci/status.js';
 import type { Repositories } from '../db/repositories/index.js';
+import { ACTIVE_RUN_STATUSES } from '../db/repositories/automation-runs.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import type { TaskPullRequest } from '../db/repositories/task-pull-requests.js';
 import type { Project, Task } from '../db/repositories/types.js';
@@ -132,7 +133,7 @@ async function candidateOf(
   }
   if (!primary) return null;
   const baseBranch = base.setup.repo?.base_branch ?? 'main';
-  if (primary.type === 'epic') return epicCandidate(base, rows, tasks, primary, baseBranch);
+  if (primary.type === 'epic') return epicCandidate(deps, base, rows, tasks, primary, baseBranch);
   const epic = primary.epic_id ? await repos.tasks.findById(primary.epic_id) : undefined;
   const { epicBranch } = targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, base.setup);
   if (row.base_ref !== baseBranch && row.base_ref !== epicBranch) return null;
@@ -144,15 +145,18 @@ async function candidateOf(
 /**
  * The epic PR (spec §10.2, D20): the epic's own branch, which its integrator run worked on, into the project's
  * base branch, and naming the epic alone. Only the epic card may have its epic branch as a PR head; a card's
- * PR from that branch is still refused by `candidateOf`.
+ * PR from that branch is still refused by `candidateOf`. The server merges (or updates) it only after the
+ * integrator finished (D20: the integrator merges the base in and pushes, then the server merges): an
+ * integrator run ended `done` and none is active. Until then it is not a candidate — no update-branch, no merge.
  */
-function epicCandidate(
+async function epicCandidate(
+  deps: MergeDeps,
   base: Omit<PullCtx, 'rows' | 'tasks' | 'primary' | 'epicBranch' | 'baseBranch'>,
   rows: TaskPullRequest[],
   tasks: Task[],
   epic: Task,
   baseBranch: string,
-): PullCtx | null {
+): Promise<PullCtx | null> {
   const row = rows[0]!;
   if (tasks.length !== 1) return null;
   let own: string;
@@ -162,6 +166,8 @@ function epicCandidate(
     return null;
   }
   if (own === baseBranch || row.head_ref !== own || row.base_ref !== baseBranch) return null;
+  const integrators = await deps.repos.automationRuns.triggeredStatuses(epic.id, 'integrator');
+  if (!integrators.includes('done') || integrators.some((s) => (ACTIVE_RUN_STATUSES as readonly string[]).includes(s))) return null;
   return { ...base, rows, tasks, primary: epic, epicBranch: own, baseBranch };
 }
 

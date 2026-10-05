@@ -170,6 +170,22 @@ describe('integrateEpic', () => {
     expect(w.startTriggered).toHaveBeenCalledTimes(1);
   });
 
+  it('a person closed or merged the epic PR: termhub opens no other and starts nothing', async () => {
+    for (const state of ['closed', 'merged'] as const) {
+      const w = world({ prs: [pr('c1', 7), pr('c2', 8), pr('e1', 42, { head_ref: EPIC_BRANCH, base_ref: 'main', state })], runs: ['blocked'] });
+      await integrateEpic(w.deps, EPIC, setupWith());
+      expect(w.gh.findOpenPull).not.toHaveBeenCalled();
+      expect(w.gh.openPull).not.toHaveBeenCalled();
+      expect(w.startTriggered).not.toHaveBeenCalled();
+    }
+  });
+
+  it('runs cancelled by a pause or a sweep do not count against the cap', async () => {
+    const w = world({ runs: ['cancelled', 'cancelled'] });
+    await integrateEpic(w.deps, EPIC, setupWith());
+    expect(w.startTriggered).toHaveBeenCalledTimes(1);
+  });
+
   it('not ready (a card still doing, a card PR still open): no PR, no run', async () => {
     for (const o of [{ board: [EPIC, card('c1', 'TER-5', { status: 'doing' })] }, { prs: [pr('c1', 7, { state: 'open' })] }]) {
       const w = world(o);
