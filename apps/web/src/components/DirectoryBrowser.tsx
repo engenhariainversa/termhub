@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import type { FsListing, FsRoot } from '../lib/types';
+import { i18n, useTranslation } from '../i18n';
 
 interface Props {
   machineId: string;
@@ -24,12 +25,13 @@ function rootTitle(r: FsRoot): string {
   const size = formatKb(r.size_kb);
   const parts = [r.path];
   if (r.source) parts.push(r.source);
-  if (avail && size) parts.push(`${avail} livres de ${size}`);
+  if (avail && size) parts.push(i18n.t('{{avail}} livres de {{size}}', { avail, size }));
   return parts.join(' · ');
 }
 
 /** Navegador de pastas de uma máquina: discos/mounts no topo, breadcrumb e lista de subpastas. */
 export function DirectoryBrowser({ machineId, initialPath, onSelect, onClose }: Props) {
+  const { t } = useTranslation();
   const [listing, setListing] = useState<FsListing | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,13 +49,13 @@ export function DirectoryBrowser({ machineId, initialPath, onSelect, onClose }: 
         setListing(await api.machines.browse(machineId, path));
         setFilter('');
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : 'Erro ao listar diretórios');
+        setError(err instanceof ApiError ? err.message : t('Erro ao listar diretórios'));
         // mantém a listagem anterior para o usuário poder voltar
       } finally {
         setLoading(false);
       }
     },
-    [machineId],
+    [machineId, t],
   );
 
   useEffect(() => {
@@ -72,7 +74,7 @@ export function DirectoryBrowser({ machineId, initialPath, onSelect, onClose }: 
       setNewName(null);
       await load(path);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao criar a pasta');
+      setError(err instanceof ApiError ? err.message : t('Erro ao criar a pasta'));
     } finally {
       setCreating(false);
     }
@@ -102,7 +104,7 @@ export function DirectoryBrowser({ machineId, initialPath, onSelect, onClose }: 
             </button>
           );
         })}
-        {!listing && loading && <span className="px-1 text-xs text-fg-dim">Conectando à máquina…</span>}
+        {!listing && loading && <span className="px-1 text-xs text-fg-dim">{t('Conectando à máquina…')}</span>}
       </div>
 
       {/* breadcrumb */}
@@ -128,12 +130,12 @@ export function DirectoryBrowser({ machineId, initialPath, onSelect, onClose }: 
 
       {/* filtro + opções */}
       <div className="flex items-center gap-2 border-b border-line px-2 py-1.5">
-        <input className="input !py-1 text-xs" placeholder="filtrar pastas…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <input className="input !py-1 text-xs" placeholder={t('filtrar pastas…')} value={filter} onChange={(e) => setFilter(e.target.value)} />
         <label className="flex shrink-0 items-center gap-1 text-xs text-fg-muted">
-          <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> ocultas
+          <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> {t('ocultas')}
         </label>
-        <button type="button" className="btn-ghost shrink-0 !py-1 text-xs" disabled={!listing} onClick={() => setNewName((n) => (n === null ? '' : null))} title="Criar uma subpasta na pasta atual">
-          + Nova pasta
+        <button type="button" className="btn-ghost shrink-0 !py-1 text-xs" disabled={!listing} onClick={() => setNewName((n) => (n === null ? '' : null))} title={t('Criar uma subpasta na pasta atual')}>
+          {t('+ Nova pasta')}
         </button>
       </div>
       {newName !== null && (
@@ -141,7 +143,7 @@ export function DirectoryBrowser({ machineId, initialPath, onSelect, onClose }: 
           <span className="shrink-0 font-mono text-xs text-fg-dim">{listing?.path === '/' ? '/' : `${listing?.path}/`}</span>
           <input
             className="input !py-1 font-mono text-xs"
-            placeholder="nome-da-pasta"
+            placeholder={t('nome-da-pasta')}
             value={newName}
             autoFocus
             onChange={(e) => setNewName(e.target.value)}
@@ -156,10 +158,10 @@ export function DirectoryBrowser({ machineId, initialPath, onSelect, onClose }: 
             }}
           />
           <button type="button" className="btn-primary shrink-0 !py-1 text-xs" disabled={creating || !newName.trim()} onClick={() => void createFolder()}>
-            {creating ? 'Criando…' : 'Criar'}
+            {creating ? t('Criando…') : t('Criar')}
           </button>
           <button type="button" className="btn-ghost shrink-0 !py-1 text-xs" onClick={() => setNewName(null)}>
-            Cancelar
+            {t('Cancelar')}
           </button>
         </div>
       )}
@@ -179,7 +181,7 @@ export function DirectoryBrowser({ machineId, initialPath, onSelect, onClose }: 
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-xs hover:bg-bg-3"
             onClick={() => void load(e.path)}
             onDoubleClick={() => onSelect(e.path)}
-            title={`${e.path} (duplo clique seleciona)`}
+            title={t('{{path}} (duplo clique seleciona)', { path: e.path })}
           >
             <span className="text-fg-dim" aria-hidden>
               ▸
@@ -187,8 +189,8 @@ export function DirectoryBrowser({ machineId, initialPath, onSelect, onClose }: 
             <span className="truncate">{e.name}</span>
           </button>
         ))}
-        {listing && !loading && entries.length === 0 && !error && <p className="px-3 py-2 text-xs text-fg-dim">{listing.entries.length ? 'Nenhuma pasta com esse filtro' : 'Sem subpastas'}</p>}
-        {loading && listing && <p className="px-3 py-2 text-xs text-fg-dim">Carregando…</p>}
+        {listing && !loading && entries.length === 0 && !error && <p className="px-3 py-2 text-xs text-fg-dim">{listing.entries.length ? t('Nenhuma pasta com esse filtro') : t('Sem subpastas')}</p>}
+        {loading && listing && <p className="px-3 py-2 text-xs text-fg-dim">{t('Carregando…')}</p>}
       </div>
 
       {/* rodapé */}
@@ -198,10 +200,10 @@ export function DirectoryBrowser({ machineId, initialPath, onSelect, onClose }: 
         </span>
         <div className="flex shrink-0 gap-1">
           <button type="button" className="btn-ghost !py-1 text-xs" onClick={onClose}>
-            Fechar
+            {t('Fechar')}
           </button>
           <button type="button" className="btn-primary !py-1 text-xs" disabled={!listing} onClick={() => listing && onSelect(listing.path)}>
-            Usar esta pasta
+            {t('Usar esta pasta')}
           </button>
         </div>
       </div>

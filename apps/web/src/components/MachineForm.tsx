@@ -9,6 +9,7 @@ import { useData } from '../lib/data';
 import type { Machine, User } from '../lib/types';
 import { TYPE_LABEL } from '../lib/machine-status';
 import { api, ApiError } from '../lib/api';
+import { Trans, useTranslation } from '../i18n';
 
 interface Props {
   open: boolean;
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function CopyButton({ text }: { text: string }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -28,12 +30,13 @@ export function CopyButton({ text }: { text: string }) {
         window.setTimeout(() => setCopied(false), 1500);
       }}
     >
-      {copied ? 'copiado' : 'copiar'}
+      {copied ? t('copiado') : t('copiar')}
     </button>
   );
 }
 
 export function MachineForm({ open, onClose, machine }: Props) {
+  const { t } = useTranslation();
   const { updateMachine, refresh, claimLocal } = useData();
   const { user: me } = useAuth();
   const isAdmin = !!me?.role_info?.is_admin;
@@ -90,7 +93,7 @@ export function MachineForm({ open, onClose, machine }: Props) {
       await updateMachine(machine.id, input);
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao salvar');
+      setError(err instanceof ApiError ? err.message : t('Erro ao salvar'));
     } finally {
       setBusy(false);
     }
@@ -98,14 +101,14 @@ export function MachineForm({ open, onClose, machine }: Props) {
 
   const rotateToken = async () => {
     if (!machine) return;
-    if (!window.confirm('Gerar um novo token? O agente atual será desconectado.')) return;
+    if (!window.confirm(t('Gerar um novo token? O agente atual será desconectado.'))) return;
     setRotating(true);
     setError(null);
     try {
       const { agent_token } = await api.machines.rotateAgentToken(machine.id);
       setEnrollment({ machine, token: agent_token });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao gerar token');
+      setError(err instanceof ApiError ? err.message : t('Erro ao gerar token'));
     } finally {
       setRotating(false);
     }
@@ -123,7 +126,7 @@ export function MachineForm({ open, onClose, machine }: Props) {
           <AgentEnrollment machine={enrollment.machine} token={enrollment.token} onConnected={onConnectedEnrolled} />
           <div className="flex justify-end pt-2">
             <button type="button" className="btn-primary" onClick={onClose}>
-              Fechar
+              {t('Fechar')}
             </button>
           </div>
         </div>
@@ -132,43 +135,57 @@ export function MachineForm({ open, onClose, machine }: Props) {
   }
 
   return (
-    <Modal title={machine ? 'Editar máquina' : 'Nova máquina'} open={open} onClose={onClose}>
+    <Modal title={machine ? t('Editar máquina') : t('Nova máquina')} open={open} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <div>
-          <label className="label" htmlFor="machine-name">Nome</label>
-          <input id="machine-name" className="input" value={name} onChange={(e) => setName(e.target.value)} required autoFocus placeholder="ex.: meu notebook" />
+          <label className="label" htmlFor="machine-name">
+            {t('Nome')}
+          </label>
+          <input id="machine-name" className="input" value={name} onChange={(e) => setName(e.target.value)} required autoFocus placeholder={t('ex.: meu notebook')} />
         </div>
         <div>
-          <label className="label" htmlFor="machine-subtitle">Subtítulo</label>
+          <label className="label" htmlFor="machine-subtitle">
+            {t('Subtítulo')}
+          </label>
           <input
             id="machine-subtitle"
             className="input"
             value={subtitle}
             onChange={(e) => setSubtitle(e.target.value)}
             maxLength={80}
-            placeholder="ex.: MacBook do escritório"
+            placeholder={t('ex.: MacBook do escritório')}
           />
-          <p className="mt-1 text-[11px] text-fg-dim">Opcional. Aparece só para você, nunca na cidade pública.</p>
+          <p className="mt-1 text-[11px] text-fg-dim">{t('Opcional. Aparece só para você, nunca na cidade pública.')}</p>
         </div>
         {machine && type !== 'agent' && (
           <p className="rounded-md border border-line bg-bg p-2 text-xs text-fg-dim">
-            Tipo: <span className="text-fg-muted">{TYPE_LABEL[type]}</span>. Máquinas novas só podem ser adicionadas com o agente
-            {type === 'local' && ' — esta é a própria máquina onde o termhub roda, não o seu computador'}.
+            {type === 'local' ? (
+              <Trans
+                i18nKey="Tipo: <0>{{type}}</0>. Máquinas novas só podem ser adicionadas com o agente — esta é a própria máquina onde o termhub roda, não o seu computador."
+                values={{ type: t(TYPE_LABEL[type]) }}
+                components={[<span key="t" className="text-fg-muted" />]}
+              />
+            ) : (
+              <Trans
+                i18nKey="Tipo: <0>{{type}}</0>. Máquinas novas só podem ser adicionadas com o agente."
+                values={{ type: t(TYPE_LABEL[type]) }}
+                components={[<span key="t" className="text-fg-muted" />]}
+              />
+            )}
           </p>
         )}
         {type === 'agent' && (
           <>
             {!machine && (
               <p className="rounded-md border border-line bg-bg p-2 text-xs text-fg-dim">
-                Serve para o seu próprio computador ou para um servidor: um cliente leve (o agente) roda na máquina e conecta ao termhub. Nada de
-                SSH, nada de portas abertas.
+                {t('Serve para o seu próprio computador ou para um servidor: um cliente leve (o agente) roda na máquina e conecta ao termhub. Nada de SSH, nada de portas abertas.')}
               </p>
             )}
             <label className="flex items-start gap-2 text-sm text-fg-muted">
               <input type="checkbox" className="mt-0.5 accent-accent" checked={isLocal} onChange={(e) => setIsLocal(e.target.checked)} />
               <span>
-                É o computador que estou usando agora
-                <span className="block text-[11px] text-fg-dim">Aparece só neste navegador; em outros computadores ela fica oculta.</span>
+                {t('É o computador que estou usando agora')}
+                <span className="block text-[11px] text-fg-dim">{t('Aparece só neste navegador; em outros computadores ela fica oculta.')}</span>
               </span>
             </label>
           </>
@@ -176,23 +193,23 @@ export function MachineForm({ open, onClose, machine }: Props) {
         {machine && type === 'agent' && (
           <div className="flex items-center gap-2">
             <button type="button" className="btn-ghost border border-line px-2 py-1 text-xs" disabled={rotating} onClick={() => void rotateToken()}>
-              {rotating ? 'Gerando…' : 'Rotacionar token'}
+              {rotating ? t('Gerando…') : t('Rotacionar token')}
             </button>
           </div>
         )}
         {type === 'ssh' && (
           <>
             <div>
-              <label className="label">Host</label>
-              <input className="input" value={host} onChange={(e) => setHost(e.target.value)} required placeholder="192.168.1.10 ou nome.local" />
+              <label className="label">{t('Host')}</label>
+              <input className="input" value={host} onChange={(e) => setHost(e.target.value)} required placeholder={t('192.168.1.10 ou nome.local')} />
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="col-span-2">
-                <label className="label">Usuário SSH</label>
-                <input className="input" value={sshUser} onChange={(e) => setSshUser(e.target.value)} placeholder="pedro" />
+                <label className="label">{t('Usuário SSH')}</label>
+                <input className="input" value={sshUser} onChange={(e) => setSshUser(e.target.value)} /* i18n-ignore */ placeholder="pedro" />
               </div>
               <div>
-                <label className="label">Porta</label>
+                <label className="label">{t('Porta')}</label>
                 <input className="input" value={sshPort} onChange={(e) => setSshPort(e.target.value)} inputMode="numeric" />
               </div>
             </div>
@@ -200,16 +217,16 @@ export function MachineForm({ open, onClose, machine }: Props) {
         )}
         {machine && isAdmin && owners && (
           <div>
-            <label className="label">Dono</label>
+            <label className="label">{t('Dono')}</label>
             <select className="input" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-              <option value="">— sem dono (só visível em "todas as máquinas") —</option>
+              <option value="">{t('— sem dono (só visível em "todas as máquinas") —')}</option>
               {owners.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name} — {u.email}
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-[11px] text-fg-dim">Projetos, tabs, tarefas, notas e contas de IA desta máquina passam a ser vistos pelo novo dono.</p>
+            <p className="mt-1 text-[11px] text-fg-dim">{t('Projetos, tabs, tarefas, notas e contas de IA desta máquina passam a ser vistos pelo novo dono.')}</p>
           </div>
         )}
         {machine && machine.type === 'agent' && <AgentUpdateCard machine={machine} />}
@@ -218,10 +235,10 @@ export function MachineForm({ open, onClose, machine }: Props) {
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>
-            Cancelar
+            {t('Cancelar')}
           </button>
           <button type="submit" className="btn-primary" disabled={busy}>
-            {machine ? 'Salvar' : 'Criar'}
+            {machine ? t('Salvar') : t('Criar')}
           </button>
         </div>
       </form>

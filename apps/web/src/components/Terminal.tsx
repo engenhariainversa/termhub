@@ -8,6 +8,7 @@ import { wheelLines } from '../lib/wheel-lines';
 import { api, ApiError } from '../lib/api';
 import { MAX_RECORDING_MS, VoiceRecorder, canRecordVoice, micErrorMessage, resumeTranscription, transcribeClip, type Clip, type TranscribePhase } from '../lib/voice-recorder';
 import { voiceStore } from '../lib/voice-store';
+import { i18n, tk, useTranslation } from '../i18n';
 
 interface Props {
   tabId: string;
@@ -42,12 +43,13 @@ const THEME = {
   brightWhite: '#f0f6fc',
 };
 
+/** pt-BR keys, shown with `t(STATE_LABEL[state])`. */
 const STATE_LABEL: Record<ConnectionState, string> = {
-  connecting: 'Conectando…',
-  connected: 'Conectado',
-  reconnecting: 'Reconectando…',
-  offline: 'Offline',
-  closed: 'Sessão encerrada',
+  connecting: tk('Conectando…'),
+  connected: tk('Conectado'),
+  reconnecting: tk('Reconectando…'),
+  offline: tk('Offline'),
+  closed: tk('Sessão encerrada'),
 };
 
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -143,6 +145,7 @@ export function isAppShortcut(e: KeyboardEvent): boolean {
 }
 
 export function TerminalView({ tabId, active, focused, onConnected, onExit }: Props) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -249,8 +252,8 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
       if (uploading || files.length === 0) return;
       uploading = true;
       const total = files.reduce((n, f) => n + f.size, 0);
-      const what = files.length === 1 ? (files[0].name || 'arquivo') : `${files.length} arquivos`;
-      showNotice(`Enviando ${what}… ${formatBytes(total)}`, 'info');
+      const what = files.length === 1 ? files[0].name || i18n.t('arquivo') : i18n.t('{{count}} arquivos', { count: files.length });
+      showNotice(i18n.t('Enviando {{what}}… {{size}}', { what, size: formatBytes(total) }), 'info');
       const paths: string[] = [];
       try {
         for (const f of files) {
@@ -258,10 +261,10 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
           paths.push(r.path);
         }
         term.paste(`${paths.join(' ')} `);
-        showNotice(files.length === 1 ? 'Arquivo anexado' : `${files.length} arquivos anexados`, 'ok', 2500);
+        showNotice(i18n.t('{{count}} arquivos anexados', { count: files.length }), 'ok', 2500);
       } catch (err) {
         if (paths.length) term.paste(`${paths.join(' ')} `); // keep what did go through
-        showNotice(err instanceof ApiError ? err.message : 'Falha ao enviar o arquivo', 'danger', 5000);
+        showNotice(err instanceof ApiError ? err.message : i18n.t('Falha ao enviar o arquivo'), 'danger', 5000);
       } finally {
         uploading = false;
       }
@@ -450,9 +453,9 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
         term.paste(text);
         // Enter goes as a separate write after the (possibly bracketed) paste so the app takes it as submit, not as pasted text
         window.setTimeout(() => connRef.current?.send('\r'), 80);
-        showNotice('Texto ditado enviado', 'ok', 2500);
+        showNotice(i18n.t('Texto ditado enviado'), 'ok', 2500);
       } else {
-        showNotice('Nenhuma fala reconhecida', 'info', 3000);
+        showNotice(i18n.t('Nenhuma fala reconhecida'), 'info', 3000);
       }
       term.focus();
       void voiceStore.clear(tabId);
@@ -482,7 +485,7 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
         }
         deliver(result.text ?? '');
       } catch (err) {
-        showNotice(err instanceof Error ? err.message : 'Falha ao transcrever o áudio', 'danger', 6000);
+        showNotice(err instanceof Error ? err.message : i18n.t('Falha ao transcrever o áudio'), 'danger', 6000);
         setPending({ audio: clip.audio, seconds: clip.seconds });
       } finally {
         setPhase(null);
@@ -501,7 +504,7 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
     recorderRef.current = null;
     const clip = await rec.stop();
     if (clip.audio.size < MIN_CLIP_BYTES) {
-      showNotice('Gravação muito curta', 'info', 2500);
+      showNotice(i18n.t('Gravação muito curta'), 'info', 2500);
       void voiceStore.clear(tabId);
       setVoice('idle');
       return;
@@ -528,7 +531,7 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
     const startedAt = Date.now();
     stopClock();
     clockTimer.current = window.setInterval(() => setRecorded(Math.floor((Date.now() - startedAt) / 1000)), 500);
-    showNotice(`Gravando… fale e clique em Parar (${VOICE_SHORTCUT})`, 'info');
+    showNotice(i18n.t('Gravando… fale e clique em Parar ({{shortcut}})', { shortcut: VOICE_SHORTCUT }), 'info');
   }, [setVoice, showNotice, stopVoice, tabId]);
 
   const cancelVoice = useCallback(() => {
@@ -536,7 +539,7 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
     recorderRef.current = null;
     stopClock();
     setVoice('idle');
-    showNotice('Gravação descartada', 'info', 2000);
+    showNotice(i18n.t('Gravação descartada'), 'info', 2000);
     termRef.current?.focus();
   }, [setVoice, showNotice]);
 
@@ -627,7 +630,7 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
       <div ref={containerRef} className="relative min-h-0 flex-1 bg-bg" onClick={() => termRef.current?.focus()}>
         {dragging && (
           <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-md border-2 border-dashed border-accent bg-accent/10 text-sm font-medium text-fg">
-            Solte para anexar ao terminal
+            {t('Solte para anexar ao terminal')}
           </div>
         )}
         {/* Dictation: floats over the terminal (bottom right, clear of the scrollbar); expands into a pill while busy. */}
@@ -635,20 +638,20 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
           <div className="absolute bottom-3 right-5 z-10 flex items-center gap-2 text-[11px]" onMouseDown={(e) => e.preventDefault()}>
             {voice === 'idle' && pending && (
               <div className="flex h-8 items-center gap-2 rounded-full border border-warn/50 bg-bg-2/95 pl-3 pr-1 shadow-lg backdrop-blur">
-                <span className="text-fg">Gravação de {formatClock(Math.round(pending.seconds))} não transcrita</span>
+                <span className="text-fg">{t('Gravação de {{duration}} não transcrita', { duration: formatClock(Math.round(pending.seconds)) })}</span>
                 <button className="rounded-full bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent-hover" onClick={() => void runTranscription(pending)}>
-                  Transcrever
+                  {t('Transcrever')}
                 </button>
                 <button className="rounded-full px-2 py-1 text-fg-muted hover:bg-bg-3 hover:text-fg" onClick={discardPending}>
-                  Descartar
+                  {t('Descartar')}
                 </button>
               </div>
             )}
             {voice === 'idle' && (
               <button
                 className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-bg-2/90 text-fg-muted shadow-lg backdrop-blur hover:border-accent hover:bg-bg-3 hover:text-fg"
-                title={`Ditar: grava até ${MAX_RECORDING_MS / 60000} minutos e cola o texto no terminal (${VOICE_SHORTCUT})`}
-                aria-label="Ditar"
+                title={t('Ditar: grava até {{minutes}} minutos e cola o texto no terminal ({{shortcut}})', { minutes: MAX_RECORDING_MS / 60000, shortcut: VOICE_SHORTCUT })}
+                aria-label={t('Ditar')}
                 onClick={() => void startVoice()}
               >
                 <MicIcon size={14} />
@@ -661,10 +664,10 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
                   {formatClock(recorded)} / {formatClock(MAX_RECORDING_MS / 1000)}
                 </span>
                 <button className="rounded-full bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent-hover" onClick={() => void stopVoice()}>
-                  Parar
+                  {t('Parar')}
                 </button>
                 <button className="rounded-full px-2 py-1 text-fg-muted hover:bg-bg-3 hover:text-fg" onClick={cancelVoice}>
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
               </div>
             )}
@@ -679,12 +682,12 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
                 <span className="relative h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden="true" />
                 <span className="relative text-fg">
                   {phase?.phase === 'uploading'
-                    ? `Enviando áudio… ${Math.round(phase.fraction * 100)}%`
+                    ? t('Enviando áudio… {{percent}}%', { percent: Math.round(phase.fraction * 100) })
                     : phase?.phase === 'transcribing' && phase.eta !== null
                       ? phase.eta > 0
-                        ? `Transcrevendo… ~${phase.eta} s`
-                        : 'Transcrevendo… quase lá'
-                      : 'Transcrevendo…'}
+                        ? t('Transcrevendo… ~{{seconds}} s', { seconds: phase.eta })
+                        : t('Transcrevendo… quase lá')
+                      : t('Transcrevendo…')}
                 </span>
               </div>
             )}
@@ -693,23 +696,24 @@ export function TerminalView({ tabId, active, focused, onConnected, onExit }: Pr
       </div>
       <div className="flex h-6 shrink-0 items-center gap-2 border-t border-line bg-bg-2 px-2 text-[11px] text-fg-dim">
         <span className={`rounded px-1.5 py-px font-medium ${badge}`}>
-          {STATE_LABEL[state]}
+          {t(STATE_LABEL[state])}
           {state === 'reconnecting' && attempt > 0 ? ` (${attempt})` : ''}
         </span>
         {(state === 'offline' || state === 'closed') && (
           <button className="text-accent hover:underline" onClick={() => connRef.current?.retryNow()}>
-            Reconectar
+            {t('Reconectar')}
           </button>
         )}
         {notice ? (
           <span className={notice.tone === 'ok' ? 'text-ok' : notice.tone === 'danger' ? 'text-danger' : 'text-fg-muted'}>{notice.text}</span>
         ) : copied ? (
-          <span className="text-ok">Copiado</span>
+          <span className="text-ok">{t('Copiado')}</span>
         ) : mouseApp ? (
-          <span title={`O programa em execução está usando o mouse. Segure ${SELECT_MODIFIER} ao arrastar para selecionar texto; a seleção é copiada ao soltar.`}>
-            app usa o mouse · {SELECT_MODIFIER} + arrastar seleciona
+          <span title={t('O programa em execução está usando o mouse. Segure {{key}} ao arrastar para selecionar texto; a seleção é copiada ao soltar.', { key: SELECT_MODIFIER })}>
+            {t('app usa o mouse · {{key}} + arrastar seleciona', { key: SELECT_MODIFIER })}
           </span>
         ) : null}
+        {/* i18n-ignore */}
         <span className="ml-auto font-mono">tmux</span>
       </div>
     </div>
