@@ -56,6 +56,10 @@ const subtaskItems = z.array(z.object({ title: taskTitle, description: taskDescr
 const precedentInput = { sources: z.array(z.string().regex(MEMORY_REF)).min(1).max(10).optional(), reason: z.string().trim().min(1).max(500).optional() };
 const PRECEDENT_NOTE = 'When you send this on a precedent from memory, pass the search_memory refs you followed in sources and a short reason in the person\'s language: the chat shows it as an automatic decision. Leave both out otherwise.';
 
+/** TER-851: how the concierge relays the person's order so the tab can tell it is theirs. */
+const ON_BEHALF_NOTE =
+  "The tab's session is told who wrote each text: without on_behalf_of, what you send reads as your own words, not the person's. When you relay something the person asked for, pass on_behalf_of with the search_memory refs (message:…, kinds [\"message\"]) of their chat messages that ask for it, at most 24 h old; the tab sees their exact words next to your text. Never write in the person's name (\"<name> aqui…\", \"<name> autorizou…\"): say what to do and let the quote carry the authority.";
+
 /** The object schema a tool's arguments are validated against — by `parseArgs` and by the MCP SDK. */
 export function inputSchemaOf(tool: ToolDef) {
   const schema = z.object(tool.input);
@@ -96,7 +100,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'list_tabs',
-    description: 'List the tabs of a project (or of every project of a machine): whether the tmux session is alive, what the tool in it is doing (working, waiting_input, waiting_permission, idle, error, or waiting_background: it ended its turn while its own subagents, background shells or monitors still run — still at work, not waiting for the person), its pending question, and the task linked to it.',
+    description: 'List the tabs of a project (or of every project of a machine): whether the tmux session is alive, what the tool in it is doing (working, waiting_input, waiting_permission, idle, error, or waiting_background: it ended its turn while its own subagents, background shells or monitors still run — still at work, not waiting for the person; or finished: it ended its turn with a report and asks nothing — done, not waiting for the person), its pending question, and the task linked to it.',
     scope: 'read', resource: 'terminals', action: 'read',
     input: { project_id: id.optional(), machine_id: id.optional() },
     run: (ctx, a) => listTabs(ctx, a as { project_id?: string; machine_id?: string }),
@@ -137,7 +141,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'wait_for_state',
-    description: `Wait until the tool in a tab stops working (it finished, asks something, or needs a permission), up to timeout_seconds (default 60, max ${WAIT_MAX_SECONDS}). A tab in waiting_background (its turn ended while its own subagents, background shells or monitors still run) is still working: the wait goes on until that work reports and the agent stops for real, unless return_on_background is true. A timeout is not an error: call again to keep waiting. This is how to follow a tab (no read_screen loops or sleep); when it stops, read_last_answer for what it said.`,
+    description: `Wait until the tool in a tab stops working (it finished — state finished, a report that asks nothing —, asks something, or needs a permission), up to timeout_seconds (default 60, max ${WAIT_MAX_SECONDS}). A tab in waiting_background (its turn ended while its own subagents, background shells or monitors still run) is still working: the wait goes on until that work reports and the agent stops for real, unless return_on_background is true. A timeout is not an error: call again to keep waiting. This is how to follow a tab (no read_screen loops or sleep); when it stops, read_last_answer for what it said.`,
     scope: 'read', resource: 'terminals', action: 'read',
     input: { tab_id: id, timeout_seconds: z.number().int().min(1).max(WAIT_MAX_SECONDS).optional(), return_on_background: z.boolean().optional() },
     run: (ctx, a, signal) => waitForState(ctx, a as { tab_id: string; timeout_seconds?: number; return_on_background?: boolean }, signal),
@@ -151,10 +155,17 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'send_input',
-    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. ${PRECEDENT_NOTE}`,
+    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. ${PRECEDENT_NOTE} ${ON_BEHALF_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
-    input: { tab_id: id, text: z.string().max(INPUT_MAX_CHARS), enter: z.boolean().optional(), answering_permission: z.boolean().optional(), ...precedentInput },
-    run: (ctx, a) => sendInput(ctx, a as { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean }),
+    input: {
+      tab_id: id,
+      text: z.string().max(INPUT_MAX_CHARS),
+      enter: z.boolean().optional(),
+      answering_permission: z.boolean().optional(),
+      ...precedentInput,
+      on_behalf_of: z.array(z.string().regex(/^message:[a-z0-9]{1,64}$/)).min(1).max(3).optional(),
+    },
+    run: (ctx, a) => sendInput(ctx, a as { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean; on_behalf_of?: string[] }),
   },
   {
     name: 'send_key',

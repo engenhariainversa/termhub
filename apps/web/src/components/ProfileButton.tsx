@@ -1,5 +1,6 @@
 import { Settings as SettingsIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from '../i18n';
 import { useAuth } from '../lib/auth';
 import { viewAsLabel } from '../lib/view-as';
 import { Avatar } from './Avatar';
@@ -12,11 +13,12 @@ import { Avatar } from './Avatar';
  * with the visible name (WCAG 2.5.3).
  */
 export function ProfileButton({ variant }: { variant: 'row' | 'rail' }) {
+  const { t } = useTranslation();
   const { user, viewAs } = useAuth();
   const navigate = useNavigate();
   const open = () => navigate('/settings/profile');
   const viewing = viewAsLabel(viewAs);
-  const name = [user?.name ? `${user.name} — configurações e perfil` : 'Configurações e perfil', viewing].filter(Boolean).join(' — ');
+  const name = [user?.name ? t('{{name}} — configurações e perfil', { name: user.name }) : t('Configurações e perfil'), viewing].filter(Boolean).join(' — ');
 
   if (variant === 'rail') {
     return (

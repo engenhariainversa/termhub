@@ -13,6 +13,7 @@ import { buildCityModel, type CityModel } from '../office/model';
 import { projectCity } from '../office/project-office';
 import { OfficeScene } from '../office/scene/OfficeScene';
 import { PROGRESS_REFRESH_MS } from './ProgressPanel';
+import { i18n, useTranslation } from '../i18n';
 
 /** Two taps on the same agent within this window pin its tab instead of previewing it. */
 export const DOUBLE_TAP_MS = 300;
@@ -75,6 +76,7 @@ interface Props {
  * Only the monitor's state stream is used: no terminal connection is opened from here.
  */
 export function OfficeEmptyState({ project, tabs, machines, reachable, visible, onOpen, onNewTerminal }: Props) {
+  const { t } = useTranslation();
   const { statuses } = useData();
   const { can } = useAuth();
   const { items, tabState } = useMonitor();
@@ -88,7 +90,7 @@ export function OfficeEmptyState({ project, tabs, machines, reachable, visible, 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `items` stands for the monitor's live state (see above)
     [project, tabs, machines, statuses, reachable, tabState, items],
   );
-  const live = (t: Tab) => ({ ...t, ...pickState(tabState(t.id)) });
+  const live = (tab: Tab) => ({ ...tab, ...pickState(tabState(tab.id)) });
 
   const highlight = (tabId: string | null) => scene?.debugHover(tabId);
   const epics = useEpicsInProgress(project.id, can('tasks', 'read'));
@@ -110,32 +112,32 @@ export function OfficeEmptyState({ project, tabs, machines, reachable, visible, 
       {aside && (
         <aside
           className={`min-h-0 space-y-5 overflow-y-auto p-4 text-sm ${narrow ? 'flex-1' : 'w-80 shrink-0 border-l border-line'}`}
-          aria-label="Resumo do projeto"
+          aria-label={t('Resumo do projeto')}
         >
           {narrow && tabs.length === 0 && <Invite projectId={project.id} onNewTerminal={onNewTerminal} />}
           <EpicsSection epics={epics} onOpenAgent={(id) => tap(id, true)} onHighlight={highlight} />
           {tabs.length > 0 && (
             <section className="space-y-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Terminais</h2>
-              <p className="text-xs text-fg-dim">Nenhuma aba aberta. Clique num terminal para ver, dois cliques para fixar a aba.</p>
-              <ul className="space-y-1" aria-label="Terminais do projeto">
-                {tabs.map((t) => (
-                  <li key={t.id}>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{t('Terminais')}</h2>
+              <p className="text-xs text-fg-dim">{t('Nenhuma aba aberta. Clique num terminal para ver, dois cliques para fixar a aba.')}</p>
+              <ul className="space-y-1" aria-label={t('Terminais do projeto')}>
+                {tabs.map((tab) => (
+                  <li key={tab.id}>
                     <button
                       type="button"
                       className="flex w-full items-baseline gap-2 rounded px-2 py-1 text-left hover:bg-bg-3"
-                      onClick={(e) => tap(t.id, e.detail === 0)}
-                      onMouseEnter={() => highlight(t.id)}
+                      onClick={(e) => tap(tab.id, e.detail === 0)}
+                      onMouseEnter={() => highlight(tab.id)}
                       onMouseLeave={() => highlight(null)}
-                      onFocus={() => highlight(t.id)}
+                      onFocus={() => highlight(tab.id)}
                       onBlur={() => highlight(null)}
                     >
-                      <StateDot tab={live(t)} />
+                      <StateDot tab={live(tab)} />
                       <span className="min-w-0 flex-1 truncate">
-                        {t.name}
-                        {machines.length > 1 && <span className="text-fg-dim"> · {machines.find((m) => m.id === t.machine_id)?.name ?? ''}</span>}
+                        {tab.name}
+                        {machines.length > 1 && <span className="text-fg-dim"> · {machines.find((m) => m.id === tab.machine_id)?.name ?? ''}</span>}
                       </span>
-                      <span className="shrink-0 text-xs text-fg-muted">{tabStateText(live(t))}</span>
+                      <span className="shrink-0 text-xs text-fg-muted">{tabStateText(live(tab))}</span>
                     </button>
                   </li>
                 ))}
@@ -152,10 +154,10 @@ function pickState(t: Tab | undefined): Partial<Tab> {
   return t ? { state: t.state, state_seen_at: t.state_seen_at, state_at: t.state_at, alive: t.alive } : {};
 }
 
-/** The words the office's figures stand for: trabalhando, esperando você, aguardando segundo plano, parado. */
+/** The words the office's figures stand for: trabalhando, esperando você, aguardando segundo plano, concluído, parado. */
 export function tabStateText(t: Pick<Tab, 'kind' | 'alive' | 'state'>): string {
-  if (t.kind === 'simulator') return t.alive ? 'simulador ligado' : 'simulador desligado';
-  if (!t.alive) return 'sem sessão';
+  if (t.kind === 'simulator') return t.alive ? i18n.t('simulador ligado') : i18n.t('simulador desligado');
+  if (!t.alive) return i18n.t('sem sessão');
   return stateLabel(t.state);
 }
 
@@ -166,6 +168,8 @@ const DOT: Record<string, string> = {
   idle: 'bg-zinc-400',
   error: 'bg-red-500',
   waiting_background: 'bg-sky-400',
+  // done with a report, asking nothing (TER-972): green, never the "esperando você" amber
+  finished: 'bg-emerald-500',
 };
 
 function StateDot({ tab }: { tab: Pick<Tab, 'alive' | 'state'> }) {
@@ -176,16 +180,17 @@ function StateDot({ tab }: { tab: Pick<Tab, 'alive' | 'state'> }) {
 function Invite({ projectId, onNewTerminal }: { projectId: string; onNewTerminal: () => void }) {
   const { can } = useAuth();
   const chat = useProjectChat();
+  const { t } = useTranslation();
   return (
     <div className="pointer-events-auto flex flex-col items-center gap-2 rounded-lg border border-line bg-bg-2/90 px-4 py-3 text-center text-sm text-fg-muted">
-      <p>Ninguém trabalhando aqui ainda.</p>
+      <p>{t('Ninguém trabalhando aqui ainda.')}</p>
       <div className="flex flex-wrap justify-center gap-2">
         <button className="btn-primary" onClick={onNewTerminal}>
-          Abrir terminal <kbd className="ml-1 rounded bg-black/30 px-1 text-[10px]">⌘T</kbd>
+          {t('Abrir terminal')} <kbd className="ml-1 rounded bg-black/30 px-1 text-[10px]">⌘T</kbd>{/* i18n-ignore */}
         </button>
         {can('chat') && (
           <button className="btn-ghost" onClick={() => chat.setOpen(projectId, true)}>
-            Pedir um agente ao concierge
+            {t('Pedir um agente ao concierge')}
           </button>
         )}
       </div>
@@ -202,6 +207,7 @@ function ProjectOffice({ model, projectId, onPickDesk, onScene }: { model: CityM
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const [failed, setFailed] = useState(false);
   const sceneRef = useRef<OfficeScene | null>(null);
+  const { t } = useTranslation();
   const modelRef = useRef(model);
   const pick = useRef(onPickDesk);
   pick.current = onPickDesk;
@@ -235,7 +241,7 @@ function ProjectOffice({ model, projectId, onPickDesk, onScene }: { model: CityM
   }, [host, projectId]);
 
   if (failed) return null;
-  return <div ref={setHost} className="absolute inset-0 overflow-hidden" role="img" aria-label="Escritório do projeto: um boneco por terminal, no estado do agente" />;
+  return <div ref={setHost} className="absolute inset-0 overflow-hidden" role="img" aria-label={t('Escritório do projeto: um boneco por terminal, no estado do agente')} />;
 }
 
 /**
@@ -272,11 +278,12 @@ function useEpicsInProgress(projectId: string, enabled: boolean): EpicSummary[] 
 }
 
 function EpicsSection({ epics, onOpenAgent, onHighlight }: { epics: EpicSummary[]; onOpenAgent: (tabId: string) => void; onHighlight: (tabId: string | null) => void }) {
+  const { t } = useTranslation();
   if (epics.length === 0) return null;
   return (
     <section className="space-y-3">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Épicos em andamento</h2>
-      <ul className="space-y-3" aria-label="Épicos em andamento">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{t('Épicos em andamento')}</h2>
+      <ul className="space-y-3" aria-label={t('Épicos em andamento')}>
         {epics.map((e) => (
           <EpicRow key={e.id} epic={e} onOpenAgent={onOpenAgent} onHighlight={onHighlight} />
         ))}
@@ -286,6 +293,7 @@ function EpicsSection({ epics, onOpenAgent, onHighlight }: { epics: EpicSummary[
 }
 
 function EpicRow({ epic, onOpenAgent, onHighlight }: { epic: EpicSummary; onOpenAgent: (tabId: string) => void; onHighlight: (tabId: string | null) => void }) {
+  const { t } = useTranslation();
   return (
     <li className="space-y-1.5 rounded-lg border border-line p-3">
       <div className="flex items-baseline gap-2">
@@ -298,7 +306,7 @@ function EpicRow({ epic, onOpenAgent, onHighlight }: { epic: EpicSummary; onOpen
       </div>
       <div
         role="progressbar"
-        aria-label={`${epic.title}: ${epic.cards.done} de ${epic.cards.total} cards feitos`}
+        aria-label={t('{{title}}: {{done}} de {{total}} cards feitos', { title: epic.title, done: epic.cards.done, total: epic.cards.total })}
         aria-valuenow={epic.percent}
         aria-valuemin={0}
         aria-valuemax={100}
@@ -307,8 +315,8 @@ function EpicRow({ epic, onOpenAgent, onHighlight }: { epic: EpicSummary; onOpen
         <div className="h-1.5 rounded bg-accent" style={{ width: `${epic.percent}%` }} />
       </div>
       <p className="text-xs text-fg-muted">
-        {epic.doing} em andamento
-        {epic.waiting > 0 && <span className="text-warn"> · {epic.waiting} esperando você</span>}
+        {t('{{n}} em andamento', { n: epic.doing })}
+        {epic.waiting > 0 && <span className="text-warn"> · {t('{{n}} esperando você', { n: epic.waiting })}</span>}
       </p>
       {epic.agents.length > 0 && (
         <div className="flex flex-wrap gap-1">
@@ -323,14 +331,15 @@ function EpicRow({ epic, onOpenAgent, onHighlight }: { epic: EpicSummary; onOpen
 
 /** An agent on the epic: hovering lights up its figure in the office, a click opens its terminal. */
 function AgentChip({ agent, onOpen, onHighlight }: { agent: AgentOnCard; onOpen: () => void; onHighlight: (tabId: string | null) => void }) {
-  const label = stateLabel(agent.state, agent.background);
-  const tone = agent.needs_you ? DOT.waiting_input : agent.background ? DOT.waiting_background : DOT.working;
+  const { t } = useTranslation();
+  const label = stateLabel(agent.state, agent.background, agent.finished);
+  const tone = agent.needs_you ? DOT.waiting_input : agent.background ? DOT.waiting_background : agent.finished ? DOT.finished : DOT.working;
   return (
     <button
       type="button"
       className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs hover:bg-bg-3 ${agent.needs_you ? 'border-amber-500' : 'border-line'}`}
       title={`${agent.tab_name} · ${label}`}
-      aria-label={`Abrir ${agent.tab_name} (${label})`}
+      aria-label={t('Abrir {{name}} ({{state}})', { name: agent.tab_name, state: label })}
       onClick={onOpen}
       onMouseEnter={() => onHighlight(agent.tab_id)}
       onMouseLeave={() => onHighlight(null)}

@@ -1,4 +1,5 @@
 import { Image, Pressable, Text, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { Icon, type IconName } from '@/ui';
 import { attachmentStatusText, formatBytes, type DraftAttachment } from '../viewmodel/attachments';
 
@@ -18,10 +19,11 @@ export const ATTACHMENT_ICON: IconName = { ios: 'paperclip', android: 'attach_fi
  * Each piece of the second line is its own `Text` (the `·` too), so a size, a status or an error reads
  * as exactly that text. */
 export function AttachmentChip({ draft, onRemove, onRetry }: { draft: DraftAttachment; onRemove(): void; onRetry(): void }) {
+  const { t } = useTranslation();
   const status = draft.phase === 'uploaded' && draft.attachment ? attachmentStatusText(draft.attachment) : null;
   const details: Array<{ key: string; text: string; tone: 'muted' | 'danger' }> = [];
   if (draft.file.bytes !== null) details.push({ key: 'size', text: formatBytes(draft.file.bytes), tone: 'muted' });
-  if (draft.phase === 'uploading') details.push({ key: 'progress', text: `enviando… ${Math.round(draft.progress * 100)}%`, tone: 'muted' });
+  if (draft.phase === 'uploading') details.push({ key: 'progress', text: t('enviando… {{percent}}%', { percent: Math.round(draft.progress * 100) }), tone: 'muted' });
   if (status) details.push({ key: 'status', text: status, tone: 'muted' });
   if (draft.phase === 'failed' && draft.error) details.push({ key: 'error', text: draft.error, tone: 'danger' });
   return (
@@ -44,7 +46,7 @@ export function AttachmentChip({ draft, onRemove, onRetry }: { draft: DraftAttac
           ))}
           {draft.phase === 'failed' && !draft.refused ? (
             <Pressable accessibilityRole="button" onPress={onRetry}>
-              <Text className="text-xs text-app-accent">tentar de novo</Text>
+              <Text className="text-xs text-app-accent">{t('tentar de novo')}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -54,7 +56,7 @@ export function AttachmentChip({ draft, onRemove, onRetry }: { draft: DraftAttac
           </View>
         ) : null}
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Remover ${draft.file.name}`} onPress={onRemove} hitSlop={8} className="px-1">
+      <Pressable accessibilityRole="button" accessibilityLabel={t('Remover {{name}}', { name: draft.file.name })} onPress={onRemove} hitSlop={8} className="px-1">
         <Icon name={{ ios: 'xmark', android: 'close' }} size={14} tone="muted" />
       </Pressable>
     </View>

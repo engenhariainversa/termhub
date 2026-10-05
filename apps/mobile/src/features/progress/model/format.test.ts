@@ -1,3 +1,4 @@
+import { setLocale } from '@/i18n';
 import type { TPullRequestBadge } from '@/services/api/contract';
 import { ciLabel, epicCiLine, formatDuration, formatEstimate, stateLabel } from './format';
 
@@ -25,6 +26,12 @@ it('names an agent waiting on its own background work, never as waiting for you 
   expect(stateLabel('working')).toBe('trabalhando');
 });
 
+it('names an agent that finished with a report as concluído, never as waiting for you (TER-972)', () => {
+  expect(stateLabel('idle', false, true)).toBe('concluído');
+  expect(stateLabel('idle', false, false)).toBe('parado');
+  expect(stateLabel('idle')).toBe('parado');
+});
+
 const p = (over: Partial<TPullRequestBadge>): TPullRequestBadge => ({
   number: 7, url: 'u', title: 't', state: 'open', draft: false, ci_state: 'passed',
   ci_summary: { total: 2, passed: 2, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, ...over,
@@ -45,4 +52,31 @@ it('describes a merged PR by its deploy, and a closed one as fechado', () => {
 it('summarises the epic PRs', () => {
   expect(epicCiLine({ open: 2, failed: 1, running: 1, deployed: 3 })).toBe('PRs: 2 abertos · 1 falhou · 1 rodando · 3 em produção');
   expect(epicCiLine({ open: 1, failed: 0, running: 0, deployed: 0 })).toBe('PRs: 1 aberto');
+});
+
+describe('in English', () => {
+  beforeEach(() => setLocale('en'));
+  afterEach(() => setLocale(null));
+
+  it('formats durations and estimates', () => {
+    expect(formatDuration(9000)).toBe('2.5 h');
+    expect(formatEstimate({ kind: 'range', low_s: 2700, high_s: 5400, basis: 'wall_clock', samples: 2 })).toBe('~45 min–1.5 h of work');
+    expect(formatEstimate({ kind: 'none', reason: 'not_started' })).toBe('not started yet');
+  });
+
+  it('names states and PRs', () => {
+    expect(stateLabel('waiting_input')).toBe('waiting for you');
+    expect(stateLabel('working', true)).toBe('waiting on background work');
+    expect(ciLabel(p({ ci_state: 'failed', ci_summary: { total: 2, passed: 1, failed: 1, running: 0, failing: ['lint'] } }))).toBe('CI failed: lint');
+    expect(ciLabel(p({ state: 'merged', deploy_state: 'passed' }))).toBe('deploy ok');
+  });
+
+  it('summarises the epic PRs', () => {
+    expect(epicCiLine({ open: 1, failed: 1, running: 0, deployed: 2 })).toBe('PRs: 1 open · 1 failed · 2 in production');
+    expect(epicCiLine({ open: 0, failed: 0, running: 0, deployed: 0 })).toBe('PRs: 0 open');
+  });
+});
+
+it('keeps the plural of open PRs in Portuguese, 0 included', () => {
+  expect(epicCiLine({ open: 0, failed: 0, running: 0, deployed: 0 })).toBe('PRs: 0 abertos');
 });

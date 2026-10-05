@@ -11,7 +11,7 @@ import { useNotificationsStore } from '@/features/notifications/viewmodel/useNot
 import { PinPromptSheet } from '@/features/session/view/pin-prompt-sheet';
 import { usePhaseRedirect } from '@/features/session/view/use-phase-redirect';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
-import { appBackgrounded } from '@/features/shared/signals';
+import { appBackgrounded, appForegrounded } from '@/features/shared/signals';
 import { logScreen } from '@/services/analytics';
 import { configurePush, pushConversationId, pushNotificationId } from '@/services/push';
 import { socketWake } from '@/services/api/wake';
@@ -64,6 +64,7 @@ function Navigator() {
         session.foreground();
         // A chat socket that backed off while the app was away reconnects now (P§6.1).
         socketWake.emit();
+        appForegrounded.emit();
       }
     });
     return () => sub.remove();

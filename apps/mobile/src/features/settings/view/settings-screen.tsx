@@ -11,6 +11,7 @@ import { PERMISSIONS_MSG } from '@/features/permissions/model/messages';
 import { usePermissionsStore } from '@/features/permissions/viewmodel/usePermissionsStore';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { useThemeStore, type ThemePreference } from '@/features/theme/viewmodel/useThemeStore';
+import { setLocale, tk, useLocaleStore, useTranslation, type Locale } from '@/i18n';
 import { diagnosticKey } from '@/services/key';
 import { AppText, Button, Screen, Sheet } from '@/ui';
 import { runKeyDiagnostic, type KeyDiagnosticResult } from '../model/key-diagnostic';
@@ -20,9 +21,17 @@ import { KeyDiagnosticSheet } from './key-diagnostic-sheet';
 const PLATFORM_LABEL: Record<'ios' | 'android', string> = { ios: 'iOS', android: 'Android' };
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
-  { value: 'system', label: 'Sistema' },
-  { value: 'light', label: 'Claro' },
-  { value: 'dark', label: 'Escuro' },
+  { value: 'system', label: tk('Sistema') },
+  { value: 'light', label: tk('Claro') },
+  { value: 'dark', label: tk('Escuro') },
+];
+
+/** Ajustes → Idioma (i18n spec §2): each language is written in its own language, so someone who
+ * cannot read the current one still finds theirs; only "Automático" follows the app. */
+const LANGUAGE_OPTIONS: { value: Locale | null; label: string; translated: boolean }[] = [
+  { value: null, label: tk('Automático'), translated: true },
+  { value: 'pt-BR', label: 'Português (Brasil)', translated: false },
+  { value: 'en', label: 'English', translated: false },
 ];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -38,7 +47,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
  * "Permissões do chat" (its trusted tabs and projects), the theme, the key diagnostic, the version,
  * leaving and "Excluir minha conta" (TER-720). */
 export function SettingsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const localeChoice = useLocaleStore((s) => s.choice);
   const device = useSettingsStore((s) => s.device);
   const loadDevice = useSettingsStore((s) => s.loadDevice);
   const server = useSettingsStore((s) => s.server);
@@ -119,28 +130,28 @@ export function SettingsScreen() {
   return (
     <Screen scroll>
       <View className="gap-6 pb-10">
-        <AppText variant="title">Ajustes</AppText>
+        <AppText variant="title">{t('Ajustes')}</AppText>
 
-        <Section title="Este aparelho">
+        <Section title={t('Este aparelho')}>
           <AppText className="font-semibold">{device?.name ?? '—'}</AppText>
-          <AppText variant="muted">{device ? `${device.model} · ${PLATFORM_LABEL[device.platform]}` : 'Carregando…'}</AppText>
+          <AppText variant="muted">{device ? `${device.model} · ${PLATFORM_LABEL[device.platform]}` : t('Carregando…')}</AppText>
         </Section>
 
-        <Section title="Biometria">
+        <Section title={t('Biometria')}>
           <View className="flex-row items-center justify-between">
-            <AppText>Usar biometria para desbloquear</AppText>
-            <Switch accessibilityLabel="Usar biometria para desbloquear" value={biometricsEnabled} onValueChange={(value) => void (value ? enableBiometrics() : disableBiometrics())} />
+            <AppText>{t('Usar biometria para desbloquear')}</AppText>
+            <Switch accessibilityLabel={t('Usar biometria para desbloquear')} value={biometricsEnabled} onValueChange={(value) => void (value ? enableBiometrics() : disableBiometrics())} />
           </View>
-          <AppText variant="muted">Atalho para o seu PIN ao desbloquear e ao autorizar ações.</AppText>
+          <AppText variant="muted">{t('Atalho para o seu PIN ao desbloquear e ao autorizar ações.')}</AppText>
         </Section>
 
-        <Section title="Notificações">
+        <Section title={t('Notificações')}>
           <AppText variant="muted">{PERMISSIONS_MSG.notificationStatus[notificationStatus ?? 'undetermined']}</AppText>
           {notificationStatus === 'undetermined' ? <Button label={PERMISSIONS_MSG.pushAccept} variant="secondary" onPress={() => void acceptPush()} /> : null}
           {notificationStatus === 'denied' ? <Button label={PERMISSIONS_MSG.openSettings} variant="secondary" onPress={() => void openSystemSettings()} /> : null}
         </Section>
 
-        <Section title="Privacidade">
+        <Section title={t('Privacidade')}>
           <View className="flex-row items-center justify-between">
             <AppText>{PERMISSIONS_MSG.adsSwitch}</AppText>
             <Switch accessibilityLabel={PERMISSIONS_MSG.adsSwitch} value={adConsent === 'granted'} onValueChange={(value) => void setAdsFromSettings(value)} />
@@ -148,43 +159,57 @@ export function SettingsScreen() {
           <AppText variant="muted">{PERMISSIONS_MSG.adsHint}</AppText>
         </Section>
 
-        <Section title="Chat">
-          <AppText variant="muted">{host ? hostLine(host).text : 'Escolhendo a máquina do chat geral…'}</AppText>
-          <Button label="Trocar máquina ou conta" variant="secondary" onPress={() => setPickingHost(true)} />
+        <Section title={t('Chat')}>
+          <AppText variant="muted">{host ? hostLine(host).text : t('Escolhendo a máquina do chat geral…')}</AppText>
+          <Button label={t('Trocar máquina ou conta')} variant="secondary" onPress={() => setPickingHost(true)} />
           <HostSheet open={pickingHost} onClose={() => setPickingHost(false)} />
-          <Button label="Permissões do chat" variant="secondary" onPress={() => router.push('/chat-grants')} />
+          <Button label={t('Permissões do chat')} variant="secondary" onPress={() => router.push('/chat-grants')} />
           {/* chat decision memory spec 2026-09-26 §5.2: "Memória do chat" is reached from here, no PIN. */}
-          <Button label="Memória do chat" variant="secondary" onPress={() => router.push('/chat-memory')} />
+          <Button label={t('Memória do chat')} variant="secondary" onPress={() => router.push('/chat-memory')} />
         </Section>
 
-        <Section title="Aparência">
+        <Section title={t('Idioma')}>
+          <View className="gap-2">
+            {LANGUAGE_OPTIONS.map((option) => (
+              <Button
+                key={option.value ?? 'auto'}
+                testID={`language-${option.value ?? 'auto'}`}
+                label={option.translated ? t(option.label) : option.label}
+                variant={localeChoice === option.value ? 'primary' : 'secondary'}
+                onPress={() => setLocale(option.value)}
+              />
+            ))}
+          </View>
+        </Section>
+
+        <Section title={t('Aparência')}>
           <View className="flex-row gap-2">
             {THEME_OPTIONS.map((option) => (
               <View key={option.value} className="flex-1">
-                <Button label={option.label} variant={theme === option.value ? 'primary' : 'secondary'} onPress={() => setTheme(option.value)} />
+                <Button label={t(option.label)} variant={theme === option.value ? 'primary' : 'secondary'} onPress={() => setTheme(option.value)} />
               </View>
             ))}
           </View>
         </Section>
 
-        <Section title="Diagnóstico da chave">
-          <Button label="Testar a chave do aparelho" variant="secondary" onPress={runDiagnostic} />
+        <Section title={t('Diagnóstico da chave')}>
+          <Button label={t('Testar a chave do aparelho')} variant="secondary" onPress={runDiagnostic} />
           <KeyDiagnosticSheet open={diagnosing} onClose={() => setDiagnosing(false)} result={diagnosticResult} />
         </Section>
 
-        <Section title="Versão">
+        <Section title={t('Versão')}>
           <AppText variant="muted">
             {Application.nativeApplicationVersion} ({Application.nativeBuildVersion})
           </AppText>
           <AppText variant="muted">{server}</AppText>
         </Section>
 
-        <Button label="Sair e remover este aparelho" variant="danger" onPress={() => setConfirmingLeave(true)} />
-        <Sheet open={confirmingLeave} onClose={() => setConfirmingLeave(false)} title="Remover este aparelho">
+        <Button label={t('Sair e remover este aparelho')} variant="danger" onPress={() => setConfirmingLeave(true)} />
+        <Sheet open={confirmingLeave} onClose={() => setConfirmingLeave(false)} title={t('Remover este aparelho')}>
           <View className="gap-4">
-            <AppText>Este aparelho perde o acesso agora. Isso não pode ser desfeito.</AppText>
-            <Button label="Remover" variant="danger" onPress={confirmLeave} />
-            <Button label="Cancelar" variant="ghost" onPress={() => setConfirmingLeave(false)} />
+            <AppText>{t('Este aparelho perde o acesso agora. Isso não pode ser desfeito.')}</AppText>
+            <Button label={t('Remover')} variant="danger" onPress={confirmLeave} />
+            <Button label={t('Cancelar')} variant="ghost" onPress={() => setConfirmingLeave(false)} />
           </View>
         </Sheet>
 

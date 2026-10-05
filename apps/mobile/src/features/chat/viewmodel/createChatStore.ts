@@ -15,14 +15,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SessionState } from '@/features/session/model/session.types';
 import { appBackgrounded, messageSent, sessionEnded } from '@/features/shared/signals';
-import { STANDING_KIND_LABEL, standingKindOf, type TChatAttachment, type TChatProjectItem, type THostOptionsResponse, type TTabQuestionAnswerBody } from '@/services/api/contract';
+import { standingKindOf, type TChatAttachment, type TChatProjectItem, type THostOptionsResponse, type TTabQuestionAnswerBody } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { randomId } from '@/services/crypto/random';
 import type { MobileApi } from '@/services/api/types';
 import { mmkvStateStorage } from '@/services/storage';
 import { applyEvent, applyStandingGrantEvent, droppedRows, mergeThread, settlePending, upsertTabQuestion } from '../model/events';
 import { belongsTo } from '../model/filter';
-import { CHAT_MSG } from '../model/messages';
+import { approveAlwaysLabel, CHAT_MSG } from '../model/messages';
 import { upsertTabLimit } from '../model/tab-limit-text';
 import { closeLive, emptyFold, pruneLive, seedLive, type LiveFold } from '../model/live';
 import type { PickedFile } from './attachments';
@@ -697,7 +697,7 @@ export function createChatStore(deps: ChatDeps) {
                 const card = get().conversations[key]?.actions.find((a) => a.id === actionId);
                 // "Liberar sem prazo": the PIN sheet's title is the card's button label, kind included.
                 const standingKind = word === 'approve_project_always' && card ? standingKindOf({ tool: card.tool, args: card.args, tab_id: card.tab_id, project_id: card.project_id }) : null;
-                const title = standingKind ? `Liberar sem prazo: ${STANDING_KIND_LABEL[standingKind]} neste projeto` : undefined;
+                const title = standingKind ? approveAlwaysLabel(standingKind) : undefined;
                 const withPin = () => session().requestPinProof(actionId, (proof) => api.decide(session().auth(), actionId, { decision: word, ...proof }), word, title);
                 // TER-92: a write card approves with the unlocked session; the server is the judge and
                 // answers PIN_REQUIRED when it disagrees, which falls back to the sheet. A server rolled

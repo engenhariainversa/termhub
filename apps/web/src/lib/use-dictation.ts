@@ -1,3 +1,4 @@
+import { i18n } from '../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { MAX_RECORDING_MS, VoiceRecorder, canRecordVoice, micErrorMessage, transcribeClip, type Clip, type TranscribePhase } from './voice-recorder';
@@ -23,10 +24,10 @@ export interface Dictation {
   state: DictationState;
   /** whole seconds recorded so far, for the timer; 0 unless recording */
   seconds: number;
-  /** pt-BR, already user-facing; cleared by the next start() */
+  /** Already user-facing (translated); cleared by the next start() */
   error: string | null;
   /**
-   * pt-BR feedback that is not a failure: a clip too short to hold speech, a transcription that came
+   * Feedback (translated) that is not a failure: a clip too short to hold speech, a transcription that came
    * back with no words. Kept apart from `error` because neither is a fault — the plan forbids an
    * error for the short clip — and silence for both is indistinguishable from a broken microphone.
    * Cleared by the next start().
@@ -117,10 +118,10 @@ export function useDictation(onText: (text: string) => void): Dictation {
           setNotice(null);
           onTextRef.current(text);
         } else {
-          setNotice('Nenhuma fala reconhecida');
+          setNotice(i18n.t('Nenhuma fala reconhecida'));
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Falha ao transcrever o áudio');
+        setError(err instanceof Error ? err.message : i18n.t('Falha ao transcrever o áudio'));
       } finally {
         // Either way the clip is done: delivered, or failed with nothing in this app able to read it
         // back (see the note on the `'chat'` key above).
@@ -143,7 +144,7 @@ export function useDictation(onText: (text: string) => void): Dictation {
         // Too short to be speech. Not an error — nothing failed, the person let go too early — but not
         // silence either: the same wording the terminals use, carried as a notice.
         void voiceStore.clear('chat'); // nothing worth keeping
-        setNotice('Gravação muito curta');
+        setNotice(i18n.t('Gravação muito curta'));
         setState('idle');
         return;
       }

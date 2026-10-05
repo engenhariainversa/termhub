@@ -52,10 +52,12 @@ function agentOf(tab: ProgressTabRow, subtaskRef: string | null): AgentOnCard {
     tab_name: tab.name,
     machine_name: tab.machine_name,
     subtask_ref: subtaskRef,
-    // the contract's state predates `waiting_background`: still at work, flagged (TER-644)
-    state: tab.state === 'waiting_background' ? 'working' : tab.state,
+    // the contract's state predates `waiting_background`: still at work, flagged (TER-644); and `finished`:
+    // stopped, flagged, never waiting for the person (TER-972)
+    state: tab.state === 'waiting_background' ? 'working' : tab.state === 'finished' ? 'idle' : tab.state,
     state_at: iso(tab.state_at),
     background: tab.state === 'waiting_background',
+    finished: tab.state === 'finished',
     needs_you: tab.state !== null && NEEDS_YOU.includes(tab.state),
     activity: tab.activity,
     activity_verb: tab.activity_verb,

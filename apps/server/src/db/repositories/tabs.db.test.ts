@@ -226,6 +226,31 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.markSeen /
     });
   });
 
+  describe('recordEvent — a turn that ends with a report (TER-972)', () => {
+    const sub = (tool: string) => ({ kind: 'working' as const, tool: 'claude', text: null, meta: { event: 'PreToolUse', tool, subagent: true, agent_id: 'a1' } });
+    const idlePrompt = { kind: 'waiting_input' as const, tool: 'claude', text: 'Claude is waiting for your input', meta: { event: 'Notification', type: 'idle_prompt' }, continuesWait: true as const, keepsWaitText: true as const };
+
+    it('replays TER-912: the tab is finished, never needs the person, and works again on the next prompt', async () => {
+      await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
+      const stop = await repo.recordEvent(tabId, { kind: 'finished', tool: 'claude', text: 'Merge e deploy feitos; o card está em Feito.', meta: { event: 'Stop' } });
+      expect(stop.event).not.toBeNull();
+      expect(stop.tab).toMatchObject({ state: 'finished', state_text: 'Merge e deploy feitos; o card está em Feito.' });
+      expect(needsYou(stop.tab)).toBe(false);
+      // the reminder a minute later and a subagent's tool call leave it there, with its report
+      const reminder = await repo.recordEvent(tabId, idlePrompt);
+      expect(reminder.event).toBeNull();
+      expect(reminder.tab).toMatchObject({ state: 'finished', state_text: 'Merge e deploy feitos; o card está em Feito.' });
+      expect((await repo.recordEvent(tabId, sub('Bash'))).event).toBeNull();
+      expect(await repo.countBusyByMachine(machineId)).toBe(1);
+      // looking at it marks nothing: it was never a wait
+      expect(await repo.markSeen(tabId)).toBeUndefined();
+      // a new prompt: the agent works again
+      const next = await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
+      expect(next.event).not.toBeNull();
+      expect(next.tab.state).toBe('working');
+    });
+  });
+
   describe('stale working tabs (TER-615)', () => {
     it('lists Claude and Codex terminal tabs working with nothing since the cut, oldest first (TER-643: Codex too)', async () => {
       const { tab } = await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
@@ -867,5 +892,67 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.recordEven
     await eventAgo('working', 60);
     await repo.recordEvent(tabId, { kind: 'idle', tool: 'claude', text: null });
     expect(await secondsOf(card.id)).toBeGreaterThanOrEqual(59);
+  });
+});
+
+describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.citedTexts (Postgres)', () => {
+  let db: PrismaClient;
+  let repo: TabsRepository;
+  let machineId: string;
+  let projectId: string;
+  let otherProjectId: string;
+
+  beforeAll(() => {
+    db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+    repo = new TabsRepository(db);
+  });
+
+  beforeEach(async () => {
+    machineId = newId();
+    projectId = newId();
+    otherProjectId = newId();
+    await db.machine.create({ data: { id: machineId, name: 'test', type: 'agent' } });
+    for (const id of [projectId, otherProjectId]) {
+      await db.project.create({ data: { id, key: 'K' + id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase(), name: 'p' } });
+      await db.projectMachine.create({ data: { id: newId(), projectId: id, machineId, cwd: '/tmp' } });
+    }
+    return async () => {
+      await db.project.deleteMany({ where: { id: { in: [projectId, otherProjectId] } } });
+      await db.machine.delete({ where: { id: machineId } });
+    };
+  });
+
+  afterAll(async () => {
+    await db?.$disconnect();
+  });
+
+  const tab = async (project: string) => {
+    const id = newId();
+    await db.tab.create({ data: { id, projectId: project, machineId, name: 't', tmuxSession: `th-${id}` } });
+    return id;
+  };
+  const at = (s: number) => new Date(Date.UTC(2026, 9, 4, 10, 0, s));
+
+  it("returns the project's last answers and newest event texts, newest first", async () => {
+    const t1 = await tab(projectId);
+    const t2 = await tab(otherProjectId);
+    await db.tabLastAnswer.create({ data: { tabId: t1, text: 'answer', tool: 'claude', at: at(30) } });
+    await db.tabEvent.createMany({
+      data: [
+        { id: newId(), tabId: t1, kind: 'idle', tool: 'claude', text: 'old', createdAt: at(1) },
+        { id: newId(), tabId: t1, kind: 'working', tool: 'claude', text: null, createdAt: at(2) },
+        { id: newId(), tabId: t1, kind: 'idle', tool: 'claude', text: 'mid', createdAt: at(10) },
+        { id: newId(), tabId: t1, kind: 'idle', tool: 'claude', text: 'new', createdAt: at(20) },
+        { id: newId(), tabId: t2, kind: 'idle', tool: 'claude', text: 'other project', createdAt: at(40) },
+      ],
+    });
+    expect((await repo.citedTexts(projectId)).map((r) => [r.machineId, r.text])).toEqual([
+      [machineId, 'answer'],
+      [machineId, 'new'],
+      [machineId, 'mid'],
+      [machineId, 'old'],
+    ]);
+    // at most `eventsPerTab` events per tab, the newest
+    expect((await repo.citedTexts(projectId, 2)).map((r) => r.text)).toEqual(['answer', 'new', 'mid']);
   });
 });
