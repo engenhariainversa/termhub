@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { deviceActivateBody, deviceRequestBody, pushTestBody, pushTokenBody } from '@termhub/mobile-api';
+import { deviceActivateBody, deviceRequestBody, pushSettings, pushTestBody, pushTokenBody } from '@termhub/mobile-api';
 import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError, unauthorized } from '../lib/errors.js';
@@ -85,8 +85,24 @@ export async function mobileDeviceRoutes(app: FastifyInstance, _repos: Repositor
   });
 }
 
-/** `PUT /push-token` and `POST /push-test` (TER-913), mounted at the mobile API's root (spec §10). */
+/** `PUT /push-token`, `POST /push-test` (TER-913) and `GET`/`PUT /push-settings` (TER-925), mounted
+ * at the mobile API's root (spec §10). */
 export async function mobilePushTokenRoutes(app: FastifyInstance, repos: Repositories, push: Pick<MobilePushService, 'testPush'>) {
+  // The person's opt-in pushes; per account, so every phone of theirs follows the same choice.
+  app.get('/push-settings', async (request) => {
+    const mobile = request.mobile;
+    if (!mobile || !('device' in mobile)) throw unauthorized();
+    return pushSettings.parse({ tab_finished: await repos.users.pushTabFinished(mobile.user.id) });
+  });
+
+  app.put('/push-settings', async (request) => {
+    const body = pushSettings.parse(request.body ?? {});
+    const mobile = request.mobile;
+    if (!mobile || !('device' in mobile)) throw unauthorized();
+    await repos.users.setPushTabFinished(mobile.user.id, body.tab_finished);
+    return body;
+  });
+
   // A test push to the calling device. Not `allowPendingDeletion`: refused like every other route (TER-920).
   app.post('/push-test', { config: { action: 'update' } }, async (request, reply) => {
     const body = pushTestBody.parse(request.body ?? {});
