@@ -86,6 +86,8 @@ model User {
   deletionRequestedAt DateTime? @map("deletion_requested_at")
   /// When the deletion job removes the account for good (30 days after the request). Null = not pending.
   deletionScheduledAt DateTime? @map("deletion_scheduled_at")
+  /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
+  locale              String?
 
   @@index([roleId])
   @@index([deletionScheduledAt])

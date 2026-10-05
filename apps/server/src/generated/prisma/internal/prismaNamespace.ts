@@ -4151,7 +4151,8 @@ export const UserScalarFieldEnum = {
   chatAutodecide: 'chatAutodecide',
   chatCodexReplies: 'chatCodexReplies',
   deletionRequestedAt: 'deletionRequestedAt',
-  deletionScheduledAt: 'deletionScheduledAt'
+  deletionScheduledAt: 'deletionScheduledAt',
+  locale: 'locale'
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
