@@ -196,8 +196,8 @@ export function SettingsScreen() {
           <Button label={t('Memória do chat')} variant="secondary" onPress={() => router.push('/chat-memory')} />
         </Section>
 
-        <Section title="Trabalho automático">
-          <PauseCard loadingText="Carregando…" />
+        <Section title={t('Trabalho automático')}>
+          <PauseCard loadingText={t('Carregando…')} />
         </Section>
 
         <Section title={t('Idioma')}>

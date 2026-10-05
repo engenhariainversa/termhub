@@ -9,6 +9,7 @@ import en_chat from '@/locales/en/chat.json';
 import en_chatView from '@/locales/en/chat-view.json';
 import en_chatGrants from '@/locales/en/chat-grants.json';
 import en_filePreview from '@/locales/en/file-preview.json';
+import en_fileRecent from '@/locales/en/file-recent.json';
 import en_home from '@/locales/en/home.json';
 import en_notifications from '@/locales/en/notifications.json';
 import en_permissions from '@/locales/en/permissions.json';
@@ -27,6 +28,7 @@ import pt_chat from '@/locales/pt-BR/chat.json';
 import pt_chatView from '@/locales/pt-BR/chat-view.json';
 import pt_chatGrants from '@/locales/pt-BR/chat-grants.json';
 import pt_filePreview from '@/locales/pt-BR/file-preview.json';
+import pt_fileRecent from '@/locales/pt-BR/file-recent.json';
 import pt_home from '@/locales/pt-BR/home.json';
 import pt_notifications from '@/locales/pt-BR/notifications.json';
 import pt_permissions from '@/locales/pt-BR/permissions.json';
@@ -50,6 +52,7 @@ export const EN_AREAS: Record<string, Catalog> = {
   'chat-view': en_chatView,
   'chat-grants': en_chatGrants,
   'file-preview': en_filePreview,
+  'file-recent': en_fileRecent,
   'home': en_home,
   'notifications': en_notifications,
   'permissions': en_permissions,
@@ -72,6 +75,7 @@ export const PT_AREAS: Record<string, Catalog> = {
   'chat-view': pt_chatView,
   'chat-grants': pt_chatGrants,
   'file-preview': pt_filePreview,
+  'file-recent': pt_fileRecent,
   'home': pt_home,
   'notifications': pt_notifications,
   'permissions': pt_permissions,
