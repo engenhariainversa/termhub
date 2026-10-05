@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { CAPABILITY_WORKTREE, WORKTREE_MIN_AGENT_VERSION } from '@termhub/agent-protocol';
+import { CAPABILITY_WORKTREE, GIT_BRANCH_RE, WORKTREE_MIN_AGENT_VERSION } from '@termhub/agent-protocol';
 import { agentRpc } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
 import { ControlError } from '../control/context.js';
@@ -22,7 +22,39 @@ export function slugOf(title: string): string {
     .replace(/-+$/g, '');
 }
 
-const fill = (pattern: string, ref: string, title: string) => pattern.replaceAll('{ref}', ref).replaceAll('{ticket}', ref).replaceAll('{slug}', slugOf(title));
+const BRANCH_MAX = 200;
+
+/** `git check-ref-format` rules for a branch name, on top of the charset the agent accepts (`GIT_BRANCH_RE`). */
+export function isValidBranchName(name: string): boolean {
+  return (
+    name.length > 0 &&
+    name.length <= BRANCH_MAX &&
+    GIT_BRANCH_RE.test(name) &&
+    !name.startsWith('/') &&
+    !name.endsWith('/') &&
+    !name.endsWith('.') &&
+    !name.endsWith('.lock') &&
+    !name.includes('//') &&
+    !name.includes('@{') &&
+    name !== '@' &&
+    !name.split('/').some((part) => part.startsWith('.') || part.endsWith('.lock'))
+  );
+}
+
+/**
+ * Fills a pattern. An empty slug (a title with no letters or digits) drops `{slug}` and the separators
+ * left dangling, so the name falls back to the bare ref. A pattern that still cannot give a valid
+ * branch name is refused, never repaired silently.
+ */
+function fill(pattern: string, ref: string, title: string): string {
+  const slug = slugOf(title);
+  let name = pattern.replaceAll('{ref}', ref).replaceAll('{ticket}', ref);
+  name = slug ? name.replaceAll('{slug}', slug) : name.replaceAll('{slug}', '').replace(/[-_./]+$/, '');
+  if (!isValidBranchName(name)) {
+    throw new ControlError('INVALID_BRANCH_PATTERN', msg('O padrão de branch {{pattern}} não gera um nome de branch válido para {{ref}}', { pattern, ref }));
+  }
+  return name;
+}
 
 /** `automation.epic_branch_pattern` (`{ref}`, `{slug}`). */
 export function epicBranchName(pattern: string, epic: { ref: string; title: string }): string {

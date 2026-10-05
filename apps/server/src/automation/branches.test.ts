@@ -4,7 +4,7 @@ import * as errors from '../agent/errors.js';
 import type { Machine } from '../db/repositories/types.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import { normalizeSetup, SETUP_VERSION } from '../setup/schema.js';
-import { cardBranchName, ensureEpicBranch, ensureWorkspace, epicBranchName, slugOf, targetOf } from './branches.js';
+import { cardBranchName, isValidBranchName, ensureEpicBranch, ensureWorkspace, epicBranchName, slugOf, targetOf } from './branches.js';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -25,6 +25,26 @@ describe('names', () => {
   });
   it('cardBranchName uses {ticket} as the ref', () => {
     expect(cardBranchName('{ticket}-{slug}', { ref: 'TER-9', title: 'Corrigir login' })).toBe('TER-9-corrigir-login');
+  });
+});
+
+describe('branch name validation', () => {
+  const card = (pattern: string, title = 'Corrigir login') => () => cardBranchName(pattern, { ref: 'TER-12', title });
+  it('falls back to the bare ref when the slug is empty', () => {
+    expect(card('{ticket}-{slug}', '!!! ???')()).toBe('TER-12');
+    expect(card('{ticket}/{slug}', '')()).toBe('TER-12');
+    expect(epicBranchName('epic/{ref}-{slug}', { ref: 'TER-1', title: '***' })).toBe('epic/TER-1');
+  });
+  it.each(['-{slug}', 'a..{slug}', '/{ticket}', '{ticket}.lock', 'x//{slug}', 'a@{{slug}', 'a b-{slug}', 'a~{slug}', 'a:{slug}', 'a\\{slug}', '.{slug}', 'x/.{slug}', '', '{slug}-'.padEnd(250, 'x')])('refuses pattern %j', (pattern) => {
+    expect(card(pattern)).toThrow(expect.objectContaining({ code: 'INVALID_BRANCH_PATTERN' }));
+  });
+  it('refuses a pattern whose only content is {slug} when the slug is empty', () => {
+    expect(card('{slug}', '???')).toThrow(expect.objectContaining({ code: 'INVALID_BRANCH_PATTERN' }));
+  });
+  it('isValidBranchName accepts plain names and slashes', () => {
+    expect(isValidBranchName('epic/TER-1-x')).toBe(true);
+    expect(isValidBranchName('a.lock/b')).toBe(false);
+    expect(isValidBranchName('a.')).toBe(false);
   });
 });
 
