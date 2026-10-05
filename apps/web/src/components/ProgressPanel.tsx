@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { PauseBanner } from './PauseAutomationButton';
 import { useMonitor } from '../lib/monitor';
 import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, stateLabel, withLiveTab } from '../lib/progress';
 import { relativeTime } from '../lib/time';
@@ -208,6 +209,7 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
           ))}
         </div>
       </div>
+      <PauseBanner projectId={projectId} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       {waiting.length > 0 && (
         <div className="rounded-lg border border-amber-500 bg-amber-50 p-3 dark:bg-amber-950">

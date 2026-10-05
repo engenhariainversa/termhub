@@ -27,6 +27,16 @@ export class AutomationPausesRepository {
     return row?.automationPausedAt ?? null;
   }
 
+  /** The projects of the scope that are paused on their own (`ownerId` null = every project, an admin's view). */
+  async pausedProjects(ownerId: string | null): Promise<Array<{ id: string; paused_at: Date }>> {
+    const rows = await this.db.project.findMany({
+      where: { automationPausedAt: { not: null }, ...(ownerId ? { ownerId } : {}) },
+      select: { id: true, automationPausedAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.flatMap((r) => (r.automationPausedAt ? [{ id: r.id, paused_at: r.automationPausedAt }] : []));
+  }
+
   async pauseUser(userId: string, at: Date): Promise<{ paused_at: Date; fresh: boolean }> {
     const { count } = await this.db.user.updateMany({ where: { id: userId, automationPausedAt: null }, data: { automationPausedAt: at } });
     const row = await this.db.user.findUniqueOrThrow({ where: { id: userId }, select: { automationPausedAt: true } });

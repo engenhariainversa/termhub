@@ -65,9 +65,26 @@ export const automationQueueItem = z.object({
 });
 export type AutomationQueueItem = z.infer<typeof automationQueueItem>;
 
-/** Whether the project's automatic work is paused (the pause switch ships with the scheduler). */
-export const pauseState = z.object({ paused: z.boolean(), paused_at: z.string().nullable() });
+/** The pause switch (`GET automation/state`): the person's "Pausar tudo" and the projects paused on their own.
+ * `paused_at` is null when nothing is paused globally. */
+export const pauseState = z.object({
+  paused_at: z.string().nullable(),
+  projects: z.array(z.object({ id: z.string(), paused_at: z.string() })),
+  /** The person has a project with automatic work on: otherwise the app hides the switch. */
+  has_automation: z.boolean(),
+  /** The person may pause and resume (`projects:update`). */
+  can_update: z.boolean(),
+});
 export type PauseState = z.infer<typeof pauseState>;
+
+/** `POST automation/pause`: `scope` is `all` ("Pausar tudo") or a project id. `interrupt` asks to also stop the tabs running now. */
+export const pauseBody = z.object({ scope: z.string().min(1).max(64), interrupt: z.boolean().optional() });
+export type PauseBody = z.infer<typeof pauseBody>;
+export const pauseResponse = z.object({ paused_at: z.string() });
+export type PauseResponse = z.infer<typeof pauseResponse>;
+/** `POST automation/resume` answers 204. */
+export const resumeBody = z.object({ scope: z.string().min(1).max(64) });
+export type ResumeBody = z.infer<typeof resumeBody>;
 
 /** What the automatic work did (`automation_events`): ids, URLs, counts and reasons only. `kind` stays a
  * string so a kind a newer server adds still parses on an older app. */

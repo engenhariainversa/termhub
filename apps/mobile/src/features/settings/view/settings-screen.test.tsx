@@ -1,6 +1,7 @@
 import { AppState } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
+jest.mock('@/features/automation/viewmodel/usePauseStore', () => ({ usePauseStore: require('../../../../test/helpers/ui-stores').stores.pause }));
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
 jest.mock('@/features/permissions/viewmodel/usePermissionsStore', () => ({ usePermissionsStore: require('../../../../test/helpers/ui-stores').stores.permissions }));
@@ -8,7 +9,12 @@ jest.mock('@/features/account/viewmodel/useAccountStore', () => ({ useAccountSto
 jest.mock('@/features/settings/viewmodel/useSettingsStore', () => ({ useSettingsStore: require('../../../../test/helpers/ui-stores').stores.settings }));
 
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
+jest.mock('expo-router', () => ({
+  useRouter: () => mockRouter,
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    require('react').useEffect(cb, [cb]);
+  },
+}));
 
 import { emptyFold } from '@/features/chat/model/live';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
@@ -246,5 +252,12 @@ describe('Notificações e Privacidade (permission prompts spec §2)', () => {
     await act(async () => onChange('active'));
     await waitFor(() => expect(screen.getByRole('switch', { name: 'Medição de anúncios' }).props.value).toBe(false));
     stores.permissionDeps.trackingStatus.mockResolvedValue('undetermined');
+  });
+
+  it('has the pause switch for the automatic work', async () => {
+    await render(<SettingsScreen />);
+    expect(screen.getByText('Trabalho automático')).toBeTruthy();
+    expect(await screen.findByText('Pausar automático', {}, LOAD)).toBeTruthy();
+    stores.pause.getState().stopPolling();
   });
 });

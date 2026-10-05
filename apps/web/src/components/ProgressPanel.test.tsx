@@ -10,6 +10,8 @@ const live: Record<string, Tab | undefined> = {};
 vi.mock('../lib/api', () => ({ api: { progress: (...a: unknown[]) => progressMock(...a) } }));
 vi.mock('../lib/monitor', () => ({ useMonitor: () => ({ tabState: (id: string) => live[id] }) }));
 
+vi.mock('./PauseAutomationButton', () => ({ PauseBanner: () => null }));
+
 import { PROGRESS_REFRESH_MS, ProgressPanel } from './ProgressPanel';
 
 const response = (): ProgressResponse => ({

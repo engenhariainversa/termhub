@@ -247,6 +247,10 @@ export interface MockState {
   projectAi: Map<string, TProjectAi>;
   /** project id -> the saved automation block (absent = the server's default, off at `pr`) */
   automation: Map<string, TAutomationSetup>;
+  /** The pause switch: the person's "Pausar tudo" and the projects paused on their own (ISO times). */
+  /** The mock person has a project with automatic work on (the pause switch shows). */
+  hasAutomation: boolean;
+  pause: { paused_at: string | null; projects: Array<{ id: string; paused_at: string }> };
   /** card id -> tagged for automatic work */
   cardAuto: Map<string, boolean>;
   /** Oldest first (push order); `GET chat` lists a conversation's own, `subagentView`'d. */
@@ -307,6 +311,8 @@ export function createMockState(): MockState {
     tabLimits: [],
     projectAi: new Map(),
     automation: new Map(),
+    hasAutomation: true,
+    pause: { paused_at: null, projects: [] },
     cardAuto: new Map(),
     subagents: [],
     attachments: new Map(),

@@ -36,6 +36,7 @@ import type {
   TNotificationsResponse,
   TProgressResponse,
   TAutomationSetup,
+  TPauseState,
   TProjectAi,
   TProjectAiResponse,
   TSendAccepted,
@@ -165,6 +166,12 @@ export interface MobileApi {
   saveAutomationSetup(auth: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }): Promise<TAutomationSetup>;
   /** Tags or untags a card for automatic work; answers the tag as it now stands. No PIN. 404 outside the scope. */
   setCardAuto(auth: Auth, taskId: string, auto: boolean): Promise<boolean>;
+  /** The pause switch ("Pausar tudo"): the person's pause and the projects paused on their own. */
+  getPauseState(auth: Auth): Promise<TPauseState>;
+  /** Pauses `scope` (`all` or a project id); answers when. `interrupt` asks to stop the tabs running now. No PIN. */
+  pauseAutomation(auth: Auth, scope: string, interrupt?: boolean): Promise<string>;
+  /** Lifts a pause. No PIN: the app confirms before calling it. */
+  resumeAutomation(auth: Auth, scope: string): Promise<void>;
 
   // attachments (spec 2026-09-26 §5.3, §5.6)
   /** Streams the file as the raw body; `onProgress` is 0..1. 415 ATTACHMENT_TYPE, 413 ATTACHMENT_TOO_LARGE / ATTACHMENT_QUOTA. */

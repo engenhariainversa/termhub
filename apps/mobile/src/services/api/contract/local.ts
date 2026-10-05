@@ -269,7 +269,7 @@ export type TProjectAiOption = z.infer<typeof projectAiOption>;
 export type TProjectAiResponse = z.infer<typeof projectAiResponse>;
 export type TProjectAiBody = z.infer<typeof projectAiBody>;
 // Trabalho automático (spec 2026-10-04): `@termhub/mobile-api`'s automation schemas.
-export type { AutomationAutonomy as TAutomationAutonomy, AutomationSetup as TAutomationSetup, AutomationSetupResponse as TAutomationSetupResponse, CardAutoResponse as TCardAutoResponse } from '@termhub/mobile-api';
+export type { AutomationAutonomy as TAutomationAutonomy, AutomationSetup as TAutomationSetup, AutomationSetupResponse as TAutomationSetupResponse, CardAutoResponse as TCardAutoResponse, PauseState as TPauseState } from '@termhub/mobile-api';
 export type TChatConversation = z.infer<typeof chatConversationSchema>;
 export type TChatResponse = z.infer<typeof chatResponse>;
 export type TMeResponse = z.infer<typeof meResponse>;

@@ -1527,6 +1527,14 @@ export interface FilePreviewRefused {
 }
 export type FilePreview = FilePreviewOk | FilePreviewRefused;
 
+/** The automatic work's pause switch (`GET /api/automation/state`): the person's "Pausar tudo" and the projects paused on their own. */
+export interface AutomationPauseState {
+  paused_at: string | null;
+  projects: Array<{ id: string; paused_at: string }>;
+  /** the person has a project with automatic work on: otherwise the switch is hidden */
+  has_automation: boolean;
+  can_update: boolean;
+}
 /** A project's recent Markdown files (spec 2026-10-04 recent Markdown files, GET /api/file-recent). */
 export type FileRecentGroup = 'specs' | 'plans' | 'lessons' | 'legal' | 'other';
 export interface FileRecentItem {
