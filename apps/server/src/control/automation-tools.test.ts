@@ -69,6 +69,13 @@ describe('unsafeAllowedTool: allow rules too broad for an automatic tab (TER-968
     'Bash(gh workflow:*)',
     'Bash(gh release create v1)',
     'Bash(gh repo:*)',
+    // review 3: only the exact fetch rules
+    'Bash(git fetch:*)',
+    'Bash(git fetch *)',
+    'Bash(git fetch origin:*)',
+    'Bash(git fetch origin *)',
+    'Bash(git f*)',
+    'Bash(git fetch*)',
   ])('%s is refused', (rule) => {
     expect(unsafeAllowedTool(rule)).toBe(true);
   });

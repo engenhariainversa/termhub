@@ -40,17 +40,22 @@ export const AUTOMATION_DENIED_TOOLS: readonly string[] = [
   'Bash(git -c*)',
   'Bash(git * -c *)',
   'Bash(git *--config-env*)',
-  'Bash(git *--upload-pack*)',
-  'Bash(git *--receive-pack*)',
+  // git's subcommand options take any unambiguous prefix (`git fetch --upload-p=cmd .` runs cmd), so each
+  // deny is the shortest prefix no other option of those commands shares: `--upl` (fetch: `--update-*`),
+  // `--rece` (push: `--recurse-submodules`), `--ext` (diff: `--exit-code`); a push's `--exec` (an alias of
+  // `--receive-pack`) from `--e`. Global options (`-c`, `--config-env`, `--exec-path`) are parsed whole.
+  'Bash(git *--upl*)',
+  'Bash(git *--rece*)',
   'Bash(git *--exec*)',
-  'Bash(git diff *--ext-diff*)',
-  'Bash(git log *--ext-diff*)',
+  'Bash(git push *--e*)',
+  'Bash(git diff *--ext*)',
+  'Bash(git log *--ext*)',
   'Bash(git diff *--output*)',
   'Bash(git log *--output*)',
   'Bash(git diff *--no-index*)',
   'Bash(git merge -s*)',
   'Bash(git merge * -s*)',
-  'Bash(git merge *--strategy*)',
+  'Bash(git merge *--str*)',
   'Bash(gh pr merge:*)',
   'Bash(gh api:*)',
   'Bash(gh secret:*)',
@@ -189,6 +194,8 @@ export function unsafeAllowedTool(rule: string): boolean {
   if (words[0] === 'git' && words.slice(1).some((w) => GIT_SENDS.has(w) || GIT_PROGRAM_OPTION.test(w))) return true;
   if (!wild) return false;
   if (/^git -/.test(literal)) return true;
+  // only the exact fetch rules (`git fetch`, `git fetch origin`, the run's branch): a wildcard reaches its options
+  if (inFamily(head, 'git fetch') || 'git fetch'.startsWith(literal)) return true;
   return RUNNERS.some((r) => inFamily(head, r) || r.startsWith(literal));
 }
 
