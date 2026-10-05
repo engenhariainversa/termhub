@@ -24,5 +24,13 @@
   "automático": "automatic",
   "Segure para o trabalho automático": "Press and hold for automatic work",
   "Tirar do trabalho automático": "Take off automatic work",
-  "Marcar como automático": "Mark as automatic"
+  "Marcar como automático": "Mark as automatic",
+  "Pausar automático": "Pause automatic work",
+  "Pausar e interromper as abas": "Pause and interrupt the tabs",
+  "Retomar automático": "Resume automatic work",
+  "Retomar o trabalho automático?": "Resume automatic work?",
+  "O trabalho automático volta a pegar cards marcados e a agir nas abas dos projetos com ele ligado.": "Automatic work will pick up marked cards again and act on the tabs of projects that have it on.",
+  "Retomar": "Resume",
+  "Não foi possível mudar o automático. Tente de novo.": "Could not change automatic work. Try again.",
+  "Automático pausado desde {{time}}.": "Automatic work paused since {{time}}."
 }
