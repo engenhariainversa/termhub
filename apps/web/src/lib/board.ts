@@ -2,8 +2,8 @@ import { i18n, tk } from '../i18n';
 import type { ColumnCategory, ProjectStatus, Task, TaskColumn, TaskStatus, TaskType } from './types';
 
 /**
- * Names termhub gives (types, statuses, column categories) in the language on screen. The maps in
- * `types.ts` keep the pt-BR text; these hold the same keys with `tk()` so the checker sees them.
+ * Names termhub gives (types, statuses, column categories, project statuses): pt-BR keys, shown
+ * in the language on screen through the helpers below. The single source of these labels.
  */
 const TYPE_KEY: Record<TaskType, string> = {
   epic: tk('Épico'),

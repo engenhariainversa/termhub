@@ -484,6 +484,7 @@ export interface ProjectSetup {
   updated_at: string | null;
 }
 
+/** Brand names: shown as is in every language. */
 export const PROVIDER_LABEL: Record<IntegrationProvider, string> = { github: 'GitHub', linear: 'Linear', jira: 'Jira' };
 
 /** pt-BR keys; shown with `t(APPROVAL_LABEL[k].label)` / `t(APPROVAL_LABEL[k].hint)`. */
@@ -509,28 +510,6 @@ export interface DashboardItem {
   doing: Task[];
   open_tasks: number;
 }
-
-export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
-  backlog: 'Backlog',
-  todo: 'A fazer',
-  doing: 'Fazendo',
-  done: 'Feito',
-};
-
-export const TASK_TYPE_LABEL: Record<TaskType, string> = {
-  epic: 'Épico',
-  story: 'História',
-  task: 'Tarefa',
-  subtask: 'Subtarefa',
-  bug: 'Bug',
-  spike: 'Spike',
-};
-
-export const COLUMN_CATEGORY_LABEL: Record<ColumnCategory, string> = {
-  todo: 'A fazer',
-  doing: 'Fazendo',
-  done: 'Feito',
-};
 
 export type TabKind = 'terminal' | 'simulator';
 
@@ -764,12 +743,6 @@ export interface AuthConfig {
   public_city_url: string;
 }
 
-export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
-  active: 'Ativo',
-  paused: 'Pausado',
-  archived: 'Arquivado',
-};
-
 export type AiProvider = 'claude' | 'chatgpt' | 'gemini' | 'antigravity';
 
 export interface AiAccount {
@@ -801,6 +774,7 @@ export interface AiAccountUsage {
   stale?: boolean;
 }
 
+/** Brand names: shown as is in every language. */
 export const AI_PROVIDER_LABEL: Record<AiProvider, string> = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini', antigravity: 'Antigravity' };
 
 /** GET /machines/:id/hardware */

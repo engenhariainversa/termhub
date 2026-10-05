@@ -4,18 +4,8 @@ import { useMonitor } from '../lib/monitor';
 import { useData } from '../lib/data';
 import { ApiError } from '../lib/api';
 import { emptyMonitorHint, tabNeedsYou } from '../lib/needs-you';
-import { NEEDS_YOU, type MonitorItem, type TabState } from '../lib/types';
-import { i18n, tk, useTranslation } from '../i18n';
-
-/** The state badge (same words as `TAB_STATE_LABEL`), as keys translated where shown. */
-const STATE_KEY: Record<TabState, string> = {
-  working: tk('trabalhando'),
-  waiting_input: tk('esperando resposta'),
-  waiting_permission: tk('pedindo permissão'),
-  idle: tk('terminou'),
-  error: tk('erro'),
-  waiting_background: tk('aguardando segundo plano'),
-};
+import { NEEDS_YOU, TAB_STATE_LABEL, type MonitorItem, type TabState } from '../lib/types';
+import { i18n, useTranslation } from '../i18n';
 
 function since(iso: string | null, now: number): string {
   if (!iso) return '';
@@ -73,7 +63,7 @@ function Item({ item, now }: { item: MonitorItem; now: number }) {
       {/* narrow: the state and the time on the first line, project › tab on a line of its own;
           from sm up, everything on one line as before */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-semibold ${stateStyle(tab.state)}`}>{tab.state ? t(STATE_KEY[tab.state]) : '—'}</span>
+        <span className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-semibold ${stateStyle(tab.state)}`}>{tab.state ? t(TAB_STATE_LABEL[tab.state]) : '—'}</span>
         <span data-testid="needs-you-where" className="order-last flex w-full min-w-0 items-center gap-2 sm:order-none sm:w-auto sm:flex-1">
           <Link to={`/projects/${project.id}`} className="max-w-[60%] shrink-0 truncate font-medium hover:underline">
             {project.name}

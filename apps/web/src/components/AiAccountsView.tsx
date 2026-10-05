@@ -300,7 +300,7 @@ function MachineSection({ machine, count, open, onToggle, onAdd, children }: { m
           <span className={`text-[10px] text-fg-dim transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
             ▶
           </span>
-          {status && <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} title={STATUS_LABEL[status]} />}
+          {status && <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} title={t(STATUS_LABEL[status])} />}
           <span className="truncate font-medium">{name}</span>
           {machine?.subtitle && <span className="truncate text-xs text-fg-muted">{machine.subtitle}</span>}
           <span className="text-xs text-fg-dim">{t('{{count}} contas', { count })}</span>
