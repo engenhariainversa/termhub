@@ -158,9 +158,13 @@ interface RowProps {
 
 function ColumnRow({ column, index, last, locked, onRename, onCategory, onMove, onDelete }: RowProps) {
   const [name, setName] = useState(column.name);
-  useEffect(() => {
+  // Follows a rename from outside, adjusted while rendering: as an effect it ran a moment after the row
+  // appeared and reset whatever had been typed in between (TER-911).
+  const [shownName, setShownName] = useState(column.name);
+  if (shownName !== column.name) {
+    setShownName(column.name);
     setName(column.name);
-  }, [column.name]);
+  }
 
   const commit = () => {
     const v = name.trim();

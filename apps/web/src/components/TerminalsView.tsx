@@ -116,8 +116,11 @@ export function TerminalsView({ project, visible }: Props) {
   }, [tabs, tabIds, area]);
 
   // First load with the real tab list: pick up the stored layout (or migrate the old active-tab key).
+  // A layout effect, so the stored layout lands in the same commit that first shows the tabs: as a
+  // passive effect it ran a moment later and replaced whatever layout change came in between (a
+  // preset or a pane picked right as the tabs appeared was lost — TER-911).
   const loadedFor = useRef<string | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!tabs || loadedFor.current === project.id) return;
     loadedFor.current = project.id;
     const all = tabs.map((t) => t.id);
