@@ -2,6 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import { Modal, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { Icon, type IconName } from '@/ui';
 import { CHAT_MSG } from '../model/messages';
 import type { PickedFile } from '../viewmodel/attachments';
@@ -49,6 +50,7 @@ export function AttachmentMenu({
   onClose(): void;
   onPicked(files: PickedFile[]): void;
 }) {
+  const { t } = useTranslation();
   const recorder = useRecorder();
   const window = useWindowDimensions();
   const [error, setError] = useState<string | null>(null);
@@ -101,22 +103,22 @@ export function AttachmentMenu({
 
   return (
     <Modal transparent animationType="fade" visible={open} onRequestClose={close}>
-      <Pressable className="absolute inset-0" onPress={close} accessibilityRole="button" accessibilityLabel="Fechar" />
+      <Pressable className="absolute inset-0" onPress={close} accessibilityRole="button" accessibilityLabel={t('Fechar')} />
       <View style={{ position: 'absolute', ...place }} className="min-w-56 rounded-3xl border border-app-border bg-app-surface p-2 shadow-lg">
         {recorder.state === 'recording' ? (
           <>
             <View className="flex-row items-center gap-2 px-3 py-2">
               <View className="h-2 w-2 rounded-full bg-app-danger" />
-              <Text className="text-sm text-app-muted">Gravando… {clock(recorder.seconds)}</Text>
+              <Text className="text-sm text-app-muted">{t('Gravando… {{time}}', { time: clock(recorder.seconds) })}</Text>
             </View>
-            <MenuItem icon={{ ios: 'stop.fill', android: 'stop' }} label="Parar e anexar" onPress={() => void stopRecording()} />
-            <MenuItem icon={{ ios: 'xmark', android: 'close' }} label="Cancelar gravação" onPress={close} tone="danger" />
+            <MenuItem icon={{ ios: 'stop.fill', android: 'stop' }} label={t('Parar e anexar')} onPress={() => void stopRecording()} />
+            <MenuItem icon={{ ios: 'xmark', android: 'close' }} label={t('Cancelar gravação')} onPress={close} tone="danger" />
           </>
         ) : (
           <>
-            <MenuItem icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }} label="Foto ou vídeo" onPress={() => void pickMedia()} />
-            <MenuItem icon={{ ios: 'doc', android: 'description' }} label="Arquivo" onPress={() => void pickFile()} />
-            <MenuItem icon={{ ios: 'waveform', android: 'graphic_eq' }} label="Gravar áudio" onPress={() => void startRecording()} />
+            <MenuItem icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }} label={t('Foto ou vídeo')} onPress={() => void pickMedia()} />
+            <MenuItem icon={{ ios: 'doc', android: 'description' }} label={t('Arquivo')} onPress={() => void pickFile()} />
+            <MenuItem icon={{ ios: 'waveform', android: 'graphic_eq' }} label={t('Gravar áudio')} onPress={() => void startRecording()} />
           </>
         )}
         {(error ?? recorder.error) ? <Text className="max-w-64 px-3 py-2 text-sm text-app-danger">{error ?? recorder.error}</Text> : null}

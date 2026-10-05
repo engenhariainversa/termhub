@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { isFavorite } from '@/features/home/model/favorites';
 import { SessionsList } from '@/features/tab-chat/view/sessions-list';
+import { tk, useTranslation } from '@/i18n';
 import { AppText, Banner, EmptyState, Screen, SPLIT_LIST_WIDTH, useWideLayout } from '@/ui';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ConversationView } from './conversation-screen';
@@ -15,12 +16,13 @@ const LIVE_LIST_DEBOUNCE_MS = 1000;
 
 type Segment = 'conversas' | 'sessoes';
 const SEGMENTS: { key: Segment; label: string }[] = [
-  { key: 'conversas', label: 'Conversas' },
-  { key: 'sessoes', label: 'Sessões' },
+  { key: 'conversas', label: tk('Conversas') },
+  { key: 'sessoes', label: tk('Sessões') },
 ];
 
 /** The two lists of the tab (spec 2026-10-01 tab chat D14): the concierge's chats, and the terminal tabs read as conversations. */
 function SegmentBar({ value, onChange }: { value: Segment; onChange(next: Segment): void }) {
+  const { t } = useTranslation();
   return (
     <View accessibilityRole="tablist" className="flex-row rounded-xl bg-app-surface2 p-1">
       {SEGMENTS.map((s) => {
@@ -29,12 +31,12 @@ function SegmentBar({ value, onChange }: { value: Segment; onChange(next: Segmen
           <Pressable
             key={s.key}
             accessibilityRole="tab"
-            accessibilityLabel={s.label}
+            accessibilityLabel={t(s.label)}
             accessibilityState={{ selected }}
             onPress={() => onChange(s.key)}
             className={`flex-1 items-center rounded-lg py-2 ${selected ? 'bg-app-surface' : ''}`}
           >
-            <Text className={`text-sm ${selected ? 'font-semibold text-app-text' : 'text-app-muted'}`}>{s.label}</Text>
+            <Text className={`text-sm ${selected ? 'font-semibold text-app-text' : 'text-app-muted'}`}>{t(s.label)}</Text>
           </Pressable>
         );
       })}
@@ -46,6 +48,7 @@ function SegmentBar({ value, onChange }: { value: Segment; onChange(next: Segmen
  * answering and how many confirmations wait for the person. From `WIDE_MIN_WIDTH` (spec 2026-09-28
  * iPad §2.3) the list and the chosen conversation sit side by side instead of pushing a screen. */
 export function ChatsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const projects = useChatStore((s) => s.projects);
   const loading = useChatStore((s) => s.loadingProjects);
@@ -109,7 +112,7 @@ export function ChatsScreen() {
   const open = (route: string) => (wide ? setSelected(route) : router.push(`/chat/${route}` as Href));
 
   const rows: (ProjectRowData & { pinned: boolean | null })[] = [
-    { route: 'general', name: 'Chat geral', busy: false, pending: 0, lastMessageAt: null, pinned: null },
+    { route: 'general', name: t('Chat geral'), busy: false, pending: 0, lastMessageAt: null, pinned: null },
     ...projects.map((p) => ({ route: p.id, name: p.name, busy: p.busy, pending: p.pending_confirmations, lastMessageAt: p.last_message_at, pinned: isFavorite(p) })),
   ];
   const sheetProject = projects.find((p) => p.id === sheetFor);
@@ -117,7 +120,7 @@ export function ChatsScreen() {
   const list = (
     <>
       <View className="gap-3 px-6 pb-2 pt-4">
-        <AppText variant="title">Chats</AppText>
+        <AppText variant="title">{t('Chats')}</AppText>
         <SegmentBar value={segment} onChange={setSegment} />
         {/* The store has one `error`: with a chat in the pane, the pane's banner already shows it. */}
         {segment === 'conversas' && error && !(wide && selected) ? <Banner tone="danger" text={error} /> : null}
@@ -156,7 +159,7 @@ export function ChatsScreen() {
           {list}
         </View>
         <View testID="chats-detail-pane" className="flex-1">
-          {selected ? <ConversationView key={selected} routeId={selected} embedded /> : <EmptyState title="Escolha uma conversa" hint="Selecione um chat na lista ao lado." />}
+          {selected ? <ConversationView key={selected} routeId={selected} embedded /> : <EmptyState title={t('Escolha uma conversa')} hint={t('Selecione um chat na lista ao lado.')} />}
         </View>
       </View>
     </Screen>

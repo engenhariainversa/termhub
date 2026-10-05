@@ -1,10 +1,12 @@
-// Verbatim from apps/web/src/components/chat/grant-time.ts
+// Verbatim from apps/web/src/components/chat/grant-time.ts (the pt-BR copy is the translation key)
+import { t } from '@/i18n';
+
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 /** "até 14:32", or "até amanhã, 09:05" — a grant lasts at most 24 h, so those are the only two days. */
 export function untilLabel(expiresAt: string, now = new Date()): string {
   const end = new Date(expiresAt);
-  return end.toDateString() === now.toDateString() ? `até ${hhmm(end)}` : `até amanhã, ${hhmm(end)}`;
+  return end.toDateString() === now.toDateString() ? t('até {{time}}', { time: hhmm(end) }) : t('até amanhã, {{time}}', { time: hhmm(end) });
 }
 
 /** The server is the judge (it re-checks on every call); this only hides a strip that has run out. */

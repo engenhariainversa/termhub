@@ -5,18 +5,19 @@ import type { TChatDecision, TConciergeNote, TLessonItem } from '@/services/api/
 import { TERMHUB_URL } from '@/services/api/config';
 import { AppText, Banner, Button, EmptyState, Field, Screen } from '@/ui';
 import { useChatMemoryStore } from '../viewmodel/useChatMemoryStore';
+import { t, tk, useTranslation } from '@/i18n';
 import { formatDate } from '@/i18n/format';
 
 const fmtDate = (iso: string) => formatDate(iso);
 
-/** "Lições" (spec 2026-09-27 failure lessons §6/§8): pt-BR labels for `evidence`, verbatim (binding
- * clarifications) — the mobile twin of `ChatMemoryPage`'s `EVIDENCE_LABEL`. */
-const EVIDENCE_LABEL: Record<TLessonItem['evidence'], string> = { observed: 'observada', fixed: 'corrigida', confirmed: 'confirmada' };
+/** "Lições" (spec 2026-09-27 failure lessons §6/§8): labels for `evidence` (pt-BR keys, verbatim from the
+ * binding clarifications; translated where shown) — the mobile twin of `ChatMemoryPage`'s `EVIDENCE_LABEL`. */
+const EVIDENCE_LABEL: Record<TLessonItem['evidence'], string> = { observed: tk('observada'), fixed: tk('corrigida'), confirmed: tk('confirmada') };
 
 /** "arquivo <path>" for a file-origin lesson, "anotação do projeto" for a note-origin one —
  * verbatim, copied from `ChatMemoryPage`'s `originText`. */
 function originText(l: TLessonItem): string {
-  return l.origin === 'file' ? `arquivo ${l.path ?? ''}` : 'anotação do projeto';
+  return l.origin === 'file' ? t('arquivo {{path}}', { path: l.path ?? '' }) : t('anotação do projeto');
 }
 
 /** "Abrir origem" (binding clarifications): the PR link when `pr` is set; else the card, built as
@@ -37,14 +38,15 @@ function answerText(d: TChatDecision): string {
 }
 
 function DecisionRow({ decision, forgetting, onForget }: { decision: TChatDecision; forgetting: boolean; onForget(): void }) {
+  const { t } = useTranslation();
   return (
     <View className="gap-1 rounded-xl border border-app-border bg-app-surface2 p-4">
       <AppText className="font-semibold">{decision.question}</AppText>
       <AppText variant="muted">{`→ ${answerText(decision)}`}</AppText>
       <AppText variant="muted" className="text-xs">
-        {`${decision.project_name ?? 'sem projeto'} · ${fmtDate(decision.created_at)} · sugerida ${decision.suggested_count}× · aceita ${decision.accepted_count}×`}
+        {`${decision.project_name ?? t('sem projeto')} · ${fmtDate(decision.created_at)} · ${t('sugerida {{n}}×', { n: decision.suggested_count })} · ${t('aceita {{n}}×', { n: decision.accepted_count })}`}
       </AppText>
-      <Button label="Esquecer" variant="ghost" disabled={forgetting} onPress={onForget} />
+      <Button label={t('Esquecer')} variant="ghost" disabled={forgetting} onPress={onForget} />
     </View>
   );
 }
@@ -52,14 +54,15 @@ function DecisionRow({ decision, forgetting, onForget }: { decision: TChatDecisi
 /** "Anotações do concierge" (spec D12/§8): one `record_decision` note, as the list shows it — the
  * mobile twin of `ChatMemoryPage`'s row. */
 function NoteRow({ note, forgetting, onForget }: { note: TConciergeNote; forgetting: boolean; onForget(): void }) {
+  const { t } = useTranslation();
   return (
     <View className="gap-1 rounded-xl border border-app-border bg-app-surface2 p-4">
       <AppText className="font-semibold">{note.question}</AppText>
       <AppText variant="muted">{`→ ${note.decision}`}</AppText>
       <AppText variant="muted" className="text-xs">
-        {`${note.reason} · ${note.project_name ?? 'sem projeto'} · ${fmtDate(note.created_at)}`}
+        {`${note.reason} · ${note.project_name ?? t('sem projeto')} · ${fmtDate(note.created_at)}`}
       </AppText>
-      <Button label="Esquecer" variant="ghost" disabled={forgetting} onPress={onForget} />
+      <Button label={t('Esquecer')} variant="ghost" disabled={forgetting} onPress={onForget} />
     </View>
   );
 }
@@ -81,18 +84,19 @@ function LessonRow({
   onToggleVerified(): void;
   onForget(): void;
 }) {
+  const { t } = useTranslation();
   const href = lessonSourceHref(lesson);
   return (
     <View className="gap-1 rounded-xl border border-app-border bg-app-surface2 p-4">
       <AppText className="font-semibold">{lesson.title}</AppText>
       <AppText variant="muted">{lesson.excerpt}</AppText>
       <AppText variant="muted" className="text-xs">
-        {`${lesson.project?.name ?? 'sem projeto'} · ${originText(lesson)} · ${EVIDENCE_LABEL[lesson.evidence]} · ${fmtDate(lesson.created_at)}${lesson.verified ? ' · verificada' : ''}`}
+        {`${lesson.project?.name ?? t('sem projeto')} · ${originText(lesson)} · ${t(EVIDENCE_LABEL[lesson.evidence])} · ${fmtDate(lesson.created_at)}${lesson.verified ? ` · ${t('verificada')}` : ''}`}
       </AppText>
       <View className="flex-row flex-wrap items-center gap-3">
-        <Button label={lesson.verified ? 'Desfazer verificação' : 'Verificar'} variant="ghost" disabled={verifying} onPress={onToggleVerified} />
-        <Button label="Esquecer" variant="ghost" disabled={forgetting} onPress={onForget} />
-        {href ? <Button label="Abrir origem" variant="ghost" onPress={() => void Linking.openURL(href)} /> : null}
+        <Button label={lesson.verified ? t('Desfazer verificação') : t('Verificar')} variant="ghost" disabled={verifying} onPress={onToggleVerified} />
+        <Button label={t('Esquecer')} variant="ghost" disabled={forgetting} onPress={onForget} />
+        {href ? <Button label={t('Abrir origem')} variant="ghost" onPress={() => void Linking.openURL(href)} /> : null}
       </View>
     </View>
   );
@@ -105,6 +109,7 @@ function LessonRow({
  * (the web asks `window.confirm`); no PIN either way, consistent with TER-56's cards.
  */
 export function ChatMemoryScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const memory = useChatMemoryStore((s) => s.memory);
   const decisions = useChatMemoryStore((s) => s.decisions);
@@ -162,55 +167,55 @@ export function ChatMemoryScreen() {
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
 
   const confirmForget = (d: TChatDecision) => {
-    Alert.alert('Esquecer esta decisão?', `«${d.question}»`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Esquecer', style: 'destructive', onPress: () => void forget(d.id) },
+    Alert.alert(t('Esquecer esta decisão?'), `«${d.question}»`, [
+      { text: t('Cancelar'), style: 'cancel' },
+      { text: t('Esquecer'), style: 'destructive', onPress: () => void forget(d.id) },
     ]);
   };
 
   const confirmForgetNote = (n: TConciergeNote) => {
-    Alert.alert('Esquecer esta anotação?', `«${n.question}»`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Esquecer', style: 'destructive', onPress: () => void forgetNote(n.id) },
+    Alert.alert(t('Esquecer esta anotação?'), `«${n.question}»`, [
+      { text: t('Cancelar'), style: 'cancel' },
+      { text: t('Esquecer'), style: 'destructive', onPress: () => void forgetNote(n.id) },
     ]);
   };
 
   /** "Esquecer esta lição?" verbatim (binding clarifications) — the mobile twin of the web's
    * `window.confirm('Esquecer esta lição?')`. */
   const confirmForgetLesson = (l: TLessonItem) => {
-    Alert.alert('Esquecer esta lição?', `«${l.title}»`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Esquecer', style: 'destructive', onPress: () => void forgetLesson(l.id) },
+    Alert.alert(t('Esquecer esta lição?'), `«${l.title}»`, [
+      { text: t('Cancelar'), style: 'cancel' },
+      { text: t('Esquecer'), style: 'destructive', onPress: () => void forgetLesson(l.id) },
     ]);
   };
 
   return (
     <Screen padded={false}>
       <View className="flex-row items-center gap-2 border-b border-app-border px-2 py-2">
-        <Button label="Voltar" variant="ghost" onPress={goBack} />
+        <Button label={t('Voltar')} variant="ghost" onPress={goBack} />
         <AppText variant="title" className="flex-1 text-xl">
-          Memória do chat
+          {t('Memória do chat')}
         </AppText>
       </View>
       <View className="gap-3 px-6 pb-2 pt-4">
         <AppText variant="muted">
-          O que o concierge lembra das suas respostas anteriores, para sugerir a mesma resposta quando uma aba perguntar de novo.
+          {t('O que o concierge lembra das suas respostas anteriores, para sugerir a mesma resposta quando uma aba perguntar de novo.')}
         </AppText>
         {memory?.available === false ? (
-          <AppText variant="muted">Sugestões indisponíveis neste servidor</AppText>
+          <AppText variant="muted">{t('Sugestões indisponíveis neste servidor')}</AppText>
         ) : memory ? (
           <>
             <View className="flex-row items-center justify-between gap-3 rounded-xl border border-app-border bg-app-surface2 p-3">
-              <AppText className="flex-1">Sugerir respostas com base nas minhas decisões</AppText>
-              <Switch accessibilityLabel="Sugerir respostas com base nas minhas decisões" value={memory.enabled} disabled={switching} onValueChange={() => void toggle()} />
+              <AppText className="flex-1">{t('Sugerir respostas com base nas minhas decisões')}</AppText>
+              <Switch accessibilityLabel={t('Sugerir respostas com base nas minhas decisões')} value={memory.enabled} disabled={switching} onValueChange={() => void toggle()} />
             </View>
             <View className="gap-1 rounded-xl border border-app-border bg-app-surface2 p-3">
               <View className="flex-row items-center justify-between gap-3">
-                <AppText className="flex-1">Responder sozinho quando houver precedente</AppText>
-                <Switch accessibilityLabel="Responder sozinho quando houver precedente" value={memory.autodecide} onValueChange={(v) => void setAutodecide(v)} />
+                <AppText className="flex-1">{t('Responder sozinho quando houver precedente')}</AppText>
+                <Switch accessibilityLabel={t('Responder sozinho quando houver precedente')} value={memory.autodecide} onValueChange={(v) => void setAutodecide(v)} />
               </View>
               <AppText variant="muted" className="text-xs">
-                Quando a resposta repetir uma decisão sua recente, o concierge espera 60 segundos antes de responder por você, dando tempo de cancelar.
+                {t('Quando a resposta repetir uma decisão sua recente, o concierge espera 60 segundos antes de responder por você, dando tempo de cancelar.')}
               </AppText>
             </View>
           </>
@@ -219,15 +224,15 @@ export function ChatMemoryScreen() {
         {memory ? (
           <View className="gap-1 rounded-xl border border-app-border bg-app-surface2 p-3">
             <View className="flex-row items-center justify-between gap-3">
-              <AppText className="flex-1">Responder perguntas do Codex pelo chat</AppText>
-              <Switch accessibilityLabel="Responder perguntas do Codex pelo chat" value={memory.codex_replies} onValueChange={(v) => void setCodexReplies(v)} />
+              <AppText className="flex-1">{t('Responder perguntas do Codex pelo chat')}</AppText>
+              <Switch accessibilityLabel={t('Responder perguntas do Codex pelo chat')} value={memory.codex_replies} onValueChange={(v) => void setCodexReplies(v)} />
             </View>
             <AppText variant="muted" className="text-xs">
-              Quando o Codex termina o turno com uma pergunta, abre um card no chat para você responder sem ir até a aba.
+              {t('Quando o Codex termina o turno com uma pergunta, abre um card no chat para você responder sem ir até a aba.')}
             </AppText>
           </View>
         ) : null}
-        <Field label="Buscar" value={q} onChangeText={search} placeholder="pergunta, resposta ou projeto" testID="chat-memory-search" />
+        <Field label={t('Buscar')} value={q} onChangeText={search} placeholder={t('pergunta, resposta ou projeto')} testID="chat-memory-search" />
         {error ? <Banner tone="danger" text={error} /> : null}
       </View>
       {/* One scrolling region for both lists (design mirrors `ChatMemoryPage`'s single page): the
@@ -241,25 +246,25 @@ export function ChatMemoryScreen() {
         ListEmptyComponent={
           decisions === null ? (
             <View className="items-center justify-center py-6">
-              <AppText variant="muted">Carregando…</AppText>
+              <AppText variant="muted">{t('Carregando…')}</AppText>
             </View>
           ) : (
-            <EmptyState title="Nenhuma decisão lembrada" hint="Suas respostas às perguntas das abas aparecem aqui." />
+            <EmptyState title={t('Nenhuma decisão lembrada')} hint={t('Suas respostas às perguntas das abas aparecem aqui.')} />
           )
         }
         ListFooterComponent={
           <View className="gap-3">
-            {cursor ? <Button label={loadingMore ? 'Carregando…' : 'Carregar mais'} variant="ghost" disabled={loadingMore} onPress={() => void loadMore()} /> : null}
+            {cursor ? <Button label={loadingMore ? t('Carregando…') : t('Carregar mais')} variant="ghost" disabled={loadingMore} onPress={() => void loadMore()} /> : null}
             <View className="gap-3 pt-6">
               <AppText variant="title" className="text-base">
-                Anotações do concierge
+                {t('Anotações do concierge')}
               </AppText>
-              <AppText variant="muted">Decisões que o concierge registrou por conta própria, com o motivo que deu para cada uma.</AppText>
+              <AppText variant="muted">{t('Decisões que o concierge registrou por conta própria, com o motivo que deu para cada uma.')}</AppText>
               {notesError ? <Banner tone="danger" text={notesError} /> : null}
               {notes === null ? (
-                <AppText variant="muted">Carregando…</AppText>
+                <AppText variant="muted">{t('Carregando…')}</AppText>
               ) : notes.length === 0 ? (
-                <AppText variant="muted">Nenhuma anotação ainda.</AppText>
+                <AppText variant="muted">{t('Nenhuma anotação ainda.')}</AppText>
               ) : (
                 <View className="gap-3">
                   {notes.map((n) => (
@@ -268,23 +273,23 @@ export function ChatMemoryScreen() {
                 </View>
               )}
               {notesCursor ? (
-                <Button label={loadingMoreNotes ? 'Carregando…' : 'Carregar mais anotações'} variant="ghost" disabled={loadingMoreNotes} onPress={() => void loadMoreNotes()} />
+                <Button label={loadingMoreNotes ? t('Carregando…') : t('Carregar mais anotações')} variant="ghost" disabled={loadingMoreNotes} onPress={() => void loadMoreNotes()} />
               ) : null}
             </View>
             <View className="gap-3 pt-6">
               <AppText variant="title" className="text-base">
-                Lições
+                {t('Lições')}
               </AppText>
               <AppText variant="muted">
-                Erros que já aconteceram — de arquivos docs/lessons e de anotações do projeto — para o concierge não repetir.
+                {t('Erros que já aconteceram — de arquivos docs/lessons e de anotações do projeto — para o concierge não repetir.')}
               </AppText>
-              <Field label="Buscar lições" value={lessonsQ} onChangeText={searchLessons} placeholder="sintoma, projeto ou arquivo" testID="chat-memory-lessons-search" />
+              <Field label={t('Buscar lições')} value={lessonsQ} onChangeText={searchLessons} placeholder={t('sintoma, projeto ou arquivo')} testID="chat-memory-lessons-search" />
               {lessonsError ? <Banner tone="danger" text={lessonsError} /> : null}
               {lessonsNote ? <AppText variant="muted">{lessonsNote}</AppText> : null}
               {lessons === null ? (
-                <AppText variant="muted">Carregando…</AppText>
+                <AppText variant="muted">{t('Carregando…')}</AppText>
               ) : lessons.length === 0 ? (
-                <AppText variant="muted">Nenhuma lição ainda.</AppText>
+                <AppText variant="muted">{t('Nenhuma lição ainda.')}</AppText>
               ) : (
                 <View className="gap-3">
                   {lessons.map((l) => (
@@ -300,7 +305,7 @@ export function ChatMemoryScreen() {
                 </View>
               )}
               {lessonsCursor ? (
-                <Button label={loadingMoreLessons ? 'Carregando…' : 'Carregar mais lições'} variant="ghost" disabled={loadingMoreLessons} onPress={() => void loadMoreLessons()} />
+                <Button label={loadingMoreLessons ? t('Carregando…') : t('Carregar mais lições')} variant="ghost" disabled={loadingMoreLessons} onPress={() => void loadMoreLessons()} />
               ) : null}
             </View>
           </View>
