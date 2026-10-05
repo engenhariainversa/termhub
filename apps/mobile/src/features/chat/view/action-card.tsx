@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { View } from 'react-native';
+import { memo, useState } from 'react';
+import { Pressable, View } from 'react-native';
 import { t, tk, useTranslation } from '@/i18n';
 import { actionAutoDecision, isBoardGrantable, isTabGrantable, isTerminalGrantable, standingKindOf, type StandingGrantKind } from '@/services/api/contract';
 import { AppText, Button } from '@/ui';
@@ -97,9 +97,37 @@ export const ActionCard = memo(function ActionCard({ action, busy, onDecide, gra
   const standingKind = standingKindOf({ tool: action.tool, args: action.args, tab_id: action.tab_id, project_id: action.project_id });
   const stale = staleLabel(action);
   const autoDecision = actionAutoDecision(action);
+  // TER-984: a call that ran under a grant asked nobody, so it reads as one line — what it did and how
+  // it ended — and opens to the whole card on a tap. A card that asks (or asked) keeps its full form.
+  const compact = Boolean(action.grant_id) && action.status !== 'pending' && !stale;
+  const [expanded, setExpanded] = useState(false);
+  const statusLine = action.status === 'pending' ? '' : `${t(STATUS_LABEL[action.status])}${action.grant_id ? grantedLabel(action) : ''}`;
+  if (compact && !expanded) {
+    return (
+      <Pressable
+        testID={`action-card-${action.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={t('Ver detalhes')}
+        accessibilityState={{ expanded: false }}
+        onPress={() => setExpanded(true)}
+        className="flex-row items-center gap-2 rounded-xl px-2 py-1"
+      >
+        <AppText variant="muted">{action.status === 'failed' ? '✗' : '✓'}</AppText>
+        {/* First line only: the whole sentence is in the expanded card. */}
+        <AppText variant="muted" numberOfLines={1} className="flex-1">
+          {action.summary.split('\n')[0]}
+        </AppText>
+        <AppText variant="muted">{statusLine}</AppText>
+        {autoDecision ? <AutoDecisionBadge decision={autoDecision} /> : null}
+      </Pressable>
+    );
+  }
   return (
     <View testID={`action-card-${action.id}`} className={`gap-3 rounded-2xl border ${stale ? 'border-app-border' : 'border-app-accent'} bg-app-surface2 p-4`}>
-      <AppText variant="label">{t('Pedido de confirmação')}</AppText>
+      <View className="flex-row items-center justify-between gap-2">
+        <AppText variant="label">{t('Pedido de confirmação')}</AppText>
+        {compact ? <Button label={t('Recolher')} variant="ghost" onPress={() => setExpanded(false)} /> : null}
+      </View>
       <AppText>{action.summary}</AppText>
       {/* The subagent whose turn proposed this action (spec 2026-09-26 §4), when there is one. */}
       {action.subagent ? <AppText variant="muted">{t('Pedido pelo subagente «{{description}}»', { description: action.subagent.description })}</AppText> : null}
@@ -138,7 +166,7 @@ export const ActionCard = memo(function ActionCard({ action, busy, onDecide, gra
           {onRepropose ? <Button label={t('Propor de novo')} variant="ghost" onPress={() => onRepropose(action)} /> : null}
         </View>
       ) : (
-        <AppText variant="muted">{`${t(STATUS_LABEL[action.status])}${action.grant_id ? grantedLabel(action) : ''}`}</AppText>
+        <AppText variant="muted">{statusLine}</AppText>
       )}
       {/* TER-641: sent without a click on a precedent from memory — apart from the allowance it ran under. */}
       {autoDecision ? <AutoDecisionBadge decision={autoDecision} /> : null}

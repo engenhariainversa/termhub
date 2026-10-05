@@ -26,6 +26,8 @@ import { TabLimitCard } from './tab-limit-card';
 import { TabQuestionCard } from './tab-question-card';
 import { TabSuggestionCard } from './tab-suggestion-card';
 
+/** How far from its end (the inverted list's offset 0) the reader counts as scrolled up (TER-984), like the web's `isNearBottom`. */
+const NEAR_END = 48;
 /** How often the grant index re-checks expiry (spec §4.2 "Stable rows"): never during render. */
 const GRANT_TICK_MS = 30_000;
 /** How often the subagents sheet's elapsed labels refresh while it is open (spec 2026-09-26 panel §4). */
@@ -256,6 +258,27 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
     setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }), JUMP_RETRY_MS);
   }, []);
 
+  // TER-984: the "novas mensagens" pill, as on the web. The inverted list shows its end at offset 0, so
+  // a reader there sees what arrives; one scrolled up (past `NEAR_END`) is told something arrived at the
+  // end — a new row, or the newest row replaced — and the pill takes them back there.
+  const farFromEnd = useRef(false);
+  const [unread, setUnread] = useState(false);
+  const endOf = (list: ChatEntry[]) => ({ count: list.length, key: list[0] ? entryKey(list[0]) : '' });
+  const seen = useRef(endOf(entries));
+  useEffect(() => {
+    const before = seen.current;
+    seen.current = endOf(entries);
+    if (farFromEnd.current && (seen.current.count > before.count || seen.current.key !== before.key)) setUnread(true);
+  }, [entries]);
+  const onScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    farFromEnd.current = e.nativeEvent.contentOffset.y > NEAR_END;
+    if (!farFromEnd.current) setUnread(false);
+  }, []);
+  const toEnd = useCallback(() => {
+    setUnread(false);
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
   // A quote's tap (TER-447): the original, if the thread has it, scrolls to the middle the same way
   // and is outlined for a moment. Read through a ref so the rows' callback stays stable across deltas.
   const entriesRef = useRef(entries);
@@ -410,6 +433,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
             </Pressable>
           )
         ) : (
+          <View className="flex-1">
           <FlatList
             ref={listRef}
             testID="conversation-thread"
@@ -423,7 +447,17 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
             extraData={extra}
             renderItem={renderItem}
             onScrollToIndexFailed={onScrollToIndexFailed}
+            onScroll={onScroll}
+            scrollEventThrottle={64}
           />
+          {unread ? (
+            <View pointerEvents="box-none" className="absolute bottom-2 left-0 right-0 items-center">
+              <Pressable testID="conversation-unread" accessibilityRole="button" onPress={toEnd} className="rounded-full border border-app-border bg-app-surface2 px-3 py-1">
+                <AppText variant="muted">{t('↓ novas mensagens')}</AppText>
+              </Pressable>
+            </View>
+          ) : null}
+          </View>
         )}
         {/* The footer block, a sibling of the list like the header: its height changes the list's
             frame, not its content (spec 2026-09-26 §4.2 "Keyboard"). */}

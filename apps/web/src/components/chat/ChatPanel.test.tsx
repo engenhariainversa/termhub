@@ -1643,3 +1643,38 @@ describe('replies (TER-447)', () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 });
+
+it('a call granted mid-turn reads compact, above the answer of its turn, so the answer is the last row (TER-984)', async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { connected: true };
+  });
+  chatMock.mockResolvedValue({
+    conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
+    messages: [
+      msg({ id: 'u1', conversation_id: 'c_p1', text: 'pode publicar os otas', created_at: '2026-10-05T20:00:00.000Z' }),
+      // The answer's row is made empty when the turn starts, before the call it runs.
+      msg({ id: 'm1', conversation_id: 'c_p1', role: 'assistant', text: 'Publicado.', created_at: '2026-10-05T20:00:01.000Z' }),
+    ],
+    actions: [],
+    host: READY,
+    grants: [],
+  });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await screen.findByText('Publicado.');
+
+  onEvent({ type: 'granted_action', conversation_id: 'c_p1', action: action({ id: 'a1', status: 'executed', grant_id: 'g1', summary: 'digitar `Mensagem do Pedro…\nresto` na aba App', created_at: '2026-10-05T20:00:05.000Z' }) });
+  expect(await screen.findByText('Executado · aba confiada')).toBeInTheDocument();
+
+  const rows = within(screen.getByRole('list', { name: 'Conversa' })).getAllByRole('listitem').filter((li) => li.parentElement?.getAttribute('aria-label') === 'Conversa');
+  const card = rows.findIndex((li) => li.getAttribute('data-chat-card') === 'a1');
+  expect(card).toBeGreaterThan(-1);
+  expect(rows[card]).toHaveAttribute('data-compact');
+  expect(rows[rows.length - 1]).toHaveTextContent('Publicado.');
+  expect(card).toBeLessThan(rows.length - 1);
+});

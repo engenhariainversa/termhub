@@ -1037,3 +1037,56 @@ describe('replies (TER-447)', () => {
     await waitFor(() => expect(screen.queryByLabelText('Cancelar resposta')).toBeNull(), LOAD);
   });
 });
+
+describe('Conversa: the answer reads last (TER-984)', () => {
+  /** Adds rows and a card to the open project's thread, as the socket's events would. */
+  function addTurn(rows: ChatMessage[], cards: TChatAction[]) {
+    const s = useChatStore.getState();
+    const slot = s.conversations['p-termhub']!;
+    useChatStore.setState({ conversations: { ...s.conversations, 'p-termhub': { ...slot, messages: [...slot.messages, ...rows], actions: [...slot.actions, ...cards] } } });
+  }
+  const granted = (id: string, created_at: string): TChatAction => ({
+    id,
+    tool: 'send_input',
+    args: { tab_id: 't-app', text: 'Mensagem do Pedro' },
+    class: 'write',
+    status: 'executed',
+    machine_id: 'm-jarvis',
+    project_id: 'p-termhub',
+    tab_id: 't-app',
+    grant_id: 'g1',
+    summary: 'digitar `Mensagem do Pedro…\nresto` na aba App',
+    created_at,
+  });
+
+  it('a call granted mid-turn sits compact above the answer of its turn: the answer is the end of the thread', async () => {
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    // The answer's row is made empty when the turn starts, before the call it runs.
+    await act(async () => addTurn([assistantRow('m-otas', { text: 'Publicado.', created_at: at(10) })], [granted('a-otas', at(20))]));
+
+    const data = screen.getByTestId('conversation-thread').props.data as Array<{ kind: string; message?: { id: string }; action?: { id: string } }>;
+    // Inverted: index 0 is the end of the thread.
+    expect(data[0]).toMatchObject({ kind: 'message', message: { id: 'm-otas' } });
+    expect(data[1]).toMatchObject({ kind: 'action', action: { id: 'a-otas' } });
+    expect(screen.getByText('executada · aba confiada')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ver detalhes' })).toBeTruthy();
+  });
+
+  it('scrolled up, a new row raises "↓ novas mensagens", which takes the reader back to the end', async () => {
+    const toOffset = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => undefined);
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    const list = screen.getByTestId('conversation-thread');
+
+    // At the end, nothing is announced: the reader sees what arrives.
+    await act(async () => addTurn([assistantRow('m-near', { text: 'primeira', created_at: at(10) })], []));
+    expect(screen.queryByTestId('conversation-unread')).toBeNull();
+
+    await fireEvent.scroll(list, { nativeEvent: { contentOffset: { y: 600 }, contentSize: { height: 2000, width: 400 }, layoutMeasurement: { height: 600, width: 400 } } });
+    await act(async () => addTurn([assistantRow('m-far', { text: 'segunda', created_at: at(20) })], []));
+    await fireEvent.press(await screen.findByText('↓ novas mensagens'));
+    expect(toOffset).toHaveBeenCalledWith({ offset: 0, animated: true });
+    expect(screen.queryByTestId('conversation-unread')).toBeNull();
+  });
+});
