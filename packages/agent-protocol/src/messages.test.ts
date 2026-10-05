@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agentMessage,
   CAPABILITY_CLAUDE_STREAM_INPUT,
+  CAPABILITY_FILE_READ,
   CAPABILITY_TRANSCRIPT,
   CAPABILITY_SIM,
   claudeOpenParams,
@@ -147,4 +148,8 @@ describe('streamed claude input', () => {
 
 it('names the transcript capability once', () => {
   expect(CAPABILITY_TRANSCRIPT).toBe('transcript');
+});
+
+it('names the file read capability once', () => {
+  expect(CAPABILITY_FILE_READ).toBe('file_read');
 });
