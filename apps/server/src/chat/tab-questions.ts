@@ -114,7 +114,7 @@ export async function closeTabQuestions(repos: Repositories, tabId: string, stat
  * a wake turn, and `deps.waker`'s own contract (`createWaker`) never throws. In a tab with a live
  * automatic run (`automaticRunOfTab`) the card goes to `automationAnswer` instead (agentic board spec
  * D18: repeat, recommended option, wake, escalate), fire-and-forget too; a `permission` card there goes to
- * `automationPermission` (§9.2: "allow" by the project's rules, or escalate).
+ * `answerPermissionAutomatically` (§9.2: "allow" by the project's rules, or escalate).
  */
 export async function openTabQuestion(
   repos: Repositories,
@@ -192,7 +192,7 @@ export async function openTabQuestion(
         const card = shown;
         // loaded lazily, like automationAnswer above
         void import('../automation/answers.js')
-          .then(({ automationPermission }) => automationPermission({ repos, log }, card, run))
+          .then(({ answerPermissionAutomatically }) => answerPermissionAutomatically({ repos, log }, card, run))
           .catch((err) => log.warn({ tabQuestionId: card.id, code: failureLabel(err) }, 'automation: permission not handled'));
       }
     }

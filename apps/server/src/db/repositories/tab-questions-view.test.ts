@@ -37,6 +37,8 @@ it('carries the countdown while the card is open, and afterwards only once sent 
   expect(toTabQuestionView({ ...answered, auto_answer: { ...auto, status: 'failed', error_code: 'TAB_PROMPT_CHANGED' } }, 'api').auto_answer?.status).toBe('failed');
   expect(toTabQuestionView({ ...answered, auto_answer: { ...auto, status: 'cancelled' }, answered_via: 'card' }, 'api')).toMatchObject({ auto_answer: null, answered_via: 'card' });
   expect(toTabQuestionView(row(), 'api')).toMatchObject({ auto_answer: null, answered_via: null });
+  // an automatic allow (agentic board §9.2) is stored as 'automation' but goes out as null: the apps' enum is card | auto
+  expect(toTabQuestionView({ ...answered, answered_via: 'automation' }, 'api')).toMatchObject({ answered_via: null });
 });
 
 it('carries surfaced_at, null until the card is brought back (TER-477)', () => {

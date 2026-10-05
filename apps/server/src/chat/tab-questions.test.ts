@@ -351,7 +351,7 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
     }
   });
 
-  it('a permission card goes to automationPermission: a Bash request (no command known) escalates the run', async () => {
+  it('a permission card goes to answerPermissionAutomatically: a Bash request (no command known) escalates the run', async () => {
     const repos = automaticRepos();
     const perm = row({ id: 'q1', kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null });
     repos.tabQuestions.open.mockResolvedValueOnce({ question: perm, closed: [] });

@@ -5,6 +5,7 @@ import { ControlError, type ControlContext } from '../control/context.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import { chatBus, type ChatEvent } from './bus.js';
+import { permissionToolOnScreen } from './permission-dialog.js';
 
 const sendKey = vi.fn(async (_ctx: unknown, input: { tab_id: string; key: string }) => ({ tab_id: input.tab_id, key: input.key, sent: true }));
 const sendInput = vi.fn(async (_ctx: unknown, input: { tab_id: string }) => ({ tab_id: input.tab_id, sent: true }));
@@ -396,6 +397,72 @@ describe('automatic answers (spec 2026-09-26 concierge memory §6, D11)', () => 
       await answerTabQuestion(ctx, 'q1', { answers: [{ selected: [1] }, { selected: [0] }] }, { log: log(), sleep: noSleep, ...noEmbed });
       expect(tabQuestions.cancelAutoAnswer).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe("an automatic allow (via 'automation', agentic board spec §9.2, review I1)", () => {
+  const dialog = (name: string) => `${readFileSync(join(import.meta.dirname, 'fixtures/permission-dialogs', name), 'utf8').trimEnd()}\n Esc to cancel`;
+  const fetchCard = (over: Partial<TabQuestion> = {}) => permission({ payload: { tool_name: 'WebFetch' }, ...over });
+  const RULE = '─'.repeat(80);
+  /** A dialog whose title the server does not know (an MCP tool), asking the usual question. */
+  const mcpDialog = `● termhub - delete_task (MCP)\n${RULE}\n Tool use\n   termhub - delete_task(id: "TER-1") (MCP)\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n Esc to cancel`;
+  const screen = (text: string) => readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text, styled: false });
+  const nothingSent = (tabQuestions: ReturnType<typeof ctxFor>['tabQuestions']) => {
+    expect(tabQuestions.claim).not.toHaveBeenCalled();
+    expect(sendKey).not.toHaveBeenCalled();
+    expect(sendInput).not.toHaveBeenCalled();
+    // the card stays open for the person
+    expect(tabQuestions.closeOne).not.toHaveBeenCalled();
+  };
+
+  it('the dialog the card names, identified on screen: "allow" is sent and stored as answered_via automation', async () => {
+    screen(dialog('claude-webfetch.txt'));
+    const { ctx, tabQuestions } = ctxFor(fetchCard());
+    await answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep, via: 'automation', ...noEmbed });
+    expect(tabQuestions.claim).toHaveBeenCalledWith('q2', 'u1', { allow: true }, undefined, 'automation');
+    expect(steps().length).toBeGreaterThan(0);
+  });
+
+  it('an unknown-title dialog on screen (an MCP tool): nothing is sent, although a click would pass', async () => {
+    screen(mcpDialog);
+    const card = fetchCard();
+    expect(promptVisible(mcpDialog, card)).toBe(true);
+    const { ctx, tabQuestions } = ctxFor(card);
+    await rejects(answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep, via: 'automation', ...noEmbed }), 409, 'TAB_PROMPT_NOT_SEEN');
+    nothingSent(tabQuestions);
+  });
+
+  it('a dialog swapped in during the settle (the next queued one, a subagent\'s): nothing is sent', async () => {
+    for (const text of [mcpDialog, dialog('claude-bash-subagent.txt'), dialog('claude-skill.txt')]) {
+      vi.clearAllMocks();
+      screen(text);
+      const { ctx, tabQuestions } = ctxFor(fetchCard());
+      await rejects(answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep, via: 'automation', ...noEmbed }), 409, 'TAB_PROMPT_NOT_SEEN');
+      nothingSent(tabQuestions);
+    }
+  });
+
+  it('a forged hook naming an allowed tool while another dialog is shown: nothing is sent', async () => {
+    // the card says WebFetch; the real dialog is a Bash command, or a WebFetch of a subagent's
+    for (const text of [screens.permission, dialog('claude-webfetch.txt').replace(' Fetch\n', ' Fetch · from the general-purpose agent\n')]) {
+      vi.clearAllMocks();
+      screen(text);
+      const { ctx, tabQuestions } = ctxFor(fetchCard());
+      await rejects(answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep, via: 'automation', ...noEmbed }), 409, 'TAB_PROMPT_NOT_SEEN');
+      nothingSent(tabQuestions);
+    }
+  });
+
+  it("only an allow on a permission card goes out via 'automation'", async () => {
+    screen(dialog('claude-webfetch.txt'));
+    const { ctx, tabQuestions } = ctxFor(fetchCard());
+    await rejects(answerTabQuestion(ctx, 'q2', { allow: false }, { log: log(), sleep: noSleep, via: 'automation', ...noEmbed }), 409, 'TAB_PROMPT_NOT_SEEN');
+    nothingSent(tabQuestions);
+  });
+
+  it('a Codex card is never identified for an automatic allow', () => {
+    expect(permissionToolOnScreen(dialog('claude-webfetch.txt'), fetchCard({ payload: { tool_name: 'WebFetch', agent: 'codex' } }))).toBe(false);
+    expect(permissionToolOnScreen(dialog('claude-webfetch.txt'), fetchCard())).toBe(true);
   });
 });
 

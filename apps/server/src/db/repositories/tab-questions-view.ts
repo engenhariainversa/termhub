@@ -26,7 +26,9 @@ export interface TabQuestionView {
    * only when it was `sent` or `failed`, so the card can say so. */
   auto_answer: AutoAnswer | null;
   /** How `answer` was obtained: `'auto'` when the countdown sent it; null on rows from before. */
-  answered_via: AnsweredVia | null;
+  /** `'automation'` goes out as null: the apps' contract knows `card` and `auto` only, and an installed
+   *  app with the older enum would drop the card (the run's `question_answered` event says what happened). */
+  answered_via: Exclude<AnsweredVia, 'automation'> | null;
   /** When the card was last brought back to the end of the chat (TER-477): screens order by it, else `created_at`. */
   surfaced_at: string | null;
   /** TER-641: "Decisão automática" — set while the countdown runs or sends (`scheduled`/`sent`, which
@@ -76,7 +78,7 @@ export function toTabQuestionView(r: TabQuestion, tabName: string | null, autoDe
     closed_at: r.closed_at,
     suggestion: r.status === 'open' ? r.suggestion : null,
     auto_answer: r.auto_answer && (r.status === 'open' || r.auto_answer.status === 'sent' || r.auto_answer.status === 'failed') ? r.auto_answer : null,
-    answered_via: r.answered_via ?? null,
+    answered_via: r.answered_via === 'automation' ? null : (r.answered_via ?? null),
     surfaced_at: r.surfaced_at ?? null,
     auto_decision: autoDecision,
   };

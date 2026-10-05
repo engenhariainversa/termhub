@@ -320,7 +320,7 @@ async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: L
 async function escalateUnansweredQuestion(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
   const q = await deps.repos.tabQuestions.latestQuestionForTab(tab.id);
   if (!q) return false;
-  // a permission card nothing answered (automationPermission escalates at once; this catches one it never
+  // a permission card nothing answered (answerPermissionAutomatically escalates at once; this catches one it never
   // reached: a pause when it opened, a crash, a send that failed silently) waits for the person too
   if (q.kind === 'permission') {
     if (q.status !== 'open' || sinceMs(deps, q.created_at) < QUESTION_WAIT_MS) return false;
@@ -405,7 +405,7 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
       }
       const stopped = tab.state === 'waiting_input';
       const exited = tab.state === 'idle' && tab.state_text === AGENT_EXITED_TEXT;
-      // a permission prompt is automationPermission's (answers.ts), or escalated above once it waited too long
+      // a permission prompt is answerPermissionAutomatically's (answers.ts), or escalated above once it waited too long
       if (!stopped && !exited) return;
       // taken before anything is typed: a state the agent reaches in reaction is always newer than it
       const now = deps.now?.() ?? new Date();

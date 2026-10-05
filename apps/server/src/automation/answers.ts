@@ -9,7 +9,6 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { TabQuestion as TabQuestionRow } from '../db/repositories/tab-questions.js';
 import { tk } from '../i18n/index.js';
 import { autoAnswerBlocked } from '../memory/blocklist.js';
-import type { AutonomyLevel } from '../setup/schema.js';
 import { recordEvent } from './events.js';
 import { ANSWER_CAP, PERMISSION_NEEDED, QUESTION_UNANSWERED, wakeOrEscalate } from './follower.js';
 import { automaticRunOfTab } from './pause.js';
@@ -291,11 +290,10 @@ function bashSpecMatches(spec: string, command: string): boolean {
  *    `Bash(prefix:*)` matching on a word boundary or a `Bash(exact)` matching exactly. A specifier on any
  *    other tool never matches: its input is not known here.
  *
- * Every refusal holds at every autonomy `level`: merging, deploying and publishing are the server's own
- * steps (D5), never a permission answered in a tab. The level is taken so a rule can depend on it later.
+ * The same at every autonomy level, on purpose: merging, deploying and publishing are the server's own
+ * steps (D5), never a permission answered in a tab — so the level is not an input.
  */
-export function permissionAllowed(req: PermissionRequest, allowed: string[], level: AutonomyLevel, branch: string | null = null): boolean {
-  void level;
+export function permissionAllowed(req: PermissionRequest, allowed: string[], branch: string | null = null): boolean {
   if (autoAnswerBlocked([req.tool, req.command ?? ''])) return false;
   const isBash = req.tool === 'Bash';
   let command: string | null = null;
@@ -317,24 +315,29 @@ type AnswerPathLog = Parameters<typeof answerTabQuestion>[3]['log'];
 
 export type PermissionOutcome = 'allowed' | 'escalated' | 'closed';
 
+/** A tool name as Claude Code writes it (`Bash`, `WebFetch`, `mcp__server__tool`); anything else escalates. */
+const TOOL_NAME = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
+
 /**
  * A `permission` card opened in a tab with a live automatic run (spec §9.2). The request is matched against
- * the allow list stored on the run (falling back to the project's setup, `runPermission`) and the project's
- * autonomy level (`permissionAllowed`). Not allowed, or past the hourly cap of automatic answers, the run
+ * the allow list stored on the run (falling back to the project's setup, `runPermission`) by
+ * `permissionAllowed`; a card whose tool name is not a plain tool name escalates at once. Not allowed, or past the hourly cap of automatic answers, the run
  * waits for the person (`permission_needed` / `answer_cap`) → `'escalated'`.
  *
  * Allowed: after PERMISSION_SETTLE_MS, right before sending, the tab's run is read again — still this run, its project on and not
  * paused (D24), its card still tagged — and when anything changed nothing is sent and the card is left to
  * the person (`'escalated'`, the run untouched: the follower deals with an untagged card or a pause).
- * Then "allow" (once) goes through the chat's ordinary answer path as the project's owner, with every check
- * of a click (live screen, claim) → `'allowed'`, recorded as `question_answered` (`via: 'permission'`). A
+ * Then "allow" (once) goes through the chat's ordinary answer path as the project's owner with `via:
+ * 'automation'`: every check of a click (live screen, claim), plus the dialog's tool positively identified
+ * on that same screen read and equal to the card's (`permissionToolOnScreen`, review I1) → `'allowed'`,
+ * stored as `answered_via: 'automation'` and recorded as `question_answered` (`via: 'permission'`). A
  * send that fails escalates, unless the card moved on meanwhile (`'closed'`). Only "allow" is ever sent.
  *
  * `command` is the Bash command when the caller knows it. The machine's hook script forwards the tool's
  * name only (spec 2026-09-25 tab questions §4.1), so today it is null and every Bash request escalates.
  * Logs ids only, never the command.
  */
-export async function automationPermission(deps: AnswerDeps, q: TabQuestionRow, run: AutomationRun, command: string | null = null): Promise<PermissionOutcome> {
+export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQuestionRow, run: AutomationRun, command: string | null = null): Promise<PermissionOutcome> {
   const { repos } = deps;
   const log = deps.log ?? noopLog;
   if (q.kind !== 'permission' || q.status !== 'open') return 'closed';
@@ -347,9 +350,13 @@ export async function automationPermission(deps: AnswerDeps, q: TabQuestionRow, 
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: answer cap reached');
     return escalate(ANSWER_CAP);
   }
-  const [{ allowedTools }, setup] = await Promise.all([runPermission(repos, run), repos.projectSetup.get(run.project_id)]);
-  const tool = (q.payload as PermissionPayload).tool_name;
-  if (!permissionAllowed({ tool, command }, allowedTools, setup.data.automation.autonomy, run.branch)) {
+  const tool: unknown = (q.payload as Partial<PermissionPayload> | null)?.tool_name;
+  if (typeof tool !== 'string' || !TOOL_NAME.test(tool)) {
+    log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission with no plain tool name');
+    return escalate(PERMISSION_NEEDED);
+  }
+  const { allowedTools } = await runPermission(repos, run);
+  if (!permissionAllowed({ tool, command }, allowedTools, run.branch)) {
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission outside the rules');
     return escalate(PERMISSION_NEEDED);
   }
@@ -365,7 +372,7 @@ export async function automationPermission(deps: AnswerDeps, q: TabQuestionRow, 
   }
 
   try {
-    await (deps.sendAnswer ?? answerTabQuestion)(controlContextFor(repos, owner), q.id, { allow: true }, { log: log as unknown as AnswerPathLog, embedder: null });
+    await (deps.sendAnswer ?? answerTabQuestion)(controlContextFor(repos, owner), q.id, { allow: true }, { log: log as unknown as AnswerPathLog, embedder: null, via: 'automation' });
   } catch (err) {
     const code = (err as { code?: unknown })?.code;
     log.warn({ runId: run.id, tabQuestionId: q.id, code: typeof code === 'string' ? code.slice(0, 64) : 'SEND_FAILED' }, 'automation: permission answer failed');

@@ -7,7 +7,7 @@ import { toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-
 import { forbidden, HttpError, notFound } from '../lib/errors.js';
 import { recordDecisions } from './decision-memory.js';
 import { defaultEmbedder, type Embedder } from './embeddings.js';
-import { lastNonBlankLines, promptVisible, rowDialogFooterVisible } from './permission-dialog.js';
+import { lastNonBlankLines, permissionToolOnScreen, promptVisible, rowDialogFooterVisible } from './permission-dialog.js';
 import { answerKeyPlan, type KeyStep } from './tab-question-keys.js';
 import { checkChoiceAnswer, choiceAnswerBody, permissionAnswerBody, type ChoiceAnswer, type ChoicePayload, type PermissionAnswer, type PermissionPayload, type TabQuestionKind } from './tab-question-payload.js';
 import { publishTabQuestions } from './tab-questions.js';
@@ -97,7 +97,7 @@ export interface AnswerDeps {
   /** How this answer is sent (spec 2026-09-26 concierge memory §6): a click (`'card'`, the default),
    *  or the countdown's sender (`'auto'`, `sendDueAutoAnswers` only) — stored as `answered_via`, and
    *  never recorded as a decision (D11): the memory must not feed on itself. */
-  via?: 'card' | 'auto';
+  via?: 'card' | 'auto' | 'automation';
 }
 
 /**
@@ -127,6 +127,7 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
   } catch (err) {
     throw asHttp(err);
   }
+  const via = deps.via ?? 'card';
   if (!promptVisible(screen, row)) {
     // A dialog of the card's agent is still up, just not one this card recognises: say so and leave the
     // card alone.
@@ -145,8 +146,17 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
     throw promptChanged();
   }
 
+  // An automatic allow (agentic board spec §9.2, review I1) goes only into the very dialog the card names,
+  // identified on this screen read: never into an unknown-title one (another tool's, a subagent's, one
+  // swapped in since the card opened, or one behind a forged hook). The card stays open for the person.
+  if (via === 'automation') {
+    if (row.kind !== 'permission' || (answer as PermissionAnswer).allow !== true) throw promptNotSeen();
+    if (!permissionToolOnScreen(screen, row)) {
+      deps.log.warn({ tabQuestionId: row.id, tabId: tab.id, kind: row.kind }, 'automatic answer: dialog tool not identified on screen');
+      throw promptNotSeen();
+    }
+  }
   deps.beforeSend?.(row, answer);
-  const via = deps.via ?? 'card';
   // The person answered while a countdown runs: it ends first, so the card never shows a countdown for
   // an answered question. The claim below would stop a second send anyway (it needs the row `open`).
   if (via === 'card' && row.auto_answer?.status === 'scheduled') await ctx.repos.tabQuestions.cancelAutoAnswer(row.id, userId);
