@@ -603,6 +603,8 @@ model AutomationRun {
   fixCount      Int       @default(0) @map("fix_count")
   /// agent restarts after an exit (spec D15: one, then the run is blocked)
   restartCount  Int       @default(0) @map("restart_count")
+  /// the allow list the agent was started with (preflight F-12); null = started before it was stored
+  allowedTools  Json?     @map("allowed_tools")
   claimedBy     String    @map("claimed_by")
   heartbeatAt   DateTime  @default(now()) @map("heartbeat_at") @db.Timestamptz
   startedAt     DateTime? @map("started_at") @db.Timestamptz

@@ -196,7 +196,9 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       const epic = task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
       const { base, epicBranch } = targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup);
       branch = cardBranchName(repo?.branch_pattern ?? '{ticket}-{slug}', task);
-      if (!(await write(run, { status: 'starting', machine_id: place.machine.id, account_id: place.account.id, branch }))) return;
+      const permission = automationPermission(automation);
+      // the profile is stored on the run: restarts and swaps keep it even if the setup changes (F-12)
+      if (!(await write(run, { status: 'starting', machine_id: place.machine.id, account_id: place.account.id, branch, allowed_tools: permission.allowedTools }))) return;
       if (epicBranch) {
         const gh = await githubToken(project, setup);
         await deps.ensureEpicBranch({ gh: deps.gh, ...gh }, repo?.base_branch ?? 'main', epicBranch);
@@ -221,7 +223,14 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         ctx,
         { project_id: project.id, machine_id: place.machine.id, account_id: place.account.id, task_id: task.id, prompt },
         // setup command only from the project's runner, cwd only from the run's worktree (Task 14 rule)
-        { cwd: ws.path, permission: automationPermission(automation), setupCommand: runner.setup_command, promptIsFinal: true },
+        {
+          cwd: ws.path,
+          permission,
+          setupCommand: runner.setup_command,
+          promptIsFinal: true,
+          // the run knows its tab before the agent starts: its tab MCP then lists report_card and get_card
+          onTabOpened: async (id) => void (await write(run, { tab_id: id })),
+        },
       );
       tabId = started.tab_id;
     } catch (e) {

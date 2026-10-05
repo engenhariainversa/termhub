@@ -375,12 +375,16 @@ async function attachTask(ctx: ControlContext, taskId: string, tabId: string): P
  * - `setupCommand`: the project's `runner.setup_command`, typed before the CLI line in the same tab.
  * - `promptIsFinal`: the prompt already ends with `LESSONS_REMINDER` (automation prompts add it), so it is
  *   not appended again (preflight F-10).
+ * - `onTabOpened`: told the tab's id once it exists and before anything is typed into it — the dispatcher
+ *   records it on the run, so the tab tools that need a run are listed when the agent starts. A failure
+ *   there is a failed start (the error carries the tab id).
  */
 export interface StartAgentInternal {
   cwd?: string;
   permission?: AgentPermission;
   setupCommand?: string | null;
   promptIsFinal?: boolean;
+  onTabOpened?: (tabId: string) => Promise<void>;
 }
 
 /** An absolute path on the machine without `..` segments or control bytes (preflight F-9). */
@@ -474,6 +478,7 @@ export async function startAgent(
   let line: string;
   let mcp: Awaited<ReturnType<typeof tabMcp>>;
   try {
+    await internal?.onTabOpened?.(tab.tab_id);
     mcp = await tabMcp(ctx, machine, account.provider, tab);
     line = withSetup(
       internal?.setupCommand,

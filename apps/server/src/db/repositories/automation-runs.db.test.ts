@@ -86,6 +86,19 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await runs.findById(run.id)).toMatchObject({ restart_count: 1, resume_count: 0, fix_count: 0 });
   });
 
+  it('stores the run\'s allow list, and followedBy lists only this instance\'s running and waiting runs', async () => {
+    const run = (await claim('blue'))!;
+    expect(run.allowed_tools).toBeNull();
+    await runs.update(run.id, 'blue', { status: 'running', allowed_tools: ['Bash(make:*)'] });
+    expect((await runs.findById(run.id))!.allowed_tools).toEqual(['Bash(make:*)']);
+    expect((await runs.followedBy('blue')).map((r) => r.id)).toContain(run.id);
+    expect((await runs.followedBy('green')).map((r) => r.id)).not.toContain(run.id);
+    await runs.update(run.id, 'blue', { status: 'waiting' });
+    expect((await runs.followedBy('blue')).map((r) => r.id)).toContain(run.id);
+    await runs.update(run.id, 'blue', { status: 'done' });
+    expect((await runs.followedBy('blue')).map((r) => r.id)).not.toContain(run.id);
+  });
+
   it('runs on different cards do not collide', async () => {
     const other = newId();
     await db.task.create({ data: { id: other, projectId, title: 'other' } });

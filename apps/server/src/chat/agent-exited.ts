@@ -4,6 +4,8 @@ import { swapPreferences } from '../control/account-swap.js';
 import { continueLine, resumeLine, type AgentPermission } from '../control/agents.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, Tab } from '../db/repositories/types.js';
+import { followerWillRestart } from '../automation/restart.js';
+import { runPermission } from '../automation/permission.js';
 import { failureLabel } from './service.js';
 import type { SuggestionPayload } from './tab-question-payload.js';
 import { closeTabQuestions, publishTabQuestions } from './tab-questions.js';
@@ -40,25 +42,28 @@ export async function resumeCommandFor(repos: Repositories, tab: Tab, machine: M
  * the tab `idle`. A card in the project owner's most recently active conversation says so and offers the
  * line that resumes it (a suggestion card: editable, Enviar / Dispensar); opening it expires whatever the
  * dead process had left open. `lastAt` is the tab's last state change before the exit. A project nobody
- * chats in gets no card, and neither does a tab with an active automatic run (its follower restarts it).
+ * chats in gets no card, and neither does a tab whose automatic run's follower restarts it.
  * Never throws; logs ids only.
  */
 export async function notifyAgentExited(repos: Repositories, log: Log, tab: Tab, machine: Machine, lastAt: string | null): Promise<void> {
   try {
-    // A tab running automatic work is restarted by the run's follower (spec D15, preflight F-12): no card
-    // offering a line without the run's permission profile. What the dead process left open still expires.
-    if (await repos.automationRuns.activeByTab(tab.id)) {
+    // A tab running automatic work is restarted by the run's follower when it can (spec D15): then no card.
+    // What the dead process left open still expires. Otherwise (paused, automation off, card untagged, run
+    // parked or out of restarts) the person gets the card, with a line that keeps the run's profile (F-12).
+    const run = await repos.automationRuns.activeByTab(tab.id);
+    if (run && (await followerWillRestart(repos, run))) {
       await closeTabQuestions(repos, tab.id, 'expired');
-      log.info({ tabId: tab.id, machineId: machine.id }, 'agent exited in an automatic run: the follower restarts it');
+      log.info({ tabId: tab.id, machineId: machine.id, runId: run.id }, 'agent exited in an automatic run: the follower restarts it');
       return;
     }
+    const auto = run ? { permission: await runPermission(repos, run), prompt: EXITED_RESUME_PROMPT } : null;
     const owner = (await repos.projects.findById(tab.project_id))?.owner_id;
     const conversation = owner ? await repos.chat.findLatestActiveForProject(tab.project_id, owner) : undefined;
     if (!conversation) {
       await closeTabQuestions(repos, tab.id, 'expired');
       return;
     }
-    const payload: SuggestionPayload = { text: await resumeCommandFor(repos, tab, machine), context: null, exited: true, last_at: lastAt, ...(tab.state_tool === 'codex' ? { agent: 'codex' as const } : {}) };
+    const payload: SuggestionPayload = { text: await resumeCommandFor(repos, tab, machine, auto), context: null, exited: true, last_at: lastAt, ...(tab.state_tool === 'codex' ? { agent: 'codex' as const } : {}) };
     const { question, closed } = await repos.tabQuestions.open({ tab_id: tab.id, project_id: tab.project_id, conversation_id: conversation.id, kind: 'suggestion', payload, tool_use_id: null, agent_id: null });
     await publishTabQuestions(repos, 'tab_question_closed', closed);
     if (question) await publishTabQuestions(repos, 'tab_question', [question]);

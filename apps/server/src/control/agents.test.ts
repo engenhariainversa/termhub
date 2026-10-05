@@ -21,7 +21,7 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import { Scoped } from '../auth/scope.js';
 import { ControlError, type ControlContext } from './context.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { checkPrompt, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
+import { checkPrompt, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
 
 /** A Claude agent's first prompt: the lessons reminder, then the origin reminder (TER-851). */
 const started = (prompt: string) => withOriginReminder(withLessonsReminder(prompt));
@@ -826,6 +826,18 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     const { c } = ctx();
     await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'do the card' }, { cwd: WORKTREE, permission: PERMISSION, setupCommand: 'pnpm i' });
     expect(sendTextToSession.mock.calls[0][2]).toBe(`eval 'pnpm i' ; ${launchLine('claude', '/Users/p/.claude-work', started('do the card'), { tabId: 'abc', url: MCP_URL }, null, PERMISSION)}`);
+  });
+
+  it('onTabOpened is told the tab before anything is typed into it; its failure is a failed start with the tab id', async () => {
+    const { c } = ctx();
+    const order: string[] = [];
+    sendTextToSession.mockImplementationOnce(async () => void order.push('typed'));
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { onTabOpened: async (id) => void order.push(`opened:${id}`) });
+    expect(order).toEqual([`opened:${(await openTab.mock.results[0]!.value).tab_id}`, 'typed']);
+    vi.clearAllMocks();
+    const err = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { onTabOpened: async () => { throw new Error('db down'); } }).catch((e: unknown) => e);
+    expect(tabIdOfError(err)).toBeTruthy();
+    expect(sendTextToSession).not.toHaveBeenCalled();
   });
 
   it('a blank setup command adds nothing; promptIsFinal does not append the lessons reminder again', async () => {

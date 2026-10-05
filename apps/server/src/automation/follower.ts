@@ -7,17 +7,30 @@ import type { AutomationRun, AutomationRunPatch } from '../db/repositories/autom
 import type { Tab, Task } from '../db/repositories/types.js';
 import { msg } from '../i18n/index.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
+import { CI_POLL_MS } from '../ci/scheduler.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
 import type { ProjectSetupData } from '../setup/schema.js';
-import { recordEvent } from './events.js';
+import { automationBus, recordEvent } from './events.js';
 import { isPaused } from './pause.js';
-import { automationPermission } from './permission.js';
+import { runPermission } from './permission.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
+import { MAX_RESTARTS } from './restart.js';
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
 
-/** Agent restarts after an exit (spec D15): one, then the run is blocked. */
-export const MAX_RESTARTS = 1;
+export { MAX_RESTARTS };
+
+/**
+ * How long a stop is left alone before it is resumed (or escalated, or restarted): long enough for the CI
+ * sync (every CI_POLL_MS) to link a PR the agent opened right before it stopped, so the PR fallback (D17)
+ * ends the run instead of a resume being typed into a finished one.
+ */
+export const PR_GRACE_MS = CI_POLL_MS + 30_000;
+/** How often the follower looks again at every run this instance drives (a stop that waited, a pause
+ *  lifted, a PR linked later, a failed attempt). */
+export const FOLLOW_SWEEP_MS = 30_000;
+/** A message typed into a tab whose state then never moved is typed again after this long (it got lost). */
+export const RETYPE_AFTER_MS = 10 * 60_000;
 
 export interface FollowerDeps {
   repos: Repositories;
@@ -29,8 +42,11 @@ export interface FollowerDeps {
   type?: (ctx: ControlContext, tabId: string, text: string) => Promise<void>;
   /** The shell line that brings an exited agent back in the same tab. Default: `resumeCommandFor`. */
   restartLine?: typeof resumeCommandFor;
-  /** A stop on a usage limit (spec D16). Task 19 fills it; until then the run just waits. */
+  /** A stop on a usage limit (spec D16). Task 19 fills it; until then the run just waits. Called again on
+   *  every look at the run while the tab stays on the limit, so it must be idempotent. */
   onRateLimited?: (run: AutomationRun, tab: Tab) => Promise<void>;
+  /** The clock (tests). */
+  now?: () => Date;
   /** How long a change settles before the tab is read (default SETTLE_MS). */
   settleMs?: number;
   log?: Log;
@@ -79,6 +95,7 @@ export async function escalateRun(repos: Repositories, run: AutomationRun, reaso
  */
 export async function wakeOrEscalate(repos: Repositories, run: AutomationRun, reason: string, log: Log = noopLog): Promise<void> {
   if (!(await writeRun(repos, run, { status: 'waiting', waiting_reason: reason }))) return;
+  actedOn.delete(run.id);
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, reason }, 'automation: run waits for a person');
   await escalateRun(repos, run, reason, log);
 }
@@ -162,105 +179,129 @@ async function mayType(deps: FollowerDeps, run: AutomationRun, log: Log): Promis
   return { ctx: controlContextFor(repos, owner), setup: setup.data, task };
 }
 
-/** `waiting_input` after a Stop (preflight F-13): resume, end on an open PR, or hand over past the cap. */
-async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<void> {
+/** Whether the stop is younger than PR_GRACE_MS: a PR opened just before it may not be linked yet. */
+const inGrace = (deps: FollowerDeps, tab: Tab) => (deps.now?.() ?? new Date()).getTime() - Date.parse(tab.state_at ?? '') < PR_GRACE_MS;
+
+/**
+ * `waiting_input` after a Stop (preflight F-13): end on an open PR, resume, or hand over past the cap.
+ * Returns true when something was typed into the tab; every other outcome is looked at again later.
+ */
+async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
   const { repos } = deps;
   // a usage limit first: never resume into it (D16, Task 19)
   if (rateLimited(tab)) {
     await deps.onRateLimited?.(run, tab);
-    return;
+    return false;
   }
   // a question card waits for its own answer (spec §9.1, Task 21)
-  if (await repos.tabQuestions.hasOpenQuestion(tab.id)) return;
+  if (await repos.tabQuestions.hasOpenQuestion(tab.id)) return false;
   const pr = await openPrOfRun(repos, run);
   if (pr) {
     await finishDone(repos, run, 'pull_request', pr, log);
-    return;
+    return false;
   }
+  if (inGrace(deps, tab)) return false;
   const ready = await mayType(deps, run, log);
-  if (!ready) return;
+  if (!ready) return false;
   if (run.resume_count >= ready.setup.automation.resume_max) {
     await wakeOrEscalate(repos, run, 'resume_cap', log);
-    return;
+    return false;
   }
   // D24: the last check before anything is typed
-  if (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id)) return;
+  if (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id)) return false;
   const count = await repos.automationRuns.bump(run.id, 'resume_count');
   await (deps.type ?? defaultType)(ready.ctx, tab.id, serverMessage(RESUME_TEXT));
   await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_resumed', payload: { tab_id: tab.id, count } }).catch((e: unknown) =>
     log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_resumed not recorded'),
   );
   log.info({ runId: run.id, tabId: tab.id, count }, 'automation: run resumed');
+  return true;
 }
 
-/** The agent exited without a hook (`idle` with AGENT_EXITED_TEXT): restart it once in the same tab. */
-async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<void> {
+/** The agent exited without a hook (`idle` with AGENT_EXITED_TEXT): restart it once in the same tab.
+ *  Returns true when the restart line was typed. */
+async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
   const { repos } = deps;
   const pr = await openPrOfRun(repos, run);
   if (pr) {
     await finishDone(repos, run, 'pull_request', pr, log);
-    return;
+    return false;
   }
+  if (inGrace(deps, tab)) return false;
   const ready = await mayType(deps, run, log);
-  if (!ready) return;
+  if (!ready) return false;
   if (run.restart_count >= MAX_RESTARTS) {
     await finishBlocked(repos, run, 'agent_exited', null, log);
-    return;
+    return false;
   }
   const machine = await repos.machines.findById(tab.machine_id);
-  if (!machine) return;
-  // the same tab, the same session, the run's permission profile (preflight F-12)
+  if (!machine) return false;
+  // the same tab, the same session, the profile the run started with (preflight F-12)
   const line = await (deps.restartLine ?? resumeCommandFor)(repos, tab, machine, {
-    permission: automationPermission(ready.setup.automation),
+    permission: await runPermission(repos, run),
     prompt: serverMessage(EXITED_RESUME_PROMPT),
   });
-  if (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id)) return;
+  if (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id)) return false;
   const count = await repos.automationRuns.bump(run.id, 'restart_count');
   await (deps.type ?? defaultType)(ready.ctx, tab.id, line);
   await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_resumed', payload: { tab_id: tab.id, restart: true, count } }).catch((e: unknown) =>
     log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_resumed not recorded'),
   );
   log.info({ runId: run.id, tabId: tab.id, machineId: machine.id }, 'automation: agent restarted');
+  return true;
 }
 
-/** One handler at a time per run, and each tab state acted on once (a hook may be delivered twice). A
- *  change that arrives while a follow still settles joins it: that follow reads the tab after it anyway. */
+/** One handler at a time per run. A change that arrives while a follow still settles joins it: that follow
+ *  reads the tab after it anyway. `actedOn`: the tab state something was typed for, and when — a hook
+ *  delivered twice, or a sweep before the agent reacted, does not type it again. Only a typed message is
+ *  recorded: every other outcome (a pause, automation off, a stop in its grace, a failure) is looked at again
+ *  by the next sweep, so no run is left `running` with nobody following it. */
 const chains = new Map<string, Promise<void>>();
 const settling = new Map<string, Promise<void>>();
-const actedOn = new Map<string, string>();
+const actedOn = new Map<string, { key: string; at: number }>();
 
 /**
  * Looks at the run's tab as it is now and does what its state asks (spec §8 step 6, D15, D17). Reads the
  * run and the tab from the database, so it works for a run this process started and for one it took over
- * from a silent instance. Only a `running` run driven by this instance is followed.
+ * from a silent instance. Only runs driven by this instance are followed: a `running` one fully, a
+ * `waiting` one (parked for a person) only for the PR fallback.
  */
-export function followRun(deps: FollowerDeps, runId: string): Promise<void> {
+export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: boolean } = {}): Promise<void> {
   const log = deps.log ?? noopLog;
   const joined = settling.get(runId);
   if (joined) return joined;
   const prev = chains.get(runId) ?? Promise.resolve();
-  const settle = deps.settleMs ?? SETTLE_MS;
+  const settle = opts.settle === false ? 0 : (deps.settleMs ?? SETTLE_MS);
   const next: Promise<void> = prev
     .then(async () => {
       if (settle > 0) await new Promise((r) => setTimeout(r, settle));
       settling.delete(runId);
       if (deps.lifecycle.draining) return;
       const run = await deps.repos.automationRuns.findById(runId);
-      if (!run || run.status !== 'running' || run.claimed_by !== deps.instance || !run.tab_id) {
+      if (!run || (run.status !== 'running' && run.status !== 'waiting') || run.claimed_by !== deps.instance || !run.tab_id) {
         actedOn.delete(runId);
         return;
       }
       const tab = await deps.repos.tabs.findById(run.tab_id);
       if (!tab?.state_at) return;
+      // `working` and `waiting_background` (lesson TER-615) are the agent's own time
+      if (tab.state === 'working' || tab.state === 'waiting_background') return;
+      if (run.status === 'waiting') {
+        // D17 in the other order: the PR was linked after the run was parked
+        const pr = await openPrOfRun(deps.repos, run);
+        if (pr) await finishDone(deps.repos, run, 'pull_request', pr, log);
+        return;
+      }
       const stopped = tab.state === 'waiting_input';
       const exited = tab.state === 'idle' && tab.state_text === AGENT_EXITED_TEXT;
-      // `working` and `waiting_background` (lesson TER-615) are the agent's own time; permissions are Task 22's
+      // permissions are Task 22's
       if (!stopped && !exited) return;
       const key = `${tab.state}@${tab.state_at}`;
-      if (actedOn.get(runId) === key) return;
-      actedOn.set(runId, key);
-      if (stopped) await onStopped(deps, run, tab, log);
-      else await onExited(deps, run, tab, log);
+      const last = actedOn.get(runId);
+      const now = (deps.now?.() ?? new Date()).getTime();
+      if (last?.key === key && now - last.at < RETYPE_AFTER_MS) return;
+      const typed = stopped ? await onStopped(deps, run, tab, log) : await onExited(deps, run, tab, log);
+      if (typed) actedOn.set(runId, { key, at: now });
     })
     .catch((e: unknown) => log.warn({ runId, code: errorCode(e) }, 'automation: follow failed'))
     .finally(() => {
@@ -272,20 +313,39 @@ export function followRun(deps: FollowerDeps, runId: string): Promise<void> {
   return next;
 }
 
+/** One look at every `running` or `waiting` run this instance drives. */
+export async function sweepRuns(deps: FollowerDeps): Promise<void> {
+  if (deps.lifecycle.draining) return;
+  const runs = await deps.repos.automationRuns.followedBy(deps.instance);
+  await Promise.all(runs.map((r) => followRun(deps, r.id, { settle: false })));
+}
+
 /** A tab's state changed: when it carries an active run, follow it. */
 export async function onTabChange(deps: FollowerDeps, change: TabStateChange): Promise<void> {
   if (deps.lifecycle.draining) return;
   const run = await deps.repos.automationRuns.activeByTab(change.tab.id);
-  if (!run || run.status !== 'running' || run.claimed_by !== deps.instance) return;
+  if (!run || (run.status !== 'running' && run.status !== 'waiting') || run.claimed_by !== deps.instance) return;
   await followRun(deps, run.id);
 }
 
-/** Subscribes the follower to the monitor's state changes; returns the unsubscribe. */
-export function startFollower(deps: FollowerDeps): () => void {
+/**
+ * Subscribes the follower to the monitor's state changes, looks at its runs again every FOLLOW_SWEEP_MS
+ * and as soon as a pause is lifted (D24: a stop seen while paused is resumed afterwards). Returns the stop.
+ */
+export function startFollower(deps: FollowerDeps, opts: { sweepMs?: number } = {}): () => void {
   const log = deps.log ?? noopLog;
-  return monitorBus.subscribe((change) => {
+  const sweep = () => void sweepRuns(deps).catch((e: unknown) => log.warn({ code: errorCode(e) }, 'automation: follower sweep failed'));
+  const offTabs = monitorBus.subscribe((change) => {
     void onTabChange(deps, change).catch((e: unknown) => log.warn({ tabId: change.tab.id, code: errorCode(e) }, 'automation: follower failed'));
   });
+  const offEvents = automationBus.subscribe((e) => (e.kind === 'resumed' ? sweep() : undefined));
+  const timer = setInterval(sweep, opts.sweepMs ?? FOLLOW_SWEEP_MS);
+  timer.unref?.();
+  return () => {
+    clearInterval(timer);
+    offTabs();
+    offEvents();
+  };
 }
 
 /** The active run of the calling tab token's tab, or null (another tab's token, no run). */
@@ -311,6 +371,7 @@ export async function tabHasActiveRun(ctx: ControlContext): Promise<boolean> {
 export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string }): Promise<{ ok: true }> {
   const run = await runOfTabToken(ctx);
   if (!run) throw new ControlError('NO_RUN', msg('Esta aba não tem trabalho automático em andamento'));
+  if (i.status === 'blocked' && !i.reason?.trim()) throw new ControlError('REASON_REQUIRED', msg('Diga em reason por que o trabalho travou'));
   const log = ctx.log ?? noopLog;
   const ended =
     i.status === 'done'

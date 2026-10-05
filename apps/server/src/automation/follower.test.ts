@@ -8,7 +8,8 @@ import type { AutomationEventInput } from '../db/repositories/automation-events.
 import type { Tab, Task } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
-import { followRun, getRunCard, onTabChange, reportCard, startFollower, tabHasActiveRun, type FollowerDeps } from './follower.js';
+import { followRun, getRunCard, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
+import { automationBus } from './events.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 
 const ME = 'instance-me';
@@ -29,7 +30,7 @@ function world(o: {
   const run: AutomationRun = {
     id: runId, project_id: 'p1', task_id: 't1', role: 'implementer', status: 'running', waiting_reason: null, tab_id: 'tab1', machine_id: 'm1', account_id: 'a1',
     branch: 'TER-1-card', worktree_path: '/w/TER-1', resume_count: 0, fix_count: 0, restart_count: 0, claimed_by: ME, heartbeat_at: new Date(), started_at: new Date(),
-    ended_at: null, created_at: new Date(), ...o.run,
+    ended_at: null, created_at: new Date(), allowed_tools: null, ...o.run,
   };
   const tab = { id: 'tab1', project_id: 'p1', machine_id: 'm1', state: 'waiting_input', state_text: 'Pronto.', state_tool: 'claude', state_at: `2026-10-05T10:00:0${seq % 10}.000Z`, rate_limited_at: null, ...o.tab } as Tab;
   const task = { id: 't1', project_id: 'p1', ref: 'TER-1', title: 'Card', description: 'd', type: 'task', status: 'doing', tab_id: 'tab1', auto: true, parent_id: null, epic_id: null, column_id: 'c2', ...o.task } as Task;
@@ -39,6 +40,7 @@ function world(o: {
     automationRuns: {
       activeByTab: vi.fn(async (id: string) => (id === run.tab_id && isActive() ? { ...run } : null)),
       findById: vi.fn(async () => ({ ...run })),
+      followedBy: vi.fn(async (instance: string) => (instance === run.claimed_by && ['running', 'waiting'].includes(run.status) ? [{ ...run }] : [])),
       updateActive: vi.fn(async (_id: string, instance: string, patch: Partial<AutomationRun>) => {
         if (instance !== run.claimed_by || !isActive()) return false;
         Object.assign(run, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)));
@@ -66,8 +68,13 @@ function world(o: {
   const type = vi.fn(async (_ctx: ControlContext, _tabId: string, _text: string) => {});
   const restartLine = vi.fn(async () => 'claude --resume …');
   const onRateLimited = vi.fn(async () => {});
-  const deps: FollowerDeps = { repos, instance: ME, lifecycle: { draining: false }, type, restartLine, onRateLimited, settleMs: 0 };
-  return { run, tab, task, events, repos, deps, type, restartLine, onRateLimited, kinds: () => events.map((e) => e.kind) };
+  // the clock is well past the stop's grace unless a test moves it
+  let now = new Date('2026-10-05T12:00:00.000Z');
+  const deps: FollowerDeps = { repos, instance: ME, lifecycle: { draining: false }, type, restartLine, onRateLimited, settleMs: 0, now: () => now };
+  const setNow = (d: Date) => (now = d);
+  const setPrs = (list: NonNullable<typeof o.prs>) => (o.prs = list);
+  const setPaused = (p: boolean) => (o.paused = p);
+  return { run, tab, task, events, repos, deps, type, restartLine, onRateLimited, setNow, setPrs, setPaused, kinds: () => events.map((e) => e.kind) };
 }
 
 const tabCtx = (repos: Repositories, tabId = 'tab1') => ({ repos, token: { id: 'tok', scopes: ['read', 'memory'], tab: { id: tabId, project_id: 'p1' } } }) as unknown as ControlContext;
@@ -200,6 +207,75 @@ describe('following a run (spec D15, F-13)', () => {
   });
 });
 
+describe('no stop is abandoned (review round 1)', () => {
+  it('a stop seen while paused is resumed once the pause is lifted (sweep and the resumed event)', async () => {
+    const w = world({ paused: true });
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    w.setPaused(false);
+    await sweepRuns(w.deps);
+    expect(w.type).toHaveBeenCalledTimes(1);
+    expect(w.run.resume_count).toBe(1);
+    // a later sweep with the tab still in the same state types nothing more
+    await sweepRuns(w.deps);
+    expect(w.type).toHaveBeenCalledTimes(1);
+  });
+
+  it('the follower looks again when the automation bus says a pause was lifted', async () => {
+    const w = world({ paused: true });
+    const stop = startFollower(w.deps, { sweepMs: 60 * 60_000 });
+    try {
+      await followRun(w.deps, w.run.id);
+      expect(w.type).not.toHaveBeenCalled();
+      w.setPaused(false);
+      automationBus.publish({ id: 'e', project_id: 'p1', task_id: null, run_id: null, kind: 'resumed', payload: {}, created_at: '', owner_id: 'u1' });
+      await vi.waitFor(() => expect(w.type).toHaveBeenCalledTimes(1));
+    } finally {
+      stop();
+    }
+  });
+
+  it('a transient failure typing is tried again by the next look', async () => {
+    const w = world();
+    w.type.mockRejectedValueOnce(new Error('machine offline'));
+    await followRun(w.deps, w.run.id);
+    expect(w.events).toEqual([]);
+    await sweepRuns(w.deps);
+    expect(w.type).toHaveBeenCalledTimes(2);
+    expect(w.kinds()).toEqual(['run_resumed']);
+  });
+
+  it('a stop younger than the PR grace is left alone; a PR linked meanwhile ends the run instead of a resume', async () => {
+    const w = world();
+    w.setNow(new Date(Date.parse(w.tab.state_at!) + 5_000));
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    w.setPrs([{ state: 'open', head_ref: 'TER-1-card', url: 'https://github.com/o/r/pull/9', number: 9 }]);
+    w.setNow(new Date(Date.parse(w.tab.state_at!) + 40_000));
+    await sweepRuns(w.deps);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run.status).toBe('done');
+  });
+
+  it('past the grace with no PR, the stop is resumed', async () => {
+    const w = world();
+    w.setNow(new Date(Date.parse(w.tab.state_at!) + PR_GRACE_MS + 1));
+    await followRun(w.deps, w.run.id);
+    expect(w.type).toHaveBeenCalledTimes(1);
+  });
+
+  it('a run parked in waiting ends done when its PR is linked later (D17, both orders)', async () => {
+    const w = world({ run: { status: 'waiting', waiting_reason: 'resume_cap' } });
+    await sweepRuns(w.deps);
+    expect(w.run.status).toBe('waiting');
+    w.setPrs([{ state: 'open', head_ref: 'TER-1-card', url: 'u', number: 5 }]);
+    await sweepRuns(w.deps);
+    expect(w.run.status).toBe('done');
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
+    expect(w.type).not.toHaveBeenCalled();
+  });
+});
+
 describe('an agent that exited (spec D15, F-12)', () => {
   const exited = { state: 'idle' as const, state_text: AGENT_EXITED_TEXT };
 
@@ -213,6 +289,12 @@ describe('an agent that exited (spec D15, F-12)', () => {
     expect(w.type).toHaveBeenCalledWith(expect.anything(), 'tab1', 'claude --resume …');
     expect(w.run.restart_count).toBe(1);
     expect(w.events).toEqual([expect.objectContaining({ kind: 'run_resumed', payload: { tab_id: 'tab1', restart: true, count: 1 } })]);
+  });
+
+  it('the restart keeps the allow list stored on the run, not the setup\'s current one', async () => {
+    const w = world({ tab: exited, run: { allowed_tools: ['Bash(make:*)'] } });
+    await followRun(w.deps, w.run.id);
+    expect(w.restartLine).toHaveBeenCalledWith(w.repos, w.tab, expect.anything(), expect.objectContaining({ permission: { mode: 'acceptEdits', allowedTools: ['Bash(make:*)'] } }));
   });
 
   it('a second exit ends the run blocked and escalates it', async () => {
@@ -299,6 +381,12 @@ describe('report_card (spec D17, F-8)', () => {
     expect(w.run).toMatchObject({ status: 'blocked', waiting_reason: 'reported_blocked' });
     expect(w.kinds()).toEqual(['run_blocked', 'escalated']);
     expect(w.events[0]!.payload).toMatchObject({ code: 'reported_blocked', reason: 'Falta a chave da API' });
+  });
+
+  it('blocked without a reason is refused and leaves the run as it was', async () => {
+    const w = world();
+    await expect(reportCard(tabCtx(w.repos), { status: 'blocked' })).rejects.toMatchObject({ code: 'REASON_REQUIRED' });
+    expect(w.run.status).toBe('running');
   });
 
   it('a run already ended by the PR fallback is not ended twice', async () => {
