@@ -260,7 +260,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_automation_queue',
     description:
-      "List a project's cards tagged \"automático\" in the order automatic work takes them (board order: column, then position). Each item has the card's ref, title, whether it is eligible now and, when it is not, the reason code and its pt-BR text (automation off, paused, type not allowed, not in a todo column, no description, already has an agent, no machine with the worktree capability, repository not configured; or, for an eligible card the dispatcher found no place for: no account with room, machine offline, machine without room, no machine accepting automatic work, followed by each machine and account it left out and why). Untagged cards and subtasks are not listed.",
+      "List a project's cards tagged \"automático\" in the order automatic work takes them (board order: column, then position). Each item has the card's ref, title, whether it is eligible now and, when it is not, the reason code and its pt-BR text (automation off, paused, type not allowed, not in a todo column, no description, already has an agent, no machine with the worktree capability, repository not configured; or, for an eligible card the dispatcher found no place for: no account with room, machine offline, machine without room, no machine accepting automatic work, followed by each machine and account it left out and why; or start_backoff: its last start failed and the next attempt waits, with the attempt, the minutes left and the failure's reason). Untagged cards and subtasks are not listed.",
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id },
     run: async (ctx, a) => ({ items: await automationQueue(ctx, (a as { project_id: string }).project_id) }),
@@ -371,7 +371,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_automation_events',
     description:
-      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses, and changes to what it may do (automation_on/off, setup_changed, cards tagged/untagged, machine_opt_in/out, each with via: chat, mcp, web or app). Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons, and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
+      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses, and changes to what it may do (automation_on/off, setup_changed, cards tagged/untagged, machine_opt_in/out, each with via: chat, mcp, web or app). Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons (a run_blocked with stage start also has message, the failure's reason in pt-BR, message_en, attempt of max_attempts, and retry_at or untagged), and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
     scope: 'read', resource: 'projects', action: 'read',
     input: { project_id: id, before: z.string().datetime({ offset: true }).optional(), limit: z.number().int().min(1).max(AUTOMATION_EVENTS_PAGE_MAX).optional() },
     run: async (ctx, a) => {

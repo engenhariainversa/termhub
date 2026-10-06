@@ -373,6 +373,7 @@
   "{{ref}}: retomado": "{{ref}}: resumed",
   "{{ref}}: agente terminou": "{{ref}}: agent finished",
   "{{ref}}: parou e espera você": "{{ref}}: stopped and waiting for you",
+  "{{ref}} não começou: {{reason}}": "{{ref}} did not start: {{reason}}",
   "{{ref}}: pergunta do agente respondida": "{{ref}}: agent question answered",
   "{{ref}} precisa de você: {{reason}}": "{{ref}} needs you: {{reason}}",
   "{{ref}}: PR aberto": "{{ref}}: PR opened",

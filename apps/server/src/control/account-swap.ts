@@ -7,7 +7,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { applyState } from '../monitor/ingest.js';
-import { sendKeyToSession, sendTextToSession } from '../terminal/session-ops.js';
+import { sendKeyToSession, sendTextToSession, typeCommandLine } from '../terminal/session-ops.js';
 import { RESUME_PROMPT, resumeLine } from './agents.js';
 import { activeRunPermission } from '../automation/permission.js';
 import { serverMessage } from '../automation/marker.js';
@@ -247,7 +247,7 @@ export async function swapAccount(
     const updated = (await repos.tabs.setAgentFields(tab.id, { ai_account_id: to.id, rate_limited_at: null })) ?? tab;
     const text = `${opts.auto ? ACCOUNT_SWAP_AUTO_TEXT : ACCOUNT_SWAP_TEXT}: ${from?.label ?? 'conta desconhecida'} → ${to.label}. Se o Claude pedir para confiar na pasta, confirme na aba.`;
     await applyState(repos, log, updated, 'claude', { kind: 'waiting_input', text, meta: { event: 'AccountSwap', from: from?.id ?? null, to: to.id, auto: opts.auto } });
-    await sendTextToSession(machine, session, line, true);
+    await typeCommandLine(machine, session, line);
 
     log.info({ tabId: tab.id, machineId: machine.id, from: from?.id ?? null, to: to.id, auto: opts.auto }, 'account swap: done');
     return { from: from && { id: from.id, label: from.label }, to: { id: to.id, label: to.label } };

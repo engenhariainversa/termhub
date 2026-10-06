@@ -6,6 +6,7 @@ import { eligibilityOf, REASON_TEXT, type IneligibleReason } from './eligibility
 import { mergeWaitOf } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { WAITING_AS_REASON, waitingOf } from './placement.js';
+import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { placeDetailText } from './waiting-text.js';
 
 export interface QueueItem {
@@ -21,20 +22,39 @@ export interface QueueItem {
  * The tagged cards of a project in board order (column position, then card position: the order is the
  * priority), each with its eligibility. Untagged cards and subtasks are not in the queue. An eligible card
  * the dispatcher found no place for shows why it waits (`no_account`, …) instead, with each machine and
- * account it left out (TER-985).
+ * account it left out (TER-985). One whose last start failed and waits for the next attempt says so, with the
+ * failure's reason (`start_backoff`, TER-987).
  */
 export async function automationQueue(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<QueueItem[]> {
   const now = new Date();
-  return (await eligibilityQueue(ctx, projectId, locale)).map((item) => {
-    // a card past `todo` whose PR the merge executor holds says why it is not merged yet
-    const merge = item.reason === 'not_in_todo' ? mergeWaitOf(item.task_id, now) : null;
-    if (merge) return { ...item, reason: merge, reason_text: t(locale, REASON_TEXT[merge]) };
-    const waiting = item.eligible ? waitingOf(item.task_id, now) : null;
-    if (!waiting) return item;
-    const reason = WAITING_AS_REASON[waiting.reason];
-    const detail = waiting.detail ? placeDetailText(locale, waiting.detail) : '';
-    return { ...item, eligible: false, reason, reason_text: detail ? `${t(locale, REASON_TEXT[reason])}: ${detail}` : t(locale, REASON_TEXT[reason]) };
-  });
+  const items = await eligibilityQueue(ctx, projectId, locale);
+  return Promise.all(
+    items.map(async (item) => {
+      // a card past `todo` whose PR the merge executor holds says why it is not merged yet
+      const merge = item.reason === 'not_in_todo' ? mergeWaitOf(item.task_id, now) : null;
+      if (merge) return { ...item, reason: merge, reason_text: t(locale, REASON_TEXT[merge]) };
+      if (item.eligible) {
+        const retry = await startRetryOf(ctx, item.task_id, locale, now);
+        if (retry) return { ...item, eligible: false, reason: 'start_backoff' as const, reason_text: retry };
+      }
+      const waiting = item.eligible ? waitingOf(item.task_id, now) : null;
+      if (!waiting) return item;
+      const reason = WAITING_AS_REASON[waiting.reason];
+      const detail = waiting.detail ? placeDetailText(locale, waiting.detail) : '';
+      return { ...item, eligible: false, reason, reason_text: detail ? `${t(locale, REASON_TEXT[reason])}: ${detail}` : t(locale, REASON_TEXT[reason]) };
+    }),
+  );
+}
+
+/** The text of a card waiting for its next start after a failed one, or null when it is not waiting. */
+async function startRetryOf(ctx: ControlContext, taskId: string, locale: Locale, now: Date): Promise<string | null> {
+  const failures = await ctx.repos.automationRuns.startFailures(taskId, startRetryBackoffMs);
+  if (!failures.recent || !failures.retry_at) return null;
+  const minutes = Math.max(1, Math.ceil((failures.retry_at.getTime() - now.getTime()) / 60_000));
+  const head = t(locale, 'O início falhou ({{attempt}} de {{max}}); nova tentativa em {{minutes}} min', { attempt: failures.consecutive, max: MAX_START_FAILURES, minutes });
+  const blocked = failures.last_run_id ? await ctx.repos.automationEvents.lastForRun(failures.last_run_id, 'run_blocked') : null;
+  const why = blocked ? (locale === 'en' ? blocked.payload.message_en : null) ?? blocked.payload.message : null;
+  return typeof why === 'string' && why ? `${head}. ${why}` : head;
 }
 
 /** The queue as the eligibility rules read it (spec §5), without the dispatcher's waiting reasons: what the dispatcher walks. */

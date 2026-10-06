@@ -227,6 +227,12 @@ export interface FeedRow {
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
 const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 
+/** Why a start failed (TER-987), in the reader's language when the event has it: null for any other block. */
+function startFailureOf(p: Record<string, unknown>, locale: Locale): string | null {
+  if (p.stage !== 'start') return null;
+  return (locale === 'en' ? str(p.message_en) : null) ?? str(p.message);
+}
+
 /**
  * The feed lines (newest first, as read): the facts of each event, the escalation reason in the reader's language.
  * Without `includeAgents` (no terminals:read) the machine, the tab and the branch stay out, like the agents' chips.
@@ -255,7 +261,7 @@ export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): A
       url: str(p.url) ?? str(p.pr_url),
       until: str(p.until),
       paused: typeof p.paused === 'boolean' ? p.paused : null,
-      reason_text: e.kind === 'escalated' ? t(locale, (reason && ESCALATION_TEXT[reason]) || ESCALATION_FALLBACK) : null,
+      reason_text: e.kind === 'escalated' ? t(locale, (reason && ESCALATION_TEXT[reason]) || ESCALATION_FALLBACK) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : null,
     };
   });
 }

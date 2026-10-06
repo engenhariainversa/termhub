@@ -16,6 +16,8 @@ export type IneligibleReason =
   | 'machine_offline'
   | 'no_room'
   | 'automation_not_allowed'
+  // a start failed and the next attempt waits (TER-987)
+  | 'start_backoff'
   // set by the merge executor on a card whose green PR is not merged yet (spec §10.1, spike R1)
   | 'merge_needs_approval'
   | 'merge_store'
@@ -41,6 +43,7 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   machine_offline: tk('Máquina do agente desligada'),
   no_room: tk('Máquina sem folga (memória/disco/carga)'),
   automation_not_allowed: tk('Nenhuma máquina aceita trabalho automático'),
+  start_backoff: tk('O início falhou; nova tentativa em breve'),
   merge_needs_approval: tk('Merge esperando sua aprovação no chat'),
   merge_store: tk('precisa de build nas lojas'),
   merge_checks_pending: tk('Esperando os checks obrigatórios do PR'),
