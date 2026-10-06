@@ -56,6 +56,19 @@ export const AUTOMATION_DENIED_TOOLS: readonly string[] = [
   'Bash(git merge -s*)',
   'Bash(git merge * -s*)',
   'Bash(git merge *--str*)',
+  // options that run a program or write a file, on the read commands `AUTOMATION_READ_TOOLS` allows (TER-989)
+  'Bash(find *-exec*)',
+  'Bash(find *-ok*)',
+  'Bash(find *-delete*)',
+  'Bash(find *-fprint*)',
+  'Bash(find *-fls*)',
+  'Bash(rg *--pre*)',
+  'Bash(git grep *-O*)',
+  'Bash(git grep *--open*)',
+  'Bash(git show *--ext*)',
+  'Bash(git show *--output*)',
+  'Bash(sort *-o*)',
+  'Bash(sort *--comp*)',
   'Bash(gh pr merge:*)',
   'Bash(gh api:*)',
   'Bash(gh secret:*)',
@@ -92,6 +105,48 @@ export const AUTOMATION_DENIED_TOOLS: readonly string[] = [
   'Edit(~/.claude*/.credentials.json)',
   'Read(~/.aws/**)',
   'Edit(~/.aws/**)',
+  // credentials a free `cat` could reach outside the worktree (TER-989): the machine agent's own config, the
+  // hook's env, other tabs' MCP tokens, npm/git/docker logins. Read only: acceptEdits never edits outside it.
+  'Read(~/.termhub/config.json)',
+  'Read(~/.termhub/hook.env)',
+  'Read(~/.termhub/tabs/**)',
+  'Read(~/.npmrc)',
+  'Read(~/.netrc)',
+  'Read(~/.git-credentials)',
+  'Read(~/.docker/config.json)',
+];
+
+/**
+ * What every automatic tab may run without asking, whatever its project's allow list says (TER-989): reading
+ * and searching the code and git's read commands. Fixed here like the deny list, since an agent's first move
+ * is a search, and a run whose `grep` asks stops for the person seconds after it starts. Only commands that
+ * cannot write or run another program: the options of these that could (`find -exec`, `rg --pre`,
+ * `git grep -O`, `sort -o`…) are in `AUTOMATION_DENIED_TOOLS`, read before any allow rule. No `sed`, `awk`,
+ * `xargs` or `echo` (sed's `e` and awk's `system` run commands; a redirect writes). Claude Code splits a
+ * piped or chained command and checks each part, so `rg x | head -40` passes; a command with more than one
+ * `cd` always asks (the prompt says to avoid it). Files inside the worktree are written by `acceptEdits`.
+ */
+export const AUTOMATION_READ_TOOLS: readonly string[] = [
+  'Bash(grep:*)',
+  'Bash(rg:*)',
+  'Bash(find:*)',
+  'Bash(ls:*)',
+  'Bash(cat:*)',
+  'Bash(head:*)',
+  'Bash(tail:*)',
+  'Bash(wc:*)',
+  'Bash(sort:*)',
+  'Bash(diff:*)',
+  'Bash(pwd)',
+  'Bash(git show:*)',
+  'Bash(git grep:*)',
+  'Bash(git blame:*)',
+  'Bash(git rev-parse:*)',
+  'Bash(git ls-files:*)',
+  'Bash(git merge-base:*)',
+  'Bash(git branch)',
+  'Bash(git branch --show-current)',
+  'Bash(git remote -v)',
 ];
 
 /**
@@ -122,6 +177,15 @@ export function branchFetchRules(branch: string | null): string[] {
 /** Every rule an automatic run gets from its own branch: its pushes and its fetch. */
 export function runBranchRules(branch: string | null): string[] {
   return [...branchPushRules(branch), ...branchFetchRules(branch)];
+}
+
+/**
+ * The whole allow list of an automatic tab (TER-989): the fixed read rules, the project's list less what is
+ * too broad (`safeAllowedTools`) and the run's own branch rules, each once. The tab's line and the server's
+ * `permissionAllowed` both use it, so they never disagree.
+ */
+export function automationAllowList(allowed: readonly string[], branch: string | null): string[] {
+  return [...new Set([...AUTOMATION_READ_TOOLS, ...safeAllowedTools(allowed).kept, ...runBranchRules(branch)])];
 }
 
 /**

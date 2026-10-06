@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_AUTOMATION_TOOLS } from './agents.js';
-import { AUTOMATION_DENIED_TOOLS, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
+import { AUTOMATION_DENIED_TOOLS, AUTOMATION_READ_TOOLS, automationAllowList, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
 describe('unsafeAllowedTool: allow rules too broad for an automatic tab (TER-968, review 1)', () => {
   it.each([
@@ -104,5 +104,29 @@ describe('unsafeAllowedTool: allow rules too broad for an automatic tab (TER-968
 
   it('splits a list into kept and dropped, in order', () => {
     expect(safeAllowedTools(['Bash(npm test:*)', 'Bash', 'WebFetch', 'Bash(git:*)'])).toEqual({ kept: ['Bash(npm test:*)', 'WebFetch'], dropped: ['Bash', 'Bash(git:*)'] });
+  });
+});
+
+describe('automationAllowList: the whole allow list of an automatic tab (TER-989)', () => {
+  it('every read rule would pass as a project rule too', () => {
+    for (const rule of AUTOMATION_READ_TOOLS) expect(unsafeAllowedTool(rule), rule).toBe(false);
+  });
+
+  it('keeps the read rules under a project list of its own, drops what is too broad and adds the run branch, each once', () => {
+    const list = automationAllowList(['Bash(make check)', 'Bash', 'Bash(grep:*)'], 'TER-1-card');
+    for (const rule of AUTOMATION_READ_TOOLS) expect(list).toContain(rule);
+    expect(list).toContain('Bash(make check)');
+    expect(list).not.toContain('Bash');
+    expect(list).toContain('Bash(git push -u origin TER-1-card)');
+    expect(list.filter((r) => r === 'Bash(grep:*)')).toHaveLength(1);
+  });
+
+  it('allows no push, publish, deploy or store command beyond the run branch', () => {
+    const list = automationAllowList(DEFAULT_AUTOMATION_TOOLS, null);
+    expect(list.some((r) => /git push|publish|release|eas|docker|fastlane|gh pr merge|gh workflow/.test(r))).toBe(false);
+  });
+
+  it('denies the options of the read commands that run a program or write a file', () => {
+    for (const r of ['Bash(find *-exec*)', 'Bash(find *-delete*)', 'Bash(rg *--pre*)', 'Bash(git grep *-O*)', 'Bash(git show *--ext*)', 'Bash(sort *-o*)']) expect(AUTOMATION_DENIED_TOOLS).toContain(r);
   });
 });
