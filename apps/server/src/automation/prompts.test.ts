@@ -32,7 +32,9 @@ describe('prompts', () => {
   });
   it('tell every role not to chain several cd in one command, even with custom text (TER-989)', () => {
     for (const p of [...all(null), ...all(custom)]) expect(p).toContain(SHELL_LINE);
-    expect(SHELL_LINE).toMatch(/vários cd num comando só/);
+    expect(SHELL_LINE).toMatch(/sem vários cd/);
+    expect(SHELL_LINE).toMatch(/parênteses/);
+    expect(SHELL_LINE).toMatch(/heredoc/);
   });
   it('carries the description excerpt and the lessons reminder', () => {
     const p = implementerPrompt({ card, branch: 'b', base: 'main', policy, custom: null, description: 'Faça o X' });
