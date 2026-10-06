@@ -23,9 +23,11 @@ const ASK_LINE = 'Pare e pergunte só quando a decisão não estiver no card, no
  * How to shape shell commands so they pass without a question (TER-989): Claude Code always asks, whatever
  * the allow list says, for a command with more than one `cd`, a `( … )` group it cannot check before it
  * runs, and a command too long for its parser (a big heredoc script) — all seen in the first automatic runs.
+ * A program called by its path (`/bin/ls`) misses the `Bash(ls:*)` rule, and the allow list refuses rules
+ * with a path on purpose (`unsafeAllowedTool`), so the line asks for the bare name.
  */
 export const SHELL_LINE =
-  'Comandos de leitura (grep, rg, find, git log/diff/show), testes, build e gh pr view/checks/create já estão liberados. Rode um comando simples por vez: sem vários cd, sem grupos entre parênteses ( … ) e sem scripts longos em heredoc; use caminhos a partir da raiz da worktree (grep -rn x apps/web/src), a ferramenta Grep para buscar e Edit/Write para mudar arquivos.';
+  'Comandos de leitura (grep, rg, find, git log/diff/show), testes, build e gh pr view/checks/create já estão liberados. Rode um comando simples por vez, com os programas pelo nome (ls, não /bin/ls): sem vários cd, sem grupos entre parênteses ( … ) e sem scripts longos em heredoc; use caminhos a partir da raiz da worktree (grep -rn x apps/web/src), a ferramenta Grep para buscar e Edit/Write para mudar arquivos.';
 /** The push the tab may send without asking (TER-968, R5: only its own branch is pre-allowed). */
 const pushLine = (branch: string) => `Para enviar, use git push -u origin ${branch}; outro push pede aprovação.`;
 const POLICY_MAX = 900;
