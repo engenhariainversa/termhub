@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ORIGIN_REMINDER, PROMPT_MAX_CHARS } from '../control/agents.js';
-import { fixerPrompt, implementerPrompt, integratorPrompt, RESUME_TEXT, SERVER_MARKER, serverMessage } from './prompts.js';
+import { fixerPrompt, implementerPrompt, integratorPrompt, RESUME_TEXT, SERVER_MARKER, serverMessage, SHELL_LINE } from './prompts.js';
 
 const policy = 'Autonomia do projeto: pr. Você abre o PR e para.\nO merge é feito pelo termhub quando o CI fica verde e a política permite.';
 const title = 'T'.repeat(300);
@@ -29,6 +29,10 @@ describe('prompts', () => {
     expect(p).toContain('report_card com status done');
     expect(p).not.toContain('Leia o card');
     expect(integratorPrompt({ epic: card, branch: 'b', base: 'main', prUrl: 'u', policy, custom: 'z' })).toContain(policy);
+  });
+  it('tell every role not to chain several cd in one command, even with custom text (TER-989)', () => {
+    for (const p of [...all(null), ...all(custom)]) expect(p).toContain(SHELL_LINE);
+    expect(SHELL_LINE).toMatch(/vários cd num comando só/);
   });
   it('carries the description excerpt and the lessons reminder', () => {
     const p = implementerPrompt({ card, branch: 'b', base: 'main', policy, custom: null, description: 'Faça o X' });

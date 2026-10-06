@@ -360,8 +360,9 @@ describe('permissionAllowed (spec D19, §9.2, preflight F-6)', () => {
   });
 
   it('a bare `Bash` rule is too broad for an automatic tab (TER-968): dropped, it allows nothing', () => {
-    expect(permissionAllowed(bash('ls -la'), ['Bash'])).toBe(false);
-    expect(permissionAllowed(bash('ls -la'), ['Bash(ls:*)'])).toBe(true);
+    // `make` is outside the fixed read rules (TER-989): only a rule of the project lets it through
+    expect(permissionAllowed(bash('make check'), ['Bash'])).toBe(false);
+    expect(permissionAllowed(bash('make check'), ['Bash(make:*)'])).toBe(true);
     expect(refused(bash('gh pr merge 3'), ['Bash'])).toBe(true);
   });
 
@@ -485,6 +486,68 @@ describe('refusedCommand: refused at every level, whatever the allow list says (
   it('every push is refused when the run has no branch', () => {
     expect(refusedCommand('git push origin TER-1-card', null)).toBe(true);
     expect(refusedCommand('git push origin HEAD', null)).toBe(true);
+  });
+});
+
+describe('permissionAllowed with the read rules every automatic tab gets (TER-989)', () => {
+  const bash = (command: string) => ({ tool: 'Bash', command });
+
+  it.each([
+    'grep -rln Liberar apps/web/src',
+    'rg -n project/: apps/web/src',
+    'find apps -name *.ts',
+    'ls -la apps',
+    'cat package.json',
+    'head -40 apps/server/src/app.ts',
+    'git show HEAD~1',
+    'git grep -n automationAllowList',
+    'git ls-files apps/server',
+    'git branch --show-current',
+  ])('allows `%s` with an empty project list', (command) => {
+    expect(permissionAllowed(bash(command), [], 'TER-1-card')).toBe(true);
+  });
+
+  it.each([
+    'npm run i18n:check -w @termhub/web',
+    'npm run build:packages',
+    'npm run test -w @termhub/server',
+    'gh pr diff 12',
+    'gh run view 123 --log-failed',
+    'git checkout origin/main -- package-lock.json',
+  ])('allows the project command `%s` with the default list', (command) => {
+    expect(permissionAllowed(bash(command), DEFAULT_AUTOMATION_TOOLS, 'TER-1-card')).toBe(true);
+  });
+
+  it.each([
+    'find . -delete',
+    'find . -execdir touch x {} +',
+    'find . -fprint out',
+    'rg --pre ./run.sh x',
+    'git grep -O vim x',
+    'git show --ext-diff HEAD',
+    'git show --output=/tmp/x HEAD',
+    'sort -o out in',
+    'sort --compress-program=x in',
+    'cat .env',
+    'cat apps/server/.env.local',
+    'grep -r token ~/.ssh',
+    'cat ~/.config/gh/hosts.yml',
+    'cat ~/.claude/.credentials.json',
+    'ls ~/.aws/',
+    'cat ~/.termhub/config.json',
+    'cat /Users/x/.termhub/tabs/abc/token',
+    'cat ~/.npmrc',
+    'cat ~/.git-credentials',
+    'git push origin main',
+    'gh pr merge 12',
+    'npm run release:ota',
+    'docker ps',
+  ])('still escalates `%s`', (command) => {
+    expect(permissionAllowed(bash(command), DEFAULT_AUTOMATION_TOOLS, 'TER-1-card')).toBe(false);
+  });
+
+  it('still escalates a chained command, whose parts the server cannot see apart', () => {
+    expect(permissionAllowed(bash('rg -n x apps | head -40'), DEFAULT_AUTOMATION_TOOLS, 'TER-1-card')).toBe(false);
   });
 });
 

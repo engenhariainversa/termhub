@@ -34,7 +34,12 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
 - Permissions of automatic tabs: `acceptEdits` plus an allow list; no bypass flag. A fixed deny list
   (force/delete/mirror pushes, `.env` reads, `git -c`, release commands, ...) sits in
   `apps/server/src/control/automation-tools.ts` (`AUTOMATION_DENIED_TOOLS`) and beats any project allow
-  rule. Any other permission request is answered by rule or escalated (`permission_needed`).
+  rule. Every automatic tab also gets a fixed list of read rules (`AUTOMATION_READ_TOOLS`: `grep`, `rg`,
+  `find`, `ls`, `cat`, `git show`/`grep`/`blame`…, TER-989) on top of the project's allow list, so a search
+  never asks. Any other permission request is answered by rule or escalated (`permission_needed`); the hook
+  does not forward Bash commands, so in practice every Bash request that reaches the server escalates, and
+  only what lies outside the rules reaches it. A command with several `cd` always asks (Claude Code's own
+  check); the run prompt tells the agent to avoid it.
 - No "Revisar" column. Review is the PR of each card plus the daily summary.
 
 ## 3. Before turning it on

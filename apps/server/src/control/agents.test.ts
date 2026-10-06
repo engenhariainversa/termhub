@@ -22,7 +22,8 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import { Scoped } from '../auth/scope.js';
 import { ControlError, type ControlContext } from './context.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { AUTOMATION_DENIED_TOOLS, branchFetchRules, branchPushRules, checkPrompt, runBranchRules, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
+import { AUTOMATION_DENIED_TOOLS, AUTOMATION_READ_TOOLS, branchFetchRules, branchPushRules, checkPrompt, runBranchRules, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
+import { TEXT_MAX_CHARS } from '@termhub/agent-protocol';
 
 /** A Claude agent's first prompt: the lessons reminder, then the origin reminder (TER-851). */
 const started = (prompt: string) => withOriginReminder(withLessonsReminder(prompt));
@@ -122,6 +123,8 @@ const NOTE = 'O agente está subindo com o prompt. Chame wait_for_state para sab
 const MCP_URL = 'https://termhub.dev/mcp';
 /** The fixed deny list as typed (TER-968): every rule single-quoted. */
 const DENY = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => `'${t}'`).join(' ')}`;
+/** The fixed read rules every automatic tab's allow list starts with (TER-989). */
+const READ = AUTOMATION_READ_TOOLS.map((t) => `'${t}'`).join(' ');
 /** A Bash deny rule as Claude Code reads it (`*` anywhere, `X:*` = `X *`), to show the run's own pushes never match one. */
 const denyGlob = (rule: string) => {
   const m = /^Bash\((.*)\)$/.exec(rule);
@@ -238,18 +241,32 @@ describe('resume and continue lines of an automatic tab (preflight F-12)', () =>
   const permission = { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)', 'Bash(npm test:*)'], branch: null };
 
   it('resumeLine keeps acceptEdits and the allow list, merged with the tab MCP\'s tools, ended by --', () => {
-    expect(resumeLine(null, SID, 'x', null, null, permission)).toBe(`${CLEAR_CLAUDE}claude --permission-mode acceptEdits --allowedTools 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --resume ${SID} -- 'x'`);
-    expect(resumeLine('/c', SID, 'x', 'abc', 'opus', permission)).toBe(`CLAUDE_CONFIG_DIR='/c' claude --model 'opus' --permission-mode acceptEdits ${MCP_FLAGS} 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --resume ${SID} -- 'x'`);
+    expect(resumeLine(null, SID, 'x', null, null, permission)).toBe(`${CLEAR_CLAUDE}claude --permission-mode acceptEdits --allowedTools ${READ} 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --resume ${SID} -- 'x'`);
+    expect(resumeLine('/c', SID, 'x', 'abc', 'opus', permission)).toBe(`CLAUDE_CONFIG_DIR='/c' claude --model 'opus' --permission-mode acceptEdits ${MCP_FLAGS} ${READ} 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --resume ${SID} -- 'x'`);
     expect(() => resumeLine(null, SID, 'x', null, null, { mode: 'acceptEdits', allowedTools: ['--dangerously-skip-permissions'], branch: null })).toThrow(ControlError);
     expect(() => resumeLine(null, SID, 'x', null, null, { mode: 'bypassPermissions' as 'acceptEdits', allowedTools: [], branch: null })).toThrow(ControlError);
   });
 
   it('continueLine of an automatic Claude tab carries the profile, the MCP and a first message; Codex is unchanged', () => {
     expect(continueLine('claude', null, { permission, prompt: '[termhub automático] x', mcpTabId: null })).toBe(
-      `${CLEAR_CLAUDE}claude --permission-mode acceptEdits --allowedTools 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --continue -- '[termhub automático] x'`,
+      `${CLEAR_CLAUDE}claude --permission-mode acceptEdits --allowedTools ${READ} 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --continue -- '[termhub automático] x'`,
     );
-    expect(continueLine('claude', null, { permission, prompt: 'x', mcpTabId: 'abc' })).toContain(`${MCP_FLAGS} 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --continue -- 'x'`);
+    expect(continueLine('claude', null, { permission, prompt: 'x', mcpTabId: 'abc' })).toContain(`${MCP_FLAGS} ${READ} 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --continue -- 'x'`);
     expect(continueLine('chatgpt', '/home/u/.codex_b', { permission, prompt: 'x', mcpTabId: null })).toBe(`CODEX_HOME='/home/u/.codex_b' codex --no-alt-screen resume --last`);
+  });
+});
+
+describe('typed resume lines of an automatic tab stay under the input cap (TER-989)', () => {
+  // still typed whole until TER-988 sends them through a file, like a start line (TER-987)
+  it('with the read rules, the default list, the longest default branch and a long config dir, a resume or continue line stays under the 4000-character typed input cap', () => {
+    // `{ticket}-{slug}` with a five-digit ref and the 40-character slug cap (branches.ts)
+    const permission = { mode: 'acceptEdits' as const, allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: `TER-12345-${'a'.repeat(40)}` };
+    const prompt = '[termhub automático] Continue a tarefa do card de onde parou. Se terminou, abra o PR e chame report_card.';
+    const lines = [
+      resumeLine('~/.claude_someone_long', '123e4567-e89b-12d3-a456-426614174000', prompt, 'abcdefghijkl', 'opus', permission),
+      continueLine('claude', '~/.claude_someone_long', { permission, prompt, mcpTabId: 'abcdefghijkl' }),
+    ];
+    for (const line of lines) expect(line.length).toBeLessThan(TEXT_MAX_CHARS - 150);
   });
 });
 
@@ -759,16 +776,19 @@ describe('linkTabTask', () => {
 
 describe('automation launch: permission flags, cwd and setup command (TER-870)', () => {
   const PERMISSION = { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)', 'Bash(npm test:*)'], branch: null };
-  const TOOLS = `'Bash(git status:*)' 'Bash(npm test:*)'`;
+  const TOOLS = `${READ} 'Bash(git status:*)' 'Bash(npm test:*)'`;
   const TAB_TOOLS = `'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy' 'mcp__termhub_tab__report_card' 'mcp__termhub_tab__get_card'`;
   const WORKTREE = '/home/u/.termhub/worktrees/P1-7';
 
   it('the default allow list is the closed F-6 list: no push (only the run\'s own branch, TER-968), no generic npm run', () => {
     expect(DEFAULT_AUTOMATION_TOOLS).toEqual([
       'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(git fetch)', 'Bash(git fetch origin)', 'Bash(git merge:*)', 'Bash(git log:*)',
-      'Bash(gh pr create:*)', 'Bash(gh pr view:*)', 'Bash(gh pr checks:*)',
+      'Bash(git checkout:*)', 'Bash(git restore:*)', 'Bash(git stash:*)',
+      'Bash(gh pr create:*)', 'Bash(gh pr view:*)', 'Bash(gh pr checks:*)', 'Bash(gh pr diff:*)', 'Bash(gh pr list:*)',
+      'Bash(gh run list:*)', 'Bash(gh run view:*)',
       'Bash(npm test:*)', 'Bash(npm ci)', 'Bash(npm install)', 'Bash(npx prisma generate)',
-      'Bash(node scripts/automation/rename-migrations.mjs:*)', 'Bash(npm run build:*)', 'Bash(npm run typecheck:*)',
+      'Bash(node scripts/automation/rename-migrations.mjs:*)', 'Bash(npm run build:*)', 'Bash(npm run build:packages)', 'Bash(npm run typecheck:*)',
+      'Bash(npm run test:*)', 'Bash(npm run i18n:check:*)',
     ]);
     for (const t of DEFAULT_AUTOMATION_TOOLS) {
       expect(t).not.toMatch(/push/);
@@ -780,8 +800,8 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
   it('without the MCP: acceptEdits, one quoted allow list and `--` before the prompt', () => {
     expect(launchLine('claude', '/c', 'do it', null, null, PERMISSION)).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits --allowedTools ${TOOLS} ${DENY} -- 'do it'`);
     expect(launchLine('claude', null, 'do it', null, 'opus', PERMISSION)).toBe(`${CLEAR_CLAUDE}claude --model 'opus' --permission-mode acceptEdits --allowedTools ${TOOLS} ${DENY} -- 'do it'`);
-    // an empty list still carries the deny list and ends the options before the prompt
-    expect(launchLine('claude', '/c', 'x', null, null, { mode: 'acceptEdits', allowedTools: [], branch: null })).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits ${DENY} -- 'x'`);
+    // an empty project list still carries the read rules and the deny list, and ends the options before the prompt
+    expect(launchLine('claude', '/c', 'x', null, null, { mode: 'acceptEdits', allowedTools: [], branch: null })).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits --allowedTools ${READ} ${DENY} -- 'x'`);
   });
 
   it('with the MCP: the tab tools and the automation tools share a single --allowedTools', () => {
@@ -811,12 +831,12 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     // an allow rule cannot carve an exception out of a deny rule in Claude Code: no generic push deny, or the run's own push would be blocked too
     expect(AUTOMATION_DENIED_TOOLS).not.toContain('Bash(git push:*)');
     // no deny silently cancels a rule the tab is meant to have
-    for (const t of AUTOMATION_DENIED_TOOLS) for (const own of [...runBranchRules('TER-1-card'), ...DEFAULT_AUTOMATION_TOOLS]) expect(denyGlob(t).test(own), `${t} vs ${own}`).toBe(false);
+    for (const t of AUTOMATION_DENIED_TOOLS) for (const own of [...runBranchRules('TER-1-card'), ...DEFAULT_AUTOMATION_TOOLS, ...AUTOMATION_READ_TOOLS]) expect(denyGlob(t).test(own), `${t} vs ${own}`).toBe(false);
   });
 
   it('path rules use the documented anchors: `//` (filesystem root) for .env, `~/` for the home dir; none is cwd-relative', () => {
     const paths = AUTOMATION_DENIED_TOOLS.filter((t) => /^(Read|Edit)\(/.test(t)).map((t) => t.replace(/^(Read|Edit)\((.*)\)$/, '$2'));
-    expect(paths.length).toBe(10);
+    expect(paths.length).toBe(17);
     for (const p of paths) expect(p.startsWith('//') || p.startsWith('~/'), p).toBe(true);
     expect(launchLine('claude', null, 'x', null, null, PERMISSION)).toContain(`'Read(//**/.env*)' 'Edit(//**/.env*)' 'Read(~/.ssh/**)'`);
   });

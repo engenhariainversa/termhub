@@ -4,7 +4,7 @@ import { publishTabQuestions } from '../chat/tab-questions.js';
 import { answerTabQuestion } from '../chat/tab-question-answer.js';
 import { checkChoiceAnswer, type ChoiceAnswer, type ChoicePayload, type PermissionPayload } from '../chat/tab-question-payload.js';
 import type { Waker } from '../chat/wake.js';
-import { AUTOMATION_DENIED_TOOLS, runBranchRules, safeAllowedTools } from '../control/automation-tools.js';
+import { AUTOMATION_DENIED_TOOLS, automationAllowList } from '../control/automation-tools.js';
 import { controlContextFor } from '../control/context.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -348,7 +348,15 @@ const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit'
  * program's path reduced to its name). A path rule (`Read(~/.ssh/**)`) cannot be checked without the path,
  * which the request does not carry: every file tool request is then taken as covered, the safe direction.
  */
+/**
+ * The paths the deny list's `Read`/`Edit` rules protect, as they show up in a shell command: a Bash read
+ * rule (`Bash(cat:*)`, `Bash(grep:*)`, TER-989) must not let `cat .env` or `grep -r x ~/.ssh` through here,
+ * where the path rules cannot be matched. Claude Code applies the Read rules to those commands itself.
+ */
+const SECRET_PATH = /(^|[\/'"=])\.env|\.ssh(\/|$)|\.config\/gh(\/|$)|\.credentials\.json|\.aws(\/|$)|\.termhub\/(config\.json|hook\.env|tabs(\/|$))|\.npmrc|\.netrc|\.git-credentials|\.docker\/config\.json/;
+
 function deniedByList(tool: string, command: string | null): boolean {
+  if (tool === 'Bash' && command !== null && command.split(' ').some((t) => SECRET_PATH.test(t))) return true;
   return AUTOMATION_DENIED_TOOLS.some((raw) => {
     const rule = parseRule(raw);
     if (!rule) return false;
@@ -371,9 +379,10 @@ function deniedByList(tool: string, command: string | null): boolean {
  *    is refused at every level (`refusedCommand`, the run's `branch` for pushes): never;
  * 3. the fixed deny list (`AUTOMATION_DENIED_TOOLS`, TER-968 R5), the same one the tab was started with as
  *    `--disallowedTools`: never, whatever `allowed` says;
- * 4. a rule of `allowed` (Claude Code's syntax; one too broad for an automatic tab, `unsafeAllowedTool`, is
- *    dropped, as on the tab's line) or of the run's own branch rules (`runBranchRules`: its pushes and its fetch) for
- *    this tool: a bare `Tool`, or for `Bash` a `Bash(prefix:*)` matching on a word boundary or a
+ * 4. a rule of the tab's whole allow list, `automationAllowList` — the fixed read rules
+ *    (`AUTOMATION_READ_TOOLS`, TER-989), `allowed` in Claude Code's syntax less what is too broad for an
+ *    automatic tab (`unsafeAllowedTool`, as on the tab's line) and the run's own branch rules
+ *    (`runBranchRules`: its pushes and its fetch) — for this tool: a bare `Tool`, or for `Bash` a `Bash(prefix:*)` matching on a word boundary or a
  *    `Bash(exact)` matching exactly. A specifier on any other tool never matches: its input is not known here.
  *
  * The same at every autonomy level, on purpose: merging, deploying and publishing are the server's own
@@ -389,7 +398,7 @@ export function permissionAllowed(req: PermissionRequest, allowed: string[], bra
     if (command === '' || refusedCommand(command, branch)) return false;
   }
   if (deniedByList(req.tool, command)) return false;
-  return [...safeAllowedTools(allowed).kept, ...runBranchRules(branch)].some((raw) => {
+  return automationAllowList(allowed, branch).some((raw) => {
     const rule = parseRule(raw);
     if (!rule || rule.tool !== req.tool) return false;
     if (rule.spec === null) return true;
@@ -423,7 +432,9 @@ const TOOL_NAME = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
  * send that fails escalates, unless the card moved on meanwhile (`'closed'`). Only "allow" is ever sent.
  *
  * `command` is the Bash command when the caller knows it. The machine's hook script forwards the tool's
- * name only (spec 2026-09-25 tab questions §4.1), so today it is null and every Bash request escalates.
+ * name only (spec 2026-09-25 tab questions §4.1), so today it is null and every Bash request that reaches
+ * here escalates. Since TER-989 that is only what lies outside the rules: Claude Code itself runs what the
+ * tab's allow list covers (`automationAllowList`) without asking, so no card opens for it.
  * Logs ids only, never the command.
  */
 export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQuestionRow, run: AutomationRun, command: string | null = null): Promise<PermissionOutcome> {
