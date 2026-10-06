@@ -35,6 +35,7 @@ describe('prompts', () => {
     expect(SHELL_LINE).toMatch(/sem vários cd/);
     expect(SHELL_LINE).toMatch(/parênteses/);
     expect(SHELL_LINE).toMatch(/heredoc/);
+    expect(SHELL_LINE).toContain('não /bin/ls');
   });
   it('carries the description excerpt and the lessons reminder', () => {
     const p = implementerPrompt({ card, branch: 'b', base: 'main', policy, custom: null, description: 'Faça o X' });
