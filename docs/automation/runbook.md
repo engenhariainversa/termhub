@@ -181,7 +181,7 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 | `answer_cap` | Too many automatically answered questions in an hour | Look at the tab, answer on the card |
 | `permission_needed` | A permission the project rules do not allow | Allow or deny on the card; add a narrow allow rule in Setup only if it should always pass |
 | `resume_cap` | Stopped several times, the chat could not continue | Open the tab and continue by hand |
-| `start_failed` | Start failed several times; the tag was removed | Fix the cause (machine, agent version, folder), tag the card again |
+| `start_failed` | Start failed three times in a row; the tag was removed | Read the reason on the failed starts (below), fix the cause (machine, agent version, folder), tag the card again |
 | `agent_exited` | The agent exited again after its restart | Open the tab, see why |
 | `card_budget` | The card passed `card_budget_usd` | Check the tab, resume if worth it |
 | `reported_blocked` | The agent said it is stuck | Read its report, unblock or take over |
@@ -190,6 +190,13 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 | `deploy_failed` | The deploy failed after a merge; the project is paused | Section 10, then "Retomar automático" |
 | `deploy_failed_not_paused` | Same, and the pause could not be applied | Pause the project yourself first, then section 10 |
 | `release_failed` | A release workflow failed after a merge; nothing is paused | Section 10 |
+
+A failed start (any code, `LAUNCH_FAILED` included) is not an escalation by itself: its `run_blocked` event
+(`stage: start`) carries the reason (`message`, `message_en`), the attempt (`attempt` of `max_attempts`) and
+when the next one comes (`retry_at`), and the card shows "O início falhou (1 de 3); nova tentativa em N min"
+with that reason in the queue (`start_backoff`). The next attempt waits 2 minutes after the first failure
+and 10 after the second; the third failure removes the tag and escalates `start_failed`. The wait is read
+from the runs table, so both colours keep it.
 
 `ci_cap` and `conflict_cap` also come before the cap when a fix ended without a push (the PR head did not
 move after its fixer, or after the fix typed into the card's own run): the escalation then carries

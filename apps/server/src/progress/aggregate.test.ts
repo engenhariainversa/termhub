@@ -164,6 +164,14 @@ describe('automatic tabs and the feed', () => {
     expect(unknown.reason_text).toBe('O trabalho automático parou e espera você.');
   });
 
+  it('gives a failed start its reason in the reader language, and no reason to any other block (TER-987)', () => {
+    const start = { code: 'LAUNCH_FAILED', stage: 'start', message: 'A máquina não respondeu', message_en: 'The machine did not answer' };
+    expect(feedOf([row('1', 'run_blocked', start)], 'pt-BR')[0].reason_text).toBe('A máquina não respondeu');
+    expect(feedOf([row('1', 'run_blocked', start)], 'en')[0].reason_text).toBe('The machine did not answer');
+    expect(feedOf([row('1', 'run_blocked', { code: 'LAUNCH_FAILED', stage: 'start', message: 'só pt' })], 'en')[0].reason_text).toBe('só pt');
+    expect(feedOf([row('1', 'run_blocked', { code: 'X', reason: 'agent_exited' })], 'pt-BR')[0].reason_text).toBeNull();
+  });
+
   it('names the branch a merge landed on', () => {
     expect(feedOf([row('1', 'merged', { base: 'main', branch: 'zzz' })], 'pt-BR')[0].branch).toBe('main');
   });

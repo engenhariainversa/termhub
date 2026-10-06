@@ -17,6 +17,9 @@ describe('feedLine', () => {
     expect(feedLine(ev({ kind: 'deploy_failed', paused: false }))).toBe('Deploy falhou (Épico)');
     expect(feedLine(ev({ kind: 'release_ok', workflow: 'npm', version: '1.2.0' }))).toBe('Publicado npm 1.2.0');
     expect(feedLine(ev({ kind: 'escalated', reason_text: 'Confirme na aba.' }))).toBe('TER-9 precisa de você: Confirme na aba.');
+    // TER-987: a start that failed says why
+    expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'A máquina não respondeu' }))).toBe('TER-9 não começou: A máquina não respondeu');
+    expect(feedLine(ev({ kind: 'run_blocked' }))).toBe('TER-9: parou e espera você');
     // TER-975: changes to what automatic work may do
     expect(feedLine(ev({ kind: 'automation_on' }))).toBe('Automático ligado no projeto');
     expect(feedLine(ev({ kind: 'tagged' }))).toBe('TER-9: marcado como automático');

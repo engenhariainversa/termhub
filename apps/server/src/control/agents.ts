@@ -8,7 +8,7 @@ import { peakUtilization, SWAP_MAX_UTILIZATION } from './account-swap.js';
 import type { AiAccount, AiProvider, Machine, Project, Task } from '../db/repositories/types.js';
 import { HttpError, localizedOf } from '../lib/errors.js';
 import { mintTabToken, TAB_TOKEN_TOOLS } from '../mcp/tab-token.js';
-import { sendTextToSession } from '../terminal/session-ops.js';
+import { typeCommandLine } from '../terminal/session-ops.js';
 import { installTabMcp, TAB_MCP_SERVER, tabMcpSupported } from '../terminal/tab-mcp.js';
 import { ControlError, type ControlContext } from './context.js';
 import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
@@ -500,7 +500,7 @@ export async function startAgent(
     throw tagged(e);
   }
   try {
-    await sendTextToSession(machine, tab.tmux_session as string, line, true);
+    await typeCommandLine(machine, tab.tmux_session as string, line);
   } catch (e) {
     throw tagged(new ControlError('LAUNCH_FAILED', msg('A aba {{tab}} foi aberta, mas o agente não foi iniciado: {{reason}}. Veja a tela com read_screen ou feche a aba com close_tab.', { tab: tab.tab_id, reason: reason(e) })));
   }

@@ -12,7 +12,8 @@ const { openTab, sendTextToSession, installTabMcp, tabMcpSupported, cfg, getAcco
 vi.mock('../config.js', () => ({ config: cfg }));
 vi.mock('../ai/index.js', () => ({ getAccountUsage }));
 vi.mock('./terminals.js', () => ({ openTab }));
-vi.mock('../terminal/session-ops.js', () => ({ sendTextToSession }));
+// typeCommandLine (file for a long line, TER-987) has its own tests: here the line it is given is what is checked
+vi.mock('../terminal/session-ops.js', () => ({ sendTextToSession, typeCommandLine: (m: unknown, s: string, line: string) => sendTextToSession(m, s, line, true) }));
 vi.mock('../terminal/tab-mcp.js', async (orig) => ({ ...(await orig<typeof import('../terminal/tab-mcp.js')>()), installTabMcp, tabMcpSupported }));
 
 import type { Repositories } from '../db/repositories/index.js';
