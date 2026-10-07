@@ -1,6 +1,7 @@
 import { currentLocale, i18n } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
 import type { AutomationFeedEvent, FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -16,6 +17,10 @@ export class ApiError extends Error {
 export function readCookie(name: string): string | undefined {
   const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
   return m ? decodeURIComponent(m[1]) : undefined;
+}
+
+function securityEventQuery(params: Record<string, string | undefined>): string {
+  return new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => !!e[1])).toString();
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -290,6 +295,8 @@ export const api = {
    *  fresh one. 409 CHAT_BUSY while an answer is being written, 409 CHAT_ARCHIVED if the send that lost
    *  the race already ran against the conversation this call just archived. */
   resetChat: (projectId?: string | null) => request<{ conversation: ChatConversation }>('POST', '/chat/reset', projectId ? { project_id: projectId } : {}),
+  /** "Apagar conversa" (TER-743): like `resetChat`, but the old conversation is deleted for good. Same 409s. */
+  deleteChat: (projectId?: string | null) => request<{ conversation: ChatConversation }>('POST', '/chat/delete', projectId ? { project_id: projectId } : {}),
   /** "Compactar" (TER-315): runs `/compact` on the scope's session. 202 once it started; the end comes
    *  over /ws/chat (`compact`, `context`). 409 CHAT_BUSY while an answer is being written,
    *  CHAT_NOTHING_TO_COMPACT before the first answer, and the host 409s (each with its pt-BR sentence). */
@@ -485,6 +492,15 @@ export const api = {
     list: () => request<{ tokens: ApiToken[] }>('GET', '/api-tokens'),
     create: (input: { name: string; scopes: ApiTokenScope[]; expires_in_days: number | null }) => request<CreatedApiToken>('POST', '/api-tokens', input),
     revoke: (id: string) => request<{ api_token: ApiToken }>('DELETE', `/api-tokens/${id}`),
+    /** The token's MCP calls (metadata only), newest first; the server keeps `retention_days`. */
+    events: (id: string) => request<{ events: ApiTokenEvent[]; retention_days: number }>('GET', `/api-tokens/${id}/events`),
+  },
+  /** Settings → Auditoria (TER-577): the instance's security trail, for admins. */
+  securityEvents: {
+    list: (filter: SecurityEventFilter, before?: string | null) =>
+      request<SecurityEventsPage>('GET', `/security-events?${securityEventQuery({ ...filter, before: before ?? undefined })}`),
+    /** A plain link (the browser downloads it with the session cookie); the export goes on the trail. */
+    exportUrl: (filter: SecurityEventFilter, format: 'csv' | 'json') => `/api/security-events/export?${securityEventQuery({ ...filter, format })}`,
   },
   waitlist: {
     list: () => request<{ entries: WaitlistEntry[] }>('GET', '/waitlist'),

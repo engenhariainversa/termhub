@@ -22,6 +22,7 @@ import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved, publishTabsRemoved } from '../monitor/tab-events.js';
 import { msg, tk } from '../i18n/index.js';
 import { recordMachineSwitch } from '../automation/setup-tools.js';
+import { audit } from '../auth/audit.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const fsQuery = z.object({ path: z.string().max(4096).optional() });
@@ -52,6 +53,7 @@ const machineBody = z
     is_local: z.boolean().optional(),
     agent_auto_update: z.boolean().optional(),
     claude_auto_swap: z.boolean().optional(),
+    ai_usage_query: z.boolean().optional(),
     automation_allowed: z.boolean().optional(),
   })
   .superRefine((m, ctx) => {
@@ -119,6 +121,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     const { token, hash } = newAgentToken();
     const machine = await repos.machines.create({ ...body, subtitle: body.subtitle ?? null, host: null, ssh_user: null, owner_id: request.scope.createAs });
     await repos.machines.rotateAgentToken(machine.id, hash);
+    await audit(repos, request, 'machine.create', { target: { type: 'machine', id: machine.id, label: machine.name }, meta: { owner_id: machine.owner_id } });
     return reply.code(201).send({ machine, agent_token: token });
   });
 
@@ -130,6 +133,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     const { token, hash } = newAgentToken();
     await repos.machines.rotateAgentToken(id, hash);
     agents.disconnect(id, CLOSE.UNAUTHORIZED, 'rotated');
+    await audit(repos, request, 'machine.agent_token_rotate', { target: { type: 'machine', id, label: machine.name } });
     return { agent_token: token };
   });
 
@@ -159,6 +163,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     // published (they belong to their owners, not to the machine). Any public page showing them
     // hangs up and re-reads.
     if (owner_id !== undefined && owner_id !== current.owner_id) {
+      await audit(repos, request, 'machine.transfer', { target: { type: 'machine', id, label: current.name }, meta: { from: current.owner_id, to: owner_id } });
       publicBus.publishRobotsGone({ machine_id: id });
       request.log.info({ machineId: id }, 'machine transferred: its robots left its old owner\'s public city');
       // its tabs leave the old owner's open tabs (sidebar) and join the new owner's
@@ -182,6 +187,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     // its robots leave every public city at once (the projects, and their publish switch, stay)
     publicBus.publishRobotsGone({ machine_id: id });
     agents.disconnect(id, CLOSE.UNAUTHORIZED, 'deleted');
+    await audit(repos, request, 'machine.delete', { target: { type: 'machine', id, label: machine.name }, meta: { owner_id: machine.owner_id, tabs: tabs.length } });
     return { ok: true };
   });
 

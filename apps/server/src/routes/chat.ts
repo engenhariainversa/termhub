@@ -219,6 +219,12 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     return { conversation: await deps.service.reset(request.scope.user, project_id ?? null) };
   });
 
+  /** "Apagar conversa" (TER-743): deletes the scope's active conversation for good and answers the fresh one. */
+  app.post('/delete', { config: { action: 'delete' } }, async (request) => {
+    const { project_id } = resetBody.parse(request.body ?? {});
+    return { conversation: await deps.service.deleteConversation(request.scope.user, project_id ?? null) };
+  });
+
   /** Per-project chat status for the sidebar's 💬: answering now, and questions waiting on the user. */
   app.get('/projects', async (request) => ({ projects: await deps.service.projectStatuses(request.scope.user) }));
 
