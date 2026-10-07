@@ -12,11 +12,11 @@ export function mockProgress(now: number): TProgressResponse {
     feed: [
       {
         id: 'ev-2', kind: 'pr_opened', created_at: minutesAgo(30), project_id: 'p-termhub', task_id: 'c-183', run_id: 'run-0183abcdef', tab_id: 't-api', ref: 'TER-183', epic: 'Visão gerencial',
-        machine: 'jarvis', account: null, branch: 'auto/ter-183', workflow: null, version: null, pr: 12, url: 'https://github.com/acme/app/pull/12', until: null, reason_text: null, paused: null,
+        machine: 'jarvis', account: null, branch: 'auto/ter-183', workflow: null, version: null, pr: 12, url: 'https://github.com/acme/app/pull/12', until: null, reason_text: null, paused: null, tool: null,
       },
       {
         id: 'ev-1', kind: 'run_started', created_at: minutesAgo(90), project_id: 'p-termhub', task_id: 'c-183', run_id: 'run-0183abcdef', tab_id: 't-api', ref: 'TER-183', epic: 'Visão gerencial',
-        machine: 'jarvis', account: 'pessoal', branch: 'auto/ter-183', workflow: null, version: null, pr: null, url: null, until: null, reason_text: null, paused: null,
+        machine: 'jarvis', account: 'pessoal', branch: 'auto/ter-183', workflow: null, version: null, pr: null, url: null, until: null, reason_text: null, paused: null, tool: null,
       },
     ],
     epics: [

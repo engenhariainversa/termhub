@@ -32,6 +32,8 @@ export const AGENT_EXITED = 'agent_exited';
 export const ACCOUNT_EXCLUSIVE = 'account_exclusive';
 /** A PR still in conflict after `fix_attempts` fixer runs (merge executor, spike R2): a person resolves it. */
 export const CONFLICT_CAP = 'conflict_cap';
+/** TER-1004: a green PR of an automatic card that also cites a person's card not yet done: a person merges it (or drops the citation). */
+export const MERGE_PERSON_CARD = 'merge_person_card';
 /** A PR whose CI is still red after `fix_attempts` fixes (spec D21, shared with the conflict fixes): a person looks at it. */
 export const CI_CAP = 'ci_cap';
 /** R8: the card's estimated cost passed `card_budget_usd`; the run is parked, not resumed. */
@@ -65,6 +67,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [DEPLOY_FAILED_NOT_PAUSED]: tk('O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.'),
   [RELEASE_FAILED]: tk('Um workflow de publicação falhou depois do merge; confira a execução.'),
   [CI_CAP]: tk('O CI do PR continua falhando depois das tentativas de correção; confira o PR.'),
+  [MERGE_PERSON_CARD]: tk('O PR está verde, mas cita um card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão ou tire a citação do PR.'),
   [CONFLICT_CAP]: tk('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
 };
 

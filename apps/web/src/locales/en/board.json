@@ -429,5 +429,9 @@
   "Liberar a conta": "Free the account",
   "Tornar a conta exclusiva": "Make the account exclusive",
   "A conta \"{{account}}\" volta a poder rodar em qualquer projeto.": "The account \"{{account}}\" can run in any project again.",
-  "A conta \"{{account}}\" passa a rodar só no projeto {{project}}: nenhum outro projeto, troca automática ou chat poderá usá-la.": "The account \"{{account}}\" will run only in project {{project}}: no other project, automatic swap or chat will be able to use it."
+  "A conta \"{{account}}\" passa a rodar só no projeto {{project}}: nenhum outro projeto, troca automática ou chat poderá usá-la.": "The account \"{{account}}\" will run only in project {{project}}: no other project, automatic swap or chat will be able to use it.",
+  "{{ref}}: {{tool}} liberado sozinho": "{{ref}}: {{tool}} allowed automatically",
+  "{{ref}}: permissão liberada sozinha": "{{ref}}: permission allowed automatically",
+  "{{ref}}: {{tool}} bloqueado pela trava": "{{ref}}: {{tool}} blocked by the guard",
+  "{{ref}}: ação bloqueada pela trava": "{{ref}}: action blocked by the guard"
 }

@@ -100,8 +100,24 @@ async function versionAt(deps: DeliveryDeps, c: DeliveryCtx, sha: string, number
 }
 
 /**
+ * Whether the card's automatic runs worked on this branch: the card the PR is about. Any other card the PR
+ * cites is only a reference (TER-1004: #394, a person's PR, cited TER-988 and its deploy landed there).
+ */
+export async function runBranchOf(repos: Repositories, taskId: string, headRef: string): Promise<boolean> {
+  return (await repos.automationRuns.branchesOfTask(taskId)).includes(headRef);
+}
+
+/** Of a merged PR's rows (one per card it cites), the one of the automatic card that worked on its head; else the first. */
+export async function deliveryRow(repos: Repositories, rows: TaskPullRequest[]): Promise<TaskPullRequest> {
+  for (const row of rows) {
+    if ((await repos.tasks.findById(row.task_id))?.auto && (await runBranchOf(repos, row.task_id, row.head_ref))) return row;
+  }
+  return rows[0]!;
+}
+
+/**
  * One sync pass over a merged PR: reads the deploy and release runs, stores them on the PR's rows, and —
- * for an automatic card with automation on — records the result once, on the pass that sees it finish.
+ * for the automatic card whose run made the PR, with automation on — records the result once, on the pass that sees it finish.
  * The stored state is written before the events, so a result is reported at most once.
  */
 export async function followMerged(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPullRequest): Promise<void> {
@@ -128,8 +144,8 @@ export async function followMerged(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPu
     }
     patch.release_runs = releases.map(({ workflow, state, url, version }) => ({ workflow, state, url, version }));
   }
-  // only what the automation delivers: an automatic card of a project with automation on
-  const reporting = !!c.setup.automation?.enabled && !!(await repos.tasks.findById(w.task_id))?.auto;
+  // only what the automation delivers: the PR of an automatic card's run, in a project with automation on
+  const reporting = !!c.setup.automation?.enabled && !!(await repos.tasks.findById(w.task_id))?.auto && (await runBranchOf(repos, w.task_id, w.head_ref));
   const about = { project_id: c.projectId, task_id: w.task_id };
   const ids = { pr: w.number, sha: w.merge_commit_sha };
   const deployDone = reporting && !!deploy && finished(deploy.state) && deploy.state !== w.deploy_state;

@@ -132,6 +132,25 @@ describe('syncProjectCi', () => {
     });
   });
 
+  it('TER-1004: a merged PR\'s deploy is reported on the card whose automatic run worked on its branch, not on a card it only cites', async () => {
+    const { deps, listWatched, github } = setup({ automation: { enabled: true } });
+    const events: Array<{ kind: string; task_id: string | null }> = [];
+    const branches: Record<string, string[]> = { cited: ['TER-9-other'], owner: ['TER-8-own'] };
+    Object.assign(deps.repos, {
+      tasks: { findById: vi.fn(async (id: string) => ({ id, ref: id, auto: true })) },
+      automationRuns: { branchesOfTask: vi.fn(async (id: string) => branches[id] ?? []) },
+      automationEvents: { insert: vi.fn(async (e: { kind: string; task_id: string | null }) => (events.push(e), { id: 'e', created_at: '', ...e })) },
+      chat: { findLatestActiveForProject: vi.fn(async () => undefined), getOrCreateForProject: vi.fn(async () => undefined) },
+      users: { findById: vi.fn(async () => ({ id: 'u1', locale: null })) },
+    });
+    vi.mocked(github.listPulls).mockResolvedValue({ notModified: true });
+    const merged = { repo: 'acme/app', number: 5, state: 'merged', head_ref: 'TER-8-own', head_sha: 'old', merge_commit_sha: 'm5', base_ref: 'main', deploy_state: 'none', release_runs: [], changed_level: 'deploy' };
+    listWatched.mockResolvedValue([{ ...merged, task_id: 'cited' }, { ...merged, task_id: 'owner' }]);
+    vi.mocked(github.listRuns).mockResolvedValue([{ id: 3, name: 'Deploy', path: '.github/workflows/deploy.yml', status: 'completed', conclusion: 'success', html_url: 'r3', created_at: '2026-09-27T12:00:00Z' }]);
+    await syncProjectCi(deps, 'p1');
+    expect(events).toEqual([expect.objectContaining({ kind: 'deploy_ok', task_id: 'owner' })]);
+  });
+
   it('with automation off, never reads release workflows', async () => {
     const { deps, listWatched } = setup({ automation: { release_workflows: ['publish-agent.yml'] } });
     await syncProjectCi(deps, 'p1');

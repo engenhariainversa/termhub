@@ -76,5 +76,9 @@
   "{{ref}} iniciado": "{{ref}} started",
   "custo {{cost}}": "cost {{cost}}",
   "custo {{cost}} · {{tokens}} tokens": "cost {{cost}} · {{tokens}} tokens",
-  "Gasto do automático em 80% do orçamento diário": "Automatic work spending at 80% of the daily budget"
+  "Gasto do automático em 80% do orçamento diário": "Automatic work spending at 80% of the daily budget",
+  "{{ref}}: {{tool}} liberado sozinho": "{{ref}}: {{tool}} allowed automatically",
+  "{{ref}}: permissão liberada sozinha": "{{ref}}: permission allowed automatically",
+  "{{ref}}: {{tool}} bloqueado pela trava": "{{ref}}: {{tool}} blocked by the guard",
+  "{{ref}}: ação bloqueada pela trava": "{{ref}}: action blocked by the guard"
 }

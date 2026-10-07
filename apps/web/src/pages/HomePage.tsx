@@ -11,7 +11,7 @@ import type { DashboardItem, Machine } from '../lib/types';
 import { NeedsYouList } from '../components/NeedsYouList';
 import { ProjectCards } from '../components/ProjectCards';
 import { PageFrame } from '../components/PageHeader';
-import { MachineForm } from '../components/MachineForm';
+import { MachineForm, type MachineFormTab } from '../components/MachineForm';
 import { ProjectForm } from '../components/ProjectForm';
 import { Trans, useTranslation } from '../i18n';
 
@@ -31,7 +31,7 @@ export function HomePage() {
   const { groups } = useProjectGroups();
   // Both forms live here, outside the step being shown: creating a machine refreshes the data and
   // moves the home to step 2 while the form still shows the one-time enrollment token.
-  const [machineForm, setMachineForm] = useState<{ machine: Machine | null } | null>(null);
+  const [machineForm, setMachineForm] = useState<{ machine: Machine | null; tab?: MachineFormTab } | null>(null);
   const [projectFormOpen, setProjectFormOpen] = useState(false);
 
   const step = homeStep({
@@ -126,7 +126,7 @@ export function HomePage() {
             key={user.id}
             userId={user.id}
             steps={nextSteps({ machines, projects, groups, nickname: user.nickname, canUpdateMachines: can('machines', 'update') })}
-            onInstallHooks={(m) => setMachineForm({ machine: m })}
+            onInstallHooks={(m) => setMachineForm({ machine: m, tab: 'monitor' })}
           />
         )}
         <Dashboard />
@@ -137,7 +137,7 @@ export function HomePage() {
   return (
     <PageFrame title={t('Início')}>
       {body}
-      {machineForm && <MachineForm key={machineForm.machine?.id ?? 'new'} open machine={machineForm.machine} onClose={() => setMachineForm(null)} />}
+      {machineForm && <MachineForm key={machineForm.machine?.id ?? 'new'} open machine={machineForm.machine} initialTab={machineForm.tab} onClose={() => setMachineForm(null)} />}
       {projectFormOpen && <ProjectForm open onClose={() => setProjectFormOpen(false)} />}
     </PageFrame>
   );

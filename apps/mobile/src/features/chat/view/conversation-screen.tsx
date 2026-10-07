@@ -26,8 +26,14 @@ import { TabLimitCard } from './tab-limit-card';
 import { TabQuestionCard } from './tab-question-card';
 import { TabSuggestionCard } from './tab-suggestion-card';
 
-/** How far from its end (the inverted list's offset 0) the reader counts as scrolled up (TER-984), like the web's `isNearBottom`. */
-const NEAR_END = 48;
+/** How far from its end (the inverted list's offset 0) the reader counts as scrolled up (TER-984), like
+ * the web's `isNearBottom`; within it, the thread follows what arrives (TER-1001). */
+const NEAR_END = 80;
+/** The inverted list's offset 0 is the thread's end, and new rows come in at index 0, before every row
+ * on screen: the scroll view keeps the first visible row where it is when rows come in or grow before
+ * it (TER-1001), so a reader scrolled up stays on the line they were reading; a reader within
+ * `NEAR_END` of the end is taken along to the new end instead. */
+const KEEP_READING_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: NEAR_END };
 /** How often the grant index re-checks expiry (spec §4.2 "Stable rows"): never during render. */
 const GRANT_TICK_MS = 30_000;
 /** How often the subagents sheet's elapsed labels refresh while it is open (spec 2026-09-26 panel §4). */
@@ -35,7 +41,8 @@ const SUBAGENTS_TICK_MS = 30_000;
 
 const entryKey = (entry: ChatEntry) =>
   entry.kind === 'message'
-    ? `m:${entry.message.id}`
+    ? // A sent row keeps its local key once it becomes the server's: no remount, no flash (TER-1001).
+      `m:${entry.message.row_key ?? entry.message.id}`
     : entry.kind === 'action'
       ? `a:${entry.action.id}`
       : entry.kind === 'action_group'
@@ -84,8 +91,13 @@ const MessageRow = memo(function MessageRow({
   const activeProject = useChatStore((s) => s.activeProject);
   const fileContext = useMemo(() => ({ projectId: activeProject ?? null }), [activeProject]);
   const bubble = <MessageBubble message={message} streamed={streamed} started={started} onRetry={onRetry} onOpenReply={onOpenReply} highlighted={highlighted} fileContext={fileContext} />;
-  // Only a row the server has, with something in it, can be answered (TER-447).
-  return isReplyable(message) ? <SwipeToReply onReply={reply}>{bubble}</SwipeToReply> : bubble;
+  // Only a row the server has, with something in it, can be answered (TER-447). The wrapper stays either
+  // way: a sent row becoming the server's, or an answer getting its text, is not remounted (TER-1001).
+  return (
+    <SwipeToReply onReply={reply} enabled={isReplyable(message)}>
+      {bubble}
+    </SwipeToReply>
+  );
 });
 
 /** The conversation (spec §11.2): thread, action cards, the host line when the host needs attention,
@@ -169,17 +181,6 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   // A confirmation or a tab's question is answered the same way (TER-849).
   const onReplyCard = useCallback((card: ReplyableCard) => setReplyTo(replyRefOfCard(card)), []);
   const cancelReply = useCallback(() => setReplyTo(null), []);
-  // The preview goes with the text, at once, and comes back with it if the send fails.
-  const onSend = useCallback(
-    async (text: string, attachments: TChatAttachment[]) => {
-      const quoted = replyTo;
-      if (quoted) setReplyTo(null);
-      const ok = await (quoted ? send(text, attachments, quoted) : send(text, attachments));
-      if (!ok && quoted) setReplyTo((current) => current ?? quoted);
-      return ok;
-    },
-    [replyTo, send],
-  );
 
   const messages = slot?.messages;
   const actions = slot?.actions;
@@ -259,25 +260,42 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   }, []);
 
   // TER-984: the "novas mensagens" pill, as on the web. The inverted list shows its end at offset 0, so
-  // a reader there sees what arrives; one scrolled up (past `NEAR_END`) is told something arrived at the
-  // end — a new row, or the newest row replaced — and the pill takes them back there.
+  // a reader there sees what arrives; one scrolled up (past `NEAR_END`) stays where they are reading
+  // (`KEEP_READING_POSITION`, TER-1001) and is told how many rows arrived at the end — the rows newer
+  // than the end they last saw, or one when the newest row was replaced — and the pill takes them back.
   const farFromEnd = useRef(false);
-  const [unread, setUnread] = useState(false);
-  const endOf = (list: ChatEntry[]) => ({ count: list.length, key: list[0] ? entryKey(list[0]) : '' });
-  const seen = useRef(endOf(entries));
+  const [unread, setUnread] = useState(0);
+  const lastEnd = useRef(entries[0] ? entryKey(entries[0]) : '');
   useEffect(() => {
-    const before = seen.current;
-    seen.current = endOf(entries);
-    if (farFromEnd.current && (seen.current.count > before.count || seen.current.key !== before.key)) setUnread(true);
+    const before = lastEnd.current;
+    lastEnd.current = entries[0] ? entryKey(entries[0]) : '';
+    if (!farFromEnd.current || lastEnd.current === before) return;
+    const newer = entries.findIndex((e) => entryKey(e) === before);
+    setUnread((n) => n + (newer > 0 ? newer : 1));
   }, [entries]);
   const onScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
     farFromEnd.current = e.nativeEvent.contentOffset.y > NEAR_END;
-    if (!farFromEnd.current) setUnread(false);
+    if (!farFromEnd.current) setUnread(0);
   }, []);
   const toEnd = useCallback(() => {
-    setUnread(false);
+    farFromEnd.current = false;
+    setUnread(0);
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
+
+  // The preview goes with the text, at once, and comes back with it if the send fails. What the person
+  // writes reads at the end, as in any messaging app, wherever they had scrolled to (TER-1001).
+  const onSend = useCallback(
+    async (text: string, attachments: TChatAttachment[]) => {
+      const quoted = replyTo;
+      if (quoted) setReplyTo(null);
+      toEnd();
+      const ok = await (quoted ? send(text, attachments, quoted) : send(text, attachments));
+      if (!ok && quoted) setReplyTo((current) => current ?? quoted);
+      return ok;
+    },
+    [replyTo, send, toEnd],
+  );
 
   // A quote's tap (TER-447): the original, if the thread has it, scrolls to the middle the same way
   // and is outlined for a moment. Read through a ref so the rows' callback stays stable across deltas.
@@ -447,13 +465,14 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
             extraData={extra}
             renderItem={renderItem}
             onScrollToIndexFailed={onScrollToIndexFailed}
+            maintainVisibleContentPosition={KEEP_READING_POSITION}
             onScroll={onScroll}
             scrollEventThrottle={64}
           />
-          {unread ? (
+          {unread > 0 ? (
             <View pointerEvents="box-none" className="absolute bottom-2 left-0 right-0 items-center">
               <Pressable testID="conversation-unread" accessibilityRole="button" onPress={toEnd} className="rounded-full border border-app-border bg-app-surface2 px-3 py-1">
-                <AppText variant="muted">{t('↓ novas mensagens')}</AppText>
+                <AppText variant="muted">{t('↓ {{count}} novas mensagens', { count: unread })}</AppText>
               </Pressable>
             </View>
           ) : null}

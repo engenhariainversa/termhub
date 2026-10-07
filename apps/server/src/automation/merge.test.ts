@@ -572,6 +572,43 @@ describe('runMergeExecutor', () => {
     expect(w.gh.merge).not.toHaveBeenCalled();
   });
 
+  it('TER-1004: the PR held by a person\'s card says why, in the queue and once per head in the feed', async () => {
+    const w = world({ prs: [pr(), pr({ id: 'pr2', task_id: 'c3' })] });
+    await runMergeExecutor(w.deps, 'p1');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(mergeWaitOf('c1', new Date('2026-10-05T12:00:00Z'))).toBe('merge_person_card');
+    expect(w.state.events).toEqual([
+      expect.objectContaining({ kind: 'escalated', task_id: 'c1', payload: expect.objectContaining({ reason: 'merge_person_card', pr: 7, sha: 'h1', cards: 'TER-7' }) }),
+    ]);
+    // a new head is a new question
+    w.state.prs = [pr({ head_sha: 'h2' }), pr({ id: 'pr2', task_id: 'c3', head_sha: 'h2' })];
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(2);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+  });
+
+  it('TER-1004: a person\'s card the PR only cites and that is already done does not hold the merge', async () => {
+    const w = world({ prs: [pr(), pr({ id: 'pr2', task_id: 'c3' })] });
+    const cards: Record<string, object> = { e1: EPIC, e2: EPIC2, c1: CARD, c2: LONE, c3: { ...MANUAL, status: 'done' } };
+    vi.mocked(w.repos.tasks.findById).mockImplementation((async (id: string) => cards[id]) as never);
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledTimes(1);
+    expect(w.repos.tasks.move).toHaveBeenCalledTimes(1);
+    expect(w.repos.tasks.move).toHaveBeenCalledWith('c1', { status: 'done' }, 0);
+    expect(w.state.events.filter((e) => e.kind === 'merged').map((e) => e.task_id)).toEqual(['c1']);
+  });
+
+  it('TER-1004: another automatic card the PR only cites is neither moved to done nor told of the merge', async () => {
+    // #395 (TER-992's branch) cited TER-994, whose own PR was still open: TER-994 went to done with it
+    const w = world({ prs: [pr(), pr({ id: 'pr2', task_id: 'c2' })] });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledTimes(1);
+    expect(w.repos.tasks.move).toHaveBeenCalledTimes(1);
+    expect(w.repos.tasks.move).toHaveBeenCalledWith('c1', { status: 'done' }, 0);
+    expect(w.state.events.filter((e) => e.kind === 'merged').map((e) => e.task_id)).toEqual(['c1']);
+    expect(w.state.messages.join('\n')).not.toContain('TER-6');
+  });
+
   it('a draft PR is not merged', async () => {
     const w = world({ prs: [pr({ draft: true })] });
     await runMergeExecutor(w.deps, 'p1');

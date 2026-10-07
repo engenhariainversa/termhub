@@ -6,6 +6,13 @@ import type { AutomationFeedEvent } from './types';
  * The sentence of one feed line, in the language on screen (spec D25, §11), or null for a kind this app has
  * no line for (a kind a newer server adds). Same wording as the app's `features/progress/model/feed.ts`.
  */
+/** A tool name for the feed: an MCP tool shown as its bare name (`mcp__termhub__create_task` → `create_task`). */
+function toolLabel(tool: string | null): string | null {
+  if (!tool) return null;
+  const m = /^mcp__[^_]+(?:_[^_]+)*__(.+)$/.exec(tool);
+  return m ? m[1]! : tool;
+}
+
 export function feedLine(e: AutomationFeedEvent): string | null {
   const t = i18n.t.bind(i18n);
   const ref = e.ref ?? t('um card');
@@ -59,6 +66,14 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       return t('{{ref}}: correção do CI pedida', { ref });
     case 'worktree_cleanup':
       return t('{{ref}}: pasta de trabalho limpa', { ref });
+    case 'permission_auto_approved': {
+      const tool = toolLabel(e.tool);
+      return tool ? t('{{ref}}: {{tool}} liberado sozinho', { ref, tool }) : t('{{ref}}: permissão liberada sozinha', { ref });
+    }
+    case 'guard_blocked': {
+      const tool = toolLabel(e.tool);
+      return tool ? t('{{ref}}: {{tool}} bloqueado pela trava', { ref, tool }) : t('{{ref}}: ação bloqueada pela trava', { ref });
+    }
     case 'automation_on':
       return t('Automático ligado no projeto');
     case 'automation_off':
