@@ -258,13 +258,13 @@ describe('swapAccount', () => {
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);
   });
 
-  it('a tab running automatic work keeps acceptEdits and the allow list on the new account, its prompt marked (F-12, D27)', async () => {
+  it('a tab running automatic work keeps the auto mode (TER-993) and the allow list on the new account, its prompt marked (F-12, D27)', async () => {
     const { repos, r } = makeRepos();
     repos.automationRuns.activeByTab.mockResolvedValue({ project_id: 'p1' });
     stored = baseTab({ state: 'idle' });
     await drive(swapAccount(r, log, baseTab(), machine(), { auto: false }));
-    const line = resumeLine(null, SID, serverMessage(RESUME_PROMPT), null, undefined, { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: null });
-    expect(line).toContain('--permission-mode acceptEdits');
+    const line = resumeLine(null, SID, serverMessage(RESUME_PROMPT), null, undefined, { mode: 'auto', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: null });
+    expect(line).toContain('--permission-mode auto ');
     expect(line).toContain('[termhub automático] A conta anterior');
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);
   });
@@ -736,5 +736,46 @@ describe('autoSwapOnLimit', () => {
     // let the manual swap finish so its lock and subscription go away
     monitorBus.publish({ tab: { ...stored, state: 'idle' }, project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
     await expect(drive(manual)).resolves.toMatchObject({ to: { id: 'a3' } });
+  });
+});
+
+describe('swapAccount with an account exclusive to a project (TER-990)', () => {
+  const a3 = accounts.find((a) => a.id === 'a3')!;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // a3, the emptiest account (the machine's default login), is exclusive to DR Horton (p9)
+    a3.exclusive_project = { id: 'p9', name: 'DR Horton' };
+  });
+  afterEach(() => {
+    a3.exclusive_project = null;
+  });
+
+  it('never swaps a tab of another project onto it: the next account with room takes over', async () => {
+    const { r } = makeRepos();
+    const result = await drive(swapAccount(r, log, baseTab(), machine(), { auto: true }));
+    expect(result.to.id).toBe('a2');
+    expect(getAccountUsage.mock.calls.map((c) => c[0].id)).toEqual(['a2']);
+  });
+
+  it('refuses it picked by hand, before the tab is touched', async () => {
+    const { r } = makeRepos();
+    await expect(drive(swapAccount(r, log, baseTab(), machine(), { accountId: 'a3', auto: false }))).rejects.toMatchObject({ code: 'ACCOUNT_EXCLUSIVE' });
+    expect(linkClaudeSession).not.toHaveBeenCalled();
+    expect(sendKeyToSession).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'a3', attemptedProjectId: 'p1', path: 'account_swap', tabId: 't1' }), 'exclusive account: use refused');
+  });
+
+  it('is not taken from the project priority either', async () => {
+    projectSetup = { ai: { accounts: ['a3', 'a2'] } };
+    const { r } = makeRepos();
+    const result = await drive(swapAccount(r, log, baseTab(), machine(), { auto: true }));
+    expect(result.to.id).toBe('a2');
+  });
+
+  it('swaps onto it in its own project', async () => {
+    const { r } = makeRepos();
+    stored = baseTab({ project_id: 'p9' });
+    const result = await drive(swapAccount(r, log, stored, machine(), { auto: true }));
+    expect(result.to.id).toBe('a3');
   });
 });

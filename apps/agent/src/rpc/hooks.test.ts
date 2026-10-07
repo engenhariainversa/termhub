@@ -1,7 +1,7 @@
 import { chmod, lstat, mkdtemp, mkdir, readFile, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { HOOK_SCRIPT } from '@termhub/machine-ops';
+import { GUARD_SCRIPT, HOOK_SCRIPT } from '@termhub/machine-ops';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { heal, install, uninstall } from './hooks.js';
 
@@ -22,6 +22,8 @@ describe('hooks.install', () => {
     await expect(install(params, home)).resolves.toEqual({ home, claude: 'installed', codex: 'skipped', cursor: 'skipped', claude_dirs: ['~/.claude'] });
     expect(await read('.termhub/bin/termhub-hook')).toBe(HOOK_SCRIPT);
     expect(await mode('.termhub/bin/termhub-hook')).toBe(0o755);
+    expect(await read('.termhub/bin/termhub-guard')).toBe(GUARD_SCRIPT);
+    expect(await mode('.termhub/bin/termhub-guard')).toBe(0o755);
     expect(await read('.termhub/hook.env')).toBe("TERMHUB_HOOK_URL='https://app.termhub.dev/api/hooks'\nTERMHUB_HOOK_TOKEN='thb_hk_abc-123'\n");
     expect(await mode('.termhub/hook.env')).toBe(0o600);
     const settings = JSON.parse(await read('.claude/settings.json')) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
@@ -303,6 +305,14 @@ describe('heal', () => {
     expect(await read('.claude/settings.json')).toBe(before);
   });
 
+  it('rewrites the guard script when an older agent left a different one (TER-993)', async () => {
+    await install(params, home);
+    await writeFile(path.join(home, '.termhub/bin/termhub-guard'), '#!/bin/sh\n# old\n');
+    await heal(home);
+    expect(await read('.termhub/bin/termhub-guard')).toBe(GUARD_SCRIPT);
+    expect(await mode('.termhub/bin/termhub-guard')).toBe(0o755);
+  });
+
   it('leaves a settings file it cannot parse where it is', async () => {
     await install(params, home);
     await mkdir(path.join(home, '.claude-broken'), { recursive: true });
@@ -424,6 +434,8 @@ describe('heal', () => {
 
     expect(await read('.termhub/bin/termhub-hook')).toBe(HOOK_SCRIPT);
     expect(await mode('.termhub/bin/termhub-hook')).toBe(0o755);
+    expect(await read('.termhub/bin/termhub-guard')).toBe(GUARD_SCRIPT);
+    expect(await mode('.termhub/bin/termhub-guard')).toBe(0o755);
   });
 
   it('leaves a script that already matches where it is', async () => {

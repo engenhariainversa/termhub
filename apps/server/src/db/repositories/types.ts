@@ -472,9 +472,27 @@ export interface AiAccount {
   label: string;
   machine_id: string;
   config_dir: string | null;
+  /** TER-990: the only project this account may run in; null = any project of the owner. */
+  exclusive_project: { id: string; name: string } | null;
   created_at: string;
 }
 
-export function mapAiAccount(a: { id: string; provider: AiProvider; label: string; machineId: string; configDir: string | null; createdAt: Date }): AiAccount {
-  return { id: a.id, provider: a.provider, label: a.label, machine_id: a.machineId, config_dir: a.configDir, created_at: a.createdAt.toISOString() };
+export function mapAiAccount(a: {
+  id: string;
+  provider: AiProvider;
+  label: string;
+  machineId: string;
+  configDir: string | null;
+  createdAt: Date;
+  exclusiveProject?: { id: string; name: string } | null;
+}): AiAccount {
+  return {
+    id: a.id,
+    provider: a.provider,
+    label: a.label,
+    machine_id: a.machineId,
+    config_dir: a.configDir,
+    exclusive_project: a.exclusiveProject ? { id: a.exclusiveProject.id, name: a.exclusiveProject.name } : null,
+    created_at: a.createdAt.toISOString(),
+  };
 }

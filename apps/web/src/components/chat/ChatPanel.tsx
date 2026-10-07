@@ -436,6 +436,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         // approve_tab) was only created if the server got that far before the busy/offline answer;
         // this re-read is what brings it in when it was.
         await load();
+      } else if (e instanceof ApiError && e.code === 'TAB_GONE') {
+        // TER-986: the card's tab was closed, so the server retired it instead of deciding it. The card
+        // itself says so ("Expirou: a aba foi fechada", with "Propor de novo"), even before the event.
+        setActions((prev) => prev.map((a) => (a.id === id ? { ...a, status: 'failed', error_code: 'TAB_GONE' } : a)));
       } else setActionError(e instanceof ApiError ? e.message : i18n.t('Não foi possível registrar a decisão'));
     } finally {
       setDecidingId(null);
@@ -528,7 +532,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   }, []);
   /** Stable, so the permission card's effect runs once per question. */
-  const loadTabQuestionScreen = useCallback(async (id: string) => (await api.tabQuestionScreen(id)).text, []);
+  const loadTabQuestionScreen = useCallback(async (id: string) => api.tabQuestionScreen(id), []);
 
   /** "Esquecer esta decisão" on a suggestion line: hard delete, 204 even if it is already gone — the
    *  card clears its own pre-selection regardless (see `TabQuestionCard`), so a failure here is not
@@ -661,7 +665,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     try {
       const { accounts } = await api.aiAccounts.list();
       // The chat runs on Claude, so a login for another provider is not an option here.
-      setHostAccounts(accounts.filter((a) => a.provider === 'claude' && own.has(a.machine_id)).map((a) => ({ id: a.id, label: a.label, machine_id: a.machine_id })));
+      // TER-990: an account exclusive to a project cannot host the account-wide chat, so it is not offered
+      setHostAccounts(accounts.filter((a) => a.provider === 'claude' && own.has(a.machine_id) && !a.exclusive_project).map((a) => ({ id: a.id, label: a.label, machine_id: a.machine_id })));
     } catch {
       // Said as what it is, next to a machine list that still works — never as "this machine has no
       // other account", which is a claim about the machine and not about a read that was refused.

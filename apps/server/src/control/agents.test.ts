@@ -22,7 +22,7 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import { Scoped } from '../auth/scope.js';
 import { ControlError, type ControlContext } from './context.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { AUTOMATION_DENIED_TOOLS, AUTOMATION_READ_TOOLS, branchFetchRules, branchPushRules, checkPrompt, runBranchRules, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
+import { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_READ_TOOLS, branchFetchRules, branchPushRules, checkPrompt, runBranchRules, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
 import { TEXT_MAX_CHARS } from '@termhub/agent-protocol';
 
 /** A Claude agent's first prompt: the lessons reminder, then the origin reminder (TER-851). */
@@ -713,6 +713,66 @@ describe('startAgent with the project setup (TER-589)', () => {
   });
 });
 
+describe('startAgent with an account exclusive to a project (TER-990)', () => {
+  const p2Only = { id: 'p2', name: 'DR Horton' };
+  // a7: a second Claude login on m1, exclusive to p2 (DR Horton); p1 must never start on it
+  const a7 = account({ id: 'a7', label: 'drhorton', machine_id: 'm1', config_dir: '~/.claude-drh', exclusive_project: p2Only });
+  beforeEach(() => accounts.push(a7));
+  afterEach(() => accounts.splice(accounts.indexOf(a7), 1));
+  const withEvents = (repos: object) => {
+    const insert = vi.fn(async (e: object) => ({ ...e, id: 'e1', created_at: '' }));
+    Object.assign(repos, { automationEvents: { insert } });
+    return insert;
+  };
+
+  it('refuses an explicit account_id of another project before any tab exists, and audits it', async () => {
+    const { c, repos, log } = ctx();
+    const insert = withEvents(repos);
+    await expect(startAgent(c, { project_id: 'p1', account_id: 'a7', prompt: 'p' })).rejects.toEqual(
+      new ControlError('ACCOUNT_EXCLUSIVE', 'Conta exclusiva do projeto DR Horton: "drhorton" não pode rodar em outro projeto'),
+    );
+    expect(openTab).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'a7', attemptedProjectId: 'p1', path: 'start_agent' }), 'exclusive account: use refused');
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'p2', kind: 'account_exclusive_blocked', payload: expect.objectContaining({ account_id: 'a7', attempted_project_id: 'p1', path: 'start_agent' }) }));
+  });
+
+  it('never chooses it from the project list, even listed first', async () => {
+    const { c } = ctx(undefined, { ai: { accounts: ['a7', 'a1'] } });
+    expect((await startAgent(c, { project_id: 'p1', prompt: 'p' })).account.id).toBe('a1');
+  });
+
+  it('with only it listed, asks for an account instead, without naming it among the machine accounts', async () => {
+    const { c } = ctx(undefined, { ai: { accounts: ['a7'] } });
+    const err = await startAgent(c, { project_id: 'p1', prompt: 'p' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'ACCOUNT_REQUIRED' });
+    expect((err as Error).message).not.toContain('drhorton');
+    expect(openTab).not.toHaveBeenCalled();
+  });
+
+  it('refuses the machine default login (no config dir) when it is the exclusive one', async () => {
+    const a8 = account({ id: 'a8', label: 'padrão', machine_id: 'm1', config_dir: null, exclusive_project: p2Only });
+    accounts.push(a8);
+    try {
+      const { c } = ctx();
+      await expect(startAgent(c, { project_id: 'p1', account_id: 'a8', prompt: 'p' })).rejects.toMatchObject({ code: 'ACCOUNT_EXCLUSIVE' });
+      expect(openTab).not.toHaveBeenCalled();
+    } finally {
+      accounts.splice(accounts.indexOf(a8), 1);
+    }
+  });
+
+  it('runs on it in its own project', async () => {
+    links.push({ id: 'l8', position: 1, created_at: '', project_id: 'p2', machine_id: 'm1', cwd: '/src/p2' });
+    try {
+      const { c } = ctx(undefined, { ai: { accounts: ['a7'] } });
+      expect((await startAgent(c, { project_id: 'p2', machine_id: 'm1', prompt: 'p' })).account.id).toBe('a7');
+      expect((await startAgent(c, { project_id: 'p2', machine_id: 'm1', account_id: 'a7', prompt: 'p' })).account.id).toBe('a7');
+    } finally {
+      links.pop();
+    }
+  });
+});
+
 describe('linkTabTask', () => {
   it('points the card at the tab and starts work on it, answering the card as it ended up', async () => {
     const { c, repos } = ctx();
@@ -795,6 +855,38 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
       expect(t).not.toBe('Bash(npm run:*)');
       expect(t).not.toMatch(/gh pr merge|--force/);
     }
+  });
+
+  it('with the run worktree, the line also allows its git -C and --no-pager forms and denies their options (TER-991)', () => {
+    const line = launchLine('claude', '/c', 'do it', null, null, { ...PERMISSION, worktree: '/w/TER-1' });
+    for (const r of ['Bash(git -C /w/TER-1 status:*)', 'Bash(git -C /w/TER-1/ status:*)', 'Bash(git -C . status:*)', 'Bash(git --no-pager status:*)', 'Bash(git --no-pager -C /w/TER-1 show:*)'])
+      expect(line).toContain(`'${r}'`);
+    for (const r of AUTOMATION_FORM_DENIED_TOOLS) expect(line).toContain(`'${r}'`);
+    expect(line.indexOf("'Bash(git -C /w/TER-1 status:*)'")).toBeLessThan(line.indexOf('--disallowedTools'));
+    expect(line.indexOf("'Bash(git -C *--ext*)'")).toBeGreaterThan(line.indexOf('--disallowedTools'));
+    const plain = launchLine('claude', '/c', 'do it', null, null, PERMISSION);
+    expect(plain).not.toContain('-C ');
+    expect(plain).not.toContain('--no-pager');
+  });
+
+  it('an automatic run starts in Claude Code\'s auto mode (TER-993); a bypass mode is refused', () => {
+    const line = launchLine('claude', '/c', 'do it', null, null, { ...PERMISSION, mode: 'auto' });
+    expect(line).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode auto --allowedTools ${TOOLS} ${DENY} -- 'do it'`);
+    for (const mode of ['bypassPermissions', 'dontAsk', 'default', 'plan']) {
+      expect(() => launchLine('claude', '/c', 'x', null, null, { ...PERMISSION, mode: mode as 'auto' }), mode).toThrow(ControlError);
+    }
+  });
+
+  it('an automatic run (a worktree) carries the hard-lock guard as --settings, after the deny list (TER-993)', () => {
+    const auto = { ...PERMISSION, mode: 'auto' as const, worktree: '/w/TER-1' };
+    const line = launchLine('claude', '/c', 'do it', { tabId: 'abc', url: MCP_URL }, null, auto, 'abc');
+    expect(line).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+    expect(line.indexOf('--settings')).toBeGreaterThan(line.indexOf('--disallowedTools'));
+    expect(line.endsWith("-- 'do it'")).toBe(true);
+    // without the MCP the guard still rides, from the explicit guard tab id
+    expect(launchLine('claude', '/c', 'x', null, null, auto, 'abc')).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+    // a tab with no worktree (manual / start_agent) gets no guard
+    expect(launchLine('claude', '/c', 'x', { tabId: 'abc', url: MCP_URL }, null, PERMISSION, 'abc')).not.toContain('--settings');
   });
 
   it('without the MCP: acceptEdits, one quoted allow list and `--` before the prompt', () => {

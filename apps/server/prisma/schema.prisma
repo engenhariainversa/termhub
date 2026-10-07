@@ -268,6 +268,8 @@ model Project {
   automationEvents AutomationEvent[]
   automationRuns   AutomationRun[]
   tabUsageDays     TabUsageDay[]
+  /// AI accounts only this project may run on (TER-990)
+  exclusiveAiAccounts AiAccount[]
 
   @@index([ownerId])
   @@map("projects")
@@ -748,8 +750,12 @@ model AiAccount {
   machineId String     @map("machine_id")
   /// CLI config dir override (e.g. ~/.claude-work for a second Claude login). null = default.
   configDir String?    @map("config_dir")
+  /// TER-990: the only project this account may run in (a client's or a company's account). null = any
+  /// project of the owner. Deleting the project clears it.
+  exclusiveProjectId String? @map("exclusive_project_id")
   createdAt DateTime   @default(now()) @map("created_at")
   machine   Machine    @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  exclusiveProject Project? @relation(fields: [exclusiveProjectId], references: [id], onDelete: SetNull)
   /// Conversations running on this account; deleting the account nulls the column.
   chatConversations ChatConversation[]
   tabs      Tab[]
@@ -757,6 +763,7 @@ model AiAccount {
   exhaustion AiAccountExhaustion?
 
   @@index([machineId])
+  @@index([exclusiveProjectId])
   @@map("ai_accounts")
 }
 

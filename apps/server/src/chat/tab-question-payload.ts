@@ -211,10 +211,16 @@ export const choiceAnswerBody = z.object({
 });
 export type ChoiceAnswer = z.infer<typeof choiceAnswerBody>;
 
+/** An option of the dialog on screen, by its number and its text as the card read it (TER-995). The
+ * server reads the screen again and refuses the answer when that number no longer shows that text. */
+export const permissionOptionChoice = z.object({ number: z.number().int().min(1).max(9), label: z.string().trim().min(1).max(ANSWER_TEXT_MAX) });
+
 export const permissionAnswerBody = z
-  .object({ allow: z.boolean(), text: typedText.optional() })
-  .refine((a) => !(a.allow && a.text !== undefined), { message: 'texto só acompanha uma negação', path: ['text'] });
-export type PermissionAnswer = z.infer<typeof permissionAnswerBody>;
+  .object({ allow: z.boolean(), text: typedText.optional(), option: permissionOptionChoice.optional() })
+  .refine((a) => !(a.allow && a.text !== undefined), { message: 'texto só acompanha uma negação', path: ['text'] })
+  .refine((a) => !(a.option && a.text !== undefined), { message: 'texto não acompanha uma opção', path: ['text'] });
+/** As stored, an option answer also carries the button's text (`summary`) the closed card shows. */
+export type PermissionAnswer = Omit<z.infer<typeof permissionAnswerBody>, 'option'> & { option?: { number: number; label: string; summary?: string } };
 
 export type ChoiceAnswerProblem = 'ANSWER_COUNT' | 'ANSWER_OPTION' | 'ANSWER_SHAPE';
 

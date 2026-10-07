@@ -475,6 +475,8 @@ export interface ProjectAiOption {
   machine_name: string;
   /** the machine's own login (no config dir override) */
   default: boolean;
+  /** TER-990: the only project this account may run in; another project's Setup shows it disabled */
+  exclusive_project?: { id: string; name: string } | null;
 }
 export interface ProjectAiView {
   ai: ProjectAi;
@@ -857,6 +859,8 @@ export interface AiAccount {
   label: string;
   machine_id: string;
   config_dir: string | null;
+  /** TER-990: the only project this account may run in; null = any project */
+  exclusive_project?: { id: string; name: string } | null;
   created_at: string;
 }
 
@@ -1230,6 +1234,24 @@ export interface ChoiceAnswer {
 export interface PermissionAnswer {
   allow: boolean;
   text?: string;
+  /** An option of the dialog on screen (TER-995), by number and text; the server adds `summary` once answered. */
+  option?: { number: number; label: string; summary?: string };
+}
+/** An option of the permission dialog a tab shows, read off its screen with the excerpt (TER-995). */
+export interface PermissionOption {
+  number: number;
+  label: string;
+  /** `label` shortened for a button. */
+  summary: string;
+  /** False for the option that rejects ("No…"). */
+  allow: boolean;
+  /** "Don't ask again", "always allow", "auto mode": the option that keeps the question from coming back. */
+  highlight: boolean;
+}
+export interface TabQuestionScreen {
+  text: string;
+  /** Absent from an older server; empty when the dialog on screen is not this card's. */
+  options?: PermissionOption[];
 }
 export type TabQuestionAnswer = ChoiceAnswer | PermissionAnswer;
 

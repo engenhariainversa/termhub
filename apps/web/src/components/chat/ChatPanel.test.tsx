@@ -486,6 +486,24 @@ it('"Liberar tudo neste projeto" passes approve_project_all through', async () =
   await waitFor(() => expect(decideMock).toHaveBeenCalledWith('a1', 'approve_project_all'));
 });
 
+it('a click on a card whose tab was closed (409 TAB_GONE) turns it stale at once, with no grant buttons left (TER-986)', async () => {
+  const { ApiError } = await import('../../lib/api');
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' })], host: READY, grants: [] });
+  decideMock.mockRejectedValue(new ApiError(409, 'A aba desta ação foi fechada: nada foi feito e o pedido expirou.', 'TAB_GONE'));
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: /^Liberar sem prazo/ }));
+  await waitFor(() => expect(decideMock).toHaveBeenCalledWith('a1', 'approve_project_always'));
+  expect(await screen.findByText('Expirou: a aba foi fechada')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Propor de novo' })).toBeInTheDocument();
+  for (const name of [/^Liberar sem prazo/, 'Permitir sempre nesta aba', 'Liberar teclas e shell nesta aba', 'Liberar tudo neste projeto', 'Autorizar']) {
+    expect(screen.queryByRole('button', { name })).toBeNull();
+  }
+});
+
 it('two pending cards render as one group; Ver separadas shows the cards', async () => {
   chatMock.mockResolvedValue({ conversation: { id: 'c1', ai_account_id: null }, messages: [], actions: [action({ id: 'a1' }), action({ id: 'a2', summary: 'mover o card TER-1' })], host: READY });
   render(

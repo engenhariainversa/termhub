@@ -1,6 +1,7 @@
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, AiProvider } from '../db/repositories/types.js';
 import type { ProjectAi } from '../setup/schema.js';
+import { usableIn } from './exclusive.js';
 
 export type { ProjectAi };
 
@@ -12,13 +13,14 @@ export const isAgentProvider = (p: AiProvider): p is AgentProvider => (AGENT_PRO
 /**
  * The project's accounts on one machine, in priority order (spec §4): ids that no longer name one of
  * `accounts` (deleted, or out of the owner's scope) are skipped, as are accounts of other machines, of
- * another provider when one is asked for, and of a provider no agent can be started with.
+ * another provider when one is asked for, of a provider no agent can be started with, and accounts
+ * exclusive to another project (TER-990) — `projectId` is the project `ai` belongs to.
  */
-export function accountsOn(ai: ProjectAi, accounts: AiAccount[], machineId: string, provider?: AgentProvider): AiAccount[] {
+export function accountsOn(projectId: string, ai: ProjectAi, accounts: AiAccount[], machineId: string, provider?: AgentProvider): AiAccount[] {
   const byId = new Map(accounts.map((a) => [a.id, a]));
   return ai.accounts
     .map((id) => byId.get(id))
-    .filter((a): a is AiAccount => !!a && a.machine_id === machineId && isAgentProvider(a.provider) && (provider === undefined || a.provider === provider));
+    .filter((a): a is AiAccount => !!a && a.machine_id === machineId && isAgentProvider(a.provider) && (provider === undefined || a.provider === provider) && usableIn(a, projectId));
 }
 
 /** The project's default model for that CLI; null = let the CLI decide (no flag). */
@@ -53,5 +55,5 @@ export async function projectAccountsOn(
   provider?: AgentProvider,
 ): Promise<{ ai: ProjectAi; listed: AiAccount[] }> {
   const [{ ai, accounts }, link] = await Promise.all([loadProjectAi(repos, projectId, ownerId), repos.projectMachines.find(projectId, machineId)]);
-  return { ai, listed: link ? accountsOn(ai, accounts, machineId, provider) : [] };
+  return { ai, listed: link ? accountsOn(projectId, ai, accounts, machineId, provider) : [] };
 }

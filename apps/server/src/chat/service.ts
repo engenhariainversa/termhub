@@ -18,7 +18,8 @@ import { replyContext, type ReplyTarget } from './reply-context.js';
 import { saveContext } from './context.js';
 import { streamedSystemPrompt } from './concierge-prompt.js';
 import { defaultEmbedder } from './embeddings.js';
-import { hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
+import { exclusiveConflict, hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
+import { auditBlocked, exclusiveError } from '../ai/exclusive.js';
 import { DEFAULT_ALLOW_KINDS, GRANTABLE_TOOL, STANDING_GRANT_BUDGETS, TAB_TERMINAL_GRANT, type StandingGrantKind } from './gate.js';
 import { LiveRun, type LiveTurn } from './live-run.js';
 import { accountSystemPrompt, projectSystemPrompt } from './project-prompt.js';
@@ -485,6 +486,17 @@ export class ChatService {
   }
 
   /**
+   * TER-990: refuses a run whose account (the chosen one, else the machine's default login) is exclusive
+   * to a project other than the conversation's — before any row is written, like a host problem.
+   */
+  private async guardExclusive(user: User, conversation: ChatConversation, host: Extract<HostChoice, { kind: 'ready' }>): Promise<void> {
+    const login = await exclusiveConflict(this.deps.repos, user, host, conversation.project_id);
+    if (!login) return;
+    await auditBlocked(this.deps.repos, undefined, login, { project_id: conversation.project_id, path: 'chat', machine_id: host.machine.id });
+    throw new HttpError(409, exclusiveError(login).localized, 'ACCOUNT_EXCLUSIVE');
+  }
+
+  /**
    * "Nova conversa" (spec §4.1): the active conversation of the scope is archived and a fresh one takes
    * its place — a new CLI session, an empty thread. Holds the conversation's lock while it works, so a
    * message cannot start a run on the row being archived. Its open questions are expired and its tokens
@@ -578,6 +590,7 @@ export class ChatService {
     // Before the lock, like `startIn`: a host that cannot run is a compaction that never started.
     const host = await this.hostForConversation(user, conversation, { wait: true });
     if (host.kind !== 'ready') throw hostFailure(host);
+    await this.guardExclusive(user, conversation, host);
     if (this.running.has(conversation.id)) throw new HttpError(409, 'O concierge ainda está respondendo: compacte quando ele terminar', 'CHAT_BUSY');
     this.running.add(conversation.id);
     let handedOff = false;
@@ -1228,6 +1241,7 @@ export class ChatService {
     // window in which a second message passes the check and starts a second run on the same session.
     const host = await this.hostForConversation(user, conversation, { wait: true });
     if (host.kind !== 'ready') throw hostFailure(host);
+    await this.guardExclusive(user, conversation, host);
     // Read with the host, before the lock and before any row: a read that fails here is a message never
     // sent, not an empty assistant bubble left behind by an error thrown mid-run.
     const appendSystemPrompt = await this.promptFor(user, conversation);
@@ -1743,7 +1757,9 @@ export class ChatService {
         // The reads above yield: `suspendAll` may have started meanwhile, and a row it released is not
         // this instance's to claim any more (nor to give up on).
         if (this.suspending) return;
-        if (!user || !conversation || !host || host.kind !== 'ready' || !this.streams(host.machine.id)) {
+        // TER-990: a run whose account became exclusive to another project is not resumed on it
+        const blocked = user && host?.kind === 'ready' && conversation ? await exclusiveConflict(this.deps.repos, user, host, conversation.project_id) : null;
+        if (!user || !conversation || !host || host.kind !== 'ready' || blocked || !this.streams(host.machine.id)) {
           if (age > RESUME_WINDOW_MS && (await this.deps.repos.chatLiveRuns.claim(row.conversation_id, row.instance_id, this.instanceId, staleBefore))) {
             try {
               await this.giveUp(row);
@@ -1902,8 +1918,9 @@ export class ChatService {
     try {
       const conversation = await this.deps.repos.chat.findByIdForUser(conversationId, user.id);
       const host = conversation && conversation.archived_at === null ? await this.hostForConversation(user, conversation, { wait: true }) : null;
-      if (!conversation || !host || host.kind !== 'ready') {
-        // No host that can run them (the machine went away, the conversation was archived): each
+      const blocked = host?.kind === 'ready' && conversation ? await exclusiveConflict(this.deps.repos, user, host, conversation.project_id) : null;
+      if (!conversation || !host || host.kind !== 'ready' || blocked) {
+        // No host that can run them (TER-990: or only on an account exclusive to another project) (the machine went away, the conversation was archived): each
         // queued message gets its answer row closed with a reason, never a bubble waiting for ever.
         await this.closeAllQueued(user, conversationId, queue.splice(0), host?.kind === 'agent_too_old' ? 'AGENT_TOO_OLD' : 'HOST_GONE');
         return;
