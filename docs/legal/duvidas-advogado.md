@@ -173,7 +173,7 @@ A Política foi escrita como **deve ficar**. Ela só pode ser publicada quando e
 | P-6 | **Retenção dos logs** (6 meses, Marco Civil) e rotação | padrão do Docker; o log do Fastify registra IP e URL | `apps/server/src/app.ts:110` | Marco Civil |
 | P-7 | Backup do banco | não há backup automatizado | `README.md:237` (só um `pg_dump` manual) | continuidade |
 | P-8 | **Consulta de uso das contas de IA sem a credencial sair da máquina**, e uma opção para desligar a leitura | o agente envia a credencial ao servidor | `packages/machine-ops/src/ai-credentials.ts:22-38`; `apps/server/src/ai/credentials.ts:18-40`; `apps/server/src/ai/claude.ts:14` | A-1 |
-| P-9 | Registro de auditoria do "ver como" do administrador | não existe | `apps/server/src/auth/scope.ts:11-39` | L-10 |
+| P-9 | ~~Registro de auditoria do "ver como" do administrador~~ | **entregue no TER-746**: tabela `view_as_audit` (admin, usuário alvo ou "todos", início, fim, IP), guardada 1 ano após o fim. Aviso ao usuário e motivo obrigatório dependem da resposta a L-10 | `apps/server/src/db/repositories/view-as-audit.ts`; `apps/server/src/auth/routes.ts` (`POST /view-as`) | L-10 |
 | P-10 | **Exportação dos dados** (portabilidade) | não existe | — | LGPD, art. 18, V |
 | P-11 | Prazos de retenção automáticos para chat, `tab_last_answers`, `tab_events`, memória e lista de espera | sem expurgo | `apps/server/prisma/schema.prisma:323-348, 586-609, 750-775, 1094-1134` | Política 8 |
 | P-12 | **Aceite dos Termos e da Política**: versão e data por usuário, no cadastro e no checkout, e novo aceite quando houver mudança relevante | não existe | — | lançamento (TER-717) |

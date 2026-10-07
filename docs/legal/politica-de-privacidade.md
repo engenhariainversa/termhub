@@ -221,6 +221,7 @@ Essas transferências são feitas para executar o contrato com você ou a seu pe
 | Arquivos colados no terminal (na sua máquina) | 7 dias |
 | Histórico de estados das abas | [definir. Hoje não é apagado] |
 | Registros de acesso (logs) | 6 meses (Marco Civil, art. 15) |
+| Registro de acesso de administradores a uma conta ("ver como") | 1 ano após o fim do acesso |
 | Lista de espera | até o convite ou [12 meses], o que vier primeiro, ou até você pedir a exclusão |
 | Dados de cobrança e fiscais | pelo prazo da legislação fiscal (em geral, 5 anos) |
 
@@ -263,7 +264,7 @@ O site carrega fontes do Google Fonts, o que envia o seu IP ao Google.
 - Os tokens das integrações e o segredo do PIN são cifrados com AES-256-GCM.
 - O aplicativo móvel usa chaves guardadas no hardware do aparelho e PIN.
 - O agente usa uma conexão só de saída, e o servidor só pode pedir a ele um conjunto fechado de operações.
-- O acesso de administradores do termhub aos dados de uma conta (função "ver como") é restrito a suporte, segurança e cumprimento de obrigação legal. [É registrado; ver item P-9.]
+- O acesso de administradores do termhub aos dados de uma conta (função "ver como") é restrito a suporte, segurança e cumprimento de obrigação legal. Cada acesso fica registrado (quem, qual conta, início, fim e IP) por 1 ano.
 - **Incidentes.** Se houver um incidente de segurança que possa trazer risco ou dano relevante a você, avisaremos você e a ANPD, nos termos da lei (art. 48 e Resolução CD/ANPD nº 15/2024).
 - **Limite do que protegemos.** Nenhum sistema é totalmente seguro. Mantenha suas máquinas, contas e credenciais protegidas.
 
