@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer, IncomingMessage } from 'node:http';
 import { z } from 'zod';
 import { RunFailed, runClaude } from './run.js';
@@ -19,6 +20,13 @@ const body = z.object({
   mcp_url: z.string().url(),
 });
 
+/** Constant-time check of the shared secret; an empty secret refuses everything. Hashing first makes the lengths equal. */
+export function secretMatches(header: string | string[] | undefined, secret: string): boolean {
+  if (!secret || typeof header !== 'string') return false;
+  const digest = (s: string) => createHash('sha256').update(s).digest();
+  return timingSafeEqual(digest(header), digest(secret));
+}
+
 /** Reads the request body, bailing out (without buffering the rest) once it exceeds the cap. */
 async function readBody(req: IncomingMessage): Promise<Buffer | null> {
   const chunks: Buffer[] = [];
@@ -36,7 +44,7 @@ export const server = createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/health') return res.writeHead(200).end('ok');
     if (req.method !== 'POST' || req.url !== '/run') return res.writeHead(404).end();
     // The compose network is not authentication: the shared secret is (spec §7.2).
-    if (!SECRET || req.headers['x-concierge-secret'] !== SECRET) return res.writeHead(401).end();
+    if (!secretMatches(req.headers['x-concierge-secret'], SECRET)) return res.writeHead(401).end();
 
     const raw = await readBody(req);
     if (raw === null) {

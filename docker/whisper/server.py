@@ -2,7 +2,8 @@
 Minimal speech-to-text HTTP service for termhub, backed by faster-whisper on CPU.
 
   GET  /health                     200 once the model is loaded (503 while downloading/loading)
-  POST /transcribe?language=pt     body = the audio file (webm/opus, ogg, mp4/aac, wav, mp3...)
+  POST /transcribe?language=pt     Authorization: Bearer $WHISPER_SECRET
+                                   body = the audio file (webm/opus, ogg, mp4/aac, wav, mp3...)
                                    -> {"text": "...", "language": "pt", "duration": 12.3}
 
 Requests are serialized (one transcription at a time) so a long clip does not
@@ -19,6 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from faster_whisper import WhisperModel
+
+from auth import authorized
 
 
 def physical_cores() -> int:
@@ -52,6 +55,8 @@ DEFAULT_PROMPTS = {
 }
 INITIAL_PROMPT = os.environ.get("WHISPER_INITIAL_PROMPT") or DEFAULT_PROMPTS.get(DEFAULT_LANGUAGE)
 PORT = int(os.environ.get("PORT", "8000"))
+# The compose network is not authentication: an empty secret refuses every /transcribe.
+SECRET = os.environ.get("WHISPER_SECRET", "")
 MAX_BYTES = 64 * 1024 * 1024
 
 model: WhisperModel | None = None
@@ -118,6 +123,11 @@ class Handler(BaseHTTPRequestHandler):
         if url.path != "/transcribe":
             self.send_json(404, {"error": "not found"})
             return
+        if not authorized(self.headers.get("authorization"), SECRET):
+            # the body was never read: drop the connection rather than parse it as the next request
+            self.close_connection = True
+            self.send_json(401, {"error": "unauthorized"})
+            return
         if model is None:
             self.send_json(503, {"error": "model loading"})
             return
@@ -140,6 +150,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    if not SECRET:
+        log("WHISPER_SECRET is empty: every /transcribe request will be refused")
     threading.Thread(target=load_model, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     log(f"listening on :{PORT}")

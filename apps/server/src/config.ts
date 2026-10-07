@@ -109,6 +109,8 @@ const envSchema = z.object({
   SMTP_SECURE: z.enum(['true', 'false']).default('false'),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  /** HTTP(S) proxy the SMTP connection tunnels through (CONNECT), e.g. http://proxy:3128. Unset = direct. */
+  SMTP_PROXY: z.string().url().optional(),
   EMAIL_DEV_CONSOLE: z.enum(['true', 'false']).default('false'),
   EMAIL_FROM: z.string().default('termhub <termhub@localhost>'),
   LOGIN_CODE_TTL_MINUTES: z.coerce.number().int().positive().default(10),
@@ -120,6 +122,8 @@ const envSchema = z.object({
   WHISPER_URL: z.string().url().optional(),
   /** language hint passed to whisper ("auto" = detect) */
   WHISPER_LANGUAGE: z.string().default('pt'),
+  /** bearer secret shared with the whisper service; empty = transcription off (the service refuses every request) */
+  WHISPER_SECRET: z.string().optional(),
 
   /** Where chat attachments live (spec 2026-09-26 §8): a Docker volume in prod, one directory per user id. */
   CHAT_FILES_DIR: z.string().min(1).default('/data/chat-files'),
@@ -185,6 +189,18 @@ function parseAuthModes(raw: string): Set<AuthMode> {
 
 const authModes = parseAuthModes(env.AUTH_MODE);
 
+/** The password docker-compose.yml falls back to when POSTGRES_PASSWORD is unset. */
+export const DEFAULT_DB_PASSWORD = 'termhub';
+
+/** True when the URL carries the compose fallback password. An empty one is left alone: peer auth or .pgpass. */
+export function usesDefaultDbPassword(databaseUrl: string): boolean {
+  try {
+    return decodeURIComponent(new URL(databaseUrl).password) === DEFAULT_DB_PASSWORD;
+  } catch {
+    return false;
+  }
+}
+
 if (authModes.has('cloudflare') && (!env.CF_TEAM_DOMAIN || !env.CF_AUD)) {
   throw new Error('AUTH_MODE cloudflare exige CF_TEAM_DOMAIN e CF_AUD');
 }
@@ -194,6 +210,13 @@ if (authModes.has('disabled') && env.NODE_ENV === 'production') {
 if (env.EMAIL_DEV_CONSOLE === 'true' && env.NODE_ENV === 'production') {
   // The dev console prints login codes to the log: refuse to boot rather than leak them.
   throw new Error('EMAIL_DEV_CONSOLE=true não é permitido em produção (imprime o código de login no log); configure SMTP_HOST');
+}
+if (env.NODE_ENV === 'production' && usesDefaultDbPassword(env.DATABASE_URL)) {
+  // docker-compose.yml falls back to this password when POSTGRES_PASSWORD is unset (handy in dev).
+  throw new Error(`DATABASE_URL usa a senha padrão "${DEFAULT_DB_PASSWORD}" em produção; defina POSTGRES_PASSWORD (openssl rand -base64 24)`);
+}
+if (env.WHISPER_URL && !env.WHISPER_SECRET && env.NODE_ENV !== 'test') {
+  console.warn('AVISO: WHISPER_URL sem WHISPER_SECRET: a transcrição de voz fica desligada (o serviço whisper recusa pedidos sem o segredo).');
 }
 if (authModes.has('app') && env.NODE_ENV === 'production' && !env.SMTP_HOST) {
   console.error('ERRO: SMTP_HOST não configurado — o login por código de e-mail não vai funcionar em produção.');
@@ -246,6 +269,7 @@ export const config = {
           port: env.SMTP_PORT,
           secure: env.SMTP_SECURE === 'true',
           auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS ?? '' } : undefined,
+          proxy: env.SMTP_PROXY,
         }
       : null,
     devConsole: env.EMAIL_DEV_CONSOLE === 'true',
@@ -253,7 +277,10 @@ export const config = {
   },
   seedLocalMachine: env.SEED_LOCAL_MACHINE === 'true',
   encryptionKey: env.ENCRYPTION_KEY ?? null,
-  transcription: env.WHISPER_URL ? { url: env.WHISPER_URL.replace(/\/$/, ''), language: env.WHISPER_LANGUAGE } : null,
+  transcription:
+    env.WHISPER_URL && env.WHISPER_SECRET
+      ? { url: env.WHISPER_URL.replace(/\/$/, ''), language: env.WHISPER_LANGUAGE, secret: env.WHISPER_SECRET }
+      : null,
   chatFiles: { dir: env.CHAT_FILES_DIR, quotaBytes: env.CHAT_FILES_QUOTA_BYTES },
   embeddings: env.EMBED_URL && env.EMBED_SECRET ? { url: env.EMBED_URL.replace(/\/$/, ''), secret: env.EMBED_SECRET } : null,
   decisionSuggestThreshold: env.DECISION_SUGGEST_THRESHOLD,
