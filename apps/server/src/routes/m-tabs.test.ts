@@ -71,7 +71,7 @@ const question = (o: Record<string, unknown>) => ({
   ...o,
 });
 
-function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknown[]) => Promise<Page>; questions?: unknown[] } = {}) {
+function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknown[]) => Promise<Page>; questions?: unknown[]; surface?: 'app' | 'web' } = {}) {
   const grants = new Set(opts.grants ?? ['terminals:read', 'terminals:write']);
   const tabs = opts.tabs ?? [tabRow(), tabRow({ id: 't2', project_id: 'p2' })];
   const repos = {
@@ -104,7 +104,7 @@ function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknow
         const cfg = (route.config ?? {}) as { action?: string };
         route.config = { ...cfg, resource: 'terminals', action: cfg.action ?? actionForMethod(String(route.method)) } as never;
       });
-      await mobileTabRoutes(a, repos as never, { hub: hub as never, readPage: readPage as never, modeSettleMs: 0 });
+      await mobileTabRoutes(a, repos as never, { hub: hub as never, readPage: readPage as never, modeSettleMs: 0, surface: opts.surface });
     },
     { prefix: '/tabs' },
   );
@@ -227,6 +227,13 @@ describe('POST /tabs/:id/chat/messages', () => {
     expect(hub.poke).toHaveBeenCalledWith('t1');
     expect(logged.join('')).toContain('"textLen":17');
     expect(logged.join('')).not.toContain('segredo');
+  });
+
+  it("mounted for the web (TER-1003), the text is typed as the person's from the web", async () => {
+    const { app } = build({ surface: 'web' });
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/chat/messages', payload: { text: 'oi' } });
+    expect(res.statusCode).toBe(200);
+    expect(sendInput).toHaveBeenCalledWith(expect.anything(), { tab_id: 't1', text: 'oi' }, expect.objectContaining({ level: 'person_typed', surface: 'web' }));
   });
 
   it('a tab waiting on a permission answers 409 WAITING_PERMISSION, pointing at the card', async () => {

@@ -33,7 +33,7 @@ function TabPicker({ tabs, value, onPick, onNew }: { tabs: BarTab[]; value: stri
       <option value="">{t('Escolha uma aba…')}</option>
       {tabs.map((tab) => (
         <option key={tab.id} value={tab.id}>
-          {tab.kind === 'simulator' ? '📱 ' : tab.kind === 'file' ? '📄 ' : ''}
+          {tab.kind === 'simulator' ? '📱 ' : tab.kind === 'file' ? '📄 ' : tab.kind === 'chat' ? '💬 ' : ''}
           {tab.name}
         </option>
       ))}
@@ -68,7 +68,7 @@ export function PaneLayer({ preset, rects, cells, focusedCell, tabs, onFocus, on
             >
               {tab ? (
                 <>
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tab.kind === 'file' || tab.alive ? 'bg-ok' : 'bg-fg-dim'}`} />
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tab.kind === 'file' || tab.kind === 'chat' || tab.alive ? 'bg-ok' : 'bg-fg-dim'}`} />
                   <span className="truncate text-fg">{tab.name}</span>
                   <TabPicker tabs={tabs} value={tab.id} onPick={(id) => onAssign(cell, id)} onNew={() => onNewTerminal(cell)} />
                   <button

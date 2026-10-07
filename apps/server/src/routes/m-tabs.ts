@@ -42,6 +42,11 @@ export interface MobileTabDeps {
   agent?: AgentView;
   /** Pause between Shift+Tab and reading the footer, so Claude Code has redrawn it. */
   modeSettleMs?: number;
+  /**
+   * Where a message typed here comes from, for its origin note (TER-851): the phone (`/api/m/tabs`, the
+   * default) or the web's conversation view (`/api/tab-chat`, TER-1003).
+   */
+  surface?: 'app' | 'web';
 }
 
 /**
@@ -80,8 +85,8 @@ async function control<T>(run: () => Promise<T>): Promise<T> {
 const emptyPage = (): Page => ({ items: [], before: null, live: null, mode: null, degraded: false, missing: false });
 
 /**
- * A terminal tab read as a conversation on the phone (spec 2026-10-01 tab chat §5.4), mounted at
- * `/tabs` of the mobile API under `terminals`: reads need `terminals:read`, everything that types,
+ * A terminal tab read as a conversation (spec 2026-10-01 tab chat §5.4), mounted at `/tabs` of the
+ * mobile API and at `/tab-chat` of the web API (TER-1003), under `terminals` in both: reads need `terminals:read`, everything that types,
  * presses a key or starts a session needs `terminals:write`. Every tab is loaded through the caller's
  * scope (404 outside it). Never logs a message, a prompt, a screen or a transcript line: lengths only.
  */
@@ -152,7 +157,7 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     const { id } = idParam.parse(request.params);
     const { text } = tabMessageBody.parse(request.body);
     const { tab } = await scoped(repos, request).tab(id);
-    await control(() => sendInput(ctxOf(request), { tab_id: tab.id, text }, { level: 'person_typed', userId: request.scope.user.id, surface: 'app' }));
+    await control(() => sendInput(ctxOf(request), { tab_id: tab.id, text }, { level: 'person_typed', userId: request.scope.user.id, surface: deps.surface ?? 'app' }));
     request.log.info({ tabId: tab.id, textLen: text.length }, 'tab chat: message sent');
     deps.hub.poke(tab.id);
     return { sent: true as const };

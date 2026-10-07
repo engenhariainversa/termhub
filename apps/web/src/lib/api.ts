@@ -1,6 +1,6 @@
 import { currentLocale, i18n } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
-import type { FileRecentResponse, TabQuestionScreen } from './types';
+import type { FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -501,6 +501,17 @@ export const api = {
     testPush: (id: string, input: { kind: PushTestKind; delay_seconds: number }) => request<PushTestResult>('POST', `/devices/${id}/test-push`, input),
     events: () => request<{ events: DeviceEventView[] }>('GET', '/devices/events'),
     summary: () => request<DevicesSummary>('GET', '/devices/summary'),
+  },
+  /** A Claude Code tab read as a conversation (TER-1003): its transcript relayed by the server, never stored. */
+  tabChat: {
+    /** A page of the conversation, read backward from `before` (the newest when absent), with the tab's open cards. */
+    page: (id: string, before?: string | null) => request<TabChatPage>('GET', `/tab-chat/${id}/chat${before ? `?before=${encodeURIComponent(before)}` : ''}`),
+    /** Types the text into the tab as the person's (TER-851). 409 WAITING_PERMISSION while a dialog waits for an answer. */
+    send: (id: string, text: string) => request<{ sent: true }>('POST', `/tab-chat/${id}/chat/messages`, { text }),
+    /** Interrupt (Esc), cycle the mode (Shift+Tab; answers the mode the footer shows), `/clear`, `/compact`. */
+    action: (id: string, action: TabChatAction) => request<{ done: true; mode: string | null }>('POST', `/tab-chat/${id}/chat/actions`, { action }),
+    /** The last lines of the pane, plain text ("Ver tela"). */
+    screen: (id: string, lines = 120) => request<{ text: string }>('GET', `/tab-chat/${id}/screen?lines=${lines}`),
   },
   tabs: {
     rename: (id: string, name: string) => request<{ tab: Tab }>('PATCH', `/tabs/${id}`, { name }),
