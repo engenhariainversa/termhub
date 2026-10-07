@@ -111,6 +111,9 @@ export interface App {
 export interface BuildAppOptions {
   /** Where the built web bundles are read from (tests); defaults to apps/web/dist and dist-city. */
   frontend?: { webDist?: string; cityDist?: string };
+  /** False skips re-queueing every pending attachment at boot (tests on a shared database, where those
+   *  rows belong to other test files and have no file in this app's store). Defaults to true. */
+  requeueAttachments?: boolean;
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
@@ -325,7 +328,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   }
 
   // Whatever was still pending when the previous process died goes back in line (spec §5.4).
-  void requeuePending(extraction, repos.chatAttachments).catch((err) => fastify.log.warn({ err: failureLabel(err) }, 'attachments: could not re-queue pending rows'));
+  if (opts.requeueAttachments !== false) void requeuePending(extraction, repos.chatAttachments).catch((err) => fastify.log.warn({ err: failureLabel(err) }, 'attachments: could not re-queue pending rows'));
 
   // Limpeza periódica de sessões expiradas e de perguntas do chat que ninguém respondeu
   const purge = setInterval(() => {

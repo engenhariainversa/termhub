@@ -125,7 +125,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('buildApp serving the fron
 
   beforeAll(async () => {
     const { buildApp } = await import('./app.js');
-    app = await buildApp({ frontend: { webDist: dirs.webDist, cityDist: dirs.cityDist } });
+    // No boot requeue: the pending attachments in this shared database belong to other test files.
+    app = await buildApp({ frontend: { webDist: dirs.webDist, cityDist: dirs.cityDist }, requeueAttachments: false });
   }, 30_000);
 
   afterAll(async () => {
