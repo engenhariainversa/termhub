@@ -325,6 +325,23 @@ describe('sendDueAutoAnswers', () => {
     expect(JSON.stringify(l.info.mock.calls)).not.toContain('Mesma pergunta');
   });
 
+  it('the automatic run\'s guard (TER-974) is asked right before the send, told once it went out, and can stop it', async () => {
+    const answer = vi.fn(async () => ({}) as never);
+    const ok = fake();
+    const guard = { before: vi.fn(async () => null), sent: vi.fn(async () => {}) };
+    expect(await sendDueAutoAnswers(ok.repos as unknown as Repositories, log(), { now, answer, woken: guard })).toBe(1);
+    expect(guard.before.mock.invocationCallOrder[0]!).toBeLessThan(answer.mock.invocationCallOrder[0]!);
+    expect(guard.sent).toHaveBeenCalledWith(expect.objectContaining({ id: 'q1' }), expect.objectContaining({ by: 'memory' }));
+
+    const stopped = fake();
+    answer.mockClear();
+    const stop = { before: vi.fn(async () => 'AUTOMATION_ANSWER_CAP'), sent: vi.fn(async () => {}) };
+    expect(await sendDueAutoAnswers(stopped.repos as unknown as Repositories, log(), { now, answer, woken: stop })).toBe(0);
+    expect(answer).not.toHaveBeenCalled();
+    expect(stop.sent).not.toHaveBeenCalled();
+    expect(stopped.tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'AUTOMATION_ANSWER_CAP');
+  });
+
   it('a 409 at send time marks the countdown failed, republishes the card and sends nothing else', async () => {
     const { repos, tabQuestions } = fake();
     const answer = vi.fn(async () => {

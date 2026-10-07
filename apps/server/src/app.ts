@@ -54,6 +54,7 @@ import { ChatService, failureLabel, purgeExpiredActions } from './chat/service.j
 import { HEARTBEAT_MS, SWEEP_MS } from './chat/resume.js';
 import { startDecisionSweeper } from './chat/decision-memory.js';
 import { startAutoAnswerSweeper } from './chat/auto-answer.js';
+import { wokenAnswerGuard } from './automation/answers.js';
 import { createWaker } from './chat/wake.js';
 import { startMemorySweeper } from './memory/sweeper.js';
 import { agentRunner } from './chat/runner.js';
@@ -384,7 +385,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     await within(chat.suspendAll().catch((err: unknown) => fastify.log.warn({ err: err instanceof Error ? err.message : String(err) }, 'preClose: suspend failed')), PRE_CLOSE_SUSPEND_MS, () => fastify.log.warn({}, 'preClose: suspend budget exceeded'));
   });
   // Sends due automatic answers (spec 2026-09-26 concierge memory §6); both colors run it, the claim picks one.
-  const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log);
+  // The woken chat's answer in an automatic tab meets the run's caps and cycle detector (TER-974).
+  const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log, undefined, wokenAnswerGuard({ repos, log: fastify.log }));
   // Agentic board (spec §8): the dispatcher starts agents on eligible cards of projects with automation on,
   // the follower drives the tabs of this instance's runs (resumes, restarts, the PR fallback). Both colours
   // run it; the claim row picks one per card. It reads the same `lifecycle` the SIGTERM drain flips, so a
