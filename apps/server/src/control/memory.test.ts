@@ -236,6 +236,46 @@ describe('searchMemory', () => {
     expect(r2.note).toBe(MEMORY_NOTE);
   });
 
+  describe('authority (TER-1012)', () => {
+    it('three contradicting notes about merge/deploy: the current one comes first', async () => {
+      const notes = [
+        item({ id: 'n1', kind: 'note', title: 'Merge sem pedir', similarity: 0.95, superseded_at: '2026-10-03T10:02:00.000Z' } as Partial<MemoryHit> & { id: string }),
+        item({ id: 'n2', kind: 'note', title: 'Só merge, deploy pede', similarity: 0.94, superseded_at: '2026-10-03T10:04:00.000Z' } as Partial<MemoryHit> & { id: string }),
+        item({ id: 'n3', kind: 'note', title: 'Merge e deploy liberados', similarity: 0.9 }),
+      ];
+      const { ctx, embedder } = ctxFor({ vecItems: notes, textItems: notes.map((n, i) => ({ ...n, rank: i + 1 })) });
+      const r = await searchMemory(ctx, { query: 'posso fazer merge e deploy?' }, { embedder });
+      expect(r.results.map((x) => x.ref)).toEqual(['note:n3', 'note:n1', 'note:n2']);
+    });
+
+    it('a superseded "acceptEdits + lista" decision does not rank above "modo auto"', async () => {
+      const old = decision({ id: 'dold', question: 'Modo de permissão das execuções?', answer: { labels: ['acceptEdits + lista'] }, similarity: 0.95, superseded_at: '2026-10-05T10:00:00.000Z' } as Partial<DecisionNeighbour> & { id: string });
+      const auto = item({ id: 'nauto', kind: 'note', title: 'Execuções em modo auto', similarity: 0.8 });
+      const { ctx, embedder } = ctxFor({ vecDecisions: [old], textDecisions: [{ ...decisionRanked({ id: 'dold', rank: 1 }), superseded_at: '2026-10-05T10:00:00.000Z' } as ChatDecision & { rank: number }], vecItems: [auto] });
+      const r = await searchMemory(ctx, { query: 'modo de permissão' }, { embedder });
+      expect(r.results.map((x) => x.ref)).toEqual(['note:nauto', 'decision:dold']);
+    });
+
+    it('an expired decision falls below a current one', async () => {
+      const expired = decision({ id: 'dexp', similarity: 0.95, expires_at: '2026-01-01T00:00:00.000Z' } as Partial<DecisionNeighbour> & { id: string });
+      const current = decision({ id: 'dnow', similarity: 0.6 });
+      const { ctx, embedder } = ctxFor({ vecDecisions: [expired, current] });
+      const r = await searchMemory(ctx, { query: 'x' }, { embedder });
+      expect(r.results.map((x) => x.ref)).toEqual(['decision:dnow', 'decision:dexp']);
+    });
+
+    it('the query project raises its own hits, and the limit applies after the re-rank', async () => {
+      // decisions stay global under an ordinary token, so one from another project can still come back
+      const decisions = [
+        decision({ id: 'other', project_id: 'p2', project_name: 'p2', similarity: 0.9 }),
+        decision({ id: 'mine', project_id: 'p1', project_name: 'p1', similarity: 0.89 }),
+      ];
+      const { ctx, embedder } = ctxFor({ vecDecisions: decisions });
+      const r = await searchMemory(ctx, { query: 'x', project_id: 'p1', limit: 1 }, { embedder });
+      expect(r.results.map((x) => x.ref)).toEqual(['decision:mine']);
+    });
+  });
+
   it('always filters by ctx.scope.user.id', async () => {
     const { ctx, embedder, calls } = ctxFor({ user: 'u7', vecDecisions: [decision({ id: 'd1' })], vecItems: [item({ id: 'i1', kind: 'note' })] });
     await searchMemory(ctx, { query: 'x' }, { embedder });
