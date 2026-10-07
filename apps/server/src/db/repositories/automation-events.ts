@@ -10,6 +10,8 @@ export type AutomationEventKind =
   | 'run_blocked'
   | 'run_cancelled'
   | 'question_answered'
+  | 'permission_auto_approved'
+  | 'guard_blocked'
   | 'escalated'
   | 'pr_opened'
   | 'merged'

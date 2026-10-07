@@ -5,7 +5,7 @@
  * has its own case here, and the normal-run cases prove the guard stays silent on them.
  */
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -19,6 +19,7 @@ let script: string;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'th-guard-'));
+  mkdirSync(join(dir, 'bin'), { recursive: true });
   script = join(dir, 'termhub-guard');
   writeFileSync(script, GUARD_SCRIPT);
   chmodSync(script, 0o755);
@@ -156,3 +157,34 @@ describe('buildGuardSettings', () => {
     expect(cmd).toBe(`"$HOME/.termhub/bin/termhub-guard" '' '/w/it'\\''s'`);
   });
 });
+
+describe('guard — reports a block to termhub (TER-993)', () => {
+  it('posts the tool and reason (never the command) to /guard, in the background', () => {
+    // fake curl + tmux on PATH; curl writes its POST body to a log
+    const bin = join(dir, 'bin');
+    writeFileSync(join(bin, 'tmux'), '#!/bin/sh\necho th-sess\n');
+    const log = join(dir, 'curl.log');
+    writeFileSync(join(bin, 'curl'), `#!/bin/sh\n# the body is the last arg via --data-binary @-; read stdin\ncat >> ${log}\necho >> ${log}\n`);
+    for (const f of ['tmux', 'curl']) chmodSync(join(bin, f), 0o755);
+    mkdirSync(join(dir, '.termhub'), { recursive: true });
+    writeFileSync(join(dir, '.termhub/hook.env'), "TERMHUB_HOOK_URL='https://app.termhub.dev/api/hooks/events'\nTERMHUB_HOOK_TOKEN='thb_hk_x'\n");
+    const r = spawnSync('sh', [script, BRANCH, WORKTREE], {
+      input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'docker ps' } }),
+      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: dir, TMUX_PANE: '%1' },
+      timeout: 5000,
+    });
+    expect(r.stdout.toString()).toContain('"permissionDecision":"deny"');
+    // the background POST may land just after exit; give it a beat
+    const until = Date.now() + 2000;
+    let body = '';
+    while (Date.now() < until) {
+      try { body = readFileSync(log, 'utf8'); } catch { body = ''; }
+      if (body.includes('/guard') || body.includes('docker')) break;
+    }
+    try { body = readFileSync(log, 'utf8'); } catch { body = ''; }
+    expect(body).toContain('"session":"th-sess"');
+    expect(body).toContain('"tool":"Bash"');
+    expect(body).not.toContain('docker ps'); // the command never leaves the machine
+  });
+});
+

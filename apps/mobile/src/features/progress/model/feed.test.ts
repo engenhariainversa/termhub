@@ -4,7 +4,7 @@ import { feedLine } from './feed';
 
 const ev = (over: Partial<TAutomationFeedEvent>): TAutomationFeedEvent => ({
   id: 'x', kind: 'run_started', created_at: '2026-10-05T10:00:00.000Z', project_id: 'p', task_id: 't', run_id: 'r', tab_id: 'tab', ref: 'TER-9', epic: 'Épico',
-  machine: 'jarvis', account: 'pessoal', branch: null, workflow: null, version: null, pr: null, url: null, until: null, reason_text: null, paused: null, ...over,
+  machine: 'jarvis', account: 'pessoal', branch: null, workflow: null, version: null, pr: null, url: null, until: null, reason_text: null, paused: null, tool: null, ...over,
 });
 
 describe('feedLine', () => {
@@ -17,6 +17,9 @@ describe('feedLine', () => {
     expect(feedLine(ev({ kind: 'deploy_failed', paused: false }))).toBe('Deploy falhou (Épico)');
     expect(feedLine(ev({ kind: 'release_ok', workflow: 'npm', version: '1.2.0' }))).toBe('Publicado npm 1.2.0');
     expect(feedLine(ev({ kind: 'escalated', reason_text: 'Confirme na aba.' }))).toBe('TER-9 precisa de você: Confirme na aba.');
+    // TER-993: auto-approved and guard-blocked, naming the tool
+    expect(feedLine(ev({ kind: 'permission_auto_approved', tool: 'mcp__termhub__create_task' }))).toBe('TER-9: create_task liberado sozinho');
+    expect(feedLine(ev({ kind: 'guard_blocked', tool: 'Bash' }))).toBe('TER-9: Bash bloqueado pela trava');
     // TER-987: a start that failed says why
     expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'A máquina não respondeu' }))).toBe('TER-9 não começou: A máquina não respondeu');
     expect(feedLine(ev({ kind: 'run_blocked' }))).toBe('TER-9: parou e espera você');
