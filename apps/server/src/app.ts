@@ -10,6 +10,7 @@ import { createMailer } from './email/mailer.js';
 import { createAccessAllowlist } from './cloudflare/access.js';
 import { AuthService, authRoutes, buildAuthHook, type AuthContext } from './auth/index.js';
 import { applyErrorHandler, sendError } from './lib/errors.js';
+import { registerSecurityHeaders } from './lib/security-headers.js';
 import { machineRoutes } from './routes/machines.js';
 import { projectRoutes } from './routes/projects.js';
 import { projectGroupRoutes } from './routes/project-groups.js';
@@ -67,6 +68,8 @@ import { userRoutes } from './routes/users.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { apiTokenRoutes } from './routes/api-tokens.js';
 import { deviceRoutes } from './routes/devices.js';
+import { securityEventRoutes } from './routes/security-events.js';
+import { securityEventCutoff } from './auth/audit.js';
 import { mcpRoutes } from './mcp/route.js';
 import { createMobileServices, registerMobileApi } from './mobile/app.js';
 import { TabChatHub } from './tab-chat/hub.js';
@@ -121,7 +124,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       // Nunca logar cookies/authorization.
       redact: ['req.headers.cookie', 'req.headers.authorization', 'req.headers["cf-access-jwt-assertion"]', 'req.headers.dpop'],
     },
-    trustProxy: true, // atrás do Cloudflare Tunnel / cloudflared em 127.0.0.1
+    // Only known proxies may set X-Forwarded-*: TRUST_PROXY, default loopback + private networks (TER-579).
+    trustProxy: config.trustProxy,
     bodyLimit: 1024 * 1024,
   });
 
@@ -159,12 +163,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     }
   });
 
-  // Cabeçalhos básicos de segurança
-  fastify.addHook('onSend', async (_req, reply) => {
-    reply.header('x-content-type-options', 'nosniff');
-    reply.header('x-frame-options', 'DENY');
-    reply.header('referrer-policy', 'same-origin');
-  });
+  // Security headers: nosniff, no framing, referrer, HSTS on https, CSP on HTML (TER-579).
+  registerSecurityHeaders(fastify, { publicUrl: config.publicUrl });
 
   applyErrorHandler(fastify);
 
@@ -260,7 +260,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await api.register((a) => authRoutes(a, auth, { onNicknameClaimed: (u) => shortLinks.onNicknameClaimed(u) }), { prefix: '/auth' });
       await api.register((a) => cityLinkRoutes(a, { shortLinks }), { prefix: '/auth' });
       // The person's own account: any signed-in person may delete it, no role grant needed.
-      await api.register((a) => accountRoutes(a, { auth: authService, deletion }), { prefix: '/account' });
+      await api.register((a) => accountRoutes(a, { auth: authService, deletion, repos }), { prefix: '/account' });
       await guarded('machines', (a) => machineRoutes(a, repos), '/machines');
       await guarded('projects', (a) => projectRoutes(a, repos, { simulators }), '/projects');
       await guarded('projects', (a) => projectGroupRoutes(a, repos), '/project-groups');
@@ -295,6 +295,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('users', (a) => userRoutes(a, repos, { mailer, access, deletion, revoke: mobile ? (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer, log: fastify.log }, id, input) : null }), '/users');
       await guarded('uploads', (a) => uploadRoutes(a, repos), '/uploads');
       await guarded('api_tokens', (a) => apiTokenRoutes(a, repos, { mcpUrl: config.mcpUrl }), '/api-tokens');
+      await guarded('security_events', (a) => securityEventRoutes(a, repos, { retentionDays: config.securityEventRetentionDays }), '/security-events');
       await guarded('chat', (a) => chatRoutes(a, repos, { service: chat }), '/chat');
       await guarded('chat', (a) => chatAttachmentRoutes(a, repos, attachments), '/chat/attachments');
       if (mobile) {
@@ -345,6 +346,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
+    // The security trail keeps SECURITY_EVENT_RETENTION_DAYS (TER-577); the purge is the only way a row leaves it.
+    void repos.securityEvents.purgeBefore(securityEventCutoff(config.securityEventRetentionDays)).catch(() => {});
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
   const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);
