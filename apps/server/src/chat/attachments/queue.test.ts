@@ -80,6 +80,16 @@ describe('extraction queue', () => {
     expect(log.warn).toHaveBeenCalledTimes(1);
   });
 
+  it('the reason an unavailable transcription carries goes to the row (TER-1035)', async () => {
+    const extractImpl = vi.fn(async () => {
+      throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'refused', { reason: 'refused' });
+    }) as unknown as typeof extract;
+    const { queue, repo } = build([row({ id: 'a', kind: 'audio' })], extractImpl);
+    queue.enqueue('a');
+    await queue.idle();
+    expect(repo.setFailed).toHaveBeenCalledWith('a', 'TRANSCRIPTION_UNAVAILABLE', 'refused');
+  });
+
   it('a file that is gone fails the row as ATTACHMENT_INVALID; a row that is gone or already done is skipped', async () => {
     const extractImpl = vi.fn(async () => ({ text: 'x', meta: {} })) as unknown as typeof extract;
     const { queue, onDone, repo } = build([row({ id: 'gone' }), row({ id: 'done', status: 'ready' })], extractImpl);
@@ -114,7 +124,8 @@ describe('extraction queue', () => {
     expect(vi.mocked(repo.markAttempt).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(extractImpl).mock.invocationCallOrder[0]);
     expect(extractImpl).toHaveBeenCalledTimes(1);
     expect(repo.setFailed).toHaveBeenCalledWith('poison', 'ATTACHMENT_INVALID');
-    expect(repo.setFailed).toHaveBeenCalledWith('clip', 'TRANSCRIPTION_UNAVAILABLE');
+    // A day of whisper out of reach says so (TER-1035).
+    expect(repo.setFailed).toHaveBeenCalledWith('clip', 'TRANSCRIPTION_UNAVAILABLE', 'unreachable');
     expect(onDone.mock.calls.map((c) => [c[0].id, c[0].status])).toEqual([['a', 'ready'], ['poison', 'failed'], ['clip', 'failed']]);
   });
 

@@ -1,5 +1,7 @@
 import ExcelJS from 'exceljs';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { type Server, createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { PassThrough } from 'node:stream';
 import { buildZip, minimalDocx, minimalPdf, withUnlistedEntry } from '../../../test/zip.js';
 import { ExtractError, TEXT_CAP, XLSX_MAX_COLS, XLSX_MAX_ROWS, extract, imageDimensions } from './extract.js';
@@ -207,8 +209,63 @@ describe('extract: audio and video go to whisper', () => {
     // 503 is whisper loading its model: the same code, but the queue may try again later.
     await expect(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'loading' }, 503)))).rejects.toMatchObject({ code: 'TRANSCRIPTION_UNAVAILABLE', retryable: true });
     await expect(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'down' }, 500)))).rejects.toMatchObject({ code: 'TRANSCRIPTION_UNAVAILABLE', retryable: false });
-    await expect(extract('audio', Buffer.from('x'), 'audio/ogg', noWhisper)).rejects.toMatchObject({ retryable: false });
+    await expect(extract('audio', Buffer.from('x'), 'audio/ogg', noWhisper)).rejects.toMatchObject({ retryable: false, reason: 'not_configured' });
+    // Out of reach is a deploy recreating the container: retried by the queue, like the 503 (TER-1035).
+    await expect(extract('audio', Buffer.from('x'), 'audio/ogg', w(vi.fn(async () => { throw new Error('ECONNREFUSED'); })))).rejects.toMatchObject({ retryable: true, reason: 'unreachable' });
+    await expect(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'unauthorized' }, 401)))).rejects.toMatchObject({ code: 'TRANSCRIPTION_UNAVAILABLE', retryable: false, reason: 'refused' });
+    await expect(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'down' }, 500)))).rejects.toMatchObject({ reason: 'error' });
     expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ error: 'bad audio' }, 422))))).toBe('TRANSCRIPTION_FAILED');
     expect(await code(extract('audio', Buffer.from('x'), 'audio/ogg', w(ok({ nope: 1 }))))).toBe('TRANSCRIPTION_FAILED');
+  });
+});
+
+/**
+ * The call against a real HTTP server that checks the bearer the way docker/whisper/auth.py does
+ * (TER-1035: after TER-585 the service refuses anything without the shared secret).
+ */
+describe('extract: whisper over HTTP with the shared secret', () => {
+  const SECRET = 'segredo-de-teste';
+  let server: Server;
+  let url: string;
+  const seen: { auth: string | undefined; type: string | undefined; path: string | undefined; bytes: number }[] = [];
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        seen.push({ auth: req.headers.authorization, type: req.headers['content-type'], path: req.url, bytes: Buffer.concat(chunks).length });
+        res.setHeader('content-type', 'application/json');
+        if (req.headers.authorization !== `Bearer ${SECRET}`) {
+          res.statusCode = 401;
+          res.end(JSON.stringify({ error: 'unauthorized' }));
+          return;
+        }
+        res.end(JSON.stringify({ text: ' transcrito ', language: 'pt', duration: 4.2 }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+  it('an .m4a with the right secret comes back transcribed', async () => {
+    const clip = Buffer.alloc(224 * 1024, 1);
+    const r = await extract('audio', clip, 'audio/mp4', { whisperUrl: url, language: 'pt', whisperSecret: SECRET });
+    expect(r).toEqual({ text: 'transcrito', meta: { duration_s: 4.2, language: 'pt', truncated: false } });
+    expect(seen.at(-1)).toEqual({ auth: `Bearer ${SECRET}`, type: 'audio/mp4', path: '/transcribe?language=pt', bytes: clip.length });
+  });
+
+  it('no secret or a different one is refused, and says so (not retried)', async () => {
+    await expect(extract('audio', Buffer.from('x'), 'audio/mp4', { whisperUrl: url, language: 'pt' })).rejects.toMatchObject({ code: 'TRANSCRIPTION_UNAVAILABLE', reason: 'refused', retryable: false });
+    expect(seen.at(-1)?.auth).toBeUndefined();
+    await expect(extract('audio', Buffer.from('x'), 'audio/mp4', { whisperUrl: url, language: 'pt', whisperSecret: 'outro' })).rejects.toMatchObject({ reason: 'refused' });
+  });
+
+  it('a whisper that is down is unreachable and retried later', async () => {
+    const closed = createServer();
+    await new Promise<void>((r) => closed.listen(0, '127.0.0.1', r));
+    const port = (closed.address() as AddressInfo).port;
+    await new Promise<void>((r) => closed.close(() => r()));
+    await expect(extract('audio', Buffer.from('x'), 'audio/mp4', { whisperUrl: `http://127.0.0.1:${port}`, language: 'pt', whisperSecret: SECRET })).rejects.toMatchObject({ reason: 'unreachable', retryable: true });
   });
 });

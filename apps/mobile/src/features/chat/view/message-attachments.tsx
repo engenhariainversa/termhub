@@ -3,7 +3,8 @@ import { Image, Modal, Pressable, Text, View } from 'react-native';
 import type { TChatAttachment } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
 import { Icon } from '@/ui';
-import { attachmentStatusText, formatBytes, thumbSize } from '../viewmodel/attachments';
+import { ApiError } from '@/services/api/errors';
+import { attachmentStatusText, canRetryAttachment, formatBytes, thumbSize } from '../viewmodel/attachments';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ATTACHMENT_ICON, KIND_ICON } from './attachment-chip';
 
@@ -71,6 +72,24 @@ function AuthImage({ attachment, className, resizeMode, size }: { attachment: TC
 export const MessageAttachments = memo(function MessageAttachments({ attachments }: { attachments: TChatAttachment[] }) {
   const { t } = useTranslation();
   const [viewing, setViewing] = useState<TChatAttachment | null>(null);
+  const retryAttachment = useChatStore((s) => s.retryAttachment);
+  /** The ids whose retry is on its way, and the one the server refused, with why (TER-1035). */
+  const [retrying, setRetrying] = useState<ReadonlySet<string>>(new Set());
+  const [retryError, setRetryError] = useState<{ id: string; message: string } | null>(null);
+  const retry = (id: string) => {
+    setRetrying((s) => new Set(s).add(id));
+    setRetryError(null);
+    // The bubble moves to "transcrevendo…" with the `attachment_status` the server publishes.
+    retryAttachment(id)
+      .catch((e: unknown) => setRetryError({ id, message: e instanceof ApiError ? e.message : t('Não foi possível tentar de novo') }))
+      .finally(() =>
+        setRetrying((s) => {
+          const next = new Set(s);
+          next.delete(id);
+          return next;
+        }),
+      );
+  };
   return (
     <View className="mt-2 gap-2">
       {attachments.map((a) => {
@@ -99,7 +118,13 @@ export const MessageAttachments = memo(function MessageAttachments({ attachments
                   </>
                 ) : null}
               </View>
+              {retryError?.id === a.id ? <Text className="text-xs text-app-danger">{retryError.message}</Text> : null}
             </View>
+            {canRetryAttachment(a) ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={t('Tentar de novo')} disabled={retrying.has(a.id)} onPress={() => retry(a.id)} className="rounded-md bg-black/20 px-2 py-1" hitSlop={8}>
+                <Text className={`text-xs text-white ${retrying.has(a.id) ? 'opacity-50' : ''}`}>{t('Tentar de novo')}</Text>
+              </Pressable>
+            ) : null}
           </View>
         );
       })}
