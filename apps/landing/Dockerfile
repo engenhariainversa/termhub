@@ -31,5 +31,6 @@ RUN npm run build -w @termhub/landing
 
 FROM nginx:1.27-alpine AS runner
 COPY apps/landing/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/landing/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /app/apps/landing/dist /usr/share/nginx/html
 EXPOSE 80
