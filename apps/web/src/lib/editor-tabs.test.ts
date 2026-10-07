@@ -4,6 +4,7 @@ import {
   announceTerminalEnded,
   closeEditorTab,
   editorTabsKey,
+  fileOfTab,
   filePathOf,
   fileTabId,
   isFileTabId,
@@ -121,6 +122,26 @@ describe('file tabs (TER-941)', () => {
     expect(isFileTabId(id)).toBe(true);
     expect(isFileTabId('t1')).toBe(false);
     expect(filePathOf(id)).toBe('docs/a.md');
+  });
+
+  it('a file read on a machine carries it in its id (TER-973)', () => {
+    const onM1 = fileTabId('~/relatorio.md', 'm1');
+    const onM2 = fileTabId('~/relatorio.md', 'm2');
+    expect(isFileTabId(onM1)).toBe(true);
+    expect(onM1).not.toBe(onM2);
+    expect(fileOfTab(onM1)).toEqual({ path: '~/relatorio.md', machineId: 'm1' });
+    expect(filePathOf(onM2)).toBe('~/relatorio.md');
+    // a path with colons keeps them
+    expect(fileOfTab(fileTabId('/tmp/a:b.md', 'm1'))).toEqual({ path: '/tmp/a:b.md', machineId: 'm1' });
+    // no machine: the id from before TER-973, still read as "any machine of the project"
+    expect(fileTabId('docs/a.md', null)).toBe('file:docs/a.md');
+    expect(fileOfTab('file:docs/a.md')).toEqual({ path: 'docs/a.md', machineId: null });
+    expect(fileOfTab('file:@x:y.md')).toEqual({ path: '@x:y.md', machineId: null });
+  });
+
+  it('a stored tab bar with a machine-bound file survives pruning and reload', () => {
+    const f = fileTabId('~/r.md', 'm1');
+    expect(pruneEditorTabs(s(['t1', f], f), new Set(['t1']))).toEqual(s(['t1', f], f));
   });
 
   it('previews and pins a file like a terminal', () => {
