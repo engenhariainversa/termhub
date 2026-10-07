@@ -10,6 +10,8 @@ import { buildAuthorizationUrl, exchangeCode, isGoogleEnabled } from './google.j
 import { normalizeNickname } from '../public/nickname.js';
 import { CSRF_COOKIE, OAUTH_COOKIE, SESSION_COOKIE } from './tokens.js';
 import { msg, requestLocale, tk } from '../i18n/index.js';
+import { audit } from './audit.js';
+import type { LoginResult } from './service.js';
 
 const loginSchema = z.object({
   email: z.string().email().max(254),
@@ -65,6 +67,15 @@ const timeZoneBodySchema = z.object({
 
 /** null = automatic (the browser's language; pt-BR for e-mails and push). */
 const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en', 'es']).nullable() });
+
+/**
+ * Whether a failed sign-in goes to the security trail: every wrong password or code does, and the one
+ * that set a lock; the refusals while locked do not (one row per locked-out request would let anyone
+ * fill the table).
+ */
+function trailsFailure(result: Exclude<LoginResult, { ok: true }>): boolean {
+  return result.reason === 'invalid' || !!result.justLocked;
+}
 
 export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: { onNicknameClaimed?: (user: User) => void } = {}) {
   /** Public user + role summary + flat permission list: what the client needs to gate its UI. */
@@ -144,16 +155,19 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     const base = { path: '/', sameSite: 'lax' as const, secure: config.auth.cookieSecure, httpOnly: true };
     if (!user_id || user_id === request.user.id) {
       reply.clearCookie(VIEW_AS_COOKIE, { path: '/' });
+      if (request.scope?.viewAs.kind !== 'self') await audit(ctx.repos, request, 'auth.view_as_end');
       return { view_as: null };
     }
     if (user_id === VIEW_AS_ALL) {
       reply.setCookie(VIEW_AS_COOKIE, VIEW_AS_ALL, base);
+      await audit(ctx.repos, request, 'auth.view_as', { target: { type: 'user', id: VIEW_AS_ALL, label: 'all' } });
       return { view_as: 'all' as const };
     }
     const target = await ctx.repos.users.findById(user_id);
     if (!target) throw badRequest('Usuário inexistente');
     reply.setCookie(VIEW_AS_COOKIE, target.id, base);
     request.log.info({ adminId: request.user.id, viewAs: target.id }, 'view-as set');
+    await audit(ctx.repos, request, 'auth.view_as', { target: { type: 'user', id: target.id, label: target.email } });
     return { view_as: { id: target.id, name: target.name, email: target.email, avatar_url: target.avatar_url } };
   });
 
@@ -161,6 +175,9 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     if (!config.auth.modes.has('app')) throw badRequest('Login por senha desativado neste modo');
     const body = loginSchema.parse(request.body);
     const result = await service.loginWithPassword(body.email, body.password, request.ip);
+    if (!result.ok && trailsFailure(result)) {
+      await audit(ctx.repos, request, 'auth.login_failed', { actor: null, target: { type: 'email', label: body.email.trim().toLowerCase() }, meta: { method: 'password', reason: result.reason } });
+    }
     if (!result.ok) {
       if (result.reason === 'locked') {
         reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));
@@ -170,6 +187,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     }
     const { token, csrf, expiresAt } = await service.createSession(result.user.id);
     setSessionCookies(reply, token, csrf, expiresAt);
+    await audit(ctx.repos, request, 'auth.login', { actor: result.user, meta: { method: 'password' } });
     return { user: await withRole(result.user) };
   });
 
@@ -192,6 +210,9 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     if (!config.auth.modes.has('app')) throw badRequest('Login por e-mail desativado neste modo');
     const body = verifyCodeSchema.parse(request.body);
     const result = await service.verifyLoginCode(body.email, body.code, request.ip);
+    if (!result.ok && trailsFailure(result)) {
+      await audit(ctx.repos, request, 'auth.login_failed', { actor: null, target: { type: 'email', label: body.email.trim().toLowerCase() }, meta: { method: 'email_code', reason: result.reason } });
+    }
     if (!result.ok) {
       if (result.reason === 'locked') {
         reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));
@@ -201,11 +222,13 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     }
     const { token, csrf, expiresAt } = await service.createSession(result.user.id);
     setSessionCookies(reply, token, csrf, expiresAt);
+    await audit(ctx.repos, request, 'auth.login', { actor: result.user, meta: { method: 'email_code' } });
     return { user: await withRole(result.user) };
   });
 
   app.post('/logout', { config: { allowPendingDeletion: true } }, async (request, reply) => {
     const token = request.cookies[SESSION_COOKIE];
+    if (request.user) await audit(ctx.repos, request, 'auth.logout');
     if (token) await service.destroySession(token);
     clearSessionCookies(reply);
     return { ok: true };
@@ -250,10 +273,14 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     }
 
     const user = await service.loginWithGoogle(profile);
-    if (!user) return fail('email_not_allowed');
+    if (!user) {
+      await audit(ctx.repos, request, 'auth.login_failed', { actor: null, target: { type: 'email', label: profile.email.toLowerCase() }, meta: { method: 'google', reason: 'not_allowed' } });
+      return fail('email_not_allowed');
+    }
 
     const { token, csrf, expiresAt } = await service.createSession(user.id);
     setSessionCookies(reply, token, csrf, expiresAt);
+    await audit(ctx.repos, request, 'auth.login', { actor: user, meta: { method: 'google' } });
     return reply.redirect('/', 302);
   });
 }

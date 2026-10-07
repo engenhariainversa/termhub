@@ -27,6 +27,7 @@ import { availabilityOf, readPage as defaultReadPage, type AgentView, type Page,
 import { tabSummaryOf } from '../tab-chat/view.js';
 import { saveFileOnMachine } from '../terminal/paste-file.js';
 import { tk } from '../i18n/index.js';
+import { audit } from '../auth/audit.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
@@ -159,6 +160,7 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     const { tab } = await scoped(repos, request).tab(id);
     await control(() => sendInput(ctxOf(request), { tab_id: tab.id, text }, { level: 'person_typed', userId: request.scope.user.id, surface: deps.surface ?? 'app' }));
     request.log.info({ tabId: tab.id, textLen: text.length }, 'tab chat: message sent');
+    await audit(repos, request, 'terminal.input', { target: { type: 'tab', id: tab.id, label: tab.name }, meta: { machine_id: tab.machine_id, chars: text.length, surface: deps.surface ?? 'app' } });
     deps.hub.poke(tab.id);
     return { sent: true as const };
   });
