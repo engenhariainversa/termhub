@@ -191,6 +191,11 @@ escalations. The daily summary is posted at `summary_hour` and lists what merged
 budgets are set, what it cost. With no review column, this plus the PRs is the review: read the summary,
 open any PR you want a second look at.
 
+A PR belongs to the automatic card whose run worked on its head branch. Other cards it cites in its title
+or body are only references (TER-1004): the merge does not move them to done, and deploys and releases are
+reported on the PR's own card. A cited manual card that is not done yet holds the merge for a person
+(`merge_person_card` in the queue and, once the PR is green, an escalation once per head); a done one does not.
+
 ## 8. Approving a merge above the level
 
 When a PR needs more than the project's level (for example a `release_paths` change at `deploy`, or any PR
@@ -217,6 +222,7 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 | `reported_blocked` | The agent said it is stuck | Read its report, unblock or take over |
 | `ci_cap` | CI still red after the fix attempts | Open the PR, fix it, push; the merge follows when green |
 | `conflict_cap` | Conflict after the fix attempts | Resolve it; the merge follows when CI is green |
+| `merge_person_card` | The PR is green but also cites a manual card that is not done (refs in `cards`) | Merge it by hand, or remove the citation from the PR text (or finish that card); the next pass merges it |
 | `deploy_failed` | The deploy failed after a merge; the project is paused | Section 10, then "Retomar automático" |
 | `deploy_failed_not_paused` | Same, and the pause could not be applied | Pause the project yourself first, then section 10 |
 | `release_failed` | A release workflow failed after a merge; nothing is paused | Section 10 |
