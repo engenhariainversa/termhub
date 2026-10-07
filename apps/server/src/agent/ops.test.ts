@@ -3,9 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn(), spawn: vi.fn() }));
 
-import { claudeAdapter } from '../ai/claude.js';
-import { CredentialError, readCredential } from '../ai/credentials.js';
-import type { Machine } from '../db/repositories/types.js';
+import { getAccountUsage } from '../ai/index.js';
+import type { AiAccount, Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { collectHardware } from '../system/hardware.js';
 import { killTmuxSession, listTmuxSessions, runOnMachine } from '../terminal/machine-exec.js';
@@ -13,7 +12,7 @@ import { browseMachine, ensureDirectory, makeDirectory } from '../terminal/machi
 import { saveFileOnMachine } from '../terminal/paste-file.js';
 import type { AgentConnection } from './connection.js';
 import { AgentClosedError, AgentRpcError, AgentTimeoutError } from './connection.js';
-import { toHttpError } from './errors.js';
+import { AI_USAGE_MIN_AGENT_VERSION, toHttpError } from './errors.js';
 import { agents, AgentOfflineError } from './registry.js';
 import { captureScreen, captureStyledScreen } from './screen.js';
 
@@ -194,47 +193,62 @@ describe('agent machine operations use named RPCs', () => {
     expect(execFile).not.toHaveBeenCalled();
   });
 
-  it('readCredential calls ai.credential and parses the result via the adapter', async () => {
+  // TER-735: the agent answers usage numbers (`ai.usage`); the server never asks it for the credential.
+  const usageAccount = (id: string) => ({ id, provider: 'claude', label: 'x', machine_id: 'm1', config_dir: null }) as unknown as AiAccount;
+  const usageReady = (conn: AgentConnection) => {
+    (conn.hello as { agent_version: string }).agent_version = AI_USAGE_MIN_AGENT_VERSION;
+    return conn;
+  };
+
+  it('getAccountUsage calls ai.usage on the agent and nothing else (never the credential)', async () => {
     const machine = agentMachine();
-    const credJson = JSON.stringify({ claudeAiOauth: { accessToken: 'tok123', expiresAt: 999, subscriptionType: 'max' } });
-    const conn = attachFakeConn(machine.id, () => ({ stdout: credJson }));
-    const cred = await readCredential(machine, claudeAdapter, null, '.claude');
-    expect(cred.token).toBe('tok123');
-    expect(conn.rpc).toHaveBeenCalledWith('ai.credential', { provider: 'claude', config_dir: null }, undefined);
+    const answer = { ok: true, plan: 'max', windows: [{ key: 'five_hour', label: '5 horas', utilization: 12, resets_at: null }], error: null, hint: null };
+    const conn = usageReady(attachFakeConn(machine.id, () => answer));
+    const usage = await getAccountUsage(usageAccount('ops-usage-ok'), machine);
+    expect(usage).toMatchObject({ ok: true, plan: 'max', account_id: 'ops-usage-ok' });
+    expect(usage.windows[0].utilization).toBe(12);
+    expect(conn.rpc).toHaveBeenCalledWith('ai.usage', { provider: 'claude', config_dir: null }, undefined);
+    expect(vi.mocked(conn.rpc).mock.calls.map((c) => c[0])).toEqual(['ai.usage']);
     expect(execFile).not.toHaveBeenCalled();
   });
 
-  it('readCredential maps an offline agent to a CredentialError with the offline message', async () => {
-    const machine = agentMachine('offline-cred');
-    await expect(readCredential(machine, claudeAdapter, null, '.claude')).rejects.toBeInstanceOf(CredentialError);
-    await expect(readCredential(machine, claudeAdapter, null, '.claude')).rejects.toMatchObject({ message: 'Agente desconectado' });
+  it('getAccountUsage maps an offline agent to the offline message', async () => {
+    const machine = agentMachine('offline-usage');
+    const usage = await getAccountUsage(usageAccount('ops-usage-offline'), machine);
+    expect(usage).toMatchObject({ ok: false, error: 'Agente desconectado' });
     expect(execFile).not.toHaveBeenCalled();
   });
 
-  it('readCredential maps an agent RPC timeout to a CredentialError with the timeout message', async () => {
+  it('getAccountUsage maps an agent RPC timeout to the timeout message', async () => {
     const machine = agentMachine();
-    attachFakeConn(machine.id, () => {
-      throw new AgentTimeoutError('agent rpc timeout: ai.credential');
-    });
-    await expect(readCredential(machine, claudeAdapter, null, '.claude')).rejects.toBeInstanceOf(CredentialError);
-    await expect(readCredential(machine, claudeAdapter, null, '.claude')).rejects.toMatchObject({ message: 'Machine did not answer in time' });
+    usageReady(
+      attachFakeConn(machine.id, () => {
+        throw new AgentTimeoutError('agent rpc timeout: ai.usage');
+      }),
+    );
+    const usage = await getAccountUsage(usageAccount('ops-usage-timeout'), machine);
+    expect(usage).toMatchObject({ ok: false, error: 'Machine did not answer in time' });
   });
 
-  it('readCredential never forwards the raw AgentRpcError message, only the fixed per-code mapping', async () => {
+  it('getAccountUsage never forwards the raw AgentRpcError message, only the fixed per-code mapping', async () => {
     const machine = agentMachine();
     const leaky = 'no access to /Users/someone/.claude/.credentials.json';
-    attachFakeConn(machine.id, () => {
-      throw new AgentRpcError({ code: 'eperm', message: leaky });
-    });
-    let caught: unknown;
-    try {
-      await readCredential(machine, claudeAdapter, null, '.claude');
-    } catch (err) {
-      caught = err;
-    }
-    expect(caught).toBeInstanceOf(CredentialError);
-    expect((caught as CredentialError).message).not.toBe(leaky);
-    expect((caught as CredentialError).message).toBe('Sem acesso à pasta na máquina (Acesso Total ao Disco?)');
+    usageReady(
+      attachFakeConn(machine.id, () => {
+        throw new AgentRpcError({ code: 'eperm', message: leaky });
+      }),
+    );
+    const usage = await getAccountUsage(usageAccount('ops-usage-rpc-error'), machine);
+    expect(usage.error).not.toBe(leaky);
+    expect(usage.error).toBe('Sem acesso à pasta na máquina (Acesso Total ao Disco?)');
+  });
+
+  it('getAccountUsage does not query an agent older than ai.usage', async () => {
+    const machine = agentMachine();
+    const conn = attachFakeConn(machine.id, () => ({ stdout: 'should not be asked' }));
+    const usage = await getAccountUsage(usageAccount('ops-usage-outdated'), machine);
+    expect(usage).toMatchObject({ ok: false, reason: 'agent_outdated' });
+    expect(conn.rpc).not.toHaveBeenCalled();
   });
 
   it('saveFileOnMachine calls file.paste with base64 data', async () => {

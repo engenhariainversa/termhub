@@ -97,7 +97,7 @@ beforeEach(() => {
 
 describe('get_machine_hooks', () => {
   it('answers each CLI of an agent machine, with the Codex trust and a note when the person still has to trust them', async () => {
-    online.set('m1', '0.20.0');
+    online.set('m1', '0.21.0');
     hooks.set('m1', '2026-10-01T00:00:00.000Z');
     rpc.mockResolvedValueOnce(status({ claude: 'current', codex: 'outdated', trusted: 'some', script: true }));
     const r = await getMachineHooks(ctxFor(), { machine_id: 'm1' });
@@ -114,7 +114,7 @@ describe('get_machine_hooks', () => {
   });
 
   it('says so when no agent CLI is on the machine', async () => {
-    online.set('m1', '0.20.0');
+    online.set('m1', '0.21.0');
     rpc.mockResolvedValueOnce(status({ claude: null, codex: null }));
     const r = await getMachineHooks(ctxFor(), { machine_id: 'm1' });
     expect(r.installed_at).toBeNull();
@@ -126,16 +126,16 @@ describe('get_machine_hooks', () => {
     expect(err.code).toBe('AGENT_OFFLINE');
   });
 
-  it('tells an agent older than 0.20.0 to update, naming the version, without calling it', async () => {
-    online.set('m1', '0.19.0');
+  it('tells an agent older than 0.21.0 to update, naming the version, without calling it', async () => {
+    online.set('m1', '0.20.0');
     const err = await rejection(getMachineHooks(ctxFor(), { machine_id: 'm1' }));
     expect(err.code).toBe('AGENT_OUTDATED');
-    expect(err.message).toContain('0.20.0');
+    expect(err.message).toContain('0.21.0');
     expect(rpc).not.toHaveBeenCalled();
   });
 
   it("never reads another person's machine", async () => {
-    online.set('mx', '0.20.0');
+    online.set('mx', '0.21.0');
     const err = await rejection(getMachineHooks(ctxFor(), { machine_id: 'mx' }));
     expect(err.message).not.toContain('de outra pessoa');
     expect(rpc).not.toHaveBeenCalled();
@@ -144,7 +144,7 @@ describe('get_machine_hooks', () => {
 
 describe('install_machine_hooks', () => {
   it('never runs on the concierge token without the person\'s card', async () => {
-    online.set('m1', '0.20.0');
+    online.set('m1', '0.21.0');
     const err = await rejection(installMachineHooks(ctxFor({ gated: true }), { machine_id: 'm1' }));
     expect(err.code).toBe('CONFIRMATION_REQUIRED');
     expect(rpc).not.toHaveBeenCalled();
@@ -152,7 +152,7 @@ describe('install_machine_hooks', () => {
   });
 
   it('installs through the agent once approved, records a fresh token hash, and answers what changed', async () => {
-    online.set('m1', '0.20.0');
+    online.set('m1', '0.21.0');
     rpc.mockImplementation(async (method: string) => {
       if (method === 'hooks.install') return { home: '/Users/p', claude: 'installed', codex: 'installed', cursor: 'skipped', claude_dirs: ['~/.claude', '~/.claude_work'] };
       return upserts.length ? status({ claude: 'current', codex: 'current', trusted: 'none', script: true }) : status({ claude: 'missing', codex: 'outdated', trusted: 'all' });
@@ -175,7 +175,7 @@ describe('install_machine_hooks', () => {
   });
 
   it('refuses, writing nothing, when a CLI the person named is not on the machine', async () => {
-    online.set('m1', '0.20.0');
+    online.set('m1', '0.21.0');
     rpc.mockResolvedValue(status({ claude: 'current', codex: null, cursor: null }));
     const err = await rejection(installMachineHooks(ctxFor(), { machine_id: 'm1', tools: ['claude', 'cursor'] }));
     expect(err.code).toBe('CLI_NOT_FOUND');
@@ -190,17 +190,17 @@ describe('install_machine_hooks', () => {
     expect(upserts).toEqual([]);
   });
 
-  it('tells an agent older than 0.20.0 to update before writing anything', async () => {
+  it('tells an agent older than 0.21.0 to update before writing anything', async () => {
     online.set('m1', '0.12.3');
     const err = await rejection(installMachineHooks(ctxFor(), { machine_id: 'm1' }));
     expect(err.code).toBe('AGENT_OUTDATED');
-    expect(err.message).toContain('0.20.0');
+    expect(err.message).toContain('0.21.0');
     expect(rpc).not.toHaveBeenCalled();
     expect(upserts).toEqual([]);
   });
 
   it('passes on what the machine reported when the install fails there', async () => {
-    online.set('m1', '0.20.0');
+    online.set('m1', '0.21.0');
     const { AgentRpcError } = await import('../agent/connection.js');
     rpc.mockImplementation(async (method: string) => {
       if (method === 'hooks.install') throw new AgentRpcError({ code: 'failed', message: '~/.claude/settings.json não é JSON válido' });

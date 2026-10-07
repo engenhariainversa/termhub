@@ -1,4 +1,4 @@
-import { httpJson } from '../ai/credentials.js';
+import { httpJson } from '../lib/http-json.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError } from '../lib/errors.js';
 import { AgentClosedError, AgentRpcError } from './connection.js';

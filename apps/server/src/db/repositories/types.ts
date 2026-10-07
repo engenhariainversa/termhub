@@ -94,6 +94,8 @@ export interface Machine {
   agent_auto_update: boolean;
   /** swap a tab's Claude to another account of this machine by itself on a usage limit (opt-in) */
   claude_auto_swap: boolean;
+  /** TER-735: false = termhub never reads the AI CLI credential on this machine (no usage bars) */
+  ai_usage_query: boolean;
   /** R6: false = the dispatcher never places automatic runs here */
   automation_allowed: boolean;
   /** the user's own computer: the web app shows it only in the browser that added it */
@@ -330,6 +332,7 @@ export const mapMachine = (m: PrismaMachine & { owner?: { name: string } | null 
   agent_last_seen_at: m.agentLastSeenAt?.toISOString() ?? null,
   agent_auto_update: m.agentAutoUpdate,
   claude_auto_swap: m.claudeAutoSwap,
+  ai_usage_query: m.aiUsageQuery,
   automation_allowed: m.automationAllowed,
   is_local: m.isLocal,
   owner_id: m.ownerId,

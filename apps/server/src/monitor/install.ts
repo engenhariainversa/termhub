@@ -42,7 +42,7 @@ export const HOOKS_MIN_AGENT_VERSION = '0.1.4';
 /** First agent release that also hooks the accounts' own Claude config dirs (`claude_dirs`). */
 export const HOOKS_CONFIG_DIRS_MIN_AGENT_VERSION = '0.1.5';
 /** First agent release that answers `hooks.status` (TER-1023). */
-export const HOOKS_STATUS_MIN_AGENT_VERSION = '0.20.0';
+export const HOOKS_STATUS_MIN_AGENT_VERSION = '0.21.0';
 
 export interface HookInstallReport {
   home: string;
@@ -340,7 +340,7 @@ export async function uninstallHooks(machine: Machine, accountDirs: string[] = [
 
 /**
  * What the hooks look like on the machine (TER-1023), never a file's content: the agent answers
- * `hooks.status` itself (agent 0.20.0); ssh/local machines are read in the same round trip install uses.
+ * `hooks.status` itself (agent 0.21.0); ssh/local machines are read in the same round trip install uses.
  */
 export async function readHooksStatus(machine: Machine, accountDirs: string[] = []): Promise<HooksStatus> {
   const extra = extraDirs(accountDirs);
