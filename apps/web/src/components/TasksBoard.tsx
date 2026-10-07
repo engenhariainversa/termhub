@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import {
   applyMove,
-  cardPath,
+  CARD_PARAM,
+  cardForRef,
   cardsIn,
   columnCategoryLabel,
   dropPosition,
@@ -33,8 +34,14 @@ const CATEGORY_DOT: Record<ColumnCategory, string> = { todo: 'bg-fg-dim', doing:
 
 interface Props {
   projectId: string;
-  /** `/project/:ref`: the card whose editor is open — the URL owns it */
-  openTaskId?: string;
+}
+
+/**
+ * Set on the history entry that opening a card pushed: closing it then goes back, so the browser's
+ * back button and the editor's close land on the same page. A pasted `?card=` link has no such entry.
+ */
+interface CardOpenState {
+  boardCard?: boolean;
 }
 
 interface DragState {
@@ -44,12 +51,13 @@ interface DragState {
 }
 
 /** The project's Board (spec §7): its own columns, a type/epic filter, cards with type, ref and epic. */
-export function TasksBoard({ projectId, openTaskId }: Props) {
+export function TasksBoard({ projectId }: Props) {
   const { t } = useTranslation();
   const { projects, machinesOf, setOpenTasks } = useData();
   const { openTabs } = useMonitor();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const project = projects.find((p) => p.id === projectId);
   const projectMachines = project ? machinesOf(project) : [];
   const [tasks, setTasks] = useState<Task[] | null>(null);
@@ -92,11 +100,32 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
     .filter((t) => t.project_id === projectId && t.kind === 'terminal')
     .map((t) => ({ id: t.id, name: t.name, machine_name: projectMachines.find((m) => m.id === t.machine_id)?.name ?? '—' }));
   const epicTitle = useMemo(() => new Map(epics.map((e) => [e.id, e.title])), [epics]);
-  const editing = openTaskId ? ((tasks ?? []).find((t) => t.id === openTaskId) ?? null) : null;
-  /** The section a card was opened from; the card URL keeps it in the history state (a pasted link has none). */
-  const from = (location.state as { from?: string } | null)?.from ?? `/projects/${projectId}/tasks`;
-  const openCard = (task: Task) => navigate(cardPath(task.ref), { state: { from: location.pathname.startsWith('/project/') ? from : location.pathname } });
-  const closeCard = () => navigate(from);
+  // The open card lives in the board's own URL (`?card=TER-12`, TER-976): opening or closing it only
+  // changes the query, so the route, the board and its data stay mounted — no reload, no flash.
+  const openRef = searchParams.get(CARD_PARAM);
+  const editing = openRef && tasks ? cardForRef(tasks, openRef) : null;
+  const openTaskId = editing?.id ?? null;
+  const openCard = (task: Task) =>
+    setSearchParams(
+      (p) => {
+        p.set(CARD_PARAM, task.ref);
+        return p;
+      },
+      { state: { boardCard: true } satisfies CardOpenState },
+    );
+  const closeCard = () => {
+    if ((location.state as CardOpenState | null)?.boardCard) {
+      navigate(-1);
+      return;
+    }
+    setSearchParams(
+      (p) => {
+        p.delete(CARD_PARAM);
+        return p;
+      },
+      { replace: true },
+    );
+  };
 
   const changeFilter = (next: BoardFilter) => {
     setFilter(next);

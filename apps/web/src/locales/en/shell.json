@@ -111,6 +111,7 @@
   "Não foi possível carregar esta página.": "Could not load this page.",
   "Não foi possível salvar o idioma.": "Could not save the language.",
   "não liberado": "not allowed",
+  "O chat do projeto sabe em quais grupos ele está e quais projetos estão junto. Favoritos não conta como grupo.": "The project's chat knows which groups it is in and which projects are with it. Favorites does not count as a group.",
   "O que cada role pode fazer em cada recurso. Roles de administrador não aparecem aqui: têm acesso total.": "What each role can do with each resource. Administrator roles are not listed: they have full access.",
   "O usuário é criado com a role escolhida, o e-mail é liberado no Cloudflare Access (quando configurado) e recebe um convite. Ele entra com Google ou com o código enviado por e-mail.": "The user is created with the chosen role, the email is allowed in Cloudflare Access (when configured) and gets an invite. They sign in with Google or with the code sent by email.",
   "Ocultar arquivados": "Hide archived",
@@ -189,5 +190,6 @@
   "← entrar com código por e-mail": "← sign in with an email code",
   "← trocar e-mail": "← change email",
   "← Voltar": "← Back",
-  "✓ liberado": "✓ allowed"
+  "✓ liberado": "✓ allowed",
+  "Auditoria": "Audit log"
 }

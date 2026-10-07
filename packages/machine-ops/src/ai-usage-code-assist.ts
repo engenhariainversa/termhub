@@ -1,12 +1,25 @@
-import type { AiCredential, AiUsageResult, AiUsageWindow } from './types.js';
-import { httpJson, isObj, num, retryAfterMs, str, toIso } from './credentials.js';
+import { type AiCredential, type AiUsageResult, type AiUsageWindow, type UsageContext, type UsageHttp, clampPercent as clamp, isObj, num, parseCredentialJson, str, toIso } from './ai-usage-shared.js';
 
 /**
  * Google Code Assist usage (shared by the Gemini CLI and Antigravity CLI adapters,
  * which both authenticate the same Google account against the same endpoints).
  * Best effort: undocumented.
  */
-const CODE_ASSIST = 'https://cloudcode-pa.googleapis.com/v1internal';
+export const CODE_ASSIST_URL = 'https://cloudcode-pa.googleapis.com/v1internal';
+
+/**
+ * Gemini (Google account: free tier / Google AI Pro / Ultra via Gemini Code Assist).
+ * Credential: Gemini CLI login — ~/.gemini/oauth_creds.json. Quota comes from the
+ * Code Assist endpoints the CLI itself uses for /stats.
+ */
+export const GEMINI_LOGIN_HINT = 'Run `gemini` on that machine and sign in with Google (API-key logins have no quota to show).';
+
+/**
+ * Antigravity CLI (`agy`) — Google's successor to the consumer Gemini CLI.
+ * Credential: ~/.gemini/antigravity-cli/antigravity-oauth-token. It authenticates
+ * the same Google account against the same Code Assist endpoints as Gemini.
+ */
+export const ANTIGRAVITY_LOGIN_HINT = 'Run `agy` on that machine and sign in with Google (API-key logins have no quota to show).';
 
 export interface CodeAssistOptions {
   expired: string;
@@ -20,14 +33,41 @@ export interface CodeAssistOptions {
   ide: 'gemini' | 'antigravity';
 }
 
+export const GEMINI_OPTIONS: CodeAssistOptions = {
+  expired: 'Run `gemini` on that machine once; it refreshes the token on use.',
+  refresh: 'Run `gemini` on that machine once to refresh the login.',
+  ide: 'gemini',
+};
+
+export const ANTIGRAVITY_OPTIONS: CodeAssistOptions = {
+  expired: 'Run `agy` on that machine once; it refreshes the token on use.',
+  refresh: 'Run `agy` on that machine once to refresh the login.',
+  ide: 'antigravity',
+};
+
 const ANTIGRAVITY_HEADERS = {
   'user-agent': 'Antigravity/1.0.0',
   'client-metadata': JSON.stringify({ ideType: 'ANTIGRAVITY', platform: 'MACOS', pluginType: 'GEMINI' }),
 };
 
-const clamp = (n: number) => Math.max(0, Math.min(100, n));
-
 const SUMMARY_WINDOW_LABELS: Record<string, string> = { '5h': '5 horas', weekly: '7 dias', daily: '24 horas' };
+
+export function parseGeminiCredential(stdout: string): AiCredential {
+  const json = parseCredentialJson(stdout, 'Gemini CLI');
+  const token = isObj(json) ? str(json.access_token) : null;
+  if (!token) throw new Error('Gemini CLI credential has no access token');
+  return { token, extra: {}, expires_at: isObj(json) ? num(json.expiry_date) : null, plan: null };
+}
+
+export function parseAntigravityCredential(stdout: string): AiCredential {
+  const json = parseCredentialJson(stdout, 'Antigravity CLI');
+  const tokenObj = isObj(json) && isObj(json.token) ? json.token : null;
+  const token = tokenObj ? str(tokenObj.access_token) : null;
+  if (!token) throw new Error('Antigravity CLI credential has no access token');
+  const expiry = tokenObj ? str(tokenObj.expiry) : null;
+  const parsed = expiry ? Date.parse(expiry) : NaN;
+  return { token, extra: {}, expires_at: Number.isNaN(parsed) ? null : parsed, plan: null };
+}
 
 /** retrieveUserQuotaSummary: { groups: [{ displayName?, buckets: [{ bucketId, displayName, window, resetTime, remainingFraction }] }] } */
 export function parseQuotaSummary(body: Record<string, unknown>): AiUsageWindow[] {
@@ -65,23 +105,23 @@ export function parseQuotaBuckets(body: Record<string, unknown>): AiUsageWindow[
   return windows;
 }
 
-export async function fetchCodeAssistUsage(cred: AiCredential, opts: CodeAssistOptions): Promise<AiUsageResult> {
+/** Up to four sequential calls (loadCodeAssist, summary, two quota variants). */
+export async function queryCodeAssistUsage(ctx: UsageContext, http: UsageHttp, opts: CodeAssistOptions): Promise<AiUsageResult> {
   const base: AiUsageResult = { ok: false, plan: null, windows: [], error: null, hint: null };
-  if (cred.expires_at && cred.expires_at < Date.now()) {
+  if (ctx.expires_at && ctx.expires_at < Date.now()) {
     return { ...base, error: 'Google token expired', hint: opts.expired };
   }
   const headers: Record<string, string> = {
-    authorization: `Bearer ${cred.token}`,
     'content-type': 'application/json',
     accept: 'application/json',
     ...(opts.ide === 'antigravity' ? ANTIGRAVITY_HEADERS : {}),
   };
-  const post = (endpoint: string, body: unknown) => httpJson(`${CODE_ASSIST}:${endpoint}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  const post = (endpoint: string, body: unknown) => http({ url: `${CODE_ASSIST_URL}:${endpoint}`, method: 'POST', headers, body: JSON.stringify(body) });
 
   // 1) which Code Assist project / tier this account has
   const load = await post('loadCodeAssist', { metadata: { ideType: opts.ide === 'antigravity' ? 'ANTIGRAVITY' : 'IDE_UNSPECIFIED', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' } });
   if (load.status === 401 || load.status === 403) return { ...base, error: `Google rejected the token (${load.status})`, hint: opts.refresh };
-  if (load.status === 429) return { ...base, error: 'Google rate-limited the usage query', hint: 'Showing the last reading; retrying in a few minutes.', rate_limited: true, retry_after_ms: retryAfterMs(load.headers) };
+  if (load.status === 429) return { ...base, error: 'Google rate-limited the usage query', hint: 'Showing the last reading; retrying in a few minutes.', rate_limited: true, retry_after_ms: load.retryAfterMs };
   if (load.status >= 400 || !isObj(load.body)) return { ...base, error: `Unexpected response from Google (${load.status})`, hint: load.text.slice(0, 200) || null };
   const tier = isObj(load.body.currentTier) ? (str(load.body.currentTier.name) ?? str(load.body.currentTier.id)) : null;
   const project = str(load.body.cloudaicompanionProject) ?? (isObj(load.body.cloudaicompanionProject) ? str(load.body.cloudaicompanionProject.id) : null);
