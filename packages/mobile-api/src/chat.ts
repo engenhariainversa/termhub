@@ -184,7 +184,8 @@ export const hostOptionsResponse = z.object({
  * options, one of picked/typed); this is the shape the app sends. No PIN (spec 2026-09-25 §2). */
 export const tabQuestionAnswerBody = z.union([
   z.object({ answers: z.array(z.object({ selected: z.array(z.number().int().min(0).max(3)).max(4), text: z.string().max(2000).optional() })).min(1).max(4) }),
-  z.object({ allow: z.boolean(), text: z.string().max(2000).optional() }),
+  // `option` (TER-995): an option of the dialog on screen, by number and its text as read with the excerpt.
+  z.object({ allow: z.boolean(), text: z.string().max(2000).optional(), option: z.object({ number: z.number().int().min(1).max(9), label: z.string().min(1).max(2000) }).optional() }),
 ]);
 /** `POST chat/tab-questions/:id/auto-answer/cancel` (no body): "Cancelar" on a countdown (spec 2026-09-26
  * concierge memory §6). Answers the card, `auto_answer.status: 'cancelled'`, the proposed answer kept as
@@ -192,7 +193,19 @@ export const tabQuestionAnswerBody = z.union([
  * agora" is the ordinary answer route, which cancels the countdown itself. */
 export const tabQuestionAutoAnswerCancelResponse = z.object({ tab_question: tabQuestionSchema });
 /** `GET chat/tab-questions/:id/screen`: the last lines of the tab, live, for a permission card. */
-export const tabQuestionScreenResponse = z.object({ text: z.string() });
+/** An option of the permission dialog on screen (TER-995): one button each on the card. */
+export const permissionOptionSchema = z.object({
+  number: z.number().int(),
+  label: z.string(),
+  /** `label` shortened for a button. */
+  summary: z.string(),
+  /** False for the option that rejects ("No…"). */
+  allow: z.boolean(),
+  /** "Don't ask again", "always allow", "auto mode": shown in highlight. */
+  highlight: z.boolean(),
+});
+/** `options` is absent from an older server, and empty when the dialog on screen is not this card's. */
+export const tabQuestionScreenResponse = z.object({ text: z.string(), options: z.array(permissionOptionSchema).optional() });
 
 /** `POST chat/tab-suggestions/:id/send`: the text to type, as edited. The server is the judge of the rest
  * (one line, no control characters, no leading "!" or "/"). No PIN (spec 2026-09-25 tab suggestions §2). */

@@ -337,8 +337,16 @@ function createTabQuestion(state: MockState, now: number, conversationId: string
 
 /** What `GET …/screen` shows: the card as the tab would draw it. */
 function tabQuestionScreenText(q: MockTabQuestion): string {
-  return q.kind === 'choice' ? `${q.payload.questions[0]!.question}\n❯ 1. Postgres\n  2. SQLite\n  3. Type something.` : 'Bash command\n  npm test\n Do you want to proceed?\n ❯ 1. Yes\n   2. No';
+  return q.kind === 'choice'
+    ? `${q.payload.questions[0]!.question}\n❯ 1. Postgres\n  2. SQLite\n  3. Type something.`
+    : `Bash command\n  npm test\n Do you want to proceed?\n${MOCK_PERMISSION_OPTIONS.map((o) => `${o.number === 1 ? ' ❯' : '  '} ${o.number}. ${o.label}`).join('\n')}`;
 }
+/** The options the server reads off that screen (TER-995). */
+const MOCK_PERMISSION_OPTIONS = [
+  { number: 1, label: 'Yes', summary: 'Yes', allow: true, highlight: false },
+  { number: 2, label: "Yes, and don't ask again for npm test commands", summary: "Yes, and don't ask again for npm test commands", allow: true, highlight: true },
+  { number: 3, label: 'No', summary: 'No', allow: false, highlight: false },
+];
 
 // --- tab suggestions (spec 2026-09-25 tab suggestions §6) -------------------------------------------
 
@@ -1173,7 +1181,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const question = state.tabQuestions.find((q) => q.id === ctx.params.id);
     if (!question) throw new WireError(404, 'NOT_FOUND', 'Pergunta não encontrada');
     if (question.status !== 'open') throw new WireError(409, 'TAB_PROMPT_CHANGED', 'A aba já não mostra esta pergunta: nada foi enviado.');
-    return { status: 200, body: { text: tabQuestionScreenText(question) } };
+    return { status: 200, body: { text: tabQuestionScreenText(question), options: question.kind === 'permission' ? MOCK_PERMISSION_OPTIONS : [] } };
   });
 
   /** Sends a tab's suggestion (no PIN): 404 unknown, 409 once it is not open. */

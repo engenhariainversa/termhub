@@ -1,6 +1,6 @@
 import { useTranslation } from '../../i18n';
 import { memo, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import type { TabQuestion, TabQuestionAnswer, TabQuestionChoice, TabQuestionPermission, TabQuestionSuggestionItem } from '../../lib/types';
+import type { PermissionOption, TabQuestion, TabQuestionAnswer, TabQuestionChoice, TabQuestionPermission, TabQuestionScreen, TabQuestionSuggestionItem } from '../../lib/types';
 import { AutoDecisionBadge } from './AutoDecisionBadge';
 import { ChatReplyButton } from './ChatReplyButton';
 import { answerSummary, autoAnswerFailureText, autoAnswerReason, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence, tabLabel } from './tab-question-text';
@@ -13,8 +13,8 @@ export interface TabQuestionCardProps {
   error?: string | null;
   /** Takes the question's id, so the panel can pass one stable callback to every card. */
   onAnswer: (id: string, body: TabQuestionAnswer) => void;
-  /** The tab's live excerpt, for a permission card while it is open. Stable across renders. */
-  loadScreen?: (id: string) => Promise<string>;
+  /** The tab's live excerpt and its dialog's options, for a permission card while it is open. Stable across renders. */
+  loadScreen?: (id: string) => Promise<TabQuestionScreen>;
   /** "Esquecer esta decisão" on a suggestion line (chat decision memory spec §5.1): forgets the past
    *  decision it came from, then the card clears that question's pre-selection. */
   onForget?: (decisionId: string) => Promise<void>;
@@ -307,6 +307,9 @@ function PermissionBody({ question, answering, onAnswer, loadScreen }: TabQuesti
   const open = question.status === 'open';
   const codex = question.payload.agent === 'codex';
   const [screen, setScreen] = useState<string | null>(null);
+  // The dialog's own options (TER-995): one button each, so "don't ask again" or "auto mode" can be
+  // chosen from here. Empty until the screen is read, or when it shows no menu this card can trust.
+  const [options, setOptions] = useState<PermissionOption[]>([]);
   const [denying, setDenying] = useState(false);
   const [text, setText] = useState('');
   useEffect(() => {
@@ -314,8 +317,10 @@ function PermissionBody({ question, answering, onAnswer, loadScreen }: TabQuesti
     let alive = true;
     // A card whose tab moved on answers 409 here: it simply shows no excerpt.
     loadScreen(question.id).then(
-      (excerpt) => {
-        if (alive) setScreen(excerpt);
+      (read) => {
+        if (!alive) return;
+        setScreen(read.text);
+        setOptions(read.options ?? []);
       },
       () => {},
     );
@@ -340,6 +345,23 @@ function PermissionBody({ question, answering, onAnswer, loadScreen }: TabQuesti
       )}
       {open ? (
         <>
+          {options.length > 0 && (
+            <div role="group" aria-label={t('Opções da aba')} className="mt-2 flex flex-wrap gap-2">
+              {options.map((o) => (
+                <button
+                  key={o.number}
+                  type="button"
+                  title={o.label}
+                  className={o.highlight ? 'btn-primary' : o.allow ? 'btn-ghost' : 'btn-danger'}
+                  disabled={answering}
+                  onClick={() => onAnswer(question.id, { allow: o.allow, option: { number: o.number, label: o.label } })}
+                >
+                  {`${o.number}. ${o.summary}`}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* "Permitir" and "Negar" stay as shortcuts: the dialog's first option, and Escape (its last). */}
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" className="btn-primary" disabled={answering} onClick={() => onAnswer(question.id, { allow: true })}>
               {t('Permitir')}

@@ -532,7 +532,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   }, []);
   /** Stable, so the permission card's effect runs once per question. */
-  const loadTabQuestionScreen = useCallback(async (id: string) => (await api.tabQuestionScreen(id)).text, []);
+  const loadTabQuestionScreen = useCallback(async (id: string) => api.tabQuestionScreen(id), []);
 
   /** "Esquecer esta decisão" on a suggestion line: hard delete, 204 even if it is already gone — the
    *  card clears its own pre-selection regardless (see `TabQuestionCard`), so a failure here is not

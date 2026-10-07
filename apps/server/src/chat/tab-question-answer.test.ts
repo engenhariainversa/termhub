@@ -128,6 +128,40 @@ describe('answerTabQuestion', () => {
     expect(steps()).toEqual(['key:1']);
   });
 
+  it('an option of the dialog (TER-995): its digit, stored as the screen shows it', async () => {
+    const { ctx, tabQuestions } = ctxFor(permission());
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
+    const label = 'Yes, and switch to auto mode · auto mode handles these prompts for you';
+    // `allow` comes from the screen's option, whatever the request said.
+    await answerTabQuestion(ctx, 'q2', { allow: false, option: { number: 3, label } }, { log: log(), sleep: noSleep });
+    expect(steps()).toEqual(['key:3']);
+    expect(tabQuestions.claim).toHaveBeenCalledWith('q2', 'u1', { allow: true, option: { number: 3, label, summary: 'Yes, and switch to auto mode' } }, undefined, 'card');
+  });
+
+  it('an option whose text changed on screen: 409, nothing claimed nor typed, the card stays open', async () => {
+    const { ctx, tabQuestions } = ctxFor(permission());
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
+    await rejects(answerTabQuestion(ctx, 'q2', { allow: true, option: { number: 2, label: "Yes, and don't ask again for npm commands" } }, { log: log(), sleep: noSleep }), 409, 'TAB_OPTION_CHANGED');
+    await rejects(answerTabQuestion(ctx, 'q2', { allow: true, option: { number: 5, label: 'No' } }, { log: log(), sleep: noSleep }), 409, 'TAB_OPTION_CHANGED');
+    expect(tabQuestions.claim).not.toHaveBeenCalled();
+    expect(tabQuestions.closeOne).not.toHaveBeenCalled();
+    expect(steps()).toEqual([]);
+  });
+
+  it('an option and a text together are refused', async () => {
+    const { ctx } = ctxFor(permission());
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
+    await expect(answerTabQuestion(ctx, 'q2', { allow: false, text: 'x', option: { number: 4, label: 'No' } }, { log: log(), sleep: noSleep })).rejects.toThrow();
+    expect(steps()).toEqual([]);
+  });
+
+  it('a Codex option: the arrows from the cursor, then Enter', async () => {
+    const codexPerm = permission({ payload: { tool_name: 'Bash', agent: 'codex' } });
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: codexFx('permission-dialogs/codex-command.txt'), styled: false });
+    await answerTabQuestion(ctxFor(codexPerm).ctx, 'q2', { allow: true, option: { number: 2, label: "Yes, and don't ask again for commands that start with `npm test` (p)" } }, { log: log(), sleep: noSleep });
+    expect(steps()).toEqual(['key:Down', 'key:Enter']);
+  });
+
   it('a Codex approval: "y" on its own screen; a Claude screen for it is stale', async () => {
     const codexPerm = permission({ payload: { tool_name: 'Bash', agent: 'codex' } });
     readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: codexFx('permission-dialogs/codex-reason.txt'), styled: false });
@@ -538,6 +572,13 @@ describe('tabQuestionScreen', () => {
     readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: Array.from({ length: 30 }, (_, i) => `l${i}\n`).join('\n'), styled: false });
     const { text } = await tabQuestionScreen(ctx, 'q2');
     expect(text.split('\n')).toEqual(Array.from({ length: 20 }, (_, i) => `l${i + 10}`));
+  });
+  it('lists the dialog’s options while it is this card’s, none otherwise (TER-995)', async () => {
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
+    const { options } = await tabQuestionScreen(ctxFor(permission()).ctx, 'q2');
+    expect(options.map((o) => o.summary)).toEqual(['Yes', 'Yes, and always allow access to /home/dev/project from this project', 'Yes, and switch to auto mode', 'No']);
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.choice, styled: false });
+    expect((await tabQuestionScreen(ctxFor(permission()).ctx, 'q2')).options).toEqual([]);
   });
   it('the excerpt is the plain screen', async () => {
     const { ctx } = ctxFor(permission());
