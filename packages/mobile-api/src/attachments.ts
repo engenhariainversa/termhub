@@ -62,7 +62,7 @@ export const chatAttachment = z.object({
   bytes: z.number().int(),
   status: attachmentStatus,
   error_code: z.string().nullable(),
-  /** pages, duration_s, sheets, width, height, truncated — whatever the extractor learned */
+  /** pages, duration_s, sheets, width, height, truncated — whatever the extractor learned; `reason` on an unavailable transcription (TER-1035) */
   meta: z.record(z.unknown()).nullable(),
   created_at: z.string(),
 });

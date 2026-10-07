@@ -899,6 +899,22 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     return { status: 200, body: { attachment: attachmentView(findAttachment(state, ctx.params.id!)) } };
   });
 
+  /** "Tentar de novo" on an unavailable transcription (TER-1035): back to pending, then ready like an upload. */
+  router.route('POST', '/api/m/v1/chat/attachments/:id/retry', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const a = findAttachment(state, ctx.params.id!);
+    if (a.status !== 'failed' || a.error_code !== 'TRANSCRIPTION_UNAVAILABLE') throw new WireError(409, 'CONFLICT', 'Este anexo não pode ser processado de novo');
+    Object.assign(a, { status: 'pending', error_code: null, meta: null });
+    broadcast(state, attachmentEvent(a));
+    setTimeout(() => {
+      if (state.attachments.get(a.id) !== a) return;
+      a.status = 'ready';
+      a.meta = metaFor(a.kind);
+      broadcast(state, attachmentEvent(a));
+    }, ATTACHMENT_EXTRACT_MS);
+    return { status: 200, body: { attachment: attachmentView(a) } };
+  });
+
   // The download itself is not mocked: the phone shows images through `<Image>` against the real host and
   // never fetches a file through `fetch`.
 
