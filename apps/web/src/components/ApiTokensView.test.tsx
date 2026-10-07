@@ -1,19 +1,20 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiTokensView, mcpAddCommand, tokenStatus } from './ApiTokensView';
+import { ApiTokensView, eventPlace, mcpAddCommand, tokenStatus } from './ApiTokensView';
 import { ApiError } from '../lib/api';
-import type { ApiToken } from '../lib/types';
+import type { ApiToken, ApiTokenEvent } from '../lib/types';
 
 const listMock = vi.fn();
 const createMock = vi.fn();
 const revokeMock = vi.fn();
+const eventsMock = vi.fn();
 
 vi.mock('../lib/api', () => {
   class ApiError extends Error {}
   return {
     ApiError,
-    api: { apiTokens: { list: (...a: unknown[]) => listMock(...a), create: (...a: unknown[]) => createMock(...a), revoke: (...a: unknown[]) => revokeMock(...a) } },
+    api: { apiTokens: { list: (...a: unknown[]) => listMock(...a), create: (...a: unknown[]) => createMock(...a), revoke: (...a: unknown[]) => revokeMock(...a), events: (...a: unknown[]) => eventsMock(...a) } },
   };
 });
 
@@ -249,5 +250,41 @@ describe('CopyField (via CreatedTokenModal)', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('token activity (TER-577)', () => {
+  const ev = (over: Partial<ApiTokenEvent> & { id: string }): ApiTokenEvent => ({
+    tool: 'read_screen',
+    ok: true,
+    error_code: null,
+    duration_ms: 42,
+    machine_id: 'm1',
+    machine_name: 'jarvis',
+    project_id: 'p1',
+    project_name: 'termhub',
+    tab_id: null,
+    tab_name: null,
+    attachment_id: null,
+    created_at: '2026-10-07T12:00:00.000Z',
+    ...over,
+  });
+
+  it('names where a call acted, falling back to the id of a row that is gone', () => {
+    expect(eventPlace(ev({ id: 'e1' }))).toBe('jarvis · termhub');
+    expect(eventPlace(ev({ id: 'e2', machine_name: null, project_id: null, project_name: null }))).toBe('m1');
+  });
+
+  it('opens the MCP calls of a token, with failures and their code', async () => {
+    listMock.mockResolvedValue({ tokens: [tok({ id: 't1', name: 'laptop' })] });
+    eventsMock.mockResolvedValue({ events: [ev({ id: 'e1' }), ev({ id: 'e2', tool: 'send_input', ok: false, error_code: 'TOOL_NOT_ALLOWED' })], retention_days: 30 });
+    render(<ApiTokensView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Atividade de laptop' }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('send_input');
+    expect(eventsMock).toHaveBeenCalledWith('t1');
+    expect(within(dialog).getByText('TOOL_NOT_ALLOWED')).toBeTruthy();
+    expect(within(dialog).getAllByText('jarvis · termhub')).toHaveLength(2);
+    expect(within(dialog).getByText('Chamadas ao MCP dos últimos 30 dias, as mais recentes primeiro.')).toBeTruthy();
   });
 });
