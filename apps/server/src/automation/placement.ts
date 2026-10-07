@@ -1,6 +1,7 @@
-import { CAPABILITY_WORKTREE, WORKTREE_MIN_AGENT_VERSION } from '@termhub/agent-protocol';
+import { CAPABILITY_WORKTREE } from '@termhub/agent-protocol';
 import { versionAtLeast } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
+import { GUARD_MIN_AGENT_VERSION, guardSupported } from '../terminal/tab-mcp.js';
 import { usableIn } from '../ai/exclusive.js';
 import { accountsOn } from '../ai/project-accounts.js';
 import { peakUtilization } from '../control/account-swap.js';
@@ -35,7 +36,7 @@ export interface TickStarts {
 }
 
 /** Why a linked machine was left out (TER-985: the waiting reason names each one). */
-export type MachineVerdict = 'not_agent' | 'offline' | 'no_worktree' | 'no_claude' | 'not_allowed' | 'no_room';
+export type MachineVerdict = 'not_agent' | 'offline' | 'no_worktree' | 'no_guard' | 'no_claude' | 'not_allowed' | 'no_room';
 /**
  * Why a Claude account of a usable machine was left out: not in the project's list ("Contas de IA e
  * modelo"), marked exhausted, at or above `AUTOMATIC_MAX_UTILIZATION`, already given a start this tick,
@@ -57,14 +58,17 @@ export type Placement =
   | { waiting: WaitingReason | 'later'; detail?: PlaceDetail };
 
 /** An agent machine of the project's owner that answers the worktree RPC right now (D10). */
-const capableNow = (m: Machine) => (agents.capabilities(m.id) ?? []).includes(CAPABILITY_WORKTREE);
-/** An agent recent enough for worktrees that is not connected: the card waits for it, not for an update. */
-const capableButOffline = (m: Machine) => !agents.isOnline(m.id) && m.agent_version !== null && versionAtLeast(m.agent_version, WORKTREE_MIN_AGENT_VERSION);
+const worktreeNow = (m: Machine) => (agents.capabilities(m.id) ?? []).includes(CAPABILITY_WORKTREE);
+/** …and has the hard-lock guard script (agent 0.19.0, TER-993): a run never starts without it (TER-1005). */
+const capableNow = (m: Machine) => worktreeNow(m) && guardSupported(m);
+/** An agent recent enough for automatic work that is not connected: the card waits for it, not for an update. */
+const capableButOffline = (m: Machine) => !agents.isOnline(m.id) && m.agent_version !== null && versionAtLeast(m.agent_version, GUARD_MIN_AGENT_VERSION);
 
 function machineVerdict(m: Machine): MachineVerdict | null {
   if (m.type !== 'agent') return 'not_agent';
   if (!agents.isOnline(m.id)) return 'offline';
-  if (!capableNow(m)) return 'no_worktree';
+  if (!worktreeNow(m)) return 'no_worktree';
+  if (!guardSupported(m)) return 'no_guard';
   if (!m.capabilities.includes('claude')) return 'no_claude';
   if (!m.automation_allowed) return 'not_allowed';
   return null;

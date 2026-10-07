@@ -4,6 +4,8 @@ import { isAccountSwapState } from '../control/account-swap.js';
 import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
 import { taskOut, type TaskOut } from '../control/tasks.js';
 import { sendInput, typeCommandInTab } from '../control/terminals.js';
+import { paneForeground } from '../terminal/session-ops.js';
+import type { PaneForeground } from '@termhub/machine-ops';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun, AutomationRunPatch } from '../db/repositories/automation-runs.js';
 import type { Tab, Task } from '../db/repositories/types.js';
@@ -20,9 +22,9 @@ import { isPaused } from './pause.js';
 import { runPermission } from './permission.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 import { MAX_RESTARTS } from './restart.js';
-import { ACCOUNT_EXCLUSIVE, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT } from './escalation-text.js';
+import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
-export { NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
+export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
@@ -83,6 +85,8 @@ export interface FollowerDeps {
   /** Wakes the project's chat for a stopped tab that used up its resumes (D15, TER-887): `wakeForStoppedTab` of
    *  the waker, wired in app.ts. Left out, the run is escalated at once. True when the chat was woken. */
   wakeStopped?: (i: StoppedTabWake) => Promise<boolean>;
+  /** What the tab's pane runs in front (`paneForeground`); null when it could not be read. Default: the real one. */
+  foreground?: (tab: Tab) => Promise<PaneForeground | null>;
   /** The clock (tests). */
   now?: () => Date;
   /** How long a change settles before the tab is read (default SETTLE_MS). */
@@ -98,6 +102,17 @@ export interface FollowerDeps {
 export const SETTLE_MS = 3_000;
 
 const noopLog: Log = { info: () => {}, warn: () => {} };
+
+/** The tab's pane as `paneForeground` reads it; null when it could not be read (the caller keeps its old guess). */
+async function defaultForeground(repos: Repositories, tab: Tab): Promise<PaneForeground | null> {
+  try {
+    if (!tab.tmux_session) return null;
+    const machine = await repos.machines.findById(tab.machine_id);
+    return machine ? await paneForeground(machine, tab.tmux_session) : null;
+  } catch {
+    return null;
+  }
+}
 
 export const defaultType = async (ctx: ControlContext, tabId: string, text: string): Promise<void> => {
   await sendInput(ctx, { tab_id: tabId, text }, null);
@@ -480,6 +495,11 @@ async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: L
       await finishBlocked(repos, run, ACCOUNT_EXCLUSIVE, null, log);
       return false;
     }
+    // TER-1005: never brought back without the hard-lock guard — the person updates the agent
+    if (e instanceof ControlError && e.code === 'GUARD_UNSUPPORTED') {
+      await finishBlocked(repos, run, AGENT_OUTDATED, null, log);
+      return false;
+    }
     throw e;
   }
   if (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id)) return false;
@@ -582,8 +602,13 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
       }
       if (!tab.state_at) {
         // start watchdog: no hook at all since the start — Claude waits on the trust question of a new
-        // worktree (it comes before any hook). Parked for the person, never typed into.
-        if (run.status === 'running' && sinceMs(deps, run.started_at ?? run.created_at) >= TRUST_WAIT_MS) await parkForTrust(deps.repos, run, log);
+        // worktree (it comes before any hook). Parked for the person, never typed into. A pane back at its
+        // shell is not that: the agent never came up (its launch line failed, TER-1005).
+        if (run.status === 'running' && sinceMs(deps, run.started_at ?? run.created_at) >= TRUST_WAIT_MS) {
+          const pane = await (deps.foreground ?? ((t: Tab) => defaultForeground(deps.repos, t)))(tab);
+          if (pane === 'shell' || pane === 'dead') await parkAndEscalate(deps.repos, run, AGENT_NOT_STARTED, log);
+          else await parkForTrust(deps.repos, run, log);
+        }
         return;
       }
       if (run.status === 'waiting' && run.waiting_reason === NEEDS_PERSON && !isAccountSwapState(tab.state_text)) {
