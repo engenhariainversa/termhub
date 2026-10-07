@@ -138,7 +138,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('buildApp serving the fron
 
   beforeAll(async () => {
     const { buildApp } = await import('./app.js');
-    app = await buildApp({ frontend: { webDist: dirs.webDist, cityDist: dirs.cityDist } });
+    // No boot re-queue: it would fail the pending attachments chat-attachments.db.test.ts creates in the same database.
+    app = await buildApp({ frontend: { webDist: dirs.webDist, cityDist: dirs.cityDist }, requeuePendingOnBoot: false });
   }, 30_000);
 
   afterAll(async () => {
