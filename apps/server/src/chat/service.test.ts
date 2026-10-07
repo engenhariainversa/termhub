@@ -82,6 +82,11 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
       const row = conversations.find((c) => c.id === id);
       if (row) row.archived_at = new Date().toISOString();
     }),
+    deleteConversation: vi.fn(async (id: string) => {
+      const i = conversations.findIndex((c) => c.id === id);
+      if (i >= 0) conversations.splice(i, 1);
+      return i >= 0;
+    }),
     clearProjectSessions: vi.fn(async () => undefined),
     listActiveProjectConversations: vi.fn(async () => [{ id: 'c_p1', project_id: 'p1' }]),
     setCliSession: vi.fn(async (id: string, s: string | null) => {
@@ -1574,6 +1579,52 @@ describe('project conversations', () => {
     await vi.waitFor(() => expect(runner.run).toHaveBeenCalledTimes(2));
     expect(chatActions.findNextToInject).toHaveBeenCalledWith('c_p1', []);
     expect(chat.addMessage).toHaveBeenLastCalledWith(expect.objectContaining({ conversation_id: 'c_p1' }));
+  });
+});
+
+describe('deleteConversation', () => {
+  it('ends the conversation like a reset, deletes it and returns the fresh one', async () => {
+    const { service, repos } = build([]);
+    const fresh = await service.deleteConversation(user, 'p1');
+    expect(repos.chat.archive).toHaveBeenCalledWith('c_p1');
+    expect(repos.chatActions.expireOpenForConversation).toHaveBeenCalledWith('c_p1');
+    expect(repos.apiTokens.revokeForConversation).toHaveBeenCalledWith('c_p1');
+    expect(repos.chat.deleteConversation).toHaveBeenCalledWith('c_p1', 'u1');
+    expect(fresh.id).not.toBe('c_p1');
+    expect(fresh.project_id).toBe('p1');
+  });
+
+  it('is refused while that conversation is answering, and deletes nothing', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { service, repos } = build(() => (async function* () { await gate; yield delta('ok'); yield done(); })());
+    const running = service.send(user, 'um', { projectId: 'p1' });
+    await new Promise((r) => setTimeout(r, 0));
+    await expect(service.deleteConversation(user, 'p1')).rejects.toMatchObject({ statusCode: 409, code: 'CHAT_BUSY' });
+    release();
+    await running;
+    await settled();
+    expect(repos.chat.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('waits for a process it stopped to exit before deleting the row', async () => {
+    const { service, runner, repos } = build([], { streaming: true });
+    const lr = liveRunner();
+    vi.mocked(runner.run).mockImplementation(lr.run);
+
+    const first = await service.start(user, 'acompanha a aba em background', { projectId: 'p1' });
+    const run = await runAt(lr, 0);
+    run.push(replayOf(run.input.text.trim()));
+    run.push(JSON.stringify({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 't1' }] }));
+    run.push(delta('Disparei.'));
+    run.push(done());
+    await first.done; // the process lives on for the subagent and holds the lock
+
+    const fresh = await service.deleteConversation(user, 'p1');
+    expect(fresh.id).not.toBe('c_p1');
+    expect(run.closed()).toBe(true);
+    await vi.waitFor(() => expect(repos.chat.deleteConversation).toHaveBeenCalledWith('c_p1', 'u1'));
+    await settled();
   });
 });
 

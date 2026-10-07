@@ -71,6 +71,13 @@ export class WaitlistRepository {
     return this.db.waitlistEntry.count();
   }
 
+  /** The retention purge (TER-743): entries never invited that signed up before `cutoff`, and entries
+   *  whose (last) invite is older than it. */
+  async purgeBefore(cutoff: Date): Promise<number> {
+    const r = await this.db.waitlistEntry.deleteMany({ where: { OR: [{ invitedAt: null, createdAt: { lt: cutoff } }, { invitedAt: { lt: cutoff } }] } });
+    return r.count;
+  }
+
   async delete(id: string): Promise<boolean> {
     return (await this.db.waitlistEntry.deleteMany({ where: { id } })).count > 0;
   }
