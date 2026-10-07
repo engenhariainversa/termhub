@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError } from '../lib/errors.js';
 
-const { captureScreen, ensureSession, awaitAgent, killTmuxSession, requireAgentVersion, sendKeyToSession, sendTextToSession, waitForState } = vi.hoisted(() => ({
+const { captureScreen, ensureSession, awaitAgent, killTmuxSession, requireAgentVersion, sendKeyToSession, sendTextToSession, typeCommandLine, waitForState } = vi.hoisted(() => ({
   captureScreen: vi.fn(),
   ensureSession: vi.fn(),
   awaitAgent: vi.fn(async () => true),
@@ -9,12 +9,13 @@ const { captureScreen, ensureSession, awaitAgent, killTmuxSession, requireAgentV
   requireAgentVersion: vi.fn(),
   sendKeyToSession: vi.fn(),
   sendTextToSession: vi.fn(),
+  typeCommandLine: vi.fn(),
   waitForState: vi.fn(),
 }));
 vi.mock('../agent/screen.js', () => ({ captureScreen }));
 vi.mock('../agent/registry.js', () => ({ agents: { awaitAgent } }));
 vi.mock('../agent/errors.js', () => ({ requireAgentVersion }));
-vi.mock('../terminal/session-ops.js', () => ({ ensureSession, sendKeyToSession, sendTextToSession, TERMINAL_RPC_MIN_AGENT_VERSION: '0.2.0', INPUT_MAX_CHARS: 4000 }));
+vi.mock('../terminal/session-ops.js', () => ({ ensureSession, sendKeyToSession, sendTextToSession, typeCommandLine, TERMINAL_RPC_MIN_AGENT_VERSION: '0.2.0', INPUT_MAX_CHARS: 4000 }));
 vi.mock('../terminal/machine-exec.js', () => ({ killTmuxSession }));
 const { removeTabMcp } = vi.hoisted(() => ({ removeTabMcp: vi.fn(async () => undefined) }));
 vi.mock('../terminal/tab-mcp.js', () => ({ removeTabMcp }));
@@ -25,7 +26,7 @@ vi.mock('./screen.js', async (importOriginal) => {
   return { ...actual, waitForState };
 });
 
-const { closeTab, MAX_TABS_PER_TOKEN, openTab, runCommand, sendInput, sendKey } = await import('./terminals.js');
+const { closeTab, MAX_TABS_PER_TOKEN, openTab, runCommand, sendInput, sendKey, typeCommandInTab } = await import('./terminals.js');
 const { resetInputOrigins, takeInputOrigin } = await import('../terminal/input-origin.js');
 
 const machine = { id: 'm1', name: 'jarvis', type: 'agent', os: 'linux', capabilities: ['tmux'], owner_id: 'u1' };
@@ -195,6 +196,26 @@ describe('sendInput', () => {
   it('refuses a tab that is not a terminal', async () => {
     const ctx = ctxWith({ tab: tab({ kind: 'simulator', tmux_session: null }) });
     await expect(sendInput(ctx, { tab_id: 't1', text: 'oi' })).rejects.toMatchObject({ code: 'NOT_A_TERMINAL' });
+  });
+});
+
+// TER-988: the line that resumes an exited agent runs in the shell through typeCommandLine (a file past 900
+// bytes, session-ops.test.ts), past sendInput's 4000-character cap and with no origin recorded.
+describe('typeCommandInTab', () => {
+  it('makes sure the session is there, then hands the whole line to typeCommandLine', async () => {
+    const line = `claude --resume x -- '${'a'.repeat(5000)}'`;
+    await typeCommandInTab(ctxWith(), 't1', line);
+    expect(ensureSession).toHaveBeenCalledWith(machine, 'termhub-p1-t1', link.cwd);
+    expect(typeCommandLine).toHaveBeenCalledWith(machine, 'termhub-p1-t1', line);
+    expect(sendTextToSession).not.toHaveBeenCalled();
+    expect(takeInputOrigin('t1', line)).toBeNull();
+  });
+
+  it('refuses a tab that is not a terminal, or a machine that is offline', async () => {
+    await expect(typeCommandInTab(ctxWith({ tab: tab({ kind: 'simulator', tmux_session: null }) }), 't1', 'claude --continue')).rejects.toMatchObject({ code: 'NOT_A_TERMINAL' });
+    awaitAgent.mockResolvedValueOnce(false);
+    await expect(typeCommandInTab(ctxWith(), 't1', 'claude --continue')).rejects.toBeTruthy();
+    expect(typeCommandLine).not.toHaveBeenCalled();
   });
 });
 

@@ -3,7 +3,7 @@ import { AGENT_EXITED_TEXT, EXITED_RESUME_PROMPT, resumeCommandFor } from '../ch
 import { isAccountSwapState } from '../control/account-swap.js';
 import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
 import { taskOut, type TaskOut } from '../control/tasks.js';
-import { sendInput } from '../control/terminals.js';
+import { sendInput, typeCommandInTab } from '../control/terminals.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun, AutomationRunPatch } from '../db/repositories/automation-runs.js';
 import type { Tab, Task } from '../db/repositories/types.js';
@@ -72,6 +72,9 @@ export interface FollowerDeps {
   type?: (ctx: ControlContext, tabId: string, text: string) => Promise<void>;
   /** The shell line that brings an exited agent back in the same tab. Default: `resumeCommandFor`. */
   restartLine?: typeof resumeCommandFor;
+  /** Runs that line in the tab's shell. Default: `typeCommandInTab`, which sources a line over 900 bytes
+   *  from a file on the machine instead of typing it (TER-988). */
+  typeLine?: (ctx: ControlContext, tabId: string, line: string) => Promise<void>;
   /** A stop on a usage limit (spec D16): `onRateLimit` (quota.ts), wired in app.ts. Called again on every
    *  look at the run while the tab stays on the limit, so it must be idempotent. */
   onRateLimited?: (run: AutomationRun, tab: Tab) => Promise<void>;
@@ -471,7 +474,7 @@ async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: L
   });
   if (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id)) return false;
   const count = await repos.automationRuns.bump(run.id, 'restart_count');
-  await (deps.type ?? defaultType)(ready.ctx, tab.id, line);
+  await (deps.typeLine ?? typeCommandInTab)(ready.ctx, tab.id, line);
   await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_resumed', payload: { tab_id: tab.id, restart: true, count } }).catch((e: unknown) =>
     log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_resumed not recorded'),
   );

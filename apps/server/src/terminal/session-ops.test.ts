@@ -130,6 +130,27 @@ describe('typeCommandLine', () => {
     expect(agentRpc.mock.calls[1][2]).toEqual({ session: 's1', text: `. '${path}'; command rm -f -- '${path}'`, enter: true });
   });
 
+  // TER-988: the line that resumes an automatic tab's exited agent is short of the RPC cap but past 1 KB,
+  // the most a fresh macOS tab keeps of what is typed: it goes through the file too.
+  it('sources an automatic tab\'s resume and continue lines from a file, never typing them whole', async () => {
+    const { continueLine, DEFAULT_AUTOMATION_TOOLS, resumeLine } = await import('../control/agents.js');
+    const permission = { mode: 'acceptEdits' as const, allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: 'TER-988-x' };
+    const prompt = '[termhub automático] O processo anterior desta sessão foi encerrado no meio do trabalho. Continue a tarefa de onde parou.';
+    const lines = [
+      resumeLine(null, '123e4567-e89b-12d3-a456-426614174000', prompt, 'tab1', 'opus', permission),
+      continueLine('claude', '~/.claude_b', { permission, prompt, mcpTabId: 'tab1' }),
+    ];
+    for (const line of lines) {
+      expect(Buffer.byteLength(line, 'utf8')).toBeGreaterThan(1024);
+      agentRpc.mockReset();
+      agentRpc.mockImplementation(async (_m: unknown, method: string) => (method === 'file.paste' ? { path: '/h/p.sh' } : { sent: true }));
+      await typeCommandLine(machine('agent'), 's1', line);
+      expect(agentRpc.mock.calls.map((c) => c[1])).toEqual(['file.paste', 'tmux.sendText']);
+      expect(Buffer.from((agentRpc.mock.calls[0][2] as { data_b64: string }).data_b64, 'base64').toString('utf8')).toBe(`${line}\n`);
+      expect((agentRpc.mock.calls[1][2] as { text: string }).text).toBe(`. '/h/p.sh'; command rm -f -- '/h/p.sh'`);
+    }
+  });
+
   it('counts bytes, not characters: accented text reaches the limit sooner', async () => {
     agentRpc.mockImplementation(async (_m: unknown, method: string) => (method === 'file.paste' ? { path: '/h/p' } : { sent: true }));
     await typeCommandLine(machine('agent'), 's1', 'ç'.repeat(TYPED_LINE_MAX_BYTES / 2 + 1));

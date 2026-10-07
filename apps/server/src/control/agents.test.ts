@@ -257,7 +257,8 @@ describe('resume and continue lines of an automatic tab (preflight F-12)', () =>
 });
 
 describe('typed resume lines of an automatic tab stay under the input cap (TER-989)', () => {
-  // still typed whole until TER-988 sends them through a file, like a start line (TER-987)
+  // the resume runs them through typeCommandLine since TER-988 (a file past 900 bytes), but a person may
+  // still paste one into a tab or send it with send_input: it stays under the cap
   it('with the read rules, the default list, the longest default branch and a long config dir, a resume or continue line stays under the 4000-character typed input cap', () => {
     // `{ticket}-{slug}` with a five-digit ref and the 40-character slug cap (branches.ts)
     const permission = { mode: 'acceptEdits' as const, allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: `TER-12345-${'a'.repeat(40)}` };
