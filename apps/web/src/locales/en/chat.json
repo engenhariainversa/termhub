@@ -390,5 +390,6 @@
   "↓ novas mensagens": "↓ new messages",
   "Resposta automática cancelada: o trabalho automático foi pausado ou desligado.": "Automatic answer cancelled: automatic work was paused or turned off.",
   "Opção recomendada pelo agente": "Option the agent recommended",
-  "Ver detalhes": "Show details"
+  "Ver detalhes": "Show details",
+  "Liberada pelas regras do trabalho automático": "Allowed by the automatic work's rules"
 }

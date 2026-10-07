@@ -157,5 +157,6 @@
   "Nenhuma fala reconhecida": "No speech recognized",
   "Gravação muito curta": "Recording too short",
   "Resposta automática cancelada: o trabalho automático foi pausado ou desligado.": "Automatic answer cancelled: automatic work was paused or turned off.",
-  "Opção recomendada pelo agente": "Option the agent recommended"
+  "Opção recomendada pelo agente": "Option the agent recommended",
+  "Liberada pelas regras do trabalho automático": "Allowed by the automatic work's rules"
 }
