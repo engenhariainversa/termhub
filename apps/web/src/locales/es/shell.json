@@ -111,6 +111,7 @@
   "Não foi possível carregar esta página.": "No se pudo cargar esta página.",
   "Não foi possível salvar o idioma.": "No se pudo guardar el idioma.",
   "não liberado": "no permitido",
+  "O chat do projeto sabe em quais grupos ele está e quais projetos estão junto. Favoritos não conta como grupo.": "El chat del proyecto sabe en qué grupos está y qué proyectos están con él. Favoritos no cuenta como grupo.",
   "O que cada role pode fazer em cada recurso. Roles de administrador não aparecem aqui: têm acesso total.": "Lo que cada rol puede hacer con cada recurso. Los roles de administrador no aparecen aquí: tienen acceso total.",
   "O usuário é criado com a role escolhida, o e-mail é liberado no Cloudflare Access (quando configurado) e recebe um convite. Ele entra com Google ou com o código enviado por e-mail.": "El usuario se crea con el rol elegido, el correo se permite en Cloudflare Access (cuando está configurado) y recibe una invitación. Inicia sesión con Google o con el código enviado por correo.",
   "Ocultar arquivados": "Ocultar archivados",
