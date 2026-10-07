@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
-import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLessonItem, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
+import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLegalVersion, TLessonItem, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
  * `transport.ts`. `error` is pt-BR text; `extra` carries `attempts_left` / `retry_after`, spread
@@ -284,6 +284,9 @@ export interface MockState {
   /** The mock user's pending account deletion (TER-720), milliseconds; `null` when none. While set,
    * every authenticated route but the account-deletion ones answers `403 ACCOUNT_PENDING_DELETION`. */
   accountDeletion: { requestedAt: number; scheduledAt: number } | null;
+  /** The Terms / Privacy Policy versions in force the mock user has not accepted yet (TER-742).
+   * Empty by default; a test seeds it with `controls.seedLegalPending`. */
+  legalPending: TLegalVersion[];
   /** "Avisar quando uma aba terminar" (TER-925). */
   pushTabFinished: boolean;
 }
@@ -327,6 +330,7 @@ export function createMockState(): MockState {
     notes: [],
     lessons: [],
     accountDeletion: null,
+    legalPending: [],
     pushTabFinished: false,
   };
 }

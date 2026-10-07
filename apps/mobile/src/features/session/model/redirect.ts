@@ -6,6 +6,9 @@ import type { Phase } from './session.types';
 /** The blocking screen of a pending account deletion (`app/account-deletion.tsx`). */
 const ACCOUNT_DELETION_SEGMENT = 'account-deletion';
 
+/** The acceptance screen of the Terms of Use and Privacy Policy (`app/legal-acceptance.tsx`, TER-742). */
+const LEGAL_ACCEPTANCE_SEGMENT = 'legal-acceptance';
+
 /** Each phase's own screen. */
 const HOME: Record<Phase, string> = {
   new: '/',
@@ -15,8 +18,9 @@ const HOME: Record<Phase, string> = {
   unlocked: '/(tabs)',
 };
 
-/** The first segments of the screens that belong to another phase (or to a pending deletion). */
-const NOT_UNLOCKED = new Set(['enrol', 'unlock', ACCOUNT_DELETION_SEGMENT]);
+/** The first segments of the screens that belong to another phase (or to a pending deletion or
+ * legal acceptance). */
+const NOT_UNLOCKED = new Set(['enrol', 'unlock', ACCOUNT_DELETION_SEGMENT, LEGAL_ACCEPTANCE_SEGMENT]);
 
 /** Whether `segments` (from `useSegments()`) already sit inside `phase`'s own group. `unlocked`
  * owns every screen but the other phases' ones: the tabs, the conversation (`app/chat/[id].tsx`),
@@ -58,14 +62,28 @@ const normalise = (path: string) => `/${path.split('/').filter(Boolean).join('/'
  * expo-router's segments hold the file names (`['chat', '[id]']`), so they cannot tell one
  * conversation from another — `/chat/c2` must not count as arriving at `/chat/c1`.
  *
- * `deletionPending` (TER-720) sends an unlocked session to `/account-deletion` ahead of everything.
+ * `deletionPending` (TER-720) sends an unlocked session to `/account-deletion` ahead of everything;
+ * `legalPending` (TER-742) sends it to `/legal-acceptance` right after that.
  */
-export function redirectFor(phase: Phase, segments: string[], pendingRoute: string | null, pathname: string, deletionPending = false): RedirectDecision {
+export function redirectFor(
+  phase: Phase,
+  segments: string[],
+  pendingRoute: string | null,
+  pathname: string,
+  deletionPending = false,
+  legalPending = false,
+): RedirectDecision {
   // A pending account deletion (TER-720) takes over the unlocked app: only its blocking screen is
   // reachable, and a deep link waits (not cleared) until the person cancels. Once cancelled, the
   // screen is no unlocked home, so the checks below send it back to the tabs.
   if (phase === 'unlocked' && deletionPending) {
     return segments[0] === ACCOUNT_DELETION_SEGMENT ? { target: null, shouldClear: false } : { target: `/${ACCOUNT_DELETION_SEGMENT}`, shouldClear: false };
+  }
+  // A Terms / Privacy Policy version in force not accepted yet (TER-742): same hold, second in line
+  // (a pending deletion keeps the account from being used at all, so it goes first). Once accepted,
+  // a waiting deep link is followed, or the screen goes back to the tabs.
+  if (phase === 'unlocked' && legalPending) {
+    return segments[0] === LEGAL_ACCEPTANCE_SEGMENT ? { target: null, shouldClear: false } : { target: `/${LEGAL_ACCEPTANCE_SEGMENT}`, shouldClear: false };
   }
   if (phase === 'unlocked' && pendingRoute) {
     const arrived = normalise(pathname) === normalise(pendingRoute);

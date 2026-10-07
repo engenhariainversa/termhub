@@ -10,6 +10,7 @@ import { registerAccountRoutes } from './handlers/account';
 import { registerChatRoutes } from './handlers/chat';
 import { registerDeviceRoutes } from './handlers/devices';
 import { registerFileRoutes } from './handlers/files';
+import { registerLegalRoutes } from './handlers/legal';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notifications';
 import { registerAutomationRoutes } from './handlers/automation';
@@ -48,6 +49,7 @@ export function createMockTransport(opts: CreateMockTransportOptions = {}): Tran
   registerSessionRoutes(router, state);
   registerMeRoutes(router, state);
   registerAccountRoutes(router, state);
+  registerLegalRoutes(router, state);
   registerChatRoutes(router, state, { maxLatency });
   registerNotificationRoutes(router, state);
   registerProgressRoutes(router, state);

@@ -174,6 +174,22 @@ it('account deletion: GET, POST and DELETE on /account/deletion, validated again
   expect(JSON.parse(calls[1]!.body!)).toEqual({ challenge: 'c1', pin_proof: 'p1' });
 });
 
+it('legal acceptance (TER-742): GET /legal and POST /legal/accept, validated against the contract', async () => {
+  const terms = { id: 'v1', document: 'terms', version: '2.0', effective_at: '2026-10-07T12:00:00.000Z', url: 'https://termhub.dev/termos', requires_acceptance: true, summary: null };
+  const { transport, calls } = scripted([{ status: 200, body: { pending: [terms], upcoming: [] } }, { status: 200, body: { pending: [], upcoming: [] } }, { status: 200, body: { pending: 'none' } }]);
+  const api = make(transport);
+  const a = { accessToken: 'tok' };
+  await expect(api.legalStatus(a)).resolves.toEqual({ pending: [terms], upcoming: [] });
+  await expect(api.acceptLegal(a, ['v1'])).resolves.toEqual({ pending: [], upcoming: [] });
+  await expect(api.legalStatus(a)).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
+  expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+    'GET https://termhub.dev/api/m/v1/legal',
+    'POST https://termhub.dev/api/m/v1/legal/accept',
+    'GET https://termhub.dev/api/m/v1/legal',
+  ]);
+  expect(JSON.parse(calls[1]!.body!)).toEqual({ version_ids: ['v1'] });
+});
+
 it('refuses a body that does not match the contract', async () => {
   const { transport } = scripted([{ status: 200, body: { nope: 1 } }]);
   await expect(make(transport).chatProjects({ accessToken: 'tok' })).rejects.toMatchObject({ status: 502, code: 'BAD_RESPONSE' });

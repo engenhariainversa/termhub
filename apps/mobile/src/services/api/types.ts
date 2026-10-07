@@ -28,6 +28,7 @@ import type {
   TLessonsResponse,
   TMeResponse,
   TMobileBatchDecisionBody,
+  TLegalStatus,
   TDecisionChallengesBody,
   TDecisionChallengesResponse,
   TMobileDecisionBody,
@@ -108,6 +109,12 @@ export interface MobileApi {
    * CHALLENGE_INVALID), plus `409 LAST_ADMIN`. */
   requestAccountDeletion(auth: Auth, body: AccountDeletionBody): Promise<AccountDeletionStatus>;
   cancelAccountDeletion(auth: Auth): Promise<AccountDeletionStatus>;
+
+  // legal acceptance (TER-742): the Terms and Privacy Policy versions in force still to accept.
+  // A server that predates them answers 404; the app reads that as nothing pending.
+  legalStatus(auth: Auth): Promise<TLegalStatus>;
+  /** Records the acceptance of `versionIds` (channel `mobile`, set by the server); answers the new status. */
+  acceptLegal(auth: Auth, versionIds: string[]): Promise<TLegalStatus>;
 
   // chat (P§6, §6.1)
   chatProjects(auth: Auth): Promise<TChatProjectsResponse>;

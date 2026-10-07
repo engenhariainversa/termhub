@@ -12,6 +12,7 @@ import {
   type PushSettings,
   type PushTestBody,
   accountDeletionStatus,
+  legalStatusResponse,
   automationSetupResponse,
   cardAutoResponse,
   pauseResponse,
@@ -293,6 +294,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     accountDeletion: (a: Auth) => call('GET', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
     requestAccountDeletion: (a: Auth, body: AccountDeletionBody) => call('POST', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken, body }),
     cancelAccountDeletion: (a: Auth) => call('DELETE', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
+
+    legalStatus: (a: Auth) => call('GET', '/api/m/v1/legal', legalStatusResponse, { token: a.accessToken }),
+    acceptLegal: (a: Auth, versionIds: string[]) =>
+      call('POST', '/api/m/v1/legal/accept', legalStatusResponse, { token: a.accessToken, body: { version_ids: versionIds } }),
 
     chatProjects: (a: Auth) => call('GET', '/api/m/v1/chat/projects', chatProjectsResponse, { token: a.accessToken }),
     setProjectFavorite: (a: Auth, projectId: string, favorite: boolean) =>

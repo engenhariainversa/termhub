@@ -5,6 +5,7 @@ import type { Resource } from 'i18next';
 import en_app from '@/locales/en/app.json';
 import en_ui from '@/locales/en/ui.json';
 import en_account from '@/locales/en/account.json';
+import en_legal from '@/locales/en/legal.json';
 import en_chat from '@/locales/en/chat.json';
 import en_chatView from '@/locales/en/chat-view.json';
 import en_chatGrants from '@/locales/en/chat-grants.json';
@@ -24,6 +25,7 @@ import en_services from '@/locales/en/services.json';
 import pt_app from '@/locales/pt-BR/app.json';
 import pt_ui from '@/locales/pt-BR/ui.json';
 import pt_account from '@/locales/pt-BR/account.json';
+import pt_legal from '@/locales/pt-BR/legal.json';
 import pt_chat from '@/locales/pt-BR/chat.json';
 import pt_chatView from '@/locales/pt-BR/chat-view.json';
 import pt_chatGrants from '@/locales/pt-BR/chat-grants.json';
@@ -48,6 +50,7 @@ export const EN_AREAS: Record<string, Catalog> = {
   'app': en_app,
   'ui': en_ui,
   'account': en_account,
+  'legal': en_legal,
   'chat': en_chat,
   'chat-view': en_chatView,
   'chat-grants': en_chatGrants,
@@ -71,6 +74,7 @@ export const PT_AREAS: Record<string, Catalog> = {
   'app': pt_app,
   'ui': pt_ui,
   'account': pt_account,
+  'legal': pt_legal,
   'chat': pt_chat,
   'chat-view': pt_chatView,
   'chat-grants': pt_chatGrants,

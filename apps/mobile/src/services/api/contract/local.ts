@@ -192,6 +192,28 @@ export const transcriptionConfigResponse = z.object({ enabled: z.boolean() });
 /** `POST chat/attachments`' answer (spec 2026-09-26 §5.3), and `GET chat/attachments/:id/status`. */
 export const chatAttachmentResponse = z.object({ attachment: chatAttachment });
 
+/** One version of a legal document (TER-742, spec 2026-10-07 legal acceptance): the server's
+ * `LegalVersionView`, the same object `/auth/me`'s `legal` carries to the web. */
+export const legalVersionSchema = z.object({
+  id: z.string(),
+  document: z.enum(['terms', 'privacy']),
+  version: z.string(),
+  effective_at: z.string(),
+  url: z.string(),
+  requires_acceptance: z.boolean(),
+  summary: z.string().nullable(),
+});
+
+/** `GET legal` and `POST legal/accept`: the versions in force the person still has to accept, and
+ * the ones announced for later. `upcoming` defaults to `[]`, so a lean answer still parses. */
+export const legalStatusResponse = z.object({
+  pending: z.array(legalVersionSchema),
+  upcoming: z.array(legalVersionSchema).default([]),
+});
+
+/** `POST legal/accept`'s body: the ids the screen showed (the server records channel `mobile`). */
+export const legalAcceptBody = z.object({ version_ids: z.array(z.string().min(1)).min(1) });
+
 // `z.infer` companions for every schema of the contract, prefixed `T` — including the ones of
 // `@termhub/mobile-api`, which exports its schemas but not these app-side type names.
 export type TVerificationCode = z.infer<typeof verificationCodeSchema>;
@@ -293,3 +315,7 @@ export type { AutomationFeedEvent as TAutomationFeedEvent } from '@termhub/mobil
 export type TProgressEstimate = z.infer<typeof progressEstimate>;
 export type TPullRequestBadge = z.infer<typeof pullRequestBadge>;
 export type TCancelSubagentResponse = z.infer<typeof cancelSubagentResponse>;
+// Legal acceptance (TER-742).
+export type TLegalVersion = z.infer<typeof legalVersionSchema>;
+export type TLegalStatus = z.infer<typeof legalStatusResponse>;
+export type TLegalAcceptBody = z.infer<typeof legalAcceptBody>;

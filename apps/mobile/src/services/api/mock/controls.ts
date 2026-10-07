@@ -1,7 +1,7 @@
 // `MockControls` — the "Aguardando aprovação" screen's simulation buttons and the test-only
 // escape hatches for expiry, lock and revoke (design spec §4.2).
 import { ACTIVATE_TTL_MS } from './handlers/devices';
-import type { TTabChatFrame, TTabChatItem, TTabSummary } from '../contract';
+import type { TLegalVersion, TTabChatFrame, TTabChatItem, TTabSummary } from '../contract';
 import { appendTabItems, sendTabFrame } from './handlers/tabs';
 import { PIN_LOCK_MS, revokeDevice, requestStatus, type MockAction, type MockState } from './state';
 
@@ -24,6 +24,8 @@ export interface MockControls {
   patchTab(tabId: string, patch: Partial<TTabSummary>): void;
   /** Drops every tab socket with a non-final close, so the app reconnects. */
   dropTabSockets(): void;
+  /** Test-only: the legal versions the mock user still has to accept (TER-742). */
+  seedLegalPending(versions: TLegalVersion[]): void;
 }
 
 export function createMockControls(state: MockState, now: () => number): MockControls {
@@ -90,6 +92,10 @@ export function createMockControls(state: MockState, now: () => number): MockCon
 
     dropTabSockets() {
       for (const socket of [...state.tabSockets]) socket.close(1006);
+    },
+
+    seedLegalPending(versions) {
+      state.legalPending = [...versions];
     },
   };
 }

@@ -26,7 +26,7 @@ describe('redirectFor', () => {
 
   it('lets an unlocked session stay on every screen of app/ that belongs to no other phase', () => {
     const appDir = path.join(__dirname, '../../../../app');
-    const otherPhases = new Set(['_layout', 'index', 'enrol', 'unlock', 'account-deletion']);
+    const otherPhases = new Set(['_layout', 'index', 'enrol', 'unlock', 'account-deletion', 'legal-acceptance']);
     const screens = fs
       .readdirSync(appDir)
       .map((name) => name.replace(/\.tsx$/, ''))
@@ -102,6 +102,32 @@ describe('redirectFor', () => {
 
     it('leaves a locked session on Desbloquear', () => {
       expect(redirectFor('locked', ['unlock'], null, '/unlock', true)).toEqual({ target: null, shouldClear: false });
+    });
+  });
+
+  describe('a legal version still to accept (TER-742)', () => {
+    it('holds an unlocked session on the acceptance screen, ahead of a pending route', () => {
+      expect(redirectFor('unlocked', ['(tabs)'], null, '/', false, true)).toEqual({ target: '/legal-acceptance', shouldClear: false });
+      expect(redirectFor('unlocked', ['chat', '[id]'], '/chat/c1', '/chat/c1', false, true)).toEqual({ target: '/legal-acceptance', shouldClear: false });
+      expect(redirectFor('unlocked', ['legal-acceptance'], null, '/legal-acceptance', false, true)).toEqual({ target: null, shouldClear: false });
+    });
+
+    it('a deep link waits on the acceptance screen, then is followed once accepted', () => {
+      expect(redirectFor('unlocked', ['legal-acceptance'], '/chat/c1', '/legal-acceptance', false, true)).toEqual({ target: null, shouldClear: false });
+      expect(redirectFor('unlocked', ['legal-acceptance'], '/chat/c1', '/legal-acceptance', false, false)).toEqual({ target: '/chat/c1', shouldClear: false });
+    });
+
+    it('a pending account deletion keeps priority', () => {
+      expect(redirectFor('unlocked', ['(tabs)'], null, '/', true, true)).toEqual({ target: '/account-deletion', shouldClear: false });
+      expect(redirectFor('unlocked', ['legal-acceptance'], null, '/legal-acceptance', true, true)).toEqual({ target: '/account-deletion', shouldClear: false });
+    });
+
+    it('once accepted, sends the acceptance screen back to the tabs', () => {
+      expect(redirectFor('unlocked', ['legal-acceptance'], null, '/legal-acceptance', false, false)).toEqual({ target: '/(tabs)', shouldClear: false });
+    });
+
+    it('leaves a locked session on Desbloquear', () => {
+      expect(redirectFor('locked', ['unlock'], null, '/unlock', false, true)).toEqual({ target: null, shouldClear: false });
     });
   });
 });
