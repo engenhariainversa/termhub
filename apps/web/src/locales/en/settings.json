@@ -356,5 +356,10 @@
   "Quando enviar": "When to send",
   "Agora": "Now",
   "Em {{seconds}} s": "In {{seconds}} s",
-  "Enviar notificação de teste": "Send test notification"
+  "Enviar notificação de teste": "Send test notification",
+  "Só roda no projeto {{project}}; nenhum outro projeto pode usá-la": "Runs only in project {{project}}; no other project can use it",
+  "Exclusiva: {{project}}": "Exclusive: {{project}}",
+  "Exclusiva de um projeto": "Exclusive to a project",
+  "Não: qualquer projeto pode usar": "No: any project can use it",
+  "Para a conta de um cliente ou empresa: ela só roda nesse projeto, e nenhum outro projeto, troca automática ou chat pode usá-la.": "For a client's or a company's account: it runs only in that project, and no other project, automatic swap or chat can use it."
 }

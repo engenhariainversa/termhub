@@ -106,5 +106,7 @@
   "máquina sem folga": "machine without room",
   "nenhuma conta escolhida em Setup → Contas de IA e modelo": "no account chosen in Setup → AI accounts and model",
   "máquina {{machine}}: {{why}}": "machine {{machine}}: {{why}}",
-  "conta {{account}} ({{machine}}): {{why}}": "account {{account}} ({{machine}}): {{why}}"
+  "conta {{account}} ({{machine}}): {{why}}": "account {{account}} ({{machine}}): {{why}}",
+  "exclusiva de outro projeto": "exclusive to another project",
+  "O agente saiu e a conta dele é exclusiva de outro projeto; não foi reiniciado. Escolha outra conta e retome.": "The agent exited and its account is exclusive to another project; it was not restarted. Pick another account and resume."
 }

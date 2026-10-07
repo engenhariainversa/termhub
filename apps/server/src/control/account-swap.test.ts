@@ -738,3 +738,44 @@ describe('autoSwapOnLimit', () => {
     await expect(drive(manual)).resolves.toMatchObject({ to: { id: 'a3' } });
   });
 });
+
+describe('swapAccount with an account exclusive to a project (TER-990)', () => {
+  const a3 = accounts.find((a) => a.id === 'a3')!;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // a3, the emptiest account (the machine's default login), is exclusive to DR Horton (p9)
+    a3.exclusive_project = { id: 'p9', name: 'DR Horton' };
+  });
+  afterEach(() => {
+    a3.exclusive_project = null;
+  });
+
+  it('never swaps a tab of another project onto it: the next account with room takes over', async () => {
+    const { r } = makeRepos();
+    const result = await drive(swapAccount(r, log, baseTab(), machine(), { auto: true }));
+    expect(result.to.id).toBe('a2');
+    expect(getAccountUsage.mock.calls.map((c) => c[0].id)).toEqual(['a2']);
+  });
+
+  it('refuses it picked by hand, before the tab is touched', async () => {
+    const { r } = makeRepos();
+    await expect(drive(swapAccount(r, log, baseTab(), machine(), { accountId: 'a3', auto: false }))).rejects.toMatchObject({ code: 'ACCOUNT_EXCLUSIVE' });
+    expect(linkClaudeSession).not.toHaveBeenCalled();
+    expect(sendKeyToSession).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'a3', attemptedProjectId: 'p1', path: 'account_swap', tabId: 't1' }), 'exclusive account: use refused');
+  });
+
+  it('is not taken from the project priority either', async () => {
+    projectSetup = { ai: { accounts: ['a3', 'a2'] } };
+    const { r } = makeRepos();
+    const result = await drive(swapAccount(r, log, baseTab(), machine(), { auto: true }));
+    expect(result.to.id).toBe('a2');
+  });
+
+  it('swaps onto it in its own project', async () => {
+    const { r } = makeRepos();
+    stored = baseTab({ project_id: 'p9' });
+    const result = await drive(swapAccount(r, log, stored, machine(), { auto: true }));
+    expect(result.to.id).toBe('a3');
+  });
+});
