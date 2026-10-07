@@ -20,7 +20,7 @@ import { epicBranchName, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
 import { cleanupRuns, type CleanupDeps } from './cleanup.js';
-import { CI_CAP, CONFLICT_CAP, MERGE_PERSON_CARD } from './escalation-text.js';
+import { CI_CAP, CONFLICT_CAP, FIXER_NO_PUSH, MERGE_PERSON_CARD, RUN_DONE_NO_PUSH } from './escalation-text.js';
 import { postAutomationLine } from './chat-line.js';
 import { claimEvent, publishEvent, recordEvent, settleEvent } from './events.js';
 import { defaultType, endRunsOfMergedCard, escalateDelivery } from './follower.js';
@@ -115,7 +115,7 @@ interface PullCtx {
 }
 
 const now = (deps: MergeDeps) => deps.now?.() ?? new Date();
-const waitOn = (c: PullCtx, wait: MergeWait) => noteMergeWait(c.tasks.map((t) => t.id), wait, now(c.deps));
+const waitOn = (c: PullCtx, wait: MergeWait, sha: string | null = null) => noteMergeWait(c.tasks.map((t) => t.id), wait, now(c.deps), sha);
 
 /** A PR of an automatic card that termhub leaves to a person (TER-1004): it also cites a person's card that is not done. */
 interface HeldPull {
@@ -415,23 +415,46 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   await conflictEscalation(c, row, { attempts: used, cause: FIXER_NO_PUSH });
 }
 
-/** Why a PR head was escalated before the cap: its fix ended and the head did not move (no push). */
-export const FIXER_NO_PUSH = 'fixer_no_push';
-
 /** The conflict marker's trigger: apart from the fixer's own (the head SHA), so both can exist for one head. */
 const conflictMarker = (sha: string) => `${CONFLICT_CAP}:${sha}`;
+/** TER-1016: the second marker of a head, for the one "a run ended and the conflict is still there" notice. */
+const runDoneMarker = (sha: string) => `${CONFLICT_CAP}:${sha}:${RUN_DONE_NO_PUSH}`;
 
 /**
  * Tells the person a conflict stays on this head (the cap, or a fixer that ended without pushing): once per
  * head, on whichever colour — a marker run (`blocked`, never active, so a card with a run still on gets it
- * too) holds the head's marker trigger. The board says why the PR waits on every pass.
+ * too) holds the head's marker trigger. The board says why the PR waits on every pass, naming the head.
+ *
+ * The escalation is about this head only: a push makes a new head, which the executor reads afresh (a clean
+ * one merges once its CI is green). A run of the card that ends after the escalation while the head stays
+ * the same (it said it was done, but pushed nothing) leaves a PR that looks finished in the feed and is
+ * still in conflict, so the person is told once more for that head (TER-1016).
  */
 async function conflictEscalation(c: PullCtx, row: TaskPullRequest, extra: { attempts: number; cause?: string }): Promise<void> {
   const { repos } = c.deps;
-  waitOn(c, 'merge_conflict_cap');
-  const marker = await repos.automationRuns.insertMarker({ project_id: c.project.id, task_id: c.primary.id, role: 'fixer', instance: c.deps.instance, trigger_sha: conflictMarker(row.head_sha), waiting_reason: CONFLICT_CAP });
-  if (!marker) return;
-  await escalateDelivery(repos, { project_id: c.project.id, task_id: c.primary.id }, CONFLICT_CAP, c.deps.log ?? noopLog, { pr: row.number, url: row.url, sha: row.head_sha, ...extra });
+  const log = c.deps.log ?? noopLog;
+  const about = { project_id: c.project.id, task_id: c.primary.id };
+  const payload = { pr: row.number, url: row.url, sha: row.head_sha };
+  waitOn(c, 'merge_conflict_cap', row.head_sha);
+  const marker = await repos.automationRuns.insertMarker({ ...about, role: 'fixer', instance: c.deps.instance, trigger_sha: conflictMarker(row.head_sha), waiting_reason: CONFLICT_CAP });
+  if (marker) return void (await escalateDelivery(repos, about, CONFLICT_CAP, log, { ...payload, ...extra }));
+  if (!(await runEndedSinceEscalation(c, row.head_sha))) return;
+  const again = await repos.automationRuns.insertMarker({ ...about, role: 'fixer', instance: c.deps.instance, trigger_sha: runDoneMarker(row.head_sha), waiting_reason: CONFLICT_CAP });
+  if (!again) return;
+  await escalateDelivery(repos, about, CONFLICT_CAP, log, { ...payload, attempts: extra.attempts, cause: RUN_DONE_NO_PUSH });
+}
+
+/** A run of the card ended after this head's conflict escalation, none is on now, and the end is past the
+ *  grace in which a push made right before it would have been synced. */
+async function runEndedSinceEscalation(c: PullCtx, sha: string): Promise<boolean> {
+  const { repos } = c.deps;
+  const task = c.primary.id;
+  const escalated = await repos.automationRuns.findTriggered(task, 'fixer', conflictMarker(sha));
+  if (!escalated?.ended_at) return false;
+  const ended = await repos.automationRuns.lastEndedAt(task);
+  if (!ended || ended.getTime() <= escalated.ended_at.getTime()) return false;
+  if (now(c.deps).getTime() - ended.getTime() < NO_PUSH_GRACE_MS) return false;
+  return !(await repos.automationRuns.activeByProject(c.project.id)).some((r) => r.task_id === task);
 }
 
 /**
