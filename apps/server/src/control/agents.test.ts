@@ -877,6 +877,18 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     }
   });
 
+  it('an automatic run (a worktree) carries the hard-lock guard as --settings, after the deny list (TER-993)', () => {
+    const auto = { ...PERMISSION, mode: 'auto' as const, worktree: '/w/TER-1' };
+    const line = launchLine('claude', '/c', 'do it', { tabId: 'abc', url: MCP_URL }, null, auto, 'abc');
+    expect(line).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+    expect(line.indexOf('--settings')).toBeGreaterThan(line.indexOf('--disallowedTools'));
+    expect(line.endsWith("-- 'do it'")).toBe(true);
+    // without the MCP the guard still rides, from the explicit guard tab id
+    expect(launchLine('claude', '/c', 'x', null, null, auto, 'abc')).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+    // a tab with no worktree (manual / start_agent) gets no guard
+    expect(launchLine('claude', '/c', 'x', { tabId: 'abc', url: MCP_URL }, null, PERMISSION, 'abc')).not.toContain('--settings');
+  });
+
   it('without the MCP: acceptEdits, one quoted allow list and `--` before the prompt', () => {
     expect(launchLine('claude', '/c', 'do it', null, null, PERMISSION)).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits --allowedTools ${TOOLS} ${DENY} -- 'do it'`);
     expect(launchLine('claude', null, 'do it', null, 'opus', PERMISSION)).toBe(`${CLEAR_CLAUDE}claude --model 'opus' --permission-mode acceptEdits --allowedTools ${TOOLS} ${DENY} -- 'do it'`);

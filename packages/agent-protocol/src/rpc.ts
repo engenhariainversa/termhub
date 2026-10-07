@@ -16,7 +16,7 @@ export const aiProvider = z.enum(['claude', 'chatgpt', 'gemini', 'antigravity'])
 /** A tab id, as minted by the server (see @termhub/machine-ops TAB_ID_RE, which this must match). */
 export const TAB_ID_RE = /^[a-z0-9]{1,64}$/;
 export const tabId = z.string().regex(TAB_ID_RE);
-export const tabMcpFile = z.enum(['mcp.json', 'token']);
+export const tabMcpFile = z.enum(['mcp.json', 'token', 'guard.json']);
 
 /** Simulator UDID as `xcrun simctl` prints it. The same regex lives in `@termhub/machine-ops`
  *  (`simulator.ts`), which cannot depend on this package; the server's tests assert they match. */
