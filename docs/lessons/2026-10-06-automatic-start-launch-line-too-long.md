@@ -26,7 +26,12 @@ its start) and the shell hangs on an open quote.
 `typeCommandLine` (`apps/server/src/terminal/session-ops.ts`): a line over `TYPED_LINE_MAX_BYTES` (900) is
 written to the machine's paste folder (`file.paste`, present in every agent) and only
 `. '<file>'; command rm -f -- '<file>'` is typed. `startAgent` and the account swap use it. The
-`run_blocked` of a failed start now carries `message` / `message_en` (the error's text), `attempt`,
+TER-988 closed the paths that still typed a long line whole: the follower's restart of an agent that exited
+(an automatic tab's resume line, with the allow and deny lists, is about 2.5–3 KB: under the RPC cap, past
+the ~1 KB a fresh macOS tab keeps) and the chat's resume card ("Enviar", which also refused anything over
+2000 characters). Both go through `typeCommandInTab` (`apps/server/src/control/terminals.ts`), which calls
+`typeCommandLine`. Any new code that types a shell line starting Claude or Codex must use one of those two,
+never `sendInput` / `sendTextToSession`. The `run_blocked` of a failed start now carries `message` / `message_en` (the error's text), `attempt`,
 `max_attempts` and `retry_at` (or `untagged`); the feed and the queue (`start_backoff`) show the reason.
 
 ## How to check
