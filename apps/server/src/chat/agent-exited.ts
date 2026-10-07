@@ -1,7 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { isClaudeSessionId } from '@termhub/machine-ops';
 import { swapPreferences } from '../control/account-swap.js';
-import { continueLine, resumeLine, type AgentPermission } from '../control/agents.js';
+import { continueLine, installRunGuard, resumeLine, type AgentPermission } from '../control/agents.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { guardAccount, loginOf } from '../ai/exclusive.js';
 import type { Machine, Tab } from '../db/repositories/types.js';
@@ -39,8 +39,10 @@ export async function resumeCommandFor(repos: Repositories, tab: Tab, machine: M
   if (codex || (!sessionId && !auto)) return continueLine(codex ? 'chatgpt' : 'claude', configDir);
   const [hasTabMcp, prefs] = await Promise.all([repos.apiTokens.hasLiveForTab(tab.id).catch(() => false), swapPreferences(repos, tab, machine).catch(() => ({ model: undefined }))]);
   const mcpTabId = hasTabMcp ? tab.id : null;
-  if (sessionId) return resumeLine(configDir, sessionId, auto?.prompt ?? EXITED_RESUME_PROMPT, mcpTabId, prefs.model, auto?.permission);
-  return continueLine('claude', configDir, auto ? { ...auto, mcpTabId } : null);
+  // an automatic tab comes back with its hard-lock guard, written again first (TER-1005); throws without it
+  const guardTabId = await installRunGuard(machine, tab.id, auto?.permission);
+  if (sessionId) return resumeLine(configDir, sessionId, auto?.prompt ?? EXITED_RESUME_PROMPT, mcpTabId, prefs.model, auto?.permission, guardTabId);
+  return continueLine('claude', configDir, auto ? { ...auto, mcpTabId, guardTabId } : null);
 }
 
 /**

@@ -836,6 +836,7 @@ describe('linkTabTask', () => {
 });
 
 describe('automation launch: permission flags, cwd and setup command (TER-870)', () => {
+  const SID_GUARD = '123e4567-e89b-12d3-a456-426614174000';
   const PERMISSION = { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)', 'Bash(npm test:*)'], branch: null };
   const TOOLS = `${READ} 'Bash(git status:*)' 'Bash(npm test:*)'`;
   const TAB_TOOLS = `'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy' 'mcp__termhub_tab__report_card' 'mcp__termhub_tab__get_card'`;
@@ -888,6 +889,60 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     expect(launchLine('claude', '/c', 'x', null, null, auto, 'abc')).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
     // a tab with no worktree (manual / start_agent) gets no guard
     expect(launchLine('claude', '/c', 'x', { tabId: 'abc', url: MCP_URL }, null, PERMISSION, 'abc')).not.toContain('--settings');
+  });
+
+  it('never names a guard.json nobody wrote: the MCP tab id is not a stand-in for the guard (TER-1005)', () => {
+    const auto = { ...PERMISSION, mode: 'auto' as const, worktree: '/w/TER-1' };
+    expect(launchLine('claude', '/c', 'x', { tabId: 'abc', url: MCP_URL }, null, auto, null)).not.toContain('--settings');
+    expect(launchLine('claude', '/c', 'x', { tabId: 'abc', url: MCP_URL }, null, auto)).not.toContain('--settings');
+    expect(resumeLine('/c', SID_GUARD, 'x', 'abc', null, auto)).not.toContain('--settings');
+    expect(resumeLine('/c', SID_GUARD, 'x', 'abc', null, auto, 'abc')).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+    expect(continueLine('claude', null, { permission: auto, prompt: 'x', mcpTabId: 'abc' })).not.toContain('--settings');
+    expect(continueLine('claude', null, { permission: auto, prompt: 'x', mcpTabId: null, guardTabId: 'abc' })).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+  });
+
+  it('a run on an agent without the guard (before 0.19.0) is refused before its tab exists: "Atualize o agente" (TER-1005)', async () => {
+    const { c } = ctx();
+    const err = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { cwd: WORKTREE, permission: { ...PERMISSION, worktree: WORKTREE } }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'GUARD_UNSUPPORTED' });
+    expect((err as Error).message).toMatch(/^Atualize o agente de MacBook Pro M4 .*0\.19\.0/);
+    expect(openTab).not.toHaveBeenCalled();
+    expect(installTabMcp).not.toHaveBeenCalled();
+    expect(sendTextToSession).not.toHaveBeenCalled();
+  });
+
+  it('on agent 0.19.0, guard.json is written before the line that names it is typed (TER-1005)', async () => {
+    const m1 = machines[0]!;
+    const before = m1.agent_version;
+    m1.agent_version = '0.19.0';
+    try {
+      cfg.mcpUrl = MCP_URL;
+      tabMcpSupported.mockReturnValue(true);
+      openTab.mockResolvedValue({ tab_id: 'abc', name: 'pedrogoiania', project_id: 'p1', tmux_session: 'termhub-p1-abc', created: true });
+      const order: string[] = [];
+      installTabMcp.mockImplementation(async (_m: unknown, _tab: string, file: string) => void order.push(`write:${file}`));
+      sendTextToSession.mockImplementation(async () => void order.push('typed'));
+      const { c } = ctx();
+      const permission = { ...PERMISSION, mode: 'auto' as const, worktree: WORKTREE };
+      await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { cwd: WORKTREE, permission });
+      expect(order).toContain('write:guard.json');
+      expect(order.indexOf('write:guard.json')).toBeLessThan(order.indexOf('typed'));
+      expect(installTabMcp).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'abc', 'guard.json', expect.stringContaining('termhub-guard'));
+      expect(sendTextToSession.mock.calls[0][2]).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+
+      // a failed write is a failed start: nothing typed, the tab named
+      vi.clearAllMocks();
+      installTabMcp.mockImplementation(async (_m: unknown, _tab: string, file: string) => {
+        if (file === 'guard.json') throw new Error('a máquina recusou a gravação');
+      });
+      const err = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { cwd: WORKTREE, permission }).catch((e: unknown) => e);
+      expect(tabIdOfError(err)).toBe('abc');
+      expect(sendTextToSession).not.toHaveBeenCalled();
+    } finally {
+      m1.agent_version = before;
+      installTabMcp.mockReset();
+      sendTextToSession.mockReset();
+    }
   });
 
   it('without the MCP: acceptEdits, one quoted allow list and `--` before the prompt', () => {

@@ -57,6 +57,10 @@ describe('editor tab transitions', () => {
     const ok = s(['x']);
     expect(pruneEditorTabs(ok, new Set(['x', 'y']))).toBe(ok);
   });
+
+  it("keeps a terminal's conversation tab while the terminal is known (TER-1003)", () => {
+    expect(pruneEditorTabs(s(['x', 'chat:x', 'chat:gone']), new Set(['x']))).toEqual(s(['x', 'chat:x']));
+  });
 });
 
 describe('editor tab store', () => {

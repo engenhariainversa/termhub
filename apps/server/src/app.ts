@@ -17,6 +17,7 @@ import { transcriptionRoutes } from './routes/transcriptions.js';
 import { filePreviewRoutes } from './routes/file-preview.js';
 import { fileRecentRoutes } from './routes/file-recent.js';
 import { tabRoutes } from './routes/tabs.js';
+import { mobileTabRoutes } from './routes/m-tabs.js';
 import { projectTaskRoutes, taskRoutes } from './routes/tasks.js';
 import { columnRoutes, projectColumnRoutes } from './routes/columns.js';
 import { noteRoutes } from './routes/notes.js';
@@ -60,6 +61,7 @@ import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-que
 import { expireOrphanTabActions, startTabGoneActionExpiry } from './chat/tab-gone-actions.js';
 import { stopTabSuggestions } from './chat/tab-suggestions.js';
 import { registerChatWs } from './chat/ws.js';
+import { registerTabChatWs } from './tab-chat/ws.js';
 import { roleRoutes } from './routes/roles.js';
 import { userRoutes } from './routes/users.js';
 import { uploadRoutes } from './routes/uploads.js';
@@ -180,6 +182,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   const lifecycle = createLifecycle();
   const upgrades = createUpgradeRouter(fastify.server, { auth, lifecycle });
   const simWs = registerSimulatorWs(upgrades, { repos, manager: simulators, log: fastify.log });
+  // The tab chat (spec 2026-10-01; the web's since TER-1003): one follower per watched tab, poked by the
+  // hooks route below.
+  const tabChat = new TabChatHub({ repos, log: fastify.log });
   // Every WebSocket server whose clients the drain closes with 1012 (the mobile chat's joins below).
   const sockets: WebSocketServer[] = [
     registerTerminalWs(upgrades, { repos, log: fastify.log }),
@@ -187,6 +192,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     simWs.wss,
     registerMonitorWs(upgrades, { log: fastify.log }),
     registerChatWs(upgrades, { log: fastify.log }),
+    registerTabChatWs(upgrades, { repos, hub: tabChat, log: fastify.log }),
     registerPublicWs(upgrades, { repos, log: fastify.log }),
   ];
 
@@ -200,8 +206,6 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // §7): built here, next to `chat`, since it needs a live `ChatService` to inject the wake turn into —
   // the hooks route (ingest path) has no `ChatService` of its own to build one from.
   const waker = createWaker({ repos, chat, maxPerHour: config.autoWakeMaxPerHour, automationMaxPerHour: config.automationWakeMaxPerHour, log: fastify.log });
-  // The phone's tab chat (spec 2026-10-01): one follower per watched tab, poked by the hooks route below.
-  const tabChat = new TabChatHub({ repos, log: fastify.log });
   // Attachments (spec 2026-09-26 §5): the files on the chat-files volume, and the in-process queue
   // that reads them. A finished job tells every open screen through the bus, metadata only.
   const attachmentStore = diskStore(config.chatFiles.dir);
@@ -278,6 +282,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('tickets', (a) => taskTicketRoutes(a, repos), '/tasks');
       await guarded('terminals', (a) => tabRoutes(a, repos, { simulators, closeSimulatorTab: (id) => simWs.closeTab(id) }), '/tabs');
       // A text file an agent wrote, read on its machine when the person opens its path (spec 2026-10-04).
+      // A Claude Code tab read as a conversation in the web (TER-1003): the phone's routes, typed as `web`.
+      await guarded('terminals', (a) => mobileTabRoutes(a, repos, { hub: tabChat, surface: 'web' }), '/tab-chat');
       await guarded('terminals', (a) => filePreviewRoutes(a, repos), '/file-preview');
       await guarded('terminals', (a) => fileRecentRoutes(a, repos), '/file-recent');
       await guarded('terminals', (a) => transcriptionRoutes(a, { transcriptions }), '/transcriptions');

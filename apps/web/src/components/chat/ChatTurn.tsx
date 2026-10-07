@@ -120,14 +120,28 @@ function flashCopy(button: HTMLElement, outcome: (typeof COPY_OUTCOME)[keyof typ
 const copyTimers = new WeakMap<HTMLElement, number>();
 
 /** Markdown to sanitised HTML, with the copy buttons on any fence and preview links on Markdown paths
- *  (spec 2026-10-04 file preview): the one path both halves go through. */
-function toHtml(markdown: string, projectId: string | null): string {
+ *  (spec 2026-10-04 file preview): the one path both halves go through, and the tab conversation's
+ *  (TER-1003) too. */
+export function toHtml(markdown: string, projectId: string | null): string {
   if (!markdown) return '';
   const rendered = renderMarkdown(markdown, { markdownOnly: true });
   // No fence in this piece, nothing to decorate: every delta of a prose-only reply would otherwise pay
   // for a full DOMParser round trip that cannot change anything. `linkifyMdPaths` skips the same way.
   const decorated = rendered.includes('<pre') ? decorateCodeBlocks(rendered) : rendered;
   return linkifyMdPaths(decorated, (path) => filePreviewHref(projectId, path));
+}
+
+/** A click in rendered Markdown: a Markdown path opens its preview in the app (a double click pins it; a
+ *  modified click keeps the browser's own), a fence's button copies it. */
+export function handleMarkdownClick(event: MouseEvent<HTMLDivElement>): void {
+  const link = (event.target as HTMLElement).closest(`a[${MD_PATH_ATTR}]`);
+  if (link instanceof HTMLAnchorElement && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+    event.preventDefault();
+    const href = link.getAttribute('href') ?? '';
+    appNavigate(event.detail >= 2 ? `${href}&pin=1` : href);
+    return;
+  }
+  handleCopyClick(event);
 }
 
 export interface ChatTurnProps {
@@ -176,18 +190,6 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
   const settledHtml = useMemo(() => toHtml(settled, projectId), [settled, projectId]);
   const tailHtml = useMemo(() => toHtml(tail, projectId), [tail, projectId]);
 
-  /** A Markdown path: open its preview in the app (a double click pins it); a modified click keeps the browser's own. */
-  const onBodyClick = (event: MouseEvent<HTMLDivElement>) => {
-    const link = (event.target as HTMLElement).closest(`a[${MD_PATH_ATTR}]`);
-    if (link instanceof HTMLAnchorElement && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-      event.preventDefault();
-      const href = link.getAttribute('href') ?? '';
-      appNavigate(event.detail >= 2 ? `${href}&pin=1` : href);
-      return;
-    }
-    handleCopyClick(event);
-  };
-
   const reply = onReply && isReplyable(message) ? <ChatReplyButton onClick={() => onReply(message)} /> : null;
   // The ring is always there, transparent until a quote scrolls here: showing it must not move the row.
   const ring = highlighted ? 'ring-2 ring-accent/60' : 'ring-2 ring-transparent';
@@ -232,7 +234,7 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
           // The one delegated handler for every copy button this row's HTML may contain (there can be
           // several, one per fence) — a per-block React handler is impossible anyway, since the blocks
           // come from an HTML string, not from JSX.
-          onClick={onBodyClick}
+          onClick={handleMarkdownClick}
         >
           {settledHtml && <div dangerouslySetInnerHTML={{ __html: settledHtml }} />}
           {tailHtml && <div dangerouslySetInnerHTML={{ __html: tailHtml }} />}

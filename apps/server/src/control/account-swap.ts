@@ -8,7 +8,7 @@ import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { applyState } from '../monitor/ingest.js';
 import { sendKeyToSession, sendTextToSession, typeCommandLine } from '../terminal/session-ops.js';
-import { RESUME_PROMPT, resumeLine } from './agents.js';
+import { installRunGuard, RESUME_PROMPT, resumeLine } from './agents.js';
 import { activeRunPermission } from '../automation/permission.js';
 import { serverMessage } from '../automation/marker.js';
 import { projectAccountsOn } from '../ai/project-accounts.js';
@@ -213,7 +213,9 @@ export async function swapAccount(
     const permission = await activeRunPermission(repos, tab.id).catch(() => null);
     // and its prompt says it comes from termhub, as every message typed into an automatic tab (spec D27)
     const prompt = permission ? serverMessage(RESUME_PROMPT) : RESUME_PROMPT;
-    const line = resumeLine(to.config_dir, sessionId, prompt, hasTabMcp ? tab.id : null, prefs.model, permission);
+    // and its hard-lock guard, written again before the line names it (TER-1005)
+    const guardTabId = await installRunGuard(machine, tab.id, permission);
+    const line = resumeLine(to.config_dir, sessionId, prompt, hasTabMcp ? tab.id : null, prefs.model, permission, guardTabId);
 
     // Claude waits for the reset on a usage limit (it does not exit): cancel that wait and leave.
     // Already idle means it ended on its own: the tab is at the shell and must not get these keys.

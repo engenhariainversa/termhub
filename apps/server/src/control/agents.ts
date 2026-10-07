@@ -10,7 +10,7 @@ import type { AiAccount, AiProvider, Machine, Project, Task } from '../db/reposi
 import { HttpError, localizedOf } from '../lib/errors.js';
 import { mintTabToken, TAB_TOKEN_TOOLS } from '../mcp/tab-token.js';
 import { typeCommandLine } from '../terminal/session-ops.js';
-import { guardSupported, installTabMcp, TAB_MCP_SERVER, tabMcpSupported } from '../terminal/tab-mcp.js';
+import { GUARD_MIN_AGENT_VERSION, guardSupported, installTabMcp, TAB_MCP_SERVER, tabMcpSupported } from '../terminal/tab-mcp.js';
 import { ControlError, type ControlContext } from './context.js';
 import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
 import { openTab } from './terminals.js';
@@ -185,6 +185,35 @@ function checkAllowedTools(tools: string[]): string[] {
 }
 
 /**
+ * Refuses automatic work on a machine whose agent has no hard-lock guard script (TER-993, agent 0.19.0):
+ * a run never starts, or comes back, without the lock (TER-1005).
+ */
+export function requireGuard(machine: Machine): void {
+  if (!guardSupported(machine)) {
+    throw new ControlError(
+      'GUARD_UNSUPPORTED',
+      msg('Atualize o agente de {{machine}} (npm i -g @termhub/agent, versão {{version}} ou mais nova): o trabalho automático só roda com a trava (termhub-guard).', {
+        machine: machine.name,
+        version: GUARD_MIN_AGENT_VERSION,
+      }),
+    );
+  }
+}
+
+/**
+ * Writes an automatic run's guard settings (`~/.termhub/tabs/<tab>/guard.json`) before a line that
+ * names them is typed (TER-993, TER-1005) and returns the tab id for `--settings`; null for a tab that
+ * runs no automatic work (no worktree). Throws when the machine cannot take the guard or the write
+ * failed: the caller must not type the line then.
+ */
+export async function installRunGuard(machine: Machine, tabId: string, permission: AgentPermission | null | undefined): Promise<string | null> {
+  if (!permission?.worktree) return null;
+  requireGuard(machine);
+  await installTabMcp(machine, tabId, 'guard.json', buildGuardSettings(permission.branch, permission.worktree));
+  return tabId;
+}
+
+/**
  * An automatic tab's Claude options (spec D19, preflight F-7/F-12, TER-968): the permission mode, then the
  * allow list (less any rule broad enough to reach a push or a denied command, `safeAllowedTools`) plus the
  * run's own branch pushes — merged with the tab MCP's own tools when the tab has its
@@ -248,7 +277,7 @@ export function launchLine(
   if (permission && provider === 'claude') {
     if (mcp && !MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
     // `--allowedTools` is variadic: `--` always ends the options, so the prompt is never read as a tool.
-    return `${clear}${prefix}${binary} ${permissionFlags(permission, mcp?.tabId ?? null, guardTabId ?? mcp?.tabId ?? null)} -- ${shellQuote(prompt)}`;
+    return `${clear}${prefix}${binary} ${permissionFlags(permission, mcp?.tabId ?? null, guardTabId ?? null)} -- ${shellQuote(prompt)}`;
   }
   if (!mcp) return `${clear}${prefix}${binary} ${shellQuote(prompt)}`;
   if (!MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
@@ -294,12 +323,20 @@ export const RESUME_PROMPT = 'A conta anterior atingiu o limite de uso. Continue
  * `permission`: the tab runs automatic work (an active run, preflight F-12) — the resumed session keeps
  * the permission mode and the allow list it was started with.
  */
-export function resumeLine(configDir: string | null, sessionId: string, prompt: string, mcpTabId?: string | null, model?: string | null, permission?: AgentPermission | null): string {
+export function resumeLine(
+  configDir: string | null,
+  sessionId: string,
+  prompt: string,
+  mcpTabId?: string | null,
+  model?: string | null,
+  permission?: AgentPermission | null,
+  guardTabId?: string | null,
+): string {
   if (!isClaudeSessionId(sessionId)) throw new ControlError('NO_SESSION', 'A sessão do Claude desta aba não é válida');
   const { clear, prefix } = accountEnv('CLAUDE_CONFIG_DIR', configDir);
   const quoted = shellQuote(checkPrompt(prompt));
   const claude = `claude${modelFlag('claude', model)}`;
-  if (permission) return `${clear}${prefix}${claude} ${permissionFlags(permission, mcpTabId ?? null, mcpTabId ?? null)} --resume ${sessionId} -- ${quoted}`;
+  if (permission) return `${clear}${prefix}${claude} ${permissionFlags(permission, mcpTabId ?? null, guardTabId ?? null)} --resume ${sessionId} -- ${quoted}`;
   if (!mcpTabId) return `${clear}${prefix}${claude} --resume ${sessionId} ${quoted}`;
   return `${clear}${prefix}${claude} ${claudeMcpFlags(mcpTabId)} --resume ${sessionId} -- ${quoted}`;
 }
@@ -309,11 +346,11 @@ export function resumeLine(configDir: string | null, sessionId: string, prompt: 
  * unknown: Claude's last session in the tab's directory (`--continue`), Codex's last one (`resume --last`),
  * under the tab's account. A Claude tab whose session id is known resumes it by id instead (`resumeLine`).
  */
-export function continueLine(provider: AiProvider, configDir: string | null, auto?: { permission: AgentPermission; prompt: string; mcpTabId: string | null } | null): string {
+export function continueLine(provider: AiProvider, configDir: string | null, auto?: { permission: AgentPermission; prompt: string; mcpTabId: string | null; guardTabId?: string | null } | null): string {
   const { binary, configEnv, flags } = launcher(provider);
   const { clear, prefix } = accountEnv(configEnv, configDir);
   // An automatic Claude tab (preflight F-12): its permission profile, its MCP and a first message.
-  if (auto && provider === 'claude') return `${clear}${prefix}${binary}${flags} ${permissionFlags(auto.permission, auto.mcpTabId, auto.mcpTabId)} --continue -- ${shellQuote(checkPrompt(auto.prompt))}`;
+  if (auto && provider === 'claude') return `${clear}${prefix}${binary}${flags} ${permissionFlags(auto.permission, auto.mcpTabId, auto.guardTabId ?? null)} --continue -- ${shellQuote(checkPrompt(auto.prompt))}`;
   return provider === 'chatgpt' ? `${clear}${prefix}${binary}${flags} resume --last` : `${clear}${prefix}${binary}${flags} --continue`;
 }
 
@@ -497,6 +534,8 @@ export async function startAgent(
   const model = input.model ?? modelFor(ai, account.provider);
   // checked before the tab exists, like every other refusal
   withSetup(internal?.setupCommand, launchLine(account.provider, account.config_dir, prompt, null, model, permission));
+  // an automatic run never starts without its hard-lock guard (TER-1005): refused before the tab exists
+  if (permission?.worktree) requireGuard(machine);
   if (!machine.capabilities.includes(binary)) {
     throw new ControlError(
       'TOOL_MISSING',
@@ -529,14 +568,9 @@ export async function startAgent(
   try {
     await internal?.onTabOpened?.(tab.tab_id);
     mcp = await tabMcp(ctx, machine, account.provider, tab);
-    // The hard-lock guard (TER-993): an automatic run (it has a worktree) gets its PreToolUse guard
-    // settings written to the machine before the line is typed. A failure here is a failed start: a
-    // run must never begin without the guard. Manual and start_agent tabs (no worktree) skip it.
-    // Gated on agent 0.19.0 (`guardSupported`): the guard script ships there, so an older agent gets no
-    // `--settings` pointing at a script it does not have — it still has `--disallowedTools` (the first wall).
-    const withGuard = !!permission?.worktree && guardSupported(machine);
-    if (withGuard) await installTabMcp(machine, tab.tab_id, 'guard.json', buildGuardSettings(permission!.branch, permission!.worktree!));
-    const guardTabId = withGuard ? tab.tab_id : null;
+    // The hard-lock guard (TER-993): written to the machine before the line is typed; a failure here
+    // is a failed start. Manual and start_agent tabs (no worktree) skip it.
+    const guardTabId = await installRunGuard(machine, tab.tab_id, permission);
     line = withSetup(
       internal?.setupCommand,
       mcp.installed

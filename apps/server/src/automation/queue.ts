@@ -1,4 +1,5 @@
 import { CAPABILITY_WORKTREE } from '@termhub/agent-protocol';
+import { versionAtLeast } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
 import type { ControlContext } from '../control/context.js';
 import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
@@ -8,6 +9,7 @@ import { isPaused } from './pause.js';
 import { WAITING_AS_REASON, waitingOf } from './placement.js';
 import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { placeDetailText } from './waiting-text.js';
+import { GUARD_MIN_AGENT_VERSION } from '../terminal/tab-mcp.js';
 
 export interface QueueItem {
   task_id: string;
@@ -76,7 +78,9 @@ export async function eligibilityQueue(ctx: ControlContext, projectId: string, l
 
   let capable = 0;
   for (const l of links) {
-    if ((agents.capabilities(l.machine_id) ?? []).includes(CAPABILITY_WORKTREE)) capable++;
+    // worktrees and the hard-lock guard (agent 0.19.0, TER-1005): a run never starts without the guard
+    const version = agents.info(l.machine_id)?.agent_version;
+    if ((agents.capabilities(l.machine_id) ?? []).includes(CAPABILITY_WORKTREE) && !!version && versionAtLeast(version, GUARD_MIN_AGENT_VERSION)) capable++;
   }
   const project = {
     automation,
