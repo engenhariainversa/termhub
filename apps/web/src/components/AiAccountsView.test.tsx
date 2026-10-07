@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AiAccount, Machine } from '../lib/types';
+import type { AiAccount, AiAccountUsage, Machine } from '../lib/types';
 
 const listMock = vi.fn();
 const usageMock = vi.fn();
@@ -32,6 +32,7 @@ const machines = [
 const projects = [{ id: 'p9', name: 'DR Horton' }, { id: 'p1', name: 'termhub' }];
 vi.mock('../lib/data', () => ({ useData: () => ({ machines, projects, statuses: { m1: 'online', m2: 'offline' } }) }));
 vi.mock('./AutoSwapSettings', () => ({ AutoSwapSettings: () => null }));
+vi.mock('./AiUsageQueryCard', () => ({ AiUsageQuerySettings: () => null }));
 
 import { AiAccountsView } from './AiAccountsView';
 
@@ -200,5 +201,30 @@ describe('AiAccountsView: accounts exclusive to a project (TER-990)', () => {
     fireEvent.click(form.getByRole('button', { name: 'Adicionar' }));
     await waitFor(() => expect(updateMock).toHaveBeenCalledWith('new', { exclusive_project_id: 'p9' }));
     expect(createMock).toHaveBeenCalledWith({ provider: 'claude', label: 'Claude', machine_id: 'm1', config_dir: null });
+  });
+});
+
+describe('AiAccountsView: usage that is off or needs a newer agent (TER-735)', () => {
+  const reading = (account_id: string, over: Partial<AiAccountUsage>): AiAccountUsage => ({
+    account_id, ok: false, windows: [], error: null, hint: null, plan: null, fetched_at: new Date().toISOString(), ...over,
+  });
+
+  it('shows a neutral note instead of the error box, pointing to the machine when the query is off', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'off' }), account({ id: 'old', machine_id: 'm3' }), account({ id: 'bad', machine_id: 'm2' })] });
+    usageMock.mockResolvedValue({
+      usage: [
+        reading('off', { reason: 'disabled', error: 'disabled' }),
+        reading('old', { reason: 'agent_outdated', error: 'outdated' }),
+        reading('bad', { error: 'Token expirado' }),
+      ],
+    });
+    render(<AiAccountsView />);
+    const off = await screen.findByText('Consulta de uso desligada nesta máquina');
+    expect(screen.getByText('Ligue em Máquinas › mac')).toBeInTheDocument();
+    expect(off.closest('div')).not.toHaveClass('text-danger');
+    expect(screen.getByText('Atualize o agente desta máquina para ver o uso')).toBeInTheDocument();
+    expect(screen.queryByText('disabled')).not.toBeInTheDocument();
+    expect(screen.queryByText('outdated')).not.toBeInTheDocument();
+    expect(screen.getByText('Token expirado')).toHaveClass('text-danger');
   });
 });
