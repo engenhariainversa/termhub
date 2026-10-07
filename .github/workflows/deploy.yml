@@ -38,6 +38,12 @@ jobs:
         run: docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.proxy.yml --profile prod up -d --build --no-deps whisper
       - name: Embed (text embeddings for the chat memory; recreated only when its image or config changes)
         run: docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.proxy.yml --profile prod up -d --build --no-deps embed
+      # The chat runs on the user's own machine now; the concierge service left docker-compose.yml
+      # (TER-748), so remove the container a previous deploy left behind. A no-op once it is gone.
+      - name: Retire the legacy concierge container
+        run: |
+          ids=$(docker ps -aq --filter label=com.docker.compose.project=termhub --filter label=com.docker.compose.service=concierge)
+          if [ -n "$ids" ]; then docker rm -f $ids; fi
       - name: Deploy blue-green (build, healthcheck, switch nginx, retire old)
         id: bluegreen
         run: bash deploy/blue-green.sh
