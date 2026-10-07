@@ -50,6 +50,8 @@ import { AutomationRunsRepository } from './automation-runs.js';
 import { ViewAsAuditRepository } from './view-as-audit.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
+import { AccessLogsRepository } from './access-logs.js';
+import { SecurityEventsRepository } from './security-events.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -102,7 +104,9 @@ export interface Repositories {
   automationRuns: AutomationRunsRepository;
   viewAsAudit: ViewAsAuditRepository;
   tabUsage: TabUsageRepository;
+  accessLogs: AccessLogsRepository;
   aiAccountExhaustions: AiAccountExhaustionsRepository;
+  securityEvents: SecurityEventsRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
 }
@@ -159,7 +163,9 @@ export function createRepositories(db: PrismaClient): Repositories {
     automationRuns: new AutomationRunsRepository(db),
     viewAsAudit: new ViewAsAuditRepository(db),
     tabUsage: new TabUsageRepository(db),
+    accessLogs: new AccessLogsRepository(db),
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
+    securityEvents: new SecurityEventsRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
 }
@@ -196,5 +202,6 @@ export type { PurgedAccount, AccountDeletionLink } from './account-deletion.js';
 export type { PauseState } from './automation-pauses.js';
 export type { UsageCursor, UsageTokens, UsageWrite, UsageSum } from './tab-usage.js';
 export type { AutomationEvent, AutomationEventKind, AutomationEventPayload, AutomationEventInput } from './automation-events.js';
+export { ACCESS_LOG_RETENTION_MS, type AccessLogInput } from './access-logs.js';
 export { AUTOMATION_EVENT_RETENTION_MS, AUTOMATION_EVENTS_PAGE_MAX } from './automation-events.js';
 export { VIEW_AS_AUDIT_RETENTION_MS } from './view-as-audit.js';

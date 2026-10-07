@@ -134,12 +134,12 @@ Tickets apagados na origem também são apagados no termhub, na sincronização 
 
 ### 3.9 Registros técnicos (logs) e segurança
 
-- **O que registramos.** Nossos servidores registram, para cada requisição, a data e a hora, o endereço IP, o método e o endereço acessado.
+- **O que registramos.** Nossos servidores registram, para cada acesso, a data e a hora, o endereço IP, o usuário (quando conectado), o método e a rota acessada, sem os parâmetros do endereço.
 - **O que não registramos.** Os logs não guardam o conteúdo dos terminais, as senhas nem os cabeçalhos de autenticação.
 - **Por quanto tempo.** Guardamos os registros de acesso por **6 meses**, como exige o Marco Civil da Internet (art. 15).
 - **Base legal:** cumprimento de obrigação legal (II) e legítimo interesse (IX).
 
-> Nota: hoje não há política de retenção de logs configurada. Ver o item P-6.
+> Nota: a retenção de 6 meses e a rotação estão implementadas desde o TER-744 (item P-6).
 
 ### 3.10 Pagamentos (quando os planos forem lançados)
 

@@ -449,11 +449,13 @@ export const ModelName = {
   Device: 'Device',
   DeviceToken: 'DeviceToken',
   DeviceChallenge: 'DeviceChallenge',
+  AccessLog: 'AccessLog',
   DeviceEvent: 'DeviceEvent',
   PushTicket: 'PushTicket',
   UserNotification: 'UserNotification',
   AutomationSummary: 'AutomationSummary',
-  ViewAsAudit: 'ViewAsAudit'
+  ViewAsAudit: 'ViewAsAudit',
+  SecurityEvent: 'SecurityEvent'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -469,7 +471,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "viewAsAudit"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "viewAsAudit" | "securityEvent"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -4321,6 +4323,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    AccessLog: {
+      payload: Prisma.$AccessLogPayload<ExtArgs>
+      fields: Prisma.AccessLogFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.AccessLogFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.AccessLogFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload>
+        }
+        findFirst: {
+          args: Prisma.AccessLogFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.AccessLogFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload>
+        }
+        findMany: {
+          args: Prisma.AccessLogFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload>[]
+        }
+        create: {
+          args: Prisma.AccessLogCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload>
+        }
+        createMany: {
+          args: Prisma.AccessLogCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.AccessLogCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload>[]
+        }
+        delete: {
+          args: Prisma.AccessLogDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload>
+        }
+        update: {
+          args: Prisma.AccessLogUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload>
+        }
+        deleteMany: {
+          args: Prisma.AccessLogDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.AccessLogUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.AccessLogUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload>[]
+        }
+        upsert: {
+          args: Prisma.AccessLogUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AccessLogPayload>
+        }
+        aggregate: {
+          args: Prisma.AccessLogAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAccessLog>
+        }
+        groupBy: {
+          args: Prisma.AccessLogGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AccessLogGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.AccessLogCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AccessLogCountAggregateOutputType> | number
+        }
+      }
+    }
     DeviceEvent: {
       payload: Prisma.$DeviceEventPayload<ExtArgs>
       fields: Prisma.DeviceEventFieldRefs
@@ -4688,6 +4764,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.ViewAsAuditCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.ViewAsAuditCountAggregateOutputType> | number
+        }
+      }
+    }
+    SecurityEvent: {
+      payload: Prisma.$SecurityEventPayload<ExtArgs>
+      fields: Prisma.SecurityEventFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.SecurityEventFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.SecurityEventFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload>
+        }
+        findFirst: {
+          args: Prisma.SecurityEventFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.SecurityEventFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload>
+        }
+        findMany: {
+          args: Prisma.SecurityEventFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload>[]
+        }
+        create: {
+          args: Prisma.SecurityEventCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload>
+        }
+        createMany: {
+          args: Prisma.SecurityEventCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.SecurityEventCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload>[]
+        }
+        delete: {
+          args: Prisma.SecurityEventDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload>
+        }
+        update: {
+          args: Prisma.SecurityEventUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload>
+        }
+        deleteMany: {
+          args: Prisma.SecurityEventDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.SecurityEventUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.SecurityEventUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload>[]
+        }
+        upsert: {
+          args: Prisma.SecurityEventUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SecurityEventPayload>
+        }
+        aggregate: {
+          args: Prisma.SecurityEventAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSecurityEvent>
+        }
+        groupBy: {
+          args: Prisma.SecurityEventGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SecurityEventGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.SecurityEventCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SecurityEventCountAggregateOutputType> | number
         }
       }
     }
@@ -5608,6 +5758,20 @@ export const DeviceChallengeScalarFieldEnum = {
 export type DeviceChallengeScalarFieldEnum = (typeof DeviceChallengeScalarFieldEnum)[keyof typeof DeviceChallengeScalarFieldEnum]
 
 
+export const AccessLogScalarFieldEnum = {
+  id: 'id',
+  createdAt: 'createdAt',
+  ip: 'ip',
+  userId: 'userId',
+  kind: 'kind',
+  method: 'method',
+  route: 'route',
+  status: 'status'
+} as const
+
+export type AccessLogScalarFieldEnum = (typeof AccessLogScalarFieldEnum)[keyof typeof AccessLogScalarFieldEnum]
+
+
 export const DeviceEventScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -5672,6 +5836,23 @@ export const ViewAsAuditScalarFieldEnum = {
 } as const
 
 export type ViewAsAuditScalarFieldEnum = (typeof ViewAsAuditScalarFieldEnum)[keyof typeof ViewAsAuditScalarFieldEnum]
+
+
+export const SecurityEventScalarFieldEnum = {
+  id: 'id',
+  actorId: 'actorId',
+  actorEmail: 'actorEmail',
+  viewAsId: 'viewAsId',
+  action: 'action',
+  targetType: 'targetType',
+  targetId: 'targetId',
+  targetLabel: 'targetLabel',
+  ip: 'ip',
+  meta: 'meta',
+  createdAt: 'createdAt'
+} as const
+
+export type SecurityEventScalarFieldEnum = (typeof SecurityEventScalarFieldEnum)[keyof typeof SecurityEventScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -6175,11 +6356,13 @@ export type GlobalOmitConfig = {
   device?: Prisma.DeviceOmit
   deviceToken?: Prisma.DeviceTokenOmit
   deviceChallenge?: Prisma.DeviceChallengeOmit
+  accessLog?: Prisma.AccessLogOmit
   deviceEvent?: Prisma.DeviceEventOmit
   pushTicket?: Prisma.PushTicketOmit
   userNotification?: Prisma.UserNotificationOmit
   automationSummary?: Prisma.AutomationSummaryOmit
   viewAsAudit?: Prisma.ViewAsAuditOmit
+  securityEvent?: Prisma.SecurityEventOmit
 }
 
 /* Types for Logging */
