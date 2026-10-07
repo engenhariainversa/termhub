@@ -14,6 +14,7 @@
  * by the agent next to the monitor hook.
  */
 
+import { HOOK_ENV_REL } from './hooks.js';
 import { shellQuote } from './shell.js';
 
 export const GUARD_SCRIPT_REL = '.termhub/bin/termhub-guard';
@@ -41,16 +42,36 @@ BRANCH="\${1:-}"
 WORKTREE="\${2:-}"
 EVENT=$(cat 2>/dev/null)
 [ -n "$EVENT" ] || exit 0
-deny() {
-  printf '%s%s"}}\\n' '${DENY_PREFIX}' "$1"
-  exit 0
-}
 # The tool name is the first "tool_name" of the payload (Claude Code serialises it before tool_input),
 # same rule as the monitor hook: cut the shortest prefix so a "tool_name" nested in the input never wins.
 REST=\${EVENT#*'"tool_name"'}
 [ "$REST" != "$EVENT" ] || exit 0
 REST=\${REST#*'"'}
 NAME=\${REST%%'"'*}
+case "$NAME" in '' | *[!A-Za-z0-9_.-]*) NAME= ;; esac
+# Tell termhub a block happened (TER-993), so the feed shows it: the tool and a short reason, never the
+# command. Best effort, in the background, and only when the monitor hook's env and a tmux session are
+# here (the guard runs inside Claude Code, which sets TMUX_PANE). The URL is the monitor's with /events
+# swapped for /guard. Any failure is silent: a block must never depend on the network.
+report() {
+  [ -n "$NAME" ] || return 0
+  [ -f "$HOME/${HOOK_ENV_REL}" ] || return 0
+  ( . "$HOME/${HOOK_ENV_REL}" 2>/dev/null
+    [ -n "$TERMHUB_HOOK_URL" ] && [ -n "$TERMHUB_HOOK_TOKEN" ] && [ -n "$TMUX_PANE" ] || exit 0
+    PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+    S=$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}' 2>/dev/null) || exit 0
+    [ -n "$S" ] || exit 0
+    GURL=\${TERMHUB_HOOK_URL%/events}/guard
+    printf '{"session":"%s","tool":"%s","reason":"%s"}' "$S" "$NAME" "$1" |
+      curl -s -m 5 -o /dev/null -X POST "$GURL" \\
+        -H "authorization: Bearer $TERMHUB_HOOK_TOKEN" -H 'content-type: application/json' --data-binary @- >/dev/null 2>&1 &
+  ) >/dev/null 2>&1
+}
+deny() {
+  report "$1"
+  printf '%s%s"}}\\n' '${DENY_PREFIX}' "$1"
+  exit 0
+}
 
 case "$NAME" in
   Bash)
