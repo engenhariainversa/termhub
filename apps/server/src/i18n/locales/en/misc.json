@@ -34,6 +34,8 @@
   "Máquina do agente desligada": "The agent's machine is offline",
   "Máquina sem folga (memória/disco/carga)": "Machine without room (memory/disk/load)",
   "Nenhuma máquina aceita trabalho automático": "No machine accepts automatic work",
+  "O início falhou; nova tentativa em breve": "The start failed; it will be tried again soon",
+  "O início falhou ({{attempt}} de {{max}}); nova tentativa em {{minutes}} min": "The start failed ({{attempt}} of {{max}}); next try in {{minutes}} min",
   "Integração do GitHub sem acesso": "The GitHub integration has no access",
   "Esta aba não tem trabalho automático em andamento": "This tab has no automatic work in progress",
   "Execução automática não encontrada": "Automatic run not found",
@@ -104,5 +106,7 @@
   "máquina sem folga": "machine without room",
   "nenhuma conta escolhida em Setup → Contas de IA e modelo": "no account chosen in Setup → AI accounts and model",
   "máquina {{machine}}: {{why}}": "machine {{machine}}: {{why}}",
-  "conta {{account}} ({{machine}}): {{why}}": "account {{account}} ({{machine}}): {{why}}"
+  "conta {{account}} ({{machine}}): {{why}}": "account {{account}} ({{machine}}): {{why}}",
+  "exclusiva de outro projeto": "exclusive to another project",
+  "O agente saiu e a conta dele é exclusiva de outro projeto; não foi reiniciado. Escolha outra conta e retome.": "The agent exited and its account is exclusive to another project; it was not restarted. Pick another account and resume."
 }

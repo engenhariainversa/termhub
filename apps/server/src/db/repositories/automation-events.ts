@@ -33,7 +33,12 @@ export type AutomationEventKind =
   | 'tagged'
   | 'untagged'
   | 'machine_opt_in'
-  | 'machine_opt_out';
+  | 'machine_opt_out'
+  // TER-990 audit, on the account's exclusive project: an account set or cleared as exclusive
+  // ({ account_id, from_project_id, to_project_id, via }), and a refused use of it elsewhere
+  // ({ account_id, attempted_project_id, path, machine_id?, tab_id? })
+  | 'account_exclusive_changed'
+  | 'account_exclusive_blocked';
 
 /** Flat on purpose: ids, URLs, counts and reasons — never terminal content, transcripts or prompts. */
 export type AutomationEventPayload = Record<string, string | number | boolean | null>;

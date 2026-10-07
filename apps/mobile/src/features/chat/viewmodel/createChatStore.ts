@@ -15,7 +15,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SessionState } from '@/features/session/model/session.types';
 import { appBackgrounded, messageSent, sessionEnded } from '@/features/shared/signals';
-import { standingKindOf, type TChatAttachment, type TChatProjectItem, type THostOptionsResponse, type TTabQuestionAnswerBody } from '@/services/api/contract';
+import { standingKindOf, type TChatAttachment, type TChatProjectItem, type THostOptionsResponse, type TTabQuestionAnswerBody, type TTabQuestionScreenResponse } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { randomId } from '@/services/crypto/random';
 import type { MobileApi } from '@/services/api/types';
@@ -149,7 +149,8 @@ export interface ChatState {
    * reads as its own sentence, in the card like `answerTabQuestion`'s own failures. */
   cancelAutoAnswer(questionId: string): Promise<void>;
   /** The tab's live excerpt for a permission card; null when it cannot be read (closed, offline). */
-  loadTabQuestionScreen(questionId: string): Promise<string | null>;
+  /** The excerpt and the dialog's options (TER-995); null once the card's tab moved on. */
+  loadTabQuestionScreen(questionId: string): Promise<TTabQuestionScreenResponse | null>;
   /** Sends a tab's suggestion, as edited — no PIN. A suggestion the tab moved past (409) says so in its card and re-reads. */
   sendTabSuggestion(suggestionId: string, text: string): Promise<void>;
   /** "Dispensar": the card closes; the tab is not touched. */
@@ -729,7 +730,11 @@ export function createChatStore(deps: ChatDeps) {
               if (decision !== 'approve' && decision !== 'deny') void reread(key);
             } catch (e) {
               if (gen !== generation || isCancelled(e)) return;
-              if (isApiError(e) && e.status === 409) {
+              if (isApiError(e, 'TAB_GONE')) {
+                // TER-986: the card's tab was closed, so the server retired it instead of deciding it. The
+                // card itself says so ("expirou: a aba foi fechada", with "Propor de novo"), even before the event.
+                patchSlot(key, (slot) => ({ actions: slot.actions.map((a) => (a.id === actionId && a.status === 'pending' ? { ...a, status: 'failed', error_code: 'TAB_GONE' } : a)) }));
+              } else if (isApiError(e) && e.status === 409) {
                 set({ error: CHAT_MSG.alreadyDecided });
                 void reread(key); // show how it was decided
               } else {
@@ -853,7 +858,7 @@ export function createChatStore(deps: ChatDeps) {
 
           async loadTabQuestionScreen(questionId) {
             try {
-              return (await api.tabQuestionScreen(session().auth(), questionId)).text;
+              return await api.tabQuestionScreen(session().auth(), questionId);
             } catch {
               return null;
             }

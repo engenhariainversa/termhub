@@ -9,7 +9,9 @@ import type { Task, User } from '../db/repositories/types.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import { newId } from '../lib/ids.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { MAX_START_FAILURES, RETRY_BACKOFF_MS, startDispatcher, type DispatcherDeps } from './dispatcher.js';
+import { MAX_START_FAILURES, START_RETRY_BACKOFF_MS, startDispatcher, type DispatcherDeps } from './dispatcher.js';
+import { ControlError } from '../control/context.js';
+import { msg } from '../i18n/index.js';
 import { followRun, TAB_CLOSED, UNTAGGED } from './follower.js';
 import { pauseAutomation } from './pause.js';
 import { resetWaiting } from './placement.js';
@@ -143,7 +145,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(input.prompt).toContain(c.ref);
     expect(internal).toEqual({
       cwd: `/home/u/.termhub/worktrees/${projectId}/${c.ref}`,
-      permission: { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: `${c.ref}-card` },
+      permission: { mode: 'auto', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: `${c.ref}-card`, worktree: `/home/u/.termhub/worktrees/${projectId}/${c.ref}` },
       setupCommand: 'npm ci',
       promptIsFinal: true,
       onTabOpened: expect.any(Function),
@@ -450,7 +452,10 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
   const age = (ms: number) => db.automationRun.updateMany({ where: { projectId, status: 'failed' }, data: { endedAt: new Date(Date.now() - ms) } });
   const tabError = (code: string, tabId: string) => Object.defineProperty(Object.assign(new Error(code), { code }), 'tab_id', { value: tabId, enumerable: false });
 
-  it('a start that throws: run failed with the code, run_blocked, and no retry for 10 minutes on either colour', async () => {
+  /** The longest wait between two starts: past it, any failed card is due again. */
+  const LONGEST_WAIT_MS = Math.max(...START_RETRY_BACKOFF_MS);
+
+  it('a start that throws: run failed with the code, run_blocked, and no retry until the first wait passed on either colour', async () => {
     const c = await card();
     const { deps, startAgent } = makeDeps();
     startAgent.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 'TOOL_MISSING' }));
@@ -461,7 +466,13 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(run).toMatchObject({ status: 'failed', waitingReason: 'TOOL_MISSING', tabId: null });
     expect(run!.endedAt).not.toBeNull();
     const events = await eventsOf();
-    expect(events.map((e) => [e.kind, e.taskId, e.runId, e.payload])).toEqual([['run_blocked', c.id, run!.id, { code: 'TOOL_MISSING', stage: 'start' }]]);
+    // a plain Error has no message fit to show: the code says it
+    expect(events.map((e) => [e.kind, e.taskId, e.runId])).toEqual([['run_blocked', c.id, run!.id]]);
+    const payload = events[0]!.payload as Record<string, unknown>;
+    expect(payload).toMatchObject({ code: 'TOOL_MISSING', stage: 'start', attempt: 1, max_attempts: MAX_START_FAILURES });
+    expect(payload.message).toBeUndefined();
+    const retryAt = new Date(payload.retry_at as string).getTime();
+    expect(retryAt - run!.endedAt!.getTime()).toBe(START_RETRY_BACKOFF_MS[0]);
 
     await d.tick('again');
     await d.settle();
@@ -471,10 +482,48 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(startAgent).toHaveBeenCalledTimes(1);
     expect(other.startAgent).not.toHaveBeenCalled();
 
-    await age(RETRY_BACKOFF_MS + 1000);
+    await age(START_RETRY_BACKOFF_MS[0]! + 1000);
     await d.tick('later');
     await d.settle();
     expect(startAgent).toHaveBeenCalledTimes(2);
+  });
+
+  // TER-987: the event said only LAUNCH_FAILED, and nobody could tell why the agent never started
+  it('run_blocked carries the reason of our own errors, in pt-BR and English, and the wait grows after the second failure', async () => {
+    await card();
+    const reason = new ControlError('LAUNCH_FAILED', msg('A aba {{tab}} foi aberta, mas o agente não foi iniciado: {{reason}}. Veja a tela com read_screen ou feche a aba com close_tab.', { tab: 'tab-1', reason: msg('Parâmetros inválidos para a máquina') }));
+    const first = makeDeps();
+    first.startAgent.mockRejectedValueOnce(Object.defineProperty(reason, 'tab_id', { value: 'tab-1' }));
+    await tickOnce(first.deps);
+    const [blocked] = (await eventsOf()).filter((e) => e.kind === 'run_blocked');
+    expect(blocked!.payload).toMatchObject({
+      code: 'LAUNCH_FAILED',
+      stage: 'start',
+      message: 'A aba tab-1 foi aberta, mas o agente não foi iniciado: Parâmetros inválidos para a máquina. Veja a tela com read_screen ou feche a aba com close_tab.',
+      message_en: expect.stringContaining('Invalid parameters for the machine'),
+      attempt: 1,
+    });
+    // the card says it too, in the queue the board reads, instead of showing as eligible
+    const [waiting] = await automationQueue(ctx(), projectId);
+    expect(waiting).toMatchObject({ eligible: false, reason: 'start_backoff' });
+    expect(waiting!.reason_text).toMatch(/^O início falhou \(1 de 3\); nova tentativa em [12] min\. A aba tab-1 foi aberta, mas o agente não foi iniciado: Parâmetros inválidos/);
+    expect((await automationQueue(ctx(), projectId, 'en'))[0]!.reason_text).toContain('Invalid parameters for the machine');
+
+    await age(START_RETRY_BACKOFF_MS[0]! + 1000);
+    expect((await automationQueue(ctx(), projectId))[0]!.reason).toBeNull();
+    const second = makeDeps();
+    second.startAgent.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 'TOOL_MISSING' }));
+    await tickOnce(second.deps);
+    const [latest] = (await eventsOf()).filter((e) => e.kind === 'run_blocked').sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    expect(latest!.payload).toMatchObject({ attempt: 2 });
+    const ended = (await runsOf()).map((r) => r.endedAt!.getTime()).sort((a, b) => b - a)[0]!;
+    expect(new Date((latest!.payload as Record<string, string>).retry_at!).getTime() - ended).toBe(START_RETRY_BACKOFF_MS[1]);
+
+    // the first wait is not enough any more
+    await age(START_RETRY_BACKOFF_MS[0]! + 1000);
+    const early = makeDeps();
+    await tickOnce(early.deps);
+    expect(early.startAgent).not.toHaveBeenCalled();
   });
 
   it('LAUNCH_FAILED: the empty tab is closed and kept on the failed run', async () => {
@@ -513,7 +562,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     for (let n = 1; n <= MAX_START_FAILURES; n++) {
       const { deps, startAgent } = makeDeps();
       startAgent.mockRejectedValueOnce(tabError('LAUNCH_FAILED', `tab-${n}`));
-      await age(RETRY_BACKOFF_MS + 1000);
+      await age(LONGEST_WAIT_MS + 1000);
       await tickOnce(deps);
       expect(startAgent).toHaveBeenCalledTimes(1);
     }
@@ -524,7 +573,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     const lines = await db.chatMessage.findMany({ where: { conversation: { projectId } }, select: { text: true } });
     expect(lines.map((l) => l.text)).toEqual([`Automático parou em ${c.ref}: O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.`]);
 
-    await age(RETRY_BACKOFF_MS + 1000);
+    await age(LONGEST_WAIT_MS + 1000);
     const later = makeDeps();
     await tickOnce(later.deps);
     expect(later.startAgent).not.toHaveBeenCalled(); // untagged: out of the queue until a person tags it again

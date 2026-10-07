@@ -7,11 +7,12 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { applyState } from '../monitor/ingest.js';
-import { sendKeyToSession, sendTextToSession } from '../terminal/session-ops.js';
+import { sendKeyToSession, sendTextToSession, typeCommandLine } from '../terminal/session-ops.js';
 import { RESUME_PROMPT, resumeLine } from './agents.js';
 import { activeRunPermission } from '../automation/permission.js';
 import { serverMessage } from '../automation/marker.js';
 import { projectAccountsOn } from '../ai/project-accounts.js';
+import { guardAccount, usableIn } from '../ai/exclusive.js';
 import { notifyLimitInChat } from '../chat/tab-limits.js';
 import { ControlError } from './context.js';
 import { offline } from './screen.js';
@@ -169,9 +170,11 @@ export async function swapAccount(
       if (chosen.machine_id !== machine.id) throw new ControlError('ACCOUNT_OTHER_MACHINE', msg('A conta "{{account}}" é de outra máquina', { account: chosen.label }));
       if (chosen.provider !== 'claude') throw new ControlError('PROVIDER_UNSUPPORTED', 'Só contas do Claude podem assumir esta sessão');
       if (chosen.id === tab.ai_account_id) throw new ControlError('SAME_ACCOUNT', 'Esta aba já roda nessa conta');
+      // TER-990: never onto an account exclusive to another project, even picked by hand
+      await guardAccount(repos, log, chosen, { project_id: tab.project_id, path: 'account_swap', machine_id: machine.id, tab_id: tab.id });
       pool = [chosen];
     } else {
-      pool = here.filter((a) => a.id !== tab.ai_account_id);
+      pool = here.filter((a) => a.id !== tab.ai_account_id && usableIn(a, tab.project_id));
     }
     // The project's order and model (TER-589). An account the person picked is taken as is, listed or not.
     const prefs = await swapPreferences(repos, tab, machine);
@@ -247,7 +250,7 @@ export async function swapAccount(
     const updated = (await repos.tabs.setAgentFields(tab.id, { ai_account_id: to.id, rate_limited_at: null })) ?? tab;
     const text = `${opts.auto ? ACCOUNT_SWAP_AUTO_TEXT : ACCOUNT_SWAP_TEXT}: ${from?.label ?? 'conta desconhecida'} → ${to.label}. Se o Claude pedir para confiar na pasta, confirme na aba.`;
     await applyState(repos, log, updated, 'claude', { kind: 'waiting_input', text, meta: { event: 'AccountSwap', from: from?.id ?? null, to: to.id, auto: opts.auto } });
-    await sendTextToSession(machine, session, line, true);
+    await typeCommandLine(machine, session, line);
 
     log.info({ tabId: tab.id, machineId: machine.id, from: from?.id ?? null, to: to.id, auto: opts.auto }, 'account swap: done');
     return { from: from && { id: from.id, label: from.label }, to: { id: to.id, label: to.label } };

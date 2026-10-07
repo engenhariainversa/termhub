@@ -111,6 +111,8 @@ export function statusLabel(q: TabQuestion): string {
 export function answerSummary(q: TabQuestion): string[] {
   if (q.kind === 'permission') {
     if (!q.answer) return [];
+    const option = q.answer.option;
+    if (option) return [q.answer.allow ? i18n.t('Permitido: «{{option}}»', { option: option.summary ?? option.label }) : i18n.t('Negado: «{{option}}»', { option: option.summary ?? option.label })];
     return [q.answer.allow ? i18n.t('Permitido') : q.answer.text ? i18n.t('Negado: «{{text}}»', { text: q.answer.text }) : i18n.t('Negado')];
   }
   const answers = q.answer?.answers;

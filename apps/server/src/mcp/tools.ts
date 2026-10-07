@@ -7,6 +7,7 @@ import type { ControlContext } from '../control/context.js';
 import { TAB_TOKEN_TOOLS } from './tab-token.js';
 import { listProjectGroups } from '../control/groups.js';
 import { find, listAiAccounts, listMachines, listProjects, listTabs } from '../control/inventory.js';
+import { setAccountExclusive } from '../control/account-exclusive.js';
 import { ANSWER_DEFAULT_CHARS, ANSWER_MAX_CHARS, readLastAnswer, readScreen, SCREEN_MAX_LINES, WAIT_MAX_SECONDS, waitForState } from '../control/screen.js';
 import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendInput, sendKey } from '../control/terminals.js';
 import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
@@ -121,10 +122,18 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_ai_accounts',
     description:
-      "List the AI CLI accounts (Claude, Codex, Gemini, Antigravity) logged in on your machines: id, provider, label, machine and default. default: true is the machine's own login for that CLI (the one it uses with no config dir override); false is another login kept on the same machine.",
+      "List the AI CLI accounts (Claude, Codex, Gemini, Antigravity) logged in on your machines: id, provider, label, machine, default and exclusive_project. default: true is the machine's own login for that CLI (the one it uses with no config dir override); false is another login kept on the same machine. exclusive_project ({ id, name }, or null) is the only project the account may run in — show it as \"Exclusiva: <name>\"; start_agent, swaps, restarts and the chat refuse it anywhere else.",
     scope: 'read', resource: 'ai_accounts', action: 'read',
     input: { machine_id: id.optional() },
     run: (ctx, a) => listAiAccounts(ctx, a as { machine_id?: string }),
+  },
+  {
+    name: 'set_ai_account_exclusive',
+    description:
+      "Make an AI account exclusive to one project (project_id), or free it again (project_id: null). An exclusive account (a client's or a company's login) runs only in that project: start_agent, the project Setup, account swaps, automatic work, restarts and the chat refuse it in any other, and the machine's default login marked exclusive is no fallback elsewhere. Needs confirm: true; without it the answer says what would change and nothing happens. Every change is written to the project's automation events. Agent tabs cannot call it.",
+    scope: 'terminals', resource: 'ai_accounts', action: 'update',
+    input: { account_id: id, project_id: id.nullable(), confirm: z.boolean().optional() },
+    run: (ctx, a) => setAccountExclusive(ctx, a as { account_id: string; project_id: string | null; confirm?: boolean }, ctx.token?.gated ? 'chat' : 'mcp'),
   },
   {
     name: 'find',
@@ -260,7 +269,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_automation_queue',
     description:
-      "List a project's cards tagged \"automático\" in the order automatic work takes them (board order: column, then position). Each item has the card's ref, title, whether it is eligible now and, when it is not, the reason code and its pt-BR text (automation off, paused, type not allowed, not in a todo column, no description, already has an agent, no machine with the worktree capability, repository not configured; or, for an eligible card the dispatcher found no place for: no account with room, machine offline, machine without room, no machine accepting automatic work, followed by each machine and account it left out and why). Untagged cards and subtasks are not listed.",
+      "List a project's cards tagged \"automático\" in the order automatic work takes them (board order: column, then position). Each item has the card's ref, title, whether it is eligible now and, when it is not, the reason code and its pt-BR text (automation off, paused, type not allowed, not in a todo column, no description, already has an agent, no machine with the worktree capability, repository not configured; or, for an eligible card the dispatcher found no place for: no account with room, machine offline, machine without room, no machine accepting automatic work, followed by each machine and account it left out and why; or start_backoff: its last start failed and the next attempt waits, with the attempt, the minutes left and the failure's reason). Untagged cards and subtasks are not listed.",
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id },
     run: async (ctx, a) => ({ items: await automationQueue(ctx, (a as { project_id: string }).project_id) }),
@@ -371,7 +380,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_automation_events',
     description:
-      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses, and changes to what it may do (automation_on/off, setup_changed, cards tagged/untagged, machine_opt_in/out, each with via: chat, mcp, web or app). Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons, and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
+      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses, and changes to what it may do (automation_on/off, setup_changed, cards tagged/untagged, machine_opt_in/out, each with via: chat, mcp, web or app). Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons (a run_blocked with stage start also has message, the failure's reason in pt-BR, message_en, attempt of max_attempts, and retry_at or untagged), and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
     scope: 'read', resource: 'projects', action: 'read',
     input: { project_id: id, before: z.string().datetime({ offset: true }).optional(), limit: z.number().int().min(1).max(AUTOMATION_EVENTS_PAGE_MAX).optional() },
     run: async (ctx, a) => {

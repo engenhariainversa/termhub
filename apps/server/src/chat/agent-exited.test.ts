@@ -11,8 +11,9 @@ vi.mock('./tab-questions.js', () => ({ publishTabQuestions, closeTabQuestions })
 vi.mock('../control/account-swap.js', () => ({ swapPreferences }));
 
 const { EXITED_RESUME_PROMPT, notifyAgentExited, resumeCommandFor } = await import('./agent-exited.js');
-const { AUTOMATION_DENIED_TOOLS } = await import('../control/agents.js');
+const { AUTOMATION_DENIED_TOOLS, AUTOMATION_READ_TOOLS } = await import('../control/agents.js');
 const DENY = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => `'${t}'`).join(' ')}`;
+const READ = AUTOMATION_READ_TOOLS.map((t) => `'${t}'`).join(' ');
 
 const SID = '6d127d73-4bd0-42d6-b4a6-d96899507e62';
 const AT = '2026-10-01T05:48:20.000Z';
@@ -72,7 +73,13 @@ describe('resumeCommandFor an automatic tab (preflight F-12)', () => {
 
   it('resumes the session with the run\'s permission profile and the given message', async () => {
     const line = await resumeCommandFor(repos().r, tab(), machine, auto);
-    expect(line).toBe(`CLAUDE_CONFIG_DIR="$HOME"/'.claude_b' claude --permission-mode acceptEdits --allowedTools 'Bash(git status:*)' ${DENY} --resume ${SID} -- '[termhub automático] continue'`);
+    expect(line).toBe(`CLAUDE_CONFIG_DIR="$HOME"/'.claude_b' claude --permission-mode acceptEdits --allowedTools ${READ} 'Bash(git status:*)' ${DENY} --resume ${SID} -- '[termhub automático] continue'`);
+  });
+
+  it('leaves the git -C forms of the run worktree out of a line typed whole (TER-991)', async () => {
+    const line = await resumeCommandFor(repos().r, tab(), machine, { ...auto, permission: { ...auto.permission, worktree: '/w/TER-1' } });
+    expect(line).toBe(await resumeCommandFor(repos().r, tab(), machine, auto));
+    expect(line).not.toContain('-C ');
   });
 
   it('with no session id, continues the last one with the profile and the message', async () => {
@@ -102,7 +109,7 @@ describe('notifyAgentExited (TER-643)', () => {
     await notifyAgentExited(r, log(), tab(), machine, AT);
     expect(open).toHaveBeenCalledTimes(1);
     const payload = (open.mock.calls[0] as unknown as [{ payload: { text: string } }])[0].payload;
-    expect(payload.text).toContain("--permission-mode acceptEdits --allowedTools 'Bash(make:*)'");
+    expect(payload.text).toContain(`--permission-mode auto --allowedTools ${READ} 'Bash(make:*)'`);
     expect(payload.text).toContain(`--resume ${SID} -- '${EXITED_RESUME_PROMPT}'`);
   });
 
@@ -143,5 +150,29 @@ describe('notifyAgentExited (TER-643)', () => {
     const l = log();
     await expect(notifyAgentExited(r, l, tab(), machine, AT)).resolves.toBeUndefined();
     expect(l.warn).toHaveBeenCalledWith(expect.objectContaining({ tabId: 'tab1abc' }), 'agent exited card failed');
+  });
+});
+
+describe('resumeCommandFor with an account exclusive to a project (TER-990)', () => {
+  const exclusive = { ...account, exclusive_project: { id: 'p9', name: 'DR Horton' } } as AiAccount;
+
+  it("never brings back the tab's account in another project", async () => {
+    await expect(resumeCommandFor(repos({ accounts: [exclusive] }).r, tab(), machine)).rejects.toMatchObject({ code: 'ACCOUNT_EXCLUSIVE' });
+  });
+
+  it("refuses the machine's default login when it is the exclusive one and the tab has no account", async () => {
+    const defaultLogin = { ...exclusive, config_dir: null } as AiAccount;
+    await expect(resumeCommandFor(repos({ accounts: [defaultLogin] }).r, tab({ ai_account_id: null }), machine)).rejects.toMatchObject({ code: 'ACCOUNT_EXCLUSIVE' });
+  });
+
+  it('resumes it in its own project', async () => {
+    expect(await resumeCommandFor(repos({ accounts: [exclusive] }).r, tab({ project_id: 'p9' }), machine)).toContain(`--resume ${SID}`);
+  });
+
+  it('leaves no resume card offering it', async () => {
+    const { r, open } = repos({ accounts: [exclusive] });
+    const l = log();
+    await notifyAgentExited(r, l, tab(), machine, AT);
+    expect(open).not.toHaveBeenCalled();
   });
 });

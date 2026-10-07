@@ -28,6 +28,8 @@ export const RESUME_CAP = 'resume_cap';
 export const START_FAILED = 'start_failed';
 /** The agent exited again after its one restart: the run ends blocked. */
 export const AGENT_EXITED = 'agent_exited';
+/** TER-990: the agent exited and its account is exclusive to another project: it is not restarted there. */
+export const ACCOUNT_EXCLUSIVE = 'account_exclusive';
 /** A PR still in conflict after `fix_attempts` fixer runs (merge executor, spike R2): a person resolves it. */
 export const CONFLICT_CAP = 'conflict_cap';
 /** A PR whose CI is still red after `fix_attempts` fixes (spec D21, shared with the conflict fixes): a person looks at it. */
@@ -56,6 +58,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [RESUME_CAP]: tk('O agente parou várias vezes sem terminar e o chat não soube continuar; confira a aba.'),
   [START_FAILED]: tk('O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.'),
   [AGENT_EXITED]: tk('O agente saiu de novo depois de reiniciado; confira a aba.'),
+  [ACCOUNT_EXCLUSIVE]: tk('O agente saiu e a conta dele é exclusiva de outro projeto; não foi reiniciado. Escolha outra conta e retome.'),
   [CARD_BUDGET]: tk('Orçamento do card estourado; o agente não foi retomado. Confira a aba e retome quando quiser.'),
   [REPORTED_BLOCKED]: tk('O agente disse que travou e precisa de você.'),
   [DEPLOY_FAILED]: tk('O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.'),

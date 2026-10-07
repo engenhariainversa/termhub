@@ -72,7 +72,8 @@ const writeTools = new Set([
 // (spec 2026-09-28 MCP integrations D6): always a card, never covered by a grant.
 // automation_merge is the card the merge executor asks for a PR above the project's level (agentic board
 // D7): never a concierge tool, never covered by a grant; approving it merges that PR once.
-const irreversibleTools = new Set(['close_tab', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'automation_merge']);
+// set_ai_account_exclusive decides where a client's account may run (TER-990): always the person's card.
+const irreversibleTools = new Set(['close_tab', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'automation_merge', 'set_ai_account_exclusive']);
 
 // Keys that interrupt the running process and cannot be undone
 const interruptingKeys = new Set(['C-c', 'Escape']);

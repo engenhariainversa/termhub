@@ -12,6 +12,7 @@ const MACHINE_TEXT: Record<MachineVerdict, string> = {
 
 const ACCOUNT_TEXT: Record<AccountVerdict, string> = {
   not_listed: tk('fora das contas do projeto no Setup'),
+  exclusive: tk('exclusiva de outro projeto'),
   exhausted: tk('no limite de uso'),
   busy: tk('uso em {{peak}}% (o automático para em 80%)'),
   taken: tk('já recebeu um início nesta rodada'),

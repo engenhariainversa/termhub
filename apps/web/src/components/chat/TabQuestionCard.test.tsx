@@ -41,7 +41,7 @@ it('"Outra resposta" answers with text and sets the options aside', () => {
 
 it('a permission card shows the live excerpt and allows, denies, or denies with a sentence', async () => {
   const onAnswer = vi.fn();
-  const loadScreen = vi.fn(async () => 'Bash command\n  touch probe-file.txt\nDo you want to proceed?');
+  const loadScreen = vi.fn(async () => ({ text: 'Bash command\n  touch probe-file.txt\nDo you want to proceed?' }));
   render(<TabQuestionCard question={permission()} answering={false} onAnswer={onAnswer} loadScreen={loadScreen} />);
   expect(screen.getByText('A aba «api» pede permissão para usar «Bash»')).toBeInTheDocument();
   // Expanded by default: the tool's name alone does not say what is about to run.
@@ -58,6 +58,35 @@ it('a permission card shows the live excerpt and allows, denies, or denies with 
   expect(onAnswer).toHaveBeenLastCalledWith('q2', { allow: false, text: 'use pnpm' });
 });
 
+it('a permission card offers every option of the dialog, the one that stops asking marked (TER-995)', async () => {
+  const onAnswer = vi.fn();
+  const auto = 'Yes, and switch to auto mode · auto mode handles these prompts for you';
+  const options = [
+    { number: 1, label: 'Yes', summary: 'Yes', allow: true, highlight: false },
+    { number: 2, label: "Yes, and don't ask again for termhub - Create Task commands", summary: "Yes, and don't ask again for termhub - Create Task commands", allow: true, highlight: true },
+    { number: 3, label: auto, summary: 'Yes, and switch to auto mode', allow: true, highlight: true },
+    { number: 4, label: 'No', summary: 'No', allow: false, highlight: false },
+  ];
+  render(<TabQuestionCard question={permission()} answering={false} onAnswer={onAnswer} loadScreen={vi.fn(async () => ({ text: 'Do you want to proceed?', options }))} />);
+  const group = await screen.findByRole('group', { name: 'Opções da aba' });
+  expect(group.querySelectorAll('button')).toHaveLength(4);
+  const autoButton = screen.getByRole('button', { name: '3. Yes, and switch to auto mode' });
+  expect(autoButton).toHaveClass('btn-primary');
+  expect(screen.getByRole('button', { name: '1. Yes' })).not.toHaveClass('btn-primary');
+  fireEvent.click(autoButton);
+  expect(onAnswer).toHaveBeenLastCalledWith('q2', { allow: true, option: { number: 3, label: auto } });
+  fireEvent.click(screen.getByRole('button', { name: '4. No' }));
+  expect(onAnswer).toHaveBeenLastCalledWith('q2', { allow: false, option: { number: 4, label: 'No' } });
+  // The shortcuts stay.
+  expect(screen.getByRole('button', { name: 'Permitir' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Negar' })).toBeInTheDocument();
+});
+
+it('a closed permission card names the option chosen', () => {
+  render(<TabQuestionCard question={permission({ status: 'answered', answer: { allow: true, option: { number: 3, label: 'x', summary: 'Yes, and switch to auto mode' } } } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+  expect(screen.getByText('Permitido: «Yes, and switch to auto mode»')).toBeInTheDocument();
+});
+
 it('disables every answer while one is in flight', () => {
   render(<TabQuestionCard question={permission()} answering onAnswer={vi.fn()} />);
   expect(screen.getByRole('button', { name: 'Permitir' })).toBeDisabled();
@@ -70,7 +99,7 @@ it.each([
   [permission({ status: 'expired' }), ['Expirada']],
   [permission({ status: 'failed', error_code: 'MACHINE_OFFLINE', answer: { allow: true } } as Partial<TabQuestion>), ['Permitido', 'Falhou — a máquina está offline']],
 ])('a closed card is read-only and says how it ended (%#)', (q, texts) => {
-  render(<TabQuestionCard question={q} answering={false} onAnswer={vi.fn()} loadScreen={vi.fn(async () => 'x')} />);
+  render(<TabQuestionCard question={q} answering={false} onAnswer={vi.fn()} loadScreen={vi.fn(async () => ({ text: 'x' }))} />);
   for (const t of texts) expect(screen.getByText(t)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Responder|Permitir/ })).toBeNull();
 });

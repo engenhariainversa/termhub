@@ -421,4 +421,27 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatActionsRepository (Po
       expect(counts.get(conversationId) ?? 0).toBe(0);
     });
   });
+
+  // TER-986. Last on purpose: the orphan sweep is global, and the rows this file left pending point at
+  // tabs that never existed — they are swept too, which nothing above relies on any more.
+  it('a closed tab retires its pending cards as TAB_GONE, and only those; the orphan sweep catches the rest', async () => {
+    const gone = `t-gone-${newId()}`;
+    const mk = (key: string, tabId: string) => repo.insertPending({ conversation_id: conversationId, tool: 'send_input', args: { tab_id: tabId, text: 'oi' }, idempotency_key: key, class: 'write', tab_id: tabId });
+    const a = await mk(`tg-a-${gone}`, gone);
+    const decided = await mk(`tg-b-${gone}`, gone);
+    await repo.decide(decided.id, userId, 'approved');
+    const other = await mk(`tg-c-${gone}`, `${gone}-other`);
+
+    const moved = await repo.failPendingForTab(gone);
+    expect(moved).toEqual([{ action: expect.objectContaining({ id: a.id, status: 'failed', error_code: 'TAB_GONE' }), user_id: userId }]);
+    expect((await repo.findById(decided.id))?.status).toBe('approved');
+    expect((await repo.findById(other.id))?.status).toBe('pending');
+    expect(await repo.failPendingForTab(gone)).toEqual([]);
+
+    expect(await repo.failPendingTabGone(a.id)).toBeUndefined(); // no longer pending
+    const swept = await repo.failOrphanPending();
+    expect(swept.map((r) => r.action.id)).toContain(other.id);
+    expect(swept.find((r) => r.action.id === other.id)).toMatchObject({ user_id: userId, action: { status: 'failed', error_code: 'TAB_GONE' } });
+    expect(swept.map((r) => r.action.id)).not.toContain(decided.id);
+  });
 });

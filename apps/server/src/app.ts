@@ -57,6 +57,7 @@ import { createWaker } from './chat/wake.js';
 import { startMemorySweeper } from './memory/sweeper.js';
 import { agentRunner } from './chat/runner.js';
 import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
+import { expireOrphanTabActions, startTabGoneActionExpiry } from './chat/tab-gone-actions.js';
 import { stopTabSuggestions } from './chat/tab-suggestions.js';
 import { registerChatWs } from './chat/ws.js';
 import { roleRoutes } from './routes/roles.js';
@@ -332,6 +333,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     if (mobile) void purgeMobile(repos, mobile.enrolment).catch(() => {});
     // Cards whose tab vanished without a lifecycle event (the other color removed it, a crash): spec 2026-09-26 §4.7.
     void expireOrphanTabQuestions(repos, fastify.log);
+    // Pending chat cards whose tab vanished the same way (TER-986).
+    void expireOrphanTabActions(repos, fastify.log);
     // Accounts whose 30-day deletion window is over go for good (TER-720); both colors may run it, the row lock picks one.
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
     // Automation events are kept 30 days (agentic board).
@@ -340,9 +343,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
   const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);
   const stopTabQuestionExpiry = startTabQuestionExpiry(repos, fastify.log);
+  const stopTabGoneActionExpiry = startTabGoneActionExpiry(repos, fastify.log);
   // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615).
   const stopStaleWorking = startStaleWorkingSweeper(repos, fastify.log);
   void expireOrphanTabQuestions(repos, fastify.log);
+  void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
   const stopMemorySweeper = startMemorySweeper(repos, fastify.log);
   // Live concierge runs survive a restart or a deploy (spec 2026-09-26 panel §3): this instance proves
@@ -397,6 +402,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopSummaries();
     stopAgentUpdates();
     stopTabQuestionExpiry();
+    stopTabGoneActionExpiry();
     stopStaleWorking();
     stopDecisionSweeper();
     stopMemorySweeper();

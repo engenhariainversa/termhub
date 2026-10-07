@@ -2,14 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 
-const { agentRpc, requireAgentVersion, requireTranscriptCapable, runOnMachine } = vi.hoisted(() => ({
+const { agentRpc, requireAgentVersion, requireTranscriptCapable, runOnMachine, runOnMachineWithInput } = vi.hoisted(() => ({
   agentRpc: vi.fn(),
   requireAgentVersion: vi.fn(),
   requireTranscriptCapable: vi.fn(),
   runOnMachine: vi.fn(),
+  runOnMachineWithInput: vi.fn(),
 }));
 vi.mock('../agent/errors.js', () => ({ agentRpc, requireAgentVersion, requireTranscriptCapable }));
-vi.mock('./machine-exec.js', async (orig) => ({ ...(await orig<typeof import('./machine-exec.js')>()), runOnMachine }));
+vi.mock('./machine-exec.js', async (orig) => ({ ...(await orig<typeof import('./machine-exec.js')>()), runOnMachine, runOnMachineWithInput }));
 // Deterministic buffer name so the paste tests can assert the exact script instead of a pattern.
 // A plain function, not vi.fn(): beforeEach's resetAllMocks() would otherwise wipe its return value.
 vi.mock('node:crypto', async (importOriginal) => {
@@ -28,6 +29,8 @@ const {
   TERMINAL_FOREGROUND_MIN_AGENT_VERSION,
   TERMINAL_RPC_MIN_AGENT_VERSION,
   TERMINAL_SCROLL_MIN_AGENT_VERSION,
+  TYPED_LINE_MAX_BYTES,
+  typeCommandLine,
 } = await import('./session-ops.js');
 const { buildPaneForegroundScript, buildScrollScript } = await import('@termhub/machine-ops');
 
@@ -102,6 +105,53 @@ describe('agent machines', () => {
     });
     await expect(sendTextToSession(machine('agent'), 's1', 'linha um\nlinha dois', true, { paste: true })).rejects.toMatchObject({ code: 'AGENT_OUTDATED' });
     expect(agentRpc).not.toHaveBeenCalled();
+  });
+});
+
+// TER-987: an automatic launch line (prompt, allow and deny lists) is longer than one tmux.sendText carries,
+// and a long burst typed into a fresh shell loses bytes on macOS: a long line goes through a file instead.
+describe('typeCommandLine', () => {
+  it('types a short line as it is, with Enter', async () => {
+    agentRpc.mockResolvedValue({ sent: true });
+    await typeCommandLine(machine('agent'), 's1', 'claude -- oi');
+    expect(agentRpc).toHaveBeenCalledTimes(1);
+    expect(agentRpc).toHaveBeenCalledWith(expect.anything(), 'tmux.sendText', { session: 's1', text: 'claude -- oi', enter: true });
+  });
+
+  it('writes a long line to a file on the machine and types only the line that runs it and removes it', async () => {
+    const path = '/Users/u/.cache/termhub/paste/paste-x-launch.sh';
+    agentRpc.mockImplementation(async (_m: unknown, method: string) => (method === 'file.paste' ? { path } : { sent: true }));
+    const line = `claude --permission-mode acceptEdits -- '${'é'.repeat(TYPED_LINE_MAX_BYTES)}'`;
+    await typeCommandLine(machine('agent'), 's1', line);
+    expect(agentRpc.mock.calls.map((c) => c[1])).toEqual(['file.paste', 'tmux.sendText']);
+    const written = agentRpc.mock.calls[0][2] as { name: string; data_b64: string };
+    expect(written.name).toMatch(/^paste-.*-launch\.sh$/);
+    expect(Buffer.from(written.data_b64, 'base64').toString('utf8')).toBe(`${line}\n`);
+    expect(agentRpc.mock.calls[1][2]).toEqual({ session: 's1', text: `. '${path}'; command rm -f -- '${path}'`, enter: true });
+  });
+
+  it('counts bytes, not characters: accented text reaches the limit sooner', async () => {
+    agentRpc.mockImplementation(async (_m: unknown, method: string) => (method === 'file.paste' ? { path: '/h/p' } : { sent: true }));
+    await typeCommandLine(machine('agent'), 's1', 'ç'.repeat(TYPED_LINE_MAX_BYTES / 2 + 1));
+    expect(agentRpc.mock.calls[0][1]).toBe('file.paste');
+  });
+
+  it('types nothing when the file could not be written', async () => {
+    agentRpc.mockRejectedValueOnce(new HttpError(502, 'Resposta inesperada da máquina'));
+    await expect(typeCommandLine(machine('agent'), 's1', 'x'.repeat(TYPED_LINE_MAX_BYTES + 1))).rejects.toMatchObject({ statusCode: 502 });
+    expect(agentRpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes through the same file on a local or ssh machine', async () => {
+    runOnMachineWithInput.mockResolvedValue({ code: 0, stdout: '/home/u/.cache/termhub/paste/p.sh\n', stderr: '', timedOut: false });
+    runOnMachine.mockResolvedValue({ code: 0, stdout: '', stderr: '', timedOut: false });
+    const line = 'x'.repeat(TYPED_LINE_MAX_BYTES + 1);
+    await typeCommandLine(machine('ssh'), 's1', line);
+    expect((runOnMachineWithInput.mock.calls[0][3] as Buffer).toString('utf8')).toBe(`${line}\n`);
+    const typed = runOnMachine.mock.calls.map((c) => c[2] as string).join('\n');
+    expect(typed).not.toContain(line);
+    expect(typed).toContain('command rm -f -- ');
+    expect(typed).toContain('/home/u/.cache/termhub/paste/p.sh');
   });
 });
 

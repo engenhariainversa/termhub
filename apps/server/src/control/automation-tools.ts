@@ -7,6 +7,20 @@ import { GIT_BRANCH_RE } from '@termhub/agent-protocol';
  */
 
 /**
+ * termhub MCP tools an automatic tab never calls (TER-993), from the person's own `termhub` MCP when their
+ * Claude config loads it: what would let a run reach past its card — change what automation may do, drive or
+ * close other tabs, start agents, answer the person's cards, touch machines, repositories, integrations or
+ * external tickets, delete cards. Not on the tab's line (a resume line is typed whole and has no room for
+ * them): the server never answers yes to them (`permissionAllowed`).
+ */
+export const AUTOMATION_MCP_DENIED_TOOLS: readonly string[] = [
+  'set_automation_policy', 'resume_automation', 'resume_automation_run', 'escalate_automation_run', 'set_machine_automation',
+  'start_agent', 'open_tab', 'close_tab', 'send_input', 'send_key', 'run_command', 'answer_tab_question',
+  'link_project_machine', 'unlink_project_machine', 'set_project_machine_cwd', 'set_project_repo',
+  'create_integration', 'push_ticket_status', 'delete_task',
+].map((t) => `mcp__termhub__${t}`);
+
+/**
  * What an automatic tab never does, whatever its project allows (TER-968, spec R5): fixed here, not
  * editable per project, passed as `--disallowedTools` on every automatic line and applied again by the
  * server's `permissionAllowed`, where it beats any `allowed_tools` entry.
@@ -56,6 +70,19 @@ export const AUTOMATION_DENIED_TOOLS: readonly string[] = [
   'Bash(git merge -s*)',
   'Bash(git merge * -s*)',
   'Bash(git merge *--str*)',
+  // options that run a program or write a file, on the read commands `AUTOMATION_READ_TOOLS` allows (TER-989)
+  'Bash(find *-exec*)',
+  'Bash(find *-ok*)',
+  'Bash(find *-delete*)',
+  'Bash(find *-fprint*)',
+  'Bash(find *-fls*)',
+  'Bash(rg *--pre*)',
+  'Bash(git grep *-O*)',
+  'Bash(git grep *--open*)',
+  'Bash(git show *--ext*)',
+  'Bash(git show *--output*)',
+  'Bash(sort *-o*)',
+  'Bash(sort *--comp*)',
   'Bash(gh pr merge:*)',
   'Bash(gh api:*)',
   'Bash(gh secret:*)',
@@ -92,7 +119,76 @@ export const AUTOMATION_DENIED_TOOLS: readonly string[] = [
   'Edit(~/.claude*/.credentials.json)',
   'Read(~/.aws/**)',
   'Edit(~/.aws/**)',
+  // credentials a free `cat` could reach outside the worktree (TER-989): the machine agent's own config, the
+  // hook's env, other tabs' MCP tokens, npm/git/docker logins. Read only: acceptEdits never edits outside it.
+  'Read(~/.termhub/config.json)',
+  'Read(~/.termhub/hook.env)',
+  'Read(~/.termhub/tabs/**)',
+  'Read(~/.npmrc)',
+  'Read(~/.netrc)',
+  'Read(~/.git-credentials)',
+  'Read(~/.docker/config.json)',
 ];
+
+/**
+ * The git denies of `AUTOMATION_DENIED_TOOLS` again, in the forms `gitRuleForms` allows (TER-991):
+ * `git -C <worktree> log --ext-diff` and `git --no-pager diff --output=x` start with neither `git log` nor
+ * `git diff`. Only for the `:*` rules: a push form is exact, so no option can be added to it. Kept apart
+ * from the fixed list because a line typed whole has no room for them (`gitRuleForms`); the server's
+ * `permissionAllowed` always applies them.
+ */
+export const AUTOMATION_FORM_DENIED_TOOLS: readonly string[] = [
+  ...['--ext', '--output', '--no-index'].flatMap((o) => [`Bash(git -C *${o}*)`, `Bash(git --no-pager *${o}*)`]),
+  ...['merge -s*', 'merge * -s*', 'merge *--str*', 'grep *-O*', 'grep *--open*'].flatMap((rest) =>
+    ['-C * ', '--no-pager ', '--no-pager -C * '].map((p) => `Bash(git ${p}${rest})`),
+  ),
+];
+
+/**
+ * What every automatic tab may run without asking, whatever its project's allow list says (TER-989): reading
+ * and searching the code and git's read commands. Fixed here like the deny list, since an agent's first move
+ * is a search, and a run whose `grep` asks stops for the person seconds after it starts. Only commands that
+ * cannot write or run another program: the options of these that could (`find -exec`, `rg --pre`,
+ * `git grep -O`, `sort -o`…) are in `AUTOMATION_DENIED_TOOLS`, read before any allow rule. No `sed`, `awk`,
+ * `xargs` or `echo` (sed's `e` and awk's `system` run commands; a redirect writes). Claude Code splits a
+ * piped or chained command and checks each part, so `rg x | head -40` passes; a command with more than one
+ * `cd` always asks (the prompt says to avoid it). Files inside the worktree are written by `acceptEdits`.
+ */
+export const AUTOMATION_READ_TOOLS: readonly string[] = [
+  'Bash(grep:*)',
+  'Bash(rg:*)',
+  'Bash(find:*)',
+  'Bash(ls:*)',
+  'Bash(cat:*)',
+  'Bash(head:*)',
+  'Bash(tail:*)',
+  'Bash(wc:*)',
+  'Bash(sort:*)',
+  'Bash(diff:*)',
+  'Bash(pwd)',
+  'Bash(git show:*)',
+  'Bash(git grep:*)',
+  'Bash(git blame:*)',
+  'Bash(git rev-parse:*)',
+  'Bash(git ls-files:*)',
+  'Bash(git merge-base:*)',
+  'Bash(git branch)',
+  'Bash(git branch --show-current)',
+  'Bash(git remote -v)',
+];
+
+/**
+ * termhub's own MCP tools an automatic tab may call (TER-993), from the person's `termhub` MCP when their
+ * Claude config loads it: reading and adding cards. The server answers yes to their permission requests
+ * (`permissionAllowed`); they are not on the tab's line, which has no room left. The tab MCP's tools
+ * (`termhub_tab`) come pre-allowed with its `--mcp-config`. Exact names only: `mcp__termhub__*` would cover
+ * `AUTOMATION_MCP_DENIED_TOOLS`. Moving or editing a card (`move_task`, `update_task`) is left to the mode.
+ */
+export const AUTOMATION_MCP_TOOLS: readonly string[] = [
+  'find', 'search_memory', 'get_automation_policy', 'get_project_setup', 'get_ticket', 'list_tasks', 'list_tickets', 'list_projects',
+  'list_project_groups', 'list_machines', 'list_tabs', 'list_automation_events', 'list_automation_queue', 'read_attachment',
+  'create_task', 'add_subtasks', 'record_lesson',
+].map((t) => `mcp__termhub__${t}`);
 
 /**
  * The pushes an automatic run may send without asking (TER-968, spec R5): exact rules naming its own
@@ -122,6 +218,47 @@ export function branchFetchRules(branch: string | null): string[] {
 /** Every rule an automatic run gets from its own branch: its pushes and its fetch. */
 export function runBranchRules(branch: string | null): string[] {
   return [...branchPushRules(branch), ...branchFetchRules(branch)];
+}
+
+/**
+ * A worktree path that can sit inside a rule as is: absolute, and none of the characters that would change
+ * what the rule means to Claude Code (`*`, a space, `(`/`)`, quotes, shell operators) or a `..` segment.
+ */
+const RULE_PATH = /^\/[A-Za-z0-9._@%+=,~/-]*[A-Za-z0-9._@%+=,~-]$/;
+const safeRulePath = (p: string | null): p is string => !!p && RULE_PATH.test(p) && !p.split('/').includes('..');
+
+/**
+ * The same git rule in the equivalent forms an agent writes (TER-991): `git --no-pager <sub>` and, with the
+ * run's worktree, `git -C <worktree> <sub>` (the path as is, with a trailing `/` and as `.`, since the tab's
+ * cwd is the worktree), alone or with `--no-pager` on either side. Claude Code matches a rule on the
+ * command's text, so `Bash(git log:*)` misses `git -C <worktree> log`. Only the run's own worktree: a `-C`
+ * anywhere else (a subfolder included, since a `*` would also take `../..`) still asks. `-c core.pager=cat`
+ * stays denied with every `-c`, and nothing covers `GIT_PAGER=cat git …`: the Bash tool has no pager.
+ */
+export function gitRuleForms(rule: string, worktree: string | null): string[] {
+  const m = /^Bash\(git (?!-)([\s\S]+)\)$/.exec(rule);
+  if (!m) return [];
+  const dir = worktree?.replace(/\/+$/, '') ?? null;
+  const paths = safeRulePath(dir) ? [dir, `${dir}/`, '.'] : [];
+  const prefixes = ['--no-pager', ...paths.flatMap((p) => [`-C ${p}`, `-C ${p} --no-pager`, `--no-pager -C ${p}`])];
+  return prefixes.map((p) => `Bash(git ${p} ${m[1]})`);
+}
+
+/**
+ * The whole allow list of an automatic tab (TER-989): the fixed read rules, the project's list less what is
+ * too broad (`safeAllowedTools`) and the run's own branch rules, each once. With `forms` (TER-991), every git
+ * rule also comes in the forms of `gitRuleForms` for the run's worktree; the line must then carry
+ * `AUTOMATION_FORM_DENIED_TOOLS` too (`automationDenyList`). The tab's line and the server's
+ * `permissionAllowed` both use it, so they never disagree.
+ */
+export function automationAllowList(allowed: readonly string[], branch: string | null, forms?: { worktree: string | null } | null): string[] {
+  const base = [...AUTOMATION_READ_TOOLS, ...safeAllowedTools(allowed).kept, ...runBranchRules(branch)];
+  return [...new Set(forms ? [...base, ...base.flatMap((r) => gitRuleForms(r, forms.worktree))] : base)];
+}
+
+/** The deny list of a line: the fixed one, plus the denies of the git forms when the line allows them. */
+export function automationDenyList(forms: boolean): readonly string[] {
+  return forms ? [...AUTOMATION_DENIED_TOOLS, ...AUTOMATION_FORM_DENIED_TOOLS] : AUTOMATION_DENIED_TOOLS;
 }
 
 /**

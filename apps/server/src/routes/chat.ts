@@ -33,9 +33,11 @@ import {
   revokeGrant,
 } from '../chat/grants.js';
 import { decideMany } from '../chat/decisions.js';
+import { assertActionTabAlive } from '../chat/tab-gone-actions.js';
 import { DEFAULT_ALLOW_KINDS, DEFAULT_KIND_LABEL } from '../chat/gate.js';
 import { indexActions as indexActionsWrite } from '../memory/index-items.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
+import { auditBlocked, exclusiveError, usableIn } from '../ai/exclusive.js';
 
 /** Indexes decided gate actions, best effort, fire-and-forget — the writer for `chatRoutes`'/
  * `mobileChatRoutes`'s own `deps.indexActions` (spec 2026-09-26 concierge memory §4): only
@@ -170,6 +172,11 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       // also rejects an account of another machine of their own, whose config dir does not exist here.
       if (!account || account.machine_id !== machine.id) throw notFound('Conta de IA não encontrada nessa máquina');
       if (account.provider !== 'claude') throw new HttpError(400, 'O chat roda no Claude: escolha uma conta do Claude nessa máquina', 'CHAT_ACCOUNT_NOT_CLAUDE');
+      // TER-990: the chat's host runs the account-wide chat, outside any project — never on an exclusive account
+      if (!usableIn(account, null)) {
+        await auditBlocked(repos, request.log, account, { project_id: null, path: 'chat_host', machine_id: machine.id });
+        throw new HttpError(400, exclusiveError(account).localized, 'ACCOUNT_EXCLUSIVE');
+      }
     }
 
     const current = await deps.service.conversationFor(user);
@@ -221,6 +228,9 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     const status = decision === 'deny' ? 'denied' : 'approved';
     const user = request.scope.user;
 
+    // A card whose tab was closed is retired rather than approved (TER-986): 409 TAB_GONE, and every
+    // screen shows it as stale. Before the grant checks, so their refusal never names the wrong cause.
+    if (decision !== 'deny') await assertActionTabAlive(repos, user.id, id);
     // "Permitir sempre nesta aba" is only for what the gate will honour — checked before anything is
     // decided, so a refused request changes nothing (404 not found, 400 GRANT_NOT_ALLOWED otherwise).
     // "Liberar teclas e shell nesta aba" (TER-325) likewise.

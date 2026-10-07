@@ -16,7 +16,8 @@ export function feedLine(e: TAutomationFeedEvent): string | null {
     case 'run_done':
       return t('{{ref}}: agente terminou', { ref });
     case 'run_blocked':
-      return t('{{ref}}: parou e espera você', { ref });
+      // a start that failed says why (TER-987)
+      return e.reason_text ? t('{{ref}} não começou: {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: parou e espera você', { ref });
     case 'question_answered':
       return t('{{ref}}: pergunta do agente respondida', { ref });
     case 'escalated':

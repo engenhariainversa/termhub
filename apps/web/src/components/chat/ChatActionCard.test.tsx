@@ -194,6 +194,12 @@ describe('an expired or stale card (TER-477)', () => {
     expect(onRepropose).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1', summary: base.summary }));
   });
 
+  it('a send_input card whose tab was closed offers no grant at all, only "Propor de novo" (TER-986)', () => {
+    render(<ChatActionCard action={card({ status: 'failed', error_code: 'TAB_GONE', project_id: 'p1', summary: 'digitar `oi` numa aba que não existe mais do projeto App' })} deciding={false} onDecide={vi.fn()} onRepropose={vi.fn()} />);
+    expect(screen.getByText('Expirou: a aba foi fechada')).toBeInTheDocument();
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Propor de novo']);
+  });
+
   it('any other failure keeps "Falhou" and offers nothing', () => {
     render(<ChatActionCard action={card({ status: 'failed', error_code: 'MACHINE_OFFLINE' })} deciding={false} onDecide={vi.fn()} onRepropose={vi.fn()} />);
     expect(screen.getByText('Falhou')).toBeInTheDocument();
