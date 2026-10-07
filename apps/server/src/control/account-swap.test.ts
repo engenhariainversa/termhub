@@ -258,13 +258,13 @@ describe('swapAccount', () => {
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);
   });
 
-  it('a tab running automatic work keeps acceptEdits and the allow list on the new account, its prompt marked (F-12, D27)', async () => {
+  it('a tab running automatic work keeps the auto mode (TER-993) and the allow list on the new account, its prompt marked (F-12, D27)', async () => {
     const { repos, r } = makeRepos();
     repos.automationRuns.activeByTab.mockResolvedValue({ project_id: 'p1' });
     stored = baseTab({ state: 'idle' });
     await drive(swapAccount(r, log, baseTab(), machine(), { auto: false }));
-    const line = resumeLine(null, SID, serverMessage(RESUME_PROMPT), null, undefined, { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: null });
-    expect(line).toContain('--permission-mode acceptEdits');
+    const line = resumeLine(null, SID, serverMessage(RESUME_PROMPT), null, undefined, { mode: 'auto', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: null });
+    expect(line).toContain('--permission-mode auto ');
     expect(line).toContain('[termhub automático] A conta anterior');
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);
   });
