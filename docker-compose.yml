@@ -146,30 +146,6 @@ services:
     volumes:
       - embed-models:/models
 
-  # ── Headless Claude Code for the chat concierge (docker/concierge) ────────────
-  # Mounts the account config dirs read-write (the CLI refreshes its own token) and holds no
-  # credential in the image. Not rebuilt by a blue/green deploy, so a conversation survives one.
-  concierge:
-    profiles: ["dev", "prod"]
-    build:
-      context: .
-      dockerfile: docker/concierge/Dockerfile
-    image: termhub-concierge
-    restart: unless-stopped
-    # The host user, not root: the account config dirs below are mounted read-write (the CLI
-    # refreshes its own token) and a root-owned rewrite of those files makes the host user's own
-    # `claude` fail with EACCES. Override for a host whose uid:gid is not 1000:1000.
-    user: "${CONCIERGE_UID:-1000}:${CONCIERGE_GID:-1000}"
-    environment:
-      # Empty = the service refuses every request (see src/index.ts) and the app answers 503.
-      # Generate with: openssl rand -base64 32
-      CONCIERGE_SECRET: ${CONCIERGE_SECRET:-}
-      PORT: 4100
-    volumes:
-      # One account only: the second mount was a workaround for a single shared account, and with the
-      # chat running on each user's own machine and account (spec §6) nothing ever read it.
-      - ${CONCIERGE_PRIMARY_CONFIG_DIR:-/home/pedrogoiania/.claude_pedrogoiania}:/accounts/primary
-
   # ── Dev: hot-reload (tsx watch + vite) ─────────────────────────────
   app-dev:
     profiles: ["dev"]
