@@ -48,7 +48,9 @@ When step 1 or 2 still fails after the retries, the script runs `bash deploy/blu
   stopped (right after the very first blue/green deploy there is none: use the manual procedure in
   CLAUDE.md);
 - no migration added by this release (present in the checkout, absent from the stopped colour's
-  image, read with `docker cp`) contains `DROP`, `RENAME`, `ALTER … TYPE` or `SET NOT NULL`;
+  image, read with `docker cp`) contains `DROP`, `RENAME`, a column type change, `ALTER TYPE` or
+  `SET NOT NULL` (a `DROP INDEX` / `DROP TRIGGER` of a name the same migration creates again is a
+  rebuild and does not count, nor does a column that happens to be called `type`: `risky_statements`);
 - `DEPLOY_AUTO_ROLLBACK` is not `0`.
 
 `--rollback` itself refuses to switch to a colour that does not become healthy, so the site is never

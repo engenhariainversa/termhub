@@ -122,10 +122,23 @@ reset; export FAKE_SMOKE_CODE=1 FAKE_ROLLBACK_CODE=1
 expect "smoke fails + rollback script fails -> job fails, says so" 1 1 'rollback automático falhou' "$(run_post_deploy)"
 
 for sql in 'ALTER TABLE "a" DROP COLUMN "x";' 'ALTER TABLE "a" RENAME COLUMN "x" TO "y";' \
-  $'ALTER TABLE "a"\n  ALTER COLUMN "x" SET DATA TYPE TEXT;' 'ALTER TABLE "a" ALTER COLUMN "x" set not null;' 'DROP INDEX "i";'; do
+  $'ALTER TABLE "a"\n  ALTER COLUMN "x" SET DATA TYPE TEXT;' 'ALTER TABLE "a" ALTER COLUMN "x" set not null;' 'DROP INDEX "i";' \
+  'ALTER TABLE "a" ALTER COLUMN "x" TYPE TEXT;' 'ALTER TYPE "S" ADD VALUE '"'"'new'"'"';' 'ALTER TABLE "a" ALTER COLUMN "x" DROP NOT NULL;' \
+  $'DROP INDEX IF EXISTS "i";\nCREATE INDEX "i2" ON "a"("x");' 'DROP TRIGGER t ON a; CREATE TRIGGER t2 BEFORE INSERT ON a FOR EACH ROW EXECUTE FUNCTION f();' \
+  $'DROP INDEX "i";\nCREATE INDEX "i" ON "a"("x");\nALTER TABLE "a" DROP COLUMN "y";'; do
   reset; export FAKE_SMOKE_CODE=1
   add_migration 20261011000000_new "$sql"
   expect "smoke fails + unsafe migration ($(tr '\n' ' ' <<<"$sql" | cut -c1-40)) -> no rollback, job fails" 1 0 'sem rollback automático: migrations added by this release.*20261011000000_new' "$(run_post_deploy)"
+done
+
+# TER-974: what the check no longer takes for a breaking change.
+for sql in 'ALTER TABLE "tasks" ADD COLUMN "type" "TaskType" NOT NULL DEFAULT '"'"'task'"'"';' \
+  $'-- rebuilt with another predicate\nDROP INDEX IF EXISTS "one_per_user";\nCREATE UNIQUE INDEX IF NOT EXISTS "one_per_user" ON "c"("user_id") WHERE "tab_id" IS NULL;' \
+  $'DROP INDEX "i";\nCREATE INDEX "i" ON "a"("x", "y");' \
+  'DROP TRIGGER IF EXISTS t ON a; CREATE OR REPLACE TRIGGER t BEFORE INSERT ON a FOR EACH ROW EXECUTE FUNCTION f();'; do
+  reset; export FAKE_SMOKE_CODE=1
+  add_migration 20261011000000_new "$sql"
+  expect "smoke fails + safe migration ($(tr '\n' ' ' <<<"$sql" | cut -c1-40)) -> rollback once" 1 1 'revertido para green' "$(run_post_deploy)"
 done
 
 reset; export FAKE_SMOKE_CODE=1

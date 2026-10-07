@@ -7,8 +7,9 @@
 # test's app checks fail (steps 1-2), and only when:
 #   - the active colour is blue or green and the other colour exists and is stopped (there is no
 #     stopped colour right after the very first blue/green deploy);
-#   - no migration added by this release contains DROP, RENAME, ALTER ... TYPE or SET NOT NULL (the
-#     previous release may not work against such a schema, and a healthcheck would not show it).
+#   - no migration added by this release contains DROP, RENAME, a column type change, ALTER TYPE or
+#     SET NOT NULL (the previous release may not work against such a schema, and a healthcheck would
+#     not show it); `risky_statements` has the exact rules.
 # Never a revert commit, and never a release (npm / OTA). Whatever happens after a failed smoke
 # test, this script exits 1 so the deploy job fails and someone looks at it; the run summary says
 # what was done.
@@ -73,6 +74,37 @@ if [ "$smoke_code" != "1" ]; then
   exit 1
 fi
 
+# risky_statements <migration.sql>: the statements the previous release may not work against, one per
+# line; nothing when the migration is safe to roll back over. Comments are dropped and each statement is
+# read whole (one per line, split on ";"), so one split over lines is seen. Risky (TER-974 narrowed it,
+# still failing closed on anything it cannot tell apart):
+#   - DROP of anything, except a DROP INDEX / DROP TRIGGER of a name this same migration creates again
+#     (a rebuild: the previous release finds it there as before);
+#   - RENAME;
+#   - a column type change (ALTER COLUMN x TYPE / SET DATA TYPE) and ALTER TYPE (an enum value the
+#     previous release cannot read) - not a column that happens to be called "type";
+#   - SET NOT NULL.
+risky_statements() {
+  local sql created stmt low kind name
+  sql="$(sed -E 's/--.*$//' "$1" | tr '\n' ' ' | tr ';' '\n' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
+  # what the migration creates, lowercased and without the optional words: "create index name on ..."
+  created="$(tr 'A-Z' 'a-z' <<<"$sql" | grep -E '^create ' | sed -E 's/ (unique|or replace|if not exists) / /g; s/ (unique|or replace|if not exists) / /g')"
+  while IFS= read -r stmt; do
+    [ -n "$stmt" ] || continue
+    low="$(tr 'A-Z' 'a-z' <<<"$stmt")"
+    if grep -qE '^drop (index|trigger) (if exists )?("[^"]+"|[[:alnum:]_.]+)( on .*)?$' <<<"$low"; then
+      kind="$(cut -d' ' -f2 <<<"$low")"
+      name="$(sed -E 's/ if exists / /' <<<"$low" | cut -d' ' -f3)"
+      grep -qF "create $kind $name " <<<"$created" && continue
+      printf '%s\n' "$stmt"
+      continue
+    fi
+    if grep -qE '\bdrop\b|\brename\b|\balter type\b|\balter (column )?("[^"]+"|[[:alnum:]_]+) (set data )?type\b|\bset not null\b' <<<"$low"; then
+      printf '%s\n' "$stmt"
+    fi
+  done <<<"$sql"
+}
+
 # Prints why rolling back is not safe, or nothing when it is.
 unsafe_reason() {
   if [ "$AUTO_ROLLBACK" != "1" ]; then
@@ -105,14 +137,12 @@ unsafe_reason() {
     name="$(basename "$dir")"
     grep -qxF "$name" <<<"$old_list" && continue
     [ -f "$dir/migration.sql" ] || continue
-    # Comments dropped, statements joined on one line so ALTER ... TYPE split over lines is seen.
-    if sed -E 's/--.*$//' "$dir/migration.sql" | tr '\n' ' ' |
-      grep -qiE '\bDROP\b|\bRENAME\b|\bALTER\b[^;]*\bTYPE\b|\bSET[[:space:]]+NOT[[:space:]]+NULL\b'; then
+    if [ -n "$(risky_statements "$dir/migration.sql")" ]; then
       risky="$risky $name"
     fi
   done
   if [ -n "$risky" ]; then
-    echo "migrations added by this release may not be backward compatible (DROP / RENAME / ALTER ... TYPE / SET NOT NULL):$risky"
+    echo "migrations added by this release may not be backward compatible (DROP / RENAME / column type / ALTER TYPE / SET NOT NULL):$risky"
     return
   fi
 }
