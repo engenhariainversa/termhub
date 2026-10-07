@@ -95,7 +95,7 @@ describe('automationAnswer (spec D18)', () => {
     expect(await automationAnswer(w.deps, card(one(item([['Worktree', true], ['Branch', false]])), { auto_answer: auto }), w.run)).toBe('repeat');
     expect(w.repos.tabQuestions.setAutoAnswer).not.toHaveBeenCalled();
     expect(w.wake).not.toHaveBeenCalled();
-    expect(w.events).toEqual([expect.objectContaining({ kind: 'question_answered', run_id: 'run1', payload: { via: 'repeat', tab_id: 'tab1', question_id: 'q1', cycle: expect.stringMatching(/^[0-9a-f]{16}$/) } })]);
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'question_answered', run_id: 'run1', payload: { via: 'repeat', tab_id: 'tab1', question_id: 'q1', cycle: expect.stringMatching(/^[0-9a-f]{16}$/), why: 'precedent', rule_ref: 'decision:d1' } })]);
   });
 
   it('2. the recommended option is scheduled with by "automation" and the usual 60 s countdown', async () => {
@@ -149,7 +149,7 @@ describe('automationAnswer (spec D18)', () => {
     const w = world(q, { wakes: false });
     expect(await automationAnswer(w.deps, q, w.run)).toBe('escalated');
     expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: QUESTION_UNANSWERED });
-    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: QUESTION_UNANSWERED, tab_id: 'tab1' } })]);
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: QUESTION_UNANSWERED, tab_id: 'tab1', why: 'no_precedent' } })]);
   });
 
   it('no waker at all, or a wake that throws, also escalates', async () => {
@@ -646,7 +646,7 @@ describe('answerPermissionAutomatically (spec §9.2)', () => {
     expect(w.sleep.mock.invocationCallOrder[0]!).toBeLessThan(vi.mocked(w.repos.automationRuns.activeByTab as never as () => void).mock.invocationCallOrder[0]!);
     expect(w.sendAnswer).toHaveBeenCalledWith(expect.objectContaining({ scope: expect.objectContaining({ ownerId: 'u1' }) }), 'q1', { allow: true }, expect.objectContaining({ embedder: null, via: 'automation' }));
     // TER-993: the feed shows what was approved alone — the tool and why, never the command
-    expect(w.events).toEqual([expect.objectContaining({ kind: 'permission_auto_approved', run_id: 'run1', payload: { tab_id: 'tab1', question_id: 'q1', tool: 'WebFetch', reason: 'policy' } })]);
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'permission_auto_approved', run_id: 'run1', payload: { tab_id: 'tab1', question_id: 'q1', tool: 'WebFetch', reason: 'policy', why: 'allow_rule', rule_ref: 'WebFetch' } })]);
     expect(w.run.status).toBe('running');
   });
 
@@ -666,7 +666,7 @@ describe('answerPermissionAutomatically (spec §9.2)', () => {
     expect(await answerPermissionAutomatically(w.pdeps, q, w.run)).toBe('escalated');
     expect(w.sendAnswer).not.toHaveBeenCalled();
     expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: PERMISSION_NEEDED });
-    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', payload: { reason: PERMISSION_NEEDED, tab_id: 'tab1' } })]);
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', payload: { reason: PERMISSION_NEEDED, tab_id: 'tab1', why: 'outside_rules' } })]);
   });
 
   it('with a command: an allowed one is answered, `gh pr merge` escalates', async () => {
@@ -742,7 +742,7 @@ describe('escalate (spec §9.3, TER-888)', () => {
     const { escalate } = await import('./answers.js');
     await escalate(w.deps, w.run, PERMISSION_NEEDED);
     expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: PERMISSION_NEEDED });
-    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: PERMISSION_NEEDED, tab_id: 'tab1' } })]);
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: PERMISSION_NEEDED, tab_id: 'tab1', why: 'outside_rules' } })]);
     expect(added).toEqual([expect.objectContaining({ conversation_id: 'cp', text: "Automático parou em TER-1: O agente pediu uma permissão que as regras do projeto não liberam; responda no card." })]);
   });
 

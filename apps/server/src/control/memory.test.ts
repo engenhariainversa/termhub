@@ -11,11 +11,17 @@ import type { ControlContext } from './context.js';
 import { ControlError } from './context.js';
 import { MEMORY_NOTE, MEMORY_REF, answerTabQuestionTool, listTabQuestions, parseRef, recordDecision, searchMemory } from './memory.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
+import { automaticRunOfTab } from '../automation/pause.js';
+import { recordEvent } from '../automation/events.js';
+import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { MemoryItem } from '../db/repositories/memory-items.js';
 import type { AutoAnswer } from '../db/repositories/tab-questions.js';
 import type { TabQuestionSuggestion } from '../chat/decision-text.js';
 
 vi.mock('../chat/tab-questions.js', () => ({ publishTabQuestions: vi.fn(async () => []) }));
+// TER-1011: whether the card's tab has a live automatic run, and the feed event recorded when it does
+vi.mock('../automation/pause.js', () => ({ automaticRunOfTab: vi.fn(async () => null) }));
+vi.mock('../automation/events.js', () => ({ recordEvent: vi.fn(async () => undefined) }));
 
 const project = (over: Partial<Project> & { id: string }): Project => ({
   owner_id: 'u1', key: over.id.toUpperCase(), next_task_number: 1, name: over.id, status: 'active', description: null, last_terminal_at: null, created_at: '', ...over,
@@ -691,12 +697,35 @@ describe('answerTabQuestionTool', () => {
       by: 'concierge',
       reason: 'Você sempre usa worktree',
       sources: [{ kind: 'decision', id: 'd1' }],
+      // TER-1011: the similarity the check measured, for the feed's why
+      score: 0.95,
       due_at: '2026-09-26T12:01:00.000Z',
       status: 'scheduled',
     });
     expect(calls.setSuggestion).not.toHaveBeenCalled();
     expect(publishTabQuestions).toHaveBeenCalledTimes(1);
     expect(vi.mocked(publishTabQuestions).mock.calls[0]![1]).toBe('tab_question');
+  });
+
+  it('TER-1011: in a tab with a live automatic run, the countdown is a question_answered line with the precedent and its score', async () => {
+    vi.mocked(recordEvent).mockClear();
+    vi.mocked(automaticRunOfTab).mockResolvedValueOnce({ id: 'run1', project_id: 'p1', task_id: 't1' } as AutomationRun);
+    const { ctx } = ctxForAnswer({ similarity: { d1: 0.987 } });
+    expect((await callTool(ctx, yes)).mode).toBe('auto');
+    expect(recordEvent).toHaveBeenCalledWith(ctx.repos, {
+      project_id: 'p1',
+      task_id: 't1',
+      run_id: 'run1',
+      kind: 'question_answered',
+      payload: { via: 'concierge', tab_id: expect.any(String), question_id: 'q1', why: 'precedent', rule_ref: 'decision:d1', score: 0.99 },
+    });
+  });
+
+  it('TER-1011: no automatic run on the tab → no feed line', async () => {
+    vi.mocked(recordEvent).mockClear();
+    const { ctx } = ctxForAnswer();
+    expect((await callTool(ctx, yes)).mode).toBe('auto');
+    expect(recordEvent).not.toHaveBeenCalled();
   });
 
   it('mode defaults to auto; label case and accents do not matter', async () => {

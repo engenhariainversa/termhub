@@ -766,7 +766,8 @@ describe('a question nothing automatic answered (spec §9.1, D18 step 4; carried
     await sweepRuns(w.deps);
     expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: QUESTION_UNANSWERED });
     expect(w.kinds()).toEqual(['escalated']);
-    expect(w.events[0]!.payload).toEqual({ reason: QUESTION_UNANSWERED, tab_id: 'tab1' });
+    // TER-1011: why — the recommended option's countdown did not go out (no precedent to name)
+    expect(w.events[0]!.payload).toEqual({ reason: QUESTION_UNANSWERED, tab_id: 'tab1', why: 'auto_answer_stopped' });
     expect(w.type).not.toHaveBeenCalled();
   });
 

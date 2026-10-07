@@ -164,6 +164,19 @@ describe('automatic tabs and the feed', () => {
     expect(unknown.reason_text).toBe('O trabalho automático parou e espera você.');
   });
 
+  it('TER-1011: an automatic answer or an escalation carries why, its rule or precedent and the score', () => {
+    const [answered, escalated, en, plain] = [
+      feedOf([row('1', 'question_answered', { via: 'repeat', why: 'precedent', rule_ref: 'decision:d1', score: 0.99 })], 'pt-BR')[0],
+      feedOf([row('1', 'escalated', { reason: 'question_unanswered', why: 'weak_precedent', rule_ref: 'decision:d2', score: 0.91 })], 'pt-BR')[0],
+      feedOf([row('1', 'permission_auto_approved', { tool: 'WebFetch', why: 'allow_rule', rule_ref: 'WebFetch' })], 'en')[0],
+      feedOf([row('1', 'merged', {})], 'pt-BR')[0],
+    ];
+    expect(answered).toMatchObject({ why_text: 'respondida com uma decisão sua de antes', rule_ref: 'decision:d1', score: 0.99 });
+    expect(escalated).toMatchObject({ why_text: expect.stringContaining('não era próxima'), rule_ref: 'decision:d2', score: 0.91 });
+    expect(en).toMatchObject({ why_text: 'allowed by a project rule', rule_ref: 'WebFetch', score: null });
+    expect(plain).toMatchObject({ why_text: null, rule_ref: null, score: null });
+  });
+
   it('gives a failed start its reason in the reader language, and no reason to any other block (TER-987)', () => {
     const start = { code: 'LAUNCH_FAILED', stage: 'start', message: 'A máquina não respondeu', message_en: 'The machine did not answer' };
     expect(feedOf([row('1', 'run_blocked', start)], 'pt-BR')[0].reason_text).toBe('A máquina não respondeu');

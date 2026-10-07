@@ -113,6 +113,14 @@ const ITEM_COLUMNS = Prisma.raw(
   `m.id, m.owner_id, m.project_id, m.kind, m.source_id, m.chunk_index, m.title, m.text, m.trust, m.content_hash, m.source_hash, m.embed_model, m.meta, m.verified_at, m.verified_hash, m.source_at, m.created_at, m.updated_at`,
 );
 
+/** `currentNotes`' status filter on the row alias `m`, read through `to_jsonb` so a mark whose column does
+ *  not exist yet reads as null (see `currentNotes`). `scope = 'conversation'` holds in one chat only. */
+const CURRENT_NOTE = Prisma.raw(
+  `((to_jsonb(m) ->> 'wrong_at') IS NULL AND (to_jsonb(m) ->> 'superseded_at') IS NULL
+    AND ((to_jsonb(m) ->> 'expires_at') IS NULL OR (to_jsonb(m) ->> 'expires_at')::timestamp > now())
+    AND COALESCE(to_jsonb(m) ->> 'scope', '') <> 'conversation')`,
+);
+
 /** pgvector's text input format: `[x,y,z]`. Never-finite components (NaN, Infinity) are zeroed rather
  *  than sent malformed, since a bad embedding would otherwise fail the whole write. */
 const toVector = (v: number[]): string => `[${v.map((x) => (Number.isFinite(x) ? x : 0)).join(',')}]`;
@@ -364,6 +372,28 @@ export class MemoryItemsRepository {
     const last = page[page.length - 1];
     const next_cursor = hasMore && last ? encodeCursor(last.created_at, last.id) : null;
     return { items: page.map(mapRaw), next_cursor };
+  }
+
+  /**
+   * The owner's current rules for a project (TER-1011): the concierge's notes (`record_decision`) of this
+   * project and the account-wide ones, newest first, at most `limit` — never one the person marked wrong,
+   * superseded or outdated, nor one past its validity or recorded for one conversation only.
+   *
+   * Those marks (`wrong_at`, `superseded_at`, `expires_at`, `scope`) come from sibling cards of the same
+   * epic (TER-1013, TER-1014, TER-1015) that land in any order, so they are read through `to_jsonb(m)`: a
+   * column that does not exist yet reads as null and the note counts as current, and the filter starts to
+   * apply as soon as its migration runs, with no migration of its own here.
+   */
+  async currentNotes(ownerId: string, projectId: string, limit: number): Promise<MemoryItem[]> {
+    const rows = await this.db.$queryRaw<RawItem[]>`
+      SELECT ${ITEM_COLUMNS}, p.name AS project_name
+      FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
+      WHERE m.owner_id = ${ownerId} AND m.kind = 'note' AND m.chunk_index = 0
+        AND (m.project_id = ${projectId} OR m.project_id IS NULL)
+        AND ${CURRENT_NOTE}
+      ORDER BY m.created_at DESC, m.id DESC
+      LIMIT ${limit}`;
+    return rows.map(mapRaw);
   }
 
   /** "Esquecer": only the owner's own note, never a card/message/action/doc chunk. */

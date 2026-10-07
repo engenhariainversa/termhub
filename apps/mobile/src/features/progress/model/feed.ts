@@ -89,3 +89,18 @@ export function feedLine(e: TAutomationFeedEvent): string | null {
       return null;
   }
 }
+
+/**
+ * Why an automatic answer, approval or escalation happened (TER-1011), as a secondary line under the sentence,
+ * or null when the event carries no reason. Same wording as the web's lib/automation-feed.ts.
+ */
+export function feedWhy(e: Pick<TAutomationFeedEvent, 'why_text' | 'rule_ref' | 'score'>): string | null {
+  const parts: string[] = [];
+  if (e.why_text) parts.push(t('Motivo: {{why}}', { why: e.why_text }));
+  if (e.rule_ref) {
+    const ref = e.rule_ref;
+    parts.push(ref.startsWith('decision:') || ref.startsWith('note:') ? t('Precedente: {{ref}}', { ref }) : t('Regra: {{ref}}', { ref }));
+  }
+  if (typeof e.score === 'number') parts.push(t('Similaridade: {{score}}%', { score: Math.round(e.score * 100) }));
+  return parts.length > 0 ? parts.join(' · ') : null;
+}

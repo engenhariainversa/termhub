@@ -19,6 +19,10 @@ import { ControlError, type ControlContext } from './context.js';
 export { MEMORY_REF, parseRef, type MemoryRefKind } from '../memory/refs.js';
 import { parseRef, type MemoryRefKind } from '../memory/refs.js';
 import { msg, tk } from '../i18n/index.js';
+import { recordEvent } from '../automation/events.js';
+import { automaticRunOfTab } from '../automation/pause.js';
+import { answerWhy, roundScore } from '../automation/why.js';
+import type { TabQuestion } from '../db/repositories/tab-questions.js';
 
 export interface MemoryResult {
   ref: string;
@@ -403,6 +407,21 @@ function suggestionSource(first: ResolvedSource): SuggestionItem['source'] {
 }
 
 /**
+ * The concierge just scheduled a countdown on a card of a tab with a live automatic run (TER-1011): that is an
+ * automatic answer of the run, so the feed gets its `question_answered` line with why (the precedent cited,
+ * its score). Best effort: a failed read or write costs the line, never the answer.
+ */
+async function noteAutomaticAnswer(ctx: ControlContext, row: TabQuestion): Promise<void> {
+  try {
+    const run = await automaticRunOfTab(ctx.repos, row.tab_id);
+    if (!run) return;
+    await recordEvent(ctx.repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'question_answered', payload: { via: 'concierge', tab_id: row.tab_id, question_id: row.id, ...answerWhy(row, 'concierge') } });
+  } catch {
+    // the countdown stands; only the feed line is lost
+  }
+}
+
+/**
  * The similarity floor behind `auto` (spec D6): for every question, one of the decisions that back its
  * answer (`backers[i]`) must also be about a similar question — cosine(embedding of this question's
  * `embedText`, the decision's stored embedding) ≥ `AUTO_ANSWER_MIN_SIMILARITY`, computed in SQL
@@ -411,29 +430,33 @@ function suggestionSource(first: ResolvedSource): SuggestionItem['source'] {
  * would match every other empty question at 1.0), or a decision with no embedding of this version yet
  * all answer `false`. One embed call for the whole card.
  */
-async function similarEnough(ctx: ControlContext, payload: ChoicePayload, backers: ChatDecision[][], embedder: Embedder | null): Promise<boolean> {
-  if (!embedder) return false;
+async function similarEnough(ctx: ControlContext, payload: ChoicePayload, backers: ChatDecision[][], embedder: Embedder | null): Promise<number | null> {
+  if (!embedder) return null;
   const texts = payload.questions.map(embedText);
-  if (texts.some((t) => t === '')) return false;
+  if (texts.some((t) => t === '')) return null;
   let model: string;
   let vectors: number[][];
   try {
     ({ model, vectors } = await withTimeout(embedder.embed(texts), EMBED_TIMEOUT_MS, () => {}));
   } catch {
-    return false;
+    return null;
   }
+  // the weakest question's best backer: the score the feed shows (TER-1011)
+  let score = 1;
   for (const [i, ds] of backers.entries()) {
     const vector = vectors[i];
-    if (!vector || ds.length === 0) return false;
+    if (!vector || ds.length === 0) return null;
     const sims = await ctx.repos.chatDecisions.similarityTo(
       ds.map((d) => d.id),
       ctx.scope.user.id,
       vector,
       embedTag(model),
     );
-    if (![...sims.values()].some((sim) => sim >= config.autoAnswerMinSimilarity)) return false;
+    const best = Math.max(...sims.values());
+    if (!(best >= config.autoAnswerMinSimilarity)) return null;
+    score = Math.min(score, best);
   }
-  return true;
+  return score;
 }
 
 /**
@@ -480,6 +503,7 @@ export async function answerTabQuestionTool(
   if (sources.length === 0) throw new ControlError('UNKNOWN_SOURCE', 'Cite ao menos uma fonte de search_memory');
 
   let downgrade: Downgrade | undefined;
+  let score: number | null = null;
   if ((a.mode ?? 'auto') === 'auto') {
     const decisions = sources.flatMap((s) => (s.kind === 'decision' ? [s.decision] : []));
     const backers = payload.questions.map((item, i) => decisions.filter((d) => decisionBacks(d, item, answer.answers[i]!)));
@@ -491,11 +515,15 @@ export async function answerTabQuestionTool(
     else if (autoAnswerBlocked(parts)) downgrade = 'blocked';
     else if (payload.questions.length > 1 && backed > 0 && backed < payload.questions.length) downgrade = 'multi_question_partial';
     else if (backed < payload.questions.length) downgrade = 'no_person_precedent';
-    else if (!(await similarEnough(ctx, payload, backers, deps.embedder !== undefined ? deps.embedder : defaultEmbedder()))) downgrade = 'not_similar';
+    else score = await similarEnough(ctx, payload, backers, deps.embedder !== undefined ? deps.embedder : defaultEmbedder());
+    if (!downgrade && score === null) downgrade = 'not_similar';
 
     if (!downgrade) {
-      const scheduled = await scheduleAutoAnswer(ctx.repos, { row, answer, by: 'concierge', reason: a.reason, sources: sources.map((s) => ({ kind: s.kind, id: s.id })) });
-      if (scheduled?.auto_answer) return { mode: 'auto', due_at: scheduled.auto_answer.due_at };
+      const scheduled = await scheduleAutoAnswer(ctx.repos, { row, answer, by: 'concierge', reason: a.reason, sources: sources.map((s) => ({ kind: s.kind, id: s.id })), score: roundScore(score) });
+      if (scheduled?.auto_answer) {
+        await noteAutomaticAnswer(ctx, scheduled);
+        return { mode: 'auto', due_at: scheduled.auto_answer.due_at };
+      }
       // The write lost. If the person cancelled a countdown meanwhile (an overlapping call scheduled
       // one during the embed above, and the person stopped it), that is the same `cancelled_by_person`
       // a later call would get: fall through to the suggestion. Anything else moved the card on.
