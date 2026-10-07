@@ -12,6 +12,9 @@ export interface FileBarTab {
   kind: 'file';
   /** the path as the answer wrote it */
   path: string;
+  /** the machine the file is read on (TER-973); null = looked for on the project's machines */
+  machineId: string | null;
+  machineName?: string;
 }
 /** A terminal's Claude Code session read as a conversation, in a tab of its own (TER-1003). */
 export interface ChatBarTab {
@@ -128,7 +131,7 @@ export function TabBar({ tabs, activeId, previewId = null, onPin, onSelect, onNe
                 setDraft(tab.name);
               }}
               data-preview={preview || undefined}
-              title={`${tab.kind === 'file' ? tab.path : tab.name} — ${tab.kind === 'file' ? t('arquivo') : tab.kind === 'chat' ? t('conversa') : tab.kind === 'simulator' ? t('simulador iOS') : tab.tmux_session}${preview ? ` · ${t('prévia (duplo clique fixa)')}` : ''}${i < 9 ? `  (⌘${i + 1})` : ''}`}
+              title={`${tab.kind === 'file' ? tab.path : tab.name} — ${tab.kind === 'file' ? `${t('arquivo')}${tab.machineName ? ` · ${tab.machineName}` : ''}` : tab.kind === 'chat' ? t('conversa') : tab.kind === 'simulator' ? t('simulador iOS') : tab.tmux_session}${preview ? ` · ${t('prévia (duplo clique fixa)')}` : ''}${i < 9 ? `  (⌘${i + 1})` : ''}`}
             >
               {(active || shown) && <span className={`absolute inset-x-0 top-0 h-px ${active ? 'bg-accent' : 'bg-accent/40'}`} />}
               {tab.kind === 'file' ? (
