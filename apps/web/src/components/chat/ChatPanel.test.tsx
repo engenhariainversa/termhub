@@ -1482,6 +1482,31 @@ describe('which answers are being written (spec 2026-09-29 §5)', () => {
     expect(screen.queryByText('antiga')).toBeNull();
   });
 
+  it('TER-468: a read of the old conversation that answers after "Nova conversa" does not bring it back', async () => {
+    let resolveStale!: (value: unknown) => void;
+    chatMock
+      .mockResolvedValueOnce(thread([q('q1', 'antiga', 0), a('a1', 1, 'resposta antiga')], []))
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveStale = resolve)))
+      .mockResolvedValue(thread([q('q2', 'nova', 2)], [], 'c2'));
+    resetMock.mockResolvedValue({ conversation: { id: 'c2' } });
+    mount();
+    await screen.findByText('resposta antiga');
+    // A reconnect re-reads the old conversation; its answer is slow.
+    let stale!: Promise<void>;
+    act(() => {
+      stale = onReconnect();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Nova conversa' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Começar de novo' }));
+    expect(await screen.findByText('nova')).toBeInTheDocument();
+    await act(async () => {
+      resolveStale(thread([q('q1', 'antiga', 0), a('a1', 1, 'resposta antiga')], []));
+      await stale;
+    });
+    expect(screen.getByText('nova')).toBeInTheDocument();
+    expect(screen.queryByText('resposta antiga')).toBeNull();
+  });
+
   it('a final message held before the panel knew its conversation reaches the thread', async () => {
     let resolveLoad!: (value: unknown) => void;
     chatMock.mockImplementationOnce(() => new Promise((resolve) => (resolveLoad = resolve)));
