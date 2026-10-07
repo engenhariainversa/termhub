@@ -475,6 +475,8 @@ export interface ProjectAiOption {
   machine_name: string;
   /** the machine's own login (no config dir override) */
   default: boolean;
+  /** TER-990: the only project this account may run in; another project's Setup shows it disabled */
+  exclusive_project?: { id: string; name: string } | null;
 }
 export interface ProjectAiView {
   ai: ProjectAi;
@@ -857,6 +859,8 @@ export interface AiAccount {
   label: string;
   machine_id: string;
   config_dir: string | null;
+  /** TER-990: the only project this account may run in; null = any project */
+  exclusive_project?: { id: string; name: string } | null;
   created_at: string;
 }
 

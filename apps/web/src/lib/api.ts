@@ -446,7 +446,7 @@ export const api = {
     list: () => request<{ accounts: AiAccount[] }>('GET', '/ai-accounts'),
     create: (input: { provider: AiProvider; label: string; machine_id: string; config_dir?: string | null }) =>
       request<{ account: AiAccount }>('POST', '/ai-accounts', input),
-    update: (id: string, input: { label?: string; machine_id?: string; config_dir?: string | null }) => request<{ account: AiAccount }>('PATCH', `/ai-accounts/${id}`, input),
+    update: (id: string, input: { label?: string; machine_id?: string; config_dir?: string | null; exclusive_project_id?: string | null }) => request<{ account: AiAccount }>('PATCH', `/ai-accounts/${id}`, input),
     remove: (id: string) => request<{ ok: true }>('DELETE', `/ai-accounts/${id}`),
     usage: (refresh = false) => request<{ usage: AiAccountUsage[] }>('GET', `/ai-accounts/usage${refresh ? '?refresh=1' : ''}`),
     usageOf: (id: string, refresh = false) => request<{ usage: AiAccountUsage }>('GET', `/ai-accounts/${id}/usage${refresh ? '?refresh=1' : ''}`),

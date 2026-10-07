@@ -55,6 +55,22 @@ describe('fallbackCandidates in a project chat (TER-589)', () => {
   });
 });
 
+describe('fallbackCandidates with an account exclusive to a project (TER-990)', () => {
+  beforeEach(() => {
+    // c, the emptiest account, is exclusive to DR Horton (p9)
+    owned = owned.map((a) => (a.id === 'c' ? { ...a, exclusive_project: { id: 'p9', name: 'DR Horton' } } : a));
+  });
+
+  it('never falls back onto it in another project chat, nor in the account-wide chat', async () => {
+    expect((await fallbackCandidates(repos, machine, 'a', new Set(), 'p1')).map((a) => a.id)).toEqual(['b']);
+    expect((await fallbackCandidates(repos, machine, 'a', new Set(), null)).map((a) => a.id)).toEqual(['b']);
+  });
+
+  it('falls back onto it in its own project chat', async () => {
+    expect((await fallbackCandidates(repos, machine, 'a', new Set(), 'p9')).map((a) => a.id)).toEqual(['c', 'b']);
+  });
+});
+
 describe('fallbackCandidates', () => {
   it('ranks the other Claude accounts of the host machine by room left, owner-scoped', async () => {
     const got = await fallbackCandidates(repos, machine, 'a', new Set(), null);

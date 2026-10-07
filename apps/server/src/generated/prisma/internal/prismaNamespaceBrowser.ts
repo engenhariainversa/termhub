@@ -552,6 +552,7 @@ export const AiAccountScalarFieldEnum = {
   label: 'label',
   machineId: 'machineId',
   configDir: 'configDir',
+  exclusiveProjectId: 'exclusiveProjectId',
   createdAt: 'createdAt'
 } as const
 

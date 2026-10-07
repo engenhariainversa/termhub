@@ -2,6 +2,7 @@ import { linkClaudeSession } from '../ai/claude-session.js';
 import { getAccountUsage, type AiAccountUsage } from '../ai/index.js';
 import { rankCandidates } from '../control/account-swap.js';
 import { projectAccountsOn } from '../ai/project-accounts.js';
+import { usableIn } from '../ai/exclusive.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine } from '../db/repositories/types.js';
 
@@ -33,7 +34,8 @@ export async function fallbackCandidates(
   projectId: string | null,
   model: string | null = null,
 ): Promise<AiAccount[]> {
-  const pool = (await otherAccounts(repos, machine, currentAccountId)).filter((a) => !tried.has(a.id));
+  // TER-990: an account exclusive to another project (or to any project, for the account-wide chat) never takes over
+  const pool = (await otherAccounts(repos, machine, currentAccountId)).filter((a) => !tried.has(a.id) && usableIn(a, projectId));
   // A project that lists Claude accounts on this machine keeps its chat on them, in its order
   // (TER-589, spec 2026-09-30 project AI accounts §7.1); any other chat ranks by room, as before.
   let priority: string[] | undefined;

@@ -1,7 +1,8 @@
 import { CAPABILITY_CLAUDE } from '@termhub/agent-protocol';
 import { projectAccountsOn } from '../ai/project-accounts.js';
+import { loginOf, usableIn } from '../ai/exclusive.js';
 import type { Repositories } from '../db/repositories/index.js';
-import type { Machine, User } from '../db/repositories/types.js';
+import type { AiAccount, Machine, User } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { msg } from '../i18n/index.js';
 
@@ -215,4 +216,16 @@ export function hostFailure(problem: HostProblem): HttpError {
         'CHAT_AGENT_TOO_OLD',
       );
   }
+}
+
+/**
+ * TER-990: the account a ready host would run this conversation on (the chosen one, else the machine's
+ * default login), when it is exclusive to a project other than the conversation's (`null`: the
+ * account-wide chat, which no exclusive account serves). null when the run may go on.
+ */
+export async function exclusiveConflict(repos: Pick<Repositories, 'aiAccounts'>, user: Pick<User, 'id'>, host: Extract<HostChoice, { kind: 'ready' }>, projectId: string | null): Promise<AiAccount | null> {
+  // the host is one of the user's own machines (`resolveHost`), so their accounts are the machine's
+  const accounts = await repos.aiAccounts.list(user.id);
+  const login = loginOf(accounts, host.machine.id, 'claude', host.account.kind === 'chosen' ? host.account.id : null);
+  return login && !usableIn(login, projectId) ? login : null;
 }
