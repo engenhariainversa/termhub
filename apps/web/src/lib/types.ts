@@ -1345,6 +1345,27 @@ export interface ChatDecision {
   suggested_count: number;
   accepted_count: number;
   created_at: string;
+  status: MemoryStatus;
+  expires_at: string | null;
+  superseded_by: MemorySuperseder | null;
+}
+/** Where a decision or a concierge note stands on the Memória screen (TER-1013): vigente, desatualizada,
+ * errada or substituída por outro item. Anything but `current` is out of the default memory search and
+ * never a precedent. */
+export type MemoryStatus = 'current' | 'outdated' | 'wrong' | 'superseded';
+/** The item that replaces a `superseded` one (`null` when it was forgotten since). */
+export interface MemorySuperseder {
+  ref: string;
+  title: string;
+}
+/** One candidate of the "Substituída por…" picker (`GET /chat/memory/replacements`). */
+export interface MemoryReplacement {
+  ref: string;
+  kind: 'decision' | 'note';
+  title: string;
+  detail: string;
+  project_name: string | null;
+  created_at: string;
 }
 /** `GET /chat/memory`: the suggestion switch, "Responder sozinho quando houver precedente" (spec D8),
  * whether embeddings are configured on this server at all (`available: false` hides both switches
@@ -1371,6 +1392,9 @@ export interface ConciergeNote {
   decision: string;
   reason: string;
   created_at: string;
+  status: MemoryStatus;
+  expires_at: string | null;
+  superseded_by: MemorySuperseder | null;
 }
 
 /** "Lições" (spec 2026-09-27 failure lessons §6/§8): one `lesson` item (chunk 0), as the "Lições"
