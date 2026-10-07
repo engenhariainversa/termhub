@@ -16,6 +16,7 @@ import { config } from '../config.js';
 import { describeDeviceEvent } from './devices.js';
 import type { AccountDeletionService } from '../account/deletion.js';
 import { localeOf, type Locale } from '../i18n/index.js';
+import { audit } from '../auth/audit.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const deviceParams = z.object({ id: z.string().min(1).max(64), deviceId: z.string().min(1).max(64) });
@@ -117,6 +118,7 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
     });
     const effects = await runInvite(user, role, request.user?.name ?? 'Alguém', request.log);
     request.log.info({ userId: user.id, roleId: role.id, access: effects.access.synced, mail: effects.mail.sent }, 'user invited');
+    await audit(repos, request, 'user.invite', { target: { type: 'user', id: user.id, label: user.email }, meta: { role: role.name } });
     return reply.code(201).send({ user: withRoleInfo(user, role), ...effects });
   });
 
@@ -158,6 +160,7 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
       );
       invited.push(id);
       results.push({ id, user_id: user.id, existing, ...effects });
+      await audit(repos, request, 'user.invite', { target: { type: 'user', id: user.id, label: user.email }, meta: { role: existing ? null : role.name, from: 'waitlist', existing } });
     }
     await repos.waitlist.markInvited(invited);
     request.log.info({ invited: invited.length, roleId: role.id }, 'alpha invites sent from waitlist');
@@ -188,6 +191,10 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
       if (current?.is_admin && (await repos.users.countAdmins()) <= 1) throw badRequest('Este é o único administrador; promova outro antes');
     }
     const updated = await repos.users.setRole(id, role.id, role.is_admin ? 'owner' : 'member');
+    if (user.role_id !== role.id) {
+      const from = user.role_id ? await repos.roles.findById(user.role_id) : undefined;
+      await audit(repos, request, 'user.role_change', { target: { type: 'user', id: user.id, label: user.email }, meta: { from: from?.name ?? null, to: role.name } });
+    }
     return { user: updated && withRoleInfo(updated, role) };
   });
 
@@ -204,6 +211,7 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
     // and its public city, agents and Cloudflare Access entry are cleaned up after the commit.
     // No e-mail: the admin did this, not the person.
     if (!(await deps.deletion.purge(id, { actor: `admin:${request.user!.id}`, notify: false }))) throw notFound('Usuário não encontrado');
+    await audit(repos, request, 'user.delete', { target: { type: 'user', id: user.id, label: user.email } });
     return { ok: true };
   });
 
