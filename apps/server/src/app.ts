@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, ROOT_DIR } from './config.js';
 import { getPrisma, closePrisma } from './db/prisma.js';
-import { AUTOMATION_EVENT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
+import { ACCESS_LOG_RETENTION_MS, AUTOMATION_EVENT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
 import { createMailer } from './email/mailer.js';
 import { createAccessAllowlist } from './cloudflare/access.js';
 import { AuthService, authRoutes, buildAuthHook, type AuthContext } from './auth/index.js';
@@ -87,6 +87,7 @@ import { agents } from './agent/registry.js';
 import { startAutomation } from './automation/start.js';
 import { TranscriptionService } from './terminal/transcription.js';
 import { createUpgradeRouter } from './ws/router.js';
+import { createAccessLogRecorder, registerAccessLog, upgradeClientIp } from './access-log/recorder.js';
 import { createLifecycle, drain, RESTART_CLOSE, within } from './ws/drain.js';
 import { readyRoutes } from './routes/ready.js';
 import { registerSimulatorWs } from './simulator/ws.js';
@@ -132,6 +133,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   const prisma = getPrisma();
   await prisma.$connect();
   const repos = createRepositories(prisma);
+  // Access records kept 6 months (Marco Civil art. 15, TER-744): every API response and WebSocket upgrade,
+  // metadata only, in a table that outlives the blue/green containers.
+  const accessLog = createAccessLogRecorder({ repo: repos.accessLogs, log: fastify.log.child({ mod: 'access-log' }) });
+  registerAccessLog(fastify, accessLog);
   // Before anything maps a machine or a project (the seed does): every public id is an HMAC with
   // this key, and publicId() refuses to answer without it.
   setPublicIdKey(await loadPublicIdKey(repos));
@@ -180,7 +185,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // recebam `simulators` e `simWs.closeTab`. `fastify.server` já existe neste ponto.
   // `lifecycle` flips to draining on SIGTERM: new upgrades get 503 and /api/ready answers 503 (spec 2026-09-27 §5).
   const lifecycle = createLifecycle();
-  const upgrades = createUpgradeRouter(fastify.server, { auth, lifecycle });
+  const upgrades = createUpgradeRouter(fastify.server, {
+    auth,
+    lifecycle,
+    onAccess: (a) => accessLog.record({ at: new Date(), ip: upgradeClientIp(a.req), user_id: a.userId, kind: 'ws', method: 'GET', route: a.path, status: a.status }),
+  });
   const simWs = registerSimulatorWs(upgrades, { repos, manager: simulators, log: fastify.log });
   // The tab chat (spec 2026-10-01; the web's since TER-1003): one follower per watched tab, poked by the
   // hooks route below.
@@ -346,6 +355,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
+    // Access records past their 6 months (TER-744): the hourly tick is the rotation.
+    void repos.accessLogs.purgeBefore(new Date(Date.now() - ACCESS_LOG_RETENTION_MS)).catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'access log: purge failed'));
     // The security trail keeps SECURITY_EVENT_RETENTION_DAYS (TER-577); the purge is the only way a row leaves it.
     void repos.securityEvents.purgeBefore(securityEventCutoff(config.securityEventRetentionDays)).catch(() => {});
   }, 60 * 60 * 1000);
@@ -421,6 +432,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopTabSuggestions();
     tabChat.close();
     await simulators.shutdownAll();
+    // What is still buffered goes in before the database closes.
+    await accessLog.close();
     await closePrisma();
   });
 
