@@ -15,8 +15,8 @@ import { agents } from '../agent/registry.js';
 import { isOutdated, latestAgentVersion, MIN_SELF_UPDATE_VERSION, runAgentUpdate } from '../agent/latest-version.js';
 import { agentRpc, requireAgentVersion, requireSimCapable } from '../agent/errors.js';
 import { config } from '../config.js';
-import { installHooks, uninstallHooks } from '../monitor/install.js';
-import { newHookToken } from '../monitor/token.js';
+import { uninstallHooks } from '../monitor/install.js';
+import { claudeAccountDirs, installMachineHooksOn } from '../monitor/machine-hooks.js';
 import type { Machine } from '../db/repositories/types.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved, publishTabsRemoved } from '../monitor/tab-events.js';
@@ -63,13 +63,6 @@ const machineBody = z
       ctx.addIssue({ code: 'custom', path: ['agent_auto_update'], message: 'só máquinas com agente atualizam sozinhas' });
     }
   });
-
-/** Config dirs of the Claude accounts registered on the machine (CLAUDE_CONFIG_DIR): the hooks go there too. */
-async function claudeAccountDirs(repos: Repositories, machineId: string): Promise<string[]> {
-  return (await repos.aiAccounts.list())
-    .filter((a) => a.machine_id === machineId && a.provider === 'claude' && a.config_dir)
-    .map((a) => a.config_dir as string);
-}
 
 const ownerPatch = z.object({ owner_id: z.string().min(1).max(64).nullable().optional() });
 
@@ -268,18 +261,17 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
   app.post('/:id/hooks', { config: { action: 'update' } }, async (request) => {
     const { id } = idParam.parse(request.params);
     const machine = await scoped(repos, request).machine(id);
-    const { token, hash } = newHookToken();
-    let report;
+    let done;
     try {
-      report = await installHooks(machine, token, config.hooksUrl, await claudeAccountDirs(repos, machine.id));
+      done = await installMachineHooksOn(repos, machine);
     } catch (err) {
       // Agent failures (offline, outdated, what the machine reported) already carry their own status.
       if (err instanceof HttpError) throw err;
       throw conflict(err instanceof Error ? localizedOf(err) : tk('Instalação falhou'));
     }
-    const hook = await repos.machineHooks.upsert(machine.id, hash);
+    const { report, installed_at } = done;
     request.log.info({ machineId: machine.id, claude: report.claude, claudeDirs: report.claude_dirs.length, codex: report.codex, cursor: report.cursor }, 'monitor: hooks installed');
-    return { installed_at: hook.installed_at, hooks_url: report.hooks_url, claude: report.claude, codex: report.codex, cursor: report.cursor, claude_dirs: report.claude_dirs };
+    return { installed_at, hooks_url: report.hooks_url, claude: report.claude, codex: report.codex, cursor: report.cursor, claude_dirs: report.claude_dirs };
   });
 
   /** Removes the hooks from the machine and revokes its token. */
