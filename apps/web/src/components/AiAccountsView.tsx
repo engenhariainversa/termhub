@@ -76,6 +76,16 @@ function WindowBar({ w, now }: { w: AiUsageWindow; now: number }) {
   );
 }
 
+/** TER-990: the account runs only in this project. */
+export function ExclusiveBadge({ name }: { name: string }) {
+  const { t } = useTranslation();
+  return (
+    <span className="shrink-0 truncate rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-medium text-warn" title={t('Só roda no projeto {{project}}; nenhum outro projeto pode usá-la', { project: name })}>
+      {t('Exclusiva: {{project}}', { project: name })}
+    </span>
+  );
+}
+
 function AccountCard({
   account,
   usage,
@@ -99,6 +109,7 @@ function AccountCard({
       <div className="flex items-center gap-2">
         <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${PROVIDER_STYLE[account.provider]}`}>{AI_PROVIDER_LABEL[account.provider]}</span>
         <span className="truncate font-medium">{account.label}</span>
+        {account.exclusive_project && <ExclusiveBadge name={account.exclusive_project.name} />}
         {usage?.plan && <span className="rounded bg-bg-4 px-1.5 text-[10px] uppercase tracking-wide text-fg-muted">{usage.plan}</span>}
         <span className="ml-auto flex shrink-0 items-center gap-0.5">
           <button
@@ -164,7 +175,7 @@ function AccountForm({
   onSaved: (a: AiAccount) => void;
 }) {
   const { t } = useTranslation();
-  const { machines } = useData();
+  const { machines, projects } = useData();
   const [provider, setProvider] = useState<AiProvider>(account?.provider ?? 'claude');
   const [label, setLabel] = useState(account?.label ?? '');
   const [machineId, setMachineId] = useState(account?.machine_id ?? initialMachineId ?? machines[0]?.id ?? '');
@@ -172,6 +183,8 @@ function AccountForm({
   // another one kept in its own config dir.
   const [custom, setCustom] = useState(!!account?.config_dir);
   const [configDir, setConfigDir] = useState(account?.config_dir ?? '');
+  // TER-990: the only project the account may run in ('' = any project)
+  const [exclusive, setExclusive] = useState(account?.exclusive_project?.id ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -181,7 +194,11 @@ function AccountForm({
     setError(null);
     try {
       const input = { label: label || AI_PROVIDER_LABEL[provider], machine_id: machineId, config_dir: custom ? configDir.trim() : null };
-      const r = account ? await api.aiAccounts.update(account.id, input) : await api.aiAccounts.create({ provider, ...input });
+      const exclusiveId = exclusive || null;
+      const changed = exclusiveId !== (account?.exclusive_project?.id ?? null);
+      let r = account ? await api.aiAccounts.update(account.id, { ...input, ...(changed ? { exclusive_project_id: exclusiveId } : {}) }) : await api.aiAccounts.create({ provider, ...input });
+      // an account is created free; its exclusivity is a change of its own (audited as one)
+      if (!account && exclusiveId) r = await api.aiAccounts.update(r.account.id, { exclusive_project_id: exclusiveId });
       onSaved(r.account);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('Erro ao salvar'));
@@ -215,8 +232,10 @@ function AccountForm({
           <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('ex.: {{provider}} pessoal', { provider: AI_PROVIDER_LABEL[provider] })} autoFocus />
         </div>
         <div>
-          <label className="label">{t('Máquina onde o CLI está logado')}</label>
-          <select className="input" value={machineId} onChange={(e) => setMachineId(e.target.value)} required>
+          <label className="label" htmlFor="ai-account-machine">
+            {t('Máquina onde o CLI está logado')}
+          </label>
+          <select id="ai-account-machine" className="input" value={machineId} onChange={(e) => setMachineId(e.target.value)} required>
             {machines.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
@@ -250,6 +269,21 @@ function AccountForm({
             />
           )}
         </fieldset>
+        <div>
+          <label className="label" htmlFor="ai-account-exclusive">
+            {t('Exclusiva de um projeto')}
+          </label>
+          <select id="ai-account-exclusive" className="input" value={exclusive} onChange={(e) => setExclusive(e.target.value)}>
+            <option value="">{t('Não: qualquer projeto pode usar')}</option>
+            {account?.exclusive_project && !projects.some((p) => p.id === account.exclusive_project!.id) && <option value={account.exclusive_project.id}>{account.exclusive_project.name}</option>}
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-fg-dim">{t('Para a conta de um cliente ou empresa: ela só roda nesse projeto, e nenhum outro projeto, troca automática ou chat pode usá-la.')}</p>
+        </div>
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>

@@ -1,6 +1,7 @@
 import { CAPABILITY_WORKTREE, WORKTREE_MIN_AGENT_VERSION } from '@termhub/agent-protocol';
 import { versionAtLeast } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
+import { usableIn } from '../ai/exclusive.js';
 import { accountsOn } from '../ai/project-accounts.js';
 import { peakUtilization } from '../control/account-swap.js';
 import { getAccountUsage } from '../ai/index.js';
@@ -40,7 +41,7 @@ export type MachineVerdict = 'not_agent' | 'offline' | 'no_worktree' | 'no_claud
  * modelo"), marked exhausted, at or above `AUTOMATIC_MAX_UTILIZATION`, already given a start this tick,
  * or on a machine without room.
  */
-export type AccountVerdict = 'not_listed' | 'exhausted' | 'busy' | 'taken' | 'machine_no_room';
+export type AccountVerdict = 'not_listed' | 'exclusive' | 'exhausted' | 'busy' | 'taken' | 'machine_no_room';
 
 /** What a placement that found nothing looked at: every machine and account it left out, and why. Ids and names only. */
 export interface PlaceDetail {
@@ -104,11 +105,12 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
 
   const [listed, exhausted] = await Promise.all([repos.aiAccounts.list(project.owner_id), repos.aiAccountExhaustions.activeIds(deps.now())]);
   const nameOf = new Map(ready.map(({ machine }) => [machine.id, machine.name]));
-  const candidates = ready.flatMap(({ machine }) => accountsOn(ai, listed, machine.id, 'claude')).sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
+  const candidates = ready.flatMap(({ machine }) => accountsOn(project.id, ai, listed, machine.id, 'claude')).sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
   const left = (account: AiAccount, why: AccountVerdict, peak?: number) =>
     detail.accounts.push({ id: account.id, label: account.label, machine: nameOf.get(account.machine_id) ?? account.machine_id, why, ...(peak === undefined ? {} : { peak }) });
   const inList = new Set(candidates.map((a) => a.id));
-  for (const a of listed) if (a.provider === 'claude' && nameOf.has(a.machine_id) && !inList.has(a.id)) left(a, 'not_listed');
+  // TER-990: an account exclusive to another project is never a candidate, listed in the Setup or not
+  for (const a of listed) if (a.provider === 'claude' && nameOf.has(a.machine_id) && !inList.has(a.id)) left(a, usableIn(a, project.id) ? 'not_listed' : 'exclusive');
   let taken = false;
   let crowded = false;
   const roomOf = new Map<string, Promise<boolean>>();

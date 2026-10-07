@@ -49,7 +49,7 @@ function build(opts: {
   checkPin?: ReturnType<typeof vi.fn>;
   consumeDecisionChallenge?: ReturnType<typeof vi.fn>;
   hostMachines?: { id: string; name: string; type: string }[];
-  aiAccounts?: { id: string; provider: string; machine_id: string; config_dir: string | null; label?: string }[];
+  aiAccounts?: { id: string; provider: string; machine_id: string; config_dir: string | null; label?: string; exclusive_project?: { id: string; name: string } | null }[];
   setHost?: ReturnType<typeof vi.fn>;
   extraProjects?: { id: string; name: string; key: string; status: string }[];
   projectStatuses?: { project_id: string; busy: boolean; pending_confirmations: number }[];
@@ -192,6 +192,8 @@ function build(opts: {
               { id: 'acc1', label: 'Trabalho', machine_id: 'm1', provider: 'claude', config_dir: '/home/u/.claude-work' },
               { id: 'acc2', label: 'GPT', machine_id: 'm1', provider: 'chatgpt', config_dir: null },
               { id: 'acc3', label: 'Pessoal', machine_id: 'm2', provider: 'claude', config_dir: null },
+              // TER-990: exclusive to a project, never offered as the chat host
+              { id: 'acc4', label: 'DR Horton', machine_id: 'm1', provider: 'claude', config_dir: '/home/u/.claude-drh', exclusive_project: { id: 'p9', name: 'DR Horton' } },
             ]
           : []
       ),
@@ -419,6 +421,14 @@ describe('POST /chat/host', () => {
     expect(res.statusCode).toBe(200);
     expect(setHost).toHaveBeenCalledWith('c1', { machine_id: 'm1', ai_account_id: 'acc1' });
     expect(res.json()).toMatchObject({ host: { kind: 'ready' } });
+  });
+
+  it('refuses an account exclusive to a project (TER-990)', async () => {
+    const { app, setHost } = build({ aiAccounts: [{ id: 'acc4', label: 'drhorton', provider: 'claude', machine_id: 'm1', config_dir: null, exclusive_project: { id: 'p9', name: 'DR Horton' } }] });
+    const res = await app.inject({ method: 'POST', url: '/chat/host', payload: { machine_id: 'm1', ai_account_id: 'acc4' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('ACCOUNT_EXCLUSIVE');
+    expect(setHost).not.toHaveBeenCalled();
   });
 
   it('never accepts a machine this user does not own, nor an account that is not on it', async () => {

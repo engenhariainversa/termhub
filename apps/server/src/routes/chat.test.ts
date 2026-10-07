@@ -25,7 +25,7 @@ function build(opts: {
   hostFor?: ReturnType<typeof vi.fn>;
   /** The machines this user owns, as `findByIdsForOwner` answers them (a host must be an agent one). */
   hostMachines?: { id: string; name: string; type: string }[];
-  aiAccounts?: { id: string; provider: string; machine_id: string; config_dir: string | null }[];
+  aiAccounts?: { id: string; provider: string; machine_id: string; config_dir: string | null; label?: string; exclusive_project?: { id: string; name: string } | null }[];
   clearProjectSessions?: ReturnType<typeof vi.fn>;
   setHost?: ReturnType<typeof vi.fn>;
   /** Active grants `listActive` answers with, as `GET /chat` returns them. */
@@ -233,6 +233,14 @@ it('refuses a machine with no agent and an account that is not a Claude login', 
   const notClaude = await other.app.inject({ method: 'POST', url: '/chat/host', payload: { machine_id: 'm1', ai_account_id: 'acc1' } });
   expect(notClaude.statusCode).toBe(400);
   expect(other.setHost).not.toHaveBeenCalled();
+});
+
+it('refuses an account exclusive to a project as the chat host: the account-wide chat runs outside any project (TER-990)', async () => {
+  const { app, setHost } = build({ aiAccounts: [{ id: 'acc1', label: 'drhorton', provider: 'claude', machine_id: 'm1', config_dir: null, exclusive_project: { id: 'p9', name: 'DR Horton' } }] });
+  const res = await app.inject({ method: 'POST', url: '/chat/host', payload: { machine_id: 'm1', ai_account_id: 'acc1' } });
+  expect(res.statusCode).toBe(400);
+  expect(res.json()).toEqual({ error: 'Conta exclusiva do projeto DR Horton: "drhorton" não pode rodar em outro projeto', code: 'ACCOUNT_EXCLUSIVE' });
+  expect(setHost).not.toHaveBeenCalled();
 });
 
 it('rejects a host payload with no machine', async () => {

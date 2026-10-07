@@ -7,7 +7,11 @@ import type { Project, ProjectAiView } from '../lib/types';
 
 const get = vi.fn();
 const save = vi.fn();
-vi.mock('../lib/api', async (orig) => ({ ...(await orig<typeof import('../lib/api')>()), api: { setup: { ai: { get: (...a: unknown[]) => get(...a), save: (...a: unknown[]) => save(...a) } } } }));
+const update = vi.fn();
+vi.mock('../lib/api', async (orig) => ({
+  ...(await orig<typeof import('../lib/api')>()),
+  api: { setup: { ai: { get: (...a: unknown[]) => get(...a), save: (...a: unknown[]) => save(...a) } }, aiAccounts: { update: (...a: unknown[]) => update(...a) } },
+}));
 
 import { ProjectAiCard } from './ProjectAiCard';
 
@@ -24,6 +28,7 @@ const view = (over: Partial<ProjectAiView['ai']> = {}): ProjectAiView => ({
 beforeEach(() => {
   get.mockReset();
   save.mockReset();
+  update.mockReset();
 });
 afterEach(cleanup);
 
@@ -75,5 +80,40 @@ describe('ProjectAiCard', () => {
     fireEvent.change(screen.getByLabelText('Id do modelo — Codex'), { target: { value: 'gpt-5-codex' } });
     fireEvent.click(screen.getByRole('button', { name: 'Salvar contas e modelo' }));
     await waitFor(() => expect(save).toHaveBeenCalledWith('p1', { accounts: ['a2'], models: { claude: null, chatgpt: 'gpt-5-codex' } }));
+  });
+});
+
+describe('ProjectAiCard with accounts exclusive to a project (TER-990)', () => {
+  const DRH = { id: 'p9', name: 'DR Horton' };
+  const withExclusive = (ids: string[], exclusive: { id: string; name: string }, ai: Partial<ProjectAiView['ai']> = {}): ProjectAiView => {
+    const v = view(ai);
+    return { ...v, available: v.available.map((a) => (ids.includes(a.id) ? { ...a, exclusive_project: exclusive } : a)) };
+  };
+
+  it("shows another project's exclusive account disabled, with its badge, and leaves it out of the saved list", async () => {
+    get.mockResolvedValue(withExclusive(['a2'], DRH, { accounts: ['a2', 'a1'] }));
+    save.mockImplementation(async (_p: string, ai: ProjectAiView['ai']) => ({ ...withExclusive(['a2'], DRH), ai }));
+    render(<ProjectAiCard project={project} />);
+    const box = await screen.findByLabelText(/trabalho · Claude · jarvis/);
+    expect(box).toBeDisabled();
+    expect(screen.getByText('Exclusiva: DR Horton')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Modelo padrão — Claude Code'), { target: { value: 'opus' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar contas e modelo' }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith('p1', { accounts: ['a1'], models: { claude: 'opus', chatgpt: null } }));
+  });
+
+  it('makes an account exclusive to this project after a confirmation, and frees it again', async () => {
+    get.mockResolvedValue(view({ accounts: ['a1'] }));
+    update.mockResolvedValueOnce({ account: { id: 'a1', exclusive_project: { id: 'p1', name: 'termhub' } } }).mockResolvedValueOnce({ account: { id: 'a1', exclusive_project: null } });
+    render(<ProjectAiCard project={project} />);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Tornar exclusiva' }))[0]);
+    expect(update).not.toHaveBeenCalled();
+    expect(screen.getByText(/passa a rodar só no projeto termhub/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tornar exclusiva' }).at(-1)!);
+    await waitFor(() => expect(update).toHaveBeenCalledWith('a1', { exclusive_project_id: 'p1' }));
+    expect(await screen.findByText('Exclusiva: termhub')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Liberar' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Liberar' }).at(-1)!);
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith('a1', { exclusive_project_id: null }));
   });
 });
