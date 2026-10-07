@@ -135,8 +135,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('supersede (Postgres)', ()
     expect((await decisions.similarityTo([d!.id], userId, vec(30), 'm#q1')).size).toBe(0);
     expect(await decisions.textSearch(userId, marker, 10)).toEqual([]);
     expect((await decisions.nearestAny(userId, vec(30), 10)).map((x) => x.id)).not.toContain(d!.id);
-    expect((await decisions.textSearch(userId, marker, 10, undefined, true)).map((x) => x.id)).toEqual([d!.id]);
-    expect((await decisions.nearestAny(userId, vec(30), 10, undefined, true)).map((x) => x.id)).toContain(d!.id);
+    expect((await decisions.textSearch(userId, marker, 10, undefined, { includeSuperseded: true })).map((x) => x.id)).toEqual([d!.id]);
+    expect((await decisions.nearestAny(userId, vec(30), 10, undefined, { includeSuperseded: true })).map((x) => x.id)).toContain(d!.id);
 
     // already replaced: a second note cannot replace it again
     expect(await items.insertNoteSuperseding(note(), { kind: 'decision', id: d!.id })).toBeNull();
