@@ -166,6 +166,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
       settleMs: 0,
       now: () => now ?? new Date(),
       type: async (_ctx, tabId, text) => void typed.push({ instance, id: tabId, text, seq: ++seq }),
+      typeLine: async (_ctx, tabId, text) => void typed.push({ instance, id: tabId, text, seq: ++seq }),
       restartLine: async () => 'claude --resume s1',
     };
     const dispatcher = D.startDispatcher(
