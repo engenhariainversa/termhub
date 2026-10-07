@@ -211,7 +211,7 @@ Essas transferências são feitas para executar o contrato com você ou a seu pe
 
 | Dado | Prazo |
 |---|---|
-| Conta, projetos, cards, notas, chat, memória, últimas respostas dos agentes, anexos enviados | enquanto a conta existir, ou até você apagá-los. Depois da exclusão da conta: até **[30] dias** para apagar dos sistemas ativos e até **[N] dias** dos backups |
+| Conta, projetos, cards, notas, chat, memória, últimas respostas dos agentes, anexos enviados | enquanto a conta existir, ou até você apagá-los (uma conversa do chat pode ser apagada inteira em "Apagar conversa", com o que a memória guardou dela). Depois da exclusão da conta: até **[30] dias** para apagar dos sistemas ativos e até **[N] dias** dos backups |
 | Sessões web | até 30 dias, ou até você sair |
 | Códigos de login por e-mail | 10 minutos |
 | Pedidos de acesso de aparelhos | 1 dia |
@@ -221,10 +221,10 @@ Essas transferências são feitas para executar o contrato com você ou a seu pe
 | Anexos não enviados | 24 horas |
 | Áudio de ditado | não é guardado. O texto fica até 10 minutos em memória |
 | Arquivos colados no terminal (na sua máquina) | 7 dias |
-| Histórico de estados das abas | [definir. Hoje não é apagado] |
+| Histórico de estados das abas | 90 dias |
 | Registros de acesso (logs) | 6 meses (Marco Civil, art. 15) |
 | Registro de acesso de administradores a uma conta ("ver como") | 1 ano após o fim do acesso |
-| Lista de espera | até o convite ou [12 meses], o que vier primeiro, ou até você pedir a exclusão |
+| Lista de espera | 12 meses depois da inscrição ou, se você foi convidado, 12 meses depois do último convite; ou até você pedir a exclusão |
 | Dados de cobrança e fiscais | pelo prazo da legislação fiscal (em geral, 5 anos) |
 
 > Nota: vários desses prazos ainda não estão implementados. Ver a seção "Lacunas no produto".
