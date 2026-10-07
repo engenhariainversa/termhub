@@ -39,7 +39,11 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
   never asks. Any other permission request is answered by rule or escalated (`permission_needed`); the hook
   does not forward Bash commands, so in practice every Bash request that reaches the server escalates, and
   only what lies outside the rules reaches it. A command with several `cd` always asks (Claude Code's own
-  check); the run prompt tells the agent to avoid it.
+  check); the run prompt tells the agent to avoid it. Every git rule also comes as `git --no-pager …` and as
+  `git -C <the run's worktree> …` (`gitRuleForms`, TER-991), with the matching denies
+  (`AUTOMATION_FORM_DENIED_TOOLS`), on the start and account-swap lines; a `-C` to any other folder asks.
+  A line typed whole (an exited agent brought back) leaves them out until it goes through a launch file
+  (TER-988).
 - No "Revisar" column. Review is the PR of each card plus the daily summary.
 
 ## 3. Before turning it on
