@@ -52,6 +52,13 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
   the second wall after `--disallowedTools`, and it is what closes auto mode's gap: the classifier can
   no longer approve a push to another ref. Only automatic tabs get it (manual and `start_agent` tabs
   have no worktree, so no `--settings`). Each `deny` is listed in the feed as `guard_blocked`.
+  The server writes `guard.json` before it types any line that names it — the start, the follower's
+  restart of an agent that exited, the resume card and the account swap (`installRunGuard`, TER-1005).
+  A run never starts or comes back without the lock: a machine whose agent is older than 0.19.0 is left
+  out by the dispatcher (the card says "agente sem a trava; atualize o agente (0.19)"), a start there is
+  refused with "Atualize o agente de <máquina>…", and an exited run there ends blocked as
+  `agent_outdated`. A run whose tab is back at its shell with no hook after 3 minutes escalates as
+  `agent_not_started` (the launch line failed; the error is on screen), not as `trust_prompt`.
 - Permissions of automatic tabs: the mode above plus an allow list; no bypass flag. A fixed deny list
   (force/delete/mirror pushes, `.env` reads, `git -c`, release commands, ...) sits in
   `apps/server/src/control/automation-tools.ts` (`AUTOMATION_DENIED_TOOLS`) and beats any project allow

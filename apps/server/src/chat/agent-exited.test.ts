@@ -9,6 +9,8 @@ const { publishTabQuestions, closeTabQuestions, swapPreferences } = vi.hoisted((
 }));
 vi.mock('./tab-questions.js', () => ({ publishTabQuestions, closeTabQuestions }));
 vi.mock('../control/account-swap.js', () => ({ swapPreferences }));
+const { installTabMcp } = vi.hoisted(() => ({ installTabMcp: vi.fn(async () => {}) }));
+vi.mock('../terminal/tab-mcp.js', async (orig) => ({ ...(await orig<typeof import('../terminal/tab-mcp.js')>()), installTabMcp }));
 
 const { EXITED_RESUME_PROMPT, notifyAgentExited, resumeCommandFor } = await import('./agent-exited.js');
 const { AUTOMATION_DENIED_TOOLS, AUTOMATION_READ_TOOLS } = await import('../control/agents.js');
@@ -77,9 +79,23 @@ describe('resumeCommandFor an automatic tab (preflight F-12)', () => {
   });
 
   it('keeps the git -C forms of the run worktree: the line goes through a launch file (TER-991, TER-988)', async () => {
-    const line = await resumeCommandFor(repos().r, tab(), machine, { ...auto, permission: { ...auto.permission, worktree: '/w/TER-1' } });
+    const line = await resumeCommandFor(repos().r, tab(), { ...machine, agent_version: '0.19.0' }, { ...auto, permission: { ...auto.permission, worktree: '/w/TER-1' } });
     expect(line).toContain(`'Bash(git -C /w/TER-1 status:*)'`);
     expect(line).toContain(`--resume ${SID} -- '[termhub automático] continue'`);
+  });
+
+  it('a run comes back with its guard: guard.json written again first, named by --settings, even without a live MCP token (TER-1005)', async () => {
+    installTabMcp.mockClear();
+    const run = { ...auto, permission: { ...auto.permission, worktree: '/w/TER-1' } };
+    const line = await resumeCommandFor(repos().r, tab(), { ...machine, agent_version: '0.19.0' }, run);
+    expect(installTabMcp).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'tab1abc', 'guard.json', expect.stringContaining('termhub-guard'));
+    expect(line).toContain(`--settings "$HOME"/'.termhub/tabs/tab1abc/guard.json'`);
+    const cont = await resumeCommandFor(repos().r, tab({ agent_session_id: null }), { ...machine, agent_version: '0.19.0' }, run);
+    expect(cont).toContain(`--settings "$HOME"/'.termhub/tabs/tab1abc/guard.json' --continue`);
+    // never without it: an agent older than 0.19.0 is refused, nothing written
+    installTabMcp.mockClear();
+    await expect(resumeCommandFor(repos().r, tab(), { ...machine, agent_version: '0.18.0' }, run)).rejects.toMatchObject({ code: 'GUARD_UNSUPPORTED' });
+    expect(installTabMcp).not.toHaveBeenCalled();
   });
 
   it('with no session id, continues the last one with the profile and the message', async () => {

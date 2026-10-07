@@ -526,6 +526,16 @@ describe('an agent that exited (spec D15, F-12)', () => {
     expect(w.kinds()).toEqual(['run_blocked', 'escalated']);
   });
 
+  it('is never restarted without the hard-lock guard: an agent before 0.19.0 ends the run blocked, "atualize o agente" (TER-1005)', async () => {
+    const w = world({ tab: exited });
+    w.restartLine.mockRejectedValueOnce(new ControlError('GUARD_UNSUPPORTED', 'Atualize o agente de hulk'));
+    await followRun(w.deps, w.run.id);
+    expect(w.typeLine).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'blocked', waiting_reason: 'agent_outdated' });
+    expect(w.kinds()).toEqual(['run_blocked', 'escalated']);
+    expect(escalationText('agent_outdated')).toMatch(/^O agente saiu e esta máquina não tem a trava/);
+  });
+
   it('a second exit ends the run blocked and escalates it', async () => {
     const w = world({ tab: exited, run: { restart_count: 1 } });
     await followRun(w.deps, w.run.id);
@@ -692,6 +702,31 @@ describe('Claude\'s trust question (never answered by the automation)', () => {
     await sweepRuns(w.deps);
     expect(w.run).toMatchObject({ status: 'running', waiting_reason: null });
     expect(w.type).not.toHaveBeenCalled();
+  });
+
+  it('a first start whose pane is back at the shell is not the trust question: the agent never came up (TER-1005)', async () => {
+    const w = world({ run: { started_at: ago(60_000) }, tab: { state: null, state_text: null, state_at: null } as Partial<Tab> });
+    const foreground = vi.fn(async () => 'shell' as const);
+    w.deps.foreground = foreground;
+    w.setNow(new Date(ago(60_000).getTime() + TRUST_WAIT_MS));
+    await sweepRuns(w.deps);
+    expect(foreground).toHaveBeenCalledWith(expect.objectContaining({ id: 'tab1' }));
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'agent_not_started' });
+    expect(w.kinds()).toEqual(['escalated']);
+    expect(w.events[0]!.payload).toEqual({ reason: 'agent_not_started', tab_id: 'tab1' });
+    expect(w.type).not.toHaveBeenCalled();
+    expect(SLOT_FREE_REASONS).toContain('agent_not_started');
+    expect(escalationText('agent_not_started')).toBe('O agente não chegou a iniciar: a aba voltou ao terminal. Confira o erro na tela e retome.');
+    expect(escalationText('agent_not_started', 'en')).toBe('The agent never started: the tab went back to the shell. Check the error on screen and resume.');
+
+    // Claude in front (or a pane that could not be read) is still the trust question
+    for (const pane of ['busy', null] as const) {
+      const t = world({ run: { started_at: ago(60_000) }, tab: { state: null, state_text: null, state_at: null } as Partial<Tab> });
+      t.deps.foreground = async () => pane;
+      t.setNow(new Date(ago(60_000).getTime() + TRUST_WAIT_MS));
+      await sweepRuns(t.deps);
+      expect(t.events[0]!.payload, String(pane)).toEqual({ reason: 'trust_prompt', tab_id: 'tab1' });
+    }
   });
 
   it('the escalation has a text in both languages', () => {

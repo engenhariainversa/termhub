@@ -9,6 +9,10 @@ import { DEFAULT_LOCALE, t, tk, type Locale } from '../i18n/index.js';
 export const NEEDS_PERSON = 'needs_person';
 /** The escalation reason of a run parked on the trust question. */
 export const TRUST_PROMPT = 'trust_prompt';
+/** TER-1005: the start watchdog found the tab back at its shell: the agent never came up (its launch line failed). */
+export const AGENT_NOT_STARTED = 'agent_not_started';
+/** TER-1005: the agent exited and the machine's agent has no hard-lock guard (before 0.19.0): it is not brought back without it. */
+export const AGENT_OUTDATED = 'agent_outdated';
 /** The escalation reason of a run whose tab asks a question nothing automatic could answer (spec D18 step 4). */
 export const QUESTION_UNANSWERED = 'question_unanswered';
 /** The escalation reason of a run whose question card closed without an answer while the tab still asks it. */
@@ -51,6 +55,8 @@ export const RELEASE_FAILED = 'release_failed';
 /** The text the feed, the chat line and the push show for each escalation reason (spec §9.3). */
 export const ESCALATION_TEXT: Record<string, string> = {
   [TRUST_PROMPT]: tk('O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.'),
+  [AGENT_NOT_STARTED]: tk('O agente não chegou a iniciar: a aba voltou ao terminal. Confira o erro na tela e retome.'),
+  [AGENT_OUTDATED]: tk('O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.'),
   [QUESTION_UNANSWERED]: tk('O agente fez uma pergunta que o modo automático não soube responder; responda no card.'),
   [QUESTION_EXPIRED]: tk('O card da pergunta do agente fechou sem resposta; responda na aba para continuar.'),
   [ANSWER_CAP]: tk('O agente fez perguntas demais respondidas automaticamente na última hora; confira a aba e responda no card.'),
@@ -90,5 +96,5 @@ export function escalationReasonText(reason: string, locale: Locale = DEFAULT_LO
  * (it stays active) but frees its `max_parallel` slot, so the dispatcher may start another card. A run
  * waiting on its account's usage limit is not one of them: it goes on by itself once the limit resets.
  */
-export const SLOT_FREE_REASONS: readonly string[] = [NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET];
+export const SLOT_FREE_REASONS: readonly string[] = [NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET];
 
