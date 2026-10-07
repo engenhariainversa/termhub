@@ -5,7 +5,7 @@ import { tk } from '../i18n';
  * heading each sits under (spec 2026-09-23 app chrome §4). `resource: null` is a section every
  * signed-in user sees; Perfil is one, so `/settings` always has somewhere to land.
  */
-export type SettingsSection = 'profile' | 'city' | 'integrations' | 'api-tokens' | 'devices' | 'chat-grants' | 'ai' | 'hardware' | 'users' | 'waitlist' | 'roles' | 'permissions' | 'uploads';
+export type SettingsSection = 'profile' | 'city' | 'security' | 'integrations' | 'api-tokens' | 'devices' | 'chat-grants' | 'ai' | 'hardware' | 'users' | 'waitlist' | 'roles' | 'permissions' | 'uploads';
 export type SettingsGroupId = 'account' | 'admin';
 
 export interface SettingsSectionInfo {
@@ -19,6 +19,7 @@ export interface SettingsSectionInfo {
 export const SETTINGS_SECTIONS: SettingsSectionInfo[] = [
   { key: 'profile', label: tk('Perfil'), resource: null, group: 'account' },
   { key: 'city', label: tk('Minha cidade'), resource: null, group: 'account' },
+  { key: 'security', label: tk('Segurança'), resource: null, group: 'account' },
   { key: 'integrations', label: tk('Integrações'), resource: 'integrations', group: 'account' },
   { key: 'api-tokens', label: tk('Tokens de API'), resource: 'api_tokens', group: 'account' },
   { key: 'devices', label: tk('Aparelhos'), resource: 'devices', group: 'account' },

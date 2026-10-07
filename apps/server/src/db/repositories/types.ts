@@ -72,6 +72,9 @@ export interface Session {
   token_hash: string;
   expires_at: string;
   created_at: string;
+  last_used_at: string;
+  ip: string | null;
+  user_agent: string | null;
 }
 
 export interface Machine {
@@ -313,6 +316,9 @@ export const mapSession = (s: PrismaSession): Session => ({
   token_hash: s.tokenHash,
   expires_at: s.expiresAt.toISOString(),
   created_at: s.createdAt.toISOString(),
+  last_used_at: s.lastUsedAt.toISOString(),
+  ip: s.ip,
+  user_agent: s.userAgent,
 });
 
 export const mapMachine = (m: PrismaMachine & { owner?: { name: string } | null }): Machine => ({

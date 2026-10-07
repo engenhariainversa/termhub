@@ -1,14 +1,15 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
-import { toPublicUser, type User } from '../db/repositories/types.js';
+import { toPublicUser, type Session, type User } from '../db/repositories/types.js';
 import { isAdmin, permissionsOf } from './permissions.js';
 import { VIEW_AS_ALL, VIEW_AS_COOKIE, type Scope } from './scope.js';
-import { HttpError, badRequest, forbidden, unauthorized, sendError } from '../lib/errors.js';
+import { HttpError, badRequest, forbidden, notFound, unauthorized, sendError } from '../lib/errors.js';
 import type { AuthContext } from './middleware.js';
 import { buildAuthorizationUrl, exchangeCode, isGoogleEnabled } from './google.js';
 import { normalizeNickname } from '../public/nickname.js';
 import { CSRF_COOKIE, OAUTH_COOKIE, SESSION_COOKIE } from './tokens.js';
+import { PASSWORD_MAX, PASSWORD_MIN } from './service.js';
 import { msg, requestLocale, tk } from '../i18n/index.js';
 
 const loginSchema = z.object({
@@ -63,6 +64,23 @@ const timeZoneBodySchema = z.object({
   }, 'invalid time zone'),
 });
 
+const sessionIdParam = z.object({ id: z.string().min(1).max(64) });
+const passwordBodySchema = z.object({
+  current_password: z.string().max(PASSWORD_MAX).nullish(),
+  new_password: z.string().max(PASSWORD_MAX),
+});
+
+/** Where a sign-in came from, kept on the session for the sessions list. */
+function originOf(request: FastifyRequest) {
+  const ua = request.headers['user-agent'];
+  return { ip: request.ip, user_agent: Array.isArray(ua) ? ua[0] : ua };
+}
+
+/** A session as the sessions list shows it: never its token hash. */
+function publicSession(s: Session, currentId: string | null) {
+  return { id: s.id, created_at: s.created_at, last_used_at: s.last_used_at, expires_at: s.expires_at, ip: s.ip, user_agent: s.user_agent, current: s.id === currentId };
+}
+
 /** null = automatic (the browser's language; pt-BR for e-mails and push). */
 const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en']).nullable() });
 
@@ -78,6 +96,12 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
   };
 
   const { service } = ctx;
+
+  /** The session behind this request's cookie (none with Cloudflare-only or disabled auth). */
+  const currentSession = async (request: FastifyRequest) => {
+    const token = request.cookies[SESSION_COOKIE];
+    return token ? await service.findSession(token) : null;
+  };
 
   app.get('/config', { config: { public: true } }, async () => ({
     modes: [...config.auth.modes],
@@ -168,7 +192,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
       }
       throw unauthorized('E-mail ou senha inválidos');
     }
-    const { token, csrf, expiresAt } = await service.createSession(result.user.id);
+    const { token, csrf, expiresAt } = await service.createSession(result.user.id, originOf(request));
     setSessionCookies(reply, token, csrf, expiresAt);
     return { user: await withRole(result.user) };
   });
@@ -199,9 +223,59 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
       }
       throw unauthorized('Código inválido ou expirado');
     }
-    const { token, csrf, expiresAt } = await service.createSession(result.user.id);
+    const { token, csrf, expiresAt } = await service.createSession(result.user.id, originOf(request));
     setSessionCookies(reply, token, csrf, expiresAt);
     return { user: await withRole(result.user) };
+  });
+
+  // --- The person's own web sessions (Settings → Segurança) ---
+  app.get('/sessions', async (request) => {
+    if (!request.user) throw unauthorized();
+    const [sessions, current] = await Promise.all([service.listSessions(request.user.id), currentSession(request)]);
+    return { sessions: sessions.map((s) => publicSession(s, current?.session.id ?? null)) };
+  });
+
+  /** Ends one session; ending the current one signs this browser out too. */
+  app.delete('/sessions/:id', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    const { id } = sessionIdParam.parse(request.params);
+    const current = await currentSession(request);
+    if (!(await ctx.repos.sessions.deleteForUser(request.user.id, id))) throw notFound('Sessão não encontrada');
+    request.log.info({ userId: request.user.id, sessionId: id }, 'session: revoked');
+    if (current?.session.id === id) clearSessionCookies(reply);
+    return { ok: true, current: current?.session.id === id };
+  });
+
+  /** "Sair de todos os outros aparelhos": every session but the one making the request. */
+  app.post('/sessions/revoke-others', async (request) => {
+    if (!request.user) throw unauthorized();
+    const current = await currentSession(request);
+    const revoked = await ctx.repos.sessions.deleteAllForUser(request.user.id, current?.session.id);
+    request.log.info({ userId: request.user.id, revoked }, 'session: revoked all others');
+    return { revoked };
+  });
+
+  /** Changes (or sets the first) password; the other sessions end. See AuthService.changePassword. */
+  app.post('/me/password', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    if (!config.auth.modes.has('app')) throw badRequest('Login por senha desativado neste modo');
+    const body = passwordBodySchema.parse(request.body);
+    const current = await currentSession(request);
+    if (!current) throw unauthorized();
+    const result = await service.changePassword(request.user, current.session, { current: body.current_password ?? null, next: body.new_password }, request.ip);
+    if (!result.ok) {
+      if (result.reason === 'locked') {
+        reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));
+        throw new HttpError(429, msg('Muitas tentativas. Tente novamente em {{seconds}}s.', { seconds: Math.ceil(result.retryAfterMs / 1000) }), 'LOCKED');
+      }
+      if (result.reason === 'weak') {
+        throw new HttpError(400, msg('A senha precisa ter de {{min}} a {{max}} caracteres e não pode ser o seu e-mail', { min: PASSWORD_MIN, max: PASSWORD_MAX }), 'WEAK_PASSWORD');
+      }
+      if (result.reason === 'reauth') throw new HttpError(403, 'Para definir a primeira senha, entre de novo e volte aqui em até 10 minutos', 'REAUTH_REQUIRED');
+      throw new HttpError(403, 'Senha atual incorreta', 'WRONG_PASSWORD');
+    }
+    request.log.info({ userId: request.user.id, revoked: result.revoked }, 'password: changed');
+    return { ok: true, revoked: result.revoked };
   });
 
   app.post('/logout', { config: { allowPendingDeletion: true } }, async (request, reply) => {
@@ -252,7 +326,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     const user = await service.loginWithGoogle(profile);
     if (!user) return fail('email_not_allowed');
 
-    const { token, csrf, expiresAt } = await service.createSession(user.id);
+    const { token, csrf, expiresAt } = await service.createSession(user.id, originOf(request));
     setSessionCookies(reply, token, csrf, expiresAt);
     return reply.redirect('/', 302);
   });

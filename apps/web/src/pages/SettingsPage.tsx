@@ -12,6 +12,7 @@ import { DevicesView } from '../components/DevicesView';
 import { ReviewAccountPanel } from '../components/ReviewAccountPanel';
 import { MyCityView } from '../components/MyCityView';
 import { ProfileView } from '../components/ProfileView';
+import { SecurityView } from '../components/SecurityView';
 import { IntegrationsView } from '../components/IntegrationsView';
 import { AiAccountsView } from '../components/AiAccountsView';
 import { HardwareView } from '../components/HardwareView';
@@ -98,6 +99,12 @@ export function SettingsPage() {
       return (
         <PageFrame title={t(current.label)}>
           <MyCityView />
+        </PageFrame>
+      );
+    case 'security':
+      return (
+        <PageFrame title={t(current.label)}>
+          <SecurityView />
         </PageFrame>
       );
     case 'profile':

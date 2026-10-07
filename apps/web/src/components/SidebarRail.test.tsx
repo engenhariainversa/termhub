@@ -89,6 +89,7 @@ describe('SidebarRail', () => {
     expect(sections.map((l) => [l.getAttribute('aria-label'), l.getAttribute('title')])).toEqual([
       ['Perfil', 'Perfil'],
       ['Minha cidade', 'Minha cidade'],
+      ['Segurança', 'Segurança'],
     ]);
     expect(screen.getByRole('link', { name: 'Minha cidade' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Voltar de Configurações' })).toHaveAttribute('data-chrome-focus', 'settings-back');

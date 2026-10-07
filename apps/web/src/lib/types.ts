@@ -1575,6 +1575,18 @@ export interface DevicesSummary {
 export type ApiTokenScope = 'read' | 'tasks' | 'terminals' | 'memory';
 
 /** Personal API token as the server lists it (never the secret). */
+/** One web session of the signed-in person (GET /auth/sessions). */
+export interface WebSession {
+  id: string;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+  ip: string | null;
+  user_agent: string | null;
+  /** the session of this very browser */
+  current: boolean;
+}
+
 export interface ApiToken {
   id: string;
   user_id: string;

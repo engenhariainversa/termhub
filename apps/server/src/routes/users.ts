@@ -188,6 +188,12 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
       if (current?.is_admin && (await repos.users.countAdmins()) <= 1) throw badRequest('Este é o único administrador; promova outro antes');
     }
     const updated = await repos.users.setRole(id, role.id, role.is_admin ? 'owner' : 'member');
+    // A new role ends the person's web sessions: they sign in again under it, and a browser left
+    // open with the old role's screens does not linger.
+    if (user.role_id !== role.id) {
+      const revoked = await repos.sessions.deleteAllForUser(id);
+      request.log.info({ userId: id, roleId: role.id, revoked }, 'user role changed: sessions revoked');
+    }
     return { user: updated && withRoleInfo(updated, role) };
   });
 
@@ -202,7 +208,9 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
     }
     // Everything the account owns goes with it (machines, projects, integrations, chat, files…),
     // and its public city, agents and Cloudflare Access entry are cleaned up after the commit.
-    // No e-mail: the admin did this, not the person.
+    // No e-mail: the admin did this, not the person. The web sessions end first (the row's cascade
+    // would take them too), so even a purge that fails halfway leaves nobody signed in as them.
+    await repos.sessions.deleteAllForUser(id);
     if (!(await deps.deletion.purge(id, { actor: `admin:${request.user!.id}`, notify: false }))) throw notFound('Usuário não encontrado');
     return { ok: true };
   });

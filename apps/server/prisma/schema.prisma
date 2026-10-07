@@ -135,6 +135,11 @@ model Session {
   tokenHash String   @unique @map("token_hash")
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
+  /// Last authenticated request (written at most once a minute); the idle timeout counts from here.
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+  /// Where the session was opened, shown in Settings → Segurança.
+  ip         String?
+  userAgent  String?  @map("user_agent")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])

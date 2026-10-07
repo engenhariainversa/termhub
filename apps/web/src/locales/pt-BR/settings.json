@@ -13,5 +13,11 @@
   "{{count}} máquinas_zero": "{{count}} máquinas",
   "publicado · {{count}} terminais agora_one": "publicado · {{count}} terminal agora",
   "publicado · {{count}} terminais agora_other": "publicado · {{count}} terminais agora",
-  "publicado · {{count}} terminais agora_zero": "publicado · {{count}} terminais agora"
+  "publicado · {{count}} terminais agora_zero": "publicado · {{count}} terminais agora",
+  "Senha salva. {{count}} outras sessões foram encerradas._one": "Senha salva. {{count}} outra sessão foi encerrada.",
+  "Senha salva. {{count}} outras sessões foram encerradas._other": "Senha salva. {{count}} outras sessões foram encerradas.",
+  "Senha salva. {{count}} outras sessões foram encerradas._zero": "Senha salva. {{count}} outras sessões foram encerradas.",
+  "{{count}} sessões encerradas._one": "{{count}} sessão encerrada.",
+  "{{count}} sessões encerradas._other": "{{count}} sessões encerradas.",
+  "{{count}} sessões encerradas._zero": "{{count}} sessões encerradas."
 }

@@ -340,6 +340,7 @@ See [.env.example](.env.example). Main ones:
 | --- | --- |
 | `AUTH_MODE` | `app`, `cloudflare`, `disabled` (dev) or the combination `app,cloudflare` |
 | `PUBLIC_URL` | public URL (secure cookies and OAuth redirect) |
+| `SESSION_TTL_DAYS` / `SESSION_IDLE_MINUTES` | web session lifetime (default 30 days) and idle timeout: a session unused for that many minutes ends (default `0` = off) |
 | `DATABASE_URL` | Postgres (`postgresql://user:pass@host:5432/db`) |
 | `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`EMAIL_FROM` | login code and invite delivery; without `SMTP_HOST` no e-mail is sent and the server logs an error (never the e-mail itself) |
 | `EMAIL_DEV_CONSOLE` | `true` = development only: print e-mails (login codes included) to the log instead of sending them; refused in production |

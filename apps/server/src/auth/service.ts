@@ -1,10 +1,11 @@
 import { createHash, randomInt } from 'node:crypto';
 import type { Repositories } from '../db/repositories/index.js';
-import type { User } from '../db/repositories/types.js';
+import type { Session, User } from '../db/repositories/types.js';
+import type { SessionOrigin } from '../db/repositories/sessions.js';
 import { config } from '../config.js';
 import type { Mailer } from '../email/mailer.js';
 import { loginCodeMail } from '../email/templates.js';
-import { verifyPassword } from './password.js';
+import { hashPassword, verifyPassword } from './password.js';
 import { generateToken, hashToken, safeEqual } from './tokens.js';
 import { API_TOKEN_EVENT_RETENTION_DAYS } from './api-tokens.js';
 import { DEFAULT_LOCALE, type Locale } from '../i18n/index.js';
@@ -19,6 +20,17 @@ export type SendCodeResult = { ok: true } | { ok: false; reason: 'rate_limited';
 const CODE_RATE_WINDOW_MS = 10 * 60 * 1000;
 const CODE_RATE_MAX = 3;
 const CODE_MAX_ATTEMPTS = 5;
+/** A busy session records its use at most this often. */
+const TOUCH_EVERY_MS = 60 * 1000;
+/** Setting a first password (none to confirm) needs a sign-in at most this old. */
+const RECENT_SIGN_IN_MS = 10 * 60 * 1000;
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 1024;
+
+export type ChangePasswordResult =
+  | { ok: true; revoked: number }
+  | { ok: false; reason: 'invalid' | 'reauth' | 'weak' }
+  | { ok: false; reason: 'locked'; retryAfterMs: number };
 
 /** Regras de autenticação independentes de HTTP (testáveis isoladamente). */
 export class AuthService {
@@ -161,26 +173,84 @@ export class AuthService {
 
   // ---------- sessões ----------
 
+  /** Sessions unused since this instant are over (null = no idle timeout). */
+  private idleCutoff(now = Date.now()): Date | null {
+    const idle = config.auth.sessionIdleMs;
+    return idle ? new Date(now - idle) : null;
+  }
+
   /** Cria sessão e devolve o token opaco (só o hash vai pro banco). */
-  async createSession(userId: string): Promise<{ token: string; csrf: string; expiresAt: Date }> {
+  async createSession(userId: string, origin: SessionOrigin = {}): Promise<{ token: string; csrf: string; expiresAt: Date }> {
     const token = generateToken(32);
     const expiresAt = new Date(Date.now() + config.auth.sessionTtlMs);
-    await this.repos.sessions.create(userId, hashToken(token), expiresAt);
+    await this.repos.sessions.create(userId, hashToken(token), expiresAt, {
+      ip: origin.ip ?? null,
+      user_agent: origin.user_agent ? origin.user_agent.slice(0, 512) : null,
+    });
     await this.repos.users.touchLogin(userId);
     return { token, csrf: generateToken(24), expiresAt };
   }
 
+  /** The live session behind a cookie token (expired or idle ones are not). */
+  async findSession(token: string): Promise<{ session: Session; user: User } | null> {
+    return (await this.repos.sessions.findValidByTokenHash(hashToken(token), this.idleCutoff())) ?? null;
+  }
+
+  /** Resolves the cookie to its user and records the use, which keeps the session from going idle. */
   async resolveSession(token: string): Promise<User | null> {
-    const found = await this.repos.sessions.findValidByTokenHash(hashToken(token));
-    return found?.user ?? null;
+    const found = await this.findSession(token);
+    if (!found) return null;
+    const now = Date.now();
+    if (now - Date.parse(found.session.last_used_at) >= TOUCH_EVERY_MS) {
+      await this.repos.sessions.touch(found.session.id, new Date(now), new Date(now - TOUCH_EVERY_MS));
+    }
+    return found.user;
+  }
+
+  async listSessions(userId: string): Promise<Session[]> {
+    return this.repos.sessions.listForUser(userId, this.idleCutoff());
   }
 
   async destroySession(token: string): Promise<void> {
     await this.repos.sessions.deleteByTokenHash(hashToken(token));
   }
 
+  /**
+   * Changes (or sets the first) password of a signed-in person. With a password, the current one
+   * must be confirmed; wrong guesses count against the same lock as the login form. Without one
+   * (Google or e-mail code only), a sign-in from the last 10 minutes stands in for it, so a session
+   * left open somewhere cannot quietly add a password to the account. On success every other
+   * session ends.
+   */
+  async changePassword(
+    user: User,
+    session: Session,
+    input: { current: string | null; next: string },
+    ip: string,
+  ): Promise<ChangePasswordResult> {
+    if (input.next.length < PASSWORD_MIN || input.next.length > PASSWORD_MAX) return { ok: false, reason: 'weak' };
+    const email = user.email.trim().toLowerCase();
+    if (input.next.trim().toLowerCase() === email) return { ok: false, reason: 'weak' };
+
+    if (user.password_hash) {
+      const locked = await this.checkLock(email, ip);
+      if (locked > 0) return { ok: false, reason: 'locked', retryAfterMs: locked };
+      if (!input.current || !(await verifyPassword(user.password_hash, input.current))) {
+        const lock = await this.recordFailure(email, ip);
+        return lock > 0 ? { ok: false, reason: 'locked', retryAfterMs: lock } : { ok: false, reason: 'invalid' };
+      }
+      await this.clearFailures(email, ip);
+    } else if (Date.now() - Date.parse(session.created_at) > RECENT_SIGN_IN_MS) {
+      return { ok: false, reason: 'reauth' };
+    }
+
+    await this.repos.users.setPassword(user.id, await hashPassword(input.next));
+    const revoked = await this.repos.sessions.deleteAllForUser(user.id, session.id);
+    return { ok: true, revoked };
+  }
+
   async purgeExpired(): Promise<void> {
     const eventsCutoff = new Date(Date.now() - API_TOKEN_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-    await Promise.all([this.repos.sessions.purgeExpired(), this.repos.loginCodes.purgeExpired(), this.repos.apiTokens.purgeEventsBefore(eventsCutoff)]);
+    await Promise.all([this.repos.sessions.purgeExpired(this.idleCutoff()), this.repos.loginCodes.purgeExpired(), this.repos.apiTokens.purgeEventsBefore(eventsCutoff)]);
   }
 }

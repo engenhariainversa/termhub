@@ -21,6 +21,8 @@ const envSchema = z.object({
   // "app" | "cloudflare" | "disabled" — pode combinar: "app,cloudflare"
   AUTH_MODE: z.string().default('app'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  /** web sessions unused for this long end (idle timeout); 0 = off, only SESSION_TTL_DAYS applies */
+  SESSION_IDLE_MINUTES: z.coerce.number().int().min(0).default(0),
   COOKIE_SECURE: z
     .enum(['true', 'false', 'auto'])
     .default('auto'),
@@ -206,6 +208,8 @@ export const config = {
   auth: {
     modes: authModes,
     sessionTtlMs: env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+    /** null = no idle timeout */
+    sessionIdleMs: env.SESSION_IDLE_MINUTES > 0 ? env.SESSION_IDLE_MINUTES * 60 * 1000 : null,
     cookieSecure:
       env.COOKIE_SECURE === 'auto' ? env.PUBLIC_URL.startsWith('https://') : env.COOKIE_SECURE === 'true',
     googleSignup: env.AUTH_GOOGLE_SIGNUP === 'true',

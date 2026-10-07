@@ -1,6 +1,6 @@
 import { currentLocale, i18n } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
-import type { FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen, WebSession } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -115,6 +115,13 @@ export const api = {
     sendCode: (email: string) => request<{ ok: true; ttl_minutes: number }>('POST', '/auth/code/send', { email }),
     verifyCode: (email: string, code: string) => request<{ user: User }>('POST', '/auth/code/verify', { email, code }),
     logout: () => request<{ ok: true }>('POST', '/auth/logout'),
+    /** The signed-in person's live web sessions, most recently used first (Settings → Segurança). */
+    sessions: () => request<{ sessions: WebSession[] }>('GET', '/auth/sessions'),
+    /** `current: true` = it was this browser's session, now signed out. */
+    revokeSession: (id: string) => request<{ ok: true; current: boolean }>('DELETE', `/auth/sessions/${encodeURIComponent(id)}`),
+    revokeOtherSessions: () => request<{ revoked: number }>('POST', '/auth/sessions/revoke-others'),
+    /** 403 WRONG_PASSWORD, 403 REAUTH_REQUIRED (first password, sign-in too old), 400 WEAK_PASSWORD, 429 LOCKED. */
+    changePassword: (current_password: string | null, new_password: string) => request<{ ok: true; revoked: number }>('POST', '/auth/me/password', { current_password, new_password }),
     /** Claims the address of the user's public city. 400 NICKNAME_INVALID for a bad shape or a
      *  reserved word, 409 NICKNAME_TAKEN when somebody else already holds it, 409 NICKNAME_LOCKED
      *  when the account already has one (a claimed address is never changed). */
