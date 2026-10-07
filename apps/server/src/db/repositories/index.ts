@@ -47,6 +47,7 @@ import { AutomationSummariesRepository } from './automation-summaries.js';
 import { AutomationPausesRepository } from './automation-pauses.js';
 import { AutomationEventsRepository } from './automation-events.js';
 import { AutomationRunsRepository } from './automation-runs.js';
+import { ViewAsAuditRepository } from './view-as-audit.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
 import { AccessLogsRepository } from './access-logs.js';
@@ -101,6 +102,7 @@ export interface Repositories {
   automationSummaries: AutomationSummariesRepository;
   automationEvents: AutomationEventsRepository;
   automationRuns: AutomationRunsRepository;
+  viewAsAudit: ViewAsAuditRepository;
   tabUsage: TabUsageRepository;
   accessLogs: AccessLogsRepository;
   aiAccountExhaustions: AiAccountExhaustionsRepository;
@@ -159,6 +161,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     automationSummaries: new AutomationSummariesRepository(db),
     automationEvents: new AutomationEventsRepository(db),
     automationRuns: new AutomationRunsRepository(db),
+    viewAsAudit: new ViewAsAuditRepository(db),
     tabUsage: new TabUsageRepository(db),
     accessLogs: new AccessLogsRepository(db),
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
@@ -201,3 +204,4 @@ export type { UsageCursor, UsageTokens, UsageWrite, UsageSum } from './tab-usage
 export type { AutomationEvent, AutomationEventKind, AutomationEventPayload, AutomationEventInput } from './automation-events.js';
 export { ACCESS_LOG_RETENTION_MS, type AccessLogInput } from './access-logs.js';
 export { AUTOMATION_EVENT_RETENTION_MS, AUTOMATION_EVENTS_PAGE_MAX } from './automation-events.js';
+export { VIEW_AS_AUDIT_RETENTION_MS } from './view-as-audit.js';
