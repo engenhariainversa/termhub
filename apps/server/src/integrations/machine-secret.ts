@@ -17,7 +17,7 @@ const SECRET_SHAPE = /^\S{1,4096}$/;
 /**
  * Reads a secret the machine already holds (today only its `gh auth token`) through the agent, for
  * the caller to store encrypted. The value never reaches a log or an error: every failure answers a
- * fixed pt-BR message that names the machine, never the agent's own text (like `readCredential`).
+ * fixed pt-BR message that names the machine, never the agent's own text (like the AI usage query, ai/index.ts).
  * Agent machines only: an ssh/local machine would need a shell script, and D2 keeps this to the one
  * reviewed RPC. An agent older than 0.9.0 drops the unknown method (a full timeout), so the version
  * is checked first.

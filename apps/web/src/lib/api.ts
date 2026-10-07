@@ -1,6 +1,6 @@
 import { currentLocale, i18n } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
-import type { FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { AutomationFeedEvent, FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -383,6 +383,8 @@ export const api = {
     reorder: (id: string, position: number) => request<{ task: Task }>('POST', `/tasks/${id}/reorder`, { position }),
     /** The card's pull requests (a subtask answers its parent's). */
     pullRequests: (id: string) => request<{ pull_requests: PullRequestBadge[] }>('GET', `/tasks/${id}/pull-requests`),
+    /** What the automatic work did on the card and its subtasks, newest first (the card's page). */
+    activity: (id: string) => request<{ events: AutomationFeedEvent[] }>('GET', `/tasks/${id}/activity`),
     pushStatus: (id: string) => request<{ task: Task; state: string }>('POST', `/tasks/${id}/push-status`, {}),
     openTerminal: (id: string, machineId?: string) =>
       request<{ task: Task; tab: Tab; created: boolean }>('POST', `/tasks/${id}/terminal`, machineId ? { machine_id: machineId } : {}),

@@ -27,7 +27,7 @@ const epic = (id: string, title: string, number: number) => task({ id, title, nu
 
 function LocationProbe() {
   const l = useLocation();
-  return <output data-testid="location">{`${l.pathname}|${(l.state as { from?: string } | null)?.from ?? ''}`}</output>;
+  return <output data-testid="location">{`${l.pathname}${l.search}|${(l.state as { boardCard?: boolean } | null)?.boardCard ? 'pushed' : ''}`}</output>;
 }
 
 function mount() {
@@ -83,11 +83,11 @@ describe('BacklogView', () => {
     expect(listMock).toHaveBeenCalledTimes(2);
   });
 
-  it('opens a card at its URL, remembering the backlog', async () => {
+  it('opens a card on the Board (?card=), in a history entry that closing goes back from', async () => {
     mount();
     await screen.findByText('first');
     fireEvent.click(within(screen.getByText('first').closest('li')!).getByRole('button', { name: 'Abrir' }));
-    expect(screen.getByTestId('location').textContent).toBe('/project/P1-first|/projects/p1/backlog');
+    expect(screen.getByTestId('location').textContent).toBe('/projects/p1/tasks?card=P1-first|pushed');
   });
 
   it('adds an item of the chosen type to that epic', async () => {
