@@ -131,3 +131,95 @@ Tone: short, plain, sentence case, no exclamation marks, "you" for the person. K
 - E-mails and push notifications follow the account's language; with none chosen they stay in pt-BR.
 - API error `code`s do not change; only the `error` text follows the request's language.
 - No setting is removed and no data changes; the new column is null for everyone.
+
+## 8. Spanish (TER-406)
+
+Spanish (`es`) is the third language, added the way §2 planned: one more catalog file per area in
+each app (`src/locales/es/<area>.json`, server `src/i18n/locales/es/<area>.json`, same keys as `en`),
+a `Español` option in Configurações → Perfil → Idioma and Ajustes → Idioma, and an `es` dictionary
+in the landing (`?lang=es`, `hreflang="es"`).
+
+- `users.locale` accepts `'es'`; the waitlist stores `'es'` from the landing and the alpha invite
+  goes out in Spanish. No migration: both columns are `text`.
+- Detection: `es*` (browser, phone, `Accept-Language`) → `es`, in the same first-match order as
+  `pt*`/`en*`. Other languages still read pt-BR.
+- `i18n:check` in every app requires an `es` entry for every key, as it does for `en`.
+- Spanish has a CLDR `many` plural form (a million and up); the catalogs give `_one`/`_other`, and
+  `_many` reads `_other` (web and phone fill it at load; the server falls back to `_other`).
+- A failed automatic start keeps its reason in `message`, `message_en` and `message_es`; older
+  events without `message_es` show the pt-BR text.
+- Tone: neutral Latin-American Spanish, **tú**, sentence case, no ¡!, opening ¿ on questions.
+
+Glossary (pt-BR → en → es):
+
+| pt-BR | en | es |
+|---|---|---|
+| Máquina(s) | Machine(s) | Máquina(s) |
+| Projeto(s) | Project(s) | Proyecto(s) |
+| aba / tab | tab | pestaña |
+| card / cartão | card | tarjeta |
+| quadro | board | tablero |
+| backlog | backlog | backlog |
+| A fazer / Fazendo / Feito | To do / In progress / Done | Por hacer / En curso / Hecho |
+| épico, história, tarefa, bug, spike, subtarefa | epic, story, task, bug, spike, subtask | épica, historia, tarea, bug, spike, subtarea |
+| coluna | column | columna |
+| Configurações (web) / Ajustes (phone) | Settings | Configuración (web) / Ajustes (teléfono) |
+| Perfil | Profile | Perfil |
+| Minha cidade / cidade | My city / city | Mi ciudad / ciudad |
+| escritório | office | oficina |
+| Integrações | Integrations | Integraciones |
+| Tokens de API | API tokens | Tokens de API |
+| Aparelho(s) | Device(s) | Dispositivo(s) |
+| Permissões do chat | Chat permissions | Permisos del chat |
+| Contas de IA | AI accounts | Cuentas de IA |
+| Usuários / Convidar | Users / Invite | Usuarios / Invitar |
+| Papéis | Roles | Roles |
+| Arquivos | Files | Archivos |
+| Memória do chat | Chat memory | Memoria del chat |
+| Progresso | Progress | Progreso |
+| Notificações | Notifications | Notificaciones |
+| Favoritos | Favorites | Favoritos |
+| agente (Claude/Codex numa aba) | agent | agente |
+| agent (termhub-agent na máquina) | agent | agente (agente de termhub cuando sea ambiguo) |
+| monitor das tabs | tab monitor | monitor de pestañas |
+| pedido de permissão / aprovação | permission request / approval | solicitud de permiso / aprobación |
+| pergunta (da aba) | question | pregunta |
+| aguardando você | waiting for you | esperándote |
+| Entrar / Sair | Sign in / Sign out | Iniciar sesión / Cerrar sesión ("Entrar" as a short button) |
+| código de acesso | sign-in code | código de acceso |
+| lista de espera | waitlist | lista de espera |
+| Excluir conta | Delete account | Eliminar cuenta |
+| Salvar / Cancelar / Excluir / Fechar | Save / Cancel / Delete / Close | Guardar / Cancelar / Eliminar / Cerrar |
+| Editar / Criar / Adicionar / Remover | Edit / Create / Add / Remove | Editar / Crear / Agregar / Quitar |
+| Carregando… | Loading… | Cargando… |
+| Reconectando… | Reconnecting… | Reconectando… |
+| Tentar de novo | Try again | Reintentar |
+| Copiar / Copiado | Copy / Copied | Copiar / Copiado |
+| Enviar | Send | Enviar |
+| sessão | session | sesión |
+| conta | account | cuenta |
+| convite | invite | invitación |
+| token | token | token |
+| ramo / branch | branch | rama |
+| mesclar / merge | merge | fusionar (merge) |
+| PR / pull request | pull request | pull request |
+| implantar / deploy | deploy | despliegue / desplegar |
+| versão / release | release | versión |
+| rodar (um comando) | run | ejecutar |
+| servidor | server | servidor |
+| nuvem | cloud | nube |
+| chave | key | clave |
+| senha | password | contraseña |
+| arquivo | file | archivo |
+| pasta | folder | carpeta |
+| tela | screen | pantalla |
+| celular / telefone | phone | teléfono / celular |
+| nota(s) | note(s) | nota(s) |
+| automação | automation | automatización |
+| fila | queue | cola |
+| política | policy | política |
+| lição | lesson | lección |
+
+Impact on other users: people whose browser or phone is set to Spanish see termhub in Spanish
+after the deploy instead of pt-BR (automatic is the default); anyone can pin a language in
+Settings / Ajustes. Everyone else is unchanged.

@@ -1,0 +1,19 @@
+{
+  "Agente desconectado": "Agente desconectado",
+  "A máquina não respondeu": "La máquina no respondió",
+  "Sem acesso à pasta na máquina (Acesso Total ao Disco?)": "Sin acceso a la carpeta en la máquina (¿Acceso total al disco?)",
+  "Não encontrado na máquina": "No se encontró en la máquina",
+  "tmux não encontrado na máquina": "No se encontró tmux en la máquina",
+  "Parâmetros inválidos para a máquina": "Parámetros no válidos para la máquina",
+  "Falha na máquina": "Falló la máquina",
+  "Caminho fora da pasta de worktrees": "Ruta fuera de la carpeta de worktrees",
+  "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova)": "Actualiza el agente de esta máquina (npm i -g @termhub/agent, versión {{version}} o más reciente)",
+  "Esta máquina não é um Mac com Xcode": "Esta máquina no es una Mac con Xcode",
+  "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para usar o simulador": "Actualiza el agente de esta máquina (npm i -g @termhub/agent, versión {{version}} o más reciente) para usar el simulador",
+  "Esta máquina não usa o agente do termhub": "Esta máquina no usa el agente de termhub",
+  "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para abrir a sessão como chat": "Actualiza el agente de esta máquina (npm i -g @termhub/agent, versión {{version}} o más reciente) para abrir la sesión como chat",
+  "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para ver arquivos": "Actualiza el agente de esta máquina (npm i -g @termhub/agent, versión {{version}} o más reciente) para ver archivos",
+  "Falha ao atualizar o agente: {{reason}}. Se persistir, rode na máquina: npm i -g @termhub/agent@latest": "No se pudo actualizar el agente: {{reason}}. Si sigue fallando, ejecuta en la máquina: npm i -g @termhub/agent@latest",
+  "A instalação do agente demorou demais; verifique na máquina": "La instalación del agente tardó demasiado; revisa en la máquina",
+  "npm não encontrado na máquina; rode: npm i -g @termhub/agent@latest": "No se encontró npm en la máquina; ejecuta: npm i -g @termhub/agent@latest"
+}

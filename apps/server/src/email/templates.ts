@@ -3,7 +3,7 @@ import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 import type { Mail } from './mailer.js';
 
 // Every template takes the recipient's language (`users.locale`, null → pt-BR; before sign-in, the
-// request's). The pt-BR text is the catalog key (locales/en/email.json holds the English).
+// request's). The pt-BR text is the catalog key (locales/en/email.json holds the English, locales/es/email.json the Spanish).
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -15,7 +15,7 @@ function fill(html: string, parts: Record<string, string>): string {
 }
 
 /** Dates in e-mails are read in Brasília time, written the way the recipient's language writes them. */
-const dateLocale = (locale: Locale) => (locale === 'en' ? 'en-US' : 'pt-BR');
+const dateLocale = (locale: Locale) => ({ 'pt-BR': 'pt-BR', en: 'en-US', es: 'es' })[locale];
 
 export function loginCodeMail(to: string, code: string, ttlMinutes: number, locale: Locale = DEFAULT_LOCALE): Mail {
   const subject = t(locale, '{{code}} — seu código de acesso ao termhub', { code });
@@ -204,17 +204,30 @@ const ALPHA_COPY = {
     ignore: "If you weren't expecting this invite, ignore this e-mail.",
     footer: { docs: 'Documentation', brand: 'Brand', coffee: '☕ Buy me a coffee', made: 'made in Goiânia' },
   },
+  es: {
+    subject: 'Estás en la alpha de termhub 🚀',
+    hi: (name: string) => `Hola, ${name}.`,
+    intro: 'Gracias por unirte a la lista de espera de termhub Cloud. Llegó tu turno: ya tienes acceso a la alpha.',
+    cta: 'Abrir termhub',
+    howTo: 'Inicia sesión con tu cuenta de Google usando este mismo correo, o pide un código de acceso en la pantalla de inicio de sesión.',
+    communityTitle: 'Grupo de alpha testers',
+    communityBody: 'Creamos un grupo de WhatsApp para los alpha testers: ahí decidimos qué probar, escuchamos tus comentarios y avisamos de las novedades.',
+    communityCta: 'Unirme al grupo de WhatsApp',
+    link: 'Enlace',
+    ignore: 'Si no esperabas esta invitación, ignora este correo.',
+    footer: { docs: 'Documentación', brand: 'Marca', coffee: '☕ Buy me a coffee', made: 'hecho en Goiânia' },
+  },
 } as const;
 
-/** The waitlist stores the landing's language as 'pt' | 'en'; 'pt' is pt-BR here. */
-export type AlphaLocale = 'pt' | 'en';
+/** The waitlist stores the landing's language as 'pt' | 'en' | 'es'; 'pt' is pt-BR here. */
+export type AlphaLocale = 'pt' | 'en' | 'es';
 
 /**
  * Alpha-tester invite sent to waitlist sign-ups: the user already exists (like inviteMail),
  * plus the WhatsApp community link. Written in the language the person used on the landing.
  */
 export function alphaInviteMail(to: string, opts: { appUrl: string; communityUrl: string; firstName: string; locale: Locale | AlphaLocale }): Mail {
-  const locale: Locale = opts.locale === 'en' ? 'en' : 'pt-BR';
+  const locale: Locale = opts.locale === 'en' || opts.locale === 'es' ? opts.locale : 'pt-BR';
   const c = ALPHA_COPY[locale];
   const year = new Date().getFullYear();
   const text = `${c.hi(opts.firstName)}\n\n${c.intro}\n\n${c.cta}: ${opts.appUrl}\n${c.howTo}\n\n${c.communityTitle}\n${c.communityBody}\n${c.communityCta}: ${opts.communityUrl}\n\n${c.ignore}\n\n© ${year} termhub · MIT · ${REPO_URL} · ${c.footer.made}`;

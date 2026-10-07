@@ -151,8 +151,8 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
           invited_at: new Date(),
         });
       }
-      // The waitlist keeps the landing's language ('pt' | 'en'); 'pt' is pt-BR.
-      const locale: Locale = entry.locale === 'en' ? 'en' : 'pt-BR';
+      // The waitlist keeps the landing's language ('pt' | 'en' | 'es'); 'pt' is pt-BR.
+      const locale: Locale = entry.locale === 'en' || entry.locale === 'es' ? entry.locale : 'pt-BR';
       const effects = await runInvite(user, role, request.user?.name ?? 'Alguém', request.log, () =>
         alphaInviteMail(user!.email, { appUrl: config.publicUrl, communityUrl: config.alphaCommunityUrl, firstName: entry.first_name, locale }),
       );

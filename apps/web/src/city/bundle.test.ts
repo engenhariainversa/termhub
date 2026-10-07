@@ -61,17 +61,19 @@ describe('the public bundle source', () => {
 
 /**
  * The city build loads only the city, office and common catalogs (src/i18n/catalogs-city.ts), so every
- * key the city and the office scene use needs its English entry in one of those three files; one kept
+ * key the city and the office scene use needs its English and Spanish entries in one of those three files; one kept
  * only in another area's file would show in pt-BR on the street.
  */
 describe('the public bundle catalogs', () => {
   it('hold every key the city and the office use', () => {
-    const en: Record<string, string> = {};
-    for (const area of ['city', 'office', 'common']) Object.assign(en, JSON.parse(readFileSync(join(SRC, 'locales', 'en', `${area}.json`), 'utf8')));
     const missing: string[] = [];
-    for (const file of [...sources(join(SRC, 'city')), ...sources(join(SRC, 'office'))]) {
-      for (const { key, where } of scanSource(relative(SRC, file), readFileSync(file, 'utf8'), { guarded: false }).keys as { key: string; where: string }[]) {
-        if (!(key in en) && !(`${key}_one` in en)) missing.push(`${where}: "${key}"`);
+    for (const lang of ['en', 'es']) {
+      const catalog: Record<string, string> = {};
+      for (const area of ['city', 'office', 'common']) Object.assign(catalog, JSON.parse(readFileSync(join(SRC, 'locales', lang, `${area}.json`), 'utf8')));
+      for (const file of [...sources(join(SRC, 'city')), ...sources(join(SRC, 'office'))]) {
+        for (const { key, where } of scanSource(relative(SRC, file), readFileSync(file, 'utf8'), { guarded: false }).keys as { key: string; where: string }[]) {
+          if (!(key in catalog) && !(`${key}_one` in catalog)) missing.push(`${lang} ${where}: "${key}"`);
+        }
       }
     }
     expect(missing).toEqual([]);

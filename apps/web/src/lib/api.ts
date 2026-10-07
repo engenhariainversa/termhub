@@ -1,4 +1,4 @@
-import { currentLocale, i18n } from '../i18n';
+import { currentLocale, i18n, type Locale } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
 import type { AutomationFeedEvent, FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 
@@ -120,7 +120,7 @@ export const api = {
      *  when the account already has one (a claimed address is never changed). */
     setNickname: (nickname: string) => request<{ user: User }>('PATCH', '/auth/me/nickname', { nickname }),
     /** The language for this account (e-mails, push and the web on every browser); null = automatic. 204. */
-    setLocale: (locale: 'pt-BR' | 'en' | null) => request<null>('PATCH', '/auth/me/locale', { locale }),
+    setLocale: (locale: Locale | null) => request<null>('PATCH', '/auth/me/locale', { locale }),
     /** The browser's IANA zone, for the automation's daily summary hour. 204. */
     setTimeZone: (time_zone: string) => request<null>('PATCH', '/auth/me/time-zone', { time_zone }),
     /** The city address and its short link. May create the partner link on the way (the server rate-limits that). */

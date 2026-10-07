@@ -34,7 +34,7 @@ export interface SummaryContent {
 
 const dateOf = (day: string, locale: Locale) => {
   const [y, m, d] = day.split('-');
-  return locale === 'en' ? `${m}/${d}/${y}` : `${d}/${m}/${y}`;
+  return locale === 'en' ? `${m}/${d}/${y}` : `${d}/${m}/${y}`; // pt-BR and es read day first
 };
 
 /** `dd/mm HH:mm` (`mm/dd` in English) of `at` in `zone`. */

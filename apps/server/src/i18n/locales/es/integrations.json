@@ -1,0 +1,7 @@
+{
+  "A máquina {{machine}} não está conectada pelo agente do termhub; só dá para ler o login do gh de uma máquina com o agente": "La máquina {{machine}} no está conectada mediante el agente de termhub; el inicio de sesión de gh solo se puede leer desde una máquina con el agente",
+  "A máquina {{machine}} está desconectada": "La máquina {{machine}} está desconectada",
+  "`gh auth token` falhou na máquina {{machine}}: rode `gh auth login` nela": "`gh auth token` falló en la máquina {{machine}}: ejecuta `gh auth login` en ella",
+  "A máquina {{machine}} não respondeu a tempo": "La máquina {{machine}} no respondió a tiempo",
+  "Falha ao ler o login do gh na máquina {{machine}}": "No se pudo leer el inicio de sesión de gh en la máquina {{machine}}"
+}

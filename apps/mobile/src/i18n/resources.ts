@@ -21,6 +21,25 @@ import en_settings from '@/locales/en/settings.json';
 import en_shared from '@/locales/en/shared.json';
 import en_tabChat from '@/locales/en/tab-chat.json';
 import en_services from '@/locales/en/services.json';
+import es_app from '@/locales/es/app.json';
+import es_ui from '@/locales/es/ui.json';
+import es_account from '@/locales/es/account.json';
+import es_chat from '@/locales/es/chat.json';
+import es_chatView from '@/locales/es/chat-view.json';
+import es_chatGrants from '@/locales/es/chat-grants.json';
+import es_filePreview from '@/locales/es/file-preview.json';
+import es_fileRecent from '@/locales/es/file-recent.json';
+import es_home from '@/locales/es/home.json';
+import es_notifications from '@/locales/es/notifications.json';
+import es_permissions from '@/locales/es/permissions.json';
+import es_automation from '@/locales/es/automation.json';
+import es_progress from '@/locales/es/progress.json';
+import es_projectAi from '@/locales/es/project-ai.json';
+import es_session from '@/locales/es/session.json';
+import es_settings from '@/locales/es/settings.json';
+import es_shared from '@/locales/es/shared.json';
+import es_tabChat from '@/locales/es/tab-chat.json';
+import es_services from '@/locales/es/services.json';
 import pt_app from '@/locales/pt-BR/app.json';
 import pt_ui from '@/locales/pt-BR/ui.json';
 import pt_account from '@/locales/pt-BR/account.json';
@@ -66,6 +85,29 @@ export const EN_AREAS: Record<string, Catalog> = {
   'services': en_services,
 };
 
+/** The `es` catalogs, by area. */
+export const ES_AREAS: Record<string, Catalog> = {
+  'app': es_app,
+  'ui': es_ui,
+  'account': es_account,
+  'chat': es_chat,
+  'chat-view': es_chatView,
+  'chat-grants': es_chatGrants,
+  'file-preview': es_filePreview,
+  'file-recent': es_fileRecent,
+  'home': es_home,
+  'notifications': es_notifications,
+  'permissions': es_permissions,
+  'automation': es_automation,
+  'progress': es_progress,
+  'project-ai': es_projectAi,
+  'session': es_session,
+  'settings': es_settings,
+  'shared': es_shared,
+  'tab-chat': es_tabChat,
+  'services': es_services,
+};
+
 /** The `pt-BR` catalogs (plural forms only), by area. */
 export const PT_AREAS: Record<string, Catalog> = {
   'app': pt_app,
@@ -91,7 +133,22 @@ export const PT_AREAS: Record<string, Catalog> = {
 
 const merge = (areas: Record<string, Catalog>): Catalog => Object.assign({}, ...Object.values(areas)) as Catalog;
 
+/**
+ * Spanish has a `many` plural form (a million and up) where the catalogs give `_one`/`_other`: a
+ * `_many` lookup reuses `_other` instead of falling back to the pt-BR text.
+ */
+function withManyForms(catalog: Catalog): Catalog {
+  const out = { ...catalog };
+  for (const [key, text] of Object.entries(catalog)) {
+    if (!key.endsWith('_other')) continue;
+    const many = `${key.slice(0, -'_other'.length)}_many`;
+    if (!(many in out)) out[many] = text;
+  }
+  return out;
+}
+
 export const resources: Resource = {
   en: { translation: merge(EN_AREAS) },
+  es: { translation: withManyForms(merge(ES_AREAS)) },
   'pt-BR': { translation: merge(PT_AREAS) },
 };

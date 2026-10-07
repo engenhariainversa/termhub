@@ -64,7 +64,7 @@ const timeZoneBodySchema = z.object({
 });
 
 /** null = automatic (the browser's language; pt-BR for e-mails and push). */
-const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en']).nullable() });
+const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en', 'es']).nullable() });
 
 export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: { onNicknameClaimed?: (user: User) => void } = {}) {
   /** Public user + role summary + flat permission list: what the client needs to gate its UI. */

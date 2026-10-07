@@ -7,20 +7,20 @@ import { catalogFiles } from './catalogs';
  * "Salvar" in pt-BR (no catalog needed) and the `en` catalog's entry in English, falling back to the
  * pt-BR text when an entry is missing. How to translate a screen: ./README.md.
  */
-export type Locale = 'pt-BR' | 'en';
-export const LOCALES: Locale[] = ['pt-BR', 'en'];
+export type Locale = 'pt-BR' | 'en' | 'es';
+export const LOCALES: Locale[] = ['pt-BR', 'en', 'es'];
 export const DEFAULT_LOCALE: Locale = 'pt-BR';
 
 /** The explicit choice kept in this browser (for the login screen, before the account is known). */
 export const LOCALE_STORAGE_KEY = 'termhub:locale';
 
 export function isLocale(value: unknown): value is Locale {
-  return value === 'pt-BR' || value === 'en';
+  return value === 'pt-BR' || value === 'en' || value === 'es';
 }
 
 /**
  * The language to show: the explicit choice, else the first browser language termhub speaks (`pt*`
- * → pt-BR, `en*` → en), else pt-BR. A Spanish browser gets pt-BR until there is a Spanish catalog.
+ * → pt-BR, `en*` → en, `es*` → es), else pt-BR.
  */
 export function resolveLocale(choice: Locale | null, systemLanguages: readonly string[]): Locale {
   if (choice) return choice;
@@ -28,6 +28,7 @@ export function resolveLocale(choice: Locale | null, systemLanguages: readonly s
     const base = lang.toLowerCase().split(/[-_]/)[0];
     if (base === 'pt') return 'pt-BR';
     if (base === 'en') return 'en';
+    if (base === 'es') return 'es';
   }
   return DEFAULT_LOCALE;
 }
@@ -63,12 +64,25 @@ type Catalog = Record<string, string>;
 
 /** `src/locales/<lang>/<area>.json` (all of them, or the city's: ./catalogs.ts), merged per language. pt-BR files hold only plural forms. */
 function loadCatalogs(): Record<Locale, Catalog> {
-  const out: Record<Locale, Catalog> = { 'pt-BR': {}, en: {} };
+  const out: Record<Locale, Catalog> = { 'pt-BR': {}, en: {}, es: {} };
   for (const [path, mod] of Object.entries(catalogFiles)) {
     const lang = path.split('/').at(-2);
     if (isLocale(lang)) Object.assign(out[lang], mod.default);
   }
+  fillManyForms(out.es);
   return out;
+}
+
+/**
+ * Spanish has a `many` plural form (a million and up). The catalogs give `_one` and `_other`, so a
+ * `_many` lookup reuses `_other` instead of falling back to the pt-BR text.
+ */
+function fillManyForms(catalog: Catalog): void {
+  for (const key of Object.keys(catalog)) {
+    if (!key.endsWith('_other')) continue;
+    const many = `${key.slice(0, -'_other'.length)}_many`;
+    if (!(many in catalog)) catalog[many] = catalog[key];
+  }
 }
 
 const catalogs = loadCatalogs();
@@ -76,7 +90,7 @@ const catalogs = loadCatalogs();
 export const i18n = i18next.createInstance();
 
 void i18n.use(initReactI18next).init({
-  resources: { 'pt-BR': { translation: catalogs['pt-BR'] }, en: { translation: catalogs.en } },
+  resources: { 'pt-BR': { translation: catalogs['pt-BR'] }, en: { translation: catalogs.en }, es: { translation: catalogs.es } },
   lng: resolveLocale(readStoredLocale(), browserLanguages()),
   fallbackLng: DEFAULT_LOCALE,
   supportedLngs: LOCALES,
