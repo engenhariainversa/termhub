@@ -525,7 +525,12 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
       expect(await titles({ place: { projectId, conversationId: 'conv-a' } })).toEqual(['conversation', 'later', 'legacy-project', 'legacy-user']);
       expect(await titles({ place: { projectId: userProjectId, conversationId: 'conv-b' } })).toEqual(['later', 'legacy-user']);
       expect(await titles({ includeExpired: true })).toEqual(['expired', 'later', 'legacy-project', 'legacy-user']);
-      const near = (await repo.nearest({ ownerId: userId, kinds: ['note'], place: { projectId: userProjectId } }, vec(13), 50)).map((r) => r.title).sort();
+      // nearest ranks every embedded note of the owner, so keep only this test's rows (other tests leave user-scope notes behind).
+      const ours = new Set(rows.map((r) => r.id));
+      const near = (await repo.nearest({ ownerId: userId, kinds: ['note'], place: { projectId: userProjectId } }, vec(13), 50))
+        .filter((r) => ours.has(r.id))
+        .map((r) => r.title)
+        .sort();
       expect(near).toEqual(['later', 'legacy-user']);
     } finally {
       await db.project.deleteMany({ where: { id: userProjectId } });
