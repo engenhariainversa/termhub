@@ -72,6 +72,7 @@ import { createMobileServices, registerMobileApi } from './mobile/app.js';
 import { TabChatHub } from './tab-chat/hub.js';
 import { revokeDevice } from './mobile/revocation.js';
 import { purgeMobile } from './mobile/purge.js';
+import { purgeRetention } from './retention/purge.js';
 import { actionForMethod, type Resource } from './auth/permissions.js';
 import { startTicketSyncScheduler } from './setup/tickets-sync.js';
 import { startCiSyncScheduler } from './ci/scheduler.js';
@@ -345,6 +346,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
+    // Privacy Policy section 8 (TER-743): tab state history after 90 days, the waitlist after 12 months.
+    void purgeRetention(repos).catch(() => {});
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
   const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);
