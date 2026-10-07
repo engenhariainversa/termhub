@@ -1646,3 +1646,60 @@ export interface FileRecentResponse {
   items: FileRecentItem[];
   skipped: FileRecentSkipped[];
 }
+
+// --- A Claude Code tab read as a conversation (TER-1003; spec 2026-10-01 tab chat) --------------------
+// The phone's contract (`packages/mobile-api/src/tab-chat.ts`), as the web reads it from `/api/tab-chat`
+// and `/ws/tabs/:id/chat`. Nothing of it is stored: the server reads the session's transcript on the
+// machine and relays it.
+
+export type TabChatItem =
+  | { kind: 'user'; id: string; at: string; text: string; images: number }
+  | { kind: 'assistant'; id: string; at: string; text: string }
+  | { kind: 'tool'; id: string; at: string; name: string; summary: string | null }
+  | { kind: 'tool_result'; id: string; at: string; tool_id: string; error: boolean; preview: string | null }
+  | { kind: 'command'; id: string; at: string; name: string; args: string | null }
+  | { kind: 'command_output'; id: string; at: string; text: string }
+  | { kind: 'notice'; id: string; at: string; notice: 'compacted' | 'interrupted' | 'truncated' };
+
+/** `ready`, `no_session`, `unsupported_tool`, `unsupported_machine`, `agent_outdated`, `offline`, or one a newer server adds. */
+export type TabChatAvailability = string;
+
+export interface TabChatSummary {
+  id: string;
+  name: string;
+  project: { id: string; key: string; name: string };
+  machine: { id: string; name: string };
+  /** `waiting_background` travels as `working` + `background`, `finished` as `idle` + `finished`. */
+  state: 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | null;
+  background: boolean;
+  finished: boolean;
+  state_at: string | null;
+  needs_you: boolean;
+  activity: string | null;
+  activity_verb: string | null;
+  availability: TabChatAvailability;
+}
+
+export interface TabChatPage {
+  tab: TabChatSummary;
+  session_id: string | null;
+  items: TabChatItem[];
+  /** opaque cursor of the previous page; null at the start of the session */
+  before: string | null;
+  /** opaque cursor the live socket follows from; null when there is no transcript to follow */
+  live: string | null;
+  mode: string | null;
+  degraded: boolean;
+  questions: TabQuestion[];
+  suggestions: TabSuggestion[];
+}
+
+export type TabChatAction = 'interrupt' | 'cycle_mode' | 'clear' | 'compact';
+
+/** Server to browser on `/ws/tabs/:id/chat`. `reset`: drop the items and fetch the first page again. */
+export type TabChatFrame =
+  | { type: 'hello'; protocol: number; server_time: string; availability: TabChatAvailability }
+  | { type: 'items'; items: TabChatItem[]; live: string; mode: string | null }
+  | { type: 'state'; tab: TabChatSummary }
+  | { type: 'reset'; session_id: string | null }
+  | { type: 'unavailable'; availability: TabChatAvailability };

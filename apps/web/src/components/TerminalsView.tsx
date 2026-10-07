@@ -23,6 +23,7 @@ import { TabBar, type BarTab } from './TabBar';
 import { FileView } from './FileView';
 import { TerminalView } from './Terminal';
 import { SimulatorView } from './SimulatorView';
+import { TabChatView } from './tab-chat/TabChatView';
 import { RateLimitBanner } from './RateLimitBanner';
 import { PaneLayer, PANE_HEADER_HEIGHT } from './PaneLayer';
 import { FloatingWindow, FLOATING_TITLE_HEIGHT } from './FloatingWindow';
@@ -34,17 +35,21 @@ import { useData } from '../lib/data';
 import { useMarkSeenOnFocus, useMonitor } from '../lib/monitor';
 import { setTabsOnScreen } from '../lib/visible-tabs';
 import { writeLastMachine } from '../lib/last-machine';
+import { setTabView, useTabViews } from '../lib/tab-view';
 import {
+  chatTabId,
   closeEditorTab,
   filePathOf,
   fileTabId,
   getEditorTabs,
+  isChatTabId,
   isFileTabId,
   onTerminalEnded,
   pinTab,
   previewTab,
   pruneEditorTabs,
   seedEditorTabs,
+  terminalOfChat,
   updateEditorTabs,
   useEditorTabs,
 } from '../lib/editor-tabs';
@@ -90,11 +95,12 @@ export function TerminalsView({ project, visible }: Props) {
   // hold a terminal connection, so the layout works on those alone.
   const editorTabs = useEditorTabs(project.id);
   // File previews (spec 2026-10-04 file preview D14) share the list: they are open whatever the terminal list says.
-  const openIds = (editorTabs?.open ?? []).filter((id) => isFileTabId(id) || (tabs ?? []).some((t) => t.id === id));
+  // A conversation tab (TER-1003) is open while its terminal is one of the project's.
+  const openIds = (editorTabs?.open ?? []).filter((id) => isFileTabId(id) || (tabs ?? []).some((t) => t.id === (isChatTabId(id) ? terminalOfChat(id) : id)));
   const openKey = JSON.stringify(openIds);
   const tabIds = useMemo(() => JSON.parse(openKey) as string[], [openKey]);
   const openTabs = useMemo(() => tabIds.map((id) => (tabs ?? []).find((t) => t.id === id)).filter((t): t is Tab => !!t), [tabIds, tabs]);
-  /** What the bar shows, in its order: terminals and file previews. */
+  /** What the bar shows, in its order: terminals, file previews and terminals' conversations. */
   const barTabs = useMemo<BarTab[]>(
     () =>
       tabIds.flatMap((id): BarTab[] => {
@@ -102,16 +108,24 @@ export function TerminalsView({ project, visible }: Props) {
           const path = filePathOf(id);
           return [{ id, kind: 'file', path, name: path.split('/').pop() || path }];
         }
+        if (isChatTabId(id)) {
+          const terminal = (tabs ?? []).find((x) => x.id === terminalOfChat(id));
+          return terminal ? [{ id, kind: 'chat', terminalId: terminal.id, machineId: terminal.machine_id, name: terminal.name }] : [];
+        }
         const t = openTabs.find((x) => x.id === id);
         return t ? [t] : [];
       }),
-    [tabIds, openTabs],
+    [tabIds, openTabs, tabs],
   );
+  /** Terminal tabs switched to their conversation (TER-1003), by id. */
+  const tabViews = useTabViews();
+  /** The terminal a bar tab is about: itself, or the one a conversation tab reads; null for a file. */
+  const terminalIdOf = (id: string | null): string | null => (!id || isFileTabId(id) ? null : isChatTabId(id) ? terminalOfChat(id) : id);
   const previewId = editorTabs?.preview ?? null;
 
   // Tabs in a cell or floating while this section is shown: the "needs you" toasts skip them.
   useEffect(() => {
-    setTabsOnScreen(project.id, visible ? tabIds.filter((id) => placeOf(layout, id) !== null) : []);
+    setTabsOnScreen(project.id, visible ? tabIds.filter((id) => placeOf(layout, id) !== null).map((id) => (isChatTabId(id) ? terminalOfChat(id) : id)) : []);
   }, [project.id, visible, tabIds, layout]);
   useEffect(() => () => setTabsOnScreen(project.id, []), [project.id]);
 
@@ -190,11 +204,12 @@ export function TerminalsView({ project, visible }: Props) {
   const focusedTabId = layout.floating && floatingFocused ? layout.floating.tabId : layout.cells[layout.focusedCell] ?? null;
 
   // Clears the focused tab's "needs you" dot as soon as the person actually looks at it (a file has none).
-  useMarkSeenOnFocus(focusedTabId && !isFileTabId(focusedTabId) ? focusedTabId : null, visible);
+  useMarkSeenOnFocus(terminalIdOf(focusedTabId), visible);
 
   // The focused tab's live state (rate_limited_at, state) comes from the monitor push; the REST row
   // (loaded below) is the fallback until a snapshot/push for it arrives.
-  const focusedLiveTab = monitorItems.find((i) => i.tab.id === focusedTabId)?.tab ?? (tabs ?? []).find((t) => t.id === focusedTabId);
+  const focusedTerminalId = terminalIdOf(focusedTabId);
+  const focusedLiveTab = monitorItems.find((i) => i.tab.id === focusedTerminalId)?.tab ?? (tabs ?? []).find((t) => t.id === focusedTerminalId);
 
   // --- Data -----------------------------------------------------------------
   const load = useCallback(async () => {
@@ -284,6 +299,37 @@ export function TerminalsView({ project, visible }: Props) {
     openTab(fileTabId(wantedFile), wantedPin ? 'pin' : 'preview');
   }, [wantedFile, wantedPin, ready, openTab, setSearchParams]);
   const openFile = useCallback((path: string, mode: 'preview' | 'pin') => openTab(fileTabId(path), mode), [openTab]);
+
+  /** A terminal's conversation in a tab of its own (TER-1003); the terminal's own tab goes back to the terminal. */
+  const openChatTab = useCallback(
+    (terminalId: string) => {
+      setTabView(terminalId, 'terminal');
+      openTab(chatTabId(terminalId), 'pin');
+    },
+    [openTab],
+  );
+
+  /**
+   * The conversation in a pane next to its terminal: a single pane becomes two columns, the terminal
+   * keeps (or takes) its pane and the conversation takes another, an empty one first.
+   */
+  const openChatBeside = useCallback(
+    (terminalId: string) => {
+      const id = chatTabId(terminalId);
+      setTabView(terminalId, 'terminal');
+      const after = updateEditorTabs(project.id, (s) => pinTab(pinTab(s, terminalId), id));
+      setLayout((l) => {
+        let next = l.preset === 'single' ? reduce(l, { type: 'setPreset', preset: 'columns' }, area) : l;
+        if (next.cells.indexOf(terminalId) === -1) next = reduce(next, { type: 'assignTo', cell: 0, tabId: terminalId }, area);
+        const terminalCell = next.cells.indexOf(terminalId);
+        const empty = next.cells.findIndex((c, i) => i !== terminalCell && c === null);
+        const target = empty !== -1 ? empty : next.cells.findIndex((_, i) => i !== terminalCell);
+        return ensureVisibleTab(reduce(next, { type: 'assignTo', cell: target, tabId: id }, area), after.open);
+      });
+      setFloatingFocused(false);
+    },
+    [project.id, area],
+  );
 
   /** The tab's ✕ (and ⌘W): only the tab closes; the terminal, its tmux session and its agent keep going. */
   const closeTab = useCallback(
@@ -411,6 +457,8 @@ export function TerminalsView({ project, visible }: Props) {
         canSimulator={canSimulator}
         onRename={(id, name) => void rename(id, name)}
         onClose={closeTab}
+        views={tabViews}
+        onToggleView={(id) => setTabView(id, tabViews[id] === 'chat' ? 'terminal' : 'chat')}
         badges={
           projectMachines.length > 1
             ? Object.fromEntries(openTabs.map((t) => [t.id, machineById(t.machine_id)?.name ?? '']))
@@ -496,6 +544,15 @@ export function TerminalsView({ project, visible }: Props) {
                 >
                   {t.kind === 'file' ? (
                     <FileView projectId={project.id} path={t.path} active={active} onOpenFile={openFile} />
+                  ) : t.kind === 'chat' ? (
+                    <TabChatView
+                      tabId={t.terminalId}
+                      projectId={project.id}
+                      machineId={t.machineId}
+                      active={active}
+                      onShowTerminal={() => openTab(t.terminalId, 'pin')}
+                      onOpenBeside={() => openChatBeside(t.terminalId)}
+                    />
                   ) : t.kind === 'simulator' ? (
                     <SimulatorView
                       tab={t}
@@ -511,6 +568,25 @@ export function TerminalsView({ project, visible }: Props) {
                       onTabChange={(updated) => setTabs((list) => (list ?? []).map((x) => (x.id === updated.id ? { ...updated, alive: x.alive } : x)))}
                       onConnected={() => markAlive(t.id)}
                     />
+                  ) : tabViews[t.id] === 'chat' ? (
+                    // The conversation in place of the terminal (TER-1003): the terminal stays mounted, hidden,
+                    // so its connection and screen are there when the person switches back.
+                    <>
+                      <div className="invisible absolute inset-0" aria-hidden>
+                        <TerminalView tabId={t.id} active={false} focused={false} onConnected={() => markAlive(t.id)} />
+                      </div>
+                      <div className="absolute inset-0">
+                        <TabChatView
+                          tabId={t.id}
+                          projectId={project.id}
+                          machineId={t.machine_id}
+                          active={active}
+                          onShowTerminal={() => setTabView(t.id, 'terminal')}
+                          onOpenBeside={() => openChatBeside(t.id)}
+                          onOpenTab={() => openChatTab(t.id)}
+                        />
+                      </div>
+                    </>
                   ) : (
                     <TerminalView tabId={t.id} active={active} focused={focused} onConnected={() => markAlive(t.id)} />
                   )}
@@ -522,7 +598,7 @@ export function TerminalsView({ project, visible }: Props) {
               rects={rects}
               cells={layout.cells}
               focusedCell={layout.focusedCell}
-              tabs={[...tabs, ...barTabs.filter((t) => t.kind === 'file')]}
+              tabs={[...tabs, ...barTabs.filter((t) => t.kind === 'file' || t.kind === 'chat')]}
               onFocus={(cell) => {
                 dispatch({ type: 'focus', cell });
                 setFloatingFocused(false);

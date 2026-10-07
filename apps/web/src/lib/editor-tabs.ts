@@ -27,6 +27,15 @@ export const fileTabId = (path: string) => `${FILE_TAB_PREFIX}${path}`;
 export const isFileTabId = (id: string) => id.startsWith(FILE_TAB_PREFIX);
 export const filePathOf = (id: string) => id.slice(FILE_TAB_PREFIX.length);
 
+/**
+ * A terminal's conversation in a tab of its own (TER-1003): a Claude Code tab read from its transcript,
+ * so it can sit in a pane next to its terminal. Keyed by the terminal's id; it goes when the terminal goes.
+ */
+export const CHAT_TAB_PREFIX = 'chat:';
+export const chatTabId = (terminalId: string) => `${CHAT_TAB_PREFIX}${terminalId}`;
+export const isChatTabId = (id: string) => id.startsWith(CHAT_TAB_PREFIX);
+export const terminalOfChat = (id: string) => id.slice(CHAT_TAB_PREFIX.length);
+
 /** Opens `id` as the preview tab, in place of the current preview; an already open tab keeps its state. */
 export function previewTab(s: EditorTabs, id: string): EditorTabs {
   if (s.open.includes(id)) return s;
@@ -46,9 +55,9 @@ export function closeEditorTab(s: EditorTabs, id: string): EditorTabs {
 }
 
 /** Drops the ids that are not terminals of the project any more (ended elsewhere, a machine unlinked).
- *  File tabs stay: a file is not a terminal of the list. */
+ *  File tabs stay: a file is not a terminal of the list. A conversation goes with its terminal. */
 export function pruneEditorTabs(s: EditorTabs, known: ReadonlySet<string>): EditorTabs {
-  const keep = (id: string) => known.has(id) || isFileTabId(id);
+  const keep = (id: string) => known.has(id) || isFileTabId(id) || (isChatTabId(id) && known.has(terminalOfChat(id)));
   if (s.open.every(keep)) return s;
   const open = s.open.filter(keep);
   return { open, preview: s.preview && keep(s.preview) ? s.preview : null };
@@ -133,7 +142,7 @@ const endedListeners = new Set<(projectId: string, tabId: string) => void>();
 
 /** The sidebar ended a terminal: its tab closes, and the project's terminal view drops it. */
 export function announceTerminalEnded(projectId: string, tabId: string) {
-  updateEditorTabs(projectId, (s) => closeEditorTab(s, tabId));
+  updateEditorTabs(projectId, (s) => closeEditorTab(closeEditorTab(s, tabId), chatTabId(tabId)));
   for (const l of endedListeners) l(projectId, tabId);
 }
 
