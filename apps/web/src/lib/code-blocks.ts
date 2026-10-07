@@ -65,7 +65,7 @@ export function decorateCodeBlocks(html: string): string {
 
     const buttonLabel = doc.createElement('span');
     buttonLabel.setAttribute('data-copy-label', '');
-    buttonLabel.textContent = i18n.t('copiar');
+    buttonLabel.textContent = i18n.t('Copiar');
     button.appendChild(buttonLabel);
 
     // The block's own live region, part of it from the moment it is built rather than created when a

@@ -58,7 +58,17 @@ body { @apply bg-bg text-fg antialiased; font-family: ui-sans-serif, system-ui, 
    was asked for — got the faint state for ever, at about 2.1:1 against the background. `fg-muted`
    keeps it quiet next to the code without making it unreadable, and the box is at least 24x24 CSS px
    (WCAG 2.5.8) so a thumb can actually land on it. */
-.prose-termhub .code-block__copy { @apply inline-flex min-h-[24px] items-center rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-fg-muted transition-colors hover:bg-bg-3 hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent; }
+.prose-termhub .code-block__copy { @apply inline-flex min-h-[24px] items-center rounded px-2 py-1 text-xs text-fg-muted transition hover:bg-bg-3 hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent; }
+/* With a mouse the button stays out of the way until the block is hovered (TER-992), the way the
+   Claude web does it; it still shows on keyboard focus and while it says "Copiado ✓". Hidden with
+   opacity, not `display`, so it keeps its place in the tab order and the header does not reflow.
+   Touch screens never match `(hover: hover)`, so on a phone it is always there. */
+@media (hover: hover) and (pointer: fine) {
+  .prose-termhub .code-block__copy { @apply opacity-0; }
+  .prose-termhub .code-block:hover .code-block__copy,
+  .prose-termhub .code-block__copy:focus-visible,
+  .prose-termhub .code-block__copy[data-copy-state] { @apply opacity-100; }
+}
 
 /* The settings sidebar slides in over the projects one (spec 2026-09-23 app chrome §4); no motion
    for whoever asked the system for none. */
