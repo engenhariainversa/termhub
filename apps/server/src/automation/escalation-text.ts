@@ -45,6 +45,13 @@ export const CARD_BUDGET = 'card_budget';
 /** The agent itself said it is stuck (`report_card blocked`). */
 export const REPORTED_BLOCKED = 'reported_blocked';
 
+/**
+ * TER-1025: the agent said it is stuck on a GitHub error (a 5xx push, `commit_refs`, `gh pr create`'s
+ * "Something went wrong"): the run waits for GitHub and is resumed by itself; past `github_retries` the
+ * person is told with this reason.
+ */
+export const GITHUB_TRANSIENT = 'github_transient';
+
 /** The project's deploy workflow failed on a merge the automation made: automation of the project is paused (spec D22). */
 export const DEPLOY_FAILED = 'deploy_failed';
 /** Same, but the pause could not be applied (owner not found or the write failed): the text must not claim it. */
@@ -69,6 +76,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [ACCOUNT_EXCLUSIVE]: tk('O agente saiu e a conta dele é exclusiva de outro projeto; não foi reiniciado. Escolha outra conta e retome.'),
   [CARD_BUDGET]: tk('Orçamento do card estourado; o agente não foi retomado. Confira a aba e retome quando quiser.'),
   [REPORTED_BLOCKED]: tk('O agente disse que travou e precisa de você.'),
+  [GITHUB_TRANSIENT]: tk('O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.'),
   [DEPLOY_FAILED]: tk('O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.'),
   [DEPLOY_FAILED_NOT_PAUSED]: tk('O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.'),
   [RELEASE_FAILED]: tk('Um workflow de publicação falhou depois do merge; confira a execução.'),

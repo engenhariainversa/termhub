@@ -549,6 +549,10 @@ export interface ProjectAutomation {
   max_parallel: number | null;
   resume_max: number;
   fix_attempts: number;
+  /** TER-1025: re-runs of a deploy that failed on GitHub's side before the project is paused (0 = pause at once) */
+  deploy_retries: number;
+  /** TER-1025: automatic resumes of a run stuck on a GitHub error before the person is told */
+  github_retries: number;
   daily_budget_usd: number | null;
   /** a card whose estimate passes this is escalated and not resumed; null = off (spike R8) */
   card_budget_usd: number | null;

@@ -78,11 +78,15 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
 
 1. Agent `>= 0.18.0` (the first with the worktree RPC) on the machines linked to termhub. Check the version
    in Máquinas; update there or let `agent_auto_update` do it.
-2. Claude folder trust for the worktrees directory. A new folder makes Claude Code ask "trust this
-   folder?", which parks the run (`trust_prompt`). Accept it once: open the first parked run's tab, answer
-   the question with "Yes, I trust this folder" and the run continues. If trust is stored per parent
-   directory in your Claude version, one answer covers the worktrees of every later card; otherwise expect
-   it once per worktree and accept each (this is not confirmed in code, see the end of this file).
+2. Claude folder trust for the worktrees directory (TER-1025: nothing to do by hand). A new folder makes
+   Claude Code ask "Is this a project you created or one you trust?". Checked in Claude Code 2.1.292: trust
+   lives in `projects[<folder>].hasTrustDialogAccepted` of the account's `.claude.json` (`~/.claude.json`,
+   or `$CLAUDE_CONFIG_DIR/.claude.json`), and inside a git repository Claude only looks at the repository's
+   root, so a trusted parent folder does not cover a worktree. Agent `>= 0.20.0` therefore marks each new
+   worktree trusted in every Claude account of the machine when it creates it. When the question still shows
+   (an older agent, an account added later), the server reads the tab after 30 s and, if the screen shows
+   the question with "1. Yes, I trust this folder" selected, presses Enter (event `trust_auto_accepted`, at
+   most 3 times a run, never while paused). Only when that fails is the run parked as `trust_prompt`.
 3. Machine switch. In Máquinas, "Aceita trabalho automático" must be unchecked for jarvis: it is the
    production host, and the automation must never start cards there. Check it on every machine that
    should not run cards, and on the others make sure it is checked. The chat can flip it too
@@ -217,7 +221,8 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 
 | Reason | What it means | What to do |
 | --- | --- | --- |
-| `trust_prompt` | Stopped at the folder-trust question | Accept it in the tab (section 3) |
+| `trust_prompt` | Stopped at the folder-trust question and the server could not answer it (section 3) | Accept it in the tab; the run goes on by itself once the agent reports again |
+| `github_transient` | The agent hit GitHub errors on a push or PR and termhub already resumed it `github_retries` times | Check githubstatus.com and the tab; resume the run when GitHub is back |
 | `question_unanswered` | A question nothing automatic could answer | Answer it on the card |
 | `question_expired` | The question card closed unanswered while the tab still asks | Answer in the tab |
 | `answer_cap` | Too many automatically answered questions in an hour | Look at the tab, answer on the card |
@@ -243,9 +248,23 @@ from the runs table, so both colours keep it.
 
 `ci_cap` and `conflict_cap` also come before the cap when a fix ended without a push (the PR head did not
 move after its fixer, or after the fix typed into the card's own run): the escalation then carries
-`cause: fixer_no_push`, once per PR head. Read the fixer's tab to see why it stopped.
+`cause: fixer_no_push`, once per PR head. Read the fixer's tab to see why it stopped. For a red CI, a fix
+that ended without a push while githubstatus.com reports trouble with Git, the API or pull requests is not
+escalated: the card waits (`merge_github_down`) and gets one more fixer once GitHub works again (TER-1025).
+
+GitHub errors do not reach you on the first failure (TER-1025). An agent whose `git push` or `gh pr create`
+fails on GitHub's side (5xx, "commit_refs", "Something went wrong") calls `report_card` blocked with
+`code: github_transient`: the run waits (event `github_wait`, card and tab kept) and is resumed with a
+"try again" message after 5, 10 and 15 minutes, each time only when githubstatus.com shows Git, the API and
+pull requests working. Past `github_retries` (Setup, default 3) it escalates as `github_transient`.
 
 ## 10. After a failed deploy or release
+
+A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no
+failed step, ended `startup_failure`, or during an Actions incident on githubstatus.com is run again (the
+same run, the same SHA) after 5, 15 and 30 minutes, up to `deploy_retries` (Setup, default 3; 0 = pause at
+once), with a `deploy_retried` event and a chat line per try. Only a failed step, or the last try, pauses.
+See `docs/lessons/2026-10-07-deploy-job-missing-github-incident.md`.
 
 - Deploy: `deploy/post-deploy.sh` runs the smoke test and rolls back to the previous colour on its own. The
   run summary of "CI e Deploy" says `revertido para <cor> (<sha>)` or `sem rollback automático: <motivo>`;
