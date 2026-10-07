@@ -386,6 +386,18 @@ it('renders "does not exist" for a tab belonging to another user, and never leak
   expect(card.summary).not.toContain(foreignTab.id);
 });
 
+it('a closed tab\'s card still names the project the row kept when it was asked (TER-986)', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(repos, [action({ tool: 'send_input', args: { tab_id: 'gone', text: 'oi' }, tab_id: 'gone', project_id: project.id })], OWNER);
+  expect(card.summary).toBe('digitar `oi` numa aba que não existe mais do projeto reactivando');
+});
+
+it('a closed tab\'s card never names a foreign project the row names (TER-986)', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(repos, [action({ tool: 'send_input', args: { tab_id: 'gone', text: 'oi' }, tab_id: 'gone', project_id: foreignProject.id })], OWNER);
+  expect(card.summary).toBe('digitar `oi` numa aba que não existe mais');
+});
+
 it('renders "does not exist" for a project belonging to another user, and never leaks its name', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(repos, [action({ tool: 'open_tab', args: { project_id: foreignProject.id }, project_id: foreignProject.id })], OWNER);
