@@ -645,7 +645,8 @@ describe('answerPermissionAutomatically (spec §9.2)', () => {
     expect(w.sleep).toHaveBeenCalledWith(PERMISSION_SETTLE_MS);
     expect(w.sleep.mock.invocationCallOrder[0]!).toBeLessThan(vi.mocked(w.repos.automationRuns.activeByTab as never as () => void).mock.invocationCallOrder[0]!);
     expect(w.sendAnswer).toHaveBeenCalledWith(expect.objectContaining({ scope: expect.objectContaining({ ownerId: 'u1' }) }), 'q1', { allow: true }, expect.objectContaining({ embedder: null, via: 'automation' }));
-    expect(w.events).toEqual([expect.objectContaining({ kind: 'question_answered', run_id: 'run1', payload: { via: 'permission', tab_id: 'tab1', question_id: 'q1' } })]);
+    // TER-993: the feed shows what was approved alone — the tool and why, never the command
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'permission_auto_approved', run_id: 'run1', payload: { tab_id: 'tab1', question_id: 'q1', tool: 'WebFetch', reason: 'policy' } })]);
     expect(w.run.status).toBe('running');
   });
 

@@ -15,9 +15,13 @@ const HOME: Record<Phase, string> = {
   unlocked: '/(tabs)',
 };
 
+/** The first segments of the screens that belong to another phase (or to a pending deletion). */
+const NOT_UNLOCKED = new Set(['enrol', 'unlock', ACCOUNT_DELETION_SEGMENT]);
+
 /** Whether `segments` (from `useSegments()`) already sit inside `phase`'s own group. `unlocked`
- * owns both the tabs and the conversation screen (`app/chat/[id].tsx`) — a deep link or a
- * tab-to-chat navigation must not get bounced back to `/(tabs)` on every render. */
+ * owns every screen but the other phases' ones: the tabs, the conversation (`app/chat/[id].tsx`),
+ * a session (`app/session/[tabId].tsx`), the file preview and the rest. An allow-list here bounced
+ * each screen it forgot back to `/(tabs)` on its first render (TER-1002). */
 function onPhaseHome(phase: Phase, segments: string[]): boolean {
   switch (phase) {
     case 'new':
@@ -29,7 +33,8 @@ function onPhaseHome(phase: Phase, segments: string[]): boolean {
     case 'locked':
       return segments[0] === 'unlock';
     case 'unlocked':
-      return segments[0] === '(tabs)' || segments[0] === 'chat';
+      // The root `index` (segments `[]`) is Início, the `new` phase's screen.
+      return segments[0] !== undefined && !NOT_UNLOCKED.has(segments[0]);
   }
 }
 

@@ -16,17 +16,21 @@ function buildApp(logStream?: { write(line: string): void }) {
     tab: { ...tab, state: e.kind, state_text: e.text, state_tool: e.tool, state_at: '2026-09-18T10:00:00.000Z' },
     event: { id: 'e1', tab_id: tab.id, kind: e.kind, tool: e.tool, text: e.text, meta: {}, created_at: '2026-09-18T10:00:00.000Z' },
   }));
+  const insert = vi.fn(async (e: Record<string, unknown>) => ({ ...e, id: 'ev1', created_at: '2026-10-07T00:00:00.000Z' }));
   const repos = {
     machineHooks: { machineIdForTokenHash: async (h: string) => (h === hash ? 'm1' : undefined) },
     tabs: { findByTmuxSession: async (machineId: string, session: string) => (machineId === 'm1' && session === tab.tmux_session ? tab : undefined), recordEvent },
     machines: { findById: async (id: string) => (id === 'm1' ? { id: 'm1', owner_id: 'u1' } : undefined) },
     users: { findById: async (id: string) => (id === 'u1' ? { id, name: 'Pedro' } : undefined) },
     chat: { findUserMessagesForUser: async () => [] },
+    automationRuns: { activeByTab: async (tabId: string) => (tabId === tab.id ? { id: 'run1', project_id: 'p1', task_id: 'task1' } : null) },
+    automationEvents: { insert },
+    projects: { findById: async (id: string) => (id === 'p1' ? { id: 'p1', owner_id: 'u1' } : undefined) },
   } as unknown as Repositories;
   const app = Fastify(logStream ? { logger: { level: 'debug', stream: logStream } } : {});
   applyErrorHandler(app);
   app.register((instance) => hooksRoutes(instance, repos), { prefix: '/api/hooks' });
-  return { app, recordEvent };
+  return { app, recordEvent, insert };
 }
 
 const post = (app: ReturnType<typeof Fastify>, payload: unknown, auth = `Bearer ${token}`) =>
@@ -153,5 +157,29 @@ describe('POST /api/hooks/events: the origin of a prompt termhub typed (TER-851)
     expect(logged).toContain('monitor: prompt origin');
     expect(logged).not.toContain('segredo-do-prompt');
     expect(logged).not.toContain('These are their own words');
+  });
+});
+
+describe('POST /api/hooks/guard (TER-993)', () => {
+  const guard = (app: ReturnType<typeof Fastify>, payload: unknown, auth = `Bearer ${token}`) =>
+    app.inject({ method: 'POST', url: '/api/hooks/guard', payload: payload as Record<string, unknown>, headers: { authorization: auth } });
+
+  it('records guard_blocked with the tool and reason, never a command', async () => {
+    const { app, insert } = buildApp();
+    const r = await guard(app, { session: tab.tmux_session, tool: 'Bash', reason: 'docker e trava dura' });
+    expect(r.statusCode).toBe(200);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'guard_blocked', project_id: 'p1', run_id: 'run1', task_id: 'task1', payload: expect.objectContaining({ tab_id: 'tab1', tool: 'Bash', reason: 'docker e trava dura' }) }));
+  });
+
+  it('drops a block from a session that is not an automatic tab', async () => {
+    const { app, insert } = buildApp();
+    expect((await guard(app, { session: 'termhub-p9-other', tool: 'Bash', reason: 'x' })).statusCode).toBe(202);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects a bad token or a malformed body', async () => {
+    const { app } = buildApp();
+    expect((await guard(app, { session: tab.tmux_session, tool: 'Bash', reason: 'x' }, 'Bearer nope')).statusCode).toBe(401);
+    expect((await guard(app, { session: tab.tmux_session, tool: 'bad tool!', reason: 'x' })).statusCode).toBe(400);
   });
 });

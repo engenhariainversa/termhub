@@ -10,7 +10,7 @@ import type { AiAccount, AiProvider, Machine, Project, Task } from '../db/reposi
 import { HttpError, localizedOf } from '../lib/errors.js';
 import { mintTabToken, TAB_TOKEN_TOOLS } from '../mcp/tab-token.js';
 import { typeCommandLine } from '../terminal/session-ops.js';
-import { installTabMcp, TAB_MCP_SERVER, tabMcpSupported } from '../terminal/tab-mcp.js';
+import { guardSupported, installTabMcp, TAB_MCP_SERVER, tabMcpSupported } from '../terminal/tab-mcp.js';
 import { ControlError, type ControlContext } from './context.js';
 import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
 import { openTab } from './terminals.js';
@@ -532,12 +532,16 @@ export async function startAgent(
     // The hard-lock guard (TER-993): an automatic run (it has a worktree) gets its PreToolUse guard
     // settings written to the machine before the line is typed. A failure here is a failed start: a
     // run must never begin without the guard. Manual and start_agent tabs (no worktree) skip it.
-    if (permission?.worktree) await installTabMcp(machine, tab.tab_id, 'guard.json', buildGuardSettings(permission.branch, permission.worktree));
+    // Gated on agent 0.19.0 (`guardSupported`): the guard script ships there, so an older agent gets no
+    // `--settings` pointing at a script it does not have — it still has `--disallowedTools` (the first wall).
+    const withGuard = !!permission?.worktree && guardSupported(machine);
+    if (withGuard) await installTabMcp(machine, tab.tab_id, 'guard.json', buildGuardSettings(permission!.branch, permission!.worktree!));
+    const guardTabId = withGuard ? tab.tab_id : null;
     line = withSetup(
       internal?.setupCommand,
       mcp.installed
-        ? launchLine(account.provider, account.config_dir, prompt, { tabId: tab.tab_id, url: mcp.url }, model, permission, tab.tab_id)
-        : launchLine(account.provider, account.config_dir, prompt, null, model, permission, tab.tab_id),
+        ? launchLine(account.provider, account.config_dir, prompt, { tabId: tab.tab_id, url: mcp.url }, model, permission, guardTabId)
+        : launchLine(account.provider, account.config_dir, prompt, null, model, permission, guardTabId),
     );
   } catch (e) {
     throw tagged(e);

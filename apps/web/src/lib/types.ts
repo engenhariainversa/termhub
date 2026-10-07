@@ -373,6 +373,8 @@ export interface AutomationFeedEvent {
   until: string | null;
   reason_text: string | null;
   paused: boolean | null;
+  /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
+  tool: string | null;
 }
 export interface ProgressResponse {
   epics: EpicProgress[];

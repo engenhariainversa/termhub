@@ -5,7 +5,7 @@ import type { AutomationFeedEvent } from './types';
 
 const ev = (over: Partial<AutomationFeedEvent>): AutomationFeedEvent => ({
   id: 'x', kind: 'run_started', created_at: '2026-10-05T10:00:00.000Z', project_id: 'p', task_id: 't', run_id: 'r', tab_id: 'tab', ref: 'TER-9', epic: 'Épico',
-  machine: 'jarvis', account: 'pessoal', branch: null, workflow: null, version: null, pr: null, url: null, until: null, reason_text: null, paused: null, ...over,
+  machine: 'jarvis', account: 'pessoal', branch: null, workflow: null, version: null, pr: null, url: null, until: null, reason_text: null, paused: null, tool: null, ...over,
 });
 
 afterEach(() => {
@@ -28,6 +28,21 @@ describe('feed lines for changes to automatic work (TER-975)', () => {
     expect(feedLine(ev({ kind: 'automation_on' }))).toBe('Automatic work turned on for the project');
     expect(feedLine(ev({ kind: 'untagged' }))).toBe('TER-9: removed from automatic work');
     expect(feedLine(ev({ kind: 'machine_opt_out' }))).toBe('jarvis no longer accepts automatic work');
+  });
+});
+
+describe('auto-approved and guard-blocked lines (TER-993)', () => {
+  it('names the tool, in pt-BR and en, and falls back without one', () => {
+    expect(feedLine(ev({ kind: 'permission_auto_approved', tool: 'Bash' }))).toBe('TER-9: Bash liberado sozinho');
+    expect(feedLine(ev({ kind: 'permission_auto_approved', tool: 'mcp__termhub__create_task' }))).toBe('TER-9: create_task liberado sozinho');
+    expect(feedLine(ev({ kind: 'permission_auto_approved', tool: null }))).toBe('TER-9: permissão liberada sozinha');
+    expect(feedLine(ev({ kind: 'guard_blocked', tool: 'Bash' }))).toBe('TER-9: Bash bloqueado pela trava');
+    expect(feedLine(ev({ kind: 'guard_blocked', tool: null }))).toBe('TER-9: ação bloqueada pela trava');
+  });
+  it('has the English copy', async () => {
+    await i18n.changeLanguage('en');
+    expect(feedLine(ev({ kind: 'permission_auto_approved', tool: 'mcp__termhub__create_task' }))).toBe('TER-9: create_task allowed automatically');
+    expect(feedLine(ev({ kind: 'guard_blocked', tool: 'Bash' }))).toBe('TER-9: Bash blocked by the guard');
   });
 });
 

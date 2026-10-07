@@ -2,6 +2,7 @@ import { i18n, tk } from '../../i18n';
 import { memo, useMemo } from 'react';
 import type { MouseEvent } from 'react';
 import { appNavigate } from '../../lib/app-navigate';
+import { copyText } from '../../lib/clipboard';
 import { decorateCodeBlocks } from '../../lib/code-blocks';
 import { renderMarkdown } from '../../lib/markdown';
 import { filePreviewHref, linkifyMdPaths, MD_PATH_ATTR } from '../../lib/md-paths';
@@ -13,7 +14,7 @@ import { ChatReplyButton } from './ChatReplyButton';
 import { ChatReplyQuote } from './ChatReplyQuote';
 import { MessageAttachments } from './MessageAttachments';
 
-const COPY_FEEDBACK_MS = 1500;
+const COPY_FEEDBACK_MS = 2000;
 
 /** What an answer that stopped says when nothing was said about why. */
 const GENERIC_FAILURE = tk('A resposta não terminou — tente de novo.');
@@ -58,8 +59,8 @@ function failureLine(message: ChatMessage): string {
 /** The two things a copy attempt can end as, in the words the block shows and the ones it announces
  * (pt-BR keys, translated by `flashCopy`). */
 const COPY_OUTCOME = {
-  copied: { label: tk('copiado'), announced: tk('Código copiado'), name: tk('Código copiado') },
-  failed: { label: tk('falhou'), announced: tk('Não foi possível copiar o código'), name: tk('Não foi possível copiar') },
+  copied: { state: 'copied', label: tk('Copiado ✓'), announced: tk('Código copiado'), name: tk('Código copiado') },
+  failed: { state: 'failed', label: tk('Falhou'), announced: tk('Não foi possível copiar o código'), name: tk('Não foi possível copiar') },
 } as const;
 
 /**
@@ -68,11 +69,11 @@ const COPY_OUTCOME = {
  * click actually landed on inside the button (its label span, most likely), so this walks up to the
  * element `decorateCodeBlocks` marked with `data-copy`.
  *
- * Every way this can fail ends in the same visible "falhou": a missing `navigator.clipboard` (an
- * insecure context, an older browser), a `writeText` that rejects (Firefox without the permission, a
- * document that is not focused), and a `writeText` that is not a promise at all, which used to throw
- * out of this handler on `.then`. Copying the block is the whole point of the button — a tap that
- * silently does nothing, again and again, is the one outcome it must never have.
+ * A missing `navigator.clipboard` (an insecure context, a WebView, an older browser) or a `writeText`
+ * that rejects (Firefox without the permission, a document that is not focused) falls back to
+ * `execCommand('copy')` (`copyText`); only when that fails too does the button say "Falhou". Copying
+ * the block is the whole point of the button — a tap that silently does nothing, again and again, is
+ * the one outcome it must never have.
  */
 export function handleCopyClick(event: MouseEvent<HTMLDivElement>): void {
   const target = event.target as HTMLElement;
@@ -85,22 +86,7 @@ export function handleCopyClick(event: MouseEvent<HTMLDivElement>): void {
   // trimmed before anything reaches the clipboard.
   const text = (pre?.textContent ?? '').replace(/\n$/, '');
 
-  try {
-    const clipboard = navigator.clipboard;
-    if (!clipboard) {
-      flashCopy(button, COPY_OUTCOME.failed);
-      return;
-    }
-    // `Promise.resolve` so a `writeText` that returns undefined (or anything else) is handled here
-    // instead of throwing on `.then`.
-    void Promise.resolve(clipboard.writeText(text)).then(
-      () => flashCopy(button, COPY_OUTCOME.copied),
-      () => flashCopy(button, COPY_OUTCOME.failed),
-    );
-  } catch {
-    // `writeText` threw synchronously, or reading `navigator.clipboard` itself did.
-    flashCopy(button, COPY_OUTCOME.failed);
-  }
+  void copyText(text).then((ok) => flashCopy(button, ok ? COPY_OUTCOME.copied : COPY_OUTCOME.failed));
 }
 
 /** Transient, DOM-only feedback on the button that was clicked — there is no React state to hold it,
@@ -111,15 +97,27 @@ function flashCopy(button: HTMLElement, outcome: (typeof COPY_OUTCOME)[keyof typ
   if (live) live.textContent = i18n.t(outcome.announced);
 
   const label = button.querySelector('[data-copy-label]');
-  const original = label?.textContent ?? null;
   if (label) label.textContent = i18n.t(outcome.label);
   button.setAttribute('aria-label', i18n.t(outcome.name));
-  window.setTimeout(() => {
-    if (live) live.textContent = '';
-    if (label) label.textContent = original;
-    button.setAttribute('aria-label', i18n.t('Copiar código'));
-  }, COPY_FEEDBACK_MS);
+  // The state keeps the button on screen on a desktop (it otherwise shows only on hover, index.css)
+  // while it says how the copy went.
+  button.setAttribute('data-copy-state', outcome.state);
+  // A second click inside the window restarts it instead of letting the first one's revert cut it short.
+  window.clearTimeout(copyTimers.get(button));
+  copyTimers.set(
+    button,
+    window.setTimeout(() => {
+      copyTimers.delete(button);
+      if (live) live.textContent = '';
+      if (label) label.textContent = i18n.t('Copiar');
+      button.setAttribute('aria-label', i18n.t('Copiar código'));
+      button.removeAttribute('data-copy-state');
+    }, COPY_FEEDBACK_MS),
+  );
 }
+
+/** The pending revert of each button that is showing an outcome. */
+const copyTimers = new WeakMap<HTMLElement, number>();
 
 /** Markdown to sanitised HTML, with the copy buttons on any fence and preview links on Markdown paths
  *  (spec 2026-10-04 file preview): the one path both halves go through, and the tab conversation's

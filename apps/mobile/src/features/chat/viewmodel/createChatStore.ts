@@ -649,13 +649,18 @@ export function createChatStore(deps: ChatDeps) {
               if (gen !== generation) return false;
               // Accepted: the row exists on the server now, newer than any snapshot still in flight.
               arrivedDuringReads(key, accepted.user_message_id);
-              patchSlot(key, (slot) => ({
-                // The socket's echo may have landed first: then the local row simply goes; otherwise
-                // it becomes the server's row where it is, and the echo merges into it by id.
-                messages: slot.messages.some((m) => m.id === accepted.user_message_id)
-                  ? slot.messages.filter((m) => m.id !== localId)
-                  : slot.messages.map((m) => (m.id === localId ? { ...m, id: accepted.user_message_id, local: undefined } : m)),
-              }));
+              patchSlot(key, (slot) => {
+                // The socket's echo may have landed first: then the echo takes the local row's place
+                // and the duplicate goes; otherwise the local row becomes the server's row where it
+                // is, and the echo merges into it by id. Either way the row keeps its list key, so it
+                // is not remounted (TER-1001).
+                const echo = slot.messages.find((m) => m.id === accepted.user_message_id);
+                return {
+                  messages: echo
+                    ? slot.messages.flatMap((m) => (m.id === localId ? [{ ...echo, row_key: localId }] : m === echo ? [] : [m]))
+                    : slot.messages.map((m) => (m.id === localId ? { ...m, id: accepted.user_message_id, local: undefined, row_key: localId } : m)),
+                };
+              });
               set({ sending: false });
               messageSent.emit();
               // Events no longer re-read the thread; with the socket down nothing else would show the answer.

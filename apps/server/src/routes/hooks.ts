@@ -6,6 +6,7 @@ import { unauthorized } from '../lib/errors.js';
 import { ingestHookEvent } from '../monitor/ingest.js';
 import { HOOK_TOOLS } from '../monitor/state.js';
 import { HOOK_TOKEN_PREFIX, hashHookToken } from '../monitor/token.js';
+import { recordEvent } from '../automation/events.js';
 
 /** `waker` (spec 2026-09-26 concierge memory §7): optional, since a test with no `ChatService`
  *  instance to build one from simply omits it, and no card is ever woken for. */
@@ -62,4 +63,27 @@ export async function hooksRoutes(app: FastifyInstance, repos: Repositories, dep
     if (!result.ok) return reply.code(202).send({ ok: false, reason: result.reason });
     return { ok: true, tab_id: result.tab.id, state: result.tab.state };
   });
+
+  // The hard-lock guard (TER-993) reports a block it made, so the feed shows what was stopped. It carries
+  // the tool name and a short reason only — never the command (CLAUDE.md: terminal content is never
+  // logged). Fire-and-forget from the guard; the reply is ignored. Recorded as `guard_blocked` against
+  // the tab's active automatic run, and dropped silently when the session is not an automatic tab.
+  app.post('/guard', { config: { public: true }, bodyLimit: 8 * 1024, onRequest: authenticate }, async (request, reply) => {
+    const machineId = request.hookMachineId;
+    if (!machineId) throw unauthorized();
+    const body = guardBlockedBody.parse(request.body);
+    const tab = await repos.tabs.findByTmuxSession(machineId, body.session);
+    if (!tab) return reply.code(202).send({ ok: false, reason: 'unknown_session' });
+    const run = await repos.automationRuns.activeByTab(tab.id);
+    if (!run) return reply.code(202).send({ ok: false, reason: 'not_automatic' });
+    await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'guard_blocked', payload: { tab_id: tab.id, tool: body.tool, reason: body.reason } }).catch(() => undefined);
+    return { ok: true };
+  });
 }
+
+/** What the guard script posts on a block: the session, the tool it stopped and a short reason (no command). */
+export const guardBlockedBody = z.object({
+  session: z.string().regex(/^[A-Za-z0-9_-]{1,120}$/),
+  tool: z.string().regex(/^[A-Za-z][A-Za-z0-9_.-]{0,127}$/),
+  reason: z.string().max(200),
+});

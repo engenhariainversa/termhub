@@ -51,6 +51,19 @@ describe('SwipeToReply (TER-447)', () => {
     expect(onReply).toHaveBeenCalledTimes(1);
   });
 
+  it('disabled, it answers nothing and offers no action, and turning it on does not remount the row (TER-1001)', async () => {
+    const onReply = jest.fn();
+    const { rerender } = await render(<SwipeToReply onReply={onReply} enabled={false}><Text>oi</Text></SwipeToReply>);
+    expect(getByGestureTestId('swipe-to-reply').config.enabled).toBe(false);
+    expect(screen.queryByTestId('swipe-to-reply-row')).toBeNull();
+    const row = screen.getByText('oi');
+
+    await rerender(<SwipeToReply onReply={onReply}><Text>oi</Text></SwipeToReply>);
+    expect(screen.getByText('oi')).toBe(row);
+    await fireEvent(screen.getByTestId('swipe-to-reply-row'), 'accessibilityAction', { nativeEvent: { actionName: 'reply' } });
+    expect(onReply).toHaveBeenCalledTimes(1);
+  });
+
   it('the recognizer waits for a clear move right and leaves vertical drags to the list', () => {
     // The native recognizer applies these; jest does not run it, so the numbers are pinned here and
     // the feel is checked on devices.
