@@ -280,6 +280,13 @@ export class TabsRepository {
     return { tab: mapTab(t), event: e ? mapTabEvent(e) : null, rearm };
   }
 
+  /** The retention purge (TER-743): every tab's state events older than `cutoff`. The tab row keeps its
+   *  current state, and its last whole answer stays while the tab exists. */
+  async purgeEventsBefore(cutoff: Date): Promise<number> {
+    const r = await this.db.tabEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });
+    return r.count;
+  }
+
   async listEvents(tabId: string, limit = 50): Promise<TabEvent[]> {
     const rows = await this.db.tabEvent.findMany({ where: { tabId }, orderBy: { createdAt: 'desc' }, take: limit });
     return rows.map(mapTabEvent);

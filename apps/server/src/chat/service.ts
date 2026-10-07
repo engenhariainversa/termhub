@@ -409,6 +409,11 @@ export class ChatService {
   /** Conversations whose lock `reset` holds: a message there is not queued (it would land in the thread
    *  being archived), it is refused as before. */
   private resetting = new Set<string>();
+  /** Conversations "Apagar conversa" archived and still has to delete: the row goes once no process
+   *  holds it and nothing is queued in it, so their last writes never land on a deleted row. */
+  private deleting = new Set<string>();
+  /** Queue launches in flight, by conversation (`launchQueued`): a deletion waits for them. */
+  private draining = new Map<string, number>();
   /** Decisions whose `markInjectedMany` failed in this process — see `drainNextDecision`. In memory on
    * purpose: the row itself is untouched, so a restart tries it again with a healthy database. */
   private unmarkable = new Set<string>();
@@ -542,6 +547,41 @@ export class ChatService {
       return (await this.deps.repos.chat.setHost(fresh.id, { machine_id: current.machine_id, ai_account_id: current.ai_account_id })).conversation;
     }
     return fresh;
+  }
+
+  /**
+   * "Apagar conversa" (TER-743): the scope's active conversation ends exactly as in "Nova conversa"
+   * (`reset`, with the same 409 while it is answering) and is then deleted for good, with its memory
+   * rows. A process that `reset` stopped still holds the lock until it exits, and messages queued
+   * behind it are closed by the release: the row goes after both (`deleteIfFree`). Answers the fresh,
+   * empty conversation.
+   */
+  async deleteConversation(user: User, projectId: string | null): Promise<ChatConversation> {
+    const current = await this.conversationFor(user, projectId);
+    // Marked before the reset: the queue launch its release may start must find the mark when it ends.
+    this.deleting.add(current.id);
+    let fresh: ChatConversation;
+    try {
+      fresh = await this.reset(user, projectId);
+    } catch (e) {
+      this.deleting.delete(current.id);
+      throw e;
+    }
+    await this.deleteIfFree(user, current.id);
+    return fresh;
+  }
+
+  /** Deletes a conversation `deleteConversation` archived, unless a process, a queued message or a
+   *  queue launch closing them still needs it; `releaseLock` and `launchQueued` call it again when they let go. */
+  private async deleteIfFree(user: User, conversationId: string): Promise<void> {
+    if (!this.deleting.has(conversationId) || this.running.has(conversationId) || this.draining.has(conversationId) || this.queued.get(conversationId)?.length) return;
+    this.deleting.delete(conversationId);
+    this.queued.delete(conversationId);
+    try {
+      await this.deps.repos.chat.deleteConversation(conversationId, user.id);
+    } catch {
+      // The archived row stays (out of sight, as after "Nova conversa"); the next try is the person's.
+    }
   }
 
   /** Whether "Compactar" is running in this conversation — what `GET /api/chat` tells a screen that
@@ -1905,7 +1945,16 @@ export class ChatService {
   private launchQueued(user: User, conversationId: string): Promise<void> {
     // Shutting down: the queue was released with the row, for the instance that takes over.
     if (this.suspending) return Promise.resolve();
-    return this.track(this.launchQueuedNow(user, conversationId));
+    // Counted per call: two launches may overlap, and only the last one to end may let a deletion through.
+    this.draining.set(conversationId, (this.draining.get(conversationId) ?? 0) + 1);
+    return this.track(
+      this.launchQueuedNow(user, conversationId).finally(() => {
+        const left = (this.draining.get(conversationId) ?? 1) - 1;
+        if (left > 0) this.draining.set(conversationId, left);
+        else this.draining.delete(conversationId);
+        return this.deleteIfFree(user, conversationId);
+      }),
+    );
   }
 
   private async launchQueuedNow(user: User, conversationId: string): Promise<void> {
@@ -1982,6 +2031,11 @@ export class ChatService {
   /** Frees a conversation's run lock and hands the conversation to its queue, or else the decision drain. */
   private releaseLock(user: User, conversationId: string): void {
     this.running.delete(conversationId);
+    // "Apagar conversa" waited for this process to let go (with a queue, `launchQueued` closes it first).
+    if (this.deleting.has(conversationId) && !this.queued.get(conversationId)?.length) {
+      void this.deleteIfFree(user, conversationId);
+      return;
+    }
     // Shutting down: what is queued was released with the row, for the instance that takes over.
     if (this.suspending) return;
     // Messages typed while the process could not take them come first: the person is waiting on
