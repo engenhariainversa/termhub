@@ -437,6 +437,9 @@ function pickAnswer(text: string): AnswerOutcome {
   if (/test|teste/.test(text)) return { kind: 'normal', text: 'Rodei `npm test` no jarvis: 1066 testes passaram, 137 pulados. Nada quebrou.' };
   if (/deploy/.test(text)) return { kind: 'normal', text: 'O último deploy foi há 2 h, verde. Quer que eu dispare outro?' };
   if (/status/.test(text)) return { kind: 'normal', text: 'Duas abas trabalhando, uma esperando você: a aba api pediu para rodar os testes.' };
+  if (/código|codigo/.test(text)) {
+    return { kind: 'normal', text: 'Para rodar os testes do app:\n\n```bash\nnpm ci\nnpm test -w @termhub/mobile\n```\n\nE o `typecheck` fica assim:\n\n    npm run typecheck -w @termhub/mobile\n' };
+  }
   return { kind: 'normal', text: 'Entendi. Posso olhar as abas do projeto e te dizer o que está esperando você — quer que eu faça isso?' };
 }
 
