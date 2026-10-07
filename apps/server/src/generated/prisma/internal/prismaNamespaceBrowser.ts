@@ -862,6 +862,7 @@ export const ChatDecisionScalarFieldEnum = {
   suggestedCount: 'suggestedCount',
   acceptedCount: 'acceptedCount',
   autoCount: 'autoCount',
+  supersededAt: 'supersededAt',
   createdAt: 'createdAt'
 } as const
 
@@ -886,6 +887,8 @@ export const MemoryItemScalarFieldEnum = {
   verifiedHash: 'verifiedHash',
   hiddenHash: 'hiddenHash',
   meta: 'meta',
+  supersedes: 'supersedes',
+  supersededAt: 'supersededAt',
   sourceAt: 'sourceAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

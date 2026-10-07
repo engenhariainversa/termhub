@@ -36,6 +36,9 @@ export interface ChatDecision {
   accepted_count: number;
   /** Times this decision backed an automatic answer sent by the countdown (spec §D11). */
   auto_count: number;
+  /** When a `record_decision` note replaced it (TER-1015): it never again backs a suggestion or an
+   *  automatic answer, and leaves the default search. Null while it is current. */
+  superseded_at: string | null;
   created_at: string;
 }
 
@@ -85,17 +88,18 @@ interface RawRow {
   suggested_count: number;
   accepted_count: number;
   auto_count: number;
+  superseded_at: Date | null;
   created_at: Date;
 }
 
 const DECISION_COLUMNS = Prisma.raw(
-  `id, user_id, project_id, conversation_id, tab_question_id, question_index, header, question, options, multi_select, answer, embed_model, suggested_count, accepted_count, auto_count, created_at`,
+  `id, user_id, project_id, conversation_id, tab_question_id, question_index, header, question, options, multi_select, answer, embed_model, suggested_count, accepted_count, auto_count, superseded_at, created_at`,
 );
 
 /** Shared column list for the raw SELECTs below, aliased through `d` and joined to `projects` for
  *  `project_name` — everything but `embedding` itself (never selected — write-only from here). */
 const DECISION_SELECT = Prisma.raw(
-  `d.id, d.user_id, d.project_id, p.name AS project_name, d.conversation_id, d.tab_question_id, d.question_index, d.header, d.question, d.options, d.multi_select, d.answer, d.embed_model, d.suggested_count, d.accepted_count, d.auto_count, d.created_at`,
+  `d.id, d.user_id, d.project_id, p.name AS project_name, d.conversation_id, d.tab_question_id, d.question_index, d.header, d.question, d.options, d.multi_select, d.answer, d.embed_model, d.suggested_count, d.accepted_count, d.auto_count, d.superseded_at, d.created_at`,
 );
 
 /** The person's picked label(s) and free text, as one tsvector-able string — never the raw jsonb keys
@@ -126,11 +130,15 @@ const mapRaw = (r: RawRow): ChatDecision => ({
   suggested_count: r.suggested_count,
   accepted_count: r.accepted_count,
   auto_count: r.auto_count,
+  superseded_at: r.superseded_at ? r.superseded_at.toISOString() : null,
   created_at: r.created_at.toISOString(),
 });
 
 /** ` AND d.project_id = …` when a search is held to one project, nothing otherwise. */
 const projectFilter = (projectId: string | undefined) => (projectId ? Prisma.sql` AND d.project_id = ${projectId}` : Prisma.empty);
+
+/** ` AND d.superseded_at IS NULL` unless the caller asked for replaced rows too (TER-1015). */
+const currentUnless = (includeSuperseded: boolean | undefined) => (includeSuperseded ? Prisma.empty : Prisma.sql` AND d.superseded_at IS NULL`);
 
 /** Escapes a person's search text for a LIKE/ILIKE pattern: `%`/`_` are wildcards and `\` is the
  *  escape character itself, so all three must be escaped before wrapping in `%…%`. */
@@ -213,6 +221,7 @@ export class ChatDecisionsRepository {
       SELECT ${DECISION_SELECT}, 1 - (d.embedding <=> ${v}::vector) AS similarity
       FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
       WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.multi_select = ${opts.multiSelect} AND d.embed_model = ${opts.embedModel}
+        AND d.superseded_at IS NULL
       ORDER BY d.embedding <=> ${v}::vector
       LIMIT ${opts.k}`;
     return rows.map((r) => ({ ...mapRaw(r), similarity: Number(r.similarity) }));
@@ -222,12 +231,12 @@ export class ChatDecisionsRepository {
    *  question payload to match a shape against — only `answer_tab_question`'s own precedent check
    *  does, and it re-verifies the shape itself with `mapAnswer`). `projectId` keeps only that
    *  project's rows (a tab token's search, TER-212 D3). */
-  async nearestAny(userId: string, vector: number[], k: number, projectId?: string): Promise<DecisionNeighbour[]> {
+  async nearestAny(userId: string, vector: number[], k: number, projectId?: string, includeSuperseded?: boolean): Promise<DecisionNeighbour[]> {
     const v = toVector(vector);
     const rows = await this.db.$queryRaw<(RawRow & { similarity: number | string })[]>`
       SELECT ${DECISION_SELECT}, 1 - (d.embedding <=> ${v}::vector) AS similarity
       FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
-      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL${projectFilter(projectId)}
+      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL${projectFilter(projectId)}${currentUnless(includeSuperseded)}
       ORDER BY d.embedding <=> ${v}::vector
       LIMIT ${k}`;
     return rows.map((r) => ({ ...mapRaw(r), similarity: Number(r.similarity) }));
@@ -246,7 +255,7 @@ export class ChatDecisionsRepository {
     const rows = await this.db.$queryRaw<{ id: string; similarity: number | string }[]>`
       SELECT d.id, 1 - (d.embedding <=> ${v}::vector) AS similarity
       FROM "chat_decisions" d
-      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.embed_model = ${embedModel} AND d.id IN (${Prisma.join(ids)})`;
+      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.embed_model = ${embedModel} AND d.superseded_at IS NULL AND d.id IN (${Prisma.join(ids)})`;
     return new Map(rows.map((r) => [r.id, Number(r.similarity)]));
   }
 
@@ -254,17 +263,37 @@ export class ChatDecisionsRepository {
    *  best `ts_rank` first — same no-index trade-off as `MemoryItemsRepository.textSearch` (D5). A
    *  query with no lexeme (only punctuation) matches nothing rather than throwing. `projectId` keeps
    *  only that project's rows (a tab token's search, TER-212 D3), as it does for `nearestAny`. */
-  async textSearch(userId: string, query: string, k: number, projectId?: string): Promise<(ChatDecision & { rank: number })[]> {
+  async textSearch(userId: string, query: string, k: number, projectId?: string, includeSuperseded?: boolean): Promise<(ChatDecision & { rank: number })[]> {
     const rows = await this.db.$queryRaw<RawRow[]>`
       WITH q AS (SELECT websearch_to_tsquery('simple', ${query}) AS tsq)
       SELECT ${DECISION_SELECT}
       FROM "chat_decisions" d CROSS JOIN q LEFT JOIN "projects" p ON p.id = d.project_id
-      WHERE d.user_id = ${userId}${projectFilter(projectId)}
+      WHERE d.user_id = ${userId}${projectFilter(projectId)}${currentUnless(includeSuperseded)}
         AND numnode(q.tsq) > 0
         AND to_tsvector('simple', d.header || ' ' || d.question || ' ' || ${answerTextExpr}) @@ q.tsq
       ORDER BY ts_rank(to_tsvector('simple', d.header || ' ' || d.question || ' ' || ${answerTextExpr}), q.tsq) DESC, d.created_at DESC
       LIMIT ${k}`;
     return rows.map((r, i) => ({ ...mapRaw(r), rank: i + 1 }));
+  }
+
+  /**
+   * `record_decision`'s conflict check (TER-1015): this user's current decisions in exactly this scope
+   * (the same project, or account-wide when `projectId` is null), embedded with `embedModel`, at cosine
+   * similarity ≥ `minSimilarity` to `vector` — best first, at most `k`.
+   */
+  async similarInScope(userId: string, projectId: string | null, vector: number[], o: { embedModel: string; minSimilarity: number; k: number }): Promise<DecisionNeighbour[]> {
+    const v = toVector(vector);
+    const rows = await this.db.$queryRaw<(RawRow & { similarity: number | string })[]>`
+      SELECT * FROM (
+        SELECT ${DECISION_SELECT}, 1 - (d.embedding <=> ${v}::vector) AS similarity
+        FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
+        WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.embed_model = ${o.embedModel} AND d.superseded_at IS NULL
+          AND d.project_id IS NOT DISTINCT FROM ${projectId}::text
+      ) s
+      WHERE s.similarity >= ${o.minSimilarity}
+      ORDER BY s.similarity DESC
+      LIMIT ${o.k}`;
+    return rows.map((r) => ({ ...mapRaw(r), similarity: Number(r.similarity) }));
   }
 
   /** Only the ids this user owns — `search_memory`'s citations are re-checked against the caller

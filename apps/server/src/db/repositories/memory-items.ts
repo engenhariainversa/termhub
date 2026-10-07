@@ -48,6 +48,10 @@ export interface MemoryItem {
    *  it — for a lesson the whole source's text (`source_hash`), for every other kind the chunk's own. */
   verified: boolean;
   verified_at: string | null;
+  /** The ref (`note:<id>` / `decision:<id>`) this `record_decision` note replaced (TER-1015); null otherwise. */
+  supersedes: string | null;
+  /** When a newer note replaced this one (TER-1015): out of the default search and the conflict check. */
+  superseded_at: string | null;
   source_at: string;
   created_at: string;
   updated_at: string;
@@ -72,6 +76,8 @@ export interface NewMemoryItem {
   /** Lesson metadata (spec §3); undefined/null for every other kind. `upsertIn` writes it on every
    *  upsert but never touches `verified_*`/`hidden_hash` — those survive a re-index untouched. */
   meta?: LessonMeta | null;
+  /** The ref a `record_decision` note replaces (TER-1015). Written on insert only: a re-upsert keeps it. */
+  supersedes?: string | null;
 }
 
 export interface MemoryHit extends MemoryItem {
@@ -83,6 +89,8 @@ export interface MemoryFilter {
   ownerId: string;
   projectId?: string;
   kinds?: MemoryKind[];
+  /** Also return rows a newer note replaced (TER-1015). Off by default: a replaced decision is history. */
+  includeSuperseded?: boolean;
 }
 
 /** Row shape shared by the raw queries below: every `memory_items` column but `embedding` itself
@@ -104,13 +112,15 @@ interface RawItem {
   meta: LessonMeta | null;
   verified_at: Date | null;
   verified_hash: string | null;
+  supersedes: string | null;
+  superseded_at: Date | null;
   source_at: Date;
   created_at: Date;
   updated_at: Date;
 }
 
 const ITEM_COLUMNS = Prisma.raw(
-  `m.id, m.owner_id, m.project_id, m.kind, m.source_id, m.chunk_index, m.title, m.text, m.trust, m.content_hash, m.source_hash, m.embed_model, m.meta, m.verified_at, m.verified_hash, m.source_at, m.created_at, m.updated_at`,
+  `m.id, m.owner_id, m.project_id, m.kind, m.source_id, m.chunk_index, m.title, m.text, m.trust, m.content_hash, m.source_hash, m.embed_model, m.meta, m.verified_at, m.verified_hash, m.supersedes, m.superseded_at, m.source_at, m.created_at, m.updated_at`,
 );
 
 /** pgvector's text input format: `[x,y,z]`. Never-finite components (NaN, Infinity) are zeroed rather
@@ -134,6 +144,8 @@ const markHash = (r: { kind: string; content_hash: string; source_hash: string |
 const MARK_HASH_SQL = Prisma.raw(`(CASE WHEN m."kind" = 'lesson' THEN COALESCE(m."source_hash", m."content_hash") ELSE m."content_hash" END)`);
 /** "Not hidden" (`hideSource`): no mark, or a mark for a text that has since changed. */
 const NOT_HIDDEN = Prisma.sql`(m.hidden_hash IS NULL OR m.hidden_hash <> ${MARK_HASH_SQL})`;
+/** "Still current" unless the caller asked for replaced rows too (TER-1015). */
+const currentUnless = (includeSuperseded: boolean | undefined) => (includeSuperseded ? Prisma.empty : Prisma.sql` AND m.superseded_at IS NULL`);
 
 const mapRaw = (r: RawItem): MemoryItem => ({
   id: r.id,
@@ -152,6 +164,8 @@ const mapRaw = (r: RawItem): MemoryItem => ({
   meta: r.meta,
   verified: r.verified_at !== null && r.verified_hash === markHash(r),
   verified_at: r.verified_at ? r.verified_at.toISOString() : null,
+  supersedes: r.supersedes,
+  superseded_at: r.superseded_at ? r.superseded_at.toISOString() : null,
   source_at: r.source_at.toISOString(),
   created_at: r.created_at.toISOString(),
   updated_at: r.updated_at.toISOString(),
@@ -176,6 +190,9 @@ const decodeCursor = (cursor: string): { createdAt: Date; id: string } | null =>
   }
 };
 
+/** Rolls `insertNoteSuperseding`'s transaction back when its target is not there to replace. */
+class TargetGone extends Error {}
+
 /** What `upsertIn` needs from a client: a plain one or a transaction's. */
 type RawClient = Pick<PrismaClient, '$queryRaw'>;
 
@@ -186,15 +203,15 @@ async function upsertIn(tx: RawClient, items: NewMemoryItem[]): Promise<MemoryIt
     const hash = contentHash(it.title, it.text);
     const meta = it.meta ? JSON.stringify(it.meta) : null;
     const [row] = await tx.$queryRaw<(RawItem & { needs_embedding: boolean })[]>`
-      INSERT INTO "memory_items" ("id","owner_id","project_id","kind","source_id","chunk_index","title","text","trust","content_hash","source_hash","meta","source_at","updated_at")
-      VALUES (${it.id ?? newId()}, ${it.owner_id}, ${it.project_id}, ${it.kind}, ${it.source_id}, ${it.chunk_index}, ${it.title}, ${it.text}, ${it.trust}, ${hash}, ${it.source_hash ?? null}, ${meta}::jsonb, ${it.source_at}, now())
+      INSERT INTO "memory_items" ("id","owner_id","project_id","kind","source_id","chunk_index","title","text","trust","content_hash","source_hash","meta","supersedes","source_at","updated_at")
+      VALUES (${it.id ?? newId()}, ${it.owner_id}, ${it.project_id}, ${it.kind}, ${it.source_id}, ${it.chunk_index}, ${it.title}, ${it.text}, ${it.trust}, ${hash}, ${it.source_hash ?? null}, ${meta}::jsonb, ${it.supersedes ?? null}, ${it.source_at}, now())
       ON CONFLICT ("kind","source_id","chunk_index") DO UPDATE SET
         "title" = EXCLUDED."title", "text" = EXCLUDED."text", "trust" = EXCLUDED."trust", "owner_id" = EXCLUDED."owner_id", "project_id" = EXCLUDED."project_id",
         "source_at" = EXCLUDED."source_at", "updated_at" = now(), "content_hash" = EXCLUDED."content_hash", "source_hash" = EXCLUDED."source_hash", "meta" = EXCLUDED."meta",
         "embedding" = CASE WHEN "memory_items"."content_hash" = EXCLUDED."content_hash" THEN "memory_items"."embedding" ELSE NULL END,
         "embed_model" = CASE WHEN "memory_items"."content_hash" = EXCLUDED."content_hash" THEN "memory_items"."embed_model" ELSE NULL END
       RETURNING id, owner_id, project_id, (SELECT name FROM "projects" WHERE id = "project_id") AS project_name,
-                kind, source_id, chunk_index, title, text, trust, content_hash, source_hash, embed_model, meta, verified_at, verified_hash, source_at, created_at, updated_at,
+                kind, source_id, chunk_index, title, text, trust, content_hash, source_hash, embed_model, meta, verified_at, verified_hash, supersedes, superseded_at, source_at, created_at, updated_at,
                 (embedding IS NULL) AS needs_embedding`;
     if (row!.needs_embedding) out.push(mapRaw(row!));
   }
@@ -308,7 +325,7 @@ export class MemoryItemsRepository {
              1 - (m.embedding <=> ${v}::vector) AS similarity
       FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${filter.ownerId} AND m.embedding IS NOT NULL
-        AND ${NOT_HIDDEN}
+        AND ${NOT_HIDDEN}${currentUnless(filter.includeSuperseded)}
         AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))
       ORDER BY m.embedding <=> ${v}::vector
@@ -325,7 +342,7 @@ export class MemoryItemsRepository {
       SELECT ${ITEM_COLUMNS}, p.name AS project_name
       FROM "memory_items" m CROSS JOIN q LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${filter.ownerId}
-        AND ${NOT_HIDDEN}
+        AND ${NOT_HIDDEN}${currentUnless(filter.includeSuperseded)}
         AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))
         AND numnode(q.tsq) > 0
@@ -343,6 +360,53 @@ export class MemoryItemsRepository {
       WHERE m.owner_id = ${ownerId} AND m.id IN (${Prisma.join(ids)})
         AND ${NOT_HIDDEN}`;
     return rows.map(mapRaw);
+  }
+
+  /**
+   * `record_decision`'s conflict check (TER-1015): this owner's current notes in exactly this scope (the
+   * same project, or account-wide when `projectId` is null), embedded with `embedModel`, whose cosine
+   * similarity to `vector` is at least `minSimilarity` — best first, at most `k`. Never a hidden or a
+   * replaced note, never another owner's.
+   */
+  async similarNotes(ownerId: string, projectId: string | null, vector: number[], o: { embedModel: string; minSimilarity: number; k: number }): Promise<MemoryHit[]> {
+    const v = toVector(vector);
+    const rows = await this.db.$queryRaw<(RawItem & { similarity: number | string })[]>`
+      SELECT * FROM (
+        SELECT ${ITEM_COLUMNS}, p.name AS project_name, 1 - (m.embedding <=> ${v}::vector) AS similarity
+        FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
+        WHERE m.owner_id = ${ownerId} AND m.kind = 'note' AND m.embedding IS NOT NULL AND m.embed_model = ${o.embedModel}
+          AND m.superseded_at IS NULL AND ${NOT_HIDDEN}
+          AND m.project_id IS NOT DISTINCT FROM ${projectId}::text
+      ) s
+      WHERE s.similarity >= ${o.minSimilarity}
+      ORDER BY s.similarity DESC
+      LIMIT ${o.k}`;
+    return rows.map((r, i) => ({ ...mapRaw(r), similarity: Number(r.similarity), rank: i + 1 }));
+  }
+
+  /**
+   * Writes a `record_decision` note that replaces an older note or card decision (TER-1015), in one
+   * transaction: the note is inserted with `supersedes` = the target's ref, and the target — this owner's
+   * own, still current — gets `superseded_at = now()`. When the target is not there to replace (another
+   * owner's, gone, or already replaced, perhaps by a concurrent call) nothing is written and this
+   * resolves null. Returns the inserted note.
+   */
+  async insertNoteSuperseding(item: NewMemoryItem, target: { kind: 'note' | 'decision'; id: string }): Promise<MemoryItem | null> {
+    const ref = `${target.kind}:${target.id}`;
+    try {
+      return await this.db.$transaction(async (tx) => {
+        const marked =
+          target.kind === 'note'
+            ? await tx.$executeRaw`UPDATE "memory_items" SET "superseded_at" = now() WHERE "id" = ${target.id} AND "owner_id" = ${item.owner_id} AND "kind" = 'note' AND "superseded_at" IS NULL`
+            : await tx.$executeRaw`UPDATE "chat_decisions" SET "superseded_at" = now() WHERE "id" = ${target.id} AND "user_id" = ${item.owner_id} AND "superseded_at" IS NULL`;
+        if (marked === 0) throw new TargetGone();
+        const [row] = await upsertIn(tx, [{ ...item, supersedes: ref }]);
+        return row!;
+      });
+    } catch (err) {
+      if (err instanceof TargetGone) return null;
+      throw err;
+    }
   }
 
   countNotesSince(ownerId: string, since: Date): Promise<number> {
