@@ -25,7 +25,7 @@ Short version for the firewall ticket:
   - It dials out to the server over one persistent WebSocket, `wss://<server>/agent/ws`, and keeps it open.
   - Every terminal is a tmux session on the machine. Its bytes travel over that one socket, multiplexed as channels.
   - The agent runs as the **logged-in user**: a systemd user unit on Linux, a LaunchAgent on macOS. It needs no root, and no admin rights beyond installing tmux (and the build tools on Linux).
-- **Web app.** A single-page app served by the server. Every API call and every WebSocket goes to the **same origin** it was loaded from; there is no third-party script, CDN or font host.
+- **Web app.** A single-page app served by the server. Every API call and every WebSocket goes to the **same origin** it was loaded from, and the app's own code, styles and fonts are served from that origin too (no CDN, no font host). The one exception is **Google Analytics (GA4, through the Firebase SDK)**, and only after the user accepts cookies in the cookie banner; declining, or withdrawing consent later, keeps it off. When accepted, the browser loads `gtag.js` from `www.googletagmanager.com` and talks to `firebase.googleapis.com`, `firebaseinstallations.googleapis.com` and `*.google-analytics.com` (e.g. `www.google-analytics.com`, `region1.google-analytics.com`). It reports route changes with ids stripped and a few product events, never the user id, e-mail, machine names or terminal content. A build without the `VITE_FIREBASE_*` variables (a self-hosted install, by default) ships no analytics at all. Blocking these hosts does not break the app.
 - **Mobile app.** It talks only to `termhub.dev` (`/api/m/v1/*` and `wss://termhub.dev/ws/m/chat`).
 - **Monitor hooks** (optional, installed from the app). A small shell script that Claude Code, Codex or the Cursor CLI call on their events. It forwards the event with `curl` as an HTTPS POST to `termhub.dev/api/hooks/events`, so the app can show which tab is waiting for you.
 - **Chat.** The termhub chat runs the `claude` CLI **on your own machine**, through the agent, with your own Claude login. That CLI calls back into termhub's MCP endpoint (`termhub.dev/mcp`) with a short-lived token scoped to the run.
@@ -72,6 +72,7 @@ A proxy or firewall that closes idle connections after **60 s or more** does not
 |---|---|---|
 | Your OS package mirrors or Homebrew | machines | Installing tmux (and, on Linux, the build tools for node-pty) with the install command from Add machine (`brew` on macOS; `apt-get`, `dnf` or `pacman` on Linux). |
 | The hosts your AI CLIs already use (e.g. Anthropic for Claude Code, OpenAI for Codex, Google for Gemini) | machines | The CLIs run in termhub tabs exactly as they would in any terminal. termhub adds no host of its own for them; follow each vendor's documentation. |
+| `www.googletagmanager.com`, `firebase.googleapis.com`, `firebaseinstallations.googleapis.com`, `*.google-analytics.com` | browsers | Google Analytics in the web app, loaded only after the user accepts cookies. Blocking them only turns analytics off. |
 | `github.com` | macOS machines | Only the first time you set up the iOS Simulator viewer (clones Appium's WebDriverAgent). |
 
 The **server** also makes outbound calls, but only from termhub's side: npm (latest agent version), Google (OAuth), the ticket integrations you configure (GitHub, Linear, Jira), the usage endpoints of the AI providers, and Expo (mobile push). Your network does not need to allow those. They are listed for self-hosters in [Evidence](#evidence).
@@ -236,6 +237,7 @@ Paths are relative to the repository root.
 | Hosts routed on `termhub.dev` (hooks, MCP, mobile) | `deploy/nginx/termhub.dev.conf.tmpl` |
 | Server WebSocket endpoints, Origin check, pings, drain with 1012 | `apps/server/src/ws/router.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/terminal/ws.ts`, `apps/server/src/ws/drain.ts` |
 | Web uses same-origin API and WebSockets only; no third-party scripts in `index.html` | `apps/web/src/lib/api.ts`, `apps/web/src/lib/terminal-connection.ts`, `apps/web/index.html` |
+| Google Analytics (Firebase SDK) loads only after cookie consent, and not at all without `VITE_FIREBASE_*` | `apps/web/src/lib/analytics.ts`, `apps/web/src/lib/consent.ts` |
 | Mobile base URL `termhub.dev`; DPoP ES256; hardware key; PIN proof | `apps/mobile/src/services/api/config.ts`, `apps/mobile/src/services/api/dpop.ts`, `apps/mobile/src/services/key/`, `apps/server/src/mobile/` |
 | Agent token: 256 bits, SHA-256 stored; rotate/delete closes with 4401 | `apps/server/src/agent/token.ts`, `apps/server/src/routes/machines.ts` |
 | Sessions, cookies, CSRF | `apps/server/src/auth/tokens.ts`, `apps/server/src/auth/routes.ts`, `apps/server/src/auth/middleware.ts` |
