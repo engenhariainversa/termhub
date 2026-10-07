@@ -92,7 +92,10 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
 
   app.get('/me', { config: { public: true } }, async (request) => {
     if (!request.user) throw unauthorized();
-    return { user: await withRole(request.user), view_as: viewAsOf(request.scope) };
+    // The acceptance status of the Terms and the Privacy Policy (TER-742), so the web gates at start-up
+    // without another request. Always the signed-in person's own, even while viewing as someone else.
+    const legal = await ctx.repos.legal.statusFor(request.user.id);
+    return { user: await withRole(request.user), view_as: viewAsOf(request.scope), legal };
   });
 
   app.patch('/me/nickname', async (request, reply) => {

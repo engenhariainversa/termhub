@@ -95,6 +95,7 @@ model User {
   /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
   locale              String?
   automationSummaries AutomationSummary[]
+  legalAcceptances    LegalAcceptance[]
 
   @@index([roleId])
   @@index([deletionScheduledAt])
@@ -1527,4 +1528,45 @@ model AutomationSummary {
 
   @@id([userId, day])
   @@map("automation_summaries")
+}
+
+/// A version of the Terms of Use or of the Privacy Policy (TER-742). Only `requires_acceptance` versions gate
+/// the interactive clients; a relevant version that replaces another takes effect 30+ days after it is registered.
+model LegalDocumentVersion {
+  id                 String            @id
+  /// 'terms' | 'privacy'
+  document           String
+  /// as printed in the document ("1", "1.1")
+  version            String
+  effectiveAt        DateTime          @map("effective_at") @db.Timestamptz
+  /// the public page of that version
+  url                String
+  requiresAcceptance Boolean           @default(true) @map("requires_acceptance")
+  /// what changed (pt-BR), shown in the notice
+  summary            String?
+  /// when the 30-day notice e-mail went out; set once (the claim, so only one colour sends it)
+  noticeSentAt       DateTime?         @map("notice_sent_at") @db.Timestamptz
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  acceptances        LegalAcceptance[]
+
+  @@unique([document, version])
+  @@map("legal_document_versions")
+}
+
+/// One acceptance of one version by one person, with where it came from. Never updated: a new acceptance is a new row.
+model LegalAcceptance {
+  id         String               @id
+  userId     String               @map("user_id")
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versionId  String               @map("version_id")
+  version    LegalDocumentVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  acceptedAt DateTime             @default(now()) @map("accepted_at") @db.Timestamptz
+  ip         String?
+  userAgent  String?              @map("user_agent")
+  /// 'web' | 'mobile' | 'checkout'
+  channel    String
+
+  @@index([userId, versionId])
+  @@index([versionId])
+  @@map("legal_acceptances")
 }

@@ -7,6 +7,8 @@ import { authRoutes } from './routes.js';
 const setLocale = vi.fn();
 const setTimeZone = vi.fn();
 const findById = vi.fn();
+const LEGAL = { pending: [{ id: 'v1', document: 'terms', version: '1', effective_at: '2026-10-01T00:00:00.000Z', url: 'https://termhub.dev/termos/', requires_acceptance: true, summary: null }], upcoming: [] };
+const statusFor = vi.fn(async () => LEGAL);
 
 function buildApp(user: Record<string, unknown> | null) {
   const app = Fastify();
@@ -15,7 +17,7 @@ function buildApp(user: Record<string, unknown> | null) {
     request.user = user as never;
     if (user) request.scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id } as never;
   });
-  const repos = { users: { setLocale, setTimeZone }, roles: { findById } } as unknown as Repositories;
+  const repos = { users: { setLocale, setTimeZone }, roles: { findById }, legal: { statusFor } } as unknown as Repositories;
   app.register((a) => authRoutes(a, { repos } as never), { prefix: '/auth' });
   return app;
 }
@@ -56,6 +58,12 @@ describe('GET /auth/me', () => {
     const res = await buildApp({ ...user, locale: 'en' }).inject({ url: '/auth/me' });
     expect(res.statusCode).toBe(200);
     expect(res.json().user.locale).toBe('en');
+  });
+
+  it('carries the legal acceptance status of the signed-in person (TER-742)', async () => {
+    const res = await buildApp(user).inject({ url: '/auth/me' });
+    expect(res.json().legal).toEqual(LEGAL);
+    expect(statusFor).toHaveBeenCalledWith('u1');
   });
 });
 

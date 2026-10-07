@@ -49,6 +49,7 @@ import { AutomationEventsRepository } from './automation-events.js';
 import { AutomationRunsRepository } from './automation-runs.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
+import { LegalRepository } from './legal.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -101,6 +102,7 @@ export interface Repositories {
   automationRuns: AutomationRunsRepository;
   tabUsage: TabUsageRepository;
   aiAccountExhaustions: AiAccountExhaustionsRepository;
+  legal: LegalRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
 }
@@ -157,6 +159,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     automationRuns: new AutomationRunsRepository(db),
     tabUsage: new TabUsageRepository(db),
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
+    legal: new LegalRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
 }
@@ -194,3 +197,5 @@ export type { PauseState } from './automation-pauses.js';
 export type { UsageCursor, UsageTokens, UsageWrite, UsageSum } from './tab-usage.js';
 export type { AutomationEvent, AutomationEventKind, AutomationEventPayload, AutomationEventInput } from './automation-events.js';
 export { AUTOMATION_EVENT_RETENTION_MS, AUTOMATION_EVENTS_PAGE_MAX } from './automation-events.js';
+export type { LegalVersion, LegalStatus, LegalDocument, LegalChannel } from './legal.js';
+export { LEGAL_NOTICE_MS } from './legal.js';

@@ -92,6 +92,8 @@ import { createRealBackend } from './simulator/backend.js';
 import { seed } from './seed.js';
 import { AccountDeletionService } from './account/deletion.js';
 import { accountRoutes } from './routes/account.js';
+import { legalRoutes, legalVersionRoutes } from './routes/legal.js';
+import { sendDueLegalNotices } from './legal/notices.js';
 import { publicBus } from './public/bus.js';
 import { CLOSE } from '@termhub/agent-protocol';
 
@@ -261,6 +263,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await api.register((a) => cityLinkRoutes(a, { shortLinks }), { prefix: '/auth' });
       // The person's own account: any signed-in person may delete it, no role grant needed.
       await api.register((a) => accountRoutes(a, { auth: authService, deletion }), { prefix: '/account' });
+      // Acceptance of the Terms and the Privacy Policy (TER-742): any signed-in person; the versions are the `legal` resource's.
+      await api.register((a) => legalRoutes(a, repos), { prefix: '/legal' });
+      await guarded('legal', (a) => legalVersionRoutes(a, repos), '/legal/versions');
       await guarded('machines', (a) => machineRoutes(a, repos), '/machines');
       await guarded('projects', (a) => projectRoutes(a, repos, { simulators }), '/projects');
       await guarded('projects', (a) => projectGroupRoutes(a, repos), '/project-groups');
@@ -345,6 +350,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
+    // The 30-day notice of a new version of the Terms or the Privacy Policy (TER-742); the claim picks one colour, a draining one sends nothing.
+    void sendDueLegalNotices({ repos, mailer, log: fastify.log, active: () => !lifecycle.draining }).catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'legal notice: job failed'));
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
   const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);

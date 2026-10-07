@@ -30,6 +30,7 @@ import { SessionService } from './session.js';
 import type { AccountDeletionService } from '../account/deletion.js';
 import { mobileAutomationPauseRoutes, mobileAutomationSetupRoutes, mobileCardAutoRoutes } from '../routes/m-automation.js';
 import { mobileAccountRoutes } from '../routes/m-account.js';
+import { mobileLegalRoutes } from '../routes/m-legal.js';
 import { registerMobileTabWs } from './tab-ws.js';
 import { registerMobileChatWs } from './ws.js';
 import { sendError } from '../lib/errors.js';
@@ -171,6 +172,8 @@ export async function registerMobileApi(
         // The person's own account: no role grant needed to delete it (device auth only).
         const deletion = deps.deletion;
         if (deletion) await m.register((a) => mobileAccountRoutes(a, { deletion, session: services.session }), { prefix: '/account' });
+        // Acceptance of the Terms and the Privacy Policy (TER-742): any enrolled device, no role grant.
+        await m.register((a) => mobileLegalRoutes(a, deps.repos), { prefix: '/legal' });
         // A terminal tab read as a conversation (spec 2026-10-01 tab chat).
         await guarded('terminals', (a) => mobileTabRoutes(a, deps.repos, { hub: deps.tabChat }), '/tabs');
         // A file an agent wrote, previewed from its path (spec 2026-10-04 file preview): the web's route.

@@ -77,5 +77,8 @@
   "Invalid profile": "Invalid profile",
   "Too many sign-ups from this address; try again later": "Too many sign-ups from this address; try again later",
   "Entry not found": "Entry not found",
-  "Confirme com o PIN para ligar ou ampliar o trabalho automático.": "Confirm with your PIN to turn on or widen automatic work."
+  "Confirme com o PIN para ligar ou ampliar o trabalho automático.": "Confirm with your PIN to turn on or widen automatic work.",
+  "Esta versão não está aguardando o seu aceite. Recarregue a página e tente de novo.": "This version is not awaiting your acceptance. Reload the page and try again.",
+  "Uma nova versão que pede aceite só pode valer daqui a 30 dias ou mais, para dar tempo do aviso.": "A new version that requires acceptance can only take effect 30 or more days from now, to leave time for the notice.",
+  "Esse documento já tem uma versão com esse número.": "This document already has a version with this number."
 }

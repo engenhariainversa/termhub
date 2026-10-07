@@ -452,7 +452,9 @@ export const ModelName = {
   DeviceEvent: 'DeviceEvent',
   PushTicket: 'PushTicket',
   UserNotification: 'UserNotification',
-  AutomationSummary: 'AutomationSummary'
+  AutomationSummary: 'AutomationSummary',
+  LegalDocumentVersion: 'LegalDocumentVersion',
+  LegalAcceptance: 'LegalAcceptance'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -468,7 +470,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "legalDocumentVersion" | "legalAcceptance"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -4616,6 +4618,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    LegalDocumentVersion: {
+      payload: Prisma.$LegalDocumentVersionPayload<ExtArgs>
+      fields: Prisma.LegalDocumentVersionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.LegalDocumentVersionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.LegalDocumentVersionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload>
+        }
+        findFirst: {
+          args: Prisma.LegalDocumentVersionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.LegalDocumentVersionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload>
+        }
+        findMany: {
+          args: Prisma.LegalDocumentVersionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload>[]
+        }
+        create: {
+          args: Prisma.LegalDocumentVersionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload>
+        }
+        createMany: {
+          args: Prisma.LegalDocumentVersionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.LegalDocumentVersionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload>[]
+        }
+        delete: {
+          args: Prisma.LegalDocumentVersionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload>
+        }
+        update: {
+          args: Prisma.LegalDocumentVersionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload>
+        }
+        deleteMany: {
+          args: Prisma.LegalDocumentVersionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.LegalDocumentVersionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.LegalDocumentVersionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload>[]
+        }
+        upsert: {
+          args: Prisma.LegalDocumentVersionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalDocumentVersionPayload>
+        }
+        aggregate: {
+          args: Prisma.LegalDocumentVersionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateLegalDocumentVersion>
+        }
+        groupBy: {
+          args: Prisma.LegalDocumentVersionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LegalDocumentVersionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.LegalDocumentVersionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LegalDocumentVersionCountAggregateOutputType> | number
+        }
+      }
+    }
+    LegalAcceptance: {
+      payload: Prisma.$LegalAcceptancePayload<ExtArgs>
+      fields: Prisma.LegalAcceptanceFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.LegalAcceptanceFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.LegalAcceptanceFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload>
+        }
+        findFirst: {
+          args: Prisma.LegalAcceptanceFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.LegalAcceptanceFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload>
+        }
+        findMany: {
+          args: Prisma.LegalAcceptanceFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload>[]
+        }
+        create: {
+          args: Prisma.LegalAcceptanceCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload>
+        }
+        createMany: {
+          args: Prisma.LegalAcceptanceCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.LegalAcceptanceCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload>[]
+        }
+        delete: {
+          args: Prisma.LegalAcceptanceDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload>
+        }
+        update: {
+          args: Prisma.LegalAcceptanceUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload>
+        }
+        deleteMany: {
+          args: Prisma.LegalAcceptanceDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.LegalAcceptanceUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.LegalAcceptanceUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload>[]
+        }
+        upsert: {
+          args: Prisma.LegalAcceptanceUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LegalAcceptancePayload>
+        }
+        aggregate: {
+          args: Prisma.LegalAcceptanceAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateLegalAcceptance>
+        }
+        groupBy: {
+          args: Prisma.LegalAcceptanceGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LegalAcceptanceGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.LegalAcceptanceCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LegalAcceptanceCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -5585,6 +5735,34 @@ export const AutomationSummaryScalarFieldEnum = {
 export type AutomationSummaryScalarFieldEnum = (typeof AutomationSummaryScalarFieldEnum)[keyof typeof AutomationSummaryScalarFieldEnum]
 
 
+export const LegalDocumentVersionScalarFieldEnum = {
+  id: 'id',
+  document: 'document',
+  version: 'version',
+  effectiveAt: 'effectiveAt',
+  url: 'url',
+  requiresAcceptance: 'requiresAcceptance',
+  summary: 'summary',
+  noticeSentAt: 'noticeSentAt',
+  createdAt: 'createdAt'
+} as const
+
+export type LegalDocumentVersionScalarFieldEnum = (typeof LegalDocumentVersionScalarFieldEnum)[keyof typeof LegalDocumentVersionScalarFieldEnum]
+
+
+export const LegalAcceptanceScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  versionId: 'versionId',
+  acceptedAt: 'acceptedAt',
+  ip: 'ip',
+  userAgent: 'userAgent',
+  channel: 'channel'
+} as const
+
+export type LegalAcceptanceScalarFieldEnum = (typeof LegalAcceptanceScalarFieldEnum)[keyof typeof LegalAcceptanceScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -6090,6 +6268,8 @@ export type GlobalOmitConfig = {
   pushTicket?: Prisma.PushTicketOmit
   userNotification?: Prisma.UserNotificationOmit
   automationSummary?: Prisma.AutomationSummaryOmit
+  legalDocumentVersion?: Prisma.LegalDocumentVersionOmit
+  legalAcceptance?: Prisma.LegalAcceptanceOmit
 }
 
 /* Types for Logging */

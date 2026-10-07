@@ -106,7 +106,9 @@ export const ModelName = {
   DeviceEvent: 'DeviceEvent',
   PushTicket: 'PushTicket',
   UserNotification: 'UserNotification',
-  AutomationSummary: 'AutomationSummary'
+  AutomationSummary: 'AutomationSummary',
+  LegalDocumentVersion: 'LegalDocumentVersion',
+  LegalAcceptance: 'LegalAcceptance'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -1053,6 +1055,34 @@ export const AutomationSummaryScalarFieldEnum = {
 } as const
 
 export type AutomationSummaryScalarFieldEnum = (typeof AutomationSummaryScalarFieldEnum)[keyof typeof AutomationSummaryScalarFieldEnum]
+
+
+export const LegalDocumentVersionScalarFieldEnum = {
+  id: 'id',
+  document: 'document',
+  version: 'version',
+  effectiveAt: 'effectiveAt',
+  url: 'url',
+  requiresAcceptance: 'requiresAcceptance',
+  summary: 'summary',
+  noticeSentAt: 'noticeSentAt',
+  createdAt: 'createdAt'
+} as const
+
+export type LegalDocumentVersionScalarFieldEnum = (typeof LegalDocumentVersionScalarFieldEnum)[keyof typeof LegalDocumentVersionScalarFieldEnum]
+
+
+export const LegalAcceptanceScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  versionId: 'versionId',
+  acceptedAt: 'acceptedAt',
+  ip: 'ip',
+  userAgent: 'userAgent',
+  channel: 'channel'
+} as const
+
+export type LegalAcceptanceScalarFieldEnum = (typeof LegalAcceptanceScalarFieldEnum)[keyof typeof LegalAcceptanceScalarFieldEnum]
 
 
 export const SortOrder = {

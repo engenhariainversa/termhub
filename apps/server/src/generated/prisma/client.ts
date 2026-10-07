@@ -394,3 +394,14 @@ export type UserNotification = Prisma.UserNotificationModel
  * timer's claim, inserted with ON CONFLICT DO NOTHING so two colours send it once. `day` is the user's local date.
  */
 export type AutomationSummary = Prisma.AutomationSummaryModel
+/**
+ * Model LegalDocumentVersion
+ * A version of the Terms of Use or of the Privacy Policy (TER-742). Only `requires_acceptance` versions gate
+ * the interactive clients; a relevant version that replaces another takes effect 30+ days after it is registered.
+ */
+export type LegalDocumentVersion = Prisma.LegalDocumentVersionModel
+/**
+ * Model LegalAcceptance
+ * One acceptance of one version by one person, with where it came from. Never updated: a new acceptance is a new row.
+ */
+export type LegalAcceptance = Prisma.LegalAcceptanceModel

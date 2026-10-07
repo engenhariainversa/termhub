@@ -353,3 +353,42 @@ export function deletionLinkMail(to: string, opts: { link: string; ttlMinutes: n
     { label: t(locale, 'Confirmar exclusão'), url: opts.link },
   );
 }
+
+// ---------- terms and privacy policy changes (TER-742) ----------
+
+/** A version whose notice is going out: which document, from when, what changes and where to read it. */
+export interface LegalChangeNotice {
+  document: 'terms' | 'privacy';
+  effective_at: string;
+  url: string;
+  summary: string | null;
+}
+
+/**
+ * The 30-day notice of a relevant change to the Terms of Use and/or the Privacy Policy. One e-mail per
+ * person covers every version claimed in the same run. The summary is written in pt-BR and goes as is.
+ */
+export function legalChangeNoticeMail(to: string, versions: readonly LegalChangeNotice[], locale: Locale = DEFAULT_LOCALE): Mail {
+  const terms = versions.some((v) => v.document === 'terms');
+  const privacy = versions.some((v) => v.document === 'privacy');
+  const subject =
+    terms && privacy
+      ? t(locale, 'Mudanças nos Termos de Uso e na Política de Privacidade')
+      : terms
+        ? t(locale, 'Mudanças nos Termos de Uso')
+        : t(locale, 'Mudanças na Política de Privacidade');
+  const paragraphs: string[] = [];
+  for (const v of versions) {
+    const date = deletionDateLabel(new Date(v.effective_at), locale);
+    paragraphs.push(
+      v.document === 'terms'
+        ? t(locale, 'Os Termos de Uso do termhub mudam em {{date}}.', { date })
+        : t(locale, 'A Política de Privacidade do termhub muda em {{date}}.', { date }),
+    );
+    if (v.summary) paragraphs.push(t(locale, 'O que muda: {{summary}}', { summary: v.summary }));
+    if (versions.length > 1) paragraphs.push(t(locale, 'Leia a nova versão: {{url}}', { url: v.url }));
+  }
+  paragraphs.push(t(locale, 'A partir dessa data, vamos pedir que você leia e aceite a nova versão no seu próximo acesso. Se preferir, já pode aceitar antes pelo termhub.'));
+  const only = versions.length === 1 ? versions[0] : undefined;
+  return noticeMail(locale, to, subject, paragraphs, only ? { label: t(locale, 'Ler a nova versão'), url: only.url } : undefined);
+}

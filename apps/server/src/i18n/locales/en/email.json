@@ -39,5 +39,14 @@
   "Alguém pediu, na página de exclusão do termhub, para excluir a conta deste e-mail.": "Someone asked, on termhub's deletion page, to delete the account of this e-mail.",
   "Para confirmar, use o botão abaixo nos próximos {{minutes}} minutos. A conta fica desativada por 30 dias e depois é excluída definitivamente; até lá, entrar no termhub permite cancelar.": "To confirm, use the button below within the next {{minutes}} minutes. The account stays deactivated for 30 days and is then deleted for good; until then, signing in to termhub lets you cancel.",
   "Se não foi você, ignore este e-mail: nada muda na sua conta.": "If it was not you, ignore this e-mail: nothing changes in your account.",
-  "Confirmar exclusão": "Confirm deletion"
+  "Confirmar exclusão": "Confirm deletion",
+  "Mudanças nos Termos de Uso e na Política de Privacidade": "Changes to the Terms of Use and the Privacy Policy",
+  "Mudanças nos Termos de Uso": "Changes to the Terms of Use",
+  "Mudanças na Política de Privacidade": "Changes to the Privacy Policy",
+  "Os Termos de Uso do termhub mudam em {{date}}.": "termhub's Terms of Use change on {{date}}.",
+  "A Política de Privacidade do termhub muda em {{date}}.": "termhub's Privacy Policy changes on {{date}}.",
+  "O que muda: {{summary}}": "What changes: {{summary}}",
+  "Leia a nova versão: {{url}}": "Read the new version: {{url}}",
+  "A partir dessa data, vamos pedir que você leia e aceite a nova versão no seu próximo acesso. Se preferir, já pode aceitar antes pelo termhub.": "From that date on, we will ask you to read and accept the new version the next time you sign in. If you prefer, you can accept it earlier in termhub.",
+  "Ler a nova versão": "Read the new version"
 }
