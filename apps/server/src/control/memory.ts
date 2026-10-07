@@ -12,6 +12,7 @@ import { sanitisePromptText } from '../chat/tab-question-context.js';
 import { indexNote } from '../memory/index-items.js';
 import { excerpt } from '../memory/text.js';
 import { rrf, type Ranked } from '../memory/fusion.js';
+import { isInactive, rankByAuthority, type AuthorityHit } from '../memory/authority.js';
 import { TAB_EXCLUDED_KINDS } from '../mcp/tab-token.js';
 import { ControlError, type ControlContext } from './context.js';
 
@@ -132,7 +133,9 @@ function mergeByRank(decisions: (ChatDecision & { rank: number })[], items: Memo
 /**
  * `search_memory` (spec 2026-09-26 §5.1, D2, D5, D16): hybrid search over the requesting user's own
  * decisions (`chat_decisions`) and memory items (`memory_items`) — vector similarity plus Postgres
- * full-text, merged by reciprocal rank fusion (`k = 60`). Never another user's rows (D16); `project_id`
+ * full-text, merged by reciprocal rank fusion (`k = 60`), then re-ranked by authority (TER-1012,
+ * `memory/authority.ts`: person decisions, current notes, verified lessons and the query's own project
+ * go up; actions and tasks go down; a superseded or expired hit never comes first). Never another user's rows (D16); `project_id`
  * is checked through `ctx.scoped.project` before any search runs, so a foreign or missing project 404s
  * with nothing searched. Without an embedder, or when embedding the query fails or times out (2 s
  * budget), falls back to full-text alone — it never throws for that. Never logs the query, a title or
@@ -190,21 +193,22 @@ export async function searchMemory(
   const itemById = new Map<string, MemoryHit>();
   for (const it of [...vecItems, ...textItems]) if (!tab || !isTabExcluded(it.kind)) itemById.set(itemKey(it.kind, it.id), it);
 
-  const results: MemoryResult[] = [];
-  for (const { key } of fused) {
-    if (results.length >= limit) break;
+  // Every fused candidate becomes a result first, then authority (TER-1012) decides the order and the cut.
+  const candidates: (AuthorityHit & { result: MemoryResult })[] = [];
+  const now = new Date();
+  for (const { key, score } of fused) {
     const parsed = parseRef(key);
     if (!parsed) continue;
     const match = matchOf(key, vecKeys, textKeys);
     const sim = similarity.get(key) ?? null;
-    if (parsed.kind === 'decision') {
-      const d = decisionById.get(parsed.id);
-      if (d) results.push(decisionResult(d, sim, match));
-    } else {
-      const it = itemById.get(key);
-      if (it) results.push(itemResult(it, sim, match));
-    }
+    const row = parsed.kind === 'decision' ? decisionById.get(parsed.id) : itemById.get(key);
+    if (!row) continue;
+    const result = parsed.kind === 'decision' ? decisionResult(row as ChatDecision, sim, match) : itemResult(row as MemoryHit, sim, match);
+    candidates.push({ key, score, kind: result.kind, trust: result.trust, projectId: result.project?.id ?? null, verified: result.verified, inactive: isInactive(row, now), result });
   }
+  const results = rankByAuthority(candidates, a.project_id)
+    .slice(0, limit)
+    .map((c) => c.result);
 
   return { note: MEMORY_NOTE, results };
 }
