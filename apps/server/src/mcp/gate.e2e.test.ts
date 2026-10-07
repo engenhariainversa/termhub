@@ -748,7 +748,8 @@ it('publishes the question to the chat, with the arguments and no terminal conte
     args: { tab_id: 't1', text: 'npm test' },
     class: 'write',
     machine_id: null,
-    project_id: null,
+    // The tab's project, kept on the card when it is asked (TER-986): it outlives the tab.
+    project_id: 'p1',
     tab_id: 't1',
     // Enriched through the tab: t1 belongs to project "app" on machine "jarvis" (this test's fixtures).
     summary: 'digitar `npm test` na aba Terminal 1 do projeto app, no jarvis',
@@ -756,6 +757,21 @@ it('publishes the question to the chat, with the arguments and no terminal conte
     created_at: actions.rows[0].created_at,
   });
   expect(JSON.stringify(collected[0])).not.toContain('segredo na tela');
+});
+
+it('a tab card keeps its tab\'s project on the row, so it outlives the tab (TER-986)', async () => {
+  attachFakeTmux([]);
+  const { app, actions } = build({ gated: true });
+  await callTool(app, 'send_input', { tab_id: 't1', text: 'npm test' });
+  expect(actions.insertPending).toHaveBeenCalledWith(expect.objectContaining({ tab_id: 't1', project_id: 'p1' }));
+});
+
+it('a card for a tab that does not resolve for this user keeps no project: nothing foreign is read (TER-986)', async () => {
+  attachFakeTmux([]);
+  const { app, actions, tabs } = build({ gated: true });
+  tabs.delete('t1');
+  await callTool(app, 'send_input', { tab_id: 't1', text: 'npm test' });
+  expect(actions.insertPending).toHaveBeenCalledWith(expect.objectContaining({ tab_id: 't1', project_id: null }));
 });
 
 // The gate origin (spec 2026-09-26 §4): a live run's stream tells `subagentOrigins` which subagent's

@@ -240,7 +240,7 @@ interface Location {
  * "na aba X do projeto Y, no Z" when all three are known, degrading gracefully as fewer are; says so
  * plainly, in pt-BR, when the one reference the action actually named did not resolve. */
 function targetPhrase(loc: Location): string {
-  if (loc.missing === 'tab') return 'numa aba que não existe mais';
+  if (loc.missing === 'tab') return loc.project ? `numa aba que não existe mais do projeto ${loc.project}` : 'numa aba que não existe mais';
   if (loc.missing === 'project') return 'num projeto que não existe mais';
   if (loc.missing === 'machine') return 'numa máquina que não existe mais';
   const parts: string[] = [];
@@ -379,7 +379,8 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
     let loc: Location;
     if (action.tab_id) {
       const tab = tabById.get(action.tab_id);
-      if (!tab) loc = { missing: 'tab' };
+      // A gone tab's card still names its project when the row kept it (TER-986: stored when asked).
+      if (!tab) loc = { missing: 'tab', project: action.project_id ? projectById.get(action.project_id)?.name : undefined };
       else {
         const project = projectById.get(tab.project_id);
         loc = { tab: tab.name, project: project?.name, machine: machineById.get(tab.machine_id)?.name };

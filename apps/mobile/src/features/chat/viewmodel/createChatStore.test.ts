@@ -797,6 +797,15 @@ it('decideMany: a cancelled prompt shows nothing; a 409 says so like decide', as
   expect(chat.getState()).toMatchObject({ decidingId: null, error: 'Essa ação já foi decidida.' });
 });
 
+it('a 409 TAB_GONE (the card\'s tab was closed) turns the card stale at once, with no "already decided" error (TER-986)', async () => {
+  const { chat, api } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  jest.spyOn(api, 'decide').mockRejectedValueOnce(new ApiError(409, 'TAB_GONE', 'A aba desta ação foi fechada: nada foi feito e o pedido expirou.'));
+  await chat.getState().decide('a-termhub-1', 'approve');
+  expect(slot(chat, 'p-termhub').actions.find((a) => a.id === 'a-termhub-1')).toMatchObject({ status: 'failed', error_code: 'TAB_GONE' });
+  expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
+});
+
 it('decide never moves a card backwards: a re-read that already says executed wins over the late HTTP answer', async () => {
   const { chat, api } = await setup();
   await openAndConnect(chat, 'p-termhub');
