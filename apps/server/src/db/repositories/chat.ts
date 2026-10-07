@@ -169,6 +169,26 @@ export class ChatRepository {
     await this.db.chatConversation.updateMany({ where: { id, archivedAt: null }, data: { archivedAt: new Date() } });
   }
 
+  /**
+   * "Apagar conversa" (TER-743): the row goes, and its transcript, actions, attachments, subagents and
+   * grants cascade with it. The memory rows indexed from its messages and decided actions point at them
+   * without a foreign key, so they go here, in the same transaction. Attachment files left on the volume
+   * lose their row and the hourly sweep removes them. Decisions on tab question cards stay (their
+   * conversation is nulled): they are the person's answers, forgotten from "Memória do chat".
+   */
+  async deleteConversation(id: string, userId: string): Promise<boolean> {
+    return this.db.$transaction(async (tx) => {
+      const [messages, actions] = await Promise.all([
+        tx.chatMessage.findMany({ where: { conversationId: id, conversation: { userId } }, select: { id: true } }),
+        tx.chatAction.findMany({ where: { conversationId: id, conversation: { userId } }, select: { id: true } }),
+      ]);
+      if (messages.length) await tx.memoryItem.deleteMany({ where: { ownerId: userId, kind: 'message', sourceId: { in: messages.map((m) => m.id) } } });
+      if (actions.length) await tx.memoryItem.deleteMany({ where: { ownerId: userId, kind: 'action', sourceId: { in: actions.map((a) => a.id) } } });
+      const { count } = await tx.chatConversation.deleteMany({ where: { id, userId } });
+      return count > 0;
+    });
+  }
+
   /** A host change moves every project conversation too: their CLI sessions live in the old host's
    * config dir and cannot be resumed anywhere else (user-hosted spec §3). */
   async clearProjectSessions(userId: string): Promise<void> {

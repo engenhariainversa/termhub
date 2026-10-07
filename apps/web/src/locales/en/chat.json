@@ -442,5 +442,9 @@
   "criar integração": "create integration",
   "definir repositório": "set repository",
   "Recolher": "Collapse",
-  "Ver ações": "Show actions"
+  "Ver ações": "Show actions",
+  "Apagar conversa": "Delete conversation",
+  "Apagar": "Delete",
+  "Não foi possível apagar a conversa": "Could not delete the conversation",
+  "As mensagens, os cards e os anexos desta conversa serão apagados de vez, junto com o que a memória guardou deles. Não dá para desfazer.": "This conversation's messages, cards and attachments will be deleted for good, along with what the memory kept from them. This cannot be undone."
 }
