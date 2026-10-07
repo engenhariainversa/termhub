@@ -10,7 +10,7 @@ import type { Project, Task } from '../db/repositories/types.js';
 import { LocalizedText, msg, t } from '../i18n/index.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import type { ProjectSetupData } from '../setup/schema.js';
-import { cleanupRuns } from './cleanup.js';
+import { cleanupRuns, markCancelledWorktreesDue } from './cleanup.js';
 import { cardBranchName, removeWorkspace as removeWorkspaceFn, targetOf, type ensureEpicBranch as ensureEpicBranchFn, type ensureWorkspace as ensureWorkspaceFn } from './branches.js';
 import { budgetReached } from './budget.js';
 import { automationBus, dispatchTriggers, recordEvent } from './events.js';
@@ -28,6 +28,8 @@ import { eligibilityQueue } from './queue.js';
 /** Spec D11: a tick every 15 s, plus one shortly after a relevant event. */
 export const TICK_MS = 15_000;
 export const TRIGGER_DEBOUNCE_MS = 1_000;
+/** How often a project's cancelled runs are looked at for a worktree to clean (TER-974). */
+export const CANCELLED_SCAN_MS = 10 * 60_000;
 /** Spec §8 step 7: heartbeats every 30 s; a run silent for 2 min is taken over by another instance. */
 export const HEARTBEAT_MS = 30_000;
 export const STALE_MS = 2 * 60_000;
@@ -466,12 +468,26 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     }
   }
 
+  /** When each project's cancelled runs were last looked at for a worktree to clean (TER-974). */
+  const cancelledScanAt = new Map<string, number>();
+
   /**
    * Cleanups left due after a merge (machine offline, tab busy): tried again on each tick. A pause does not
    * stop them (removing a merged card's worktree is not work); automation off does (only projects with it on
    * are read), and so does a draining instance.
    */
   async function retryCleanups(projectId: string, setup: ProjectSetupData): Promise<void> {
+    // TER-974: a cancelled run's worktree nothing will use again joins them (looked for every few minutes)
+    const now = deps.now();
+    if (now.getTime() - (cancelledScanAt.get(projectId) ?? 0) >= CANCELLED_SCAN_MS) {
+      cancelledScanAt.set(projectId, now.getTime());
+      try {
+        const marked = await markCancelledWorktreesDue(repos, projectId, now);
+        if (marked.length > 0) log.info({ projectId, runs: marked.length }, 'automation: worktrees of cancelled runs due for cleanup');
+      } catch (e) {
+        log.warn({ projectId, code: errorCode(e) }, 'automation: cancelled runs not looked at for cleanup');
+      }
+    }
     const due = await repos.automationRuns.dueCleanups(projectId);
     if (due.length === 0) return;
     const project = await repos.projects.findById(projectId);

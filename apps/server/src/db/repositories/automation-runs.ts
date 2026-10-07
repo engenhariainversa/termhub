@@ -367,6 +367,24 @@ export class AutomationRunsRepository {
     return (await this.db.automationRun.findMany({ where: { taskId: { in: taskIds }, cleanupState: 'due' }, orderBy: { createdAt: 'asc' } })).map(map);
   }
 
+  /**
+   * TER-974: the cards of a project with a cancelled run that left a worktree no cleanup has looked at yet
+   * (the cleanup otherwise only follows a merge or a deleted card). The caller decides whether it may go.
+   */
+  async cardsWithCancelledWorktree(projectId: string): Promise<string[]> {
+    const rows = await this.db.automationRun.findMany({
+      where: { projectId, status: 'cancelled', cleanupState: null, worktreePath: { not: null }, taskId: { not: null } },
+      distinct: ['taskId'],
+      select: { taskId: true },
+    });
+    return rows.map((r) => r.taskId!);
+  }
+
+  /** Every run of the card, in any status. */
+  async listByTask(taskId: string): Promise<AutomationRun[]> {
+    return (await this.db.automationRun.findMany({ where: { taskId }, orderBy: { createdAt: 'asc' } })).map(map);
+  }
+
   /** The runs of a project whose cleanup is still to do. */
   async dueCleanups(projectId: string): Promise<AutomationRun[]> {
     return (await this.db.automationRun.findMany({ where: { projectId, cleanupState: 'due' }, orderBy: { createdAt: 'asc' } })).map(map);

@@ -47,7 +47,7 @@ function deps(repos: Repositories, over: Partial<DispatcherDeps> = {}): Dispatch
 
 /** No project has automation on: the sweep finds nothing and the list is empty. */
 const idle = () => ({
-  automationRuns: { cancelOrphaned: async () => [], heartbeat: async () => {}, takeOver: async () => [], dueCleanups: async () => [] },
+  automationRuns: { cancelOrphaned: async () => [], heartbeat: async () => {}, takeOver: async () => [], dueCleanups: async () => [], cardsWithCancelledWorktree: async () => [] },
   projectSetup: { listWithAutomation: async () => [] },
 });
 
