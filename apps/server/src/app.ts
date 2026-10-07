@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, ROOT_DIR } from './config.js';
 import { getPrisma, closePrisma } from './db/prisma.js';
-import { ACCESS_LOG_RETENTION_MS, AUTOMATION_EVENT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
+import { ACCESS_LOG_RETENTION_MS, AUTOMATION_EVENT_RETENTION_MS, VIEW_AS_AUDIT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
 import { createMailer } from './email/mailer.js';
 import { createAccessAllowlist } from './cloudflare/access.js';
 import { AuthService, authRoutes, buildAuthHook, type AuthContext } from './auth/index.js';
@@ -116,6 +116,11 @@ export interface App {
 export interface BuildAppOptions {
   /** Where the built web bundles are read from (tests); defaults to apps/web/dist and dist-city. */
   frontend?: { webDist?: string; cityDist?: string };
+  /**
+   * Re-queue every pending attachment on boot (default true). Tests that boot the app against the shared CI
+   * database turn it off: the worker would fail the pending rows other test files are still working on.
+   */
+  requeuePendingOnBoot?: boolean;
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
@@ -223,7 +228,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     repo: repos.chatAttachments,
     store: attachmentStore,
     extract,
-    whisper: { whisperUrl: config.transcription?.url ?? null, language: config.transcription?.language ?? null },
+    whisper: {
+      whisperUrl: config.transcription?.url ?? null,
+      language: config.transcription?.language ?? null,
+      whisperSecret: config.transcription?.secret ?? null,
+    },
     onDone: (row) => chatBus.publish({ type: 'attachment_status', user_id: row.user_id, conversation_id: row.conversation_id, attachment: toPublicAttachment(row) }),
     log: fastify.log,
   });
@@ -336,7 +345,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   }
 
   // Whatever was still pending when the previous process died goes back in line (spec §5.4).
-  void requeuePending(extraction, repos.chatAttachments).catch((err) => fastify.log.warn({ err: failureLabel(err) }, 'attachments: could not re-queue pending rows'));
+  if (opts.requeuePendingOnBoot !== false) void requeuePending(extraction, repos.chatAttachments).catch((err) => fastify.log.warn({ err: failureLabel(err) }, 'attachments: could not re-queue pending rows'));
 
   // Limpeza periódica de sessões expiradas e de perguntas do chat que ninguém respondeu
   const purge = setInterval(() => {
@@ -356,6 +365,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
+    // The admin "view as" trail is kept a year after each period ends (TER-746).
+    void repos.viewAsAudit.purgeBefore(new Date(Date.now() - VIEW_AS_AUDIT_RETENTION_MS)).catch(() => {});
     // Privacy Policy section 8 (TER-743): tab state history after 90 days, the waitlist after 12 months.
     void purgeRetention(repos).catch(() => {});
     // Access records past their 6 months (TER-744): the hourly tick is the rotation.
