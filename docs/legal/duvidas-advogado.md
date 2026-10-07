@@ -170,7 +170,7 @@ A Política foi escrita como **deve ficar**. Ela só pode ser publicada quando e
 | P-3 | ~~**Página web para pedir a exclusão sem o app**~~ | **entregue no PR #285 (TER-720)**: `termhub.dev/excluir-conta` | `apps/landing/src/delete-account/DeleteAccountPage.tsx` | — |
 | P-4 | Provedor de SMTP de produção documentado, e **e-mail fora do log**: sem `SMTP_HOST`, o e-mail inteiro, com o código de login, vai para o log | `apps/server/src/email/mailer.ts:32-42` | — | segurança |
 | P-5 | País da hospedagem declarado | não está escrito em lugar nenhum | — | Política |
-| P-6 | **Retenção dos logs** (6 meses, Marco Civil) e rotação | padrão do Docker; o log do Fastify registra IP e URL | `apps/server/src/app.ts:110` | Marco Civil |
+| P-6 | ~~**Retenção dos logs** (6 meses, Marco Civil) e rotação~~ | **entregue no TER-744**: registros de acesso (data e hora, IP, usuário, rota e status; sem query, corpo nem conteúdo) na tabela `access_logs`, apagados após 190 dias | `apps/server/src/access-log/recorder.ts`; `docs/security-and-network.md` | — |
 | P-7 | Backup do banco | não há backup automatizado | `README.md:237` (só um `pg_dump` manual) | continuidade |
 | P-8 | **Consulta de uso das contas de IA sem a credencial sair da máquina**, e uma opção para desligar a leitura | o agente envia a credencial ao servidor | `packages/machine-ops/src/ai-credentials.ts:22-38`; `apps/server/src/ai/credentials.ts:18-40`; `apps/server/src/ai/claude.ts:14` | A-1 |
 | P-9 | Registro de auditoria do "ver como" do administrador | não existe | `apps/server/src/auth/scope.ts:11-39` | L-10 |
