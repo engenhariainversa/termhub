@@ -53,6 +53,7 @@ const machineBody = z
     is_local: z.boolean().optional(),
     agent_auto_update: z.boolean().optional(),
     claude_auto_swap: z.boolean().optional(),
+    ai_usage_query: z.boolean().optional(),
     automation_allowed: z.boolean().optional(),
   })
   .superRefine((m, ctx) => {

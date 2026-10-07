@@ -66,7 +66,9 @@ vi.mock('../office/scene/OfficeScene', () => ({
 }));
 // a file preview reads its machine through the API: a marker is enough for the tab bar flow (TER-941)
 vi.mock('./FileView', () => ({
-  FileView: ({ path, active }: { path: string; active: boolean }) => <div data-testid={`file-${path}`} data-active={String(active)} />,
+  FileView: ({ path, machineId, active }: { path: string; machineId?: string | null; active: boolean }) => (
+    <div data-testid={`file-${path}`} data-machine={machineId ?? ''} data-active={String(active)} />
+  ),
 }));
 
 const projectRow = vi.hoisted(() => ({ id: 'p1', key: 'TER', name: 'termhub', status: 'active', machines: [{ machine_id: 'm1', cwd: '/w', position: 0 }] }) as unknown as Project);
@@ -307,5 +309,25 @@ describe('file previews in the tab bar (TER-941)', () => {
     fireEvent.click(within(tabBar()).getByRole('button', { name: 'Fechar aba r.md' }));
     await waitFor(() => expect(tabNames()).toEqual(['Ana']));
     expect(apiMock.remove).not.toHaveBeenCalled();
+  });
+
+  it('?machine= reads the file on that machine, and the tab keeps it across a reload (TER-973)', async () => {
+    localStorage.setItem(editorTabsKey('p1'), JSON.stringify({ open: ['t1'], preview: null }));
+    const first = renderPage('/projects/p1?file=%7E%2Frelatorio.md&machine=m1&pin=1');
+    await waitFor(() => expect(tabNames()).toEqual(['Ana', 'relatorio.md']));
+    expect(screen.getByTestId('file-~/relatorio.md')).toHaveAttribute('data-machine', 'm1');
+    expect(JSON.parse(localStorage.getItem(editorTabsKey('p1'))!).open).toEqual(['t1', 'file@m1:~/relatorio.md']);
+    first.unmount();
+    resetEditorTabsCache();
+    renderPage();
+    await waitFor(() => expect(tabNames()).toEqual(['Ana', 'relatorio.md']));
+    expect(screen.getByTestId('file-~/relatorio.md')).toHaveAttribute('data-machine', 'm1');
+  });
+
+  it('a file tab stored before TER-973 opens with no machine', async () => {
+    localStorage.setItem(editorTabsKey('p1'), JSON.stringify({ open: ['t1', 'file:docs/a.md'], preview: null }));
+    renderPage();
+    await waitFor(() => expect(tabNames()).toEqual(['Ana', 'a.md']));
+    expect(screen.getByTestId('file-docs/a.md')).toHaveAttribute('data-machine', '');
   });
 });
