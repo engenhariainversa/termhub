@@ -1,8 +1,8 @@
 import type { FastifyBaseLogger } from 'fastify';
-import type { AnsweredChoiceRow, ChatDecision, NewDecision } from '../db/repositories/chat-decisions.js';
+import type { AnsweredChoiceRow, ChatDecision, DecisionNeighbour, NewDecision } from '../db/repositories/chat-decisions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
-import { answerToDecision, embedTag, embedText, EMBED_TEXT_VERSION, mapAnswer, sameAnswer, type SuggestionItem, type TabQuestionSuggestion } from './decision-text.js';
+import { answerToDecision, embedTag, embedText, EMBED_TEXT_VERSION, mapAnswer, sameAnswer, type ItemAnswer, type SuggestionItem, type TabQuestionSuggestion } from './decision-text.js';
 import { defaultEmbedder, EMBED_TIMEOUT_MS, memoryCode, withTimeout, type Embedder } from './embeddings.js';
 import { checkChoiceAnswer, choiceAnswerBody, choicePayload, type ChoiceAnswer, type ChoicePayload } from './tab-question-payload.js';
 
@@ -14,6 +14,21 @@ export interface MemoryDeps {
   threshold: number;
   timeoutMs?: number;
   log: Pick<FastifyBaseLogger, 'info' | 'warn'>;
+}
+
+/**
+ * The past decision a question's suggestion comes from, among its `nearest` neighbours (spec 2026-09-26
+ * §4): only the ones at or above `threshold`, newest first — a fresher decision beats a stronger but
+ * stale match — and the first whose answer still maps onto this question's options. Shared by
+ * `suggestFor` and the memory replay (TER-1009), so the replay measures the rule the cards actually use.
+ */
+export function pickPrecedent(near: DecisionNeighbour[], item: { multi_select: boolean; options: { label: string }[] }, threshold: number): { decision: DecisionNeighbour; mapped: ItemAnswer } | null {
+  const candidates = near.filter((n) => n.similarity >= threshold).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  for (const c of candidates) {
+    const mapped = mapAnswer(c.answer, item);
+    if (mapped) return { decision: c, mapped }; // otherwise the past labels no longer match this question's options — try the next
+  }
+  return null;
 }
 
 /**
@@ -45,14 +60,10 @@ export async function suggestFor(repos: Pick<Repositories, 'users' | 'chatDecisi
       // asks `nearest`.
       if (texts[i] === '') continue;
       const near = await repos.chatDecisions.nearest(row.user_id, vectors[i]!, { multiSelect: item.multi_select, k: SUGGEST_K, embedModel: embedTag(model) });
-      // Newest first among the ones close enough: a fresher decision beats a stronger but stale match.
-      const candidates = near.filter((n) => n.similarity >= deps.threshold).sort((a, b) => b.created_at.localeCompare(a.created_at));
-      for (const c of candidates) {
-        const mapped = mapAnswer(c.answer, item);
-        if (!mapped) continue; // the past labels no longer match this question's options — try the next
-        found.push({ question_index: i, decision_id: c.id, similarity: c.similarity, ...mapped, source: { question: c.question, project_name: c.project_name, answered_at: c.created_at } });
-        break;
-      }
+      const picked = pickPrecedent(near, item, deps.threshold);
+      if (!picked) continue;
+      const c = picked.decision;
+      found.push({ question_index: i, decision_id: c.id, similarity: c.similarity, ...picked.mapped, source: { question: c.question, project_name: c.project_name, answered_at: c.created_at } });
     }
     if (found.length === 0 || abandoned) return null;
     await repos.chatDecisions.bumpSuggested(found.map((f) => f.decision_id));
