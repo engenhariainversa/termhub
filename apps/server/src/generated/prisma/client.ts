@@ -403,6 +403,15 @@ export type UserNotification = Prisma.UserNotificationModel
  */
 export type AutomationSummary = Prisma.AutomationSummaryModel
 /**
+ * Model ViewAsAudit
+ * Audit trail of the admin "view as" switch (TER-746, P-9/L-10 of docs/legal/duvidas-advogado.md): one row
+ * per period an admin spent in another scope — a user's data or "all". `ended_at` is set when the admin
+ * switches again or signs out; null means the period has not ended, or ended without an explicit switch
+ * (the browser dropped the session cookie). No foreign keys on purpose: the record outlives the deletion of
+ * either account until its retention is over (VIEW_AS_AUDIT_RETENTION_MS).
+ */
+export type ViewAsAudit = Prisma.ViewAsAuditModel
+/**
  * Model SecurityEvent
  * The security audit trail (TER-577): who signed in or failed to, changed a role or a permission, viewed
  * as another person, minted or revoked a token, added or removed a machine or an integration, typed into
