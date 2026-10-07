@@ -13,6 +13,7 @@ export interface MachineInput {
   owner_id?: string | null;
   agent_auto_update?: boolean;
   claude_auto_swap?: boolean;
+  ai_usage_query?: boolean;
   automation_allowed?: boolean;
 }
 
@@ -105,6 +106,7 @@ export class MachinesRepository {
         isLocal: next.is_local,
         agentAutoUpdate: next.agent_auto_update ?? false,
         claudeAutoSwap: next.claude_auto_swap ?? false,
+        aiUsageQuery: next.ai_usage_query ?? true,
         automationAllowed: next.automation_allowed ?? true,
         ...(patch.owner_id !== undefined ? { ownerId: patch.owner_id } : {}),
       },
