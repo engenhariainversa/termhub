@@ -10,13 +10,13 @@ beforeEach(() => store.setState({ platform: 'ios', adConsent: 'unknown', trackin
 
 it('on iOS asks while consent is unknown, and "Continuar" always goes through ATT', async () => {
   await render(<AdConsentCard />);
-  expect(screen.getByText('Ajude a medir nossos anúncios')).toBeTruthy();
+  expect(screen.getByText('Ajude a melhorar o termhub')).toBeTruthy();
   expect(screen.queryByText('Agora não')).toBeNull();
   expect(screen.queryByText('Permitir')).toBeNull();
   await act(async () => fireEvent.press(screen.getByText('Continuar')));
   expect(stores.permissionDeps.requestTracking).toHaveBeenCalled();
   expect(store.getState().adConsent).toBe('granted');
-  expect(screen.queryByText('Ajude a medir nossos anúncios')).toBeNull();
+  expect(screen.queryByText('Ajude a melhorar o termhub')).toBeNull();
 });
 
 it('on Android "Permitir" and "Agora não" are ours, and "Agora não" declines and hides it', async () => {
@@ -26,13 +26,13 @@ it('on Android "Permitir" and "Agora não" are ours, and "Agora não" declines a
   expect(screen.queryByText('Continuar')).toBeNull();
   await act(async () => fireEvent.press(screen.getByText('Agora não')));
   expect(store.getState().adConsent).toBe('denied');
-  expect(screen.queryByText('Ajude a medir nossos anúncios')).toBeNull();
+  expect(screen.queryByText('Ajude a melhorar o termhub')).toBeNull();
 });
 
 it('stays hidden once decided, or when iOS already refused ATT', async () => {
   store.setState({ adConsent: 'denied' });
   await render(<AdConsentCard />);
-  expect(screen.queryByText('Ajude a medir nossos anúncios')).toBeNull();
+  expect(screen.queryByText('Ajude a melhorar o termhub')).toBeNull();
   await act(async () => store.setState({ adConsent: 'unknown', trackingStatus: 'denied' }));
-  expect(screen.queryByText('Ajude a medir nossos anúncios')).toBeNull();
+  expect(screen.queryByText('Ajude a melhorar o termhub')).toBeNull();
 });

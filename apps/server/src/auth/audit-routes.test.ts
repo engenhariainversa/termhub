@@ -34,6 +34,7 @@ function buildApp(opts: { user?: typeof admin | null; viewAs?: 'self' | 'user'; 
       permissionsOf: vi.fn(async () => []),
     },
     securityEvents: { record: vi.fn(async (e: SecurityEventInput) => void rows.push(e)) },
+    viewAsAudit: { start: vi.fn(async () => {}), end: vi.fn(async () => {}) },
   } as unknown as Repositories;
   const service = {
     loginWithPassword: vi.fn(async () => opts.login ?? { ok: true, user: other }),
