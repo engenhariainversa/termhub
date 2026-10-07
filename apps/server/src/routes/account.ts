@@ -1,9 +1,11 @@
+import { createReadStream } from 'node:fs';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { AuthService } from '../auth/service.js';
 import { CSRF_COOKIE, SESSION_COOKIE } from '../auth/tokens.js';
 import { VIEW_AS_COOKIE } from '../auth/scope.js';
 import { AccountDeletionService, deletionStatus } from '../account/deletion.js';
+import type { DataExportService } from '../account/data-export.js';
 import { HttpError, unauthorized } from '../lib/errors.js';
 import { config } from '../config.js';
 import { msg, requestLocale, tk } from '../i18n/index.js';
@@ -20,6 +22,7 @@ const linkBody = z.object({
   website: z.string().max(0).optional(),
 });
 const confirmBody = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{20,128}$/) });
+const exportParams = z.object({ id: z.string().regex(/^[a-z0-9]{1,64}$/) });
 
 /**
  * Per-IP budget for the two public routes, in memory like the waitlist form's: a bot cannot hammer
@@ -48,6 +51,7 @@ function clearSession(reply: FastifyReply) {
 export interface AccountRouteDeps {
   auth: AuthService;
   deletion: AccountDeletionService;
+  exports: DataExportService;
 }
 
 /**
@@ -107,6 +111,31 @@ export async function accountRoutes(app: FastifyInstance, deps: AccountRouteDeps
     if (!user) throw unauthorized();
     await deps.deletion.cancel(user);
     return deletionStatus({ deletion_requested_at: null, deletion_scheduled_at: null });
+  });
+
+  // ---------- "Exportar meus dados" (TER-741) ----------
+
+  app.get('/export', async (request) => {
+    if (!request.user) throw unauthorized();
+    return deps.exports.status(request.user);
+  });
+
+  /** Asks for an archive of the account's data: built in the background, announced by e-mail. */
+  app.post('/export', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    return reply.code(202).send(await deps.exports.request(request.user));
+  });
+
+  /** The archive itself: only its own account, signed in, within its 7 days. */
+  app.get('/export/:id/download', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    const { id } = exportParams.parse(request.params);
+    const found = await deps.exports.openDownload(request.user, id);
+    reply.header('content-type', 'application/zip');
+    reply.header('content-length', found.bytes);
+    reply.header('content-disposition', `attachment; filename="${found.filename}"`);
+    reply.header('cache-control', 'private, no-store');
+    return reply.send(createReadStream(found.file));
   });
 
   // ---------- public page (TER-728) ----------

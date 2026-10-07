@@ -189,5 +189,15 @@
   "← entrar com código por e-mail": "← sign in with an email code",
   "← trocar e-mail": "← change email",
   "← Voltar": "← Back",
-  "✓ liberado": "✓ allowed"
+  "✓ liberado": "✓ allowed",
+  "Exportar meus dados": "Export my data",
+  "Não foi possível carregar a exportação.": "Could not load the export.",
+  "Não foi possível pedir a exportação.": "Could not request the export.",
+  "Gera um arquivo .zip com sua conta, projetos, cards, notas, tickets, chats, memória, abas, máquinas, integrações (sem tokens), contas de IA, aparelhos e notificações. Você recebe um e-mail quando ele fica pronto, e o download fica aqui por 7 dias.": "Builds a .zip file with your account, projects, cards, notes, tickets, chats, memory, tabs, machines, integrations (without tokens), AI accounts, devices and notifications. You get an e-mail when it is ready, and the download stays here for 7 days.",
+  "Preparando o arquivo… Você recebe um e-mail quando ele ficar pronto.": "Preparing the file… You will get an e-mail when it is ready.",
+  "Baixar ({{size}})": "Download ({{size}})",
+  "Disponível até {{date}}.": "Available until {{date}}.",
+  "Não foi possível gerar o arquivo. Peça de novo.": "Could not build the file. Ask again.",
+  "O arquivo da última exportação expirou.": "The file of the last export has expired.",
+  "Você pode pedir outra exportação a partir de {{date}}.": "You can ask for another export from {{date}}."
 }

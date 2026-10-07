@@ -370,3 +370,10 @@ export type UserNotification = Prisma.UserNotificationModel
  * timer's claim, inserted with ON CONFLICT DO NOTHING so two colours send it once. `day` is the user's local date.
  */
 export type AutomationSummary = Prisma.AutomationSummaryModel
+/**
+ * Model DataExport
+ * "Exportar meus dados" (TER-741, LGPD art. 18): one request for a zip of everything the account
+ * holds. The job builds it on the chat-files volume (`<CHAT_FILES_DIR>/.exports/<id>.zip`), e-mails a
+ * link to Perfil, and removes the file once `expiresAt` passes (7 days after it is ready).
+ */
+export type DataExport = Prisma.DataExportModel

@@ -6,6 +6,7 @@ import { ANALYTICS_ENABLED } from '../lib/analytics';
 import { useAuth } from '../lib/auth';
 import { openCookieBanner } from './AnalyticsGate';
 import { Avatar } from './Avatar';
+import { DataExportSection } from './DataExportSection';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
 import { LanguageSetting } from './LanguageSetting';
 import { ViewAsSwitch } from './ViewAsSwitch';
@@ -13,7 +14,8 @@ import { ViewAsSwitch } from './ViewAsSwitch';
 /**
  * Configurações → Perfil (spec 2026-09-23 app chrome §4.1): who is signed in, and what used to sit in
  * the sidebar's profile row — the admin's "Ver como…" (ViewAsSwitch renders nothing for others), the
- * cookie choice when analytics is on, Sair, and the danger zone to delete one's own account (TER-720).
+ * cookie choice when analytics is on, Sair, the export of one's own data (TER-741) and the danger zone
+ * to delete one's own account (TER-720).
  */
 export function ProfileView() {
   const { t } = useTranslation();
@@ -42,6 +44,7 @@ export function ProfileView() {
           {t('Sair')}
         </button>
       </div>
+      <DataExportSection />
       <section aria-label={t('Excluir minha conta')} className="rounded-lg border border-danger/40 p-4">
         <h3 className="text-sm font-semibold text-danger">{t('Excluir minha conta')}</h3>
         <p className="mt-1 text-xs text-fg-muted">

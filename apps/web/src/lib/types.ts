@@ -47,6 +47,23 @@ export interface AccountDeletionStatus {
   scheduled_at: string | null;
 }
 
+/** "Exportar meus dados" (TER-741): an archive request and where it stands. */
+export interface DataExport {
+  id: string;
+  status: 'pending' | 'running' | 'ready' | 'failed' | 'expired';
+  bytes: number | null;
+  created_at: string;
+  completed_at: string | null;
+  /** The download works until then (7 days after it is ready). */
+  expires_at: string | null;
+}
+
+export interface DataExportStatus {
+  export: DataExport | null;
+  /** When another request may be made; null = now. */
+  next_allowed_at: string | null;
+}
+
 /** Side effects of an invite (the user row is created regardless). */
 export interface InviteResult {
   user: User;

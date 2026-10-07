@@ -43,6 +43,7 @@ import { UserNotificationsRepository } from './user-notifications.js';
 import { PushTicketsRepository } from './push-tickets.js';
 import { TaskPullRequestsRepository } from './task-pull-requests.js';
 import { AccountDeletionRepository } from './account-deletion.js';
+import { DataExportsRepository } from './data-exports.js';
 import { AutomationSummariesRepository } from './automation-summaries.js';
 import { AutomationPausesRepository } from './automation-pauses.js';
 import { AutomationEventsRepository } from './automation-events.js';
@@ -95,6 +96,7 @@ export interface Repositories {
   pushTickets: PushTicketsRepository;
   taskPullRequests: TaskPullRequestsRepository;
   accountDeletion: AccountDeletionRepository;
+  dataExports: DataExportsRepository;
   automationPauses: AutomationPausesRepository;
   automationSummaries: AutomationSummariesRepository;
   automationEvents: AutomationEventsRepository;
@@ -151,6 +153,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     pushTickets: new PushTicketsRepository(db),
     taskPullRequests: new TaskPullRequestsRepository(db),
     accountDeletion: new AccountDeletionRepository(db),
+    dataExports: new DataExportsRepository(db),
     automationPauses: new AutomationPausesRepository(db),
     automationSummaries: new AutomationSummariesRepository(db),
     automationEvents: new AutomationEventsRepository(db),
