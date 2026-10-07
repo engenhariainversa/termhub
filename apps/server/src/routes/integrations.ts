@@ -6,6 +6,7 @@ import { scoped } from '../auth/scope.js';
 import { encryptionAvailable } from '../lib/crypto.js';
 import { getProvider } from '../integrations/index.js';
 import { checkPublicUrl } from '../integrations/public-url.js';
+import { audit } from '../auth/audit.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const providerEnum = z.enum(['github', 'linear', 'jira']);
@@ -52,6 +53,7 @@ export async function integrationRoutes(app: FastifyInstance, repos: Repositorie
     const body = createBody.parse(request.body);
     await assertJiraBaseUrl(body.provider, body.config);
     const integration = await repos.integrations.create({ ...body, owner_id: request.scope.createAs });
+    await audit(repos, request, 'integration.create', { target: { type: 'integration', id: integration.id, label: integration.name }, meta: { provider: integration.provider, owner_id: request.scope.createAs } });
     return reply.code(201).send({ integration });
   });
 
@@ -65,8 +67,9 @@ export async function integrationRoutes(app: FastifyInstance, repos: Repositorie
 
   app.delete('/:id', async (request) => {
     const { id } = idParam.parse(request.params);
-    await scoped(repos, request).integration(id);
+    const integration = await scoped(repos, request).integration(id);
     await repos.integrations.delete(id);
+    await audit(repos, request, 'integration.delete', { target: { type: 'integration', id, label: integration.name }, meta: { provider: integration.provider, owner_id: integration.owner_id } });
     return { ok: true };
   });
 

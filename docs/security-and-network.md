@@ -25,7 +25,7 @@ Short version for the firewall ticket:
   - It dials out to the server over one persistent WebSocket, `wss://<server>/agent/ws`, and keeps it open.
   - Every terminal is a tmux session on the machine. Its bytes travel over that one socket, multiplexed as channels.
   - The agent runs as the **logged-in user**: a systemd user unit on Linux, a LaunchAgent on macOS. It needs no root, and no admin rights beyond installing tmux (and the build tools on Linux).
-- **Web app.** A single-page app served by the server. Every API call and every WebSocket goes to the **same origin** it was loaded from; there is no third-party script, CDN or font host.
+- **Web app.** A single-page app served by the server. Every API call and every WebSocket goes to the **same origin** it was loaded from, and the app's own code, styles and fonts are served from that origin too (no CDN, no font host). The one exception is **Google Analytics (GA4, through the Firebase SDK)**, and only after the user accepts cookies in the cookie banner; declining, or withdrawing consent later, keeps it off. When accepted, the browser loads `gtag.js` from `www.googletagmanager.com` and talks to `firebase.googleapis.com`, `firebaseinstallations.googleapis.com` and `*.google-analytics.com` (e.g. `www.google-analytics.com`, `region1.google-analytics.com`). It reports route changes with ids stripped and a few product events, never the user id, e-mail, machine names or terminal content. A build without the `VITE_FIREBASE_*` variables (a self-hosted install, by default) ships no analytics at all. Blocking these hosts does not break the app.
 - **Mobile app.** It talks only to `termhub.dev` (`/api/m/v1/*` and `wss://termhub.dev/ws/m/chat`).
 - **Monitor hooks** (optional, installed from the app). A small shell script that Claude Code, Codex or the Cursor CLI call on their events. It forwards the event with `curl` as an HTTPS POST to `termhub.dev/api/hooks/events`, so the app can show which tab is waiting for you.
 - **Chat.** The termhub chat runs the `claude` CLI **on your own machine**, through the agent, with your own Claude login. That CLI calls back into termhub's MCP endpoint (`termhub.dev/mcp`) with a short-lived token scoped to the run.
@@ -72,6 +72,7 @@ A proxy or firewall that closes idle connections after **60 s or more** does not
 |---|---|---|
 | Your OS package mirrors or Homebrew | machines | Installing tmux (and, on Linux, the build tools for node-pty) with the install command from Add machine (`brew` on macOS; `apt-get`, `dnf` or `pacman` on Linux). |
 | The hosts your AI CLIs already use (e.g. Anthropic for Claude Code, OpenAI for Codex, Google for Gemini) | machines | The CLIs run in termhub tabs exactly as they would in any terminal. termhub adds no host of its own for them; follow each vendor's documentation. |
+| `www.googletagmanager.com`, `firebase.googleapis.com`, `firebaseinstallations.googleapis.com`, `*.google-analytics.com` | browsers | Google Analytics in the web app, loaded only after the user accepts cookies. Blocking them only turns analytics off. |
 | `github.com` | macOS machines | Only the first time you set up the iOS Simulator viewer (clones Appium's WebDriverAgent). |
 
 The **server** also makes outbound calls, but only from termhub's side: npm (latest agent version), Google (OAuth), the ticket integrations you configure (GitHub, Linear, Jira), the usage endpoints of the AI providers, and Expo (mobile push). Your network does not need to allow those. They are listed for self-hosters in [Evidence](#evidence).
@@ -164,10 +165,13 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 
 ### Credentials that belong to the machine
 
-- **AI subscription logins** (Claude, ChatGPT/Codex, Gemini):
-  - To show usage limits, the server asks the agent to read the CLI's login file on demand and uses it once to query the provider's usage endpoint.
-  - The credential is **not stored** on the server; only the usage numbers are cached, in memory.
-  - It does travel to the server over the encrypted agent connection for that query. If that is not acceptable, don't add AI accounts in termhub; everything else keeps working.
+- **AI subscription logins** (Claude, ChatGPT/Codex, Gemini, Antigravity): the credential is read **and used** on the machine that holds it, and never travels to the server.
+  - **Agent machines** (agent 0.20.0 or later): to show usage limits, the agent reads the CLI's login on demand, queries the provider's usage endpoint itself and returns only the usage numbers.
+  - **SSH machines:** the server runs a script on the machine that reads the login and calls the provider with `curl` there; the token is passed to `curl` on stdin, so it is neither printed nor on a command line. The server receives only the provider's response. The machine needs `curl`.
+  - **The local machine** (the server's own host): the server process does the same in-process, since the credential is already on that host.
+  - **Older agents** do not fall back to sending the credential: the account card says to update the agent, and shows no usage until then.
+  - Nothing is stored: only the usage numbers are cached, in memory.
+  - **The query can be turned off per machine** (Máquinas › the machine, "Consultar o uso das contas de IA", on by default). When off, termhub does not read the credential at all and that machine's accounts show no usage bars; everything else keeps working.
 - **The chat's Claude login** never leaves the machine: the CLI runs there.
 - **`gh auth token`** is read only when you confirm a "create GitHub integration" card. It is then stored encrypted, like any integration token.
 
@@ -194,7 +198,7 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 3. **Exempt those hosts from TLS inspection.**
 4. **No explicit proxy on the agent's path** (not supported yet): direct egress, or a transparent proxy.
 5. **Machine prerequisites:** macOS or Linux, Node.js 20+, tmux, and a user account; on Linux, also `make`, a C++ compiler and `python3` (`build-essential python3` on apt, `"Development Tools" python3` on dnf, `base-devel python` on pacman). No root, apart from installing those packages with your package manager.
-6. Optional: the hosts of the AI CLIs your users run, and your package mirrors for tmux and the build tools.
+6. Optional: the hosts of the AI CLIs your users run (the usage bars query `api.anthropic.com`, `chatgpt.com` and `cloudcode-pa.googleapis.com` from the machine), and your package mirrors for tmux and the build tools.
 7. **Test from the machine:**
    ```bash
    npm i -g @termhub/agent                # reaches registry.npmjs.org
@@ -235,6 +239,7 @@ Paths are relative to the repository root.
 | Hosts routed on `termhub.dev` (hooks, MCP, mobile) | `deploy/nginx/termhub.dev.conf.tmpl` |
 | Server WebSocket endpoints, Origin check, pings, drain with 1012 | `apps/server/src/ws/router.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/terminal/ws.ts`, `apps/server/src/ws/drain.ts` |
 | Web uses same-origin API and WebSockets only; no third-party scripts in `index.html` | `apps/web/src/lib/api.ts`, `apps/web/src/lib/terminal-connection.ts`, `apps/web/index.html` |
+| Google Analytics (Firebase SDK) loads only after cookie consent, and not at all without `VITE_FIREBASE_*` | `apps/web/src/lib/analytics.ts`, `apps/web/src/lib/consent.ts` |
 | Mobile base URL `termhub.dev`; DPoP ES256; hardware key; PIN proof | `apps/mobile/src/services/api/config.ts`, `apps/mobile/src/services/api/dpop.ts`, `apps/mobile/src/services/key/`, `apps/server/src/mobile/` |
 | Agent token: 256 bits, SHA-256 stored; rotate/delete closes with 4401 | `apps/server/src/agent/token.ts`, `apps/server/src/routes/machines.ts` |
 | Sessions, cookies, CSRF | `apps/server/src/auth/tokens.ts`, `apps/server/src/auth/routes.ts`, `apps/server/src/auth/middleware.ts` |
@@ -245,8 +250,8 @@ Paths are relative to the repository root.
 | Chat confirmation cards and grants | `apps/server/src/chat/gate.ts`, `apps/server/src/chat/gate-runtime.ts` |
 | AES-256-GCM for integration secrets | `apps/server/src/lib/crypto.ts`, `apps/server/src/db/repositories/integrations.ts` |
 | Terminal content not logged; header redaction; security headers | `apps/server/src/terminal/ws.ts`, `apps/server/src/app.ts` |
-| AI credential read on demand, not stored | `packages/machine-ops/src/ai-credentials.ts`, `apps/agent/src/rpc/ai.ts`, `apps/server/src/ai/` |
+| AI credential read and used on the machine, never sent to the server; per-machine switch | `packages/machine-ops/src/ai-credentials.ts`, `packages/machine-ops/src/ai-usage*.ts`, `apps/agent/src/rpc/ai.ts`, `apps/server/src/ai/` |
 | `gh auth token` read | `apps/agent/src/rpc/secret.ts`, `apps/server/src/control/integrations.ts` |
 | Voice audio not written to disk | `apps/server/src/terminal/transcription.ts` |
 | npm provenance | `.github/workflows/publish-agent.yml` |
-| Server outbound calls (self-hosting): `registry.npmjs.org`, `oauth2.googleapis.com`, `www.googleapis.com`, `api.github.com`, `api.linear.app`, Jira base URL, `api.anthropic.com`, `chatgpt.com`, `cloudcode-pa.googleapis.com`, `exp.host`, SMTP, Cloudflare API | `apps/server/src/agent/latest-version.ts`, `apps/server/src/auth/google.ts`, `apps/server/src/integrations/`, `apps/server/src/ai/`, `apps/server/src/mobile/push.ts`, `apps/server/src/email/mailer.ts`, `apps/server/src/cloudflare/access.ts` |
+| Server outbound calls (self-hosting): `registry.npmjs.org`, `oauth2.googleapis.com`, `www.googleapis.com`, `api.github.com`, `api.linear.app`, Jira base URL, `api.anthropic.com`, `chatgpt.com`, `cloudcode-pa.googleapis.com` (AI usage, only for accounts on the server's own host), `exp.host`, SMTP, Cloudflare API | `apps/server/src/agent/latest-version.ts`, `apps/server/src/auth/google.ts`, `apps/server/src/integrations/`, `packages/machine-ops/src/ai-usage*.ts`, `apps/server/src/mobile/push.ts`, `apps/server/src/email/mailer.ts`, `apps/server/src/cloudflare/access.ts` |
