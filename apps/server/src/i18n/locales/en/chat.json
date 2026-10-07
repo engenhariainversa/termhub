@@ -58,6 +58,7 @@
   "A aba deste aviso não existe mais": "This notice's tab no longer exists",
   "A aba já não mostra esta pergunta: nada foi enviado.": "The tab no longer shows this question: nothing was sent.",
   "Não encontrei esta pergunta na tela da aba, então nada foi enviado. Responda direto na aba.": "This question was not found on the tab's screen, so nothing was sent. Answer directly in the tab.",
+  "As opções na tela da aba mudaram, então nada foi enviado. Confira a tela e escolha de novo.": "The options on the tab's screen changed, so nothing was sent. Check the screen and choose again.",
   "A resposta não combina com a pergunta": "The answer does not match the question",
   "Responder na aba precisa da permissão terminals:write na sua role": "Answering in the tab needs the terminals:write permission in your role",
   "Não foi possível responder na aba": "Could not answer in the tab",

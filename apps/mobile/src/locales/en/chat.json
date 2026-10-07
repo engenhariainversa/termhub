@@ -104,6 +104,8 @@
   "não foi possível digitar na aba": "could not type in the tab",
   "Permitido": "Allowed",
   "Negado: «{{text}}»": "Denied: “{{text}}”",
+  "Negado: «{{option}}»": "Denied: “{{option}}”",
+  "Permitido: «{{option}}»": "Allowed: “{{option}}”",
   "Negado": "Denied",
   "sem projeto": "no project",
   "você respondeu «{{answer}}» a «{{question}}» em {{project}}, {{date}}": "you answered “{{answer}}” to “{{question}}” in {{project}}, {{date}}",

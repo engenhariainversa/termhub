@@ -1091,7 +1091,7 @@ it('loadTabQuestionScreen answers the excerpt while open, null once it is not', 
   await chat.getState().send('preciso da sua permissão');
   await jest.advanceTimersByTimeAsync(5000);
   const q = slot(chat, 'p-termhub').tabQuestions.find((x) => x.kind === 'permission')!;
-  expect(await chat.getState().loadTabQuestionScreen(q.id)).toContain('Do you want to proceed?');
+  expect((await chat.getState().loadTabQuestionScreen(q.id))?.text).toContain('Do you want to proceed?');
   await chat.getState().answerTabQuestion(q.id, { allow: true });
   expect(await chat.getState().loadTabQuestionScreen(q.id)).toBeNull();
 });

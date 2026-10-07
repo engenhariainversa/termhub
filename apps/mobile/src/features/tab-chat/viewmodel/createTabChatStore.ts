@@ -20,6 +20,7 @@ import {
   type TTabFileResponse,
   type TTabQuestion,
   type TTabQuestionAnswerBody,
+  type TTabQuestionScreenResponse,
   type TTabSuggestion,
   type TTabSummary,
 } from '@/services/api/contract';
@@ -74,7 +75,7 @@ export interface TabChatState {
   noteQuestionEvent(e: TChatEvent): void;
   answerTabQuestion(questionId: string, body: TTabQuestionAnswerBody): Promise<void>;
   cancelAutoAnswer(questionId: string): Promise<void>;
-  loadTabQuestionScreen(questionId: string): Promise<string | null>;
+  loadTabQuestionScreen(questionId: string): Promise<TTabQuestionScreenResponse | null>;
   sendTabSuggestion(suggestionId: string, text: string): Promise<void>;
   dismissTabSuggestion(suggestionId: string): Promise<void>;
   /** Saves a picked file on the tab's machine; rejects when it could not. */
@@ -368,7 +369,7 @@ export function createTabChatStore(deps: TabChatDeps) {
 
       async loadTabQuestionScreen(questionId) {
         try {
-          return (await api.tabQuestionScreen(session().auth(), questionId)).text;
+          return await api.tabQuestionScreen(session().auth(), questionId);
         } catch {
           return null;
         }
