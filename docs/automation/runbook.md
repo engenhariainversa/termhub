@@ -258,6 +258,13 @@ fails on GitHub's side (5xx, "commit_refs", "Something went wrong") calls `repor
 "try again" message after 5, 10 and 15 minutes, each time only when githubstatus.com shows Git, the API and
 pull requests working. Past `github_retries` (Setup, default 3) it escalates as `github_transient`.
 
+A `conflict_cap` escalation is about one PR head and holds nothing by itself: the executor reads the PR on
+every pass, so a push (a new head) or a head GitHub no longer finds in conflict merges once CI is green.
+The queue says which head still waits ("Escalado por conflito em a058efd; aguardando um push que
+resolva") and so does the feed line. When a run of the card ends after the escalation and the head did not
+move (it reported done but pushed nothing), the person is told once more for that head, with
+`cause: run_done_no_push` (TER-1016): check that the run really pushed its merge with the base.
+
 ## 10. After a failed deploy or release
 
 A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no
