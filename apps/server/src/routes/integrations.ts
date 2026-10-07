@@ -5,6 +5,7 @@ import { badRequest, notFound } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
 import { encryptionAvailable } from '../lib/crypto.js';
 import { getProvider } from '../integrations/index.js';
+import { checkPublicUrl } from '../integrations/public-url.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const providerEnum = z.enum(['github', 'linear', 'jira']);
@@ -30,6 +31,16 @@ const testBody = z.object({
   integration_id: z.string().min(1).max(64).optional(),
 });
 
+/**
+ * The server calls Jira at the base URL the user typed, so it must be a public https site (TER-578):
+ * refused here with the reason, before anything is saved or requested.
+ */
+async function assertJiraBaseUrl(provider: string, config: Record<string, unknown> | undefined) {
+  if (provider !== 'jira' || !config) return;
+  const check = await checkPublicUrl(String(config.baseUrl ?? ''));
+  if (!check.ok) throw badRequest(check.reason);
+}
+
 export async function integrationRoutes(app: FastifyInstance, repos: Repositories) {
   app.addHook('preHandler', async () => {
     if (!encryptionAvailable()) throw badRequest('ENCRYPTION_KEY não configurada no servidor (openssl rand -base64 32)');
@@ -39,14 +50,17 @@ export async function integrationRoutes(app: FastifyInstance, repos: Repositorie
 
   app.post('/', async (request, reply) => {
     const body = createBody.parse(request.body);
+    await assertJiraBaseUrl(body.provider, body.config);
     const integration = await repos.integrations.create({ ...body, owner_id: request.scope.createAs });
     return reply.code(201).send({ integration });
   });
 
   app.patch('/:id', async (request) => {
     const { id } = idParam.parse(request.params);
-    await scoped(repos, request).integration(id);
-    return { integration: await repos.integrations.update(id, patchBody.parse(request.body)) };
+    const current = await scoped(repos, request).integration(id);
+    const body = patchBody.parse(request.body);
+    await assertJiraBaseUrl(current.provider, body.config);
+    return { integration: await repos.integrations.update(id, body) };
   });
 
   app.delete('/:id', async (request) => {
@@ -67,6 +81,7 @@ export async function integrationRoutes(app: FastifyInstance, repos: Repositorie
       config = { ...saved.config, ...config } as typeof config;
     }
     if (!secret) throw badRequest('Informe o segredo ou integration_id');
+    await assertJiraBaseUrl(body.provider, config);
     return await getProvider(body.provider).testConnection(secret, config);
   });
 }
