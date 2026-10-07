@@ -37,8 +37,10 @@ function travel(t: number): number {
  * gives up on a vertical one, so the thread's own scroll wins every vertical drag; a touch that begins
  * at the screen's left edge is left to the system's back gesture. A drag cannot be made with VoiceOver
  * or TalkBack, so the row also offers "Responder" as an accessibility action.
+ * `enabled={false}` keeps the wrapper but answers nothing: a row that cannot be answered yet (a message
+ * still being sent) keeps the same tree when it can, so it is not remounted, a flash (TER-1001).
  */
-export function SwipeToReply({ onReply, children }: { onReply(): void; children: ReactNode }) {
+export function SwipeToReply({ onReply, enabled = true, children }: { onReply(): void; enabled?: boolean; children: ReactNode }) {
   const { t } = useTranslation();
   const x = useSharedValue(0);
   const armed = useSharedValue(false);
@@ -46,6 +48,7 @@ export function SwipeToReply({ onReply, children }: { onReply(): void; children:
 
   const pan = Gesture.Pan()
     .withTestId('swipe-to-reply')
+    .enabled(enabled)
     .activeOffsetX(replyPanConfig.activeOffsetX)
     .failOffsetY(replyPanConfig.failOffsetY)
     .failOffsetX(replyPanConfig.failOffsetX)
@@ -75,10 +78,10 @@ export function SwipeToReply({ onReply, children }: { onReply(): void; children:
   return (
     <GestureDetector gesture={pan}>
       <View
-        testID="swipe-to-reply-row"
-        accessibilityActions={[{ name: 'reply', label: t('Responder') }]}
+        testID={enabled ? 'swipe-to-reply-row' : undefined}
+        accessibilityActions={enabled ? [{ name: 'reply', label: t('Responder') }] : undefined}
         onAccessibilityAction={(e) => {
-          if (e.nativeEvent.actionName === 'reply') onReply();
+          if (enabled && e.nativeEvent.actionName === 'reply') onReply();
         }}
       >
         <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, bottom: 0, justifyContent: 'center' }, iconStyle]}>
