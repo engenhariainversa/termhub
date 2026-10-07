@@ -31,16 +31,9 @@ const SECTIONS: { key: ProjectSection; label: string; path: string }[] = [
   { key: 'settings', label: tk('Setup'), path: 'settings' },
 ];
 
-interface Props {
-  /** `/project/:ref` (CardPage): the card's project, on its Board, with the card's editor open */
-  card?: { projectId: string; taskId: string };
-}
-
-export function ProjectPage({ card }: Props = {}) {
+export function ProjectPage() {
   const { t } = useTranslation();
-  const params = useParams<{ id: string; section?: string }>();
-  const id = card?.projectId ?? params.id;
-  const section = card ? 'tasks' : params.section;
+  const { id, section } = useParams<{ id: string; section?: string }>();
   const { projects, machinesOf, statuses, loading, refresh } = useData();
   const project = projects.find((p) => p.id === id);
   const current: ProjectSection = SECTIONS.find((s) => s.path === (section ?? ''))?.key ?? 'terminals';
@@ -105,7 +98,7 @@ export function ProjectPage({ card }: Props = {}) {
       <div className="relative min-h-0 flex-1">
         {/* Terminais ficam montados mesmo em outras seções: trocar de aba não reconecta. */}
         <TerminalsView key={`terminals-${project.id}`} project={project} visible={current === 'terminals'} />
-        {current === 'tasks' && <TasksBoard key={`tasks-${project.id}`} projectId={project.id} openTaskId={card?.taskId} />}
+        {current === 'tasks' && <TasksBoard key={`tasks-${project.id}`} projectId={project.id} />}
         {current === 'backlog' && <BacklogView key={`backlog-${project.id}`} projectId={project.id} />}
         {current === 'progress' && <ProgressPanel key={`progress-${project.id}`} projectId={project.id} />}
         {current === 'tickets' && <TicketsView key={`tickets-${project.id}`} project={project} />}
