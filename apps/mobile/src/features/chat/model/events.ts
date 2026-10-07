@@ -58,7 +58,10 @@ export function mergeMessage(list: ChatMessage[], msg: ChatMessage): ChatMessage
   if (isAnswered(old) && isEmptyAnswer(msg)) return list;
   const same =
     old.text === msg.text && old.error_code === msg.error_code && old.created_at === msg.created_at && JSON.stringify(old.usage ?? null) === JSON.stringify(msg.usage ?? null) && sameAttachments(old.attachments, msg.attachments) && JSON.stringify(old.notice ?? null) === JSON.stringify(msg.notice ?? null);
-  return same ? list : list.map((m, j) => (j === i ? msg : m));
+  if (same) return list;
+  // The server's version never carries the row's list key: it keeps the one this device gave it (TER-1001).
+  const next = old.row_key !== undefined && msg.row_key === undefined ? { ...msg, row_key: old.row_key } : msg;
+  return list.map((m, j) => (j === i ? next : m));
 }
 
 /**

@@ -121,6 +121,7 @@ afterEach(() => {
   useChatStore.setState({
     error: null,
     sending: false,
+    connected: false,
     live: emptyFold(),
     conversations: conversationsBefore,
     send: realActions.send,
@@ -1073,7 +1074,7 @@ describe('Conversa: the answer reads last (TER-984)', () => {
     expect(screen.getByRole('button', { name: 'Ver detalhes' })).toBeTruthy();
   });
 
-  it('scrolled up, a new row raises "↓ novas mensagens", which takes the reader back to the end', async () => {
+  it('scrolled up, a new row raises "↓ 1 nova mensagem", which takes the reader back to the end', async () => {
     const toOffset = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => undefined);
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
@@ -1085,8 +1086,110 @@ describe('Conversa: the answer reads last (TER-984)', () => {
 
     await fireEvent.scroll(list, { nativeEvent: { contentOffset: { y: 600 }, contentSize: { height: 2000, width: 400 }, layoutMeasurement: { height: 600, width: 400 } } });
     await act(async () => addTurn([assistantRow('m-far', { text: 'segunda', created_at: at(20) })], []));
-    await fireEvent.press(await screen.findByText('↓ novas mensagens'));
+    await fireEvent.press(await screen.findByText('↓ 1 nova mensagem'));
     expect(toOffset).toHaveBeenCalledWith({ offset: 0, animated: true });
+    expect(screen.queryByTestId('conversation-unread')).toBeNull();
+  });
+});
+
+describe('Conversa: the reading position holds when rows arrive (TER-1001)', () => {
+  const scrollTo = (y: number) => ({ nativeEvent: { contentOffset: { y }, contentSize: { height: 2000, width: 400 }, layoutMeasurement: { height: 600, width: 400 } } });
+
+  /** Every way the screen could move the list itself: none of them may run when a row arrives. */
+  function spyScrolls() {
+    return [
+      jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => undefined),
+      jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => undefined),
+      jest.spyOn(FlatList.prototype, 'scrollToEnd').mockImplementation(() => undefined),
+    ] as const;
+  }
+
+  it('the list keeps its first visible row in place, and follows the end only within 80 px of it', async () => {
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    expect(screen.getByTestId('conversation-thread').props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0, autoscrollToTopThreshold: 80 });
+  });
+
+  it('scrolled up, three rows arrive: nothing scrolls, nothing on screen remounts, and "↓ 3 novas mensagens" takes the reader to the end', async () => {
+    const [toOffset, toIndex, toEnd] = spyScrolls();
+    await render(<ConversationScreen />);
+    const reading = await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await fireEvent.scroll(screen.getByTestId('conversation-thread'), scrollTo(600));
+
+    await act(async () => addRows([assistantRow('m-1', { text: 'um', created_at: at(10) })], []));
+    await act(async () => addRows([assistantRow('m-2', { text: 'dois', created_at: at(20) })], []));
+    await act(async () => addRows([assistantRow('m-3', { text: 'três', created_at: at(30) })], []));
+
+    expect(toOffset).not.toHaveBeenCalled();
+    expect(toIndex).not.toHaveBeenCalled();
+    expect(toEnd).not.toHaveBeenCalled();
+    // The row being read is the very same element: no key change, no remount, no flash.
+    expect(screen.getByText(SEEDED_USER)).toBe(reading);
+
+    await fireEvent.press(screen.getByText('↓ 3 novas mensagens'));
+    expect(toOffset).toHaveBeenCalledWith({ offset: 0, animated: true });
+    expect(screen.queryByTestId('conversation-unread')).toBeNull();
+  });
+
+  it('a change to a row already in the thread (an answer finishing) announces nothing and moves nothing', async () => {
+    const [toOffset, toIndex, toEnd] = spyScrolls();
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await act(async () => addRows([assistantRow('m-live', { created_at: at(10) })], []));
+    await fireEvent.scroll(screen.getByTestId('conversation-thread'), scrollTo(600));
+
+    await act(async () => {
+      const s = useChatStore.getState();
+      const slot = s.conversations['p-termhub']!;
+      useChatStore.setState({ conversations: { ...s.conversations, 'p-termhub': { ...slot, messages: slot.messages.map((m) => (m.id === 'm-live' ? { ...m, text: 'Pronto.' } : m)) } } });
+    });
+    expect(screen.queryByTestId('conversation-unread')).toBeNull();
+    expect(toOffset).not.toHaveBeenCalled();
+    expect(toIndex).not.toHaveBeenCalled();
+    expect(toEnd).not.toHaveBeenCalled();
+  });
+
+  it('at the end (within 80 px), a new row shows without a pill, and the rows on screen are not remounted', async () => {
+    const [toOffset] = spyScrolls();
+    await render(<ConversationScreen />);
+    const shown = await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await fireEvent.scroll(screen.getByTestId('conversation-thread'), scrollTo(60));
+
+    await act(async () => addRows([assistantRow('m-end', { text: 'chegou', created_at: at(10) })], []));
+    expect(screen.getByText('chegou')).toBeTruthy();
+    expect(screen.queryByTestId('conversation-unread')).toBeNull();
+    // Following the end is the scroll view's own (`autoscrollToTopThreshold`): the screen does not jump.
+    expect(toOffset).not.toHaveBeenCalled();
+    expect(screen.getByText(SEEDED_USER)).toBe(shown);
+  });
+
+  it("sending takes the reader to the end, and the sent row keeps its list key when it becomes the server's", async () => {
+    const [toOffset] = spyScrolls();
+    let accept!: (v: { conversation_id: string; user_message_id: string; assistant_message_id: string }) => void;
+    jest.spyOn(stores.api, 'sendMessage').mockImplementation(() => new Promise((r) => { accept = r; }));
+    await render(<ConversationScreen />);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await fireEvent.scroll(screen.getByTestId('conversation-thread'), scrollTo(600));
+
+    await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'oi');
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
+    expect(toOffset).toHaveBeenCalledWith({ offset: 0, animated: true });
+    const list = () => screen.getByTestId('conversation-thread');
+    type Entry = { kind: string; message?: { id: string; text: string } };
+    const keyOfMine = () => {
+      const entry = (list().props.data as Entry[]).find((e) => e.kind === 'message' && e.message!.text === 'oi')!;
+      return { id: entry.message!.id, key: list().props.keyExtractor(entry) as string };
+    };
+    const sending = keyOfMine();
+    expect(sending.key).toBe(`m:${sending.id}`);
+    expect(sending.id.startsWith('local:')).toBe(true);
+    const row = screen.getByText('oi');
+
+    // Live, as on the phone: with the socket up the 202 is not followed by a re-read of the thread.
+    useChatStore.setState({ connected: true });
+    await act(async () => accept({ conversation_id: 'c-termhub', user_message_id: 'u-sent', assistant_message_id: 'a-sent' }));
+    expect(keyOfMine()).toEqual({ id: 'u-sent', key: sending.key });
+    expect(screen.getByText('oi')).toBe(row);
     expect(screen.queryByTestId('conversation-unread')).toBeNull();
   });
 });

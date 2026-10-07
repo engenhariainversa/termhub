@@ -302,9 +302,13 @@ it('send shows the row at once, renamed on accept; the thread then grows through
   expect(rows()).toHaveLength(5); // the person's row, already under the server's id
   expect(rows()[4]).toMatchObject({ id: userId, role: 'user', text: 'roda o teste' });
   expect(rows()[4]!.local).toBeUndefined();
+  // It keeps its local list key: the list does not remount it, no flash (TER-1001).
+  const rowKey = rows()[4]!.row_key;
+  expect(rowKey?.startsWith('local:')).toBe(true);
 
   await jest.advanceTimersToNextTimerAsync(); // the server's echo of that row
   expect(rows()).toHaveLength(5); // merged by id, not appended
+  expect(rows()[4]!.row_key).toBe(rowKey);
   expect(read).not.toHaveBeenCalled(); // a `message` event no longer re-reads the thread
 
   await jest.advanceTimersToNextTimerAsync(); // the empty assistant row: "pensando…"
@@ -353,6 +357,8 @@ it('the local row is shown while the 202 is in flight, and dropped without a dup
   expect(mine).toHaveLength(1);
   expect(mine[0]!.id.startsWith('local:')).toBe(false);
   expect(mine[0]!.local).toBeUndefined();
+  // The echo took the local row's place and list key (TER-1001).
+  expect(mine[0]!.row_key).toBe(seenWhileInFlight.at(-1)!.id);
 
   await jest.advanceTimersByTimeAsync(5000); // the mock's own echo and answer
   expect(rows().filter((m) => m.role === 'user' && m.text === 'oi')).toHaveLength(1);

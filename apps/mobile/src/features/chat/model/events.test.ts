@@ -26,6 +26,12 @@ describe('mergeMessage', () => {
     expect(replaced[1]).toEqual(row('b', { text: 'done' }));
   });
 
+  it("keeps the list key of a row this device sent when the server's version replaces it (TER-1001)", () => {
+    const sent = row('u1', { role: 'user', text: 'oi', row_key: 'local:abc' });
+    const merged = mergeMessage([sent], row('u1', { role: 'user', text: 'oi', created_at: '2026-09-24T12:00:01.000Z' }));
+    expect(merged[0]).toMatchObject({ id: 'u1', created_at: '2026-09-24T12:00:01.000Z', row_key: 'local:abc' });
+  });
+
   it('hands back the very same list when nothing changed (same text, usage, error code and time)', () => {
     const a = row('a', { text: 'x', usage: { input: 1 } });
     const list = [a];
