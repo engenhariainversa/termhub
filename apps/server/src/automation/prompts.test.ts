@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ORIGIN_REMINDER, PROMPT_MAX_CHARS } from '../control/agents.js';
+import { rulesBlock } from '../memory/current-rules.js';
 import { fixerPrompt, implementerPrompt, integratorPrompt, RESUME_TEXT, SERVER_MARKER, serverMessage, SHELL_LINE } from './prompts.js';
 
 const policy = 'Autonomia do projeto: pr. Você abre o PR e para.\nO merge é feito pelo termhub quando o CI fica verde e a política permite.';
@@ -18,6 +19,22 @@ describe('prompts', () => {
     for (const p of all(custom)) expect(p.length + ORIGIN_REMINDER.length + 2).toBeLessThanOrEqual(PROMPT_MAX_CHARS);
     expect(implementerPrompt({ card, branch: 'b', base: 'main', policy: 'p'.repeat(5000), custom, description: 'd'.repeat(5000) }).length + ORIGIN_REMINDER.length + 2).toBeLessThanOrEqual(PROMPT_MAX_CHARS);
   });
+  it("TER-1011: every role carries the project's current rules, and stays under the cap with them", () => {
+    const rules = rulesBlock([{ ref: 'note:n2', title: 'Modo de permissão', decision: 'modo auto', project_id: 'p1' }])!;
+    const prompts = [
+      implementerPrompt({ card, branch: 'b', base: 'main', policy, custom: null, description: 'd'.repeat(5000), rules }),
+      integratorPrompt({ epic: card, branch: 'b', base: 'main', prUrl: 'u', policy, custom: null, rules }),
+      fixerPrompt({ ref: 'TER-1', branch: 'b', base: 'main', reason: 'ci', detail: 'x'.repeat(5000), custom: null, rules }),
+    ];
+    for (const p of prompts) {
+      expect(p).toContain('- [note:n2] «Modo de permissão»: «modo auto»');
+      expect(p.length + ORIGIN_REMINDER.length + 2).toBeLessThanOrEqual(PROMPT_MAX_CHARS);
+    }
+    const big = rulesBlock(Array.from({ length: 20 }, (_, i) => ({ ref: `note:n${i}`, title: `t${i}`, decision: 'x'.repeat(200), project_id: 'p1' })))!;
+    expect(implementerPrompt({ card, branch: 'b', base: 'main', policy: 'p'.repeat(5000), custom, description: 'd'.repeat(5000), rules: big }).length + ORIGIN_REMINDER.length + 2).toBeLessThanOrEqual(PROMPT_MAX_CHARS);
+    expect(implementerPrompt({ card, branch: 'b', base: 'main', policy, custom: null })).not.toContain('Regras vigentes');
+  });
+
   it('never forbid merging absolutely', () => {
     for (const p of [...all(null), ...all(custom)]) expect(p).not.toMatch(/não faça merge|do not merge/i);
   });

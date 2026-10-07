@@ -1477,8 +1477,9 @@ export type $ChatDecisionPayload<ExtArgs extends runtime.Types.Extensions.Intern
     autoCount: number
     /**
      * Memory status (TER-1013): "Desatualizada" sets expiresAt to now; a row past it is out of the
-     * default search and never a precedent. "Errada" sets wrongAt; "Substituída por…" sets supersededAt
-     * here and puts this row's ref (`decision:<id>`) in `supersedes` of the row that replaces it.
+     * default search and never a precedent. "Errada" sets wrongAt; "Substituída por…" (or a
+     * `record_decision` note that replaced it, TER-1015) sets supersededAt here and puts this row's ref
+     * (`decision:<id>`) in `supersedes` of the row that replaces it.
      */
     expiresAt: Date | null
     wrongAt: Date | null

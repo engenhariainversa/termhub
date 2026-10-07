@@ -29,3 +29,19 @@ export function statusOf(r: StatusColumns, now = new Date()): MemoryStatus {
  *  row is current — the condition every default search and precedent query adds. */
 export const currentSql = (a: 'd' | 'm'): Prisma.Sql =>
   Prisma.raw(`(${a}.wrong_at IS NULL AND ${a}.superseded_at IS NULL AND (${a}.expires_at IS NULL OR ${a}.expires_at > now()))`);
+
+/** Which rows a search may return besides the current ones: every status (`includeInactive`, TER-1013)
+ *  or only the replaced ones too (`includeSuperseded`, TER-1015). */
+export interface StatusSearch {
+  includeInactive?: boolean;
+  includeSuperseded?: boolean;
+}
+
+/** A search's status condition for the row alias `a`: `currentSql` by default, nothing with
+ *  `includeInactive`, and current-or-superseded with `includeSuperseded`. */
+export const statusSearchSql = (a: 'd' | 'm', opts: StatusSearch): Prisma.Sql =>
+  opts.includeInactive
+    ? Prisma.raw('TRUE')
+    : opts.includeSuperseded
+      ? Prisma.raw(`(${a}.wrong_at IS NULL AND (${a}.expires_at IS NULL OR ${a}.expires_at > now()))`)
+      : currentSql(a);

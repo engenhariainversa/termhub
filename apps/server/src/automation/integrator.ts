@@ -3,6 +3,7 @@ import { ACTIVE_RUN_STATUSES } from '../db/repositories/automation-runs.js';
 import type { PrState, TaskPullRequest } from '../db/repositories/task-pull-requests.js';
 import type { Task, TaskStatus, TaskType } from '../db/repositories/types.js';
 import type { PullInfo } from '../integrations/github-write.js';
+import { currentRulesBlock } from '../memory/current-rules.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { epicBranchName } from './branches.js';
 import type { DispatcherDeps, TriggeredRun, TriggeredStart } from './dispatcher.js';
@@ -128,6 +129,7 @@ export async function integrateEpic(deps: IntegratorDeps, epic: Task, setup: Pro
     prUrl: pull.url,
     policy: policyText(setup.automation, setup.repo?.deploy_workflow ?? null),
     custom: setup.automation.prompts.integrator,
+    rules: await currentRulesBlock(repos, project.owner_id, project.id),
   });
   const started = await deps.startTriggered({ projectId: project.id, taskId: epic.id, role: 'integrator', triggerSha: head, branch: epicBranch, base: baseBranch, prompt });
   if (started === 'started') log.info({ projectId: project.id, taskId: epic.id, pr: pull.number }, 'automation: integrator started');

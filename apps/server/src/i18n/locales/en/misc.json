@@ -113,5 +113,13 @@
   "Nenhuma máquina com agente 0.19 ligada ao projeto; atualize o agente": "No machine with agent 0.19 linked to the project; update the agent",
   "agente sem a trava; atualize o agente (0.19)": "agent without the hard lock; update the agent (0.19)",
   "O agente não chegou a iniciar: a aba voltou ao terminal. Confira o erro na tela e retome.": "The agent never started: the tab went back to the shell. Check the error on screen and resume.",
-  "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "The agent exited and this machine has no automatic-work hard lock; update the agent (0.19.0 or newer) and resume."
+  "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "The agent exited and this machine has no automatic-work hard lock; update the agent (0.19.0 or newer) and resume.",
+  "respondida com uma decisão sua de antes": "answered with a decision you took before",
+  "sem precedente na memória; usada a opção recomendada pelo agente": "no precedent in memory; the agent's recommended option was used",
+  "liberada por uma regra do projeto": "allowed by a project rule",
+  "ferramenta do termhub sempre liberada no automático": "termhub tool, always allowed in automatic work",
+  "nenhuma decisão sua na memória para esta pergunta": "no decision of yours in memory for this question",
+  "a decisão mais parecida não era próxima o bastante para responder sozinho": "the closest decision was not close enough to answer alone",
+  "a resposta automática foi cancelada ou não saiu": "the automatic answer was cancelled or did not go out",
+  "nenhuma regra do projeto libera esta permissão": "no project rule allows this permission"
 }

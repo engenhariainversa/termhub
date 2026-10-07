@@ -100,5 +100,7 @@
   "Só a pessoa muda a exclusividade de uma conta de IA, nunca um agente numa aba": "Only the person changes whether an AI account is exclusive, never an agent in a tab",
   "Isso deixa a conta \"{{account}}\" exclusiva do projeto {{project}}: nenhum outro projeto poderá usá-la; repita com confirm: true para confirmar": "This makes the account \"{{account}}\" exclusive to project {{project}}: no other project will be able to use it; repeat with confirm: true to confirm",
   "Isso libera a conta \"{{account}}\", hoje exclusiva do projeto {{project}}, para qualquer projeto; repita com confirm: true para confirmar": "This frees the account \"{{account}}\", now exclusive to project {{project}}, for any project; repeat with confirm: true to confirm",
-  "Atualize o agente de {{machine}} (npm i -g @termhub/agent, versão {{version}} ou mais nova): o trabalho automático só roda com a trava (termhub-guard).": "Update the agent on {{machine}} (npm i -g @termhub/agent, version {{version}} or newer): automatic work only runs with the hard lock (termhub-guard)."
+  "Atualize o agente de {{machine}} (npm i -g @termhub/agent, versão {{version}} ou mais nova): o trabalho automático só roda com a trava (termhub-guard).": "Update the agent on {{machine}} (npm i -g @termhub/agent, version {{version}} or newer): automatic work only runs with the hard lock (termhub-guard).",
+  "{{ref}} já foi substituído ou esquecido": "{{ref}} was already replaced or forgotten",
+  "Só uma anotação (note:) ou decisão (decision:) pode ser substituída: {{ref}}": "Only a note (note:) or a decision (decision:) can be replaced: {{ref}}"
 }

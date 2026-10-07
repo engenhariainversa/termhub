@@ -1672,11 +1672,16 @@ export type $MemoryItemPayload<ExtArgs extends runtime.Types.Extensions.Internal
      */
     meta: runtime.JsonValue | null
     /**
-     * Memory status (TER-1013), same meaning as on `ChatDecision`; only ever set on a `note`.
+     * Memory status (TER-1013), same meaning as on `ChatDecision`; only ever set on a `note`. A newer
+     * `record_decision` note also sets supersededAt (TER-1015): out of the default search and the
+     * conflict check.
      */
     expiresAt: Date | null
     wrongAt: Date | null
     supersededAt: Date | null
+    /**
+     * The ref (`note:<id>` / `decision:<id>`) of the row this one replaces (TER-1013 / TER-1015).
+     */
     supersedes: string | null
     sourceAt: Date
     createdAt: Date

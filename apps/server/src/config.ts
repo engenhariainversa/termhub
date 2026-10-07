@@ -135,6 +135,10 @@ const envSchema = z.object({
    *  `answer_tab_question` to schedule an automatic answer (spec 2026-09-26 concierge memory D6): the
    *  model judges "the same question", the server checks it is at least close. Below it, a suggestion. */
   AUTO_ANSWER_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.8),
+  /** the least cosine similarity (0..1) between a new `record_decision` note and a current note or card
+   *  decision of the same scope for the server to answer "conflicts with X, replace it?" instead of
+   *  recording (TER-1015). 1 turns the check off. */
+  DECISION_CONFLICT_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.8),
   /** at most this many concierge wake turns per conversation per hour (spec 2026-09-26 concierge
    *  memory D10): each is a run on the person's own Claude account. 0 disables every wake. */
   AUTO_WAKE_MAX_PER_HOUR: z.coerce.number().int().min(0).max(120).default(12),
@@ -249,6 +253,7 @@ export const config = {
   decisionSuggestThreshold: env.DECISION_SUGGEST_THRESHOLD,
   autoAnswerDelayMs: env.AUTO_ANSWER_DELAY_SECONDS * 1000,
   autoAnswerMinSimilarity: env.AUTO_ANSWER_MIN_SIMILARITY,
+  decisionConflictMinSimilarity: env.DECISION_CONFLICT_MIN_SIMILARITY,
   autoWakeMaxPerHour: env.AUTO_WAKE_MAX_PER_HOUR,
   automationWakeMaxPerHour: env.AUTOMATION_WAKE_MAX_PER_HOUR,
   /**

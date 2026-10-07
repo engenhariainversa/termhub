@@ -375,6 +375,12 @@ export interface AutomationFeedEvent {
   paused: boolean | null;
   /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
   tool: string | null;
+  /** TER-1011: why an automatic answer or an escalation happened (reader's language); absent from an older server */
+  why_text?: string | null;
+  /** TER-1011: the precedent (`decision:<id>`, `note:<id>`) or allow rule it rests on */
+  rule_ref?: string | null;
+  /** TER-1011: the precedent's similarity, 0..1 */
+  score?: number | null;
 }
 export interface ProgressResponse {
   epics: EpicProgress[];

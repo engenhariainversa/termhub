@@ -80,5 +80,9 @@
   "{{ref}}: {{tool}} liberado sozinho": "{{ref}}: {{tool}} allowed automatically",
   "{{ref}}: permissão liberada sozinha": "{{ref}}: permission allowed automatically",
   "{{ref}}: {{tool}} bloqueado pela trava": "{{ref}}: {{tool}} blocked by the guard",
-  "{{ref}}: ação bloqueada pela trava": "{{ref}}: action blocked by the guard"
+  "{{ref}}: ação bloqueada pela trava": "{{ref}}: action blocked by the guard",
+  "Motivo: {{why}}": "Why: {{why}}",
+  "Precedente: {{ref}}": "Precedent: {{ref}}",
+  "Regra: {{ref}}": "Rule: {{ref}}",
+  "Similaridade: {{score}}%": "Similarity: {{score}}%"
 }

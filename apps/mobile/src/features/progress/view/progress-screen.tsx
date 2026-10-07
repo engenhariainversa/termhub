@@ -8,7 +8,7 @@ import { useTranslation } from '@/i18n';
 import type { TAgentOnCard, TAutomationFeedEvent, TCardProgress, TEpicProgress } from '@/services/api/contract';
 import { AppText, Button, MAX_READABLE_WIDTH, readableColumn, Sheet } from '@/ui';
 import { ciLabel, epicCiLine, formatEstimate, stateLabel, usageLine } from '../model/format';
-import { feedLine } from '../model/feed';
+import { feedLine, feedWhy } from '../model/feed';
 import { useProgressStore } from '../viewmodel/useProgressStore';
 
 function Bar({ percent }: { percent: number }) {
@@ -55,6 +55,7 @@ function Feed({ feed }: { feed: TAutomationFeedEvent[] }) {
       {lines.map(({ e, text }) => (
         <View key={e.id} className="gap-0.5">
           <Text className={e.kind === 'escalated' || e.kind === 'deploy_failed' || e.kind === 'release_failed' || e.kind === 'run_blocked' ? 'text-sm text-amber-400' : 'text-sm text-zinc-200'}>{text}</Text>
+          {feedWhy(e) ? <Text className="text-xs text-zinc-400">{feedWhy(e)}</Text> : null}
           <View className="flex-row flex-wrap items-center gap-2">
             <Text className="text-xs text-zinc-500">{relativeTime(e.created_at, Date.now())}</Text>
             {e.run_id ? <Text className="text-xs text-zinc-500" accessibilityLabel={t('execução {{id}}', { id: e.run_id })}>{`#${e.run_id.slice(-6)}`}</Text> : null}
