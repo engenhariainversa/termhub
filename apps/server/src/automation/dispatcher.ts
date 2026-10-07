@@ -328,7 +328,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         // setup command only from the project's runner, cwd only from the run's worktree (Task 14 rule)
         {
           cwd: ws.path,
-          permission,
+          permission: { ...permission, worktree: ws.path },
           setupCommand: runner.setup_command,
           promptIsFinal: true,
           // the run knows its tab before the agent starts: its tab MCP then lists report_card and get_card

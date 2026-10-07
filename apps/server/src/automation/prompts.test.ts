@@ -37,6 +37,11 @@ describe('prompts', () => {
     expect(SHELL_LINE).toMatch(/heredoc/);
     expect(SHELL_LINE).toContain('não /bin/ls');
   });
+  it('tell every role the cwd is already the worktree, so git needs no -C (TER-991)', () => {
+    expect(SHELL_LINE).toContain('O diretório atual já é a worktree');
+    expect(SHELL_LINE).toContain('sem git -C');
+    expect(SHELL_LINE).toContain('não sed -i');
+  });
   it('carries the description excerpt and the lessons reminder', () => {
     const p = implementerPrompt({ card, branch: 'b', base: 'main', policy, custom: null, description: 'Faça o X' });
     expect(p).toContain('Faça o X');

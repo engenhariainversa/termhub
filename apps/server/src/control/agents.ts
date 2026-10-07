@@ -14,9 +14,9 @@ import { ControlError, type ControlContext } from './context.js';
 import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
 import { openTab } from './terminals.js';
 import { msg } from '../i18n/index.js';
-import { AUTOMATION_DENIED_TOOLS, automationAllowList } from './automation-tools.js';
+import { automationAllowList, automationDenyList } from './automation-tools.js';
 
-export { AUTOMATION_DENIED_TOOLS, AUTOMATION_READ_TOOLS, automationAllowList, branchFetchRules, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
+export { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_READ_TOOLS, automationAllowList, automationDenyList, gitRuleForms, branchFetchRules, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
 /** Same ceiling as one typed input: the prompt travels as a single command-line argument. */
 export const PROMPT_MAX_CHARS = 4000;
@@ -155,6 +155,12 @@ export interface AgentPermission {
   mode: 'acceptEdits';
   allowedTools: string[];
   branch: string | null;
+  /**
+   * The run's worktree, the tab's cwd (TER-991): with it, every git rule also comes as `git -C <worktree> …`
+   * and `git --no-pager …` (`gitRuleForms`), with their denies. Left out of a line typed whole, which has no
+   * room for them.
+   */
+  worktree?: string | null;
 }
 
 /**
@@ -177,9 +183,10 @@ function checkAllowedTools(tools: string[]): string[] {
  */
 function permissionFlags(permission: AgentPermission, mcpTabId: string | null): string {
   if (permission.mode !== 'acceptEdits') throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
-  const tools = automationAllowList(checkAllowedTools(permission.allowedTools), permission.branch);
+  const forms = permission.worktree ? { worktree: permission.worktree } : null;
+  const tools = automationAllowList(checkAllowedTools(permission.allowedTools), permission.branch, forms);
   const allow = mcpTabId ? claudeMcpFlags(mcpTabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
-  const deny = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => shellQuote(t)).join(' ')}`;
+  const deny = `--disallowedTools ${automationDenyList(forms !== null).map((t) => shellQuote(t)).join(' ')}`;
   return `--permission-mode ${permission.mode}${allow ? ` ${allow}` : ''} ${deny}`;
 }
 

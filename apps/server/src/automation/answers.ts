@@ -4,7 +4,7 @@ import { publishTabQuestions } from '../chat/tab-questions.js';
 import { answerTabQuestion } from '../chat/tab-question-answer.js';
 import { checkChoiceAnswer, type ChoiceAnswer, type ChoicePayload, type PermissionPayload } from '../chat/tab-question-payload.js';
 import type { Waker } from '../chat/wake.js';
-import { AUTOMATION_DENIED_TOOLS, automationAllowList } from '../control/automation-tools.js';
+import { automationAllowList, automationDenyList } from '../control/automation-tools.js';
 import { controlContextFor } from '../control/context.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -343,7 +343,7 @@ function denyPattern(spec: string): RegExp {
 const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
 /**
- * Whether the fixed deny list (`AUTOMATION_DENIED_TOOLS`, TER-968 R5) covers a request. A Bash rule is
+ * Whether the fixed deny list (`AUTOMATION_DENIED_TOOLS`, TER-968 R5, with the git forms' `AUTOMATION_FORM_DENIED_TOOLS`) covers a request. A Bash rule is
  * tried on the command from every token on (a prefix — `env X=1`, `npx`, a path — does not hide it, the
  * program's path reduced to its name). A path rule (`Read(~/.ssh/**)`) cannot be checked without the path,
  * which the request does not carry: every file tool request is then taken as covered, the safe direction.
@@ -357,7 +357,7 @@ const SECRET_PATH = /(^|[\/'"=])\.env|\.ssh(\/|$)|\.config\/gh(\/|$)|\.credentia
 
 function deniedByList(tool: string, command: string | null): boolean {
   if (tool === 'Bash' && command !== null && command.split(' ').some((t) => SECRET_PATH.test(t))) return true;
-  return AUTOMATION_DENIED_TOOLS.some((raw) => {
+  return automationDenyList(true).some((raw) => {
     const rule = parseRule(raw);
     if (!rule) return false;
     if (rule.tool === 'Read' || rule.tool === 'Edit') return FILE_TOOLS.has(tool);
@@ -377,18 +377,19 @@ function deniedByList(tool: string, command: string | null): boolean {
  * 1. the keyword block (`memory/blocklist.ts`) on the tool's name and the command: never;
  * 2. for `Bash`: a command that is unknown, holds a shell operator (`; & | \` $( > <` or a line break), or
  *    is refused at every level (`refusedCommand`, the run's `branch` for pushes): never;
- * 3. the fixed deny list (`AUTOMATION_DENIED_TOOLS`, TER-968 R5), the same one the tab was started with as
+ * 3. the fixed deny list (`AUTOMATION_DENIED_TOOLS`, TER-968 R5, and `AUTOMATION_FORM_DENIED_TOOLS`), the same one the tab was started with as
  *    `--disallowedTools`: never, whatever `allowed` says;
  * 4. a rule of the tab's whole allow list, `automationAllowList` — the fixed read rules
  *    (`AUTOMATION_READ_TOOLS`, TER-989), `allowed` in Claude Code's syntax less what is too broad for an
  *    automatic tab (`unsafeAllowedTool`, as on the tab's line) and the run's own branch rules
- *    (`runBranchRules`: its pushes and its fetch) — for this tool: a bare `Tool`, or for `Bash` a `Bash(prefix:*)` matching on a word boundary or a
+ *    (`runBranchRules`: its pushes and its fetch), git's rules also as `git -C <worktree>` / `--no-pager`
+ *    (`gitRuleForms`, TER-991) — for this tool: a bare `Tool`, or for `Bash` a `Bash(prefix:*)` matching on a word boundary or a
  *    `Bash(exact)` matching exactly. A specifier on any other tool never matches: its input is not known here.
  *
  * The same at every autonomy level, on purpose: merging, deploying and publishing are the server's own
  * steps (D5), never a permission answered in a tab — so the level is not an input.
  */
-export function permissionAllowed(req: PermissionRequest, allowed: string[], branch: string | null = null): boolean {
+export function permissionAllowed(req: PermissionRequest, allowed: string[], branch: string | null = null, worktree: string | null = null): boolean {
   if (autoAnswerBlocked([req.tool, req.command ?? ''])) return false;
   const isBash = req.tool === 'Bash';
   let command: string | null = null;
@@ -398,7 +399,7 @@ export function permissionAllowed(req: PermissionRequest, allowed: string[], bra
     if (command === '' || refusedCommand(command, branch)) return false;
   }
   if (deniedByList(req.tool, command)) return false;
-  return automationAllowList(allowed, branch).some((raw) => {
+  return automationAllowList(allowed, branch, { worktree }).some((raw) => {
     const rule = parseRule(raw);
     if (!rule || rule.tool !== req.tool) return false;
     if (rule.spec === null) return true;
@@ -453,8 +454,8 @@ export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQues
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission with no plain tool name');
     return handOver(PERMISSION_NEEDED);
   }
-  const { allowedTools } = await runPermission(repos, run);
-  if (!permissionAllowed({ tool, command }, allowedTools, run.branch)) {
+  const { allowedTools, worktree } = await runPermission(repos, run);
+  if (!permissionAllowed({ tool, command }, allowedTools, run.branch, worktree ?? null)) {
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission outside the rules');
     return handOver(PERMISSION_NEEDED);
   }

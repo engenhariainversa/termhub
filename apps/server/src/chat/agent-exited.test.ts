@@ -76,6 +76,12 @@ describe('resumeCommandFor an automatic tab (preflight F-12)', () => {
     expect(line).toBe(`CLAUDE_CONFIG_DIR="$HOME"/'.claude_b' claude --permission-mode acceptEdits --allowedTools ${READ} 'Bash(git status:*)' ${DENY} --resume ${SID} -- '[termhub automático] continue'`);
   });
 
+  it('leaves the git -C forms of the run worktree out of a line typed whole (TER-991)', async () => {
+    const line = await resumeCommandFor(repos().r, tab(), machine, { ...auto, permission: { ...auto.permission, worktree: '/w/TER-1' } });
+    expect(line).toBe(await resumeCommandFor(repos().r, tab(), machine, auto));
+    expect(line).not.toContain('-C ');
+  });
+
   it('with no session id, continues the last one with the profile and the message', async () => {
     const line = await resumeCommandFor(repos({ liveToken: true }).r, tab({ agent_session_id: null }), machine, auto);
     expect(line).toContain('--permission-mode acceptEdits --mcp-config "$HOME"/');
