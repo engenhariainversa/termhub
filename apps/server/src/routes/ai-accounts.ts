@@ -1,11 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
-import { badRequest } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
 import { forgetAccountUsage, getAccountUsage } from '../ai/index.js';
+import { setAccountExclusive } from '../control/account-exclusive.js';
+import { ControlError, controlContextForRequest } from '../control/context.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
+/** TER-990: the only project the account may run in; null clears it. */
+const exclusiveBody = z.object({ exclusive_project_id: z.string().min(1).max(64).nullable().optional() });
 const usageQuery = z.object({ refresh: z.coerce.boolean().optional() });
 
 const accountBody = z.object({
@@ -32,9 +36,17 @@ export async function aiAccountRoutes(app: FastifyInstance, repos: Repositories)
     const s = scoped(repos, request);
     await s.aiAccount(id);
     const patch = accountBody.omit({ provider: true }).partial().parse(request.body);
+    const { exclusive_project_id } = exclusiveBody.parse(request.body);
     if (patch.machine_id) {
       await s.machine(patch.machine_id).catch(() => {
         throw badRequest('Machine does not exist');
+      });
+    }
+    if (exclusive_project_id !== undefined) {
+      const ctx = { ...controlContextForRequest(repos, request), log: request.log };
+      await setAccountExclusive(ctx, { account_id: id, project_id: exclusive_project_id }, 'web').catch((e: unknown) => {
+        if (!(e instanceof ControlError)) throw e;
+        throw e.code === 'NOT_FOUND' ? notFound(e.localized) : e.code === 'FORBIDDEN' ? forbidden(e.localized) : conflict(e.localized);
       });
     }
     forgetAccountUsage(id);

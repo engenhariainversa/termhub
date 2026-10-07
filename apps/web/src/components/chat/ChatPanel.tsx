@@ -661,7 +661,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     try {
       const { accounts } = await api.aiAccounts.list();
       // The chat runs on Claude, so a login for another provider is not an option here.
-      setHostAccounts(accounts.filter((a) => a.provider === 'claude' && own.has(a.machine_id)).map((a) => ({ id: a.id, label: a.label, machine_id: a.machine_id })));
+      // TER-990: an account exclusive to a project cannot host the account-wide chat, so it is not offered
+      setHostAccounts(accounts.filter((a) => a.provider === 'claude' && own.has(a.machine_id) && !a.exclusive_project).map((a) => ({ id: a.id, label: a.label, machine_id: a.machine_id })));
     } catch {
       // Said as what it is, next to a machine list that still works — never as "this machine has no
       // other account", which is a claim about the machine and not about a read that was refused.

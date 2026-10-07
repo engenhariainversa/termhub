@@ -417,5 +417,11 @@
   "conta removida": "removed account",
   "custo {{cost}}": "cost {{cost}}",
   "Gasto do automático em 80% do orçamento diário": "Automatic work spending at 80% of the daily budget",
-  "Orçamento por card (USD)": "Budget per card (USD)"
+  "Orçamento por card (USD)": "Budget per card (USD)",
+  "Liberar": "Free",
+  "Tornar exclusiva": "Make exclusive",
+  "Liberar a conta": "Free the account",
+  "Tornar a conta exclusiva": "Make the account exclusive",
+  "A conta \"{{account}}\" volta a poder rodar em qualquer projeto.": "The account \"{{account}}\" can run in any project again.",
+  "A conta \"{{account}}\" passa a rodar só no projeto {{project}}: nenhum outro projeto, troca automática ou chat poderá usá-la.": "The account \"{{account}}\" will run only in project {{project}}: no other project, automatic swap or chat will be able to use it."
 }

@@ -713,6 +713,66 @@ describe('startAgent with the project setup (TER-589)', () => {
   });
 });
 
+describe('startAgent with an account exclusive to a project (TER-990)', () => {
+  const p2Only = { id: 'p2', name: 'DR Horton' };
+  // a7: a second Claude login on m1, exclusive to p2 (DR Horton); p1 must never start on it
+  const a7 = account({ id: 'a7', label: 'drhorton', machine_id: 'm1', config_dir: '~/.claude-drh', exclusive_project: p2Only });
+  beforeEach(() => accounts.push(a7));
+  afterEach(() => accounts.splice(accounts.indexOf(a7), 1));
+  const withEvents = (repos: object) => {
+    const insert = vi.fn(async (e: object) => ({ ...e, id: 'e1', created_at: '' }));
+    Object.assign(repos, { automationEvents: { insert } });
+    return insert;
+  };
+
+  it('refuses an explicit account_id of another project before any tab exists, and audits it', async () => {
+    const { c, repos, log } = ctx();
+    const insert = withEvents(repos);
+    await expect(startAgent(c, { project_id: 'p1', account_id: 'a7', prompt: 'p' })).rejects.toEqual(
+      new ControlError('ACCOUNT_EXCLUSIVE', 'Conta exclusiva do projeto DR Horton: "drhorton" não pode rodar em outro projeto'),
+    );
+    expect(openTab).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'a7', attemptedProjectId: 'p1', path: 'start_agent' }), 'exclusive account: use refused');
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'p2', kind: 'account_exclusive_blocked', payload: expect.objectContaining({ account_id: 'a7', attempted_project_id: 'p1', path: 'start_agent' }) }));
+  });
+
+  it('never chooses it from the project list, even listed first', async () => {
+    const { c } = ctx(undefined, { ai: { accounts: ['a7', 'a1'] } });
+    expect((await startAgent(c, { project_id: 'p1', prompt: 'p' })).account.id).toBe('a1');
+  });
+
+  it('with only it listed, asks for an account instead, without naming it among the machine accounts', async () => {
+    const { c } = ctx(undefined, { ai: { accounts: ['a7'] } });
+    const err = await startAgent(c, { project_id: 'p1', prompt: 'p' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'ACCOUNT_REQUIRED' });
+    expect((err as Error).message).not.toContain('drhorton');
+    expect(openTab).not.toHaveBeenCalled();
+  });
+
+  it('refuses the machine default login (no config dir) when it is the exclusive one', async () => {
+    const a8 = account({ id: 'a8', label: 'padrão', machine_id: 'm1', config_dir: null, exclusive_project: p2Only });
+    accounts.push(a8);
+    try {
+      const { c } = ctx();
+      await expect(startAgent(c, { project_id: 'p1', account_id: 'a8', prompt: 'p' })).rejects.toMatchObject({ code: 'ACCOUNT_EXCLUSIVE' });
+      expect(openTab).not.toHaveBeenCalled();
+    } finally {
+      accounts.splice(accounts.indexOf(a8), 1);
+    }
+  });
+
+  it('runs on it in its own project', async () => {
+    links.push({ id: 'l8', position: 1, created_at: '', project_id: 'p2', machine_id: 'm1', cwd: '/src/p2' });
+    try {
+      const { c } = ctx(undefined, { ai: { accounts: ['a7'] } });
+      expect((await startAgent(c, { project_id: 'p2', machine_id: 'm1', prompt: 'p' })).account.id).toBe('a7');
+      expect((await startAgent(c, { project_id: 'p2', machine_id: 'm1', account_id: 'a7', prompt: 'p' })).account.id).toBe('a7');
+    } finally {
+      links.pop();
+    }
+  });
+});
+
 describe('linkTabTask', () => {
   it('points the card at the tab and starts work on it, answering the card as it ended up', async () => {
     const { c, repos } = ctx();

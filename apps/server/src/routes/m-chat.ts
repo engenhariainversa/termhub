@@ -43,6 +43,7 @@ import { indexActions as indexActionsWrite } from '../memory/index-items.js';
 import { HttpError, conflict, notFound, unauthorized } from '../lib/errors.js';
 import { DeviceLockedError, PinInvalidError, deviceRevoked, type SessionService } from '../mobile/session.js';
 import { requestLocale, t } from '../i18n/index.js';
+import { auditBlocked, exclusiveError, usableIn } from '../ai/exclusive.js';
 
 const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
@@ -216,7 +217,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
           online: deps.agents.capabilities(m.id) !== null,
           agent_version: deps.agents.info(m.id)?.agent_version ?? null,
           accounts: accounts
-            .filter((a) => a.machine_id === m.id && a.provider === 'claude')
+            // TER-990: an exclusive account cannot host the account-wide chat, so the phone does not offer it
+            .filter((a) => a.machine_id === m.id && a.provider === 'claude' && usableIn(a, null))
             .map((a) => ({ id: a.id, label: a.label, config_dir: a.config_dir })),
         })),
     });
@@ -235,6 +237,11 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       const account = await repos.aiAccounts.findById(accountId);
       if (!account || account.machine_id !== machine.id) throw notFound('Conta de IA não encontrada nessa máquina');
       if (account.provider !== 'claude') throw new HttpError(400, 'O chat roda no Claude: escolha uma conta do Claude nessa máquina', 'CHAT_ACCOUNT_NOT_CLAUDE');
+      // TER-990: the chat's host runs the account-wide chat, outside any project — never on an exclusive account
+      if (!usableIn(account, null)) {
+        await auditBlocked(repos, request.log, account, { project_id: null, path: 'chat_host', machine_id: machine.id });
+        throw new HttpError(400, exclusiveError(account).localized, 'ACCOUNT_EXCLUSIVE');
+      }
     }
 
     const current = await deps.chat.conversationFor(user);

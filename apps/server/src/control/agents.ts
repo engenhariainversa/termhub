@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { MODEL_RE, type ProjectAi } from '../setup/schema.js';
 import { getAccountUsage } from '../ai/index.js';
 import { accountsOn, isAlias, modelFor } from '../ai/project-accounts.js';
+import { guardAccount, usableIn } from '../ai/exclusive.js';
 import { peakUtilization, SWAP_MAX_UTILIZATION } from './account-swap.js';
 import type { AiAccount, AiProvider, Machine, Project, Task } from '../db/repositories/types.js';
 import { HttpError, localizedOf } from '../lib/errors.js';
@@ -336,7 +337,7 @@ async function placeAgent(
   } catch (e) {
     if (!(e instanceof HttpError) || e.code !== 'MACHINE_REQUIRED' || input.account_id !== undefined || ai.accounts.length === 0) throw e;
     const { project, machines } = await ctx.scoped.projectMachines(input.project_id);
-    const onLinked = machines.flatMap(({ machine }) => accountsOn(ai, listed, machine.id)).sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
+    const onLinked = machines.flatMap(({ machine }) => accountsOn(input.project_id, ai, listed, machine.id)).sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
     const machineOf = (a: AiAccount) => machines.find((m) => m.machine.id === a.machine_id)!.machine;
     const pick = (await firstWithRoom(onLinked, machineOf)) ?? onLinked[0];
     if (!pick) throw e;
@@ -344,10 +345,15 @@ async function placeAgent(
   }
   const { project, machine } = placed;
 
-  if (input.account_id !== undefined) return { project, machine, account: await accountOnMachine(ctx, input.account_id, machine), ai, note: null };
-  const candidates = accountsOn(ai, listed, machine.id);
+  if (input.account_id !== undefined) {
+    const account = await accountOnMachine(ctx, input.account_id, machine);
+    // TER-990: an account exclusive to another project never starts here, however it was named
+    await guardAccount(ctx.repos, ctx.log, account, { project_id: project.id, path: 'start_agent', machine_id: machine.id });
+    return { project, machine, account, ai, note: null };
+  }
+  const candidates = accountsOn(input.project_id, ai, listed, machine.id);
   if (candidates.length === 0) {
-    const here = listed.filter((a) => a.machine_id === machine.id);
+    const here = listed.filter((a) => a.machine_id === machine.id && usableIn(a, project.id));
     const list = here.length ? here.map((a) => `${a.label} (${a.provider}, ${a.id})`).join(', ') : 'nenhuma';
     throw new ControlError('ACCOUNT_REQUIRED', msg('Escolha a conta (account_id): o projeto não tem contas configuradas em {{machine}}. Contas lá: {{list}}', { machine: machine.name, list }));
   }

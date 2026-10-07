@@ -7,7 +7,7 @@ import { projectAiRoutes } from './project-ai.js';
 
 const machine = (id: string, owner_id = 'u1') => ({ id, name: `máquina ${id}`, owner_id, type: 'agent' });
 const machines = [machine('m1'), machine('m2'), machine('m3'), machine('mx', 'u2')];
-const acc = (id: string, machine_id: string, provider = 'claude', config_dir: string | null = null) => ({ id, label: `conta ${id}`, provider, machine_id, config_dir, created_at: '' });
+const acc = (id: string, machine_id: string, provider = 'claude', config_dir: string | null = null) => ({ id, label: `conta ${id}`, provider, machine_id, config_dir, exclusive_project: null as { id: string; name: string } | null, created_at: '' });
 const accounts = [acc('a1', 'm1'), acc('a2', 'm1', 'claude', '~/.claude-2'), acc('c1', 'm2', 'chatgpt'), acc('g1', 'm1', 'gemini'), acc('u3', 'm3'), acc('ax', 'mx')];
 
 function build() {
@@ -45,9 +45,9 @@ describe('project AI routes', () => {
     expect(res.json()).toEqual({
       ai: { accounts: [], models: { claude: null, chatgpt: null } },
       available: [
-        { id: 'a1', label: 'conta a1', provider: 'claude', machine_id: 'm1', machine_name: 'máquina m1', default: true },
-        { id: 'a2', label: 'conta a2', provider: 'claude', machine_id: 'm1', machine_name: 'máquina m1', default: false },
-        { id: 'c1', label: 'conta c1', provider: 'chatgpt', machine_id: 'm2', machine_name: 'máquina m2', default: true },
+        { id: 'a1', label: 'conta a1', provider: 'claude', machine_id: 'm1', machine_name: 'máquina m1', default: true, exclusive_project: null },
+        { id: 'a2', label: 'conta a2', provider: 'claude', machine_id: 'm1', machine_name: 'máquina m1', default: false, exclusive_project: null },
+        { id: 'c1', label: 'conta c1', provider: 'chatgpt', machine_id: 'm2', machine_name: 'máquina m2', default: true, exclusive_project: null },
       ],
     });
   });
@@ -84,5 +84,51 @@ describe('project AI routes', () => {
   it('404s a project out of scope', async () => {
     const { app } = build();
     expect((await app.inject({ method: 'GET', url: '/projects/px/setup/ai' })).statusCode).toBe(404);
+  });
+});
+
+describe('project AI routes with an account exclusive to a project (TER-990)', () => {
+  const a2 = accounts.find((a) => a.id === 'a2')! as { exclusive_project?: { id: string; name: string } | null };
+  const withExclusive = async (fn: () => Promise<void>) => {
+    a2.exclusive_project = { id: 'p9', name: 'DR Horton' };
+    try {
+      await fn();
+    } finally {
+      a2.exclusive_project = null;
+    }
+  };
+
+  it('lists it with the project it is exclusive to, so the Setup shows it disabled', () =>
+    withExclusive(async () => {
+      const { app } = build();
+      const res = await app.inject({ method: 'GET', url: '/projects/p1/setup/ai' });
+      expect(res.json().available).toContainEqual(expect.objectContaining({ id: 'a2', exclusive_project: { id: 'p9', name: 'DR Horton' } }));
+      expect(res.json().available).toContainEqual(expect.objectContaining({ id: 'a1', exclusive_project: null }));
+    }));
+
+  it('refuses to add it to another project, saving nothing', () =>
+    withExclusive(async () => {
+      const { app, save } = build();
+      const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup/ai', payload: { ai: { accounts: ['a1', 'a2'] } } });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe('Conta exclusiva do projeto DR Horton: "conta a2" não pode rodar em outro projeto');
+      expect(save).not.toHaveBeenCalled();
+    }));
+
+  it('answers the refusal in English', () =>
+    withExclusive(async () => {
+      const { app } = build();
+      const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup/ai', headers: { 'accept-language': 'en' }, payload: { ai: { accounts: ['a2'] } } });
+      expect(res.json().error).toBe('Account exclusive to project DR Horton: "conta a2" cannot run in another project');
+    }));
+
+  it('drops it, saving the rest, when the project listed it from before it became exclusive', async () => {
+    const { app, stored } = build();
+    await app.inject({ method: 'PUT', url: '/projects/p1/setup/ai', payload: { ai: { accounts: ['a2', 'a1'] } } });
+    await withExclusive(async () => {
+      const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup/ai', payload: { ai: { accounts: ['a2', 'a1'], models: { claude: 'opus' } } } });
+      expect(res.statusCode).toBe(200);
+      expect(stored().ai).toEqual({ accounts: ['a1'], models: { claude: 'opus', chatgpt: null } });
+    });
   });
 });

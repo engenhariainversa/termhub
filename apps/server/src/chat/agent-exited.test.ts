@@ -146,3 +146,27 @@ describe('notifyAgentExited (TER-643)', () => {
     expect(l.warn).toHaveBeenCalledWith(expect.objectContaining({ tabId: 'tab1abc' }), 'agent exited card failed');
   });
 });
+
+describe('resumeCommandFor with an account exclusive to a project (TER-990)', () => {
+  const exclusive = { ...account, exclusive_project: { id: 'p9', name: 'DR Horton' } } as AiAccount;
+
+  it("never brings back the tab's account in another project", async () => {
+    await expect(resumeCommandFor(repos({ accounts: [exclusive] }).r, tab(), machine)).rejects.toMatchObject({ code: 'ACCOUNT_EXCLUSIVE' });
+  });
+
+  it("refuses the machine's default login when it is the exclusive one and the tab has no account", async () => {
+    const defaultLogin = { ...exclusive, config_dir: null } as AiAccount;
+    await expect(resumeCommandFor(repos({ accounts: [defaultLogin] }).r, tab({ ai_account_id: null }), machine)).rejects.toMatchObject({ code: 'ACCOUNT_EXCLUSIVE' });
+  });
+
+  it('resumes it in its own project', async () => {
+    expect(await resumeCommandFor(repos({ accounts: [exclusive] }).r, tab({ project_id: 'p9' }), machine)).toContain(`--resume ${SID}`);
+  });
+
+  it('leaves no resume card offering it', async () => {
+    const { r, open } = repos({ accounts: [exclusive] });
+    const l = log();
+    await notifyAgentExited(r, l, tab(), machine, AT);
+    expect(open).not.toHaveBeenCalled();
+  });
+});

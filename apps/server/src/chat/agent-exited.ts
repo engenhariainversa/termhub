@@ -3,6 +3,7 @@ import { isClaudeSessionId } from '@termhub/machine-ops';
 import { swapPreferences } from '../control/account-swap.js';
 import { continueLine, resumeLine, type AgentPermission } from '../control/agents.js';
 import type { Repositories } from '../db/repositories/index.js';
+import { guardAccount, loginOf } from '../ai/exclusive.js';
 import type { Machine, Tab } from '../db/repositories/types.js';
 import { followerWillRestart } from '../automation/restart.js';
 import { runPermission } from '../automation/permission.js';
@@ -27,8 +28,13 @@ export const EXITED_RESUME_PROMPT = 'O processo anterior desta sessão foi encer
  */
 export async function resumeCommandFor(repos: Repositories, tab: Tab, machine: Machine, auto?: { permission: AgentPermission; prompt: string } | null): Promise<string> {
   const codex = tab.state_tool === 'codex';
-  const account = tab.ai_account_id ? (await repos.aiAccounts.list(machine.owner_id)).find((a) => a.id === tab.ai_account_id && a.machine_id === machine.id) : undefined;
+  const owned = await repos.aiAccounts.list(machine.owner_id);
+  const account = tab.ai_account_id ? owned.find((a) => a.id === tab.ai_account_id && a.machine_id === machine.id) : undefined;
   const configDir = account?.config_dir ?? null;
+  // TER-990: the login the line resumes on (the tab's account, else the machine's default one) must be
+  // usable in the tab's project — an exclusive account is never brought back elsewhere.
+  const login = account ?? loginOf(owned, machine.id, codex ? 'chatgpt' : 'claude', null);
+  if (login) await guardAccount(repos, undefined, login, { project_id: tab.project_id, path: 'restart', machine_id: machine.id, tab_id: tab.id });
   const sessionId = !codex && tab.agent_session_id && isClaudeSessionId(tab.agent_session_id) ? tab.agent_session_id : null;
   if (codex || (!sessionId && !auto)) return continueLine(codex ? 'chatgpt' : 'claude', configDir);
   const [hasTabMcp, prefs] = await Promise.all([repos.apiTokens.hasLiveForTab(tab.id).catch(() => false), swapPreferences(repos, tab, machine).catch(() => ({ model: undefined }))]);
