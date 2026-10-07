@@ -1274,6 +1274,14 @@ model ChatDecision {
   /// Times this decision backed an automatic answer sent by the countdown (spec §D11); those answers
   /// are never recorded as a new row, so this is the only trace of them on the source decision.
   autoCount      Int               @default(0) @map("auto_count")
+  /// Memory status (TER-1013): "Desatualizada" sets expiresAt to now; a row past it is out of the
+  /// default search and never a precedent. "Errada" sets wrongAt; "Substituída por…" sets supersededAt
+  /// here and puts this row's ref (`decision:<id>`) in `supersedes` of the row that replaces it.
+  expiresAt      DateTime?         @map("expires_at")
+  wrongAt        DateTime?         @map("wrong_at")
+  supersededAt   DateTime?         @map("superseded_at")
+  /// The ref (`decision:<id>` / `note:<id>`) of the row this one replaces.
+  supersedes     String?
   createdAt      DateTime          @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
@@ -1315,6 +1323,11 @@ model MemoryItem {
   /// Lesson metadata (spec §3): { evidence, card, pr, tags, agent, tab_id, origin, path }. Null for
   /// every other kind.
   meta        Json?
+  /// Memory status (TER-1013), same meaning as on `ChatDecision`; only ever set on a `note`.
+  expiresAt    DateTime? @map("expires_at")
+  wrongAt      DateTime? @map("wrong_at")
+  supersededAt DateTime? @map("superseded_at")
+  supersedes   String?
   sourceAt    DateTime @map("source_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

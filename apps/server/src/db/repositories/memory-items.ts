@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { PrismaClient } from '../prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
+import { currentSql, statusOf, type MemoryStatus } from '../../memory/status.js';
 
 export type MemoryKind = 'task' | 'message' | 'action' | 'doc' | 'note' | 'lesson' | 'project_note';
 export type MemoryTrust = 'person' | 'derived';
@@ -48,6 +49,12 @@ export interface MemoryItem {
    *  it — for a lesson the whole source's text (`source_hash`), for every other kind the chunk's own. */
   verified: boolean;
   verified_at: string | null;
+  /** TER-1013: where the person put it on the Memória screen (only ever marked on a `note`); anything
+   *  but `current` is out of the default search. */
+  status: MemoryStatus;
+  expires_at: string | null;
+  /** The ref (`decision:<id>` / `note:<id>`) of the item this one replaces. */
+  supersedes: string | null;
   source_at: string;
   created_at: string;
   updated_at: string;
@@ -83,6 +90,8 @@ export interface MemoryFilter {
   ownerId: string;
   projectId?: string;
   kinds?: MemoryKind[];
+  /** TER-1013: also rows marked desatualizada, errada or substituída (left out by default). */
+  includeInactive?: boolean;
 }
 
 /** Row shape shared by the raw queries below: every `memory_items` column but `embedding` itself
@@ -104,13 +113,17 @@ interface RawItem {
   meta: LessonMeta | null;
   verified_at: Date | null;
   verified_hash: string | null;
+  expires_at: Date | null;
+  wrong_at: Date | null;
+  superseded_at: Date | null;
+  supersedes: string | null;
   source_at: Date;
   created_at: Date;
   updated_at: Date;
 }
 
 const ITEM_COLUMNS = Prisma.raw(
-  `m.id, m.owner_id, m.project_id, m.kind, m.source_id, m.chunk_index, m.title, m.text, m.trust, m.content_hash, m.source_hash, m.embed_model, m.meta, m.verified_at, m.verified_hash, m.source_at, m.created_at, m.updated_at`,
+  `m.id, m.owner_id, m.project_id, m.kind, m.source_id, m.chunk_index, m.title, m.text, m.trust, m.content_hash, m.source_hash, m.embed_model, m.meta, m.verified_at, m.verified_hash, m.expires_at, m.wrong_at, m.superseded_at, m.supersedes, m.source_at, m.created_at, m.updated_at`,
 );
 
 /** pgvector's text input format: `[x,y,z]`. Never-finite components (NaN, Infinity) are zeroed rather
@@ -134,6 +147,8 @@ const markHash = (r: { kind: string; content_hash: string; source_hash: string |
 const MARK_HASH_SQL = Prisma.raw(`(CASE WHEN m."kind" = 'lesson' THEN COALESCE(m."source_hash", m."content_hash") ELSE m."content_hash" END)`);
 /** "Not hidden" (`hideSource`): no mark, or a mark for a text that has since changed. */
 const NOT_HIDDEN = Prisma.sql`(m.hidden_hash IS NULL OR m.hidden_hash <> ${MARK_HASH_SQL})`;
+/** TER-1013: only current rows, unless the search asked for every status. */
+const statusFilter = (f: MemoryFilter) => (f.includeInactive ? Prisma.sql`TRUE` : currentSql('m'));
 
 const mapRaw = (r: RawItem): MemoryItem => ({
   id: r.id,
@@ -152,6 +167,9 @@ const mapRaw = (r: RawItem): MemoryItem => ({
   meta: r.meta,
   verified: r.verified_at !== null && r.verified_hash === markHash(r),
   verified_at: r.verified_at ? r.verified_at.toISOString() : null,
+  status: statusOf(r),
+  expires_at: r.expires_at ? r.expires_at.toISOString() : null,
+  supersedes: r.supersedes,
   source_at: r.source_at.toISOString(),
   created_at: r.created_at.toISOString(),
   updated_at: r.updated_at.toISOString(),
@@ -194,7 +212,7 @@ async function upsertIn(tx: RawClient, items: NewMemoryItem[]): Promise<MemoryIt
         "embedding" = CASE WHEN "memory_items"."content_hash" = EXCLUDED."content_hash" THEN "memory_items"."embedding" ELSE NULL END,
         "embed_model" = CASE WHEN "memory_items"."content_hash" = EXCLUDED."content_hash" THEN "memory_items"."embed_model" ELSE NULL END
       RETURNING id, owner_id, project_id, (SELECT name FROM "projects" WHERE id = "project_id") AS project_name,
-                kind, source_id, chunk_index, title, text, trust, content_hash, source_hash, embed_model, meta, verified_at, verified_hash, source_at, created_at, updated_at,
+                kind, source_id, chunk_index, title, text, trust, content_hash, source_hash, embed_model, meta, verified_at, verified_hash, expires_at, wrong_at, superseded_at, supersedes, source_at, created_at, updated_at,
                 (embedding IS NULL) AS needs_embedding`;
     if (row!.needs_embedding) out.push(mapRaw(row!));
   }
@@ -308,7 +326,7 @@ export class MemoryItemsRepository {
              1 - (m.embedding <=> ${v}::vector) AS similarity
       FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${filter.ownerId} AND m.embedding IS NOT NULL
-        AND ${NOT_HIDDEN}
+        AND ${NOT_HIDDEN} AND ${statusFilter(filter)}
         AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))
       ORDER BY m.embedding <=> ${v}::vector
@@ -325,7 +343,7 @@ export class MemoryItemsRepository {
       SELECT ${ITEM_COLUMNS}, p.name AS project_name
       FROM "memory_items" m CROSS JOIN q LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${filter.ownerId}
-        AND ${NOT_HIDDEN}
+        AND ${NOT_HIDDEN} AND ${statusFilter(filter)}
         AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))
         AND numnode(q.tsq) > 0
@@ -349,13 +367,17 @@ export class MemoryItemsRepository {
     return this.db.memoryItem.count({ where: { ownerId, kind: 'note', createdAt: { gte: since } } });
   }
 
-  /** "Anotações do concierge" (spec D12): newest first, keyset cursor over `(created_at, id)`. */
-  async listNotes(ownerId: string, opts: { cursor?: string; limit: number }): Promise<{ items: MemoryItem[]; next_cursor: string | null }> {
+  /** "Anotações do concierge" (spec D12): newest first, keyset cursor over `(created_at, id)`; `q`
+   *  (TER-1013's replacement picker) is a case-insensitive substring of the title or text. */
+  async listNotes(ownerId: string, opts: { q?: string; cursor?: string; limit: number }): Promise<{ items: MemoryItem[]; next_cursor: string | null }> {
     const cur = opts.cursor ? decodeCursor(opts.cursor) : null;
+    const q = opts.q?.trim();
+    const like = q ? `%${escapeLike(q)}%` : null;
     const rows = await this.db.$queryRaw<RawItem[]>`
       SELECT ${ITEM_COLUMNS}, p.name AS project_name
       FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${ownerId} AND m.kind = 'note'
+        AND (${like}::text IS NULL OR m.title ILIKE ${like} ESCAPE '\\' OR m.text ILIKE ${like} ESCAPE '\\')
         AND (${cur === null}::boolean OR (m.created_at, m.id) < (${cur?.createdAt ?? new Date(0)}, ${cur?.id ?? ''}))
       ORDER BY m.created_at DESC, m.id DESC
       LIMIT ${opts.limit + 1}`;

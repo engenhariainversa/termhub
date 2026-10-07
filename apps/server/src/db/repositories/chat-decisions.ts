@@ -1,6 +1,7 @@
 import type { PrismaClient } from '../prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
+import { currentSql, statusOf, type MemoryStatus } from '../../memory/status.js';
 
 /** One option offered by a remembered `AskUserQuestion` question. */
 export interface DecisionOption {
@@ -36,6 +37,12 @@ export interface ChatDecision {
   accepted_count: number;
   /** Times this decision backed an automatic answer sent by the countdown (spec §D11). */
   auto_count: number;
+  /** TER-1013: where the person put it on the Memória screen; anything but `current` is out of the
+   *  default search and never a precedent. */
+  status: MemoryStatus;
+  expires_at: string | null;
+  /** The ref (`decision:<id>` / `note:<id>`) of the item this one replaces. */
+  supersedes: string | null;
   created_at: string;
 }
 
@@ -85,17 +92,21 @@ interface RawRow {
   suggested_count: number;
   accepted_count: number;
   auto_count: number;
+  expires_at: Date | null;
+  wrong_at: Date | null;
+  superseded_at: Date | null;
+  supersedes: string | null;
   created_at: Date;
 }
 
 const DECISION_COLUMNS = Prisma.raw(
-  `id, user_id, project_id, conversation_id, tab_question_id, question_index, header, question, options, multi_select, answer, embed_model, suggested_count, accepted_count, auto_count, created_at`,
+  `id, user_id, project_id, conversation_id, tab_question_id, question_index, header, question, options, multi_select, answer, embed_model, suggested_count, accepted_count, auto_count, expires_at, wrong_at, superseded_at, supersedes, created_at`,
 );
 
 /** Shared column list for the raw SELECTs below, aliased through `d` and joined to `projects` for
  *  `project_name` — everything but `embedding` itself (never selected — write-only from here). */
 const DECISION_SELECT = Prisma.raw(
-  `d.id, d.user_id, d.project_id, p.name AS project_name, d.conversation_id, d.tab_question_id, d.question_index, d.header, d.question, d.options, d.multi_select, d.answer, d.embed_model, d.suggested_count, d.accepted_count, d.auto_count, d.created_at`,
+  `d.id, d.user_id, d.project_id, p.name AS project_name, d.conversation_id, d.tab_question_id, d.question_index, d.header, d.question, d.options, d.multi_select, d.answer, d.embed_model, d.suggested_count, d.accepted_count, d.auto_count, d.expires_at, d.wrong_at, d.superseded_at, d.supersedes, d.created_at`,
 );
 
 /** The person's picked label(s) and free text, as one tsvector-able string — never the raw jsonb keys
@@ -126,8 +137,15 @@ const mapRaw = (r: RawRow): ChatDecision => ({
   suggested_count: r.suggested_count,
   accepted_count: r.accepted_count,
   auto_count: r.auto_count,
+  status: statusOf(r),
+  expires_at: r.expires_at ? r.expires_at.toISOString() : null,
+  supersedes: r.supersedes,
   created_at: r.created_at.toISOString(),
 });
+
+/** ` AND <current>` unless a search asked for every status too (TER-1013: the default search leaves
+ *  out what the person marked desatualizada, errada or substituída). */
+const statusFilter = (includeInactive: boolean | undefined) => (includeInactive ? Prisma.empty : Prisma.sql` AND ${currentSql('d')}`);
 
 /** ` AND d.project_id = …` when a search is held to one project, nothing otherwise. */
 const projectFilter = (projectId: string | undefined) => (projectId ? Prisma.sql` AND d.project_id = ${projectId}` : Prisma.empty);
@@ -203,7 +221,8 @@ export class ChatDecisionsRepository {
 
   /** The `k` nearest decisions of this user, same `multi_select` shape, best (highest cosine similarity)
    *  first. Never another user's rows, never the other `multi_select` shape, never an unembedded row.
-   *  Only rows embedded with exactly `embedModel` (model + text version, `embedTag`): a vector of another
+   *  Only current rows (TER-1013): a decision marked desatualizada, errada or substituída never
+   *  suggests an answer again. Only rows embedded with exactly `embedModel` (model + text version, `embedTag`): a vector of another
    *  model or text version is not comparable. An exact scan over the user's rows, on purpose: no ANN
    *  index, so no row of this user is ever lost to an approximate index's post-filtering, and one
    *  person's decisions are few enough to scan. */
@@ -213,6 +232,7 @@ export class ChatDecisionsRepository {
       SELECT ${DECISION_SELECT}, 1 - (d.embedding <=> ${v}::vector) AS similarity
       FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
       WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.multi_select = ${opts.multiSelect} AND d.embed_model = ${opts.embedModel}
+        AND ${currentSql('d')}
       ORDER BY d.embedding <=> ${v}::vector
       LIMIT ${opts.k}`;
     return rows.map((r) => ({ ...mapRaw(r), similarity: Number(r.similarity) }));
@@ -222,12 +242,12 @@ export class ChatDecisionsRepository {
    *  question payload to match a shape against — only `answer_tab_question`'s own precedent check
    *  does, and it re-verifies the shape itself with `mapAnswer`). `projectId` keeps only that
    *  project's rows (a tab token's search, TER-212 D3). */
-  async nearestAny(userId: string, vector: number[], k: number, projectId?: string): Promise<DecisionNeighbour[]> {
+  async nearestAny(userId: string, vector: number[], k: number, projectId?: string, opts: { includeInactive?: boolean } = {}): Promise<DecisionNeighbour[]> {
     const v = toVector(vector);
     const rows = await this.db.$queryRaw<(RawRow & { similarity: number | string })[]>`
       SELECT ${DECISION_SELECT}, 1 - (d.embedding <=> ${v}::vector) AS similarity
       FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
-      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL${projectFilter(projectId)}
+      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL${projectFilter(projectId)}${statusFilter(opts.includeInactive)}
       ORDER BY d.embedding <=> ${v}::vector
       LIMIT ${k}`;
     return rows.map((r) => ({ ...mapRaw(r), similarity: Number(r.similarity) }));
@@ -254,12 +274,12 @@ export class ChatDecisionsRepository {
    *  best `ts_rank` first — same no-index trade-off as `MemoryItemsRepository.textSearch` (D5). A
    *  query with no lexeme (only punctuation) matches nothing rather than throwing. `projectId` keeps
    *  only that project's rows (a tab token's search, TER-212 D3), as it does for `nearestAny`. */
-  async textSearch(userId: string, query: string, k: number, projectId?: string): Promise<(ChatDecision & { rank: number })[]> {
+  async textSearch(userId: string, query: string, k: number, projectId?: string, opts: { includeInactive?: boolean } = {}): Promise<(ChatDecision & { rank: number })[]> {
     const rows = await this.db.$queryRaw<RawRow[]>`
       WITH q AS (SELECT websearch_to_tsquery('simple', ${query}) AS tsq)
       SELECT ${DECISION_SELECT}
       FROM "chat_decisions" d CROSS JOIN q LEFT JOIN "projects" p ON p.id = d.project_id
-      WHERE d.user_id = ${userId}${projectFilter(projectId)}
+      WHERE d.user_id = ${userId}${projectFilter(projectId)}${statusFilter(opts.includeInactive)}
         AND numnode(q.tsq) > 0
         AND to_tsvector('simple', d.header || ' ' || d.question || ' ' || ${answerTextExpr}) @@ q.tsq
       ORDER BY ts_rank(to_tsvector('simple', d.header || ' ' || d.question || ' ' || ${answerTextExpr}), q.tsq) DESC, d.created_at DESC
