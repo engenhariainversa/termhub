@@ -131,6 +131,12 @@ export class AutomationRunsRepository {
     }
   }
 
+  /** The card's run of a role keyed by this trigger (a fixer's head, or a marker's), in any status. */
+  async findTriggered(taskId: string, role: RunRole, triggerSha: string): Promise<AutomationRun | null> {
+    const row = await this.db.automationRun.findFirst({ where: { taskId, role, triggerSha } });
+    return row ? map(row) : null;
+  }
+
   /** When the card's most recent run that ended did so (markers included); null when none ended. */
   async lastEndedAt(taskId: string): Promise<Date | null> {
     const row = await this.db.automationRun.findFirst({ where: { taskId, endedAt: { not: null } }, orderBy: { endedAt: 'desc' }, select: { endedAt: true } });
