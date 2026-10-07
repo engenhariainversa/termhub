@@ -9,6 +9,8 @@ import type { DataExportService } from '../account/data-export.js';
 import { HttpError, unauthorized } from '../lib/errors.js';
 import { config } from '../config.js';
 import { msg, requestLocale, tk } from '../i18n/index.js';
+import type { Repositories } from '../db/repositories/index.js';
+import { audit } from '../auth/audit.js';
 
 /** Re-authentication for the request: the account's password, or a code e-mailed to it. */
 const requestBody = z.union([
@@ -52,6 +54,8 @@ export interface AccountRouteDeps {
   auth: AuthService;
   deletion: AccountDeletionService;
   exports: DataExportService;
+  /** Where the security trail goes (TER-577); without it nothing is recorded (route tests). */
+  repos?: Pick<Repositories, 'securityEvents'>;
 }
 
 /**
@@ -101,6 +105,7 @@ export async function accountRoutes(app: FastifyInstance, deps: AccountRouteDeps
     }
     if (check.user.id !== user.id) throw unauthorized();
     const updated = await deps.deletion.request(user, 'web');
+    if (deps.repos) await audit(deps.repos, request, 'user.deletion_requested', { target: { type: 'user', id: user.id, label: user.email }, meta: { via: 'web' } });
     // The request ended every session, this one included.
     clearSession(reply);
     return deletionStatus(updated);
@@ -110,6 +115,7 @@ export async function accountRoutes(app: FastifyInstance, deps: AccountRouteDeps
     const user = request.user;
     if (!user) throw unauthorized();
     await deps.deletion.cancel(user);
+    if (deps.repos) await audit(deps.repos, request, 'user.deletion_canceled', { target: { type: 'user', id: user.id, label: user.email } });
     return deletionStatus({ deletion_requested_at: null, deletion_scheduled_at: null });
   });
 
@@ -153,6 +159,7 @@ export async function accountRoutes(app: FastifyInstance, deps: AccountRouteDeps
     const { token } = confirmBody.parse(request.body);
     const user = await deps.deletion.confirmLink(token);
     if (!user) throw new HttpError(400, 'Este link é inválido, já foi usado ou expirou. Peça outro na página.', 'LINK_INVALID');
+    if (deps.repos) await audit(deps.repos, request, 'user.deletion_requested', { actor: user, target: { type: 'user', id: user.id, label: user.email }, meta: { via: 'link' } });
     return deletionStatus(user);
   });
 }

@@ -82,4 +82,23 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MachinesRepository.findBy
       await db.user.deleteMany({ where: { id: ownerId } });
     }
   });
+
+  it('ai_usage_query is on by default (TER-735), turned off on update, and kept on a later update that does not mention it', async () => {
+    const ownerId = newId();
+    await db.user.create({ data: { id: ownerId, email: `${ownerId}@test.local`, name: 'owner' } });
+    try {
+      const created = await repo.create({ name: 'mac', type: 'agent', owner_id: ownerId });
+      expect(created.ai_usage_query).toBe(true);
+      const off = await repo.update(created.id, { ai_usage_query: false });
+      expect(off?.ai_usage_query).toBe(false);
+      expect((await repo.findById(created.id))?.ai_usage_query).toBe(false);
+      const renamed = await repo.update(created.id, { name: 'x' });
+      expect(renamed?.ai_usage_query).toBe(false);
+      const on = await repo.update(created.id, { ai_usage_query: true });
+      expect(on?.ai_usage_query).toBe(true);
+    } finally {
+      await db.machine.deleteMany({ where: { ownerId } });
+      await db.user.deleteMany({ where: { id: ownerId } });
+    }
+  });
 });

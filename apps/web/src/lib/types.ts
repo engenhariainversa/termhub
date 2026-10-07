@@ -117,6 +117,8 @@ export interface Machine {
   agent_auto_update: boolean;
   /** a tab whose Claude hits a usage limit resumes on another Claude account of this machine, on its own */
   claude_auto_swap: boolean;
+  /** TER-735: the AI accounts' usage is queried on this machine (the credential never leaves it); off = no bars */
+  ai_usage_query: boolean;
   automation_allowed: boolean;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
@@ -901,6 +903,11 @@ export interface AiAccountUsage {
   hint: string | null;
   /** last good reading, shown because the provider is rate-limiting the usage query */
   stale?: boolean;
+  /**
+   * TER-735: why there is no reading when it is not an error — 'disabled' = the machine's usage query is
+   * turned off (Máquinas › the machine); 'agent_outdated' = the machine's agent predates the `ai.usage` RPC.
+   */
+  reason?: 'disabled' | 'agent_outdated';
 }
 
 /** Brand names: shown as is in every language. */
@@ -1601,6 +1608,54 @@ export interface ApiToken {
   last_used_at: string | null;
   revoked_at: string | null;
   created_at: string;
+}
+
+/** One MCP call made with a token (TER-577): metadata only. Names are null once the row is gone. */
+export interface ApiTokenEvent {
+  id: string;
+  tool: string;
+  ok: boolean;
+  error_code: string | null;
+  duration_ms: number;
+  machine_id: string | null;
+  machine_name: string | null;
+  project_id: string | null;
+  project_name: string | null;
+  tab_id: string | null;
+  tab_name: string | null;
+  attachment_id: string | null;
+  created_at: string;
+}
+
+/** One row of the security trail (TER-577). `action` stays a plain string: one a newer server adds shows as is. */
+export interface SecurityEvent {
+  id: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  view_as_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  target_label: string | null;
+  ip: string | null;
+  meta: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SecurityEventFilter {
+  /** an action (`auth.login`) or a group (`auth`) */
+  action?: string;
+  q?: string;
+  /** ISO dates */
+  from?: string;
+  to?: string;
+}
+
+export interface SecurityEventsPage {
+  events: SecurityEvent[];
+  next: string | null;
+  actions: string[];
+  retention_days: number;
 }
 
 /** Create response: the only time the plain token is ever returned. */
