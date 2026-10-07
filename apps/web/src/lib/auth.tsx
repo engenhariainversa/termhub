@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { api, ApiError } from './api';
 import { track } from './analytics';
 import { readStoredLocale, setLocale as applyLocale, type Locale } from '../i18n';
-import type { AuthConfig, User, ViewAs } from './types';
+import type { AuthConfig, LegalStatus, User, ViewAs } from './types';
 
 interface AuthState {
   user: User | null;
@@ -26,6 +26,19 @@ interface AuthState {
   refresh: () => Promise<void>;
   /** the account's language choice (null = automatic): applied at once, kept in this browser and saved on the account */
   setLocale: (locale: Locale | null) => Promise<void>;
+  /** Terms/Privacy versions this person still has to accept, and the ones coming (TER-742); empty lists until known */
+  legal: LegalStatus;
+  /** replaces `legal` with the status an accept answered */
+  setLegal: (legal: LegalStatus) => void;
+  /** refetches GET /legal/status */
+  refreshLegal: () => Promise<void>;
+}
+
+export const NO_LEGAL: LegalStatus = { pending: [], upcoming: [] };
+
+/** A server older than TER-742 sends no `legal`: nothing to accept. */
+function legalOf(status: Partial<LegalStatus> | null | undefined): LegalStatus {
+  return { pending: status?.pending ?? [], upcoming: status?.upcoming ?? [] };
 }
 
 /**
@@ -46,6 +59,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AuthConfig | null>(null);
   const [viewAs, setViewAsState] = useState<ViewAs>(null);
   const [loading, setLoading] = useState(true);
+  const [legal, setLegalState] = useState<LegalStatus>(NO_LEGAL);
+
+  const setLegal = useCallback((next: LegalStatus) => setLegalState(legalOf(next)), []);
+  // A login answers only the user: the acceptance status comes from its own route. A failure leaves
+  // the lists empty (the server keeps the record; the gate shows on the next start-up).
+  const refreshLegal = useCallback(async () => {
+    try {
+      setLegalState(legalOf(await api.legal.status()));
+    } catch {
+      // keep what we had
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(me?.user ?? null);
         followAccountLocale(me?.user);
         setViewAsState(me?.view_as ?? null);
+        setLegalState(legalOf(me?.legal));
       } catch {
         if (!cancelled) setUser(null);
       } finally {
@@ -96,9 +122,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const { user } = await api.auth.login(email, password);
     followAccountLocale(user);
+    await refreshLegal();
     setUser(user);
     track('login', { method: 'password' });
-  }, []);
+  }, [refreshLegal]);
 
   const sendCode = useCallback(async (email: string) => {
     const r = await api.auth.sendCode(email);
@@ -108,14 +135,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyCode = useCallback(async (email: string, code: string) => {
     const { user } = await api.auth.verifyCode(email, code);
     followAccountLocale(user);
+    await refreshLegal();
     setUser(user);
     track('login', { method: 'code' });
-  }, []);
+  }, [refreshLegal]);
 
   const logout = useCallback(async () => {
     await api.auth.logout().catch(() => {});
     setUser(null);
     setViewAsState(null);
+    setLegalState(NO_LEGAL);
   }, []);
 
   const setViewAs = useCallback(async (user_id: string | null) => {
@@ -147,10 +176,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const me = await api.auth.me();
     setUser(me.user);
     setViewAsState(me.view_as);
+    setLegalState(legalOf(me.legal));
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, config, login, sendCode, verifyCode, logout, viewAs, setViewAs, can, setNickname, publicCityUrl: config?.public_city_url ?? null, refresh, setLocale }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, loading, config, login, sendCode, verifyCode, logout, viewAs, setViewAs, can, setNickname, publicCityUrl: config?.public_city_url ?? null, refresh, setLocale, legal, setLegal, refreshLegal }}>{children}</AuthContext.Provider>
   );
 }
 

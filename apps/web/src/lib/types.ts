@@ -40,6 +40,26 @@ export interface User {
   deletion_scheduled_at: string | null;
 }
 
+/** A registered version of the Terms of Use or of the Privacy Policy (TER-742). */
+export interface LegalVersion {
+  id: string;
+  document: 'terms' | 'privacy';
+  /** as printed in the document ("1", "1.1") */
+  version: string;
+  effective_at: string;
+  /** public page of that version */
+  url: string;
+  requires_acceptance: boolean;
+  /** what changed (pt-BR), when the maintainer wrote it */
+  summary: string | null;
+}
+
+/** GET /api/legal/status (also `legal` in /auth/me): versions in force not accepted yet, and the ones coming. */
+export interface LegalStatus {
+  pending: LegalVersion[];
+  upcoming: LegalVersion[];
+}
+
 /** GET/POST/DELETE /api/account/deletion. */
 export interface AccountDeletionStatus {
   pending: boolean;

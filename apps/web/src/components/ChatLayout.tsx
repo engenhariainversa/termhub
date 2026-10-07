@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { useTranslation } from '../i18n';
 import { trackAppHeight } from '../lib/viewport';
+import { LegalNoticeBanner } from './LegalNoticeBanner';
 
 /**
  * The chat's own full-screen shell: no sidebar, no menus — just a thin header with a way back
@@ -51,6 +52,8 @@ export function ChatLayout() {
           v{__APP_VERSION__} · {import.meta.env.VITE_BUILD_SHA || __BUILD_STAMP__}
         </span>
       </header>
+      {/* the notice of a coming Terms/Privacy change reaches the chat too (TER-742); the sidebar layout shows it above its pages */}
+      <LegalNoticeBanner />
       {/* `main`, like every sidebar route's own region (`Layout.tsx`): /chat is a full page too, and
        * a screen reader needs the landmark to skip the header. */}
       {/* A flex column, not a plain block: the page inside stretches to this region instead of

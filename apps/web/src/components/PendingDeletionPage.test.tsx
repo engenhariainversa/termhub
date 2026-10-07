@@ -10,6 +10,7 @@ const { authState, accountApi, dataMounted } = vi.hoisted(() => ({
     current: {
       user: null as { deletion_scheduled_at: string | null } | null,
       loading: false,
+      legal: { pending: [], upcoming: [] },
       refresh: vi.fn(async () => {}),
       logout: vi.fn(async () => {}),
     },

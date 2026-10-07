@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// The legal notice reads the auth context; not this test's concern.
+vi.mock('./LegalNoticeBanner', () => ({ LegalNoticeBanner: () => null }));
+
 import { ChatLayout } from './ChatLayout';
 
 function Marker() {

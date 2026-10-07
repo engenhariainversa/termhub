@@ -1,6 +1,6 @@
 import { currentLocale, i18n } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
-import type { FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { FileRecentResponse, LegalStatus, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -108,7 +108,8 @@ export const api = {
   fileRecent: (projectId: string) => request<FileRecentResponse>('GET', `/file-recent?${new URLSearchParams({ project_id: projectId })}`),
   auth: {
     config: () => request<AuthConfig>('GET', '/auth/config'),
-    me: () => request<{ user: User; view_as: ViewAs }>('GET', '/auth/me'),
+    /** `legal` is absent on servers older than TER-742 */
+    me: () => request<{ user: User; view_as: ViewAs; legal?: LegalStatus }>('GET', '/auth/me'),
     /** admin only: null = self, '*' = everything, or a user id */
     viewAs: (user_id: string | null) => request<{ view_as: ViewAs }>('POST', '/auth/view-as', { user_id }),
     login: (email: string, password: string) => request<{ user: User }>('POST', '/auth/login', { email, password }),
@@ -129,6 +130,13 @@ export const api = {
     setCustomCityLink: (short_url: string) => request<CityLink>('PUT', '/auth/me/city-link', { short_url }),
     /** back to the partner link */
     clearCustomCityLink: () => request<CityLink>('DELETE', '/auth/me/city-link/custom'),
+  },
+  /** Acceptance of the Terms of Use and of the Privacy Policy (TER-742). */
+  legal: {
+    status: () => request<LegalStatus>('GET', '/legal/status'),
+    /** every id must be a pending or upcoming version of this user (400 otherwise); answers the new status */
+    accept: (version_ids: string[], channel?: 'web' | 'checkout') =>
+      request<LegalStatus>('POST', '/legal/accept', channel ? { version_ids, channel } : { version_ids }),
   },
   /** The person's own account (TER-720). Only `deletion` and its DELETE answer while a deletion is pending. */
   account: {
