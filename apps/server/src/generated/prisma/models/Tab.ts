@@ -358,6 +358,7 @@ export type TabWhereInput = {
   tasks?: Prisma.TaskListRelationFilter
   events?: Prisma.TabEventListRelationFilter
   lastAnswer?: Prisma.XOR<Prisma.TabLastAnswerNullableScalarRelationFilter, Prisma.TabLastAnswerWhereInput> | null
+  usage?: Prisma.XOR<Prisma.TabUsageNullableScalarRelationFilter, Prisma.TabUsageWhereInput> | null
 }
 
 export type TabOrderByWithRelationInput = {
@@ -389,6 +390,7 @@ export type TabOrderByWithRelationInput = {
   tasks?: Prisma.TaskOrderByRelationAggregateInput
   events?: Prisma.TabEventOrderByRelationAggregateInput
   lastAnswer?: Prisma.TabLastAnswerOrderByWithRelationInput
+  usage?: Prisma.TabUsageOrderByWithRelationInput
 }
 
 export type TabWhereUniqueInput = Prisma.AtLeast<{
@@ -423,6 +425,7 @@ export type TabWhereUniqueInput = Prisma.AtLeast<{
   tasks?: Prisma.TaskListRelationFilter
   events?: Prisma.TabEventListRelationFilter
   lastAnswer?: Prisma.XOR<Prisma.TabLastAnswerNullableScalarRelationFilter, Prisma.TabLastAnswerWhereInput> | null
+  usage?: Prisma.XOR<Prisma.TabUsageNullableScalarRelationFilter, Prisma.TabUsageWhereInput> | null
 }, "id" | "tmuxSession">
 
 export type TabOrderByWithAggregationInput = {
@@ -509,6 +512,7 @@ export type TabCreateInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageCreateNestedOneWithoutTabInput
 }
 
 export type TabUncheckedCreateInput = {
@@ -537,6 +541,7 @@ export type TabUncheckedCreateInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageUncheckedCreateNestedOneWithoutTabInput
 }
 
 export type TabUpdateInput = {
@@ -565,6 +570,7 @@ export type TabUpdateInput = {
   tasks?: Prisma.TaskUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUpdateOneWithoutTabNestedInput
 }
 
 export type TabUncheckedUpdateInput = {
@@ -593,6 +599,7 @@ export type TabUncheckedUpdateInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUncheckedUpdateOneWithoutTabNestedInput
 }
 
 export type TabCreateManyInput = {
@@ -910,6 +917,20 @@ export type TabUpdateOneWithoutTasksNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.TabUpdateToOneWithWhereWithoutTasksInput, Prisma.TabUpdateWithoutTasksInput>, Prisma.TabUncheckedUpdateWithoutTasksInput>
 }
 
+export type TabCreateNestedOneWithoutUsageInput = {
+  create?: Prisma.XOR<Prisma.TabCreateWithoutUsageInput, Prisma.TabUncheckedCreateWithoutUsageInput>
+  connectOrCreate?: Prisma.TabCreateOrConnectWithoutUsageInput
+  connect?: Prisma.TabWhereUniqueInput
+}
+
+export type TabUpdateOneRequiredWithoutUsageNestedInput = {
+  create?: Prisma.XOR<Prisma.TabCreateWithoutUsageInput, Prisma.TabUncheckedCreateWithoutUsageInput>
+  connectOrCreate?: Prisma.TabCreateOrConnectWithoutUsageInput
+  upsert?: Prisma.TabUpsertWithoutUsageInput
+  connect?: Prisma.TabWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TabUpdateToOneWithWhereWithoutUsageInput, Prisma.TabUpdateWithoutUsageInput>, Prisma.TabUncheckedUpdateWithoutUsageInput>
+}
+
 export type TabCreateNestedManyWithoutAiAccountInput = {
   create?: Prisma.XOR<Prisma.TabCreateWithoutAiAccountInput, Prisma.TabUncheckedCreateWithoutAiAccountInput> | Prisma.TabCreateWithoutAiAccountInput[] | Prisma.TabUncheckedCreateWithoutAiAccountInput[]
   connectOrCreate?: Prisma.TabCreateOrConnectWithoutAiAccountInput | Prisma.TabCreateOrConnectWithoutAiAccountInput[]
@@ -977,6 +998,7 @@ export type TabCreateWithoutMachineInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageCreateNestedOneWithoutTabInput
 }
 
 export type TabUncheckedCreateWithoutMachineInput = {
@@ -1004,6 +1026,7 @@ export type TabUncheckedCreateWithoutMachineInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageUncheckedCreateNestedOneWithoutTabInput
 }
 
 export type TabCreateOrConnectWithoutMachineInput = {
@@ -1085,6 +1108,7 @@ export type TabCreateWithoutProjectInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageCreateNestedOneWithoutTabInput
 }
 
 export type TabUncheckedCreateWithoutProjectInput = {
@@ -1112,6 +1136,7 @@ export type TabUncheckedCreateWithoutProjectInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageUncheckedCreateNestedOneWithoutTabInput
 }
 
 export type TabCreateOrConnectWithoutProjectInput = {
@@ -1165,6 +1190,7 @@ export type TabCreateWithoutEventsInput = {
   machine: Prisma.MachineCreateNestedOneWithoutTabsInput
   tasks?: Prisma.TaskCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageCreateNestedOneWithoutTabInput
 }
 
 export type TabUncheckedCreateWithoutEventsInput = {
@@ -1192,6 +1218,7 @@ export type TabUncheckedCreateWithoutEventsInput = {
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageUncheckedCreateNestedOneWithoutTabInput
 }
 
 export type TabCreateOrConnectWithoutEventsInput = {
@@ -1235,6 +1262,7 @@ export type TabUpdateWithoutEventsInput = {
   machine?: Prisma.MachineUpdateOneRequiredWithoutTabsNestedInput
   tasks?: Prisma.TaskUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUpdateOneWithoutTabNestedInput
 }
 
 export type TabUncheckedUpdateWithoutEventsInput = {
@@ -1262,6 +1290,7 @@ export type TabUncheckedUpdateWithoutEventsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUncheckedUpdateOneWithoutTabNestedInput
 }
 
 export type TabCreateWithoutLastAnswerInput = {
@@ -1289,6 +1318,7 @@ export type TabCreateWithoutLastAnswerInput = {
   machine: Prisma.MachineCreateNestedOneWithoutTabsInput
   tasks?: Prisma.TaskCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventCreateNestedManyWithoutTabInput
+  usage?: Prisma.TabUsageCreateNestedOneWithoutTabInput
 }
 
 export type TabUncheckedCreateWithoutLastAnswerInput = {
@@ -1316,6 +1346,7 @@ export type TabUncheckedCreateWithoutLastAnswerInput = {
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
+  usage?: Prisma.TabUsageUncheckedCreateNestedOneWithoutTabInput
 }
 
 export type TabCreateOrConnectWithoutLastAnswerInput = {
@@ -1359,6 +1390,7 @@ export type TabUpdateWithoutLastAnswerInput = {
   machine?: Prisma.MachineUpdateOneRequiredWithoutTabsNestedInput
   tasks?: Prisma.TaskUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUpdateManyWithoutTabNestedInput
+  usage?: Prisma.TabUsageUpdateOneWithoutTabNestedInput
 }
 
 export type TabUncheckedUpdateWithoutLastAnswerInput = {
@@ -1386,6 +1418,7 @@ export type TabUncheckedUpdateWithoutLastAnswerInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
+  usage?: Prisma.TabUsageUncheckedUpdateOneWithoutTabNestedInput
 }
 
 export type TabCreateWithoutTasksInput = {
@@ -1413,6 +1446,7 @@ export type TabCreateWithoutTasksInput = {
   machine: Prisma.MachineCreateNestedOneWithoutTabsInput
   events?: Prisma.TabEventCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageCreateNestedOneWithoutTabInput
 }
 
 export type TabUncheckedCreateWithoutTasksInput = {
@@ -1440,6 +1474,7 @@ export type TabUncheckedCreateWithoutTasksInput = {
   createdAt?: Date | string
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageUncheckedCreateNestedOneWithoutTabInput
 }
 
 export type TabCreateOrConnectWithoutTasksInput = {
@@ -1483,6 +1518,7 @@ export type TabUpdateWithoutTasksInput = {
   machine?: Prisma.MachineUpdateOneRequiredWithoutTabsNestedInput
   events?: Prisma.TabEventUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUpdateOneWithoutTabNestedInput
 }
 
 export type TabUncheckedUpdateWithoutTasksInput = {
@@ -1508,6 +1544,135 @@ export type TabUncheckedUpdateWithoutTasksInput = {
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
+  lastAnswer?: Prisma.TabLastAnswerUncheckedUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUncheckedUpdateOneWithoutTabNestedInput
+}
+
+export type TabCreateWithoutUsageInput = {
+  id: string
+  name: string
+  kind?: $Enums.TabKind
+  tmuxSession?: string | null
+  simulatorUdid?: string | null
+  position?: number
+  state?: $Enums.TabState | null
+  stateText?: string | null
+  stateTool?: string | null
+  stateAt?: Date | string | null
+  stateSeenAt?: Date | string | null
+  activity?: $Enums.TabActivity | null
+  activityVerb?: string | null
+  agentSessionId?: string | null
+  agentTranscriptPath?: string | null
+  rateLimitedAt?: Date | string | null
+  cwd?: string | null
+  createdByTokenId?: string | null
+  createdAt?: Date | string
+  aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
+  project: Prisma.ProjectCreateNestedOneWithoutTabsInput
+  machine: Prisma.MachineCreateNestedOneWithoutTabsInput
+  tasks?: Prisma.TaskCreateNestedManyWithoutTabInput
+  events?: Prisma.TabEventCreateNestedManyWithoutTabInput
+  lastAnswer?: Prisma.TabLastAnswerCreateNestedOneWithoutTabInput
+}
+
+export type TabUncheckedCreateWithoutUsageInput = {
+  id: string
+  projectId: string
+  machineId: string
+  name: string
+  kind?: $Enums.TabKind
+  tmuxSession?: string | null
+  simulatorUdid?: string | null
+  position?: number
+  state?: $Enums.TabState | null
+  stateText?: string | null
+  stateTool?: string | null
+  stateAt?: Date | string | null
+  stateSeenAt?: Date | string | null
+  activity?: $Enums.TabActivity | null
+  activityVerb?: string | null
+  agentSessionId?: string | null
+  agentTranscriptPath?: string | null
+  aiAccountId?: string | null
+  rateLimitedAt?: Date | string | null
+  cwd?: string | null
+  createdByTokenId?: string | null
+  createdAt?: Date | string
+  tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
+  events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
+  lastAnswer?: Prisma.TabLastAnswerUncheckedCreateNestedOneWithoutTabInput
+}
+
+export type TabCreateOrConnectWithoutUsageInput = {
+  where: Prisma.TabWhereUniqueInput
+  create: Prisma.XOR<Prisma.TabCreateWithoutUsageInput, Prisma.TabUncheckedCreateWithoutUsageInput>
+}
+
+export type TabUpsertWithoutUsageInput = {
+  update: Prisma.XOR<Prisma.TabUpdateWithoutUsageInput, Prisma.TabUncheckedUpdateWithoutUsageInput>
+  create: Prisma.XOR<Prisma.TabCreateWithoutUsageInput, Prisma.TabUncheckedCreateWithoutUsageInput>
+  where?: Prisma.TabWhereInput
+}
+
+export type TabUpdateToOneWithWhereWithoutUsageInput = {
+  where?: Prisma.TabWhereInput
+  data: Prisma.XOR<Prisma.TabUpdateWithoutUsageInput, Prisma.TabUncheckedUpdateWithoutUsageInput>
+}
+
+export type TabUpdateWithoutUsageInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  kind?: Prisma.EnumTabKindFieldUpdateOperationsInput | $Enums.TabKind
+  tmuxSession?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  simulatorUdid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  position?: Prisma.IntFieldUpdateOperationsInput | number
+  state?: Prisma.NullableEnumTabStateFieldUpdateOperationsInput | $Enums.TabState | null
+  stateText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stateTool?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  stateSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  activity?: Prisma.NullableEnumTabActivityFieldUpdateOperationsInput | $Enums.TabActivity | null
+  activityVerb?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
+  project?: Prisma.ProjectUpdateOneRequiredWithoutTabsNestedInput
+  machine?: Prisma.MachineUpdateOneRequiredWithoutTabsNestedInput
+  tasks?: Prisma.TaskUpdateManyWithoutTabNestedInput
+  events?: Prisma.TabEventUpdateManyWithoutTabNestedInput
+  lastAnswer?: Prisma.TabLastAnswerUpdateOneWithoutTabNestedInput
+}
+
+export type TabUncheckedUpdateWithoutUsageInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  projectId?: Prisma.StringFieldUpdateOperationsInput | string
+  machineId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  kind?: Prisma.EnumTabKindFieldUpdateOperationsInput | $Enums.TabKind
+  tmuxSession?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  simulatorUdid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  position?: Prisma.IntFieldUpdateOperationsInput | number
+  state?: Prisma.NullableEnumTabStateFieldUpdateOperationsInput | $Enums.TabState | null
+  stateText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stateTool?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  stateSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  activity?: Prisma.NullableEnumTabActivityFieldUpdateOperationsInput | $Enums.TabActivity | null
+  activityVerb?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentTranscriptPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedUpdateOneWithoutTabNestedInput
 }
@@ -1537,6 +1702,7 @@ export type TabCreateWithoutAiAccountInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageCreateNestedOneWithoutTabInput
 }
 
 export type TabUncheckedCreateWithoutAiAccountInput = {
@@ -1564,6 +1730,7 @@ export type TabUncheckedCreateWithoutAiAccountInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedCreateNestedOneWithoutTabInput
+  usage?: Prisma.TabUsageUncheckedCreateNestedOneWithoutTabInput
 }
 
 export type TabCreateOrConnectWithoutAiAccountInput = {
@@ -1641,6 +1808,7 @@ export type TabUpdateWithoutMachineInput = {
   tasks?: Prisma.TaskUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUpdateOneWithoutTabNestedInput
 }
 
 export type TabUncheckedUpdateWithoutMachineInput = {
@@ -1668,6 +1836,7 @@ export type TabUncheckedUpdateWithoutMachineInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUncheckedUpdateOneWithoutTabNestedInput
 }
 
 export type TabUncheckedUpdateManyWithoutMachineInput = {
@@ -1743,6 +1912,7 @@ export type TabUpdateWithoutProjectInput = {
   tasks?: Prisma.TaskUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUpdateOneWithoutTabNestedInput
 }
 
 export type TabUncheckedUpdateWithoutProjectInput = {
@@ -1770,6 +1940,7 @@ export type TabUncheckedUpdateWithoutProjectInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUncheckedUpdateOneWithoutTabNestedInput
 }
 
 export type TabUncheckedUpdateManyWithoutProjectInput = {
@@ -1845,6 +2016,7 @@ export type TabUpdateWithoutAiAccountInput = {
   tasks?: Prisma.TaskUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUpdateOneWithoutTabNestedInput
 }
 
 export type TabUncheckedUpdateWithoutAiAccountInput = {
@@ -1872,6 +2044,7 @@ export type TabUncheckedUpdateWithoutAiAccountInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedUpdateOneWithoutTabNestedInput
+  usage?: Prisma.TabUsageUncheckedUpdateOneWithoutTabNestedInput
 }
 
 export type TabUncheckedUpdateManyWithoutAiAccountInput = {
@@ -1967,6 +2140,7 @@ export type TabSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = ru
   tasks?: boolean | Prisma.Tab$tasksArgs<ExtArgs>
   events?: boolean | Prisma.Tab$eventsArgs<ExtArgs>
   lastAnswer?: boolean | Prisma.Tab$lastAnswerArgs<ExtArgs>
+  usage?: boolean | Prisma.Tab$usageArgs<ExtArgs>
   _count?: boolean | Prisma.TabCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tab"]>
 
@@ -2059,6 +2233,7 @@ export type TabInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   tasks?: boolean | Prisma.Tab$tasksArgs<ExtArgs>
   events?: boolean | Prisma.Tab$eventsArgs<ExtArgs>
   lastAnswer?: boolean | Prisma.Tab$lastAnswerArgs<ExtArgs>
+  usage?: boolean | Prisma.Tab$usageArgs<ExtArgs>
   _count?: boolean | Prisma.TabCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type TabIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -2081,6 +2256,7 @@ export type $TabPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
     tasks: Prisma.$TaskPayload<ExtArgs>[]
     events: Prisma.$TabEventPayload<ExtArgs>[]
     lastAnswer: Prisma.$TabLastAnswerPayload<ExtArgs> | null
+    usage: Prisma.$TabUsagePayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -2538,6 +2714,7 @@ export interface Prisma__TabClient<T, Null = never, ExtArgs extends runtime.Type
   tasks<T extends Prisma.Tab$tasksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tab$tasksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   events<T extends Prisma.Tab$eventsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tab$eventsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TabEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   lastAnswer<T extends Prisma.Tab$lastAnswerArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tab$lastAnswerArgs<ExtArgs>>): Prisma.Prisma__TabLastAnswerClient<runtime.Types.Result.GetResult<Prisma.$TabLastAnswerPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  usage<T extends Prisma.Tab$usageArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tab$usageArgs<ExtArgs>>): Prisma.Prisma__TabUsageClient<runtime.Types.Result.GetResult<Prisma.$TabUsagePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -3073,6 +3250,25 @@ export type Tab$lastAnswerArgs<ExtArgs extends runtime.Types.Extensions.Internal
    */
   include?: Prisma.TabLastAnswerInclude<ExtArgs> | null
   where?: Prisma.TabLastAnswerWhereInput
+}
+
+/**
+ * Tab.usage
+ */
+export type Tab$usageArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the TabUsage
+   */
+  select?: Prisma.TabUsageSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the TabUsage
+   */
+  omit?: Prisma.TabUsageOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
+  where?: Prisma.TabUsageWhereInput
 }
 
 /**
