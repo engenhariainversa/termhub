@@ -11,8 +11,9 @@ vi.mock('./tab-questions.js', () => ({ publishTabQuestions, closeTabQuestions })
 vi.mock('../control/account-swap.js', () => ({ swapPreferences }));
 
 const { EXITED_RESUME_PROMPT, notifyAgentExited, resumeCommandFor } = await import('./agent-exited.js');
-const { AUTOMATION_DENIED_TOOLS } = await import('../control/agents.js');
+const { AUTOMATION_DENIED_TOOLS, AUTOMATION_READ_TOOLS } = await import('../control/agents.js');
 const DENY = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => `'${t}'`).join(' ')}`;
+const READ = AUTOMATION_READ_TOOLS.map((t) => `'${t}'`).join(' ');
 
 const SID = '6d127d73-4bd0-42d6-b4a6-d96899507e62';
 const AT = '2026-10-01T05:48:20.000Z';
@@ -72,7 +73,13 @@ describe('resumeCommandFor an automatic tab (preflight F-12)', () => {
 
   it('resumes the session with the run\'s permission profile and the given message', async () => {
     const line = await resumeCommandFor(repos().r, tab(), machine, auto);
-    expect(line).toBe(`CLAUDE_CONFIG_DIR="$HOME"/'.claude_b' claude --permission-mode acceptEdits --allowedTools 'Bash(git status:*)' ${DENY} --resume ${SID} -- '[termhub automático] continue'`);
+    expect(line).toBe(`CLAUDE_CONFIG_DIR="$HOME"/'.claude_b' claude --permission-mode acceptEdits --allowedTools ${READ} 'Bash(git status:*)' ${DENY} --resume ${SID} -- '[termhub automático] continue'`);
+  });
+
+  it('leaves the git -C forms of the run worktree out of a line typed whole (TER-991)', async () => {
+    const line = await resumeCommandFor(repos().r, tab(), machine, { ...auto, permission: { ...auto.permission, worktree: '/w/TER-1' } });
+    expect(line).toBe(await resumeCommandFor(repos().r, tab(), machine, auto));
+    expect(line).not.toContain('-C ');
   });
 
   it('with no session id, continues the last one with the profile and the message', async () => {
@@ -102,7 +109,7 @@ describe('notifyAgentExited (TER-643)', () => {
     await notifyAgentExited(r, log(), tab(), machine, AT);
     expect(open).toHaveBeenCalledTimes(1);
     const payload = (open.mock.calls[0] as unknown as [{ payload: { text: string } }])[0].payload;
-    expect(payload.text).toContain("--permission-mode acceptEdits --allowedTools 'Bash(make:*)'");
+    expect(payload.text).toContain(`--permission-mode acceptEdits --allowedTools ${READ} 'Bash(make:*)'`);
     expect(payload.text).toContain(`--resume ${SID} -- '${EXITED_RESUME_PROMPT}'`);
   });
 

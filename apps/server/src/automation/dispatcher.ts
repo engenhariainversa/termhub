@@ -7,7 +7,7 @@ import { cardUrl } from '../control/tasks.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun, AutomationRunPatch } from '../db/repositories/automation-runs.js';
 import type { Project, Task } from '../db/repositories/types.js';
-import { msg } from '../i18n/index.js';
+import { LocalizedText, msg, t } from '../i18n/index.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { cleanupRuns } from './cleanup.js';
@@ -21,6 +21,7 @@ import { clearWaiting, noteWaiting, placeRun, type Placement, type PlacementDeps
 import { policyText } from './policy.js';
 import { startPermission } from './permission.js';
 import { implementerPrompt } from './prompts.js';
+import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { integrateEpic } from './integrator.js';
 import { eligibilityQueue } from './queue.js';
 
@@ -30,10 +31,7 @@ export const TRIGGER_DEBOUNCE_MS = 1_000;
 /** Spec §8 step 7: heartbeats every 30 s; a run silent for 2 min is taken over by another instance. */
 export const HEARTBEAT_MS = 30_000;
 export const STALE_MS = 2 * 60_000;
-/** A card whose start failed is not tried again for this long (read from the runs table: both colours keep it). */
-export const RETRY_BACKOFF_MS = 10 * 60_000;
-/** Failed starts in a row after which the card's tag is removed until a person tags it again. */
-export const MAX_START_FAILURES = 3;
+export { MAX_START_FAILURES, START_RETRY_BACKOFF_MS } from './start-retry.js';
 /** Tries of the write that marks a started run `running`, and the wait before the next (times the try). */
 export const MARK_RUNNING_TRIES = 3;
 export const MARK_RUNNING_RETRY_MS = 500;
@@ -114,6 +112,21 @@ function errorCode(e: unknown): string {
   const o = e as { code?: unknown; kind?: unknown };
   const code = typeof o?.code === 'string' ? o.code : typeof o?.kind === 'string' ? `GITHUB_${o.kind.toUpperCase()}` : 'INTERNAL';
   return code.slice(0, 64);
+}
+
+/** The longest reason a failed start's event keeps (an error from a machine may quote its stderr). */
+const START_FAILURE_TEXT_MAX = 300;
+
+/**
+ * Why a start failed, for the person (TER-987): the message of one of our own errors (a ControlError or an
+ * HttpError says what to fix), in pt-BR (`message`) and English (`message_en`), the feed picks the reader's.
+ * Anything else (a bug, the database) has no message fit to show: nothing, the code says it.
+ */
+function startFailureText(e: unknown): { message: string; message_en: string } | null {
+  const localized = (e as { localized?: unknown } | null)?.localized;
+  if (!(localized instanceof LocalizedText)) return null;
+  const clip = (s: string) => (s.length <= START_FAILURE_TEXT_MAX ? s : `${s.slice(0, START_FAILURE_TEXT_MAX - 1)}…`);
+  return { message: clip(t('pt-BR', localized)), message_en: clip(t('en', localized)) };
 }
 
 /**
@@ -209,6 +222,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
    * Otherwise a tab left open with nothing in it is closed, the run ends `failed` (its code and tab kept),
    * and after `MAX_START_FAILURES` failed starts in a row the card's tag is removed: a person tags it again
    * once the cause is fixed. The wait between attempts is read from the database, so both colours keep it.
+   * `run_blocked` carries the readable reason, the attempt and when the next one comes (TER-987).
    */
   async function startFailed(ctx: ControlContext, project: Project, run: AutomationRun, task: Task, place: Extract<Placement, { machine: unknown }>, branch: string | null, e: unknown): Promise<void> {
     const code = errorCode(e);
@@ -218,7 +232,9 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       await markRunning(ctx, project, run, task, place, tabId, branch ?? '', false);
       return;
     }
-    log.warn({ runId: run.id, taskId: task.id, machineId: place.machine.id, tabId, code }, 'automation: start failed');
+    const reason = startFailureText(e);
+    // the reason too: an error of ours names what to fix, never a screen
+    log.warn({ runId: run.id, taskId: task.id, machineId: place.machine.id, tabId, code, ...(reason ? { reason: reason.message_en } : {}) }, 'automation: start failed');
     if (tabId) {
       await closeTab(ctx, tabId).catch((err: unknown) => log.warn({ runId: run.id, tabId, code: errorCode(err) }, 'automation: tab of a failed start not closed'));
     }
@@ -228,16 +244,29 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       log.warn({ runId: run.id, code: errorCode(err) }, 'automation: failed start not recorded');
       return;
     }
-    await recordEvent(repos, { project_id: project.id, task_id: task.id, run_id: run.id, kind: 'run_blocked', payload: { code, stage: 'start' } }).catch((err: unknown) =>
+    // TER-987: the event says why, which attempt this was and when the next one comes (or that the card left)
+    let failures: Awaited<ReturnType<typeof repos.automationRuns.startFailures>> | null = null;
+    try {
+      failures = await repos.automationRuns.startFailures(task.id, startRetryBackoffMs);
+    } catch (err) {
+      log.warn({ runId: run.id, taskId: task.id, code: errorCode(err) }, 'automation: start failures not read');
+    }
+    const untag = failures !== null && failures.consecutive >= MAX_START_FAILURES;
+    const payload = {
+      code,
+      stage: 'start',
+      ...(reason ?? {}),
+      ...(failures ? { attempt: failures.consecutive, max_attempts: MAX_START_FAILURES } : {}),
+      ...(untag ? { untagged: true } : failures?.retry_at ? { retry_at: failures.retry_at.toISOString() } : {}),
+    };
+    await recordEvent(repos, { project_id: project.id, task_id: task.id, run_id: run.id, kind: 'run_blocked', payload }).catch((err: unknown) =>
       log.warn({ runId: run.id, code: errorCode(err) }, 'automation: run_blocked not recorded'),
     );
+    if (!untag) return;
     try {
-      const { consecutive } = await repos.automationRuns.startFailures(task.id, RETRY_BACKOFF_MS);
-      if (consecutive >= MAX_START_FAILURES) {
-        await repos.tasks.setAuto(task.id, false);
-        await escalateRun(repos, run, START_FAILED, log, { extra: { attempts: consecutive, code, untagged: true } });
-        log.warn({ runId: run.id, taskId: task.id, attempts: consecutive }, 'automation: card untagged after failed starts');
-      }
+      await repos.tasks.setAuto(task.id, false);
+      await escalateRun(repos, run, START_FAILED, log, { extra: { attempts: failures!.consecutive, code, untagged: true } });
+      log.warn({ runId: run.id, taskId: task.id, attempts: failures!.consecutive }, 'automation: card untagged after failed starts');
     } catch (err) {
       log.warn({ runId: run.id, taskId: task.id, code: errorCode(err) }, 'automation: start failure cap not applied');
     }
@@ -299,7 +328,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         // setup command only from the project's runner, cwd only from the run's worktree (Task 14 rule)
         {
           cwd: ws.path,
-          permission,
+          permission: { ...permission, worktree: ws.path },
           setupCommand: runner.setup_command,
           promptIsFinal: true,
           // the run knows its tab before the agent starts: its tab MCP then lists report_card and get_card
@@ -331,8 +360,9 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       const item = queue[i]!;
       if (halted()) return;
       if (starting.has(item.task_id)) continue;
-      // a failed start waits RETRY_BACKOFF_MS before the next attempt, on whichever colour (database clock)
-      if ((await repos.automationRuns.startFailures(item.task_id, RETRY_BACKOFF_MS)).recent) continue;
+      // a failed start waits before the next attempt (longer after each, `startRetryBackoffMs`), on whichever
+      // colour (database clock)
+      if ((await repos.automationRuns.startFailures(item.task_id, startRetryBackoffMs)).recent) continue;
       // a run parked for the person (an escalation) keeps its card but not its slot (TER-888)
       if (max !== null && (await repos.automationRuns.countOccupyingSlots(projectId, SLOT_FREE_REASONS)) >= max) return;
       // D24: a pause pressed during this pass stops the claims right here.

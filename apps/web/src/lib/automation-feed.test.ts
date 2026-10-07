@@ -30,3 +30,12 @@ describe('feed lines for changes to automatic work (TER-975)', () => {
     expect(feedLine(ev({ kind: 'machine_opt_out' }))).toBe('jarvis no longer accepts automatic work');
   });
 });
+
+describe('a start that failed (TER-987)', () => {
+  it('says why it did not start, and keeps the plain line for any other block', async () => {
+    expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'A máquina não respondeu' }))).toBe('TER-9 não começou: A máquina não respondeu');
+    expect(feedLine(ev({ kind: 'run_blocked' }))).toBe('TER-9: parou e espera você');
+    await i18n.changeLanguage('en');
+    expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'The machine did not answer' }))).toBe('TER-9 did not start: The machine did not answer');
+  });
+});

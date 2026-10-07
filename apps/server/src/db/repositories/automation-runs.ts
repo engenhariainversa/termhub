@@ -236,24 +236,30 @@ export class AutomationRunsRepository {
 
   /**
    * The card's failed starts, read from the database so both colours agree (the dispatcher's retry rule):
-   * `consecutive` = failed runs since the last run that did not fail (newest first), `recent` = one of them
-   * ended less than `backoffMs` ago on the database's clock.
+   * `consecutive` = failed runs since the last run that did not fail (newest first); the wait after them is
+   * `backoffMs(consecutive)` (it grows with the failures, TER-987), counted from the last failure's end on the
+   * database's clock: `recent` = that wait is not over, `retry_at` = when it is (null with no failure), and
+   * `last_run_id` = the newest failed run (its `run_blocked` says why).
    */
-  async startFailures(taskId: string, backoffMs: number): Promise<{ consecutive: number; recent: boolean }> {
-    const rows = await this.db.automationRun.findMany({ where: { taskId }, orderBy: { createdAt: 'desc' }, take: 20, select: { status: true } });
+  async startFailures(
+    taskId: string,
+    backoffMs: (consecutive: number) => number,
+  ): Promise<{ consecutive: number; recent: boolean; retry_at: Date | null; last_run_id: string | null }> {
+    const rows = await this.db.automationRun.findMany({ where: { taskId }, orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, status: true } });
     let consecutive = 0;
     for (const r of rows) {
       if (r.status !== 'failed') break;
       consecutive++;
     }
-    if (consecutive === 0) return { consecutive, recent: false };
-    const [hit] = await this.db.$queryRaw<Array<{ recent: boolean }>>`
-      SELECT EXISTS (
-        SELECT 1 FROM "automation_runs"
+    if (consecutive === 0) return { consecutive, recent: false, retry_at: null, last_run_id: null };
+    const [hit] = await this.db.$queryRaw<Array<{ retry_at: Date | null; recent: boolean | null }>>`
+      SELECT w."retry_at", w."retry_at" > now() AS "recent"
+      FROM (
+        SELECT max("ended_at") + make_interval(secs => CAST(${backoffMs(consecutive) / 1000} AS double precision)) AS "retry_at"
+        FROM "automation_runs"
         WHERE "task_id" = ${taskId} AND "status" = 'failed'
-          AND "ended_at" > now() - make_interval(secs => CAST(${backoffMs / 1000} AS double precision))
-      ) AS "recent"`;
-    return { consecutive, recent: hit?.recent === true };
+      ) w`;
+    return { consecutive, recent: hit?.recent === true, retry_at: hit?.retry_at ?? null, last_run_id: rows[0]!.id };
   }
 
   /**

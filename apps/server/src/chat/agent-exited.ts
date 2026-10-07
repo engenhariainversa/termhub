@@ -31,10 +31,13 @@ export async function resumeCommandFor(repos: Repositories, tab: Tab, machine: M
   const configDir = account?.config_dir ?? null;
   const sessionId = !codex && tab.agent_session_id && isClaudeSessionId(tab.agent_session_id) ? tab.agent_session_id : null;
   if (codex || (!sessionId && !auto)) return continueLine(codex ? 'chatgpt' : 'claude', configDir);
+  // typed whole, under the 4000-character input cap with no room left (TER-991): no `git -C` forms until the
+  // line goes through a launch file (TER-988)
+  const typed = auto ? { ...auto, permission: { ...auto.permission, worktree: null } } : null;
   const [hasTabMcp, prefs] = await Promise.all([repos.apiTokens.hasLiveForTab(tab.id).catch(() => false), swapPreferences(repos, tab, machine).catch(() => ({ model: undefined }))]);
   const mcpTabId = hasTabMcp ? tab.id : null;
-  if (sessionId) return resumeLine(configDir, sessionId, auto?.prompt ?? EXITED_RESUME_PROMPT, mcpTabId, prefs.model, auto?.permission);
-  return continueLine('claude', configDir, auto ? { ...auto, mcpTabId } : null);
+  if (sessionId) return resumeLine(configDir, sessionId, typed?.prompt ?? EXITED_RESUME_PROMPT, mcpTabId, prefs.model, typed?.permission);
+  return continueLine('claude', configDir, typed ? { ...typed, mcpTabId } : null);
 }
 
 /**

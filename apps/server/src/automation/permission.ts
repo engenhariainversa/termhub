@@ -27,11 +27,16 @@ export function startPermission(automation: Pick<ProjectSetupData['automation'],
 /**
  * The profile a restart or resume line of this run keeps (preflight F-12): the one stored on the run when it
  * started, so an edit of the project's allow list mid-run does not change a running tab's flags. A run
- * started before the list was stored falls back to the project's current setup.
+ * started before the list was stored falls back to the project's current setup. The worktree comes from the
+ * run (TER-991), like the branch.
  */
-export async function runPermission(repos: Repositories, run: Pick<AutomationRun, 'project_id' | 'allowed_tools' | 'branch'>): Promise<AgentPermission> {
-  if (run.allowed_tools) return { mode: 'acceptEdits', allowedTools: run.allowed_tools, branch: run.branch };
-  return automationPermission((await repos.projectSetup.get(run.project_id)).data.automation, run.branch);
+export async function runPermission(
+  repos: Repositories,
+  run: Pick<AutomationRun, 'project_id' | 'allowed_tools' | 'branch'> & Partial<Pick<AutomationRun, 'worktree_path'>>,
+): Promise<AgentPermission> {
+  const worktree = run.worktree_path ?? null;
+  if (run.allowed_tools) return { mode: 'acceptEdits', allowedTools: run.allowed_tools, branch: run.branch, worktree };
+  return { ...automationPermission((await repos.projectSetup.get(run.project_id)).data.automation, run.branch), worktree };
 }
 
 /**
