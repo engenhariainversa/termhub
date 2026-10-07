@@ -134,7 +134,7 @@ describe('typeCommandLine', () => {
   // the most a fresh macOS tab keeps of what is typed: it goes through the file too.
   it('sources an automatic tab\'s resume and continue lines from a file, never typing them whole', async () => {
     const { continueLine, DEFAULT_AUTOMATION_TOOLS, resumeLine } = await import('../control/agents.js');
-    const permission = { mode: 'acceptEdits' as const, allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: 'TER-988-x' };
+    const permission = { mode: 'acceptEdits' as const, allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: 'TER-988-x', worktree: '/Users/u/.termhub/worktrees/p1/TER-988' };
     const prompt = '[termhub automático] O processo anterior desta sessão foi encerrado no meio do trabalho. Continue a tarefa de onde parou.';
     const lines = [
       resumeLine(null, '123e4567-e89b-12d3-a456-426614174000', prompt, 'tab1', 'opus', permission),
