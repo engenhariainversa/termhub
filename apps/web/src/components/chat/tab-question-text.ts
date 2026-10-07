@@ -74,6 +74,8 @@ export function autoAnswerFailureText(code?: string | null): string {
       return i18n.t('Resposta automática cancelada: o precedente foi esquecido.');
     case 'PRECEDENT_EXPIRED':
       return i18n.t('Resposta automática cancelada: o precedente expirou.');
+    case 'PRECEDENT_SUPERSEDED':
+      return i18n.t('Resposta automática cancelada: o precedente foi substituído por uma decisão mais nova.');
     case 'AUTOMATION_OFF':
       return i18n.t('Resposta automática cancelada: o trabalho automático foi pausado ou desligado.');
     default:

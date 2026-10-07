@@ -1279,6 +1279,9 @@ model ChatDecision {
   scope          String            @default("user")
   /// When the decision stops holding (TER-1014); null = never. An expired one is never a precedent.
   expiresAt      DateTime?         @map("expires_at")
+  /// When a `record_decision` note replaced it (TER-1015): it leaves the default search and never again
+  /// backs a suggestion or an automatic answer.
+  supersededAt   DateTime?         @map("superseded_at")
   createdAt      DateTime          @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
@@ -1327,6 +1330,10 @@ model MemoryItem {
   conversationId String?   @map("conversation_id")
   /// When a note stops holding (TER-1014); null = never. Search skips an expired one by default.
   expiresAt      DateTime? @map("expires_at")
+  /// The ref (`note:<id>` / `decision:<id>`) a `record_decision` note replaced (TER-1015); null otherwise.
+  supersedes     String?   @map("supersedes")
+  /// When a newer note replaced this one (TER-1015): it leaves the default search and the conflict check.
+  supersededAt   DateTime? @map("superseded_at")
   sourceAt    DateTime @map("source_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

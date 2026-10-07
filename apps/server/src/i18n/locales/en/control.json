@@ -105,5 +105,7 @@
   "Informe expires_at ou expires_at_time, não os dois": "Provide expires_at or expires_at_time, not both",
   "A validade da decisão precisa estar no futuro": "The decision's expiry must be in the future",
   "Uma decisão deste projeto precisa de project_id": "A decision for this project needs project_id",
-  "Uma decisão desta conversa só pode ser registrada no chat do termhub": "A decision for this conversation can only be recorded in the termhub chat"
+  "Uma decisão desta conversa só pode ser registrada no chat do termhub": "A decision for this conversation can only be recorded in the termhub chat",
+  "{{ref}} já foi substituído ou esquecido": "{{ref}} was already replaced or forgotten",
+  "Só uma anotação (note:) ou decisão (decision:) pode ser substituída: {{ref}}": "Only a note (note:) or a decision (decision:) can be replaced: {{ref}}"
 }

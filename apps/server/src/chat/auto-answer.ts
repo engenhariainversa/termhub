@@ -48,6 +48,8 @@ export interface ScheduleInput {
   by: AutoAnswerBy;
   reason: string;
   sources: { kind: MemoryRefKind; id: string }[];
+  /** The precedent's similarity the concierge's check measured (TER-1011): the feed's score. */
+  score?: number | null;
 }
 
 /**
@@ -134,6 +136,7 @@ async function storeAutoAnswer(repos: Repositories, input: ScheduleInput, now: D
     by: input.by,
     reason: input.reason,
     sources: input.sources,
+    ...(typeof input.score === 'number' ? { score: input.score } : {}),
     due_at: new Date(now.getTime() + config.autoAnswerDelayMs).toISOString(),
     status: 'scheduled',
   };
@@ -164,7 +167,8 @@ export async function maybeScheduleRepeat(repos: Repositories, row: TabQuestion,
   const ids = [...new Set(items.map((it) => it!.decision_id))];
   // The suggestion only says a decision was similar: re-read the ones it cites (the person's own,
   // still there) and check each still backs its answer, option descriptions included.
-  const decisions = await repos.chatDecisions.findManyForUser(ids, row.user_id);
+  // A decision a newer one replaced (TER-1015) is history, never a precedent: drop it before the check.
+  const decisions = (await repos.chatDecisions.findManyForUser(ids, row.user_id)).filter((d) => !d.superseded_at);
   // TER-1014: a decision that expired or does not hold on this card's project/conversation is no precedent.
   const place = { projectId: row.project_id, conversationId: row.conversation_id };
   if (decisions.some((d) => !holdsAt(d, place, now))) return null;
@@ -212,10 +216,11 @@ export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { 
         if (!(await automaticRunOfTab(repos, claimed.tab_id))) throw new HttpError(409, 'Trabalho automático pausado ou desligado', 'AUTOMATION_OFF');
       } else if (!(await autoAnswerAllowed(repos, claimed))) throw new HttpError(409, 'Resposta automática desligada', 'AUTODECIDE_OFF');
       const cited = [...new Set(auto.sources.filter((s) => s.kind === 'decision').map((s) => s.id))];
-      const citedRows = cited.length ? await repos.chatDecisions.findManyForUser(cited, user.id) : [];
-      if (citedRows.length < cited.length) throw new HttpError(409, 'A decisão usada foi esquecida', 'PRECEDENT_FORGOTTEN');
+      const precedents = cited.length ? await repos.chatDecisions.findManyForUser(cited, user.id) : [];
+      if (precedents.length < cited.length) throw new HttpError(409, 'A decisão usada foi esquecida', 'PRECEDENT_FORGOTTEN');
+      if (precedents.some((d) => d.superseded_at)) throw new HttpError(409, 'A decisão usada foi substituída', 'PRECEDENT_SUPERSEDED');
       // TER-1014: a precedent that expired during the countdown (or never held here) sends nothing.
-      if (citedRows.some((d) => !holdsAt(d, { projectId: claimed.project_id, conversationId: claimed.conversation_id }, now))) {
+      if (precedents.some((d) => !holdsAt(d, { projectId: claimed.project_id, conversationId: claimed.conversation_id }, now))) {
         throw new HttpError(409, 'A decisão usada expirou ou não vale aqui', 'PRECEDENT_EXPIRED');
       }
       await (deps.answer ?? answerTabQuestion)(controlContextFor(repos, user), claimed.id, auto.answer, { log, via: 'auto', embedder: null });

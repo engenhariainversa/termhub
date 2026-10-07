@@ -9,6 +9,7 @@ import type { AutomationRun, AutomationRunPatch } from '../db/repositories/autom
 import type { Project, Task } from '../db/repositories/types.js';
 import { LocalizedText, msg, t } from '../i18n/index.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
+import { currentRulesBlock } from '../memory/current-rules.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { cleanupRuns } from './cleanup.js';
 import { cardBranchName, removeWorkspace as removeWorkspaceFn, targetOf, type ensureEpicBranch as ensureEpicBranchFn, type ensureWorkspace as ensureWorkspaceFn } from './branches.js';
@@ -312,6 +313,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
           policy: policyText(automation, repo?.deploy_workflow ?? null),
           custom: automation.prompts.implementer,
           description: task.description,
+          rules: await currentRulesBlock(repos, project.owner_id, project.id),
         });
       // the agent's questions become cards in the owner's project chat (spec §9.1, §9.3): make sure it
       // has one, or a question would have nowhere to go (review I1)

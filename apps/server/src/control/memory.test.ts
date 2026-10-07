@@ -11,11 +11,17 @@ import type { ControlContext } from './context.js';
 import { ControlError } from './context.js';
 import { MEMORY_NOTE, MEMORY_REF, answerTabQuestionTool, listTabQuestions, parseRef, recordDecision, searchMemory } from './memory.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
+import { automaticRunOfTab } from '../automation/pause.js';
+import { recordEvent } from '../automation/events.js';
+import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { MemoryItem } from '../db/repositories/memory-items.js';
 import type { AutoAnswer } from '../db/repositories/tab-questions.js';
 import type { TabQuestionSuggestion } from '../chat/decision-text.js';
 
 vi.mock('../chat/tab-questions.js', () => ({ publishTabQuestions: vi.fn(async () => []) }));
+// TER-1011: whether the card's tab has a live automatic run, and the feed event recorded when it does
+vi.mock('../automation/pause.js', () => ({ automaticRunOfTab: vi.fn(async () => null) }));
+vi.mock('../automation/events.js', () => ({ recordEvent: vi.fn(async () => undefined) }));
 
 const project = (over: Partial<Project> & { id: string }): Project => ({
   owner_id: 'u1', key: over.id.toUpperCase(), next_task_number: 1, name: over.id, status: 'active', description: null, last_terminal_at: null, created_at: '', ...over,
@@ -235,14 +241,79 @@ describe('searchMemory', () => {
     expect(r2.note).toBe(MEMORY_NOTE);
   });
 
+  describe('authority (TER-1012)', () => {
+    it('three contradicting notes about merge/deploy: the current one comes first', async () => {
+      const notes = [
+        item({ id: 'n1', kind: 'note', title: 'Merge sem pedir', similarity: 0.95, superseded_at: '2026-10-03T10:02:00.000Z' } as Partial<MemoryHit> & { id: string }),
+        item({ id: 'n2', kind: 'note', title: 'Só merge, deploy pede', similarity: 0.94, superseded_at: '2026-10-03T10:04:00.000Z' } as Partial<MemoryHit> & { id: string }),
+        item({ id: 'n3', kind: 'note', title: 'Merge e deploy liberados', similarity: 0.9 }),
+      ];
+      const { ctx, embedder } = ctxFor({ vecItems: notes, textItems: notes.map((n, i) => ({ ...n, rank: i + 1 })) });
+      const r = await searchMemory(ctx, { query: 'posso fazer merge e deploy?' }, { embedder });
+      expect(r.results.map((x) => x.ref)).toEqual(['note:n3', 'note:n1', 'note:n2']);
+    });
+
+    it('a superseded "acceptEdits + lista" decision does not rank above "modo auto"', async () => {
+      const old = decision({ id: 'dold', question: 'Modo de permissão das execuções?', answer: { labels: ['acceptEdits + lista'] }, similarity: 0.95, superseded_at: '2026-10-05T10:00:00.000Z' } as Partial<DecisionNeighbour> & { id: string });
+      const auto = item({ id: 'nauto', kind: 'note', title: 'Execuções em modo auto', similarity: 0.8 });
+      const { ctx, embedder } = ctxFor({ vecDecisions: [old], textDecisions: [{ ...decisionRanked({ id: 'dold', rank: 1 }), superseded_at: '2026-10-05T10:00:00.000Z' } as ChatDecision & { rank: number }], vecItems: [auto] });
+      const r = await searchMemory(ctx, { query: 'modo de permissão' }, { embedder });
+      expect(r.results.map((x) => x.ref)).toEqual(['note:nauto', 'decision:dold']);
+    });
+
+    it('an expired decision falls below a current one', async () => {
+      const expired = decision({ id: 'dexp', similarity: 0.95, expires_at: '2026-01-01T00:00:00.000Z' } as Partial<DecisionNeighbour> & { id: string });
+      const current = decision({ id: 'dnow', similarity: 0.6 });
+      const { ctx, embedder } = ctxFor({ vecDecisions: [expired, current] });
+      const r = await searchMemory(ctx, { query: 'x' }, { embedder });
+      expect(r.results.map((x) => x.ref)).toEqual(['decision:dnow', 'decision:dexp']);
+    });
+
+    it('the query project raises its own hits, and the limit applies after the re-rank', async () => {
+      // decisions stay global under an ordinary token, so one from another project can still come back
+      const decisions = [
+        decision({ id: 'other', project_id: 'p2', project_name: 'p2', similarity: 0.9 }),
+        decision({ id: 'mine', project_id: 'p1', project_name: 'p1', similarity: 0.89 }),
+      ];
+      const { ctx, embedder } = ctxFor({ vecDecisions: decisions });
+      const r = await searchMemory(ctx, { query: 'x', project_id: 'p1', limit: 1 }, { embedder });
+      expect(r.results.map((x) => x.ref)).toEqual(['decision:mine']);
+    });
+  });
+
   it('always filters by ctx.scope.user.id', async () => {
     const { ctx, embedder, calls } = ctxFor({ user: 'u7', vecDecisions: [decision({ id: 'd1' })], vecItems: [item({ id: 'i1', kind: 'note' })] });
     await searchMemory(ctx, { query: 'x' }, { embedder });
     // The 4th argument (a project to hold decisions to) is for tab tokens only (TER-212 D3).
-    expect(calls.nearestAny).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), undefined, expect.anything());
-    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), undefined, expect.anything());
+    // The 5th, where the decisions must hold, leaves replaced ones out unless asked for (TER-1015).
+    expect(calls.nearestAny).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), undefined, expect.objectContaining({ includeSuperseded: false }));
+    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), undefined, expect.objectContaining({ includeSuperseded: false }));
     expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u7' }), expect.anything(), expect.anything());
     expect(calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u7' }), expect.anything(), expect.anything());
+  });
+});
+
+describe('searchMemory and replaced items (TER-1015)', () => {
+  it('leaves replaced notes and decisions out by default', async () => {
+    const { ctx, embedder, calls } = ctxFor({});
+    await searchMemory(ctx, { query: 'x' }, { embedder });
+    for (const spy of [calls.nearest, calls.itemTextSearch]) expect(spy).toHaveBeenCalledWith(expect.objectContaining({ includeSuperseded: false }), expect.anything(), expect.anything());
+    expect(calls.nearestAny.mock.calls[0]![4]).toMatchObject({ includeSuperseded: false });
+    expect(calls.decisionTextSearch.mock.calls[0]![4]).toMatchObject({ includeSuperseded: false });
+  });
+
+  it('include_superseded brings them back, marked with superseded_at; a replacing note carries supersedes', async () => {
+    const { ctx, embedder, calls } = ctxFor({
+      vecDecisions: [decision({ id: 'd1', superseded_at: '2026-10-03T12:02:00.000Z' })],
+      vecItems: [item({ id: 'n2', kind: 'note', supersedes: 'decision:d1', superseded_at: null })],
+    });
+    const r = await searchMemory(ctx, { query: 'x', include_superseded: true }, { embedder });
+    expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ includeSuperseded: true }), expect.anything(), expect.anything());
+    expect(calls.nearestAny.mock.calls[0]![4]).toMatchObject({ includeSuperseded: true });
+    const byRef = new Map(r.results.map((x) => [x.ref, x]));
+    expect(byRef.get('decision:d1')).toMatchObject({ superseded_at: '2026-10-03T12:02:00.000Z' });
+    expect(byRef.get('note:n2')).toMatchObject({ supersedes: 'decision:d1' });
+    expect(byRef.get('note:n2')).not.toHaveProperty('superseded_at');
   });
 });
 
@@ -256,18 +327,26 @@ describe('searchMemory with a tab token (TER-212 D3)', () => {
   it('searches only the tab\'s project, without messages or gate decisions', async () => {
     const { ctx, embedder, calls } = withTab({});
     await searchMemory(ctx, { query: 'x', project_id: 'p1' }, { embedder });
-    const filter = { ownerId: 'u1', projectId: 'p1', kinds: ['task', 'doc', 'note', 'lesson', 'project_note'], place: { projectId: 'p1', conversationId: null }, includeExpired: false };
+    const filter = {
+      ownerId: 'u1',
+      projectId: 'p1',
+      kinds: ['task', 'doc', 'note', 'lesson', 'project_note'],
+      place: { projectId: 'p1', conversationId: null },
+      includeExpired: false,
+      includeSuperseded: false,
+    };
+    const place = { projectId: 'p1', conversationId: null, includeExpired: false, includeSuperseded: false };
     expect(calls.nearest).toHaveBeenCalledWith(filter, expect.anything(), expect.anything());
     expect(calls.itemTextSearch).toHaveBeenCalledWith(filter, expect.anything(), expect.anything());
-    expect(calls.nearestAny).toHaveBeenCalledWith('u1', expect.anything(), expect.anything(), 'p1', { projectId: 'p1', conversationId: null, includeExpired: false });
-    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), 'p1', { projectId: 'p1', conversationId: null, includeExpired: false });
+    expect(calls.nearestAny).toHaveBeenCalledWith('u1', expect.anything(), expect.anything(), 'p1', place);
+    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), 'p1', place);
   });
 
   it('forces the tab\'s project when project_id is missing', async () => {
     const { ctx, embedder, calls } = withTab({});
     await searchMemory(ctx, { query: 'x' }, { embedder });
     expect(calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1' }), expect.anything(), expect.anything());
-    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), 'p1', { projectId: 'p1', conversationId: null, includeExpired: false });
+    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), 'p1', { projectId: 'p1', conversationId: null, includeExpired: false, includeSuperseded: false });
   });
 
   it('refuses another project with TAB_SCOPE before any search', async () => {
@@ -412,6 +491,191 @@ describe('recordDecision', () => {
     const { ctx, calls } = ctxForNotes({ count: 29 });
     await recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r' }, { embedder: null });
     expect(calls.upsertMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('with no embedder, records without the conflict check and says so', async () => {
+    const { ctx } = ctxForNotes();
+    const r = await recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r' }, { embedder: null });
+    expect(r).toMatchObject({ recorded: true, conflict_check: 'unavailable' });
+  });
+});
+
+/**
+ * TER-1015: an in-memory stand-in for the two tables, enough to replay a chain of `record_decision`
+ * calls. Vectors come from `topicEmbedder`: every text about merging/deploying embeds near [1, 0, 0]
+ * (a slightly different vector per text, so similarity is high but not 1), anything else on [0, 1, 0].
+ */
+interface StoredNote {
+  item: MemoryItem;
+  vector: number[] | null;
+}
+
+const cosine = (a: number[], b: number[]): number => {
+  const dot = a.reduce((s, x, i) => s + x * (b[i] ?? 0), 0);
+  const n = (v: number[]) => Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+  return dot / (n(a) * n(b));
+};
+
+const topicEmbedder = (): Embedder => ({
+  embed: vi.fn(async (texts: string[]) => ({
+    model: 'm',
+    vectors: texts.map((t) => (/mescl|merge|deploy/i.test(t) ? [1, (t.length % 7) / 40, 0] : [0, 1, 0])),
+  })),
+});
+
+function memoryStore(opts: { decisions?: ChatDecision[]; decisionVectors?: Record<string, number[]> } = {}) {
+  const notes: StoredNote[] = [];
+  const decisions = opts.decisions ?? [];
+  let seq = 0;
+  const toItem = (it: NewMemoryItem): MemoryItem => ({
+    ...memoryItem({ id: it.id ?? `n${++seq}` }),
+    owner_id: it.owner_id,
+    project_id: it.project_id,
+    project_name: null,
+    title: it.title,
+    text: it.text,
+    source_id: it.source_id,
+    supersedes: it.supersedes ?? null,
+    superseded_at: null,
+    embed_model: null,
+    source_at: '2026-10-03T12:00:00.000Z',
+  });
+  const memoryItems = {
+    countNotesSince: vi.fn(async () => 0),
+    findManyForOwner: vi.fn(async (ids: string[], ownerId: string) => notes.filter((n) => ids.includes(n.item.id) && n.item.owner_id === ownerId).map((n) => n.item)),
+    upsertMany: vi.fn(async (items: NewMemoryItem[]) => items.map((it) => (notes.push({ item: toItem(it), vector: null }), notes[notes.length - 1]!.item))),
+    insertNoteSuperseding: vi.fn(async (it: NewMemoryItem, target: { kind: 'note' | 'decision'; id: string }) => {
+      const old = target.kind === 'note' ? notes.find((n) => n.item.id === target.id && n.item.owner_id === it.owner_id)?.item : decisions.find((d) => d.id === target.id && d.user_id === it.owner_id);
+      if (!old || old.superseded_at) return null;
+      old.superseded_at = '2026-10-03T12:04:00.000Z';
+      notes.push({ item: toItem({ ...it, supersedes: `${target.kind}:${target.id}` }), vector: null });
+      return notes[notes.length - 1]!.item;
+    }),
+    setEmbedding: vi.fn(async (id: string, vector: number[], model: string) => {
+      const n = notes.find((x) => x.item.id === id)!;
+      n.vector = vector;
+      n.item.embed_model = model;
+    }),
+    similarNotes: vi.fn(async (ownerId: string, projectId: string | null, vector: number[], o: { embedModel: string; minSimilarity: number; k: number }) =>
+      notes
+        .filter((n) => n.item.owner_id === ownerId && n.item.project_id === projectId && !n.item.superseded_at && n.vector && n.item.embed_model === o.embedModel)
+        .map((n) => ({ ...n.item, similarity: cosine(vector, n.vector!), rank: 0 }))
+        .filter((h) => h.similarity >= o.minSimilarity)
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, o.k),
+    ),
+  };
+  const chatDecisions = {
+    findManyForUser: vi.fn(async (ids: string[], userId: string) => decisions.filter((d) => ids.includes(d.id) && d.user_id === userId)),
+    similarInScope: vi.fn(async (userId: string, projectId: string | null, vector: number[], o: { minSimilarity: number; k: number }) =>
+      decisions
+        .filter((d) => d.user_id === userId && d.project_id === projectId && !d.superseded_at && opts.decisionVectors?.[d.id])
+        .map((d) => ({ ...d, similarity: cosine(vector, opts.decisionVectors![d.id]!) }))
+        .filter((d) => d.similarity >= o.minSimilarity)
+        .slice(0, o.k),
+    ),
+  };
+  const projects = [project({ id: 'p1' }), project({ id: 'p2' })];
+  const repos = { projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) }, memoryItems, chatDecisions } as unknown as Repositories;
+  const scope = { user: { id: 'u1' } as never, viewAs: { kind: 'self' as const }, ownerId: 'u1', createAs: 'u1' };
+  const ctx: ControlContext = { repos, scope, scoped: new Scoped(repos, scope), can: async () => true };
+  const current = () => notes.filter((n) => !n.item.superseded_at).map((n) => n.item);
+  return { ctx, notes, decisions, memoryItems, chatDecisions, current };
+}
+
+/** Waits for the fire-and-forget `setEmbedding` after a write. */
+const flush = () => new Promise((r) => setTimeout(r, 0));
+
+describe('recordDecision: conflicts and replacement (TER-1015)', () => {
+  const deps = () => ({ embedder: topicEmbedder(), log: { info: vi.fn(), warn: vi.fn() } });
+  const q = 'Pode mesclar o PR e fazer deploy sem perguntar?';
+
+  it('the three contradicting merge/deploy notes of 03/10: each later one is flagged, and only the last stays current', async () => {
+    const s = memoryStore();
+    const d = deps();
+    const first = await recordDecision(s.ctx, { question: q, decision: 'Sim: mescla com o CI verde e faz o deploy.', reason: 'Pedro no chat', project_id: 'p1' }, d);
+    expect(first).toMatchObject({ recorded: true });
+    await flush();
+
+    const second = { question: q, decision: 'Não: só abre o PR; quem mescla é o Pedro.', reason: 'Pedro no chat, 2 min depois', project_id: 'p1' };
+    const clash = await recordDecision(s.ctx, second, d);
+    expect(clash).toMatchObject({ recorded: false, conflicts: [{ ref: (first as { ref: string }).ref, kind: 'note', title: q }] });
+    expect((clash as { message: string }).message).toMatch(/^Conflita com note:\S+ \(".+"\)\. Substituir\?$/);
+    expect(s.notes).toHaveLength(1); // nothing written on a conflict
+
+    const secondRef = await recordDecision(s.ctx, { ...second, supersedes: (first as { ref: string }).ref }, d);
+    expect(secondRef).toMatchObject({ recorded: true, supersedes: (first as { ref: string }).ref });
+    await flush();
+
+    const third = { question: q, decision: 'Mescla sozinho; deploy só com o Pedro.', reason: 'Pedro no chat, 4 min depois', project_id: 'p1' };
+    const clash2 = await recordDecision(s.ctx, third, d);
+    // the replaced first note is no longer a conflict: only the second one is
+    expect((clash2 as { conflicts: { ref: string }[] }).conflicts.map((c) => c.ref)).toEqual([(secondRef as { ref: string }).ref]);
+    const last = await recordDecision(s.ctx, { ...third, supersedes: (secondRef as { ref: string }).ref }, d);
+    expect(last).toMatchObject({ recorded: true });
+
+    expect(s.current().map((n) => n.text)).toEqual([expect.stringContaining('Mescla sozinho; deploy só com o Pedro.')]);
+    expect(s.notes.filter((n) => n.item.superseded_at)).toHaveLength(2);
+  });
+
+  it('a note on another subject, or the same subject in another project, records with no conflict', async () => {
+    const s = memoryStore();
+    const d = deps();
+    await recordDecision(s.ctx, { question: q, decision: 'Sim', reason: 'r', project_id: 'p1' }, d);
+    await flush();
+    expect(await recordDecision(s.ctx, { question: 'Qual cor do botão?', decision: 'Azul', reason: 'r', project_id: 'p1' }, d)).toMatchObject({ recorded: true });
+    expect(await recordDecision(s.ctx, { question: q, decision: 'Não', reason: 'r', project_id: 'p2' }, d)).toMatchObject({ recorded: true });
+    expect(await recordDecision(s.ctx, { question: q, decision: 'Não', reason: 'r' }, d)).toMatchObject({ recorded: true }); // account-wide
+  });
+
+  it('keep_both records next to the conflicting note, both stay current', async () => {
+    const s = memoryStore();
+    const d = deps();
+    const first = (await recordDecision(s.ctx, { question: q, decision: 'Sim no termhub', reason: 'r', project_id: 'p1' }, d)) as { ref: string };
+    await flush();
+    const r = await recordDecision(s.ctx, { question: q, decision: 'Também vale para hotfix', reason: 'r', project_id: 'p1', keep_both: true }, d);
+    expect(r).toMatchObject({ recorded: true, kept_alongside: [first.ref] });
+    expect(s.current()).toHaveLength(2);
+  });
+
+  it('flags a card decision of the same scope, and can replace it', async () => {
+    const past = pastDecision({ id: 'd1', question: q, superseded_at: null });
+    const s = memoryStore({ decisions: [past], decisionVectors: { d1: [1, 0.05, 0] } });
+    const d = deps();
+    const clash = await recordDecision(s.ctx, { question: q, decision: 'Não', reason: 'r', project_id: 'p1' }, d);
+    expect(clash).toMatchObject({ recorded: false, conflicts: [{ ref: 'decision:d1', kind: 'decision' }] });
+    const r = await recordDecision(s.ctx, { question: q, decision: 'Não', reason: 'r', project_id: 'p1', supersedes: 'decision:d1' }, d);
+    expect(r).toMatchObject({ recorded: true, supersedes: 'decision:d1' });
+    expect(past.superseded_at).not.toBeNull();
+    expect(s.chatDecisions.similarInScope).toHaveBeenCalledWith('u1', 'p1', expect.any(Array), expect.objectContaining({ embedModel: 'm#q1', minSimilarity: 0.8 }));
+  });
+
+  it('supersedes refuses a kind that is not a note or a decision, an unknown ref and one already replaced', async () => {
+    const s = memoryStore({ decisions: [pastDecision({ id: 'd1', superseded_at: '2026-10-01T00:00:00.000Z' })] });
+    const d = deps();
+    await expect(recordDecision(s.ctx, { question: q, decision: 'x', reason: 'r', supersedes: 'task:t1' }, d)).rejects.toMatchObject({ code: 'BAD_SUPERSEDES' });
+    await expect(recordDecision(s.ctx, { question: q, decision: 'x', reason: 'r', supersedes: 'note:nope' }, d)).rejects.toMatchObject({ code: 'UNKNOWN_SOURCE' });
+    await expect(recordDecision(s.ctx, { question: q, decision: 'x', reason: 'r', supersedes: 'decision:d1' }, d)).rejects.toMatchObject({ code: 'SUPERSEDE_GONE' });
+    expect(s.notes).toHaveLength(0);
+  });
+
+  it('a target replaced by a concurrent call between the check and the write answers SUPERSEDE_GONE', async () => {
+    const s = memoryStore();
+    const d = deps();
+    const first = (await recordDecision(s.ctx, { question: q, decision: 'Sim', reason: 'r' }, d)) as { ref: string };
+    s.memoryItems.insertNoteSuperseding.mockImplementationOnce(async () => null);
+    await expect(recordDecision(s.ctx, { question: q, decision: 'Não', reason: 'r', supersedes: first.ref }, d)).rejects.toMatchObject({ code: 'SUPERSEDE_GONE' });
+  });
+
+  it('an embed that fails records without the check; the vector it computed is reused for the note', async () => {
+    const s = memoryStore();
+    const failing: Embedder = { embed: vi.fn(async () => { throw new Error('down'); }) };
+    expect(await recordDecision(s.ctx, { question: q, decision: 'Sim', reason: 'r' }, { embedder: failing, log: { info: vi.fn(), warn: vi.fn() } })).toMatchObject({ recorded: true, conflict_check: 'unavailable' });
+    const e = topicEmbedder();
+    await recordDecision(s.ctx, { question: 'Outra coisa', decision: 'x', reason: 'r' }, { embedder: e, log: { info: vi.fn(), warn: vi.fn() } });
+    await flush();
+    expect(e.embed).toHaveBeenCalledTimes(1); // the conflict check's embed, not a second one for the note
+    expect(s.notes[1]!.vector).not.toBeNull();
   });
 });
 
@@ -671,12 +935,35 @@ describe('answerTabQuestionTool', () => {
       by: 'concierge',
       reason: 'Você sempre usa worktree',
       sources: [{ kind: 'decision', id: 'd1' }],
+      // TER-1011: the similarity the check measured, for the feed's why
+      score: 0.95,
       due_at: '2026-09-26T12:01:00.000Z',
       status: 'scheduled',
     });
     expect(calls.setSuggestion).not.toHaveBeenCalled();
     expect(publishTabQuestions).toHaveBeenCalledTimes(1);
     expect(vi.mocked(publishTabQuestions).mock.calls[0]![1]).toBe('tab_question');
+  });
+
+  it('TER-1011: in a tab with a live automatic run, the countdown is a question_answered line with the precedent and its score', async () => {
+    vi.mocked(recordEvent).mockClear();
+    vi.mocked(automaticRunOfTab).mockResolvedValueOnce({ id: 'run1', project_id: 'p1', task_id: 't1' } as AutomationRun);
+    const { ctx } = ctxForAnswer({ similarity: { d1: 0.987 } });
+    expect((await callTool(ctx, yes)).mode).toBe('auto');
+    expect(recordEvent).toHaveBeenCalledWith(ctx.repos, {
+      project_id: 'p1',
+      task_id: 't1',
+      run_id: 'run1',
+      kind: 'question_answered',
+      payload: { via: 'concierge', tab_id: expect.any(String), question_id: 'q1', why: 'precedent', rule_ref: 'decision:d1', score: 0.99 },
+    });
+  });
+
+  it('TER-1011: no automatic run on the tab → no feed line', async () => {
+    vi.mocked(recordEvent).mockClear();
+    const { ctx } = ctxForAnswer();
+    expect((await callTool(ctx, yes)).mode).toBe('auto');
+    expect(recordEvent).not.toHaveBeenCalled();
   });
 
   it('mode defaults to auto; label case and accents do not matter', async () => {
@@ -715,6 +1002,13 @@ describe('answerTabQuestionTool', () => {
     const r = await callTool(ctx, yes);
     expect(r).toEqual({ mode: 'suggest', downgraded_because: 'no_person_precedent' });
     expectSuggestion(calls, d1Source);
+  });
+
+  it('a cited decision a newer one replaced never backs auto (no_person_precedent, TER-1015)', async () => {
+    const { ctx, calls } = ctxForAnswer({ decisions: [pastDecision({ id: 'd1', superseded_at: '2026-10-03T12:04:00.000Z' })] });
+    const r = await callTool(ctx, yes);
+    expect(r).toEqual({ mode: 'suggest', downgraded_because: 'no_person_precedent' });
+    expect(calls.setAutoAnswer).not.toHaveBeenCalled();
   });
 
   it('downgrades a question about deploys (blocked), even with a perfect precedent', async () => {
@@ -902,7 +1196,7 @@ describe('recordDecision scope and expiry (TER-1014)', () => {
     const { ctx, calls } = ctxForNotes({ timeZone: 'America/Sao_Paulo', conversation: 'c1' });
     const now = new Date('2026-10-07T01:00:00.000Z'); // 22:00 of Oct 6 in São Paulo (UTC-3)
     const r = await recordDecision(ctx, { question: 'Posso mesclar sozinho?', decision: 'Sim, durante a noite', reason: 'pessoa', scope: 'conversation', expires_at_time: '08:00' }, { embedder: null, now });
-    expect(r).toEqual({ ref: expect.stringMatching(/^note:/), scope: 'conversation', expires_at: '2026-10-07T11:00:00.000Z' });
+    expect(r).toEqual({ recorded: true, ref: expect.stringMatching(/^note:/), scope: 'conversation', expires_at: '2026-10-07T11:00:00.000Z', conflict_check: 'unavailable' });
     expect(written(calls)).toMatchObject({ scope: 'conversation', conversation_id: 'c1', expires_at: new Date('2026-10-07T11:00:00.000Z') });
   });
 
@@ -936,8 +1230,8 @@ describe('searchMemory scope and expiry (TER-1014)', () => {
     const place = { projectId: 'p1', conversationId: 'c9' };
     expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ place, includeExpired: true }), expect.anything(), expect.anything());
     expect(calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ place, includeExpired: true }), expect.anything(), expect.anything());
-    expect(calls.nearestAny).toHaveBeenCalledWith('u1', expect.anything(), expect.anything(), undefined, { ...place, includeExpired: true });
-    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), undefined, { ...place, includeExpired: true });
+    expect(calls.nearestAny).toHaveBeenCalledWith('u1', expect.anything(), expect.anything(), undefined, { ...place, includeExpired: true, includeSuperseded: false });
+    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), undefined, { ...place, includeExpired: true, includeSuperseded: false });
   });
 
   it('skips expired ones by default; a decision or note result carries scope and expires_at, and expired: true once past', async () => {

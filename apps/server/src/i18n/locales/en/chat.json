@@ -69,5 +69,6 @@
   "Enviar para a aba precisa da permissão terminals:write na sua role": "Sending to the tab needs the terminals:write permission in your role",
   "Não foi possível enviar para a aba": "Could not send to the tab",
   "Trabalho automático pausado ou desligado": "Automatic work is paused or turned off",
-  "A decisão usada expirou ou não vale aqui": "The decision used expired or does not apply here"
+  "A decisão usada expirou ou não vale aqui": "The decision used expired or does not apply here",
+  "A decisão usada foi substituída": "The decision used was replaced"
 }

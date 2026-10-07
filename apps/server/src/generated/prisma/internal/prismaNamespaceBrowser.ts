@@ -864,6 +864,7 @@ export const ChatDecisionScalarFieldEnum = {
   autoCount: 'autoCount',
   scope: 'scope',
   expiresAt: 'expiresAt',
+  supersededAt: 'supersededAt',
   createdAt: 'createdAt'
 } as const
 
@@ -891,6 +892,8 @@ export const MemoryItemScalarFieldEnum = {
   scope: 'scope',
   conversationId: 'conversationId',
   expiresAt: 'expiresAt',
+  supersedes: 'supersedes',
+  supersededAt: 'supersededAt',
   sourceAt: 'sourceAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
