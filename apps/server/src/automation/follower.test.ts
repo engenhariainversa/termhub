@@ -102,15 +102,17 @@ function world(o: {
     },
   } as unknown as Repositories;
   const type = vi.fn(async (_ctx: ControlContext, _tabId: string, _text: string) => {});
+  // a restart line goes to the shell, through a file when long (TER-988): not through `type`
+  const typeLine = vi.fn(async (_ctx: ControlContext, _tabId: string, _line: string) => {});
   const restartLine = vi.fn(async () => 'claude --resume …');
   const onRateLimited = vi.fn(async () => {});
   // the clock is well past the stop's grace unless a test moves it
   let now = new Date('2026-10-05T12:00:00.000Z');
-  const deps: FollowerDeps = { repos, instance: ME, lifecycle: { draining: false }, type, restartLine, onRateLimited, settleMs: 0, now: () => now };
+  const deps: FollowerDeps = { repos, instance: ME, lifecycle: { draining: false }, type, typeLine, restartLine, onRateLimited, settleMs: 0, now: () => now };
   const setNow = (d: Date) => (now = d);
   const setPrs = (list: NonNullable<typeof o.prs>) => (o.prs = list);
   const setPaused = (p: boolean) => (o.paused = p);
-  return { run, tab, task, events, repos, deps, type, restartLine, onRateLimited, setNow, setPrs, setPaused, kinds: () => events.map((e) => e.kind) };
+  return { run, tab, task, events, repos, deps, type, typeLine, restartLine, onRateLimited, setNow, setPrs, setPaused, kinds: () => events.map((e) => e.kind) };
 }
 
 const tabCtx = (repos: Repositories, tabId = 'tab1') => ({ repos, token: { id: 'tok', scopes: ['read', 'memory'], tab: { id: tabId, project_id: 'p1' } } }) as unknown as ControlContext;
@@ -282,7 +284,7 @@ describe('budgets (TER-892, spike R8)', () => {
   it('an exited agent is not restarted while the day is at its budget', async () => {
     const w = world({ dailyBudget: 10, daySpent: 12, tab: { state: 'idle', state_text: AGENT_EXITED_TEXT } });
     await followRun(w.deps, w.run.id);
-    expect(w.type).not.toHaveBeenCalled();
+    expect(w.typeLine).not.toHaveBeenCalled();
     expect(w.run.restart_count).toBe(0);
   });
 
@@ -503,7 +505,8 @@ describe('an agent that exited (spec D15, F-12)', () => {
       permission: { mode: 'auto', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: w.run.branch, worktree: w.run.worktree_path },
       prompt: serverMessage(EXITED_RESUME_PROMPT),
     });
-    expect(w.type).toHaveBeenCalledWith(expect.anything(), 'tab1', 'claude --resume …');
+    expect(w.typeLine).toHaveBeenCalledWith(expect.anything(), 'tab1', 'claude --resume …');
+    expect(w.type).not.toHaveBeenCalled();
     expect(w.run.restart_count).toBe(1);
     expect(w.events).toEqual([expect.objectContaining({ kind: 'run_resumed', payload: { tab_id: 'tab1', restart: true, count: 1 } })]);
   });
@@ -526,7 +529,7 @@ describe('an agent that exited (spec D15, F-12)', () => {
   it('a second exit ends the run blocked and escalates it', async () => {
     const w = world({ tab: exited, run: { restart_count: 1 } });
     await followRun(w.deps, w.run.id);
-    expect(w.type).not.toHaveBeenCalled();
+    expect(w.typeLine).not.toHaveBeenCalled();
     expect(w.run).toMatchObject({ status: 'blocked', waiting_reason: 'agent_exited' });
     expect(w.kinds()).toEqual(['run_blocked', 'escalated']);
   });
@@ -534,10 +537,10 @@ describe('an agent that exited (spec D15, F-12)', () => {
   it('is not restarted while paused, nor once its card was untagged', async () => {
     const paused = world({ tab: exited, paused: true });
     await followRun(paused.deps, paused.run.id);
-    expect(paused.type).not.toHaveBeenCalled();
+    expect(paused.typeLine).not.toHaveBeenCalled();
     const untagged = world({ tab: exited, task: { auto: false } });
     await followRun(untagged.deps, untagged.run.id);
-    expect(untagged.type).not.toHaveBeenCalled();
+    expect(untagged.typeLine).not.toHaveBeenCalled();
     expect(untagged.run.status).toBe('cancelled');
   });
 
@@ -978,7 +981,7 @@ describe('escalation to the person: the chat line, the slot, the resume (spec §
     await followRun(w.deps, w.run.id);
     expect(w.run.status).toBe('blocked');
     expect(w.kinds()).toEqual(['run_blocked', 'escalated']);
-    expect(w.type).not.toHaveBeenCalled();
+    expect(w.typeLine).not.toHaveBeenCalled();
     expect(lines(w)[0]).toMatchObject({ text: 'Automático parou em TER-1: O agente saiu de novo depois de reiniciado; confira a aba.' });
   });
 
