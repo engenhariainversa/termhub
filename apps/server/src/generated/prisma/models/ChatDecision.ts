@@ -55,6 +55,7 @@ export type ChatDecisionMinAggregateOutputType = {
   suggestedCount: number | null
   acceptedCount: number | null
   autoCount: number | null
+  supersededAt: Date | null
   createdAt: Date | null
 }
 
@@ -72,6 +73,7 @@ export type ChatDecisionMaxAggregateOutputType = {
   suggestedCount: number | null
   acceptedCount: number | null
   autoCount: number | null
+  supersededAt: Date | null
   createdAt: Date | null
 }
 
@@ -91,6 +93,7 @@ export type ChatDecisionCountAggregateOutputType = {
   suggestedCount: number
   acceptedCount: number
   autoCount: number
+  supersededAt: number
   createdAt: number
   _all: number
 }
@@ -124,6 +127,7 @@ export type ChatDecisionMinAggregateInputType = {
   suggestedCount?: true
   acceptedCount?: true
   autoCount?: true
+  supersededAt?: true
   createdAt?: true
 }
 
@@ -141,6 +145,7 @@ export type ChatDecisionMaxAggregateInputType = {
   suggestedCount?: true
   acceptedCount?: true
   autoCount?: true
+  supersededAt?: true
   createdAt?: true
 }
 
@@ -160,6 +165,7 @@ export type ChatDecisionCountAggregateInputType = {
   suggestedCount?: true
   acceptedCount?: true
   autoCount?: true
+  supersededAt?: true
   createdAt?: true
   _all?: true
 }
@@ -266,6 +272,7 @@ export type ChatDecisionGroupByOutputType = {
   suggestedCount: number
   acceptedCount: number
   autoCount: number
+  supersededAt: Date | null
   createdAt: Date
   _count: ChatDecisionCountAggregateOutputType | null
   _avg: ChatDecisionAvgAggregateOutputType | null
@@ -308,6 +315,7 @@ export type ChatDecisionWhereInput = {
   suggestedCount?: Prisma.IntFilter<"ChatDecision"> | number
   acceptedCount?: Prisma.IntFilter<"ChatDecision"> | number
   autoCount?: Prisma.IntFilter<"ChatDecision"> | number
+  supersededAt?: Prisma.DateTimeNullableFilter<"ChatDecision"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"ChatDecision"> | Date | string
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
@@ -330,6 +338,7 @@ export type ChatDecisionOrderByWithRelationInput = {
   suggestedCount?: Prisma.SortOrder
   acceptedCount?: Prisma.SortOrder
   autoCount?: Prisma.SortOrder
+  supersededAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   user?: Prisma.UserOrderByWithRelationInput
   project?: Prisma.ProjectOrderByWithRelationInput
@@ -355,6 +364,7 @@ export type ChatDecisionWhereUniqueInput = Prisma.AtLeast<{
   suggestedCount?: Prisma.IntFilter<"ChatDecision"> | number
   acceptedCount?: Prisma.IntFilter<"ChatDecision"> | number
   autoCount?: Prisma.IntFilter<"ChatDecision"> | number
+  supersededAt?: Prisma.DateTimeNullableFilter<"ChatDecision"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"ChatDecision"> | Date | string
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
@@ -377,6 +387,7 @@ export type ChatDecisionOrderByWithAggregationInput = {
   suggestedCount?: Prisma.SortOrder
   acceptedCount?: Prisma.SortOrder
   autoCount?: Prisma.SortOrder
+  supersededAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.ChatDecisionCountOrderByAggregateInput
   _avg?: Prisma.ChatDecisionAvgOrderByAggregateInput
@@ -404,6 +415,7 @@ export type ChatDecisionScalarWhereWithAggregatesInput = {
   suggestedCount?: Prisma.IntWithAggregatesFilter<"ChatDecision"> | number
   acceptedCount?: Prisma.IntWithAggregatesFilter<"ChatDecision"> | number
   autoCount?: Prisma.IntWithAggregatesFilter<"ChatDecision"> | number
+  supersededAt?: Prisma.DateTimeNullableWithAggregatesFilter<"ChatDecision"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"ChatDecision"> | Date | string
 }
 
@@ -420,6 +432,7 @@ export type ChatDecisionCreateInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutChatDecisionsInput
   project?: Prisma.ProjectCreateNestedOneWithoutChatDecisionsInput
@@ -442,6 +455,7 @@ export type ChatDecisionUncheckedCreateInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -458,6 +472,7 @@ export type ChatDecisionUpdateInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutChatDecisionsNestedInput
   project?: Prisma.ProjectUpdateOneWithoutChatDecisionsNestedInput
@@ -480,6 +495,7 @@ export type ChatDecisionUncheckedUpdateInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -499,6 +515,7 @@ export type ChatDecisionCreateManyInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -515,6 +532,7 @@ export type ChatDecisionUpdateManyMutationInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -534,6 +552,7 @@ export type ChatDecisionUncheckedUpdateManyInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -563,6 +582,7 @@ export type ChatDecisionCountOrderByAggregateInput = {
   suggestedCount?: Prisma.SortOrder
   acceptedCount?: Prisma.SortOrder
   autoCount?: Prisma.SortOrder
+  supersededAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -587,6 +607,7 @@ export type ChatDecisionMaxOrderByAggregateInput = {
   suggestedCount?: Prisma.SortOrder
   acceptedCount?: Prisma.SortOrder
   autoCount?: Prisma.SortOrder
+  supersededAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -604,6 +625,7 @@ export type ChatDecisionMinOrderByAggregateInput = {
   suggestedCount?: Prisma.SortOrder
   acceptedCount?: Prisma.SortOrder
   autoCount?: Prisma.SortOrder
+  supersededAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -753,6 +775,7 @@ export type ChatDecisionCreateWithoutUserInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
   project?: Prisma.ProjectCreateNestedOneWithoutChatDecisionsInput
   conversation?: Prisma.ChatConversationCreateNestedOneWithoutChatDecisionsInput
@@ -773,6 +796,7 @@ export type ChatDecisionUncheckedCreateWithoutUserInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -821,6 +845,7 @@ export type ChatDecisionScalarWhereInput = {
   suggestedCount?: Prisma.IntFilter<"ChatDecision"> | number
   acceptedCount?: Prisma.IntFilter<"ChatDecision"> | number
   autoCount?: Prisma.IntFilter<"ChatDecision"> | number
+  supersededAt?: Prisma.DateTimeNullableFilter<"ChatDecision"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"ChatDecision"> | Date | string
 }
 
@@ -837,6 +862,7 @@ export type ChatDecisionCreateWithoutProjectInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutChatDecisionsInput
   conversation?: Prisma.ChatConversationCreateNestedOneWithoutChatDecisionsInput
@@ -857,6 +883,7 @@ export type ChatDecisionUncheckedCreateWithoutProjectInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -899,6 +926,7 @@ export type ChatDecisionCreateWithoutConversationInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutChatDecisionsInput
   project?: Prisma.ProjectCreateNestedOneWithoutChatDecisionsInput
@@ -919,6 +947,7 @@ export type ChatDecisionUncheckedCreateWithoutConversationInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -963,6 +992,7 @@ export type ChatDecisionCreateManyUserInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -979,6 +1009,7 @@ export type ChatDecisionUpdateWithoutUserInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneWithoutChatDecisionsNestedInput
   conversation?: Prisma.ChatConversationUpdateOneWithoutChatDecisionsNestedInput
@@ -999,6 +1030,7 @@ export type ChatDecisionUncheckedUpdateWithoutUserInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1017,6 +1049,7 @@ export type ChatDecisionUncheckedUpdateManyWithoutUserInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1035,6 +1068,7 @@ export type ChatDecisionCreateManyProjectInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -1051,6 +1085,7 @@ export type ChatDecisionUpdateWithoutProjectInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutChatDecisionsNestedInput
   conversation?: Prisma.ChatConversationUpdateOneWithoutChatDecisionsNestedInput
@@ -1071,6 +1106,7 @@ export type ChatDecisionUncheckedUpdateWithoutProjectInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1089,6 +1125,7 @@ export type ChatDecisionUncheckedUpdateManyWithoutProjectInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1107,6 +1144,7 @@ export type ChatDecisionCreateManyConversationInput = {
   suggestedCount?: number
   acceptedCount?: number
   autoCount?: number
+  supersededAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -1123,6 +1161,7 @@ export type ChatDecisionUpdateWithoutConversationInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutChatDecisionsNestedInput
   project?: Prisma.ProjectUpdateOneWithoutChatDecisionsNestedInput
@@ -1143,6 +1182,7 @@ export type ChatDecisionUncheckedUpdateWithoutConversationInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1161,6 +1201,7 @@ export type ChatDecisionUncheckedUpdateManyWithoutConversationInput = {
   suggestedCount?: Prisma.IntFieldUpdateOperationsInput | number
   acceptedCount?: Prisma.IntFieldUpdateOperationsInput | number
   autoCount?: Prisma.IntFieldUpdateOperationsInput | number
+  supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1182,6 +1223,7 @@ export type ChatDecisionSelect<ExtArgs extends runtime.Types.Extensions.Internal
   suggestedCount?: boolean
   acceptedCount?: boolean
   autoCount?: boolean
+  supersededAt?: boolean
   createdAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatDecision$projectArgs<ExtArgs>
@@ -1204,6 +1246,7 @@ export type ChatDecisionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   suggestedCount?: boolean
   acceptedCount?: boolean
   autoCount?: boolean
+  supersededAt?: boolean
   createdAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatDecision$projectArgs<ExtArgs>
@@ -1226,6 +1269,7 @@ export type ChatDecisionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   suggestedCount?: boolean
   acceptedCount?: boolean
   autoCount?: boolean
+  supersededAt?: boolean
   createdAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatDecision$projectArgs<ExtArgs>
@@ -1248,10 +1292,11 @@ export type ChatDecisionSelectScalar = {
   suggestedCount?: boolean
   acceptedCount?: boolean
   autoCount?: boolean
+  supersededAt?: boolean
   createdAt?: boolean
 }
 
-export type ChatDecisionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "conversationId" | "tabQuestionId" | "questionIndex" | "header" | "question" | "options" | "multiSelect" | "answer" | "embedModel" | "suggestedCount" | "acceptedCount" | "autoCount" | "createdAt", ExtArgs["result"]["chatDecision"]>
+export type ChatDecisionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "conversationId" | "tabQuestionId" | "questionIndex" | "header" | "question" | "options" | "multiSelect" | "answer" | "embedModel" | "suggestedCount" | "acceptedCount" | "autoCount" | "supersededAt" | "createdAt", ExtArgs["result"]["chatDecision"]>
 export type ChatDecisionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatDecision$projectArgs<ExtArgs>
@@ -1295,6 +1340,11 @@ export type $ChatDecisionPayload<ExtArgs extends runtime.Types.Extensions.Intern
      * are never recorded as a new row, so this is the only trace of them on the source decision.
      */
     autoCount: number
+    /**
+     * When a `record_decision` note replaced it (TER-1015): it leaves the default search and never again
+     * backs a suggestion or an automatic answer.
+     */
+    supersededAt: Date | null
     createdAt: Date
   }, ExtArgs["result"]["chatDecision"]>
   composites: {}
@@ -1737,6 +1787,7 @@ export interface ChatDecisionFieldRefs {
   readonly suggestedCount: Prisma.FieldRef<"ChatDecision", 'Int'>
   readonly acceptedCount: Prisma.FieldRef<"ChatDecision", 'Int'>
   readonly autoCount: Prisma.FieldRef<"ChatDecision", 'Int'>
+  readonly supersededAt: Prisma.FieldRef<"ChatDecision", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"ChatDecision", 'DateTime'>
 }
     

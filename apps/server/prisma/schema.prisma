@@ -1274,6 +1274,9 @@ model ChatDecision {
   /// Times this decision backed an automatic answer sent by the countdown (spec §D11); those answers
   /// are never recorded as a new row, so this is the only trace of them on the source decision.
   autoCount      Int               @default(0) @map("auto_count")
+  /// When a `record_decision` note replaced it (TER-1015): it leaves the default search and never again
+  /// backs a suggestion or an automatic answer.
+  supersededAt   DateTime?         @map("superseded_at")
   createdAt      DateTime          @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
@@ -1315,6 +1318,10 @@ model MemoryItem {
   /// Lesson metadata (spec §3): { evidence, card, pr, tags, agent, tab_id, origin, path }. Null for
   /// every other kind.
   meta        Json?
+  /// The ref (`note:<id>` / `decision:<id>`) a `record_decision` note replaced (TER-1015); null otherwise.
+  supersedes   String?   @map("supersedes")
+  /// When a newer note replaced this one (TER-1015): it leaves the default search and the conflict check.
+  supersededAt DateTime? @map("superseded_at")
   sourceAt    DateTime @map("source_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
