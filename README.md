@@ -210,7 +210,7 @@ Name the one service you mean, as every line above does. `app-blue`/`app-green` 
 
 On another server, the simple path is `cloudflared tunnel --url http://127.0.0.1:3000`.
 
-Set `PUBLIC_URL=https://app.termhub.yourdomain.com` in `.env` (`secure` cookies + Google redirect). If you protect it with **Cloudflare Access**, set `AUTH_MODE=app,cloudflare`, `CF_TEAM_DOMAIN` and `CF_AUD` — the server validates the `Cf-Access-Jwt-Assertion` JWT on every request in addition to the app session.
+Set `PUBLIC_URL=https://app.termhub.yourdomain.com` in `.env` (`secure` cookies, HSTS + Google redirect). X-Forwarded-For is only honoured from the peers in `TRUST_PROXY` (default: loopback and private networks, which covers `cloudflared` on the same host and an nginx on a Docker network). If you protect it with **Cloudflare Access**, set `AUTH_MODE=app,cloudflare`, `CF_TEAM_DOMAIN` and `CF_AUD` — the server validates the `Cf-Access-Jwt-Assertion` JWT on every request in addition to the app session.
 
 On jarvis, `app.termhub.dev` sits behind a Cloudflare Access self-hosted application ("termhub") with an e-mail **allowlist** policy; the landing at `termhub.dev` stays public. The allowlist is managed with a script on the server that talks to the Access API using an API token (Account · Access: Apps and Policies · Edit) stored in `~/.cloudflare/access-token`: `bash ~/cf-access-allowlist.sh a@x.com b@y.com` replaces the policy with exactly those e-mails. The tunnel's own `cert.pem` token can read but not edit Access.
 
@@ -339,7 +339,8 @@ See [.env.example](.env.example). Main ones:
 | Variable | Description |
 | --- | --- |
 | `AUTH_MODE` | `app`, `cloudflare`, `disabled` (dev) or the combination `app,cloudflare` |
-| `PUBLIC_URL` | public URL (secure cookies and OAuth redirect) |
+| `PUBLIC_URL` | public URL (secure cookies and OAuth redirect); when it is `https://`, every response also carries `Strict-Transport-Security` |
+| `TRUST_PROXY` | which peers may set `X-Forwarded-For`/`-Proto`/`-Host`: a comma list of IPs, CIDRs and the presets `loopback`, `linklocal`, `uniquelocal`, or `true`/`false`. Default `loopback,uniquelocal` (a proxy on the same host or on a Docker network). The client address it yields feeds the login lockout and the waitlist limit, so if your proxy reaches the app from a public address, list that address instead of setting `true` |
 | `DATABASE_URL` | Postgres (`postgresql://user:pass@host:5432/db`) |
 | `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`EMAIL_FROM` | login code and invite delivery; without `SMTP_HOST` no e-mail is sent and the server logs an error (never the e-mail itself) |
 | `EMAIL_DEV_CONSOLE` | `true` = development only: print e-mails (login codes included) to the log instead of sending them; refused in production |

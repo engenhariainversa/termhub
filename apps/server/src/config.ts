@@ -4,6 +4,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { resolvePublicCityUrl } from './public/base-url.js';
+import { parseTrustProxy } from './lib/security-headers.js';
 
 // Raiz do monorepo (funciona tanto em src/ quanto em dist/).
 export const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -17,6 +18,12 @@ const envSchema = z.object({
   HOST: z.string().default('127.0.0.1'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL é obrigatória (postgresql://...)'),
   PUBLIC_URL: z.string().url().default('http://localhost:3000'),
+  /**
+   * Which peers may set X-Forwarded-For/-Proto/-Host (lib/security-headers.ts): a comma list of IPs,
+   * CIDRs and the presets loopback, linklocal, uniquelocal; or true / false. Default:
+   * loopback,uniquelocal (a local proxy and the compose networks).
+   */
+  TRUST_PROXY: z.string().optional(),
 
   // "app" | "cloudflare" | "disabled" — pode combinar: "app,cloudflare"
   AUTH_MODE: z.string().default('app'),
@@ -197,6 +204,7 @@ export const config = {
   host: env.HOST,
   databaseUrl: env.DATABASE_URL,
   publicUrl: env.PUBLIC_URL.replace(/\/$/, ''),
+  trustProxy: parseTrustProxy(env.TRUST_PROXY),
   hooksUrl: env.HOOKS_URL ?? `${env.PUBLIC_URL.replace(/\/$/, '')}/api/hooks/events`,
   mcpUrl: env.MCP_URL ?? null,
   publicCityUrl: resolvePublicCityUrl(env),
