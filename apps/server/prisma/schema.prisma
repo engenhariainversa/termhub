@@ -204,6 +204,8 @@ model Machine {
   agentAutoUpdate     Boolean   @default(false) @map("agent_auto_update")
   /// Swap a tab's Claude to another account of this machine by itself when it hits a usage limit (on by default, TER-587).
   claudeAutoSwap  Boolean  @default(true) @map("claude_auto_swap")
+  /// TER-735: show the AI accounts' usage of this machine; when false, termhub never reads the AI CLI credential on it.
+  aiUsageQuery    Boolean  @default(true) @map("ai_usage_query")
   /// R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
   automationAllowed Boolean @default(true) @map("automation_allowed")
   /// The user's own computer (an agent machine): browsers other than the one that added it hide it
@@ -1529,4 +1531,30 @@ model AutomationSummary {
 
   @@id([userId, day])
   @@map("automation_summaries")
+}
+
+/// The security audit trail (TER-577): who signed in or failed to, changed a role or a permission, viewed
+/// as another person, minted or revoked a token, added or removed a machine or an integration, typed into
+/// a tab over the API. Append-only: a trigger refuses UPDATE (see the migration); rows only leave through
+/// the retention purge (SECURITY_EVENT_RETENTION_DAYS). No foreign keys, so the trail outlives the people
+/// and rows it names: `actor_email` and `target_label` are snapshots taken at the time. Metadata only,
+/// never typed text, passwords, codes or tokens.
+model SecurityEvent {
+  id          String   @id
+  actorId     String?  @map("actor_id")
+  actorEmail  String?  @map("actor_email")
+  /// The person an admin was viewing as when acting, or "*" for "all"; null when acting as themselves.
+  viewAsId    String?  @map("view_as_id")
+  action      String
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id")
+  targetLabel String?  @map("target_label")
+  ip          String?
+  meta        Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([action, createdAt])
+  @@index([actorId, createdAt])
+  @@map("security_events")
 }
