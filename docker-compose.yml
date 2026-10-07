@@ -44,6 +44,8 @@ x-app: &app
     NODE_ENV: production
     HOST: 0.0.0.0
     PORT: 3000
+    # The "termhub" password fallback is for dev only: the server refuses to boot in production with it,
+    # so set POSTGRES_PASSWORD in the .env (openssl rand -base64 24) before the first start.
     DATABASE_URL: postgresql://${POSTGRES_USER:-termhub}:${POSTGRES_PASSWORD:-termhub}@db:5432/${POSTGRES_DB:-termhub}
     # SMTP: no .env use SMTP_HOST=mailpit (caixa local) ou um SMTP real
     SEED_LOCAL_MACHINE: ${SEED_LOCAL_MACHINE:-false}
@@ -51,6 +53,8 @@ x-app: &app
     # voice input: the whisper service below (same compose network); unset to turn the mic off
     WHISPER_URL: ${WHISPER_URL:-http://whisper:8000}
     WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-pt}
+    # shared with the whisper service; empty = the mic stays off (the service refuses every request)
+    WHISPER_SECRET: ${WHISPER_SECRET:-}
     # chat decision memory: the embed service below (same compose network). EMBED_URL falls back to it
     # when unset, so an empty EMBED_SECRET is what turns suggestions off.
     EMBED_URL: ${EMBED_URL:-http://embed:8000}
@@ -123,6 +127,8 @@ services:
       # 0 = one thread per physical core (hyperthreads slow CTranslate2 down)
       WHISPER_THREADS: ${WHISPER_THREADS:-0}
       WHISPER_BEAM_SIZE: ${WHISPER_BEAM_SIZE:-5}
+      # Empty = the service refuses every /transcribe and the mic stays off. openssl rand -base64 32
+      WHISPER_SECRET: ${WHISPER_SECRET:-}
     volumes:
       - whisper-models:/models
 
@@ -189,6 +195,7 @@ services:
       TZ: ${TZ:-America/Sao_Paulo}
       WHISPER_URL: ${WHISPER_URL:-http://whisper:8000}
       WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-pt}
+      WHISPER_SECRET: ${WHISPER_SECRET:-}
       EMBED_URL: ${EMBED_URL:-http://embed:8000}
       EMBED_SECRET: ${EMBED_SECRET:-}
     extra_hosts:

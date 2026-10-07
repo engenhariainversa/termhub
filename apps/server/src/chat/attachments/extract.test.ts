@@ -185,7 +185,14 @@ describe('extract: audio and video go to whisper', () => {
     expect(url).toBe('http://whisper:8000/transcribe?language=pt');
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['content-type']).toBe('audio/ogg');
+    expect((init.headers as Record<string, string>).authorization).toBeUndefined();
     expect(Buffer.from(init.body as Uint8Array).toString()).toBe('clip');
+  });
+  it('sends the shared secret as a bearer token when there is one', async () => {
+    const fetch = ok({ text: 'oi', duration: 1 });
+    await extract('audio', Buffer.from('clip'), 'audio/ogg', { whisperUrl: 'http://whisper:8000', language: 'pt', whisperSecret: 's3cret', fetch: fetch as unknown as typeof globalThis.fetch });
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer s3cret');
   });
   it('video is sent the same way (whisper decodes the audio track)', async () => {
     const fetch = ok({ text: 'fala', duration: 1 });

@@ -213,7 +213,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     repo: repos.chatAttachments,
     store: attachmentStore,
     extract,
-    whisper: { whisperUrl: config.transcription?.url ?? null, language: config.transcription?.language ?? null },
+    whisper: {
+      whisperUrl: config.transcription?.url ?? null,
+      language: config.transcription?.language ?? null,
+      whisperSecret: config.transcription?.secret ?? null,
+    },
     onDone: (row) => chatBus.publish({ type: 'attachment_status', user_id: row.user_id, conversation_id: row.conversation_id, attachment: toPublicAttachment(row) }),
     log: fastify.log,
   });
