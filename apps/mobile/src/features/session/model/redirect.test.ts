@@ -1,5 +1,10 @@
 import { redirectFor } from './redirect';
 
+// The app has no Node types: the test reads `app/` through Jest's own `require` and `__dirname`.
+declare const __dirname: string;
+const fs = require('fs') as { readdirSync(dir: string): string[] };
+const path = require('path') as { join(...parts: string[]): string };
+
 describe('redirectFor', () => {
   it('lets an unlocked session sit on the conversation screen', () => {
     expect(redirectFor('unlocked', ['chat', '[id]'], null, '/chat/c1')).toEqual({ target: null, shouldClear: false });
@@ -9,8 +14,37 @@ describe('redirectFor', () => {
     expect(redirectFor('unlocked', ['(tabs)'], null, '/')).toEqual({ target: null, shouldClear: false });
   });
 
-  it('sends an unlocked session on a session route back to the tabs', () => {
+  it('lets an unlocked session open a terminal session from Chats → Sessões (TER-1002)', () => {
+    expect(redirectFor('unlocked', ['session', '[tabId]'], null, '/session/t1')).toEqual({ target: null, shouldClear: false });
+    expect(redirectFor('unlocked', ['session', 'new'], null, '/session/new')).toEqual({ target: null, shouldClear: false });
+  });
+
+  it('a pushed session ("aba terminou") stays open once reached, not bounced to the tabs after the clear', () => {
+    expect(redirectFor('unlocked', ['session', '[tabId]'], '/session/t1', '/session/t1')).toEqual({ target: null, shouldClear: true });
+    expect(redirectFor('unlocked', ['session', '[tabId]'], null, '/session/t1')).toEqual({ target: null, shouldClear: false });
+  });
+
+  it('lets an unlocked session stay on every screen of app/ that belongs to no other phase', () => {
+    const appDir = path.join(__dirname, '../../../../app');
+    const otherPhases = new Set(['_layout', 'index', 'enrol', 'unlock', 'account-deletion']);
+    const screens = fs
+      .readdirSync(appDir)
+      .map((name) => name.replace(/\.tsx$/, ''))
+      .filter((name) => !otherPhases.has(name));
+    expect(screens).toEqual(expect.arrayContaining(['(tabs)', 'chat', 'session', 'file-preview']));
+    for (const first of screens) {
+      expect({ first, ...redirectFor('unlocked', [first], null, `/${first}`) }).toEqual({ first, target: null, shouldClear: false });
+    }
+  });
+
+  it('sends an unlocked session on another phase screen back to the tabs', () => {
     expect(redirectFor('unlocked', ['unlock'], null, '/unlock')).toEqual({ target: '/(tabs)', shouldClear: false });
+    expect(redirectFor('unlocked', ['enrol', 'create-pin'], null, '/enrol/create-pin')).toEqual({ target: '/(tabs)', shouldClear: false });
+    expect(redirectFor('unlocked', [], null, '/')).toEqual({ target: '/(tabs)', shouldClear: false });
+  });
+
+  it('keeps a locked session off the screens the unlocked phase owns', () => {
+    expect(redirectFor('locked', ['session', '[tabId]'], null, '/session/t1')).toEqual({ target: '/unlock', shouldClear: false });
   });
 
   it('sends a locked session on the tabs back to Desbloquear', () => {
