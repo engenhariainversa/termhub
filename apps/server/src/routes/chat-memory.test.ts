@@ -17,6 +17,7 @@ function fakeRepos() {
       listForUser: vi.fn(async () => ({ items: [], next_cursor: null })),
       deleteForUser: vi.fn(async () => true),
       countForUser: vi.fn(async () => 0),
+      replayDataset: vi.fn(async () => ({ decisions: [] as unknown[], older: [] as unknown[], replay: [] as unknown[], scope: [] as unknown[], unembedded: 0 })),
     },
     memoryItems: {
       listNotes: vi.fn(async () => ({ items: [], next_cursor: null })),
@@ -90,6 +91,46 @@ function build(kind: 'web' | 'mobile', repos: ReturnType<typeof fakeRepos>) {
 beforeEach(() => vi.clearAllMocks());
 
 describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
+  it('GET /memory/report measures only the requester, at the server threshold unless given one', async () => {
+    const repos = fakeRepos();
+    const row = (id: string, created_at: string) => ({
+      id,
+      user_id: 'u1',
+      project_id: 'p1',
+      project_name: 'Proj',
+      conversation_id: 'c1',
+      tab_question_id: `t-${id}`,
+      question_index: 0,
+      header: 'H',
+      question: 'Fazer merge?',
+      options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }],
+      multi_select: false,
+      answer: { labels: ['Sim'] },
+      embed_model: 'm#q1',
+      suggested_count: 0,
+      accepted_count: 0,
+      created_at,
+    });
+    repos.chatDecisions.replayDataset.mockResolvedValueOnce({
+      decisions: [row('d1', '2026-09-01T00:00:00.000Z'), row('d2', '2026-09-02T00:00:00.000Z')],
+      older: [],
+      replay: [{ id: 'd2', neighbour_id: 'd1', similarity: 0.995 }],
+      scope: [{ id: 'd2', neighbour_id: 'd1', similarity: 0.995 }],
+      unembedded: 3,
+    });
+    const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/report' });
+    expect(res.statusCode).toBe(200);
+    expect(repos.chatDecisions.replayDataset).toHaveBeenCalledWith('u1', '#q1', 5, 2000);
+    const body = res.json();
+    expect(body).toMatchObject({ threshold: config.decisionSuggestThreshold, period: 'month', dataset: { decisions: 2, unembedded: 3 } });
+    expect(body.replay).toMatchObject({ total: 2, hit: 1, no_precedent: 1 });
+    expect(body.repeats).toMatchObject({ answers: 2, repeated: 1, same_answer: 1, questions: 1 });
+
+    const custom = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/report?threshold=0.9&period=week' });
+    expect(custom.json()).toMatchObject({ threshold: 0.9, period: 'week' });
+    expect((await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/report?threshold=2' })).statusCode).toBe(400);
+  });
+
   it('GET /decisions passes the user, q, cursor and the fixed page size, and never leaks embedding', async () => {
     const repos = fakeRepos();
     repos.chatDecisions.listForUser.mockResolvedValueOnce({
