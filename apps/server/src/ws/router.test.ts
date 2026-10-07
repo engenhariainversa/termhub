@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { AuthContext } from '../auth/index.js';
 import { createLifecycle } from './drain.js';
-import { createUpgradeRouter } from './router.js';
+import { createUpgradeRouter, type UpgradeAccess } from './router.js';
 
 const { resolveUserMock, canAccessMock } = vi.hoisted(() => ({ resolveUserMock: vi.fn(), canAccessMock: vi.fn() }));
 
@@ -345,6 +345,56 @@ describe('createUpgradeRouter', () => {
       });
     }
   });
+  // TER-744: every upgrade the router decides leaves an access record (path only, never the query).
+  describe('onAccess', () => {
+    let accServer: http.Server;
+    let accWss: WebSocketServer;
+    let accPort: number;
+    let seen: Omit<UpgradeAccess, 'req'>[];
+
+    beforeEach(async () => {
+      seen = [];
+      accServer = http.createServer();
+      const router = createUpgradeRouter(accServer, {
+        auth: {} as AuthContext,
+        onAccess: ({ req: _req, ...a }) => seen.push(a),
+      });
+      accWss = new WebSocketServer({ noServer: true });
+      const open = ({ req, socket, head }: { req: http.IncomingMessage; socket: Duplex; head: Buffer }) =>
+        accWss.handleUpgrade(req, socket, head, (ws) => ws.send('opened'));
+      router.add(/^\/ws\/ok$/, open);
+      router.addPublic(/^\/agent\/ok$/, open);
+      accPort = await listen(accServer);
+    });
+
+    afterEach(async () => {
+      accWss.close();
+      await shutdown(accServer);
+    });
+
+    it('an admitted upgrade: 101 with the user, and the path without its query', async () => {
+      resolveUserMock.mockResolvedValue({ id: 'u1' });
+      await attempt(`ws://127.0.0.1:${accPort}/ws/ok?token=secret`);
+      expect(seen).toEqual([{ path: '/ws/ok', userId: 'u1', status: 101 }]);
+    });
+
+    it('a refused upgrade: its status, no user', async () => {
+      resolveUserMock.mockResolvedValue(null);
+      await attempt(`ws://127.0.0.1:${accPort}/ws/ok`);
+      expect(seen).toEqual([{ path: '/ws/ok', userId: null, status: 401 }]);
+    });
+
+    it('a public route: recorded with no status, the route authenticates itself', async () => {
+      await attempt(`ws://127.0.0.1:${accPort}/agent/ok`);
+      expect(seen).toEqual([{ path: '/agent/ok', userId: null, status: null }]);
+    });
+
+    it('an unknown path is not recorded', async () => {
+      await attempt(`ws://127.0.0.1:${accPort}/ws/nope`);
+      expect(seen).toEqual([]);
+    });
+  });
+
   describe('while draining', () => {
     let drainServer: http.Server;
     let drainWss: WebSocketServer;
