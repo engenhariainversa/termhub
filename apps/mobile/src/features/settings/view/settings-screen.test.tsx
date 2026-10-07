@@ -233,7 +233,7 @@ describe('Notificações e Privacidade (permission prompts spec §2)', () => {
   it('the ad measurement switch follows and changes the consent', async () => {
     stores.permissions.setState({ adConsent: 'granted' });
     await render(<SettingsScreen />);
-    const toggle = screen.getByRole('switch', { name: 'Medição de anúncios' });
+    const toggle = screen.getByRole('switch', { name: 'Métricas de uso e anúncios' });
     expect(toggle.props.value).toBe(true);
     await act(async () => fireEvent(toggle, 'valueChange', false));
     expect(stores.permissions.getState().adConsent).toBe('denied');
@@ -247,10 +247,10 @@ describe('Notificações e Privacidade (permission prompts spec §2)', () => {
       return { remove: jest.fn() };
     });
     await render(<SettingsScreen />);
-    expect(screen.getByRole('switch', { name: 'Medição de anúncios' }).props.value).toBe(true);
+    expect(screen.getByRole('switch', { name: 'Métricas de uso e anúncios' }).props.value).toBe(true);
     stores.permissionDeps.trackingStatus.mockResolvedValue('denied');
     await act(async () => onChange('active'));
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Medição de anúncios' }).props.value).toBe(false));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Métricas de uso e anúncios' }).props.value).toBe(false));
     stores.permissionDeps.trackingStatus.mockResolvedValue('undetermined');
   });
 

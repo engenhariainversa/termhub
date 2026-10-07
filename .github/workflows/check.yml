@@ -42,13 +42,21 @@ jobs:
         run: npm test -w @termhub/concierge
       - name: Typecheck + build concierge
         run: npm run typecheck -w @termhub/concierge && npm run build -w @termhub/concierge
-      # A stalled Ubuntu mirror once held `apt-get update` for 13 minutes and the job hit its
-      # 15-minute limit; per-request timeouts and retries make apt move on instead of hanging.
       - name: Instalar tmux (teste e2e do agente)
-        timeout-minutes: 4
+        # A hung Ubuntu mirror once held `apt-get update` until the job timeout cancelled the whole
+        # check; bound each attempt and retry instead (docs/lessons/2026-10-07-ci-apt-get-update-hangs.md).
+        timeout-minutes: 8
         run: |
-          apt_opts="-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=3"
-          sudo apt-get $apt_opts update && sudo apt-get $apt_opts install -y tmux
+          if command -v tmux >/dev/null; then exit 0; fi
+          apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          for attempt in 1 2 3; do
+            if sudo timeout 120 apt-get $apt_opts update && sudo timeout 120 apt-get $apt_opts install -y tmux; then
+              exit 0
+            fi
+            echo "apt-get failed or timed out (attempt $attempt); retrying"
+            sleep 10
+          done
+          exit 1
       - name: Aplicar migrations (testes de repositório usam o Postgres)
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub

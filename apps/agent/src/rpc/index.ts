@@ -47,6 +47,7 @@ export const handlers: Handlers = {
   'file.list': fileList.list,
   'hooks.install': hooks.install,
   'hooks.uninstall': hooks.uninstall,
+  'hooks.status': hooks.status,
   'agent.update': update.update,
   'sim.list': sim.list,
   'sim.boot': sim.boot,
