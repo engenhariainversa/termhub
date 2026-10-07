@@ -242,13 +242,11 @@ Essas transferências são feitas para executar o contrato com você ou a seu pe
 
 O Google Analytics só é carregado depois que você clica em "Aceitar" no aviso de cookies. Você pode mudar a escolha a qualquer momento em "Preferências de cookies" (no perfil do app ou no rodapé do site). Ao recusar, apagamos os cookies do Google Analytics.
 
-O site carrega fontes do Google Fonts, o que envia o seu IP ao Google.
-
-> Nota: TER-583 propõe hospedar as fontes no próprio site.
+As fontes do site são servidas pelo próprio termhub.dev: nenhum pedido vai ao Google Fonts.
 
 ### 9.2 Aplicativo móvel
 
-- **Métricas de uso (Google Analytics for Firebase).** Registramos as telas abertas, só o tipo de tela e nunca o conteúdo, e eventos automáticos de sessão. O Firebase associa esses dados a um identificador de instalação e ao IP, que dá a localização aproximada. [Definir: consentimento ou legítimo interesse; ver item L-5.]
+- **Métricas de uso (Google Analytics for Firebase).** Só com a sua permissão, no mesmo pedido da medição de anúncios: registramos as telas abertas, só o tipo de tela e nunca o conteúdo, e eventos automáticos de sessão. O Firebase associa esses dados a um identificador de instalação e ao IP, que dá a localização aproximada. Você pode mudar a escolha em Ajustes → Privacidade → "Métricas de uso e anúncios".
 - **Medição de anúncios.** Só com a sua permissão:
   - no iOS, pelo pedido de "Permitir rastreamento" (ATT);
   - no Android, pelo nosso próprio pedido.
