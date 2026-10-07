@@ -2,7 +2,7 @@ import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, Prog
 import type { TabState } from '../db/repositories/types.js';
 import type { AutomationEvent } from '../db/repositories/index.js';
 import { ESCALATION_FALLBACK, ESCALATION_TEXT } from '../automation/escalation-text.js';
-import { t, type Locale } from '../i18n/index.js';
+import { t, tk, type Locale } from '../i18n/index.js';
 import { NEEDS_YOU } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
 
@@ -211,7 +211,24 @@ export const FEED_KINDS = [
   'run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed',
   'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup',
   'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out',
+  // TER-974: a cancelled run, and the TER-993 lines both clients already write
+  'run_cancelled', 'permission_auto_approved', 'guard_blocked',
 ] as const satisfies readonly AutomationEvent['kind'][];
+
+/** Why a run was cancelled (`run_cancelled.reason`, follower's UNTAGGED / TAB_CLOSED), as the feed says it. */
+const CANCEL_TEXT: Record<string, string> = {
+  untagged: tk('o card saiu do automático'),
+  tab_closed: tk('a aba foi fechada'),
+};
+
+/** The `reason_text` of a line: an escalation's reason, a failed start's (TER-987) or a cancel's (TER-974). */
+function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string | null {
+  const reason = str(p.reason);
+  if (e.kind === 'escalated') return t(locale, (reason && ESCALATION_TEXT[reason]) || ESCALATION_FALLBACK);
+  if (e.kind === 'run_blocked') return startFailureOf(p, locale);
+  if (e.kind === 'run_cancelled') return reason && CANCEL_TEXT[reason] ? t(locale, CANCEL_TEXT[reason]) : null;
+  return null;
+}
 
 /** An event with what its sentence names, looked up by the repository. */
 export interface FeedRow {
@@ -240,7 +257,6 @@ function startFailureOf(p: Record<string, unknown>, locale: Locale): string | nu
 export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): AutomationFeedEvent[] {
   return rows.map(({ event: e, ref, epic, machine, account, tab_id, branch }) => {
     const p = e.payload;
-    const reason = str(p.reason);
     return {
       id: e.id,
       kind: e.kind,
@@ -261,7 +277,7 @@ export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): A
       url: str(p.url) ?? str(p.pr_url),
       until: str(p.until),
       paused: typeof p.paused === 'boolean' ? p.paused : null,
-      reason_text: e.kind === 'escalated' ? t(locale, (reason && ESCALATION_TEXT[reason]) || ESCALATION_FALLBACK) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : null,
+      reason_text: reasonTextOf(e, p, locale),
       // the tool a permission_auto_approved / guard_blocked line names (TER-993)
       tool: str(p.tool),
     };

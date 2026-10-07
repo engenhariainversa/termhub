@@ -23,6 +23,9 @@ describe('feedLine', () => {
     // TER-987: a start that failed says why
     expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'A máquina não respondeu' }))).toBe('TER-9 não começou: A máquina não respondeu');
     expect(feedLine(ev({ kind: 'run_blocked' }))).toBe('TER-9: parou e espera você');
+    // TER-974: a cancelled run, with its reason when the server sends one
+    expect(feedLine(ev({ kind: 'run_cancelled', reason_text: 'a aba foi fechada' }))).toBe('TER-9: cancelado — a aba foi fechada');
+    expect(feedLine(ev({ kind: 'run_cancelled' }))).toBe('TER-9: cancelado');
     // TER-975: changes to what automatic work may do
     expect(feedLine(ev({ kind: 'automation_on' }))).toBe('Automático ligado no projeto');
     expect(feedLine(ev({ kind: 'tagged' }))).toBe('TER-9: marcado como automático');
@@ -31,7 +34,7 @@ describe('feedLine', () => {
   });
 
   it('has a line for every kind the server records and none for an unknown one', () => {
-    const kinds = ['run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed', 'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup', 'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out'];
+    const kinds = ['run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed', 'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup', 'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out', 'run_cancelled', 'permission_auto_approved', 'guard_blocked'];
     for (const kind of kinds) expect(feedLine(ev({ kind }))).toBeTruthy();
     expect(feedLine(ev({ kind: 'from_the_future' }))).toBeNull();
   });

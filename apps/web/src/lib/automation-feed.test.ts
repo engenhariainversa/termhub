@@ -54,3 +54,12 @@ describe('a start that failed (TER-987)', () => {
     expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'The machine did not answer' }))).toBe('TER-9 did not start: The machine did not answer');
   });
 });
+
+describe('a cancelled run (TER-974)', () => {
+  it('says why when the server knows', async () => {
+    expect(feedLine(ev({ kind: 'run_cancelled', reason_text: 'a aba foi fechada' }))).toBe('TER-9: cancelado — a aba foi fechada');
+    expect(feedLine(ev({ kind: 'run_cancelled' }))).toBe('TER-9: cancelado');
+    await i18n.changeLanguage('en');
+    expect(feedLine(ev({ kind: 'run_cancelled', reason_text: 'the tab was closed' }))).toBe('TER-9: cancelled — the tab was closed');
+  });
+});

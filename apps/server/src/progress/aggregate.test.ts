@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { agentOnCard, progressResponse, type EpicProgress, type PullRequestBadge } from '@termhub/mobile-api';
-import { aggregateCard, aggregateEpic, feedOf, selectEpics, withUsage, type FeedRow, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
+import { aggregateCard, aggregateEpic, FEED_KINDS, feedOf, selectEpics, withUsage, type FeedRow, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
 
 const at = (min: number) => new Date(Date.UTC(2026, 8, 27, 12, 0) + min * 60_000);
 const tab = (id: string, state: ProgressTabRow['state']): ProgressTabRow => ({ id, name: `aba ${id}`, machine_name: 'jarvis', state, state_at: at(0), activity: null, activity_verb: null, rate_limited_at: null, automatic: false });
@@ -170,6 +170,13 @@ describe('automatic tabs and the feed', () => {
     expect(feedOf([row('1', 'run_blocked', start)], 'en')[0].reason_text).toBe('The machine did not answer');
     expect(feedOf([row('1', 'run_blocked', { code: 'LAUNCH_FAILED', stage: 'start', message: 'só pt' })], 'en')[0].reason_text).toBe('só pt');
     expect(feedOf([row('1', 'run_blocked', { code: 'X', reason: 'agent_exited' })], 'pt-BR')[0].reason_text).toBeNull();
+  });
+
+  it('says why a run was cancelled, in the reader language, and nothing for a reason it does not know (TER-974)', () => {
+    expect(feedOf([row('1', 'run_cancelled', { reason: 'tab_closed' })], 'pt-BR')[0].reason_text).toBe('a aba foi fechada');
+    expect(feedOf([row('1', 'run_cancelled', { reason: 'untagged' })], 'en')[0].reason_text).toBe('the card left automatic work');
+    expect(feedOf([row('1', 'run_cancelled', { reason: 'novo' })], 'pt-BR')[0].reason_text).toBeNull();
+    expect(FEED_KINDS).toEqual(expect.arrayContaining(['run_cancelled', 'permission_auto_approved', 'guard_blocked']));
   });
 
   it('names the branch a merge landed on', () => {
