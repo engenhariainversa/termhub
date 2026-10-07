@@ -70,8 +70,10 @@ time the new agent starts.
   it right now.
 - `termhub-agent disconnect` — removes the local config (`~/.termhub/config.json`); revoke the
   token from the termhub web app too.
-- `termhub-agent doctor` — checks the local config, server reachability, `tmux`, `node-pty` and
-  filesystem access to `$HOME`/`Documents`/`Desktop` (and every volume under `/Volumes` on
+- `termhub-agent doctor` — checks the local config, server reachability, the monitor hooks and
+  MCP addresses the server names (an empty POST without a token to each, expecting termhub's 401,
+  so a firewall that only lets `/agent/ws` through shows up as ✗ with the host), `tmux`, `node-pty`
+  and filesystem access to `$HOME`/`Documents`/`Desktop` (and every volume under `/Volumes` on
   macOS).
 
 ## File preview

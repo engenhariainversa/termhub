@@ -1,4 +1,4 @@
-import { CAPABILITY_FILE_READ, CAPABILITY_SIM, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
+import { CAPABILITY_FILE_READ, CAPABILITY_NET_CHECK, CAPABILITY_SIM, NET_CHECK_MIN_AGENT_VERSION, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { msg } from '../i18n/index.js';
@@ -115,6 +115,16 @@ export function requireFileReadCapable(machine: Machine): void {
   if (machine.type !== 'agent') throw new HttpError(400, 'Esta máquina não usa o agente do termhub', 'UNSUPPORTED_MACHINE');
   if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
   if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_FILE_READ)) throw new HttpError(409, FILE_READ_OUTDATED_MESSAGE, 'AGENT_OUTDATED');
+}
+
+/** Testing the hooks and MCP addresses from the machine (TER-586) needs an agent machine whose connected
+ *  agent claims `net_check`: an older agent drops the RPC, which would read as a timeout. */
+export function requireNetCheckCapable(machine: Machine): void {
+  if (machine.type !== 'agent') throw new HttpError(400, 'Esta máquina não usa o agente do termhub', 'UNSUPPORTED_MACHINE');
+  if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
+  if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_NET_CHECK)) {
+    throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para testar os endereços', { version: NET_CHECK_MIN_AGENT_VERSION }), 'AGENT_OUTDATED');
+  }
 }
 
 /** Calls a named RPC on the machine's agent connection, converting connection/protocol errors via toHttpError. */

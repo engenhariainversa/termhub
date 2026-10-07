@@ -5,6 +5,7 @@ import { Modal } from './Modal';
 import { SimulatorSetupCard } from './SimulatorSetupCard';
 import { AgentEnrollment } from './AgentEnrollment';
 import { AgentUpdateCard } from './AgentUpdateCard';
+import { NetworkCheckCard } from './NetworkCheckCard';
 import { AutomationAllowedCard } from './AutomationAllowedCard';
 import { MonitorHooksCard, monitorHealthNote } from './MonitorHooksCard';
 import { useData } from '../lib/data';
@@ -307,6 +308,7 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
         return (
           <>
             <AgentUpdateCard machine={machine} />
+            <NetworkCheckCard machine={machine} />
             <div className="rounded-md border border-line bg-bg p-2 text-xs">
               <div className="flex items-center gap-2">
                 <p className="font-medium text-fg-muted">{t('Token do agente')}</p>

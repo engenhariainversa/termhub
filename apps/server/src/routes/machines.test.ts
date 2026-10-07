@@ -15,6 +15,7 @@ import { setLatestAgentVersion } from '../agent/latest-version.js';
 import { AGENT_TOKEN_RE, hashAgentToken } from '../agent/token.js';
 import { HOOK_TOKEN_PREFIX, hashHookToken } from '../monitor/token.js';
 import { machineRoutes } from './machines.js';
+import { config } from '../config.js';
 
 function makeMachine(overrides: Partial<Machine> & { type: MachineType }): Machine {
   return {
@@ -123,9 +124,9 @@ beforeEach(() => {
 });
 
 /** A connected agent as the registry sees it: hello + an rpc stub, no socket. */
-function attachAgent(version: string, rpc = vi.fn()) {
+function attachAgent(version: string, rpc = vi.fn(), capabilities: string[] = []) {
   const conn = Object.assign(new EventEmitter(), {
-    hello: { type: 'hello', protocol: 1, agent_version: version, os: 'macos', tools: ['tmux'] },
+    hello: { type: 'hello', protocol: 1, agent_version: version, os: 'macos', tools: ['tmux'], capabilities },
     connectedAt: Date.now(),
     rpc,
     close: vi.fn(),
@@ -444,6 +445,38 @@ describe('GET /api/machines/:id/simulators', () => {
     expect(res.statusCode).toBe(503);
     expect(res.json().code).toBe('AGENT_OFFLINE');
     expect(execFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/machines/:id/network-check (hooks and MCP addresses from the machine)', () => {
+  it('answers 409 AGENT_OUTDATED for an agent without net_check, without calling it', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const rpc = attachAgent('0.19.0');
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'GET', url: '/api/machines/m1/network-check' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('AGENT_OUTDATED');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('asks the agent to POST to the hooks address and counts only 401 as reachable', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const rpc = attachAgent('0.20.0', vi.fn(async (_m: string, p: { urls: string[] }) => ({ results: p.urls.map((url) => ({ url, status: 403, error: null })) })), ['net_check']);
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'GET', url: '/api/machines/m1/network-check' });
+    expect(res.statusCode).toBe(200);
+    const [method, params] = rpc.mock.calls[0] as [string, { urls: string[] }];
+    expect(method).toBe('net.check');
+    expect(params.urls[0]).toBe(config.hooksUrl);
+    const hooks = res.json().checks[0];
+    expect(hooks).toEqual({ name: 'hooks', url: config.hooksUrl, host: new URL(config.hooksUrl).host, ok: false, status: 403, error: null });
+  });
+
+  it('answers 400 on a machine without the agent', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'local' });
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'GET', url: '/api/machines/m1/network-check' });
+    expect(res.statusCode).toBe(400);
   });
 });
 

@@ -188,7 +188,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // Every WebSocket server whose clients the drain closes with 1012 (the mobile chat's joins below).
   const sockets: WebSocketServer[] = [
     registerTerminalWs(upgrades, { repos, log: fastify.log }),
-    registerAgentWs(upgrades, { repos, log: fastify.log }),
+    registerAgentWs(upgrades, { repos, log: fastify.log, probeInfo: { hooks_url: config.hooksUrl, mcp_url: config.mcpUrl } }),
     simWs.wss,
     registerMonitorWs(upgrades, { log: fastify.log }),
     registerChatWs(upgrades, { log: fastify.log }),

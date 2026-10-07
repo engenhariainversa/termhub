@@ -13,7 +13,7 @@ import { collectHardware } from '../system/hardware.js';
 import { newAgentToken } from '../agent/token.js';
 import { agents } from '../agent/registry.js';
 import { isOutdated, latestAgentVersion, MIN_SELF_UPDATE_VERSION, runAgentUpdate } from '../agent/latest-version.js';
-import { agentRpc, requireAgentVersion, requireSimCapable } from '../agent/errors.js';
+import { agentRpc, requireAgentVersion, requireNetCheckCapable, requireSimCapable } from '../agent/errors.js';
 import { config } from '../config.js';
 import { installHooks, uninstallHooks } from '../monitor/install.js';
 import { newHookToken } from '../monitor/token.js';
@@ -251,6 +251,27 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     const machine = await scoped(repos, request).machine(id);
     const hook = await repos.machineHooks.findByMachine(machine.id);
     return { installed_at: hook?.installed_at ?? null, hooks_url: config.hooksUrl };
+  });
+
+  /**
+   * From the machine, a POST without a token to the monitor hooks address and the tabs' MCP (TER-586): the
+   * agent reaching /agent/ws says nothing about these, which may sit on another host (termhub.dev). termhub
+   * answers 401 there, so only 401 counts as reachable; a firewall answers something else, or nothing.
+   */
+  app.get('/:id/network-check', async (request) => {
+    const { id } = idParam.parse(request.params);
+    const machine = await scoped(repos, request).machine(id);
+    requireNetCheckCapable(machine);
+    const targets: { name: 'hooks' | 'mcp'; url: string }[] = [{ name: 'hooks', url: config.hooksUrl }];
+    if (config.mcpUrl) targets.push({ name: 'mcp', url: config.mcpUrl });
+    const { results } = await agentRpc(machine, 'net.check', { urls: targets.map((t) => t.url) });
+    const checks = targets.map((t, i) => {
+      const r = results[i];
+      const status = r?.status ?? null;
+      return { name: t.name, url: t.url, host: new URL(t.url).host, ok: status === 401, status, error: r?.error ?? null };
+    });
+    request.log.info({ machineId: machine.id, checks: checks.map((c) => ({ name: c.name, ok: c.ok, status: c.status })) }, 'machine network check');
+    return { checks };
   });
 
   /**

@@ -686,6 +686,16 @@ export interface MachineHooks {
   hooks_url: string;
 }
 
+/** One address the machine must reach besides /agent/ws (TER-586): `ok` only on the 401 termhub answers without a token. */
+export interface NetworkCheck {
+  name: 'hooks' | 'mcp';
+  url: string;
+  host: string;
+  ok: boolean;
+  status: number | null;
+  error: string | null;
+}
+
 export interface MonitorItem {
   tab: Tab;
   project: Project;

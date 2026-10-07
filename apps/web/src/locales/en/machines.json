@@ -412,5 +412,15 @@
   "— sem dono (só visível em \"todas as máquinas\") —": "— no owner (only visible in \"all machines\") —",
   "— sem repositório —": "— no repository —",
   "Aceita trabalho automático": "Accepts automatic work",
-  "Desmarcada, o termhub nunca inicia sozinho um card do quadro nesta máquina. Abas abertas por você continuam como sempre.": "When unchecked, termhub never starts a board card on this machine by itself. Tabs you open keep working as usual."
+  "Desmarcada, o termhub nunca inicia sozinho um card do quadro nesta máquina. Abas abertas por você continuam como sempre.": "When unchecked, termhub never starts a board card on this machine by itself. Tabs you open keep working as usual.",
+  "Hooks do monitor": "Monitor hooks",
+  "MCP das abas": "Tabs' MCP",
+  "Erro ao testar": "Test failed",
+  "Endereços dos hooks e do MCP": "Hooks and MCP addresses",
+  "Testando…": "Testing…",
+  "Testar de novo": "Test again",
+  "Da máquina, um POST sem token em cada endereço: o termhub responde 401. Se o firewall liberar só o endereço do agente, ele conecta mas o monitor fica mudo.": "From the machine, a POST without a token to each address: termhub answers 401. If the firewall only lets the agent's address through, the agent connects but the monitor stays silent.",
+  "respondeu HTTP {{status}} (esperado 401)": "answered HTTP {{status}} (expected 401)",
+  "sem resposta": "no answer",
+  "Libere {{url}} no firewall/proxy desta máquina.": "Allow {{url}} in this machine's firewall/proxy."
 }

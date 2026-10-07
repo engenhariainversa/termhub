@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import type { FastifyBaseLogger } from 'fastify';
-import { CLOSE, CONTROL_CHANNEL, MAX_FRAME, PROTOCOL_VERSION, encodeFrame } from '@termhub/agent-protocol';
+import { CLOSE, CONTROL_CHANNEL, MAX_FRAME, PROTOCOL_VERSION, decodeFrame, encodeFrame } from '@termhub/agent-protocol';
 import type { AuthContext } from '../auth/index.js';
 import { createUpgradeRouter } from '../ws/router.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -81,7 +81,7 @@ describe('registerAgentWs', () => {
   let port: number;
   let log: FastifyBaseLogger;
 
-  function start(opts: { helloTimeoutMs?: number } = {}) {
+  function start(opts: { helloTimeoutMs?: number; probeInfo?: { hooks_url: string; mcp_url: string | null } } = {}) {
     server = http.createServer();
     const router = createUpgradeRouter(server, { auth: {} as AuthContext });
     log = fakeLog();
@@ -225,6 +225,17 @@ describe('registerAgentWs', () => {
     expect(closed).toEqual({ code: 1000, reason: 'probe-ok' });
     expect(registry.isOnline('m1')).toBe(false);
     expect(repos.machines.touchAgent).not.toHaveBeenCalled();
+  });
+
+  it('sends the hooks and MCP addresses (probe_info) before probe-ok', async () => {
+    const probeInfo = { hooks_url: 'https://termhub.dev/api/hooks/events', mcp_url: 'https://termhub.dev/mcp' };
+    await start({ probeInfo });
+    const ws = (await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: `Bearer ${GOOD}` })).ws!;
+    const frames: unknown[] = [];
+    ws.on('message', (data) => frames.push(JSON.parse(decodeFrame(data as Buffer).payload.toString('utf8'))));
+    ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify({ ...goodHello, probe: true })));
+    expect(await waitClose(ws)).toEqual({ code: 1000, reason: 'probe-ok' });
+    expect(frames).toEqual([{ type: 'probe_info', ...probeInfo }]);
   });
 
   it('a live attached connection survives a probe from the same token', async () => {
