@@ -59,3 +59,6 @@ jest.mock('react-native-markdown-display', () => require('./fakes/markdown'));
 // The pickers open native sheets; under jest they answer what a test tells them to.
 jest.mock('expo-image-picker', () => require('./fakes/image-picker'));
 jest.mock('expo-document-picker', () => require('./fakes/document-picker'));
+
+// No native clipboard under jest; the fake keeps the copied text and can be told to fail.
+jest.mock('expo-clipboard', () => require('./fakes/expo-clipboard'));
