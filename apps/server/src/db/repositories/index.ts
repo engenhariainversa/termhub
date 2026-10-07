@@ -50,6 +50,7 @@ import { AutomationRunsRepository } from './automation-runs.js';
 import { ViewAsAuditRepository } from './view-as-audit.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
+import { SecurityEventsRepository } from './security-events.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -103,6 +104,7 @@ export interface Repositories {
   viewAsAudit: ViewAsAuditRepository;
   tabUsage: TabUsageRepository;
   aiAccountExhaustions: AiAccountExhaustionsRepository;
+  securityEvents: SecurityEventsRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
 }
@@ -160,6 +162,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     viewAsAudit: new ViewAsAuditRepository(db),
     tabUsage: new TabUsageRepository(db),
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
+    securityEvents: new SecurityEventsRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
 }

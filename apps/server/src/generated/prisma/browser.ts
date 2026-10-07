@@ -379,3 +379,13 @@ export type AutomationSummary = Prisma.AutomationSummaryModel
  * either account until its retention is over (VIEW_AS_AUDIT_RETENTION_MS).
  */
 export type ViewAsAudit = Prisma.ViewAsAuditModel
+/**
+ * Model SecurityEvent
+ * The security audit trail (TER-577): who signed in or failed to, changed a role or a permission, viewed
+ * as another person, minted or revoked a token, added or removed a machine or an integration, typed into
+ * a tab over the API. Append-only: a trigger refuses UPDATE (see the migration); rows only leave through
+ * the retention purge (SECURITY_EVENT_RETENTION_DAYS). No foreign keys, so the trail outlives the people
+ * and rows it names: `actor_email` and `target_label` are snapshots taken at the time. Metadata only,
+ * never typed text, passwords, codes or tokens.
+ */
+export type SecurityEvent = Prisma.SecurityEventModel
