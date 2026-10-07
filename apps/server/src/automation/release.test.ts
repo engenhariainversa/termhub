@@ -17,13 +17,15 @@ const pr = (over: Partial<TaskPullRequest> = {}): TaskPullRequest => ({
   ci_state: 'passed', ci_summary: { total: 1, passed: 1, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, release_runs: [], changed_level: 'release', synced_at: '', ...over,
 });
 
-function world(o: { enabled?: boolean; auto?: boolean; byCommit?: Record<string, WorkflowRun[]>; headSha?: string | null; ancestor?: boolean; pkg?: string | null; files?: string[]; pkgs?: Record<string, string>; noOwner?: boolean; releaseWorkflows?: string[] } = {}) {
+function world(o: { enabled?: boolean; auto?: boolean; byCommit?: Record<string, WorkflowRun[]>; headSha?: string | null; ancestor?: boolean; pkg?: string | null; files?: string[]; pkgs?: Record<string, string>; noOwner?: boolean; releaseWorkflows?: string[]; runBranches?: string[] } = {}) {
   const events: AutomationEventInput[] = [];
   const messages: string[] = [];
   const updateCi = vi.fn(async () => {});
   const repos = {
     taskPullRequests: { updateCi },
     tasks: { findById: vi.fn(async () => ({ id: 't1', ref: 'TER-1', auto: o.auto ?? true })) },
+    // the branches the card's automatic runs worked on: the PR's head by default
+    automationRuns: { branchesOfTask: vi.fn(async () => o.runBranches ?? ['h']) },
     automationEvents: { insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { id: `e${events.length}`, ...e, created_at: '' })) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
     users: { findById: vi.fn(async () => (o.noOwner ? undefined : { id: 'u1', locale: null })) },
@@ -153,6 +155,15 @@ describe('followMerged: deploy', () => {
     await followMerged(w.deps, w.ctx, pr());
     expect(w.events).toEqual([]);
     expect(pauseAutomation).not.toHaveBeenCalled();
+  });
+
+  it('TER-1004: an automatic card the PR only cites (its runs never worked on the head) records nothing', async () => {
+    // #394, a person's PR on TER-991's branch, cited TER-988: its deploy was recorded on TER-988
+    const w = world({ runBranches: ['TER-988-other-branch'], byCommit: { m1: [run({ conclusion: 'failure' })] } });
+    await followMerged(w.deps, w.ctx, pr());
+    expect(w.events).toEqual([]);
+    expect(pauseAutomation).not.toHaveBeenCalled();
+    expect(w.updateCi).toHaveBeenCalledWith('p1', 'acme/app', 7, expect.objectContaining({ deploy_state: 'failed' }));
   });
 });
 
