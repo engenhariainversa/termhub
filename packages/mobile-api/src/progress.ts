@@ -134,6 +134,8 @@ export const automationFeedEvent = z.object({
   reason_text: z.string().nullable(),
   /** a failed deploy: the project's automatic work was paused by it (false when the pause could not be applied) */
   paused: z.boolean().nullable().default(null),
+  /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
+  tool: z.string().nullable().default(null),
 });
 
 export const progressResponse = z.object({

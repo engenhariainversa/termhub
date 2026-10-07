@@ -262,6 +262,8 @@ export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): A
       until: str(p.until),
       paused: typeof p.paused === 'boolean' ? p.paused : null,
       reason_text: e.kind === 'escalated' ? t(locale, (reason && ESCALATION_TEXT[reason]) || ESCALATION_FALLBACK) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : null,
+      // the tool a permission_auto_approved / guard_blocked line names (TER-993)
+      tool: str(p.tool),
     };
   });
 }
