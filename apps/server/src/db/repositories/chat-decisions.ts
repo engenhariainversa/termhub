@@ -36,8 +36,13 @@ export interface ChatDecision {
   accepted_count: number;
   /** Times this decision backed an automatic answer sent by the countdown (spec §D11). */
   auto_count: number;
+  /** `person` when the person clicked the card; `derived` when the countdown answered it (TER-1006) —
+   *  never a precedent for a suggestion or an automatic answer (concierge memory spec D2/D11). */
+  trust: DecisionTrust;
   created_at: string;
 }
+
+export type DecisionTrust = 'person' | 'derived';
 
 export interface NewDecision {
   user_id: string;
@@ -50,6 +55,8 @@ export interface NewDecision {
   options: DecisionOption[];
   multi_select: boolean;
   answer: DecisionAnswer;
+  /** Left out: `person`. */
+  trust?: DecisionTrust;
 }
 
 export interface DecisionNeighbour extends ChatDecision {
@@ -62,6 +69,8 @@ export interface AnsweredChoiceRow {
   project_id: string;
   conversation_id: string;
   answered_by: string;
+  /** Null on a row answered before the column existed: a click, as every answer then was. */
+  answered_via: string | null;
   payload: unknown;
   answer: unknown;
 }
@@ -85,17 +94,18 @@ interface RawRow {
   suggested_count: number;
   accepted_count: number;
   auto_count: number;
+  trust: string;
   created_at: Date;
 }
 
 const DECISION_COLUMNS = Prisma.raw(
-  `id, user_id, project_id, conversation_id, tab_question_id, question_index, header, question, options, multi_select, answer, embed_model, suggested_count, accepted_count, auto_count, created_at`,
+  `id, user_id, project_id, conversation_id, tab_question_id, question_index, header, question, options, multi_select, answer, embed_model, suggested_count, accepted_count, auto_count, trust, created_at`,
 );
 
 /** Shared column list for the raw SELECTs below, aliased through `d` and joined to `projects` for
  *  `project_name` — everything but `embedding` itself (never selected — write-only from here). */
 const DECISION_SELECT = Prisma.raw(
-  `d.id, d.user_id, d.project_id, p.name AS project_name, d.conversation_id, d.tab_question_id, d.question_index, d.header, d.question, d.options, d.multi_select, d.answer, d.embed_model, d.suggested_count, d.accepted_count, d.auto_count, d.created_at`,
+  `d.id, d.user_id, d.project_id, p.name AS project_name, d.conversation_id, d.tab_question_id, d.question_index, d.header, d.question, d.options, d.multi_select, d.answer, d.embed_model, d.suggested_count, d.accepted_count, d.auto_count, d.trust, d.created_at`,
 );
 
 /** The person's picked label(s) and free text, as one tsvector-able string — never the raw jsonb keys
@@ -126,6 +136,7 @@ const mapRaw = (r: RawRow): ChatDecision => ({
   suggested_count: r.suggested_count,
   accepted_count: r.accepted_count,
   auto_count: r.auto_count,
+  trust: r.trust === 'derived' ? 'derived' : 'person',
   created_at: r.created_at.toISOString(),
 });
 
@@ -172,8 +183,8 @@ export class ChatDecisionsRepository {
       for (const r of rows) {
         const [row] = await tx.$queryRaw<RawRow[]>`
           WITH ins AS (
-            INSERT INTO "chat_decisions" ("id", "user_id", "project_id", "conversation_id", "tab_question_id", "question_index", "header", "question", "options", "multi_select", "answer")
-            VALUES (${newId()}, ${r.user_id}, ${r.project_id}, ${r.conversation_id}, ${r.tab_question_id}, ${r.question_index}, ${r.header}, ${r.question}, ${JSON.stringify(r.options)}::jsonb, ${r.multi_select}, ${JSON.stringify(r.answer)}::jsonb)
+            INSERT INTO "chat_decisions" ("id", "user_id", "project_id", "conversation_id", "tab_question_id", "question_index", "header", "question", "options", "multi_select", "answer", "trust")
+            VALUES (${newId()}, ${r.user_id}, ${r.project_id}, ${r.conversation_id}, ${r.tab_question_id}, ${r.question_index}, ${r.header}, ${r.question}, ${JSON.stringify(r.options)}::jsonb, ${r.multi_select}, ${JSON.stringify(r.answer)}::jsonb, ${r.trust ?? 'person'})
             ON CONFLICT ("tab_question_id", "question_index") WHERE "tab_question_id" IS NOT NULL DO NOTHING
             RETURNING ${DECISION_COLUMNS}
           )
@@ -202,7 +213,8 @@ export class ChatDecisionsRepository {
   }
 
   /** The `k` nearest decisions of this user, same `multi_select` shape, best (highest cosine similarity)
-   *  first. Never another user's rows, never the other `multi_select` shape, never an unembedded row.
+   *  first. Never another user's rows, never the other `multi_select` shape, never an unembedded row, and
+   *  never a `derived` one: this is what a card pre-selects, and the countdown may then send it (TER-1006).
    *  Only rows embedded with exactly `embedModel` (model + text version, `embedTag`): a vector of another
    *  model or text version is not comparable. An exact scan over the user's rows, on purpose: no ANN
    *  index, so no row of this user is ever lost to an approximate index's post-filtering, and one
@@ -212,7 +224,7 @@ export class ChatDecisionsRepository {
     const rows = await this.db.$queryRaw<(RawRow & { similarity: number | string })[]>`
       SELECT ${DECISION_SELECT}, 1 - (d.embedding <=> ${v}::vector) AS similarity
       FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
-      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.multi_select = ${opts.multiSelect} AND d.embed_model = ${opts.embedModel}
+      WHERE d.user_id = ${userId} AND d.trust = 'person' AND d.embedding IS NOT NULL AND d.multi_select = ${opts.multiSelect} AND d.embed_model = ${opts.embedModel}
       ORDER BY d.embedding <=> ${v}::vector
       LIMIT ${opts.k}`;
     return rows.map((r) => ({ ...mapRaw(r), similarity: Number(r.similarity) }));
@@ -221,13 +233,15 @@ export class ChatDecisionsRepository {
   /** Same as `nearest`, but across both `multi_select` shapes (a `search_memory` caller has no
    *  question payload to match a shape against — only `answer_tab_question`'s own precedent check
    *  does, and it re-verifies the shape itself with `mapAnswer`). `projectId` keeps only that
-   *  project's rows (a tab token's search, TER-212 D3). */
-  async nearestAny(userId: string, vector: number[], k: number, projectId?: string): Promise<DecisionNeighbour[]> {
+   *  project's rows (a tab token's search, TER-212 D3). Only rows embedded with exactly `embedModel`
+   *  (`embedTag` of the query's model, TER-1006): a vector of another model or text version is not comparable.
+   *  A `derived` decision is still found here: `search_memory` reports its trust. */
+  async nearestAny(userId: string, vector: number[], k: number, embedModel: string, projectId?: string): Promise<DecisionNeighbour[]> {
     const v = toVector(vector);
     const rows = await this.db.$queryRaw<(RawRow & { similarity: number | string })[]>`
       SELECT ${DECISION_SELECT}, 1 - (d.embedding <=> ${v}::vector) AS similarity
       FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
-      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL${projectFilter(projectId)}
+      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.embed_model = ${embedModel}${projectFilter(projectId)}
       ORDER BY d.embedding <=> ${v}::vector
       LIMIT ${k}`;
     return rows.map((r) => ({ ...mapRaw(r), similarity: Number(r.similarity) }));
@@ -238,7 +252,8 @@ export class ChatDecisionsRepository {
    * similarity floor (spec 2026-09-26 concierge memory D6): the cited decision must be about a question
    * like this one, not just share its answer. Owner-scoped; a row that is another user's, missing, or
    * not embedded yet, or embedded under another model or text version (`embedModel`, the `embedTag` of
-   * the query vector — TER-204), is simply absent from the map (the caller treats absent as "not similar").
+   * the query vector — TER-204), or `derived` (TER-1006), is simply absent from the map (the caller treats
+   * absent as "not similar").
    */
   async similarityTo(ids: string[], userId: string, vector: number[], embedModel: string): Promise<Map<string, number>> {
     if (ids.length === 0) return new Map();
@@ -246,7 +261,7 @@ export class ChatDecisionsRepository {
     const rows = await this.db.$queryRaw<{ id: string; similarity: number | string }[]>`
       SELECT d.id, 1 - (d.embedding <=> ${v}::vector) AS similarity
       FROM "chat_decisions" d
-      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.embed_model = ${embedModel} AND d.id IN (${Prisma.join(ids)})`;
+      WHERE d.user_id = ${userId} AND d.trust = 'person' AND d.embedding IS NOT NULL AND d.embed_model = ${embedModel} AND d.id IN (${Prisma.join(ids)})`;
     return new Map(rows.map((r) => [r.id, Number(r.similarity)]));
   }
 
@@ -332,14 +347,16 @@ export class ChatDecisionsRepository {
    * A `choice` question the chat answered but the sweeper has not yet turned into decisions (spec §5):
    * never a `permission` row, never one still `open` (only `answered` questions are remembered), and
    * never one answered in the last minute — `claim` sets `status: 'answered'` before the keys are sent
-   * to the tab, so a row this fresh may still fail to send and never truly count as answered. `excludeIds`
+   * to the tab, so a row this fresh may still fail to send and never truly count as answered. Any
+   * `answered_via` comes back: the caller records a click as `person` and the countdown's answer as
+   * `derived` (TER-1006). `excludeIds`
    * lets the sweeper skip rows it already found unparseable this run (or a recent one) without them
    * blocking every row behind them at the head of the `ORDER BY`.
    */
   async listAnsweredChoicesWithoutDecision(limit: number, excludeIds: string[] = []): Promise<AnsweredChoiceRow[]> {
     const exclude = excludeIds.length > 0 ? Prisma.sql`AND q.id NOT IN (${Prisma.join(excludeIds)})` : Prisma.empty;
     return this.db.$queryRaw<AnsweredChoiceRow[]>`
-      SELECT q.id, q.project_id, q.conversation_id, q.answered_by, q.payload, q.answer
+      SELECT q.id, q.project_id, q.conversation_id, q.answered_by, q.answered_via, q.payload, q.answer
       FROM "tab_questions" q
       WHERE q.kind = 'choice' AND q.status = 'answered' AND q.answered_by IS NOT NULL AND q.answer IS NOT NULL
         AND q.answered_at < now() - interval '1 minute'

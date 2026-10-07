@@ -162,8 +162,9 @@ export async function maybeScheduleRepeat(repos: Repositories, row: TabQuestion,
   if (!(await autoAnswerAllowed(repos, row))) return null;
   const ids = [...new Set(items.map((it) => it!.decision_id))];
   // The suggestion only says a decision was similar: re-read the ones it cites (the person's own,
-  // still there) and check each still backs its answer, option descriptions included.
-  const decisions = await repos.chatDecisions.findManyForUser(ids, row.user_id);
+  // still there, never one the countdown made, TER-1006) and check each still backs its answer, option
+  // descriptions included.
+  const decisions = (await repos.chatDecisions.findManyForUser(ids, row.user_id)).filter((d) => d.trust === 'person');
   if (!precedentBacks(decisions, payload, answer)) return null;
   return storeAutoAnswer(repos, { row, answer, by: 'memory', reason: REPEAT_REASON, sources: ids.map((id) => ({ kind: 'decision' as const, id })) }, now);
 }
@@ -208,7 +209,8 @@ export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { 
         if (!(await automaticRunOfTab(repos, claimed.tab_id))) throw new HttpError(409, 'Trabalho automático pausado ou desligado', 'AUTOMATION_OFF');
       } else if (!(await autoAnswerAllowed(repos, claimed))) throw new HttpError(409, 'Resposta automática desligada', 'AUTODECIDE_OFF');
       const cited = [...new Set(auto.sources.filter((s) => s.kind === 'decision').map((s) => s.id))];
-      if (cited.length && (await repos.chatDecisions.findManyForUser(cited, user.id)).length < cited.length) throw new HttpError(409, 'A decisão usada foi esquecida', 'PRECEDENT_FORGOTTEN');
+      // A decision the countdown made (`derived`, TER-1006) is no precedent: as good as forgotten.
+      if (cited.length && (await repos.chatDecisions.findManyForUser(cited, user.id)).filter((d) => d.trust === 'person').length < cited.length) throw new HttpError(409, 'A decisão usada foi esquecida', 'PRECEDENT_FORGOTTEN');
       await (deps.answer ?? answerTabQuestion)(controlContextFor(repos, user), claimed.id, auto.answer, { log, via: 'auto', embedder: null });
     } catch (err) {
       const code = codeOf(err, 'AUTO_ANSWER_FAILED');

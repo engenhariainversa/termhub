@@ -862,6 +862,7 @@ export const ChatDecisionScalarFieldEnum = {
   suggestedCount: 'suggestedCount',
   acceptedCount: 'acceptedCount',
   autoCount: 'autoCount',
+  trust: 'trust',
   createdAt: 'createdAt'
 } as const
 

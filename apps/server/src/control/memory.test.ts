@@ -5,6 +5,7 @@ import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Project, Tab } from '../db/repositories/types.js';
 import type { Embedder } from '../chat/embeddings.js';
+import { embedTag } from '../chat/decision-text.js';
 import { Scoped } from '../auth/scope.js';
 import { HttpError } from '../lib/errors.js';
 import type { ControlContext } from './context.js';
@@ -37,6 +38,7 @@ const decision = (over: Partial<DecisionNeighbour> & { id: string }): DecisionNe
   suggested_count: 0,
   accepted_count: 0,
   auto_count: 0,
+  trust: 'person',
   created_at: '2026-09-24T10:00:00.000Z',
   similarity: 0.9,
   ...over,
@@ -157,7 +159,7 @@ describe('searchMemory', () => {
     const r = await searchMemory(ctx, { query: 'x', kinds: ['doc'] }, { embedder });
     expect(calls.nearestAny).not.toHaveBeenCalled();
     expect(calls.decisionTextSearch).not.toHaveBeenCalled();
-    expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ kinds: ['doc'] }), expect.anything(), expect.anything());
+    expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ kinds: ['doc'] }), expect.anything(), expect.anything(), 'm');
     expect(calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ kinds: ['doc'] }), expect.anything(), expect.anything());
     expect(r.results.every((x) => x.kind === 'doc')).toBe(true);
   });
@@ -171,7 +173,7 @@ describe('searchMemory', () => {
     const r = await searchMemory(ctx, { query: 'x', kinds: ['lesson'] }, { embedder });
     expect(calls.nearestAny).not.toHaveBeenCalled();
     expect(calls.decisionTextSearch).not.toHaveBeenCalled();
-    expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ kinds: ['lesson'] }), expect.anything(), expect.anything());
+    expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ kinds: ['lesson'] }), expect.anything(), expect.anything(), 'm');
     expect(r.results).toHaveLength(1);
     expect(r.results[0]).toMatchObject({ kind: 'lesson', verified: true, evidence: 'confirmed', origin: 'note', path: null, tab_id: 't1', card: 'TER-57', pr: 'https://github.com/x/y/pull/1' });
   });
@@ -190,7 +192,7 @@ describe('searchMemory', () => {
   it('kinds: ["project_note"] searches only project notes', async () => {
     const { ctx, embedder, calls } = ctxFor({ vecItems: [item({ id: 'i1', kind: 'project_note' })], textItems: [item({ id: 'i1', kind: 'project_note', rank: 1 })] });
     const r = await searchMemory(ctx, { query: 'x', kinds: ['project_note'] }, { embedder });
-    expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ kinds: ['project_note'] }), expect.anything(), expect.anything());
+    expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ kinds: ['project_note'] }), expect.anything(), expect.anything(), 'm');
     expect(r.results.every((x) => x.kind === 'project_note')).toBe(true);
   });
 
@@ -230,13 +232,30 @@ describe('searchMemory', () => {
     expect(r2.note).toBe(MEMORY_NOTE);
   });
 
+  it('a decision carries its own trust: one the countdown made is derived (TER-1006)', async () => {
+    const { ctx, embedder } = ctxFor({ vecDecisions: [decision({ id: 'd1', trust: 'derived' }), decision({ id: 'd2', similarity: 0.8 })] });
+    const r = await searchMemory(ctx, { query: 'worktree' }, { embedder });
+    expect(r.results.map((x) => [x.ref, x.trust])).toEqual([
+      ['decision:d1', 'derived'],
+      ['decision:d2', 'person'],
+    ]);
+  });
+
+  it('compares vectors of the query\'s own model only: items by model, decisions by model and text version (TER-1006)', async () => {
+    const { ctx, calls } = ctxFor();
+    const embedder: Embedder = { embed: vi.fn(async (texts: string[]) => ({ model: 'other-model', vectors: texts.map(() => [1, 0, 0]) })) };
+    await searchMemory(ctx, { query: 'worktree' }, { embedder });
+    expect(calls.nearest).toHaveBeenCalledWith(expect.anything(), [1, 0, 0], expect.anything(), 'other-model');
+    expect(calls.nearestAny).toHaveBeenCalledWith('u1', [1, 0, 0], expect.anything(), embedTag('other-model'), undefined);
+  });
+
   it('always filters by ctx.scope.user.id', async () => {
     const { ctx, embedder, calls } = ctxFor({ user: 'u7', vecDecisions: [decision({ id: 'd1' })], vecItems: [item({ id: 'i1', kind: 'note' })] });
     await searchMemory(ctx, { query: 'x' }, { embedder });
     // The 4th argument (a project to hold decisions to) is for tab tokens only (TER-212 D3).
-    expect(calls.nearestAny).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), undefined);
+    expect(calls.nearestAny).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), embedTag('m'), undefined);
     expect(calls.decisionTextSearch).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), undefined);
-    expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u7' }), expect.anything(), expect.anything());
+    expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u7' }), expect.anything(), expect.anything(), 'm');
     expect(calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u7' }), expect.anything(), expect.anything());
   });
 });
@@ -252,9 +271,9 @@ describe('searchMemory with a tab token (TER-212 D3)', () => {
     const { ctx, embedder, calls } = withTab({});
     await searchMemory(ctx, { query: 'x', project_id: 'p1' }, { embedder });
     const filter = { ownerId: 'u1', projectId: 'p1', kinds: ['task', 'doc', 'note', 'lesson', 'project_note'] };
-    expect(calls.nearest).toHaveBeenCalledWith(filter, expect.anything(), expect.anything());
+    expect(calls.nearest).toHaveBeenCalledWith(filter, expect.anything(), expect.anything(), 'm');
     expect(calls.itemTextSearch).toHaveBeenCalledWith(filter, expect.anything(), expect.anything());
-    expect(calls.nearestAny).toHaveBeenCalledWith('u1', expect.anything(), expect.anything(), 'p1');
+    expect(calls.nearestAny).toHaveBeenCalledWith('u1', expect.anything(), expect.anything(), embedTag('m'), 'p1');
     expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), 'p1');
   });
 
@@ -695,6 +714,22 @@ describe('answerTabQuestionTool', () => {
     const r = await callTool(ctx, yes);
     expect(r).toEqual({ mode: 'suggest', downgraded_because: 'no_person_precedent' });
     expectSuggestion(calls, d1Source);
+  });
+
+  it('a decision the countdown made (trust derived) never backs auto: no_person_precedent (TER-1006)', async () => {
+    const { ctx, calls } = ctxForAnswer({ decisions: [pastDecision({ id: 'd1', trust: 'derived' })] });
+    const r = await callTool(ctx, yes);
+    expect(r).toEqual({ mode: 'suggest', downgraded_because: 'no_person_precedent' });
+    expect(calls.setAutoAnswer).not.toHaveBeenCalled();
+  });
+
+  it('lists the cited decisions answered in another project, without changing the answer (TER-1006)', async () => {
+    const { ctx, calls } = ctxForAnswer({ decisions: [pastDecision({ id: 'd1', project_id: 'p9', project_name: 'outro' }), pastDecision({ id: 'd2' })] });
+    const r = await callTool(ctx, { ...yes, sources: ['decision:d1', 'decision:d2'] });
+    expect(r).toEqual({ mode: 'auto', due_at: '2026-09-26T12:01:00.000Z', other_project_sources: ['decision:d1'] });
+    expect(calls.setAutoAnswer).toHaveBeenCalledTimes(1);
+    const suggested = await callTool(ctxForAnswer({ decisions: [pastDecision({ id: 'd1', project_id: null, project_name: null })] }).ctx, { ...yes, mode: 'suggest' });
+    expect(suggested).toEqual({ mode: 'suggest', other_project_sources: ['decision:d1'] });
   });
 
   it('downgrades a question about deploys (blocked), even with a perfect precedent', async () => {
