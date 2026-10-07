@@ -809,6 +809,14 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     expect(plain).not.toContain('--no-pager');
   });
 
+  it('an automatic run starts in Claude Code\'s auto mode (TER-993); a bypass mode is refused', () => {
+    const line = launchLine('claude', '/c', 'do it', null, null, { ...PERMISSION, mode: 'auto' });
+    expect(line).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode auto --allowedTools ${TOOLS} ${DENY} -- 'do it'`);
+    for (const mode of ['bypassPermissions', 'dontAsk', 'default', 'plan']) {
+      expect(() => launchLine('claude', '/c', 'x', null, null, { ...PERMISSION, mode: mode as 'auto' }), mode).toThrow(ControlError);
+    }
+  });
+
   it('without the MCP: acceptEdits, one quoted allow list and `--` before the prompt', () => {
     expect(launchLine('claude', '/c', 'do it', null, null, PERMISSION)).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits --allowedTools ${TOOLS} ${DENY} -- 'do it'`);
     expect(launchLine('claude', null, 'do it', null, 'opus', PERMISSION)).toBe(`${CLEAR_CLAUDE}claude --model 'opus' --permission-mode acceptEdits --allowedTools ${TOOLS} ${DENY} -- 'do it'`);

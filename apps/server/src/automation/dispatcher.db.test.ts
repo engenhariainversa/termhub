@@ -145,7 +145,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(input.prompt).toContain(c.ref);
     expect(internal).toEqual({
       cwd: `/home/u/.termhub/worktrees/${projectId}/${c.ref}`,
-      permission: { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: `${c.ref}-card`, worktree: `/home/u/.termhub/worktrees/${projectId}/${c.ref}` },
+      permission: { mode: 'auto', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: `${c.ref}-card`, worktree: `/home/u/.termhub/worktrees/${projectId}/${c.ref}` },
       setupCommand: 'npm ci',
       promptIsFinal: true,
       onTabOpened: expect.any(Function),
