@@ -39,6 +39,7 @@ import {
   revokeGrant,
 } from '../chat/grants.js';
 import type { StandingGrantKind } from '../chat/gate.js';
+import { assertActionTabAlive } from '../chat/tab-gone-actions.js';
 import { indexActions as indexActionsWrite } from '../memory/index-items.js';
 import { HttpError, conflict, notFound, unauthorized } from '../lib/errors.js';
 import { DeviceLockedError, PinInvalidError, deviceRevoked, type SessionService } from '../mobile/session.js';
@@ -287,6 +288,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     let standing: { kind: StandingGrantKind; projectId: string } | undefined;
     if (body.decision !== 'deny') {
       const device = deviceOf(request);
+      // A card whose tab was closed is retired, not approved (TER-986) — before the PIN is asked for.
+      await assertActionTabAlive(repos, user.id, id);
       // An ineligible grant is refused before the challenge is spent or the PIN checked. The project a
       // grant trusts is resolved here, with the user's own id, exactly as the gate will resolve it.
       let existing: ChatAction | undefined;

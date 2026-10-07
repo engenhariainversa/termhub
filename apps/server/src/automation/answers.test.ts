@@ -318,6 +318,18 @@ describe('permissionAllowed (spec D19, §9.2, preflight F-6)', () => {
   /** No autonomy level is an input: a refusal holds at every one by construction. */
   const refused = (req: { tool: string; command: string | null }, allowed: string[], branch: string | null = 'TER-1-card') => !permissionAllowed(req, allowed, branch);
 
+  it('termhub MCP tools (TER-993): reading and adding cards are allowed with any list, reaching past the card never', () => {
+    for (const tool of ['mcp__termhub__create_task', 'mcp__termhub__add_subtasks', 'mcp__termhub__list_tasks', 'mcp__termhub__search_memory', 'mcp__termhub__find']) {
+      expect(permissionAllowed({ tool, command: null }, []), tool).toBe(true);
+    }
+    for (const tool of ['mcp__termhub__set_automation_policy', 'mcp__termhub__start_agent', 'mcp__termhub__send_input', 'mcp__termhub__close_tab', 'mcp__termhub__delete_task', 'mcp__termhub__run_command', 'mcp__termhub__answer_tab_question']) {
+      expect(refused({ tool, command: null }, [tool, 'mcp__termhub']), tool).toBe(true);
+    }
+    // only the exact names: another server's tool of the same name, or a tool left to the mode, still escalates
+    expect(refused({ tool: 'mcp__other__create_task', command: null }, [])).toBe(true);
+    expect(refused({ tool: 'mcp__termhub__update_task', command: null }, [])).toBe(true);
+  });
+
   it('a prefix rule `Bash(npm test:*)` allows the command and its arguments', () => {
     expect(permissionAllowed(bash('npm test -w x'), ['Bash(npm test:*)'])).toBe(true);
     expect(permissionAllowed(bash('npm test'), ['Bash(npm test:*)'])).toBe(true);
@@ -548,6 +560,54 @@ describe('permissionAllowed with the read rules every automatic tab gets (TER-98
 
   it('still escalates a chained command, whose parts the server cannot see apart', () => {
     expect(permissionAllowed(bash('rg -n x apps | head -40'), DEFAULT_AUTOMATION_TOOLS, 'TER-1-card')).toBe(false);
+  });
+});
+
+describe('permissionAllowed with `git -C <worktree>` and `--no-pager` (TER-991)', () => {
+  const bash = (command: string) => ({ tool: 'Bash', command });
+  const WT = '/Users/u/.termhub/worktrees/lxjlcaa8gd35/TER-903';
+  const allowed = (command: string, worktree: string | null = WT) => permissionAllowed(bash(command), DEFAULT_AUTOMATION_TOOLS, 'TER-903-card', worktree);
+
+  it.each([
+    `git -C ${WT} log --oneline -1`,
+    `git -C ${WT}/ status`,
+    'git -C . diff --stat',
+    `git -C ${WT} --no-pager log -5`,
+    `git --no-pager -C ${WT} show HEAD`,
+    'git --no-pager log --oneline -20',
+    'git --no-pager diff origin/main...HEAD',
+    `git -C ${WT} checkout -- apps/web/src/a.ts`,
+    `git -C ${WT} restore apps/web/src/a.ts`,
+    `git -C ${WT} stash list`,
+    `git -C ${WT} grep -n automationAllowList`,
+    `git -C ${WT} rev-parse HEAD`,
+  ])('allows `%s` in the run worktree, as its plain form', (command) => {
+    expect(allowed(command)).toBe(true);
+  });
+
+  it.each([
+    'git -C /Users/u/other-repo log',
+    `git -C ${WT}/apps/web log`,
+    `git -C ${WT}/.. log`,
+    `git -C ${WT}-evil log`,
+    '/usr/bin/git -C . log',
+    `git -C ${WT} push origin main`,
+    `git -C ${WT} push --force origin TER-903-card`,
+    `git -C ${WT} log --ext-diff`,
+    `git --no-pager log --output=/tmp/x`,
+    `git --no-pager -C ${WT} diff --no-index a b`,
+    `git -C ${WT} show --ext-diff HEAD`,
+    'git -c core.pager=cat log',
+    `git -C ${WT} -c core.sshCommand=x fetch`,
+    'GIT_PAGER=cat git log',
+  ])('still escalates `%s`', (command) => {
+    expect(allowed(command)).toBe(false);
+  });
+
+  it('without the run worktree, only the --no-pager forms pass', () => {
+    expect(allowed(`git -C ${WT} log`, null)).toBe(false);
+    expect(allowed('git -C . log', null)).toBe(false);
+    expect(allowed('git --no-pager log', null)).toBe(true);
   });
 });
 

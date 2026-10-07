@@ -500,7 +500,7 @@ describe('an agent that exited (spec D15, F-12)', () => {
     const w = world({ tab: exited });
     await followRun(w.deps, w.run.id);
     expect(w.restartLine).toHaveBeenCalledWith(w.repos, w.tab, expect.objectContaining({ id: 'm1' }), {
-      permission: { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: w.run.branch },
+      permission: { mode: 'auto', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: w.run.branch, worktree: w.run.worktree_path },
       prompt: serverMessage(EXITED_RESUME_PROMPT),
     });
     expect(w.type).toHaveBeenCalledWith(expect.anything(), 'tab1', 'claude --resume …');
@@ -511,7 +511,7 @@ describe('an agent that exited (spec D15, F-12)', () => {
   it('the restart keeps the allow list stored on the run, not the setup\'s current one', async () => {
     const w = world({ tab: exited, run: { allowed_tools: ['Bash(make:*)'] } });
     await followRun(w.deps, w.run.id);
-    expect(w.restartLine).toHaveBeenCalledWith(w.repos, w.tab, expect.anything(), expect.objectContaining({ permission: { mode: 'acceptEdits', allowedTools: ['Bash(make:*)'], branch: w.run.branch } }));
+    expect(w.restartLine).toHaveBeenCalledWith(w.repos, w.tab, expect.anything(), expect.objectContaining({ permission: { mode: 'auto', allowedTools: ['Bash(make:*)'], branch: w.run.branch, worktree: w.run.worktree_path } }));
   });
 
   it('is never restarted on an account exclusive to another project: the run ends blocked for the person (TER-990)', async () => {

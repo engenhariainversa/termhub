@@ -33,6 +33,7 @@ import {
   revokeGrant,
 } from '../chat/grants.js';
 import { decideMany } from '../chat/decisions.js';
+import { assertActionTabAlive } from '../chat/tab-gone-actions.js';
 import { DEFAULT_ALLOW_KINDS, DEFAULT_KIND_LABEL } from '../chat/gate.js';
 import { indexActions as indexActionsWrite } from '../memory/index-items.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
@@ -227,6 +228,9 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     const status = decision === 'deny' ? 'denied' : 'approved';
     const user = request.scope.user;
 
+    // A card whose tab was closed is retired rather than approved (TER-986): 409 TAB_GONE, and every
+    // screen shows it as stale. Before the grant checks, so their refusal never names the wrong cause.
+    if (decision !== 'deny') await assertActionTabAlive(repos, user.id, id);
     // "Permitir sempre nesta aba" is only for what the gate will honour — checked before anything is
     // decided, so a refused request changes nothing (404 not found, 400 GRANT_NOT_ALLOWED otherwise).
     // "Liberar teclas e shell nesta aba" (TER-325) likewise.

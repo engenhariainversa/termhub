@@ -122,10 +122,16 @@ function build(opts: {
       clearProjectSessions: vi.fn(async () => undefined),
       listActiveProjectConversations: vi.fn(async () => [{ id: 'c_p1', project_id: 'p1', last_message_at: '2026-09-23T10:00:00.000Z' }]),
     },
-    chatActions: { decide, findByIdForUser, listByConversation: vi.fn(async () => []) },
+    chatActions: {
+      decide,
+      findByIdForUser,
+      listByConversation: vi.fn(async () => []),
+      failPendingTabGone: vi.fn(async (id: string) => ({ action: { ...pendingAction, id, status: 'failed', error_code: 'TAB_GONE' }, user_id: 'u1' })),
+    },
     tabQuestions: { listByConversation: vi.fn(async () => opts.tabQuestions ?? []) },
     tabLimitNotices: { listByConversation: vi.fn(async () => []) },
-    tabs: { findByIdsForOwner: vi.fn(async (ids: string[]) => (opts.tabs ?? []).filter((t) => ids.includes(t.id))) },
+    // The decision route reads the card's tab (TER-986): by default the fixture card's tab ('t1') is open.
+    tabs: { findByIdsForOwner: vi.fn(async (ids: string[]) => (opts.tabs ?? [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }]).filter((t) => ids.includes(t.id))) },
     chatGrants: {
       grant: vi.fn(async (input: { conversation_id: string; tab_id: string; tool: string; source_action_id: string; granted_by: string }) => ({ id: 'g1', ...input, created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z', revoked_at: null, revoked_by: null })),
       listActive: vi.fn(async () => opts.grants ?? []),
@@ -999,9 +1005,7 @@ describe('POST /chat/actions/:id/decision: terminal grants (TER-325)', () => {
 
   it.each([
     ['approve_tab_terminal', 'run_command', { ...keyCard, tool: 'run_command', args: { tab_id: 't1', command: 'ls' } }],
-    ['approve_tab_terminal', 'a foreign tab', { ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } }],
     ['approve_project_all', 'delete_task', { ...boardCard, tool: 'delete_task', args: { task_id: 'k1' } }],
-    ['approve_project_all', 'a foreign tab', { ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } }],
   ])('%s on %s is 400 GRANT_NOT_ALLOWED before the challenge is consumed or the PIN checked', async (decision, _label, row) => {
     const { app, session, decide, repos } = build({ findByIdForUser: vi.fn(async () => row), tabs, boardTasks: [{ id: 'k1', project_id: 'p1' }] });
     const res = await post(app, decision);
@@ -1070,9 +1074,32 @@ describe('POST /chat/actions/:id/decision: approve_project_always (TER-386)', ()
     expect(repos.chatStandingGrants.grant).not.toHaveBeenCalled();
   });
 
+  // TER-986: a closed tab (or a foreign one, which reads the same) retires the card before any PIN work.
+  it.each(['approve', 'approve_tab_terminal', 'approve_project_all', 'approve_project_always'])(
+    '%s on a card whose tab is gone is 409 TAB_GONE before the challenge is consumed or the PIN checked, and retires it',
+    async (decision) => {
+      const { app, session, decide, repos } = build({ findByIdForUser: vi.fn(async () => ({ ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } })), tabs });
+      const events: ChatEvent[] = [];
+      const unsubscribe = chatBus.subscribe((e) => events.push(e));
+      let res;
+      try {
+        res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision, challenge: 'ch', pin_proof: 'proof-1' } });
+      } finally {
+        unsubscribe();
+      }
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe('TAB_GONE');
+      expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+      expect(session.checkPin).not.toHaveBeenCalled();
+      expect(decide).not.toHaveBeenCalled();
+      expect(repos.chatActions.failPendingTabGone).toHaveBeenCalledWith('act1');
+      expect(repos.chatStandingGrants.grant).not.toHaveBeenCalled();
+      expect(events).toContainEqual(expect.objectContaining({ type: 'action_status', action_id: 'act1', status: 'failed', error_code: 'TAB_GONE' }));
+    },
+  );
+
   it.each([
     ['delete_task', { ...boardCard, tool: 'delete_task', args: { task_id: 'k1' } }],
-    ['a foreign tab', { ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } }],
   ])('on %s is 400 GRANT_NOT_ALLOWED before the challenge is consumed or the PIN checked', async (_label, row) => {
     const { app, session, decide, repos } = build({ findByIdForUser: vi.fn(async () => row), tabs, boardTasks: [{ id: 'k1', project_id: 'p1' }] });
     const res = await post(app);

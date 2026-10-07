@@ -436,6 +436,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         // approve_tab) was only created if the server got that far before the busy/offline answer;
         // this re-read is what brings it in when it was.
         await load();
+      } else if (e instanceof ApiError && e.code === 'TAB_GONE') {
+        // TER-986: the card's tab was closed, so the server retired it instead of deciding it. The card
+        // itself says so ("Expirou: a aba foi fechada", with "Propor de novo"), even before the event.
+        setActions((prev) => prev.map((a) => (a.id === id ? { ...a, status: 'failed', error_code: 'TAB_GONE' } : a)));
       } else setActionError(e instanceof ApiError ? e.message : i18n.t('Não foi possível registrar a decisão'));
     } finally {
       setDecidingId(null);

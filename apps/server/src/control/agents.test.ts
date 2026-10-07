@@ -22,7 +22,7 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import { Scoped } from '../auth/scope.js';
 import { ControlError, type ControlContext } from './context.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { AUTOMATION_DENIED_TOOLS, AUTOMATION_READ_TOOLS, branchFetchRules, branchPushRules, checkPrompt, runBranchRules, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
+import { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_READ_TOOLS, branchFetchRules, branchPushRules, checkPrompt, runBranchRules, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
 import { TEXT_MAX_CHARS } from '@termhub/agent-protocol';
 
 /** A Claude agent's first prompt: the lessons reminder, then the origin reminder (TER-851). */
@@ -854,6 +854,26 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
       expect(t).not.toMatch(/push/);
       expect(t).not.toBe('Bash(npm run:*)');
       expect(t).not.toMatch(/gh pr merge|--force/);
+    }
+  });
+
+  it('with the run worktree, the line also allows its git -C and --no-pager forms and denies their options (TER-991)', () => {
+    const line = launchLine('claude', '/c', 'do it', null, null, { ...PERMISSION, worktree: '/w/TER-1' });
+    for (const r of ['Bash(git -C /w/TER-1 status:*)', 'Bash(git -C /w/TER-1/ status:*)', 'Bash(git -C . status:*)', 'Bash(git --no-pager status:*)', 'Bash(git --no-pager -C /w/TER-1 show:*)'])
+      expect(line).toContain(`'${r}'`);
+    for (const r of AUTOMATION_FORM_DENIED_TOOLS) expect(line).toContain(`'${r}'`);
+    expect(line.indexOf("'Bash(git -C /w/TER-1 status:*)'")).toBeLessThan(line.indexOf('--disallowedTools'));
+    expect(line.indexOf("'Bash(git -C *--ext*)'")).toBeGreaterThan(line.indexOf('--disallowedTools'));
+    const plain = launchLine('claude', '/c', 'do it', null, null, PERMISSION);
+    expect(plain).not.toContain('-C ');
+    expect(plain).not.toContain('--no-pager');
+  });
+
+  it('an automatic run starts in Claude Code\'s auto mode (TER-993); a bypass mode is refused', () => {
+    const line = launchLine('claude', '/c', 'do it', null, null, { ...PERMISSION, mode: 'auto' });
+    expect(line).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode auto --allowedTools ${TOOLS} ${DENY} -- 'do it'`);
+    for (const mode of ['bypassPermissions', 'dontAsk', 'default', 'plan']) {
+      expect(() => launchLine('claude', '/c', 'x', null, null, { ...PERMISSION, mode: mode as 'auto' }), mode).toThrow(ControlError);
     }
   });
 
