@@ -394,5 +394,16 @@
   "Apagar conversa": "Delete conversation",
   "Apagar": "Delete",
   "Não foi possível apagar a conversa": "Could not delete the conversation",
-  "As mensagens, os cards e os anexos desta conversa serão apagados de vez, junto com o que a memória guardou deles. Não dá para desfazer.": "This conversation's messages, cards and attachments will be deleted for good, along with what the memory kept from them. This cannot be undone."
+  "As mensagens, os cards e os anexos desta conversa serão apagados de vez, junto com o que a memória guardou deles. Não dá para desfazer.": "This conversation's messages, cards and attachments will be deleted for good, along with what the memory kept from them. This cannot be undone.",
+  "Gravar áudio": "Record audio",
+  "Enviar áudio": "Send audio",
+  "Descartar áudio": "Discard audio",
+  "Segure para gravar": "Hold to record",
+  "‹ deslize para cancelar": "‹ slide to cancel",
+  "enviando áudio…": "sending audio…",
+  "Reproduzir áudio": "Play audio",
+  "Pausar áudio": "Pause audio",
+  "Ver transcrição": "Show transcript",
+  "Ocultar transcrição": "Hide transcript",
+  "Baixar {{name}}": "Download {{name}}"
 }
