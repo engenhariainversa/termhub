@@ -37,6 +37,9 @@ const decision = (over: Partial<ChatDecision> & { id: string }): ChatDecision =>
   suggested_count: 0,
   accepted_count: 0,
   auto_count: 0,
+  status: 'current',
+  expires_at: null,
+  supersedes: null,
   created_at: '2026-09-24T10:00:00.000Z',
   ...over,
 });
@@ -93,6 +96,12 @@ describe('precedentBacks', () => {
     const d = decision({ id: 'd1' });
     expect(precedentBacks([d], two, { answers: [{ selected: [0] }, { selected: [1] }] })).toBe(false);
     expect(precedentBacks([d], two, { answers: [{ selected: [0] }, { selected: [0] }] })).toBe(true);
+  });
+
+  it('a decision marked desatualizada, errada or substituída is no precedent (TER-1013)', () => {
+    for (const status of ['outdated', 'wrong', 'superseded'] as const) {
+      expect(precedentBacks([decision({ id: 'd1', status })], payload, { answers: [{ selected: [0] }] })).toBe(false);
+    }
   });
 
   it('no decisions backs nothing', () => {

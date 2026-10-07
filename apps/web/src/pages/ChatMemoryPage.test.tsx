@@ -16,6 +16,9 @@ const chatLessonsListMock = vi.fn();
 const chatLessonsVerifyMock = vi.fn();
 const chatLessonsUnverifyMock = vi.fn();
 const chatLessonsForgetMock = vi.fn();
+const setDecisionStatusMock = vi.fn();
+const setNoteStatusMock = vi.fn();
+const memoryReplacementsMock = vi.fn();
 
 vi.mock('../lib/api', () => {
   class ApiError extends Error {
@@ -36,6 +39,9 @@ vi.mock('../lib/api', () => {
       forgetChatDecision: (...a: unknown[]) => forgetChatDecisionMock(...a),
       chatNotes: (...a: unknown[]) => chatNotesMock(...a),
       forgetChatNote: (...a: unknown[]) => forgetChatNoteMock(...a),
+      setDecisionStatus: (...a: unknown[]) => setDecisionStatusMock(...a),
+      setNoteStatus: (...a: unknown[]) => setNoteStatusMock(...a),
+      memoryReplacements: (...a: unknown[]) => memoryReplacementsMock(...a),
       chat: {
         lessons: {
           list: (...a: unknown[]) => chatLessonsListMock(...a),
@@ -62,6 +68,9 @@ const dec = (over: Partial<ChatDecision> & { id: string }): ChatDecision => ({
   suggested_count: 2,
   accepted_count: 1,
   created_at: '2026-09-20T10:00:00.000Z',
+  status: 'current',
+  expires_at: null,
+  superseded_by: null,
   ...over,
 });
 
@@ -72,6 +81,9 @@ const note = (over: Partial<ConciergeNote> & { id: string }): ConciergeNote => (
   decision: 'Sim',
   reason: 'Você sempre usa worktree para isolar o trabalho',
   created_at: '2026-09-21T10:00:00.000Z',
+  status: 'current',
+  expires_at: null,
+  superseded_by: null,
   ...over,
 });
 
@@ -86,6 +98,9 @@ beforeEach(() => {
   chatLessonsVerifyMock.mockReset();
   chatLessonsUnverifyMock.mockReset();
   chatLessonsForgetMock.mockReset();
+  setDecisionStatusMock.mockReset();
+  setNoteStatusMock.mockReset();
+  memoryReplacementsMock.mockReset();
   // Every test that does not care about notes/lessons gets an empty, immediately-resolved list — the
   // search and toggle tests below never mock `chatNotes`/`chatLessonsList` themselves.
   chatNotesMock.mockResolvedValue({ notes: [], next_cursor: null });
@@ -494,4 +509,62 @@ it('"Abrir origem" links to the PR when present, else the card, else the project
   expect(links[0]).toHaveAttribute('href', 'https://github.com/x/y/pull/9');
   expect(links[1]).toHaveAttribute('href', '/project/TER-12');
   expect(links[2]).toHaveAttribute('href', '/projects/p1/notes');
+});
+
+const MEM = { enabled: true, available: true, count: 1, autodecide: false, codex_replies: false, notes: 0 };
+
+it('a current decision shows "Vigente"; "Errada" marks it and offers "Desfazer", which undoes it (TER-1013)', async () => {
+  chatMemoryMock.mockResolvedValue(MEM);
+  chatDecisionsMock.mockResolvedValue({ decisions: [dec({ id: 'd1' })], next_cursor: null });
+  setDecisionStatusMock.mockResolvedValueOnce({ decision: dec({ id: 'd1', status: 'wrong' }) });
+  render(<ChatMemoryPage />, { wrapper: MemoryRouter });
+  expect(await screen.findByText('Vigente')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Errada' }));
+  await waitFor(() => expect(setDecisionStatusMock).toHaveBeenCalledWith('d1', 'wrong', undefined));
+  expect(await screen.findByRole('button', { name: 'Desfazer' })).toBeInTheDocument();
+  expect(screen.getByText('Errada')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Desatualizada' })).toBeNull();
+
+  setDecisionStatusMock.mockResolvedValueOnce({ decision: dec({ id: 'd1' }) });
+  fireEvent.click(screen.getByRole('button', { name: 'Desfazer' }));
+  await waitFor(() => expect(setDecisionStatusMock).toHaveBeenLastCalledWith('d1', 'current', undefined));
+  expect(await screen.findByText('Vigente')).toBeInTheDocument();
+});
+
+it('"Desatualizada" on a note marks it outdated', async () => {
+  chatMemoryMock.mockResolvedValue(MEM);
+  chatDecisionsMock.mockResolvedValue({ decisions: [], next_cursor: null });
+  chatNotesMock.mockResolvedValue({ notes: [note({ id: 'n1' })], next_cursor: null });
+  setNoteStatusMock.mockResolvedValueOnce({ note: note({ id: 'n1', status: 'outdated', expires_at: '2026-10-07T00:00:00.000Z' }) });
+  render(<ChatMemoryPage />, { wrapper: MemoryRouter });
+  fireEvent.click(await screen.findByRole('button', { name: 'Desatualizada' }));
+  await waitFor(() => expect(setNoteStatusMock).toHaveBeenCalledWith('n1', 'outdated', undefined));
+  expect(await screen.findByText('Desatualizada')).toBeInTheDocument();
+});
+
+it('"Substituída por…" searches the other items, picks one and shows "Substituída por «…»"', async () => {
+  chatMemoryMock.mockResolvedValue(MEM);
+  chatDecisionsMock.mockResolvedValue({ decisions: [dec({ id: 'd1' })], next_cursor: null });
+  memoryReplacementsMock.mockResolvedValue({
+    items: [{ ref: 'note:n9', kind: 'note', title: 'Usar a main direto', detail: 'Sim', project_name: 'termhub', created_at: '2026-10-01T00:00:00.000Z' }],
+  });
+  setDecisionStatusMock.mockResolvedValueOnce({ decision: dec({ id: 'd1', status: 'superseded', superseded_by: { ref: 'note:n9', title: 'Usar a main direto' } }) });
+  render(<ChatMemoryPage />, { wrapper: MemoryRouter });
+  fireEvent.click(await screen.findByRole('button', { name: 'Substituída por…' }));
+  fireEvent.change(screen.getByLabelText('Qual item substitui este?'), { target: { value: 'main' } });
+  await waitFor(() => expect(memoryReplacementsMock).toHaveBeenLastCalledWith('main', 'decision:d1'));
+  fireEvent.click(await screen.findByRole('button', { name: /Usar a main direto/ }));
+  await waitFor(() => expect(setDecisionStatusMock).toHaveBeenCalledWith('d1', 'superseded', 'note:n9'));
+  expect(await screen.findByText('Substituída por «Usar a main direto»')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Desfazer' })).toBeInTheDocument();
+});
+
+it('a refused status change shows the server\'s message', async () => {
+  const { ApiError } = await import('../lib/api');
+  chatMemoryMock.mockResolvedValue(MEM);
+  chatDecisionsMock.mockResolvedValue({ decisions: [dec({ id: 'd1' })], next_cursor: null });
+  setDecisionStatusMock.mockRejectedValueOnce(new ApiError(409, 'O item escolhido já substitui outro; desfaça aquela substituição antes'));
+  render(<ChatMemoryPage />, { wrapper: MemoryRouter });
+  fireEvent.click(await screen.findByRole('button', { name: 'Errada' }));
+  expect(await screen.findByText('O item escolhido já substitui outro; desfaça aquela substituição antes')).toBeInTheDocument();
 });

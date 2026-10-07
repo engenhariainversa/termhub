@@ -391,5 +391,21 @@
   "↓ novas mensagens": "↓ new messages",
   "Resposta automática cancelada: o trabalho automático foi pausado ou desligado.": "Automatic answer cancelled: automatic work was paused or turned off.",
   "Opção recomendada pelo agente": "Option the agent recommended",
-  "Ver detalhes": "Show details"
+  "Ver detalhes": "Show details",
+  "Vigente": "Current",
+  "Desatualizada": "Outdated",
+  "Errada": "Wrong",
+  "Substituída": "Superseded",
+  "Substituída por «{{title}}»": "Superseded by “{{title}}”",
+  "Substituída por…": "Superseded by…",
+  "Desfazer": "Undo",
+  "Deixa de valer a partir de agora": "Stops applying from now on",
+  "Sai dos precedentes e da busca padrão": "Leaves the precedents and the default search",
+  "Qual item substitui este?": "Which item replaces this one?",
+  "Buscar decisões e anotações": "Search decisions and notes",
+  "Nenhum item vigente encontrado.": "No current item found.",
+  "Decisão": "Decision",
+  "Anotação": "Note",
+  "Não foi possível buscar os itens da memória": "Could not search the memory items",
+  "Não foi possível alterar o estado do item": "Could not change the item's status"
 }

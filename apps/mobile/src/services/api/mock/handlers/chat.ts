@@ -7,6 +7,8 @@ import { randomId } from '../../../crypto/random';
 import {
   chatGrantListQuery,
   chatMemoryPatchBody,
+  memoryStatusSchema,
+  type TMemoryReplacement,
   decisionChallengesBody,
   isBoardGrantable,
   isTabGrantable,
@@ -1323,6 +1325,68 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const idx = state.notes.findIndex((n) => n.id === ctx.params.id);
     if (idx !== -1) state.notes.splice(idx, 1);
     return { status: 204, body: {} };
+  });
+
+  // --- "Desatualizada" / "Errada" / "Substituída por…" (TER-1013) -------------------------------
+  // The mock keeps the link on the superseded row only (`superseded_by`), which is all the screen
+  // reads; the server keeps it on the replacing row's `supersedes`. Same refusals as the server.
+
+  const memoryRow = (ref: string): MockDecision | MockNote | undefined => {
+    const [kind, id] = ref.split(':');
+    return kind === 'decision' ? state.decisions.find((d) => d.id === id) : kind === 'note' ? state.notes.find((n) => n.id === id) : undefined;
+  };
+  const memoryRows = (): { ref: string; row: MockDecision | MockNote }[] => [
+    ...state.decisions.map((row) => ({ ref: `decision:${row.id}`, row })),
+    ...state.notes.map((row) => ({ ref: `note:${row.id}`, row })),
+  ];
+
+  // The server's `memoryStatusBody`, but with the mock's own ids (`d-worktree`), which carry a hyphen.
+  const mockStatusBody = z
+    .object({ status: memoryStatusSchema, superseded_by: z.string().regex(/^(decision|note):[a-z0-9-]{1,64}$/).optional() })
+    .refine((b) => b.status !== 'superseded' || b.superseded_by !== undefined);
+
+  const setMemoryStatus = (ref: string, rawBody: unknown): MockDecision | MockNote => {
+    const body = mockStatusBody.parse(rawBody);
+    const row = memoryRow(ref);
+    if (!row) throw new WireError(404, 'NOT_FOUND', 'Não encontrado.');
+    let supersededBy: { ref: string; title: string } | null = null;
+    if (body.status === 'superseded') {
+      const by = body.superseded_by!;
+      if (by === ref) throw new WireError(400, 'SELF_REPLACEMENT', 'Um item não pode substituir a si mesmo');
+      const replacement = memoryRow(by);
+      if (!replacement) throw new WireError(404, 'REPLACEMENT_NOT_FOUND', 'O item escolhido para substituir não foi encontrado');
+      if (memoryRows().some((r) => r.ref !== ref && r.row.superseded_by?.ref === by)) throw new WireError(409, 'REPLACEMENT_TAKEN', 'O item escolhido já substitui outro; desfaça aquela substituição antes');
+      if (replacement.superseded_by?.ref === ref) throw new WireError(409, 'REPLACEMENT_CYCLE', 'Este item já substitui o escolhido; desfaça aquela substituição antes');
+      supersededBy = { ref: by, title: 'question' in replacement ? replacement.question : '' };
+    }
+    row.status = body.status;
+    row.expires_at = body.status === 'outdated' ? new Date().toISOString() : null;
+    row.superseded_by = supersededBy;
+    return row;
+  };
+
+  router.route('PUT', '/api/m/v1/chat/decisions/:id/status', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'PUT', htu: ctx.htu, now: ctx.now() });
+    return { status: 200, body: { decision: setMemoryStatus(`decision:${ctx.params.id}`, ctx.body) } };
+  });
+
+  router.route('PUT', '/api/m/v1/chat/notes/:id/status', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'PUT', htu: ctx.htu, now: ctx.now() });
+    return { status: 200, body: { note: setMemoryStatus(`note:${ctx.params.id}`, ctx.body) } };
+  });
+
+  router.route('GET', '/api/m/v1/chat/memory/replacements', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
+    const q = ctx.query.q?.trim().toLowerCase() ?? '';
+    const exclude = ctx.query.exclude;
+    const items: TMemoryReplacement[] = [
+      ...state.decisions.map((d) => ({ ref: `decision:${d.id}`, kind: 'decision' as const, title: d.question, detail: d.answer.text ?? d.answer.labels.join(', '), project_name: d.project_name, created_at: d.created_at, status: d.status })),
+      ...state.notes.map((n) => ({ ref: `note:${n.id}`, kind: 'note' as const, title: n.question, detail: n.decision, project_name: n.project_name, created_at: n.created_at, status: n.status })),
+    ]
+      .filter((it) => it.status === 'current' && it.ref !== exclude && (!q || `${it.title} ${it.detail}`.toLowerCase().includes(q)))
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+      .map(({ status: _status, ...it }) => it);
+    return { status: 200, body: { items } };
   });
 
   // --- "Lições" (spec 2026-09-27 failure lessons §6/§8) -------------------------------------

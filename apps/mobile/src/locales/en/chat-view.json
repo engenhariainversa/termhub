@@ -182,5 +182,17 @@
   "Arquivos do projeto": "Project files",
   "Ver detalhes": "Show details",
   "↓ {{count}} novas mensagens_one": "↓ {{count}} new message",
-  "↓ {{count}} novas mensagens_other": "↓ {{count}} new messages"
+  "↓ {{count}} novas mensagens_other": "↓ {{count}} new messages",
+  "Vigente": "Current",
+  "Desatualizada": "Outdated",
+  "Errada": "Wrong",
+  "Substituída": "Superseded",
+  "Substituída por «{{title}}»": "Superseded by “{{title}}”",
+  "Substituída por…": "Superseded by…",
+  "Desfazer": "Undo",
+  "Qual item substitui este?": "Which item replaces this one?",
+  "Buscar decisões e anotações": "Search decisions and notes",
+  "Nenhum item vigente encontrado.": "No current item found.",
+  "Decisão": "Decision",
+  "Anotação": "Note"
 }
