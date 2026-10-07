@@ -65,6 +65,9 @@ export const chatAttachment = z.object({
   /** pages, duration_s, sheets, width, height, truncated — whatever the extractor learned; `reason` on an unavailable transcription (TER-1035) */
   meta: z.record(z.unknown()).nullable(),
   created_at: z.string(),
+  /** What whisper heard in an audio attachment, once it is `ready` (TER-1036): the bubble shows it
+   * under the player. Null for every other kind; absent from a server older than this field. */
+  transcript: z.string().nullable().optional(),
 });
 export type ChatAttachment = z.infer<typeof chatAttachment>;
 

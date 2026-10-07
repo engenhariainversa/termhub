@@ -214,14 +214,17 @@ export function useAttachmentDrafts(deps: AttachmentDeps) {
     }
   }, []);
 
+  /** Answers the keys of the chips it added (none past the limit), so a caller can follow its own. */
   const add = useCallback(
-    (files: PickedFile[]) => {
+    (files: PickedFile[]): string[] => {
       const before = latest.current;
       const { drafts: next, notice } = planAdd(before, files, () => `d${++seq.current}`);
       setNotice(notice);
-      if (next.length === before.length) return;
+      if (next.length === before.length) return [];
       dispatch({ type: 'add', drafts: next });
-      for (const draft of next.slice(before.length)) if (!draft.refused) void upload(draft);
+      const added = next.slice(before.length);
+      for (const draft of added) if (!draft.refused) void upload(draft);
+      return added.map((d) => d.key);
     },
     [upload],
   );
