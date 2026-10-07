@@ -52,6 +52,11 @@ export const DEPLOY_FAILED_NOT_PAUSED = 'deploy_failed_not_paused';
 /** A release workflow (npm, OTA…) failed after a merge: nothing is paused, a person looks at it. */
 export const RELEASE_FAILED = 'release_failed';
 
+/** Why a PR head was escalated before the cap: its fix ended and the head did not move (no push). */
+export const FIXER_NO_PUSH = 'fixer_no_push';
+/** TER-1016: a run of the card ended after the conflict escalation and the head it left is still the escalated one. */
+export const RUN_DONE_NO_PUSH = 'run_done_no_push';
+
 /** The text the feed, the chat line and the push show for each escalation reason (spec §9.3). */
 export const ESCALATION_TEXT: Record<string, string> = {
   [TRUST_PROMPT]: tk('O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.'),
@@ -84,6 +89,25 @@ export const ESCALATION_FALLBACK = tk('O trabalho automático parou e espera voc
 export function escalationText(reason: string, locale: Locale = DEFAULT_LOCALE): string | null {
   const key = ESCALATION_TEXT[reason];
   return key ? t(locale, key) : null;
+}
+
+/**
+ * A conflict escalation names the PR head it is about, and why it was sent (TER-1016): a later push ends it,
+ * so the feed must show which head still waits.
+ */
+const CONFLICT_TEXT: Record<string, string> = {
+  '': tk('O PR continua com conflito em {{sha}} depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
+  [FIXER_NO_PUSH]: tk('A correção do conflito em {{sha}} terminou sem push; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
+  [RUN_DONE_NO_PUSH]: tk('A execução terminou, mas o PR continua com conflito em {{sha}} (nenhum push novo); resolva o conflito e o termhub mescla quando o CI ficar verde.'),
+};
+
+/** The feed's text for an `escalated` event: its reason's text, with the PR head when the reason is about one. */
+export function escalationEventText(payload: Record<string, unknown>, locale: Locale = DEFAULT_LOCALE): string {
+  const reason = typeof payload.reason === 'string' ? payload.reason : '';
+  const sha = typeof payload.sha === 'string' && payload.sha ? payload.sha.slice(0, 7) : null;
+  const cause = typeof payload.cause === 'string' ? payload.cause : '';
+  if (reason !== CONFLICT_CAP || !sha) return escalationReasonText(reason, locale);
+  return t(locale, CONFLICT_TEXT[cause] ?? CONFLICT_TEXT['']!, { sha });
 }
 
 /** `escalationText`, or the generic text for a reason with none. */
