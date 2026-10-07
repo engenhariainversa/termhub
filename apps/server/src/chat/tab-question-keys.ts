@@ -46,8 +46,10 @@ export function choiceKeyPlan(payload: ChoicePayload, answer: ChoiceAnswer): Key
   return steps;
 }
 
-/** "1" is always "Yes"; Escape always rejects, and leaves Claude at its prompt for the text, if any. */
+/** "1" is always "Yes"; Escape always rejects, and leaves Claude at its prompt for the text, if any. An
+ * option chosen on the card (TER-995) is its digit: Claude Code picks a numbered option with it at once. */
 export function permissionKeyPlan(answer: PermissionAnswer): KeyStep[] {
+  if (answer.option) return [{ key: digit(answer.option.number) }];
   if (answer.allow) return [{ key: '1' }];
   return answer.text === undefined ? [{ key: 'Escape' }] : [{ key: 'Escape' }, { text: answer.text }, { key: 'Enter' }];
 }
@@ -72,17 +74,27 @@ export function codexChoiceKeyPlan(payload: ChoicePayload, answer: ChoiceAnswer)
   return steps;
 }
 
-/** Codex's approval menu: "y" approves; Escape cancels and leaves Codex at its prompt for the text, if any. */
-export function codexPermissionKeyPlan(answer: PermissionAnswer): KeyStep[] {
+/**
+ * Codex's approval menu: "y" approves; Escape cancels and leaves Codex at its prompt for the text, if any.
+ * An option chosen on the card (TER-995) is reached with the arrows from the row under the cursor
+ * (`cursor`, read off the same screen) and confirmed with Enter, as the menu's footer says: its own
+ * shortcuts ("p", "a") are not keys the agent may send.
+ */
+export function codexPermissionKeyPlan(answer: PermissionAnswer, cursor = 1): KeyStep[] {
+  if (answer.option) {
+    const delta = answer.option.number - cursor;
+    return [...Array<KeyStep>(Math.abs(delta)).fill({ key: delta > 0 ? 'Down' : 'Up' }), { key: 'Enter' }];
+  }
   if (answer.allow) return [{ key: 'y' }];
   return answer.text === undefined ? [{ key: 'Escape' }] : [{ key: 'Escape' }, { text: answer.text }, { key: 'Enter' }];
 }
 
 /** The plan for a card's answer, by the agent whose dialog the card mirrors (`payload.agent`). */
 export function answerKeyPlan(kind: 'choice', payload: ChoicePayload, answer: ChoiceAnswer): KeyStep[];
-export function answerKeyPlan(kind: 'permission', payload: PermissionPayload, answer: PermissionAnswer): KeyStep[];
-export function answerKeyPlan(kind: 'choice' | 'permission', payload: ChoicePayload | PermissionPayload, answer: ChoiceAnswer | PermissionAnswer): KeyStep[] {
+/** `cursor`: the number of the menu's selected option on the screen just read, for a Codex option answer. */
+export function answerKeyPlan(kind: 'permission', payload: PermissionPayload, answer: PermissionAnswer, cursor?: number): KeyStep[];
+export function answerKeyPlan(kind: 'choice' | 'permission', payload: ChoicePayload | PermissionPayload, answer: ChoiceAnswer | PermissionAnswer, cursor?: number): KeyStep[] {
   const codex = payload.agent === 'codex';
   if (kind === 'choice') return (codex ? codexChoiceKeyPlan : choiceKeyPlan)(payload as ChoicePayload, answer as ChoiceAnswer);
-  return (codex ? codexPermissionKeyPlan : permissionKeyPlan)(answer as PermissionAnswer);
+  return codex ? codexPermissionKeyPlan(answer as PermissionAnswer, cursor) : permissionKeyPlan(answer as PermissionAnswer);
 }

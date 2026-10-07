@@ -59,6 +59,10 @@ describe('permissionKeyPlan', () => {
     expect(permissionKeyPlan({ allow: false })).toEqual([{ key: 'Escape' }]);
     expect(permissionKeyPlan({ allow: false, text: 'use pnpm' })).toEqual([{ key: 'Escape' }, { text: 'use pnpm' }, { key: 'Enter' }]);
   });
+  it('an option of the dialog is its digit (TER-995)', () => {
+    expect(permissionKeyPlan({ allow: true, option: { number: 3, label: 'Yes, and switch to auto mode' } })).toEqual([{ key: '3' }]);
+    expect(permissionKeyPlan({ allow: false, option: { number: 4, label: 'No' } })).toEqual([{ key: '4' }]);
+  });
 });
 
 const codexAsk: ChoicePayload = {
@@ -88,6 +92,12 @@ describe('codexPermissionKeyPlan', () => {
     expect(codexPermissionKeyPlan({ allow: true })).toEqual([{ key: 'y' }]);
     expect(codexPermissionKeyPlan({ allow: false })).toEqual([{ key: 'Escape' }]);
     expect(codexPermissionKeyPlan({ allow: false, text: 'use azul.txt' })).toEqual([{ key: 'Escape' }, { text: 'use azul.txt' }, { key: 'Enter' }]);
+  });
+  it('an option of the menu: the arrows from the cursor, then Enter (TER-995)', () => {
+    const option = (number: number) => ({ allow: true, option: { number, label: 'x' } });
+    expect(codexPermissionKeyPlan(option(1))).toEqual([{ key: 'Enter' }]);
+    expect(codexPermissionKeyPlan(option(3))).toEqual([{ key: 'Down' }, { key: 'Down' }, { key: 'Enter' }]);
+    expect(codexPermissionKeyPlan(option(1), 2)).toEqual([{ key: 'Up' }, { key: 'Enter' }]);
   });
 });
 
