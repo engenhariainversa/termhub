@@ -10,6 +10,7 @@ import { createMailer } from './email/mailer.js';
 import { createAccessAllowlist } from './cloudflare/access.js';
 import { AuthService, authRoutes, buildAuthHook, type AuthContext } from './auth/index.js';
 import { applyErrorHandler, sendError } from './lib/errors.js';
+import { registerSecurityHeaders } from './lib/security-headers.js';
 import { machineRoutes } from './routes/machines.js';
 import { projectRoutes } from './routes/projects.js';
 import { projectGroupRoutes } from './routes/project-groups.js';
@@ -128,7 +129,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       // Nunca logar cookies/authorization.
       redact: ['req.headers.cookie', 'req.headers.authorization', 'req.headers["cf-access-jwt-assertion"]', 'req.headers.dpop'],
     },
-    trustProxy: true, // atrás do Cloudflare Tunnel / cloudflared em 127.0.0.1
+    // Only known proxies may set X-Forwarded-*: TRUST_PROXY, default loopback + private networks (TER-579).
+    trustProxy: config.trustProxy,
     bodyLimit: 1024 * 1024,
   });
 
@@ -166,12 +168,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     }
   });
 
-  // Cabeçalhos básicos de segurança
-  fastify.addHook('onSend', async (_req, reply) => {
-    reply.header('x-content-type-options', 'nosniff');
-    reply.header('x-frame-options', 'DENY');
-    reply.header('referrer-policy', 'same-origin');
-  });
+  // Security headers: nosniff, no framing, referrer, HSTS on https, CSP on HTML (TER-579).
+  registerSecurityHeaders(fastify, { publicUrl: config.publicUrl });
 
   applyErrorHandler(fastify);
 
