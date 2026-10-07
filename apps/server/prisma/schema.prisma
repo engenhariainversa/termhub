@@ -1016,6 +1016,8 @@ model ChatAction {
   machineId      String?          @map("machine_id")
   projectId      String?          @map("project_id")
   tabId          String?          @map("tab_id")
+  /// The tab's name when the action was asked (TER-1024): a closed tab's card still names it.
+  tabName        String?          @map("tab_name")
   /// The grant this action ran under (`chat_grants`), when it was not asked but allowed by one.
   grantId        String?          @map("grant_id")
   errorCode      String?          @map("error_code")

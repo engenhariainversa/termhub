@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { Link } from 'react-router-dom';
 import { ChatActionCard } from './ChatActionCard';
 import { ChatActionGroup, type BatchDecision } from './ChatActionGroup';
+import { ChatActionTrail } from './ChatActionTrail';
 import { ChatComposer } from './ChatComposer';
 import { ChatContextMeter } from './ChatContextMeter';
 import { ChatHost } from './ChatHost';
@@ -21,7 +22,7 @@ import { compactDoneText, compactFailedText, isCompactCommand, isCompactShortcut
 import { useChatLive } from '../../lib/chat-live';
 import { droppedRows, mergeMessage, mergeThread } from '../../lib/chat-merge';
 import { replyTargetOf, replyTargetOfAction, replyTargetOfQuestion, type ReplyTarget } from '../../lib/chat-reply';
-import { chatTimeline, groupPendingActions } from '../../lib/chat-timeline';
+import { chatTimeline, groupPendingActions, groupSettledActions } from '../../lib/chat-timeline';
 import { activeGrantsLabel } from './grant-list-text';
 import { isGrantActive } from './grant-time';
 import { isActive, upsertSubagent } from '../../lib/subagents';
@@ -707,7 +708,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     .map((a) => a.id)
     .join(',');
   useEffect(() => setSeparate(false), [pendingKey]);
-  const entries = useMemo(() => (separate ? timeline : groupPendingActions(timeline)), [separate, timeline]);
+  // A turn's settled cards fold into one accordion above its answer (TER-1024); pending ones never do.
+  const entries = useMemo(() => groupSettledActions(separate ? timeline : groupPendingActions(timeline)), [separate, timeline]);
   /**
    * The row a running answer would be written into: only the newest one can still be the live one.
    * Keyed on the id, not on a position: the loop below walks the merged timeline, where an index
@@ -739,6 +741,29 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     for (const g of standingGrants) if (g.source_action_id !== null) map.set(g.source_action_id, g);
     return map;
   }, [standingGrants]);
+
+  /** One gate card, alone in the thread or inside a turn's accordion (TER-1024). */
+  const renderAction = (action: ChatAction) => {
+    const g = grantByAction.get(action.id);
+    const pg = projectGrantByAction.get(action.id);
+    const sg = standingGrantByAction.get(action.id);
+    return (
+      <ChatActionCard
+        key={action.id}
+        action={action}
+        deciding={decidingId === action.id}
+        note={queuedNotes[action.id]}
+        grant={g}
+        projectGrant={pg}
+        standingGrant={sg}
+        revoking={(g !== undefined && revokingId === g.id) || (pg !== undefined && revokingId === pg.id) || (sg !== undefined && revokingId === sg.id)}
+        onRevoke={revoke}
+        onDecide={decide}
+        onRepropose={repropose}
+        onReply={startActionReply}
+      />
+    );
+  };
 
   /** What the thread's pin follows: a new row or card (the timeline) or a streamed delta (the fold). */
   const followKey = useMemo(() => ({ timeline, version }), [timeline, version]);
@@ -1060,27 +1085,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
               />
             );
           }
-          if (entry.kind === 'action') {
-            const g = grantByAction.get(entry.action.id);
-            const pg = projectGrantByAction.get(entry.action.id);
-            const sg = standingGrantByAction.get(entry.action.id);
-            return (
-              <ChatActionCard
-                key={entry.action.id}
-                action={entry.action}
-                deciding={decidingId === entry.action.id}
-                note={queuedNotes[entry.action.id]}
-                grant={g}
-                projectGrant={pg}
-                standingGrant={sg}
-                revoking={(g !== undefined && revokingId === g.id) || (pg !== undefined && revokingId === pg.id) || (sg !== undefined && revokingId === sg.id)}
-                onRevoke={revoke}
-                onDecide={decide}
-                onRepropose={repropose}
-                onReply={startActionReply}
-              />
-            );
-          }
+          if (entry.kind === 'action_trail') return <ChatActionTrail key={`t:${entry.actions[0]!.id}`} actions={entry.actions} renderAction={renderAction} initiallyOpen={entry.actions.some((a) => queuedNotes[a.id] !== undefined)} />;
+          if (entry.kind === 'action') return renderAction(entry.action);
           const m = entry.message;
           const row = fold.get(m.id);
           const streaming = row?.text || undefined;
