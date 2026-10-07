@@ -43,7 +43,16 @@ jobs:
       - name: Typecheck + build concierge
         run: npm run typecheck -w @termhub/concierge && npm run build -w @termhub/concierge
       - name: Instalar tmux (teste e2e do agente)
-        run: sudo apt-get update && sudo apt-get install -y tmux
+        # A mirror that stops answering leaves apt hanging until the job timeout cancels the
+        # whole check (docs/lessons/2026-10-07-ci-apt-get-tmux-hangs.md): cap each attempt and retry.
+        run: |
+          command -v tmux && exit 0
+          for i in 1 2 3; do
+            sudo timeout 180 sh -c 'apt-get update -o Acquire::Retries=3 && apt-get install -y -o Acquire::Retries=3 tmux' && exit 0
+            echo "apt falhou ou travou (tentativa $i), tentando de novo"
+            sleep 5
+          done
+          exit 1
       - name: Aplicar migrations (testes de repositório usam o Postgres)
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
