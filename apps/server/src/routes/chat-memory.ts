@@ -5,6 +5,9 @@ import type { MemoryItem } from '../db/repositories/memory-items.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { config } from '../config.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
+import { SUGGEST_K } from '../chat/decision-memory.js';
+import { EMBED_TEXT_VERSION } from '../chat/decision-text.js';
+import { memoryReport } from '../chat/memory-report.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
 import { notFound } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
@@ -15,6 +18,8 @@ import { requestLocale, t } from '../i18n/index.js';
 const listQuery = z.object({ q: z.string().trim().max(200).optional(), cursor: z.string().max(500).optional() });
 const notesQuery = z.object({ cursor: z.string().max(500).optional() });
 const lessonsQuery = z.object({ q: z.string().trim().max(200).optional(), project_id: z.string().min(1).max(64).optional(), cursor: z.string().max(500).optional() });
+/** `GET /memory/report` (TER-1009): `threshold` defaults to the server's suggestion threshold. */
+const reportQuery = z.object({ threshold: z.coerce.number().min(0).max(1).optional(), period: z.enum(['week', 'month']).default('month') });
 const idParam = z.object({ id: z.string().min(1).max(64) });
 /** `PATCH /memory` (spec D8/§8): at least one of the switches, never none — an empty body is a
  *  400, not a silent no-op. */
@@ -22,6 +27,10 @@ const memoryBody = z
   .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional() })
   .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined, { message: 'Informe enabled, autodecide ou codex_replies' });
 
+/** Newest decisions the memory report measures at most (TER-1009): an exact scan per decision. */
+export const REPORT_DECISIONS = 2000;
+/** Miss cases the report lists at most, newest first. */
+export const REPORT_MISSES = 50;
 /** 50 decisions per page (spec 2026-09-26 §4.6). */
 export const DECISIONS_PAGE = 50;
 /** 50 notes per page (task-10 brief), same page size as decisions. */
@@ -152,6 +161,15 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
       if (cancelled.length > 0) await publishTabQuestions(repos, 'tab_question', cancelled, { update: true });
     }
     return memory(userId);
+  });
+
+  /** The memory report (TER-1009, `docs/memory-report.md`): replay of the signed-in user's own
+   *  decisions against their own memory, and the "pergunta repetida" counts. Read-only, and only ever
+   *  the requester's rows — the dataset query is scoped to this user on both sides of every pair. */
+  app.get('/memory/report', async (request) => {
+    const { threshold, period } = reportQuery.parse(request.query);
+    const ds = await repos.chatDecisions.replayDataset(request.scope.user.id, '#' + EMBED_TEXT_VERSION, SUGGEST_K, REPORT_DECISIONS);
+    return memoryReport(ds, { threshold: threshold ?? config.decisionSuggestThreshold, period, maxMisses: REPORT_MISSES });
   });
 
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, keyset `cursor` like `/decisions`. */
