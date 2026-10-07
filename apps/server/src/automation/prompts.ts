@@ -24,10 +24,12 @@ const ASK_LINE = 'Pare e pergunte só quando a decisão não estiver no card, no
  * the allow list says, for a command with more than one `cd`, a `( … )` group it cannot check before it
  * runs, and a command too long for its parser (a big heredoc script) — all seen in the first automatic runs.
  * A program called by its path (`/bin/ls`) misses the `Bash(ls:*)` rule, and the allow list refuses rules
- * with a path on purpose (`unsafeAllowedTool`), so the line asks for the bare name.
+ * with a path on purpose (`unsafeAllowedTool`), so the line asks for the bare name. The cwd is the worktree
+ * (TER-991): `git -C <worktree>` is allowed too, but a run that knows it needs no `-C`; `sed -i` always asks
+ * (Claude Code treats it as a write), so files change through Edit/Write.
  */
 export const SHELL_LINE =
-  'Comandos de leitura (grep, rg, find, git log/diff/show), testes, build e gh pr view/checks/create já estão liberados. Rode um comando simples por vez, com os programas pelo nome (ls, não /bin/ls): sem vários cd, sem grupos entre parênteses ( … ) e sem scripts longos em heredoc; use caminhos a partir da raiz da worktree (grep -rn x apps/web/src), a ferramenta Grep para buscar e Edit/Write para mudar arquivos.';
+  'Leitura (grep, rg, find, git log/diff/show), testes, build e gh pr view/checks/create já liberados. O diretório atual já é a worktree: rode tudo nele, sem git -C nem cd. Um comando por vez, programas pelo nome (ls, não /bin/ls): sem vários cd, sem grupos entre parênteses ( … ), sem heredoc longo; caminhos a partir da raiz (grep -rn x apps/web/src), Grep para buscar e Edit/Write para mudar arquivos (não sed -i).';
 /** The push the tab may send without asking (TER-968, R5: only its own branch is pre-allowed). */
 const pushLine = (branch: string) => `Para enviar, use git push -u origin ${branch}; outro push pede aprovação.`;
 const POLICY_MAX = 900;
