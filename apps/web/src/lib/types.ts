@@ -1593,6 +1593,54 @@ export interface ApiToken {
   created_at: string;
 }
 
+/** One MCP call made with a token (TER-577): metadata only. Names are null once the row is gone. */
+export interface ApiTokenEvent {
+  id: string;
+  tool: string;
+  ok: boolean;
+  error_code: string | null;
+  duration_ms: number;
+  machine_id: string | null;
+  machine_name: string | null;
+  project_id: string | null;
+  project_name: string | null;
+  tab_id: string | null;
+  tab_name: string | null;
+  attachment_id: string | null;
+  created_at: string;
+}
+
+/** One row of the security trail (TER-577). `action` stays a plain string: one a newer server adds shows as is. */
+export interface SecurityEvent {
+  id: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  view_as_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  target_label: string | null;
+  ip: string | null;
+  meta: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SecurityEventFilter {
+  /** an action (`auth.login`) or a group (`auth`) */
+  action?: string;
+  q?: string;
+  /** ISO dates */
+  from?: string;
+  to?: string;
+}
+
+export interface SecurityEventsPage {
+  events: SecurityEvent[];
+  next: string | null;
+  actions: string[];
+  retention_days: number;
+}
+
 /** Create response: the only time the plain token is ever returned. */
 export interface CreatedApiToken {
   api_token: ApiToken;
