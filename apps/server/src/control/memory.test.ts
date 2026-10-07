@@ -78,6 +78,7 @@ interface Setup {
   textItems?: MemoryHit[];
   embedder?: Embedder | null;
   user?: string;
+  superseded?: string[];
 }
 
 function ctxFor(setup: Setup = {}) {
@@ -90,6 +91,7 @@ function ctxFor(setup: Setup = {}) {
     projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) },
     chatDecisions: { nearestAny, textSearch: decisionTextSearch },
     memoryItems: { nearest, textSearch: itemTextSearch },
+    memoryRules: { supersededRefs: vi.fn(async () => new Set(setup.superseded ?? [])) },
   } as unknown as Repositories;
   const user = setup.user ?? 'u1';
   const scope = { user: { id: user } as never, viewAs: { kind: 'self' as const }, ownerId: user, createAs: user };
@@ -128,6 +130,16 @@ describe('searchMemory', () => {
     expect(r.note).toBe(MEMORY_NOTE);
     expect(r.results[0]).toMatchObject({ ref: 'doc:i1', match: 'both', similarity: 0.7 });
     expect(r.results[1]).toMatchObject({ ref: 'decision:d1', match: 'semantic' });
+  });
+
+  it('leaves out the notes and decisions an approved rule supersedes (TER-1010)', async () => {
+    const { ctx, embedder } = ctxFor({
+      vecDecisions: [decision({ id: 'd1', similarity: 0.95 })],
+      vecItems: [item({ id: 'n1', kind: 'note', similarity: 0.9 }), item({ id: 'n2', kind: 'note', similarity: 0.8 })],
+      superseded: ['decision:d1', 'note:n1'],
+    });
+    const r = await searchMemory(ctx, { query: 'worktree' }, { embedder });
+    expect(r.results.map((x) => x.ref)).toEqual(['note:n2']);
   });
 
   it('checks project_id through ctx.scoped.project first: a foreign project 404s with no repo search', async () => {

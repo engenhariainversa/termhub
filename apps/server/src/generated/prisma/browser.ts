@@ -308,6 +308,16 @@ export type ChatDecision = Prisma.ChatDecisionModel
  */
 export type MemoryItem = Prisma.MemoryItemModel
 /**
+ * Model MemoryRule
+ * A current rule (regra vigente) or a proposal for one (TER-1010): decisions and concierge notes that
+ * say the same thing, consolidated per project, or per user when the same permission shows up in two or
+ * more projects. Nothing here applies itself: a `proposed` row waits for the person. Approving a `rule`
+ * makes it `approved` and supersedes its `source_refs`; approving a `policy` asks one
+ * `set_automation_policy` card per project (`awaiting_confirmation`) and only those cards change the
+ * Setup. A `rejected` row keeps the same proposal from coming back for 180 days.
+ */
+export type MemoryRule = Prisma.MemoryRuleModel
+/**
  * Model InstanceSecret
  * A secret this instance generates for itself, once, and keeps: no env var to configure, and blue
  * and green read the same row. `public_id` keys the HMAC behind every id on the public city.

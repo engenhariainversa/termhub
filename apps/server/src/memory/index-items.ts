@@ -2,7 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import type { Repositories } from '../db/repositories/index.js';
-import type { MemoryItem, NewMemoryItem } from '../db/repositories/memory-items.js';
+import type { MemoryItem, MemoryTrust, NewMemoryItem } from '../db/repositories/memory-items.js';
 import { EMBED_TIMEOUT_MS, memoryCode, withTimeout, type Embedder } from '../chat/embeddings.js';
 import { newId } from '../lib/ids.js';
 import { cleanMemoryText, ITEM_TEXT_MAX, memoryText } from './text.js';
@@ -215,7 +215,7 @@ export async function indexTasks(repos: Repositories, ownerId: string, deps: Mem
  */
 export async function indexNote(
   repos: Pick<Repositories, 'memoryItems'>,
-  note: { owner_id: string; project_id: string | null; question: string; decision: string; reason: string; sources: string[] },
+  note: { owner_id: string; project_id: string | null; question: string; decision: string; reason: string; sources: string[]; trust?: MemoryTrust },
   deps: MemoryDeps,
 ): Promise<MemoryItem> {
   const id = newId();
@@ -228,7 +228,8 @@ export async function indexNote(
     chunk_index: 0,
     title: cleanMemoryText(note.question),
     text: cut(`Decisão: ${note.decision}\nMotivo: ${note.reason}\nFontes: ${note.sources.join(', ')}`),
-    trust: 'derived',
+    // A rule the person approved (TER-1010) is theirs; a `record_decision` note is the concierge's reading.
+    trust: note.trust ?? 'derived',
     source_at: new Date(),
   };
   const [inserted] = await repos.memoryItems.upsertMany([item]);

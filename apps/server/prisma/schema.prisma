@@ -82,6 +82,7 @@ model User {
   pushTabFinished    Boolean            @default(false) @map("push_tab_finished")
   memoryItems        MemoryItem[]
   verifiedMemoryItems MemoryItem[] @relation("MemoryItemVerifier")
+  memoryRules        MemoryRule[]
   standingGrants     ChatStandingGrant[]
   chatDefaultRestrictions ChatDefaultRestriction[]
   /// Self-service deletion (TER-720): when the person asked; the account is deactivated from then on.
@@ -260,7 +261,8 @@ model Project {
   chatDecisions  ChatDecision[]
   groupItems     ProjectGroupItem[]
   memoryItems    MemoryItem[]
-  agentColumn    TaskColumn?   @relation("ProjectAgentColumn", fields: [agentColumnId], references: [id], onDelete: SetNull)
+  memoryRules    MemoryRule[]
+  agentColumn   TaskColumn?   @relation("ProjectAgentColumn", fields: [agentColumnId], references: [id], onDelete: SetNull)
   /// The project's board columns, in `position` order.
   columns        TaskColumn[]  @relation("ProjectColumns")
   pullRequests   TaskPullRequest[]
@@ -1323,6 +1325,42 @@ model MemoryItem {
   @@index([ownerId, kind])
   @@index([ownerId, projectId])
   @@map("memory_items")
+}
+
+/// A current rule (regra vigente) or a proposal for one (TER-1010): decisions and concierge notes that
+/// say the same thing, consolidated per project, or per user when the same permission shows up in two or
+/// more projects. Nothing here applies itself: a `proposed` row waits for the person. Approving a `rule`
+/// makes it `approved` and supersedes its `source_refs`; approving a `policy` asks one
+/// `set_automation_policy` card per project (`awaiting_confirmation`) and only those cards change the
+/// Setup. A `rejected` row keeps the same proposal from coming back for 180 days.
+model MemoryRule {
+  id          String    @id
+  ownerId     String    @map("owner_id")
+  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /// Null = a rule at the user level (every project of the owner).
+  projectId   String?   @map("project_id")
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// rule | policy
+  kind        String
+  /// proposed | awaiting_confirmation | approved | rejected
+  status      String
+  text        String
+  /// A `policy` row: { autonomy?, max_parallel?, project_ids[], applied[] }. Null for a `rule`.
+  policy      Json?
+  /// The memory refs (`note:<id>`, `decision:<id>`) the rule was consolidated from.
+  sourceRefs  Json      @map("source_refs")
+  /// sha256 of kind, scope, policy and the sorted refs: the same proposal is the same row.
+  fingerprint String
+  /// The `note` memory item an approved rule is indexed as, so search finds the rule instead of its sources.
+  noteId      String?   @map("note_id")
+  decidedAt   DateTime? @map("decided_at")
+  decidedBy   String?   @map("decided_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([ownerId, fingerprint])
+  @@index([ownerId, status])
+  @@map("memory_rules")
 }
 
 /// A secret this instance generates for itself, once, and keeps: no env var to configure, and blue

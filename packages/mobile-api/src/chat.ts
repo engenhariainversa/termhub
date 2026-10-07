@@ -286,6 +286,33 @@ export const lessonListSchema = z.object({ lessons: z.array(lessonItemSchema), n
  * itself stays in the repository until a PR removes it. */
 export const lessonForgetSchema = z.object({ ok: z.literal(true), note: z.string().optional() });
 
+/** "Regras vigentes" (TER-1010): one approved rule, or a proposal waiting for the person. `project` is
+ * `null` for a rule at the user level (every project). A `policy` row changes the automatic-work Setup —
+ * `autonomy` and/or `max_parallel` on `projects` — and only through the `set_automation_policy` cards it
+ * asks when approved (`awaiting_confirmation` until they are decided); `applied` marks the projects whose
+ * card was approved. `sources` are the notes and decisions the rule came from, still in memory. */
+export const memoryRuleSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['rule', 'policy']),
+  status: z.enum(['proposed', 'awaiting_confirmation', 'approved', 'rejected']),
+  project: z.object({ id: z.string(), name: z.string() }).nullable(),
+  text: z.string(),
+  policy: z
+    .object({
+      autonomy: z.enum(['pr', 'merge', 'deploy', 'release']).nullable(),
+      max_parallel: z.number().int().nullable(),
+      projects: z.array(z.object({ id: z.string(), name: z.string(), applied: z.boolean() })),
+    })
+    .nullable(),
+  sources: z.array(z.object({ ref: z.string(), title: z.string(), statement: z.string(), project_name: z.string().nullable() })),
+  created_at: z.string(),
+  decided_at: z.string().nullable(),
+});
+/** `GET chat/rules`: the approved rules and the proposals waiting for the person (consolidated on the call). */
+export const memoryRulesResponse = z.object({ rules: z.array(memoryRuleSchema), proposals: z.array(memoryRuleSchema) });
+/** `POST chat/rules/:id/approve` (body `{ text? }`) and `POST chat/rules/:id/reject`. */
+export const memoryRuleDecisionResponse = z.object({ rule: memoryRuleSchema });
+
 /** "Decisão automática" (TER-641) on an action card: the precedent a send cited, but only when the call
  * also ran without a click (`grant_id`, a default allowance or a grant). A pending card, or one the person
  * approved by hand, is never an automatic decision. Null otherwise — and on an older server (absent). */

@@ -130,6 +130,9 @@ const envSchema = z.object({
   /** seconds an automatic answer stays on the card, cancellable, before the server sends it (spec
    *  2026-09-26 concierge memory D6, §6). Bounded so a typo can neither remove the undo window nor
    *  leave a tab waiting for ten minutes. */
+  /** cosine similarity (0..1) at which two concierge notes, or two decisions with the same answer, count
+   *  as the same rule when consolidating current rules (TER-1010); word overlap groups them too. */
+  RULES_SIMILARITY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.9),
   AUTO_ANSWER_DELAY_SECONDS: z.coerce.number().int().min(10).max(600).default(60),
   /** the least cosine similarity (0..1) between a card's question and the cited decision's question for
    *  `answer_tab_question` to schedule an automatic answer (spec 2026-09-26 concierge memory D6): the
@@ -247,6 +250,7 @@ export const config = {
   chatFiles: { dir: env.CHAT_FILES_DIR, quotaBytes: env.CHAT_FILES_QUOTA_BYTES },
   embeddings: env.EMBED_URL && env.EMBED_SECRET ? { url: env.EMBED_URL.replace(/\/$/, ''), secret: env.EMBED_SECRET } : null,
   decisionSuggestThreshold: env.DECISION_SUGGEST_THRESHOLD,
+  rulesSimilarityThreshold: env.RULES_SIMILARITY_THRESHOLD,
   autoAnswerDelayMs: env.AUTO_ANSWER_DELAY_SECONDS * 1000,
   autoAnswerMinSimilarity: env.AUTO_ANSWER_MIN_SIMILARITY,
   autoWakeMaxPerHour: env.AUTO_WAKE_MAX_PER_HOUR,

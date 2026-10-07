@@ -442,6 +442,7 @@ export const ModelName = {
   TabQuestion: 'TabQuestion',
   ChatDecision: 'ChatDecision',
   MemoryItem: 'MemoryItem',
+  MemoryRule: 'MemoryRule',
   InstanceSecret: 'InstanceSecret',
   ProjectGroup: 'ProjectGroup',
   ProjectGroupItem: 'ProjectGroupItem',
@@ -468,7 +469,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -3802,6 +3803,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    MemoryRule: {
+      payload: Prisma.$MemoryRulePayload<ExtArgs>
+      fields: Prisma.MemoryRuleFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.MemoryRuleFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.MemoryRuleFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload>
+        }
+        findFirst: {
+          args: Prisma.MemoryRuleFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.MemoryRuleFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload>
+        }
+        findMany: {
+          args: Prisma.MemoryRuleFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload>[]
+        }
+        create: {
+          args: Prisma.MemoryRuleCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload>
+        }
+        createMany: {
+          args: Prisma.MemoryRuleCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.MemoryRuleCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload>[]
+        }
+        delete: {
+          args: Prisma.MemoryRuleDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload>
+        }
+        update: {
+          args: Prisma.MemoryRuleUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload>
+        }
+        deleteMany: {
+          args: Prisma.MemoryRuleDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.MemoryRuleUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.MemoryRuleUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload>[]
+        }
+        upsert: {
+          args: Prisma.MemoryRuleUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryRulePayload>
+        }
+        aggregate: {
+          args: Prisma.MemoryRuleAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateMemoryRule>
+        }
+        groupBy: {
+          args: Prisma.MemoryRuleGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MemoryRuleGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.MemoryRuleCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MemoryRuleCountAggregateOutputType> | number
+        }
+      }
+    }
     InstanceSecret: {
       payload: Prisma.$InstanceSecretPayload<ExtArgs>
       fields: Prisma.InstanceSecretFieldRefs
@@ -5424,6 +5499,26 @@ export const MemoryItemScalarFieldEnum = {
 export type MemoryItemScalarFieldEnum = (typeof MemoryItemScalarFieldEnum)[keyof typeof MemoryItemScalarFieldEnum]
 
 
+export const MemoryRuleScalarFieldEnum = {
+  id: 'id',
+  ownerId: 'ownerId',
+  projectId: 'projectId',
+  kind: 'kind',
+  status: 'status',
+  text: 'text',
+  policy: 'policy',
+  sourceRefs: 'sourceRefs',
+  fingerprint: 'fingerprint',
+  noteId: 'noteId',
+  decidedAt: 'decidedAt',
+  decidedBy: 'decidedBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type MemoryRuleScalarFieldEnum = (typeof MemoryRuleScalarFieldEnum)[keyof typeof MemoryRuleScalarFieldEnum]
+
+
 export const InstanceSecretScalarFieldEnum = {
   name: 'name',
   value: 'value',
@@ -6079,6 +6174,7 @@ export type GlobalOmitConfig = {
   tabQuestion?: Prisma.TabQuestionOmit
   chatDecision?: Prisma.ChatDecisionOmit
   memoryItem?: Prisma.MemoryItemOmit
+  memoryRule?: Prisma.MemoryRuleOmit
   instanceSecret?: Prisma.InstanceSecretOmit
   projectGroup?: Prisma.ProjectGroupOmit
   projectGroupItem?: Prisma.ProjectGroupItemOmit

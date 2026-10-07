@@ -6,5 +6,7 @@
   "{{count}} pendentes_zero": "{{count}} pendentes",
   "{{count}} permissões ativas_one": "{{count}} permissão ativa",
   "{{count}} permissões ativas_other": "{{count}} permissões ativas",
-  "{{count}} permissões ativas_zero": "{{count}} permissões ativas"
+  "{{count}} permissões ativas_zero": "{{count}} permissões ativas",
+  "{{count}} origens_one": "{{count}} origem",
+  "{{count}} origens_other": "{{count}} origens"
 }

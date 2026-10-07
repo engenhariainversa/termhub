@@ -96,6 +96,7 @@ export const ModelName = {
   TabQuestion: 'TabQuestion',
   ChatDecision: 'ChatDecision',
   MemoryItem: 'MemoryItem',
+  MemoryRule: 'MemoryRule',
   InstanceSecret: 'InstanceSecret',
   ProjectGroup: 'ProjectGroup',
   ProjectGroupItem: 'ProjectGroupItem',
@@ -892,6 +893,26 @@ export const MemoryItemScalarFieldEnum = {
 } as const
 
 export type MemoryItemScalarFieldEnum = (typeof MemoryItemScalarFieldEnum)[keyof typeof MemoryItemScalarFieldEnum]
+
+
+export const MemoryRuleScalarFieldEnum = {
+  id: 'id',
+  ownerId: 'ownerId',
+  projectId: 'projectId',
+  kind: 'kind',
+  status: 'status',
+  text: 'text',
+  policy: 'policy',
+  sourceRefs: 'sourceRefs',
+  fingerprint: 'fingerprint',
+  noteId: 'noteId',
+  decidedAt: 'decidedAt',
+  decidedBy: 'decidedBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type MemoryRuleScalarFieldEnum = (typeof MemoryRuleScalarFieldEnum)[keyof typeof MemoryRuleScalarFieldEnum]
 
 
 export const InstanceSecretScalarFieldEnum = {

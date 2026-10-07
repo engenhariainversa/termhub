@@ -15,6 +15,7 @@ import {
   lessonForgetSchema,
   lessonItemSchema,
   lessonListSchema,
+  memoryRulesResponse,
   mobileBatchDecisionBody,
   mobileDecisionBody,
   mobileMessageBody,
@@ -451,5 +452,26 @@ describe('card replies (TER-849)', () => {
   it("quotes a permission card's question, or names the tool it asks for", () => {
     expect(tabQuestionReplyText({ kind: 'permission', payload: { tool_name: 'Bash', question: 'Rodar npm test?' } })).toBe('Rodar npm test?');
     expect(tabQuestionReplyText({ kind: 'permission', payload: { tool_name: 'Bash' } })).toBe('Permissão para usar Bash');
+  });
+});
+
+describe('memoryRulesResponse (TER-1010)', () => {
+  const policy = {
+    id: 'r1',
+    kind: 'policy',
+    status: 'awaiting_confirmation',
+    project: null,
+    text: 'Pode mesclar com o CI verde',
+    policy: { autonomy: 'merge', max_parallel: null, projects: [{ id: 'p1', name: 'termhub', applied: false }] },
+    sources: [{ ref: 'note:a', title: 'Pode mesclar?', statement: 'Pode mesclar com o CI verde', project_name: 'termhub' }],
+    created_at: '2026-10-07T00:00:00.000Z',
+    decided_at: null,
+  };
+
+  it('parses rules and proposals, and refuses an unknown status or level', () => {
+    expect(memoryRulesResponse.safeParse({ rules: [], proposals: [policy] }).success).toBe(true);
+    expect(memoryRulesResponse.safeParse({ rules: [{ ...policy, kind: 'rule', status: 'approved', policy: null }], proposals: [] }).success).toBe(true);
+    expect(memoryRulesResponse.safeParse({ rules: [], proposals: [{ ...policy, status: 'maybe' }] }).success).toBe(false);
+    expect(memoryRulesResponse.safeParse({ rules: [], proposals: [{ ...policy, policy: { ...policy.policy, autonomy: 'store' } }] }).success).toBe(false);
   });
 });

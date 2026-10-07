@@ -1393,6 +1393,25 @@ export interface LessonItem {
   created_at: string;
 }
 
+/** "Regras vigentes" (TER-1010): an approved rule, or a proposal waiting for the person. `project` null =
+ * a rule at the user level. A `policy` row widens the automatic-work Setup of `policy.projects`, only
+ * through the `set_automation_policy` cards it asks once approved (`awaiting_confirmation` meanwhile). */
+export interface MemoryRule {
+  id: string;
+  kind: 'rule' | 'policy';
+  status: 'proposed' | 'awaiting_confirmation' | 'approved' | 'rejected';
+  project: { id: string; name: string } | null;
+  text: string;
+  policy: {
+    autonomy: 'pr' | 'merge' | 'deploy' | 'release' | null;
+    max_parallel: number | null;
+    projects: { id: string; name: string; applied: boolean }[];
+  } | null;
+  sources: { ref: string; title: string; statement: string; project_name: string | null }[];
+  created_at: string;
+  decided_at: string | null;
+}
+
 export type TabSuggestionStatus = TabQuestionStatus | 'dismissed';
 /**
  * Claude Code's dimmed next prompt in a tab (spec 2026-09-25 tab suggestions §6.4): a card with the text

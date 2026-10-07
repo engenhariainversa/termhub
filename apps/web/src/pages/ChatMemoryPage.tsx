@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import type { ChatDecision, ChatMemory, ConciergeNote, LessonItem } from '../lib/types';
 import { formatDate } from '../lib/format';
+import { MemoryRulesSection } from '../components/MemoryRulesSection';
 
 const fmtDate = (iso: string) => formatDate(iso);
 
@@ -412,6 +413,8 @@ export function ChatMemoryPage() {
           <p className="mt-1 text-xs text-fg-dim">{t('Quando o Codex termina o turno com uma pergunta, abre um card no chat para você responder sem ir até a aba.')}</p>
         </div>
       )}
+
+      <MemoryRulesSection />
 
       <div className="mt-4">
         <label className="label" htmlFor="chat-memory-search">

@@ -190,9 +190,12 @@ export async function searchMemory(
   const itemById = new Map<string, MemoryHit>();
   for (const it of [...vecItems, ...textItems]) if (!tab || !isTabExcluded(it.kind)) itemById.set(itemKey(it.kind, it.id), it);
 
+  // An approved rule (TER-1010) supersedes the notes and decisions it came from: the rule's own note answers instead.
+  const superseded = await ctx.repos.memoryRules.supersededRefs(ownerId);
   const results: MemoryResult[] = [];
   for (const { key } of fused) {
     if (results.length >= limit) break;
+    if (superseded.has(key)) continue;
     const parsed = parseRef(key);
     if (!parsed) continue;
     const match = matchOf(key, vecKeys, textKeys);

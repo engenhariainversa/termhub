@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { lessonForgetSchema, lessonItemSchema, lessonListSchema } from '@termhub/mobile-api';
+import { lessonForgetSchema, lessonItemSchema, lessonListSchema, memoryRuleDecisionResponse, memoryRulesResponse } from '@termhub/mobile-api';
 import { config } from '../config.js';
 import { applyErrorHandler } from '../lib/errors.js';
 
@@ -521,5 +521,66 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(res.statusCode).toBe(404);
     expect(repos.memoryItems.hideSource).not.toHaveBeenCalled();
     expect(repos.notes.removeBlock).not.toHaveBeenCalled();
+  });
+});
+
+describe.each(['web', 'mobile'] as const)('%s current rules routes (TER-1010)', (kind) => {
+  /** The 4-project case: the same permission noted in 4 projects, and the rules repository kept in memory. */
+  function rulesRepos() {
+    const repos = fakeRepos();
+    let rows: Record<string, unknown>[] = [];
+    const memoryRules = {
+      listForOwner: vi.fn(async () => rows),
+      listSources: vi.fn(async () =>
+        ['p1', 'p2', 'p3', 'p4'].map((p, i) => ({ ref: `note:n${i}`, project_id: p, project_name: p, title: 'Testes?', text: 'Decisão: Pode rodar os testes de banco sem perguntar\nMotivo: x\nFontes: ', answer: null, created_at: `2026-10-0${i + 1}T00:00:00.000Z` })),
+      ),
+      similarPairs: vi.fn(async () => []),
+      syncProposals: vi.fn(async (_owner: string, candidates: { kind: string; project_id: string | null; text: string; policy: unknown; source_refs: string[]; fingerprint: string }[]) => {
+        rows = candidates.map((c, i) => ({ id: `r${i}`, owner_id: 'u1', project_name: null, status: 'proposed', note_id: null, decided_at: null, decided_by: null, created_at: '2026-10-07T00:00:00.000Z', ...c }));
+      }),
+      findForOwner: vi.fn(async (id: string) => rows.find((r) => r.id === id) ?? null),
+      decide: vi.fn(async (id: string, _o: string, from: string[], to: string) => {
+        const row = rows.find((r) => r.id === id);
+        if (!row || !from.includes(row.status as string)) return null;
+        row.status = to;
+        row.decided_at = '2026-10-07T01:00:00.000Z';
+        return row;
+      }),
+    };
+    const projectSetup = { get: vi.fn(async () => ({ data: { automation: { autonomy: 'pr', max_parallel: 1 } } })) };
+    projectsOwned(repos);
+    return { repos: { ...repos, memoryRules, projectSetup }, memoryRules };
+  }
+  const projectsOwned = (repos: ReturnType<typeof fakeRepos>) => repos.projects.findById.mockImplementation(async (id: string) => ({ id, owner_id: 'u1', name: id, key: 'K' }));
+
+  it('GET /rules consolidates the same permission in 4 projects into one user-level proposal', async () => {
+    const { repos } = rulesRepos();
+    const res = await build(kind, repos as never).inject({ method: 'GET', url: '/chat/rules' });
+    expect(res.statusCode).toBe(200);
+    const body = memoryRulesResponse.parse(res.json());
+    expect(body.rules).toEqual([]);
+    expect(body.proposals).toHaveLength(1);
+    expect(body.proposals[0]).toMatchObject({ kind: 'rule', project: null, text: 'Pode rodar os testes de banco sem perguntar' });
+    expect(body.proposals[0]!.sources).toHaveLength(4);
+  });
+
+  it('POST /rules/:id/reject stores the rejection; a second decision is a 409', async () => {
+    const { repos, memoryRules } = rulesRepos();
+    const app = build(kind, repos as never);
+    await app.inject({ method: 'GET', url: '/chat/rules' });
+    const res = await app.inject({ method: 'POST', url: '/chat/rules/r0/reject', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(memoryRuleDecisionResponse.parse(res.json()).rule.status).toBe('rejected');
+    expect(memoryRules.decide).toHaveBeenCalledWith('r0', 'u1', ['proposed'], 'rejected', 'u1');
+    const again = await app.inject({ method: 'POST', url: '/chat/rules/r0/approve', payload: {} });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe('RULE_DECIDED');
+  });
+
+  it('POST /rules/:id/approve validates the body, and 404s an unknown id', async () => {
+    const { repos } = rulesRepos();
+    const app = build(kind, repos as never);
+    expect((await app.inject({ method: 'POST', url: '/chat/rules/r0/approve', payload: { text: 'x'.repeat(1001) } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/chat/rules/nope/approve', payload: {} })).statusCode).toBe(404);
   });
 });

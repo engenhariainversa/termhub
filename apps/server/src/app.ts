@@ -76,6 +76,8 @@ import { actionForMethod, type Resource } from './auth/permissions.js';
 import { startTicketSyncScheduler } from './setup/tickets-sync.js';
 import { startCiSyncScheduler } from './ci/scheduler.js';
 import { MERGE_TOOL } from './automation/merge.js';
+import { applyPolicyCard, POLICY_TOOL } from './memory/rules-service.js';
+import { defaultEmbedder } from './chat/embeddings.js';
 import { startSummaryTimer } from './automation/summary.js';
 import { startAgentUpdateScheduler } from './agent/latest-version.js';
 import { registerTerminalWs } from './terminal/ws.js';
@@ -394,6 +396,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // merge card in the chat merges that PR once (F-19).
   const stopCiSync = startCiSyncScheduler(repos, fastify.log, undefined, { merge: (projectId) => automation.merge(projectId) });
   chat.onApproved(MERGE_TOOL, (action) => automation.mergeApproved(action.id));
+  // A policy proposal of "Regras vigentes" (TER-1010) changes the Setup only through these cards; the hook
+  // leaves the concierge's own `set_automation_policy` cards alone (they have no `memory_rule:` key).
+  chat.onApproved(POLICY_TOOL, (action) => applyPolicyCard(repos, action, { embedder: defaultEmbedder(), log: fastify.log, threshold: config.rulesSimilarityThreshold }));
   // The daily summary of the automatic work (spec D26): both colours tick, the claim row sends it once; a draining colour sends nothing.
   const stopSummaries = startSummaryTimer({ repos, lifecycle, log: fastify.log, push: mobile ? (...a) => mobile.push.automationSummary(...a) : undefined });
   fastify.addHook('onClose', async () => {

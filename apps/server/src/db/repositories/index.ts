@@ -49,6 +49,7 @@ import { AutomationEventsRepository } from './automation-events.js';
 import { AutomationRunsRepository } from './automation-runs.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
+import { MemoryRulesRepository } from './memory-rules.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -85,6 +86,7 @@ export interface Repositories {
   chatAttachments: ChatAttachmentsRepo;
   chatDecisions: ChatDecisionsRepository;
   memoryItems: MemoryItemsRepository;
+  memoryRules: MemoryRulesRepository;
   instanceSecrets: InstanceSecretsRepository;
   projectGroups: ProjectGroupsRepository;
   deviceRequests: DeviceRequestsRepository;
@@ -141,6 +143,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     chatAttachments: new ChatAttachmentsRepository(db),
     chatDecisions: new ChatDecisionsRepository(db),
     memoryItems: new MemoryItemsRepository(db),
+    memoryRules: new MemoryRulesRepository(db),
     instanceSecrets: new InstanceSecretsRepository(db),
     projectGroups: new ProjectGroupsRepository(db),
     deviceRequests: new DeviceRequestsRepository(db),
