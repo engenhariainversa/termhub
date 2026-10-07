@@ -2,7 +2,7 @@
 // account-wide chat, each with a short pt-BR thread dated within the last two days, and the two
 // pending confirmations of termhub (`a-termhub-1`, the one the plan fixes in place, and `a-termhub-2`).
 import { randomId } from '../../crypto/random';
-import type { MockAction, MockConversation, MockDecision, MockMessage, MockNotification, MockProject, MockState } from './state';
+import type { MockAction, MockConversation, MockDecision, MockMemoryRule, MockMessage, MockNotification, MockProject, MockState } from './state';
 
 /** 5 h between messages (oldest first), newest one 20 min ago — keeps every conversation well
  * inside the "last two days" the brief asks for, even at 6 messages. */
@@ -149,6 +149,50 @@ export function seedFixtures(state: MockState, now: number): void {
     },
   ];
   state.decisions.push(...decisions);
+
+  // "Regras vigentes" (TER-1010): two proposals waiting, so the section is not empty on first boot —
+  // a user-level rule consolidated from four projects, and an automation policy over two of them.
+  const day = 24 * 60 * 60_000;
+  const rules: MockMemoryRule[] = [
+    {
+      id: 'r-worktree',
+      kind: 'rule',
+      status: 'proposed',
+      project: null,
+      text: 'Sempre trabalhar numa worktree separada, nunca direto no checkout principal.',
+      policy: null,
+      sources: [
+        { ref: 'decision:d-worktree', title: 'Usar worktree para essa tarefa?', statement: 'Não', project_name: 'termhub' },
+        { ref: 'note:n-opapingou-worktree', title: 'Onde trabalhar no card?', statement: 'Numa worktree própria', project_name: 'opapingou' },
+        { ref: 'note:n-reactivando-worktree', title: 'Isolar a tarefa?', statement: 'Sim, numa worktree', project_name: 'reactivando' },
+        { ref: 'note:n-site-worktree', title: 'Checkout principal ou worktree?', statement: 'Worktree', project_name: 'site' },
+      ],
+      created_at: new Date(now - day).toISOString(),
+      decided_at: null,
+    },
+    {
+      id: 'r-autonomy',
+      kind: 'policy',
+      status: 'proposed',
+      project: null,
+      text: 'Fazer o merge sozinho quando o CI passar, com no máximo 2 cards em paralelo.',
+      policy: {
+        autonomy: 'merge',
+        max_parallel: 2,
+        projects: [
+          { id: 'p-termhub', name: 'termhub', applied: false },
+          { id: 'p-opapingou', name: 'opapingou', applied: false },
+        ],
+      },
+      sources: [
+        { ref: 'decision:d-merge-termhub', title: 'Fazer o merge?', statement: 'Sim, com o CI verde', project_name: 'termhub' },
+        { ref: 'decision:d-merge-opapingou', title: 'Posso dar merge?', statement: 'Pode, se o CI passar', project_name: 'opapingou' },
+      ],
+      created_at: new Date(now - 2 * 60 * 60_000).toISOString(),
+      decided_at: null,
+    },
+  ];
+  state.memoryRules.push(...rules);
 
   // The confirmation notification this pre-existing pending action would have produced, so the
   // Notificações tab is not empty on first boot either.

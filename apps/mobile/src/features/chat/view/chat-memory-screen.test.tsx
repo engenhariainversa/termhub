@@ -3,6 +3,7 @@ import { Alert, Linking } from 'react-native';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatMemoryStore', () => ({ useChatMemoryStore: require('../../../../test/helpers/ui-stores').stores.chatMemory }));
+jest.mock('@/features/chat/viewmodel/useMemoryRulesStore', () => ({ useMemoryRulesStore: require('../../../../test/helpers/ui-stores').stores.memoryRules }));
 
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
@@ -70,6 +71,8 @@ beforeEach(() => {
   // mock backend carries no note or lesson fixtures (unlike decisions).
   jest.spyOn(stores.api, 'chatNotes').mockResolvedValue({ notes: [], next_cursor: null });
   jest.spyOn(stores.api, 'chatLessons').mockResolvedValue({ lessons: [], next_cursor: null });
+  // "Regras vigentes" has its own tests (memory-rules-section.test.tsx).
+  jest.spyOn(stores.api, 'chatRules').mockResolvedValue({ rules: [], proposals: [] });
 });
 
 afterEach(() => {
@@ -109,6 +112,13 @@ describe('Memória do chat', () => {
     // A free-text answer shows the text, not an empty label list.
     expect(screen.getByText('Qual branch a partir de main?')).toBeTruthy();
     expect(screen.getByText('→ fix/city-sound-ios')).toBeTruthy();
+  });
+
+  it('mounts "Regras vigentes", which loads on its own', async () => {
+    await render(<ChatMemoryScreen />);
+    expect(await screen.findByText('Nenhuma regra vigente nem proposta por enquanto.', undefined, LOAD)).toBeTruthy();
+    expect(screen.getByText('Regras vigentes')).toBeTruthy();
+    expect(stores.api.chatRules).toHaveBeenCalled();
   });
 
   it('typing in "Buscar" re-queries with q, debounced', async () => {

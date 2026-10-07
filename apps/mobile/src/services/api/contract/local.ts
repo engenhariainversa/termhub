@@ -40,6 +40,9 @@ import {
   lessonForgetSchema,
   lessonItemSchema,
   lessonListSchema,
+  memoryRuleDecisionResponse,
+  memoryRuleSchema,
+  memoryRulesResponse,
   mobileBatchDecisionBody,
   mobileDecisionBody,
   mobileMessageBody,
@@ -257,6 +260,11 @@ export type TNotesResponse = z.infer<typeof notesResponse>;
 export type TLessonItem = z.infer<typeof lessonItemSchema>;
 export type TLessonsResponse = z.infer<typeof lessonListSchema>;
 export type TLessonForgetResponse = z.infer<typeof lessonForgetSchema>;
+// "Regras vigentes" (TER-1010, spec 2026-10-07 current rules): the approved rules, the proposals and
+// one decision's answer — mirrors the web's `api.chat.rules`.
+export type TMemoryRule = z.infer<typeof memoryRuleSchema>;
+export type TMemoryRulesResponse = z.infer<typeof memoryRulesResponse>;
+export type TMemoryRuleDecisionResponse = z.infer<typeof memoryRuleDecisionResponse>;
 export type TTabSuggestion = z.infer<typeof tabSuggestionSchema>;
 export type TTabSuggestionSendBody = z.infer<typeof tabSuggestionSendBody>;
 // The project's AI accounts and models, and the usage-limit card (spec 2026-09-30 project AI accounts

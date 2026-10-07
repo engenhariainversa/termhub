@@ -38,6 +38,8 @@ import {
   lessonItemSchema,
   lessonListSchema,
   meResponse,
+  memoryRuleDecisionResponse,
+  memoryRulesResponse,
   notesResponse,
   notificationsResponse,
   progressResponse,
@@ -383,6 +385,12 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     verifyChatLesson: (a: Auth, id: string) => call('POST', `/api/m/v1/chat/lessons/${encodeURIComponent(id)}/verify`, lessonItemSchema, { token: a.accessToken, body: {} }),
     unverifyChatLesson: (a: Auth, id: string) => call('DELETE', `/api/m/v1/chat/lessons/${encodeURIComponent(id)}/verify`, lessonItemSchema, { token: a.accessToken }),
     forgetChatLesson: (a: Auth, id: string) => call('DELETE', `/api/m/v1/chat/lessons/${encodeURIComponent(id)}`, lessonForgetSchema, { token: a.accessToken }),
+    chatRules: (a: Auth) => call('GET', '/api/m/v1/chat/rules', memoryRulesResponse, { token: a.accessToken }),
+    approveChatRule: (a: Auth, id: string) =>
+      call('POST', `/api/m/v1/chat/rules/${encodeURIComponent(id)}/approve`, memoryRuleDecisionResponse, { token: a.accessToken, body: {} }).then((r) => r.rule),
+    rejectChatRule: (a: Auth, id: string) =>
+      call('POST', `/api/m/v1/chat/rules/${encodeURIComponent(id)}/reject`, memoryRuleDecisionResponse, { token: a.accessToken, body: {} }).then((r) => r.rule),
+    removeChatRule: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/rules/${encodeURIComponent(id)}`, { token: a.accessToken }),
 
     notifications: (a: Auth, before?: string) =>
       call('GET', `/api/m/v1/notifications${before ? `?before=${encodeURIComponent(before)}` : ''}`, notificationsResponse, {

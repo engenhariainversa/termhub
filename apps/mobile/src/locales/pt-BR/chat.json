@@ -1,1 +1,4 @@
-{}
+{
+  "{{count}} origens_one": "{{count}} origem",
+  "{{count}} origens_other": "{{count}} origens"
+}

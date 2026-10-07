@@ -5,6 +5,7 @@ import type { TChatDecision, TConciergeNote, TLessonItem } from '@/services/api/
 import { TERMHUB_URL } from '@/services/api/config';
 import { AppText, Banner, Button, EmptyState, Field, Screen } from '@/ui';
 import { useChatMemoryStore } from '../viewmodel/useChatMemoryStore';
+import { MemoryRulesSection } from './memory-rules-section';
 import { t, tk, useTranslation } from '@/i18n';
 import { formatDate } from '@/i18n/format';
 
@@ -255,6 +256,7 @@ export function ChatMemoryScreen() {
         ListFooterComponent={
           <View className="gap-3">
             {cursor ? <Button label={loadingMore ? t('Carregando…') : t('Carregar mais')} variant="ghost" disabled={loadingMore} onPress={() => void loadMore()} /> : null}
+            <MemoryRulesSection />
             <View className="gap-3 pt-6">
               <AppText variant="title" className="text-base">
                 {t('Anotações do concierge')}

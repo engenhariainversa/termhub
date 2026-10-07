@@ -27,6 +27,8 @@ import type {
   TLessonItem,
   TLessonsResponse,
   TMeResponse,
+  TMemoryRule,
+  TMemoryRulesResponse,
   TMobileBatchDecisionBody,
   TDecisionChallengesBody,
   TDecisionChallengesResponse,
@@ -221,6 +223,16 @@ export interface MobileApi {
   /** "Esquecer": `note` is present only for a file-origin lesson, saying the file itself stays in
    *  the repository until a PR removes it. 404 for another user's row (or not a lesson at all). */
   forgetChatLesson(auth: Auth, id: string): Promise<TLessonForgetResponse>;
+  /** "Regras vigentes" (TER-1010): the twin of the web's `api.chat.rules`. The server consolidates
+   *  on this read, then answers the approved rules and the proposals waiting for the person. No PIN. */
+  chatRules(auth: Auth): Promise<TMemoryRulesResponse>;
+  /** "Aprovar": a rule is approved at once; a policy goes to `awaiting_confirmation` and asks one
+   *  card per project in the chat. 409 when the proposal was already decided. */
+  approveChatRule(auth: Auth, id: string): Promise<TMemoryRule>;
+  /** "Recusar": the same proposal stays away for 180 days. */
+  rejectChatRule(auth: Auth, id: string): Promise<TMemoryRule>;
+  /** "Remover regra": an approved rule only (404 otherwise); its sources are current again. */
+  removeChatRule(auth: Auth, id: string): Promise<void>;
 
   // notifications (P§9)
   notifications(auth: Auth, before?: string): Promise<TNotificationsResponse>;
