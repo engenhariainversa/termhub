@@ -37,6 +37,9 @@ const decision = (over: Partial<DecisionNeighbour> & { id: string }): DecisionNe
   suggested_count: 0,
   accepted_count: 0,
   auto_count: 0,
+  status: 'current',
+  expires_at: null,
+  supersedes: null,
   created_at: '2026-09-24T10:00:00.000Z',
   similarity: 0.9,
   ...over,
@@ -63,6 +66,9 @@ const item = (over: Partial<MemoryHit> & { id: string }): MemoryHit => ({
   meta: null,
   verified: false,
   verified_at: null,
+  status: 'current',
+  expires_at: null,
+  supersedes: null,
   source_at: '2026-09-24T10:00:00.000Z',
   created_at: '2026-09-24T10:00:00.000Z',
   updated_at: '2026-09-24T10:00:00.000Z',
@@ -234,10 +240,27 @@ describe('searchMemory', () => {
     const { ctx, embedder, calls } = ctxFor({ user: 'u7', vecDecisions: [decision({ id: 'd1' })], vecItems: [item({ id: 'i1', kind: 'note' })] });
     await searchMemory(ctx, { query: 'x' }, { embedder });
     // The 4th argument (a project to hold decisions to) is for tab tokens only (TER-212 D3).
-    expect(calls.nearestAny).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), undefined);
-    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), undefined);
+    expect(calls.nearestAny).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), undefined, { includeInactive: false });
+    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u7', expect.anything(), expect.anything(), undefined, { includeInactive: false });
     expect(calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u7' }), expect.anything(), expect.anything());
     expect(calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u7' }), expect.anything(), expect.anything());
+  });
+
+  it('leaves out marked items by default and tags them with include_inactive (TER-1013)', async () => {
+    const setup = { vecDecisions: [decision({ id: 'd1', status: 'wrong' })], vecItems: [item({ id: 'i1', kind: 'note', status: 'superseded' }), item({ id: 'i2', kind: 'note' })] };
+    const off = ctxFor(setup);
+    await searchMemory(off.ctx, { query: 'x' }, { embedder: off.embedder });
+    expect(off.calls.nearestAny).toHaveBeenCalledWith('u1', expect.anything(), expect.anything(), undefined, { includeInactive: false });
+    expect(off.calls.nearest).toHaveBeenCalledWith(expect.objectContaining({ includeInactive: false }), expect.anything(), expect.anything());
+
+    const on = ctxFor(setup);
+    const r = await searchMemory(on.ctx, { query: 'x', include_inactive: true }, { embedder: on.embedder });
+    expect(on.calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), undefined, { includeInactive: true });
+    expect(on.calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ includeInactive: true }), expect.anything(), expect.anything());
+    const byRef = new Map(r.results.map((x) => [x.ref, x]));
+    expect(byRef.get('decision:d1')?.status).toBe('wrong');
+    expect(byRef.get('note:i1')?.status).toBe('superseded');
+    expect(byRef.get('note:i2')).not.toHaveProperty('status');
   });
 });
 
@@ -251,18 +274,18 @@ describe('searchMemory with a tab token (TER-212 D3)', () => {
   it('searches only the tab\'s project, without messages or gate decisions', async () => {
     const { ctx, embedder, calls } = withTab({});
     await searchMemory(ctx, { query: 'x', project_id: 'p1' }, { embedder });
-    const filter = { ownerId: 'u1', projectId: 'p1', kinds: ['task', 'doc', 'note', 'lesson', 'project_note'] };
+    const filter = { ownerId: 'u1', projectId: 'p1', kinds: ['task', 'doc', 'note', 'lesson', 'project_note'], includeInactive: false };
     expect(calls.nearest).toHaveBeenCalledWith(filter, expect.anything(), expect.anything());
     expect(calls.itemTextSearch).toHaveBeenCalledWith(filter, expect.anything(), expect.anything());
-    expect(calls.nearestAny).toHaveBeenCalledWith('u1', expect.anything(), expect.anything(), 'p1');
-    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), 'p1');
+    expect(calls.nearestAny).toHaveBeenCalledWith('u1', expect.anything(), expect.anything(), 'p1', { includeInactive: false });
+    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), 'p1', { includeInactive: false });
   });
 
   it('forces the tab\'s project when project_id is missing', async () => {
     const { ctx, embedder, calls } = withTab({});
     await searchMemory(ctx, { query: 'x' }, { embedder });
     expect(calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1' }), expect.anything(), expect.anything());
-    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), 'p1');
+    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), 'p1', { includeInactive: false });
   });
 
   it('refuses another project with TAB_SCOPE before any search', async () => {

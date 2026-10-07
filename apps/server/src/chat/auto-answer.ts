@@ -59,6 +59,9 @@ export interface ScheduleInput {
  * this time is not a precedent.
  */
 export function decisionBacks(d: ChatDecision, item: ChoicePayload['questions'][number], a: ChoiceAnswer['answers'][number]): boolean {
+  // TER-1013: a decision the person marked desatualizada, errada or substituída is never a precedent,
+  // even when cited by ref from an earlier search (and re-checked at send time).
+  if (d.status !== 'current') return false;
   const mapped = mapAnswer(d.answer, item);
   if (mapped === null || !sameAnswer(mapped, { selected: a.selected, text: a.text })) return false;
   return a.selected.every((s) => {

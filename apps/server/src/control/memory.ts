@@ -18,6 +18,7 @@ import { ControlError, type ControlContext } from './context.js';
 export { MEMORY_REF, parseRef, type MemoryRefKind } from '../memory/refs.js';
 import { parseRef, type MemoryRefKind } from '../memory/refs.js';
 import { msg, tk } from '../i18n/index.js';
+import type { MemoryStatus } from '../memory/status.js';
 
 export interface MemoryResult {
   ref: string;
@@ -29,6 +30,9 @@ export interface MemoryResult {
   excerpt: string;
   similarity: number | null;
   match: 'semantic' | 'text' | 'both';
+  /** Only with `include_inactive` and only for a decision or note the person marked on the Memória
+   *  screen (TER-1013): `outdated`, `wrong` or `superseded`. Absent for a current item. */
+  status?: Exclude<MemoryStatus, 'current'>;
   /** Only for `kind: 'lesson'` (spec 2026-09-27 failure lessons D8, §5.1), from the item's `meta`:
    *  whether the person marked it verified, its evidence, whether it came from a `docs/lessons/*.md`
    *  file or a project note, the file's path (null for a note lesson), the tab it was recorded from
@@ -70,8 +74,10 @@ const projectOf = (id: string | null, name: string | null): MemoryResult['projec
 const matchOf = (key: string, vecKeys: Set<string>, textKeys: Set<string>): MemoryResult['match'] =>
   vecKeys.has(key) && textKeys.has(key) ? 'both' : vecKeys.has(key) ? 'semantic' : 'text';
 
+const withStatus = (r: MemoryResult, status: MemoryStatus | undefined): MemoryResult => (status && status !== 'current' ? { ...r, status } : r);
+
 function decisionResult(d: ChatDecision, similarity: number | null, match: MemoryResult['match']): MemoryResult {
-  return {
+  return withStatus({
     ref: decisionKey(d.id),
     kind: 'decision',
     trust: 'person',
@@ -81,7 +87,7 @@ function decisionResult(d: ChatDecision, similarity: number | null, match: Memor
     excerpt: decisionExcerpt(d),
     similarity,
     match,
-  };
+  }, d.status);
 }
 
 function itemResult(it: MemoryHit, similarity: number | null, match: MemoryResult['match']): MemoryResult {
@@ -96,7 +102,7 @@ function itemResult(it: MemoryHit, similarity: number | null, match: MemoryResul
     similarity,
     match,
   };
-  if (it.kind !== 'lesson') return base;
+  if (it.kind !== 'lesson') return withStatus(base, it.status);
   const meta = it.meta;
   return {
     ...base,
@@ -138,13 +144,16 @@ function mergeByRank(decisions: (ChatDecision & { rank: number })[], items: Memo
  * budget), falls back to full-text alone — it never throws for that. Never logs the query, a title or
  * an excerpt: only counts and codes belong in a log line, and this function does not log at all.
  *
+ * Decisions and notes the person marked desatualizada, errada or substituída (TER-1013) are left out
+ * unless `include_inactive`; then they come back tagged with their `status`.
+ *
  * Under a tab token (TER-212 D3) the search is held to the tab's project — decisions included — and
  * never reads the kinds `message` and `action`. The MCP route already pinned `project_id`; the check
  * is repeated here so this function holds the rule on its own.
  */
 export async function searchMemory(
   ctx: ControlContext,
-  a: { query: string; project_id?: string; kinds?: MemoryRefKind[]; limit?: number },
+  a: { query: string; project_id?: string; kinds?: MemoryRefKind[]; limit?: number; include_inactive?: boolean },
   deps: { embedder?: Embedder | null } = {},
 ): Promise<{ note: string; results: MemoryResult[] }> {
   const tab = ctx.token?.tab;
@@ -160,7 +169,8 @@ export async function searchMemory(
   const wantDecision = a.kinds === undefined || a.kinds.includes('decision');
   const itemKinds = a.kinds === undefined ? undefined : (a.kinds.filter((k): k is MemoryKind => k !== 'decision') as MemoryKind[]);
   const skipItems = itemKinds !== undefined && itemKinds.length === 0;
-  const itemFilter: MemoryFilter = { ownerId, projectId: a.project_id, kinds: itemKinds };
+  const includeInactive = a.include_inactive === true;
+  const itemFilter: MemoryFilter = { ownerId, projectId: a.project_id, kinds: itemKinds, includeInactive };
 
   let vector: number[] | null = null;
   if (embedder) {
@@ -173,9 +183,9 @@ export async function searchMemory(
   }
 
   const [vecDecisions, vecItems, textDecisions, textItems] = await Promise.all([
-    vector && wantDecision ? ctx.repos.chatDecisions.nearestAny(ownerId, vector, CANDIDATE_K, decisionProject) : Promise.resolve([] as DecisionNeighbour[]),
+    vector && wantDecision ? ctx.repos.chatDecisions.nearestAny(ownerId, vector, CANDIDATE_K, decisionProject, { includeInactive }) : Promise.resolve([] as DecisionNeighbour[]),
     vector && !skipItems ? ctx.repos.memoryItems.nearest(itemFilter, vector, CANDIDATE_K) : Promise.resolve([] as MemoryHit[]),
-    wantDecision ? ctx.repos.chatDecisions.textSearch(ownerId, a.query, CANDIDATE_K, decisionProject) : Promise.resolve([] as (ChatDecision & { rank: number })[]),
+    wantDecision ? ctx.repos.chatDecisions.textSearch(ownerId, a.query, CANDIDATE_K, decisionProject, { includeInactive }) : Promise.resolve([] as (ChatDecision & { rank: number })[]),
     skipItems ? Promise.resolve([] as MemoryHit[]) : ctx.repos.memoryItems.textSearch(itemFilter, a.query, CANDIDATE_K),
   ]);
 
