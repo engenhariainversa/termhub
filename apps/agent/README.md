@@ -64,6 +64,33 @@ the existing sessions when it comes back (macOS needs nothing: launchd does not 
 it daemonises). A unit installed by an older agent is rewritten to the current template the first
 time the new agent starts.
 
+## Updates
+
+The agent updates itself when the server asks it to (the update button in Máquinas, or hourly on
+machines with auto-update on): it installs the new version with npm and, when it runs as a service,
+restarts into it. The server first verifies each release against its npm provenance (signed by this
+repository's publish workflow) and sends the tarball's SHA-512 with the request; since 0.20.0 the
+agent downloads the tarball into a private temp dir, checks it against that SHA-512 and installs only
+that file, failing the update without installing anything when they differ.
+
+## Remove from a machine
+
+When you delete an online machine running agent 0.20.0 or later, the delete dialog offers
+**Também desinstalar da máquina** (on by default). It removes the monitor hooks, closes the tmux
+sessions of the machine's tabs, removes the background service and deletes the agent's config (its
+token); the agent then stops. The npm package stays installed: remove it with
+`npm rm -g @termhub/agent`.
+
+By hand (an offline machine, or an older agent):
+
+```bash
+termhub-agent service uninstall   # stop and remove the background service
+termhub-agent disconnect          # delete the local config and its token
+npm rm -g @termhub/agent          # remove the package
+```
+
+Then revoke or delete the machine in the termhub web app (Máquinas), so its token stops working.
+
 ## Other commands
 
 - `termhub-agent status` — shows the paired server, machine name and whether the agent can reach

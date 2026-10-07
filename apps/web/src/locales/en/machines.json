@@ -412,5 +412,8 @@
   "— sem dono (só visível em \"todas as máquinas\") —": "— no owner (only visible in \"all machines\") —",
   "— sem repositório —": "— no repository —",
   "Aceita trabalho automático": "Accepts automatic work",
-  "Desmarcada, o termhub nunca inicia sozinho um card do quadro nesta máquina. Abas abertas por você continuam como sempre.": "When unchecked, termhub never starts a board card on this machine by itself. Tabs you open keep working as usual."
+  "Desmarcada, o termhub nunca inicia sozinho um card do quadro nesta máquina. Abas abertas por você continuam como sempre.": "When unchecked, termhub never starts a board card on this machine by itself. Tabs you open keep working as usual.",
+  "Também desinstalar da máquina": "Also uninstall from the machine",
+  "Remove os hooks, encerra as sessões de terminal das tabs desta máquina e remove o serviço e o token do agente. O pacote npm continua instalado (npm rm -g @termhub/agent).": "Removes the hooks, ends the terminal sessions of this machine's tabs and removes the agent's service and token. The npm package stays installed (npm rm -g @termhub/agent).",
+  "O agente continua instalado na máquina. Para removê-lo, rode nela:": "The agent stays installed on the machine. To remove it, run there:"
 }

@@ -145,7 +145,8 @@ export const api = {
     /** for `type: 'agent'`, the response also carries `agent_token` (the plaintext token, shown only once) */
     create: (input: Partial<Machine>) => request<{ machine: Machine; agent_token?: string }>('POST', '/machines', input),
     update: (id: string, input: Partial<Machine>) => request<{ machine: Machine }>('PATCH', `/machines/${id}`, input),
-    remove: (id: string) => request<{ ok: true }>('DELETE', `/machines/${id}`),
+    /** `uninstall`: also remove the hooks, the tabs' tmux sessions and the agent's service + token from the machine (agent 0.20.0+, online). */
+    remove: (id: string, opts?: { uninstall?: boolean }) => request<{ ok: true }>('DELETE', `/machines/${id}${opts?.uninstall ? '?uninstall=1' : ''}`),
     status: (id: string) =>
       request<{
         id: string;

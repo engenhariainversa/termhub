@@ -74,13 +74,14 @@ A proxy or firewall that closes idle connections after **60 s or more** does not
 | The hosts your AI CLIs already use (e.g. Anthropic for Claude Code, OpenAI for Codex, Google for Gemini) | machines | The CLIs run in termhub tabs exactly as they would in any terminal. termhub adds no host of its own for them; follow each vendor's documentation. |
 | `github.com` | macOS machines | Only the first time you set up the iOS Simulator viewer (clones Appium's WebDriverAgent). |
 
-The **server** also makes outbound calls, but only from termhub's side: npm (latest agent version), Google (OAuth), the ticket integrations you configure (GitHub, Linear, Jira), the usage endpoints of the AI providers, and Expo (mobile push). Your network does not need to allow those. They are listed for self-hosters in [Evidence](#evidence).
+The **server** also makes outbound calls, but only from termhub's side: npm (latest agent version and its provenance attestation), Sigstore's TUF mirror `tuf-repo-cdn.sigstore.dev` (the trust root used to verify that attestation), Google (OAuth), the ticket integrations you configure (GitHub, Linear, Jira), the usage endpoints of the AI providers, and Expo (mobile push). Your network does not need to allow those. They are listed for self-hosters in [Evidence](#evidence).
 
 ## 4. What the agent installs and can do
 
 **Installation**
 
 - **The npm package** `@termhub/agent`, installed globally. It is published from GitHub Actions with **npm provenance**, so `npm view @termhub/agent` and `npm audit signatures` can tie each release to the public workflow that built it.
+- **Updates** (the update button and the opt-in auto-update) install only a release the **server verified**. When npm reports a new latest version, the server reads its `dist.integrity` (it must be `sha512-…`), fetches the release's SLSA provenance attestation from the npm registry and verifies it with Sigstore: the certificate chain, the transparency log, and the signer, which must be this repository's `publish-agent.yml` workflow on `main` or an `agent-vX.Y.Z` tag. The signed statement must name `pkg:npm/%40termhub/agent@<version>` with that same SHA-512. A release that fails is logged and not offered; the previous verified release stays. The update carries the verified integrity, and agents from 0.20.0 download the tarball, check its SHA-512 against it and install that file (older agents install by version). Limits: the check covers the `@termhub/agent` tarball, not its dependencies (`ws`, `zod`, `node-pty`), which npm resolves by semver range at install time; and the server needs to reach `tuf-repo-cdn.sigstore.dev` besides `registry.npmjs.org` (the trust root is cached under the OS temp dir). The server asks npm once an hour with an anonymous `GET`, and skips the poll while no agent is connected.
 - **The config file** `~/.termhub/config.json`, created with mode `0600` in a `0700` directory. It holds the server URL and the machine's token.
 - **The service** (`termhub-agent service install`):
   - Linux: a systemd **user** unit, `systemctl --user`. Keeping it running after logout requires `loginctl enable-linger`.
@@ -91,6 +92,7 @@ The **server** also makes outbound calls, but only from termhub's side: npm (lat
   - its settings file `~/.termhub/hook.env` (mode `0600`);
   - entries merged into `~/.claude*/settings.json`, `~/.codex/config.toml` and `~/.cursor/hooks.json`.
   - Uninstalling from the app removes them.
+- **Removing the agent.** Deleting an online machine whose agent is 0.20.0 or newer can also uninstall it (the "uninstall from the machine" option, on by default): the server removes the monitor hooks, kills the tmux sessions of the machine's tabs, then asks the agent to remove its service definition and its config file (the token) and stop. If removing the hooks or the agent fails, nothing is deleted and the error is shown. The npm package stays installed. For an offline machine or an older agent, run on the machine: `termhub-agent service uninstall`, `termhub-agent disconnect`, `npm rm -g @termhub/agent`.
 - **Per-tab MCP config** for agents started from termhub: `~/.termhub/tabs/<tab>/`, deleted when the tab closes.
 
 **What the server can ask the agent to do**
@@ -102,7 +104,8 @@ The server cannot send the agent an arbitrary shell command. It can only call a 
 - detect installed tools; read hardware stats;
 - paste a file into a tab;
 - install or remove the monitor hooks;
-- update the agent to a given version;
+- update the agent to a release the server verified (version and SHA-512 integrity);
+- uninstall itself (service definition and config) when the machine is deleted with that option;
 - read the local AI CLI login to show usage limits (see section 5);
 - read `gh auth token`, only when you create a GitHub integration from the chat, and only after you confirm the card;
 - scan the repository's `docs/` for the chat's memory;
@@ -215,7 +218,7 @@ These are open gaps, each tracked on the termhub board:
 - Sessions last 30 days with no idle timeout, and there is no "sign out everywhere" (TER-580).
 - Chat messages, proposed commands, the agent's last answers and chat attachments are stored unencrypted in the database or on disk, with no retention limit; they are deleted with the conversation, project or user (TER-582).
 - The app sends `nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy`, but no HSTS or CSP of its own (TER-579).
-- The agent token does not expire until it is rotated, and deleting a machine in the app does not uninstall the agent on the machine (TER-584).
+- The agent token does not expire until it is rotated (TER-584). Replacing it with a single-use pairing token and a per-device key is proposed in `docs/superpowers/specs/2026-10-07-agent-release-trust-and-uninstall-design.md` §1, not built yet. Deleting a machine uninstalls the agent only when the machine is online on agent 0.20.0 or newer; otherwise the manual steps in section 4 apply.
 - `termhub-agent doctor` checks the agent connection only, not the hooks and MCP host (TER-586).
 
 ## Evidence
@@ -249,4 +252,6 @@ Paths are relative to the repository root.
 | `gh auth token` read | `apps/agent/src/rpc/secret.ts`, `apps/server/src/control/integrations.ts` |
 | Voice audio not written to disk | `apps/server/src/terminal/transcription.ts` |
 | npm provenance | `.github/workflows/publish-agent.yml` |
-| Server outbound calls (self-hosting): `registry.npmjs.org`, `oauth2.googleapis.com`, `www.googleapis.com`, `api.github.com`, `api.linear.app`, Jira base URL, `api.anthropic.com`, `chatgpt.com`, `cloudcode-pa.googleapis.com`, `exp.host`, SMTP, Cloudflare API | `apps/server/src/agent/latest-version.ts`, `apps/server/src/auth/google.ts`, `apps/server/src/integrations/`, `apps/server/src/ai/`, `apps/server/src/mobile/push.ts`, `apps/server/src/email/mailer.ts`, `apps/server/src/cloudflare/access.ts` |
+| Server verifies each agent release's provenance (Sigstore, signer workflow, subject and SHA-512) before offering it; poll skipped with no agent connected | `apps/server/src/agent/release-verify.ts`, `apps/server/src/agent/latest-version.ts` |
+| Update sends the verified integrity; uninstall on delete (hooks, tmux sessions, `agent.uninstall`) | `packages/agent-protocol/src/rpc.ts` (`agent.update`, `agent.uninstall`), `apps/server/src/routes/machines.ts` (`DELETE /:id?uninstall=1`) |
+| Server outbound calls (self-hosting): `registry.npmjs.org`, `tuf-repo-cdn.sigstore.dev`, `oauth2.googleapis.com`, `www.googleapis.com`, `api.github.com`, `api.linear.app`, Jira base URL, `api.anthropic.com`, `chatgpt.com`, `cloudcode-pa.googleapis.com`, `exp.host`, SMTP, Cloudflare API | `apps/server/src/agent/latest-version.ts`, `apps/server/src/agent/release-verify.ts`, `apps/server/src/auth/google.ts`, `apps/server/src/integrations/`, `apps/server/src/ai/`, `apps/server/src/mobile/push.ts`, `apps/server/src/email/mailer.ts`, `apps/server/src/cloudflare/access.ts` |

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agentVersionBadge, machineLabel, machineTitle } from './machine-labels';
+import { agentVersionBadge, machineLabel, machineTitle, versionAtLeast } from './machine-labels';
 import type { Machine } from './types';
 
 function agentMachine(overrides: Partial<Machine> = {}): Machine {
@@ -62,5 +62,23 @@ describe('machineLabel', () => {
     expect(machineLabel({ name: 'mini', subtitle: 'MacBook do escritório' })).toBe('mini — MacBook do escritório');
     expect(machineLabel({ name: 'mini', subtitle: null })).toBe('mini');
     expect(machineLabel({ name: 'mini' })).toBe('mini');
+  });
+});
+
+describe('versionAtLeast', () => {
+  it('compares numerically, part by part', () => {
+    expect(versionAtLeast('0.20.0', '0.20.0')).toBe(true);
+    expect(versionAtLeast('0.20.1', '0.20.0')).toBe(true);
+    expect(versionAtLeast('1.0.0', '0.20.0')).toBe(true);
+    expect(versionAtLeast('0.19.9', '0.20.0')).toBe(false);
+    expect(versionAtLeast('0.3.0', '0.20.0')).toBe(false);
+    expect(versionAtLeast('0.20.0-beta.1', '0.20.0')).toBe(true);
+  });
+
+  it('is false for a missing or unparseable version', () => {
+    expect(versionAtLeast(null, '0.20.0')).toBe(false);
+    expect(versionAtLeast(undefined, '0.20.0')).toBe(false);
+    expect(versionAtLeast('', '0.20.0')).toBe(false);
+    expect(versionAtLeast('dev', '0.20.0')).toBe(false);
   });
 });
