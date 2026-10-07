@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/data';
 import type { Machine } from '../lib/types';
 import { agentVersionBadge, machineTitle } from '../lib/machine-labels';
 import { STATUS_DOT, STATUS_LABEL, TYPE_LABEL } from '../lib/machine-status';
-import { MachineForm } from '../components/MachineForm';
+import { MACHINE_FORM_TABS, MachineForm, type MachineFormTab } from '../components/MachineForm';
 import { ConfirmDialog } from '../components/Modal';
 import { PageFrame } from '../components/PageHeader';
 import { Trans, useTranslation } from '../i18n';
@@ -15,7 +15,18 @@ export function MachinesPage() {
   const { t } = useTranslation();
   const { can, viewAs } = useAuth();
   const { machines, projects, hiddenLocal, claimLocal, statuses, missingTmux, deleteMachine, checkStatus } = useData();
-  const [form, setForm] = useState<{ open: boolean; machine?: Machine | null }>({ open: false });
+  const [form, setForm] = useState<{ open: boolean; machine?: Machine | null; tab?: MachineFormTab }>({ open: false });
+  const [params, setParams] = useSearchParams();
+  // Direct link to a machine's form, optionally on one tab: `/machines?edit=<id>&tab=agent`.
+  const editId = params.get('edit');
+  useEffect(() => {
+    if (!editId) return;
+    const m = machines.find((x) => x.id === editId);
+    if (!m) return;
+    const tab = params.get('tab');
+    setForm({ open: true, machine: m, tab: MACHINE_FORM_TABS.includes(tab as MachineFormTab) ? (tab as MachineFormTab) : undefined });
+    setParams({}, { replace: true });
+  }, [editId, machines, params, setParams]);
   const [deleting, setDeleting] = useState<Machine | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -60,7 +71,7 @@ export function MachinesPage() {
                 {m.os && <span className="text-[11px] text-fg-dim">{m.os === 'macos' ? '' : m.os}</span>}
                 {badge &&
                   (badge.outdated ? (
-                    <button type="button" className="rounded px-1 text-[11px] text-warn hover:bg-bg-3" title={badge.title} onClick={() => setForm({ open: true, machine: m })}>
+                    <button type="button" className="rounded px-1 text-[11px] text-warn hover:bg-bg-3" title={badge.title} onClick={() => setForm({ open: true, machine: m, tab: 'agent' })}>
                       {badge.text}
                     </button>
                   ) : (
@@ -83,7 +94,7 @@ export function MachinesPage() {
                     type="button"
                     className="rounded px-1 text-[11px] text-warn hover:bg-bg-3"
                     title={t('Os hooks do monitor não estão instalados: as tabs desta máquina não aparecem em “Precisando de você”. Clique para instalar.')}
-                    onClick={() => setForm({ open: true, machine: m })}
+                    onClick={() => setForm({ open: true, machine: m, tab: 'monitor' })}
                   >
                     {t('sem monitor')}
                   </button>
@@ -138,7 +149,7 @@ export function MachinesPage() {
         </div>
       )}
 
-      {form.open && <MachineForm key={form.machine?.id ?? 'new'} open onClose={() => setForm({ open: false })} machine={form.machine} />}
+      {form.open && <MachineForm key={form.machine?.id ?? 'new'} open onClose={() => setForm({ open: false })} machine={form.machine} initialTab={form.tab} />}
 
       <ConfirmDialog
         open={!!deleting}
