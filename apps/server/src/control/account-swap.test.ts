@@ -11,7 +11,8 @@ const { getAccountUsage, linkClaudeSession, sendKeyToSession, sendTextToSession,
 }));
 vi.mock('../ai/index.js', () => ({ getAccountUsage }));
 vi.mock('../ai/claude-session.js', () => ({ linkClaudeSession }));
-vi.mock('../terminal/session-ops.js', () => ({ sendKeyToSession, sendTextToSession }));
+// typeCommandLine (file for a long line, TER-987) has its own tests: here the line it is given is what is checked
+vi.mock('../terminal/session-ops.js', () => ({ sendKeyToSession, sendTextToSession, typeCommandLine: (m: unknown, s: string, line: string) => sendTextToSession(m, s, line, true) }));
 vi.mock('../agent/registry.js', () => ({ agents: { awaitAgent } }));
 vi.mock('../monitor/ingest.js', () => ({ applyState }));
 vi.mock('../chat/tab-limits.js', () => ({ notifyLimitInChat }));

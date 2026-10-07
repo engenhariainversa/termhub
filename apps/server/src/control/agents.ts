@@ -8,15 +8,15 @@ import { peakUtilization, SWAP_MAX_UTILIZATION } from './account-swap.js';
 import type { AiAccount, AiProvider, Machine, Project, Task } from '../db/repositories/types.js';
 import { HttpError, localizedOf } from '../lib/errors.js';
 import { mintTabToken, TAB_TOKEN_TOOLS } from '../mcp/tab-token.js';
-import { sendTextToSession } from '../terminal/session-ops.js';
+import { typeCommandLine } from '../terminal/session-ops.js';
 import { installTabMcp, TAB_MCP_SERVER, tabMcpSupported } from '../terminal/tab-mcp.js';
 import { ControlError, type ControlContext } from './context.js';
 import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
 import { openTab } from './terminals.js';
 import { msg } from '../i18n/index.js';
-import { AUTOMATION_DENIED_TOOLS, runBranchRules, safeAllowedTools } from './automation-tools.js';
+import { automationAllowList, automationDenyList } from './automation-tools.js';
 
-export { AUTOMATION_DENIED_TOOLS, branchFetchRules, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
+export { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_READ_TOOLS, automationAllowList, automationDenyList, gitRuleForms, branchFetchRules, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
 /** Same ceiling as one typed input: the prompt travels as a single command-line argument. */
 export const PROMPT_MAX_CHARS = 4000;
@@ -112,7 +112,9 @@ function claudeMcpFlags(tabId: string, extraTools: string[] = []): string {
  * permission-bypass flag. No push is listed here: the only pushes pre-allowed are the run's own branch
  * (`branchPushRules`, TER-968 R5), so `git push origin HEAD:main` asks and is escalated. There is no
  * generic `npm run:*` (it would cover `release:ota`). The server-side check of Task 22 also refuses shell
- * operators before matching these.
+ * operators before matching these. The project commands of a typical run (TER-989): git's worktree-local
+ * writes, reading a PR or a CI run with `gh`, install, tests, typecheck, build and the i18n check. Reading
+ * and searching come from `AUTOMATION_READ_TOOLS`, which every automatic tab gets on top of this list.
  */
 export const DEFAULT_AUTOMATION_TOOLS: string[] = [
   'Bash(git status:*)',
@@ -123,16 +125,26 @@ export const DEFAULT_AUTOMATION_TOOLS: string[] = [
   'Bash(git fetch origin)',
   'Bash(git merge:*)',
   'Bash(git log:*)',
+  'Bash(git checkout:*)',
+  'Bash(git restore:*)',
+  'Bash(git stash:*)',
   'Bash(gh pr create:*)',
   'Bash(gh pr view:*)',
   'Bash(gh pr checks:*)',
+  'Bash(gh pr diff:*)',
+  'Bash(gh pr list:*)',
+  'Bash(gh run list:*)',
+  'Bash(gh run view:*)',
   'Bash(npm test:*)',
   'Bash(npm ci)',
   'Bash(npm install)',
   'Bash(npx prisma generate)',
   'Bash(node scripts/automation/rename-migrations.mjs:*)',
   'Bash(npm run build:*)',
+  'Bash(npm run build:packages)',
   'Bash(npm run typecheck:*)',
+  'Bash(npm run test:*)',
+  'Bash(npm run i18n:check:*)',
 ];
 
 /**
@@ -143,6 +155,12 @@ export interface AgentPermission {
   mode: 'acceptEdits';
   allowedTools: string[];
   branch: string | null;
+  /**
+   * The run's worktree, the tab's cwd (TER-991): with it, every git rule also comes as `git -C <worktree> …`
+   * and `git --no-pager …` (`gitRuleForms`), with their denies. Left out of a line typed whole, which has no
+   * room for them.
+   */
+  worktree?: string | null;
 }
 
 /**
@@ -165,9 +183,10 @@ function checkAllowedTools(tools: string[]): string[] {
  */
 function permissionFlags(permission: AgentPermission, mcpTabId: string | null): string {
   if (permission.mode !== 'acceptEdits') throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
-  const tools = [...safeAllowedTools(checkAllowedTools(permission.allowedTools)).kept, ...runBranchRules(permission.branch)];
+  const forms = permission.worktree ? { worktree: permission.worktree } : null;
+  const tools = automationAllowList(checkAllowedTools(permission.allowedTools), permission.branch, forms);
   const allow = mcpTabId ? claudeMcpFlags(mcpTabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
-  const deny = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => shellQuote(t)).join(' ')}`;
+  const deny = `--disallowedTools ${automationDenyList(forms !== null).map((t) => shellQuote(t)).join(' ')}`;
   return `--permission-mode ${permission.mode}${allow ? ` ${allow}` : ''} ${deny}`;
 }
 
@@ -500,7 +519,7 @@ export async function startAgent(
     throw tagged(e);
   }
   try {
-    await sendTextToSession(machine, tab.tmux_session as string, line, true);
+    await typeCommandLine(machine, tab.tmux_session as string, line);
   } catch (e) {
     throw tagged(new ControlError('LAUNCH_FAILED', msg('A aba {{tab}} foi aberta, mas o agente não foi iniciado: {{reason}}. Veja a tela com read_screen ou feche a aba com close_tab.', { tab: tab.tab_id, reason: reason(e) })));
   }
