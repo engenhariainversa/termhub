@@ -79,7 +79,9 @@ bash deploy/blue-green.sh   # builds the image and switches the active blue/gree
 docker exec termhub-app-$(cat /mnt/hd2tb/projetos/termhub/active-color) node apps/server/dist/cli/create-user.js you@example.com "Your Name"
 ```
 
-The `whisper` service (dictation) is shared by both colors like the db: `docker compose --profile prod up -d --build --no-deps whisper` builds it and downloads the model into the `whisper-models` volume on first start (≈ 1.5 GB for `medium`; the mic reports "model loading" until then). The app runs without it — the mic is simply hidden.
+In production the server refuses to start while `DATABASE_URL` carries the compose fallback password `termhub`: set `POSTGRES_PASSWORD` in the `.env` before the db's first start (changing it later also means `ALTER USER ... PASSWORD` inside Postgres, since the data volume keeps the old one). The compose `DATABASE_URL` has no TLS because the app and Postgres share the compose network; against a managed database elsewhere, add `?sslmode=require` (or `verify-full`) to your own `DATABASE_URL`.
+
+The `whisper` service (dictation) is shared by both colors like the db: `docker compose --profile prod up -d --build --no-deps whisper` builds it and downloads the model into the `whisper-models` volume on first start (≈ 1.5 GB for `medium`; the mic reports "model loading" until then). The app runs without it — the mic is simply hidden. Like `embed`, it only answers with the shared secret: set `WHISPER_SECRET` (`openssl rand -base64 32`) in the `.env`, which both the app and the service read; while it is empty the service refuses every request and the mic stays hidden.
 
 The `db` service is a termhub image (`termhub-db`, built from `docker/db`): `postgres:16-alpine` with the [pgvector](https://github.com/pgvector/pgvector) extension compiled in, which the chat decision memory needs. It keeps the same Postgres binary and musl libc as plain `postgres:16-alpine`, so an existing data volume needs no `REINDEX`. The `embed` service (text embeddings for that memory) is shared by both colors too, and the app runs without it — suggestions are simply off.
 
@@ -342,8 +344,10 @@ See [.env.example](.env.example). Main ones:
 | `AUTH_MODE` | `app`, `cloudflare`, `disabled` (dev) or the combination `app,cloudflare` |
 | `PUBLIC_URL` | public URL (secure cookies and OAuth redirect); when it is `https://`, every response also carries `Strict-Transport-Security` |
 | `TRUST_PROXY` | which peers may set `X-Forwarded-For`/`-Proto`/`-Host`: a comma list of IPs, CIDRs and the presets `loopback`, `linklocal`, `uniquelocal`, or `true`/`false`. Default `loopback,uniquelocal` (a proxy on the same host or on a Docker network). The client address it yields feeds the login lockout and the waitlist limit, so if your proxy reaches the app from a public address, list that address instead of setting `true` |
-| `DATABASE_URL` | Postgres (`postgresql://user:pass@host:5432/db`) |
+| `DATABASE_URL` | Postgres (`postgresql://user:pass@host:5432/db`); add `?sslmode=require` for a database outside a private network. In compose it is built from `POSTGRES_PASSWORD`, whose dev fallback `termhub` is refused in production |
 | `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`EMAIL_FROM` | login code and invite delivery; without `SMTP_HOST` no e-mail is sent and the server logs an error (never the e-mail itself) |
+| `SMTP_PROXY` | HTTP(S) proxy the SMTP connection tunnels through with `CONNECT` (`http://proxy:3128`); unset = direct |
+| `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY` | outbound proxy for the server's own calls (npm, Google, GitHub/Linear/Jira, AI usage, Expo push); honoured because the image sets `NODE_USE_ENV_PROXY=1` (Node ≥ 22.21; set it yourself outside the image). Put the compose services in `NO_PROXY` (`whisper,embed,mailpit,localhost,127.0.0.1`) |
 | `EMAIL_DEV_CONSOLE` | `true` = development only: print e-mails (login codes included) to the log instead of sending them; refused in production |
 | `CF_ACCOUNT_ID`/`CF_API_TOKEN`/`CF_ACCESS_APP_DOMAIN`/`CF_ACCESS_POLICY_NAME` | Cloudflare Access allowlist sync on invite/delete (optional) |
 | `ALPHA_COMMUNITY_URL` | WhatsApp group linked from the alpha-tester e-mail (Waitlist tab → Convidar); default `https://77a.it/comunidadetermhub` |
@@ -352,6 +356,7 @@ See [.env.example](.env.example). Main ones:
 | `ENCRYPTION_KEY` | base64 of 32 bytes (`openssl rand -base64 32`) for integration secrets |
 | `VITE_FIREBASE_*` | Firebase Analytics for the landing page and the app (same Firebase web app); build args of both images, empty = no analytics |
 | `WHISPER_URL` | speech-to-text service for dictation (`http://whisper:8000` in compose); unset hides the microphone |
+| `WHISPER_SECRET` | bearer secret shared by the app and the `whisper` service (`openssl rand -base64 32`); empty = the service refuses every request and the microphone is hidden |
 | `WHISPER_MODEL`/`WHISPER_LANGUAGE`/`WHISPER_THREADS`/`WHISPER_BEAM_SIZE`/`WHISPER_INITIAL_PROMPT` | (compose, `whisper` service) model `medium` (default: ~3x realtime on 6 cores, best pt-BR punctuation and names — `large-v3`/`turbo` measured worse in Portuguese) or `small` (~10x realtime, rougher); language hint (`auto` detects); threads (0 = physical cores); beam size; style prompt whose punctuation/casing whisper mimics (a pt/en default is built in) |
 | `EMBED_URL` | text-embeddings service for the chat decision memory (`http://embed:8000` in compose, which is also the compose fallback when unset) |
 | `EMBED_SECRET` | bearer secret shared by the app and the `embed` service (`openssl rand -base64 32`); empty = the service refuses every request and suggestions are off |
