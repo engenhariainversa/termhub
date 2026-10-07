@@ -361,5 +361,11 @@
   "Exclusiva: {{project}}": "Exclusiva: {{project}}",
   "Exclusiva de um projeto": "Exclusiva de un proyecto",
   "Não: qualquer projeto pode usar": "No: cualquier proyecto puede usarla",
-  "Para a conta de um cliente ou empresa: ela só roda nesse projeto, e nenhum outro projeto, troca automática ou chat pode usá-la.": "Para la cuenta de un cliente o una empresa: solo se ejecuta en ese proyecto, y ningún otro proyecto, cambio automático ni chat puede usarla."
+  "Para a conta de um cliente ou empresa: ela só roda nesse projeto, e nenhum outro projeto, troca automática ou chat pode usá-la.": "Para la cuenta de un cliente o una empresa: solo se ejecuta en ese proyecto, y ningún otro proyecto, cambio automático ni chat puede usarla.",
+  "Consulta de uso": "Consulta de uso",
+  "A credencial de login das ferramentas é lida e usada só na própria máquina; o termhub recebe apenas os números de uso. Desligado, o termhub não lê a credencial e as contas da máquina ficam sem as barras de uso.": "La credencial de inicio de sesión de las herramientas se lee y se usa solo en la propia máquina; termhub recibe únicamente los números de uso. Si está desactivado, termhub no lee la credencial y las cuentas de la máquina se quedan sin las barras de uso.",
+  "Consultar o uso das contas de IA em {{machine}}": "Consultar el uso de las cuentas de IA en {{machine}}",
+  "Consulta de uso desligada nesta máquina": "Consulta de uso desactivada en esta máquina",
+  "Atualize o agente desta máquina para ver o uso": "Actualiza el agente de esta máquina para ver el uso",
+  "Ligue em Máquinas › {{machine}}": "Actívala en Máquinas › {{machine}}"
 }

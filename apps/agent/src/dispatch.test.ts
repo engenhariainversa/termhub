@@ -35,7 +35,7 @@ function makeHandlers(overrides: Partial<Handlers> = {}): Handlers {
     'hw.probe': notImplemented,
     'fs.list': notImplemented,
     'fs.mkdir': notImplemented,
-    'ai.credential': notImplemented,
+    'ai.usage': notImplemented,
     'file.paste': notImplemented,
     ...overrides,
   } as Handlers;
