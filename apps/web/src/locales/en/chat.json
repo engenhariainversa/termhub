@@ -248,6 +248,7 @@
   "Respondida automaticamente: «{{answer}}» — motivo {{reason}}": "Answered automatically: «{{answer}}» — reason {{reason}}",
   "Respondida na aba": "Answered in the tab",
   "Resposta automática cancelada: o precedente foi esquecido.": "Automatic answer canceled: the precedent was forgotten.",
+  "Resposta automática cancelada: o precedente expirou.": "Automatic answer canceled: the precedent expired.",
   "Resposta automática cancelada: você desligou «Responder sozinho».": "Automatic answer canceled: you turned off «Answer on my own».",
   "Resposta automática em {{time}} — «{{answer}}» ({{description}}). Motivo: {{reason}}": "Automatic answer in {{time}} — «{{answer}}» ({{description}}). Reason: {{reason}}",
   "Resposta automática em {{time}} — «{{answer}}». Motivo: {{reason}}": "Automatic answer in {{time}} — «{{answer}}». Reason: {{reason}}",

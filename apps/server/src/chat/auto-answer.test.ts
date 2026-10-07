@@ -37,6 +37,8 @@ const decision = (over: Partial<ChatDecision> & { id: string }): ChatDecision =>
   suggested_count: 0,
   accepted_count: 0,
   auto_count: 0,
+  scope: 'user',
+  expires_at: null,
   created_at: '2026-09-24T10:00:00.000Z',
   ...over,
 });
@@ -165,6 +167,14 @@ describe('maybeScheduleRepeat', () => {
     expect(publishTabQuestions).not.toHaveBeenCalled();
   });
 
+  it('never repeats from a decision that expired or is scoped to another conversation (TER-1014)', async () => {
+    for (const over of [{ expires_at: '2026-09-26T11:59:00.000Z' }, { scope: 'conversation' as const, conversation_id: 'c-other' }]) {
+      const { repos, setAutoAnswer } = reposFor(true, [decision({ id: 'd1', ...over })]);
+      expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now)).toBeNull();
+      expect(setAutoAnswer).not.toHaveBeenCalled();
+    }
+  });
+
   it('carries a free-text past answer as text', async () => {
     const { repos, setAutoAnswer } = reposFor(true, [decision({ id: 'd1', answer: { labels: [], text: 'usar a main' } })]);
     await maybeScheduleRepeat(repos, row({ suggestion: { items: [item({ selected: [], text: 'usar a main' })] } }), now);
@@ -278,7 +288,7 @@ describe('sendDueAutoAnswers', () => {
   const now = () => new Date('2026-09-26T12:01:05.000Z');
   const user = { id: 'u1', email: 'a@x', name: 'Ana', nickname: 'ana', role_id: 'r1', password_hash: 'h' };
   const log = () => ({ info: vi.fn(), warn: vi.fn() });
-  function fake(opts: { claimOnce?: boolean; user?: typeof user | undefined; autodecide?: boolean; decisions?: string[]; auto?: Partial<AutoAnswer> } = {}) {
+  function fake(opts: { claimOnce?: boolean; user?: typeof user | undefined; autodecide?: boolean; decisions?: string[]; auto?: Partial<AutoAnswer>; decisionOver?: Partial<ChatDecision> } = {}) {
     const due = row({ auto_answer: scheduled(opts.auto) });
     let claimed = false;
     const tabQuestions = {
@@ -295,7 +305,7 @@ describe('sendDueAutoAnswers', () => {
       users: { findById: vi.fn(async (id: string) => ('user' in opts ? opts.user : id === 'u1' ? user : undefined)), chatAutodecide: vi.fn(async () => opts.autodecide ?? true) },
       chatDecisions: {
         bumpAuto: vi.fn(async () => {}),
-        findManyForUser: vi.fn(async (ids: string[], userId: string) => (userId === 'u1' ? ids.filter((id) => (opts.decisions ?? ['d1', 'd2']).includes(id)).map((id) => decision({ id })) : [])),
+        findManyForUser: vi.fn(async (ids: string[], userId: string) => (userId === 'u1' ? ids.filter((id) => (opts.decisions ?? ['d1', 'd2']).includes(id)).map((id) => decision({ id, ...opts.decisionOver })) : [])),
       },
       roles: { findById: vi.fn(async () => ({ id: 'r1', name: 'x', is_admin: false })), permissionsOf: vi.fn(async () => []) },
     };
@@ -405,6 +415,16 @@ describe('sendDueAutoAnswers', () => {
     expect(repos.chatDecisions.findManyForUser).toHaveBeenCalledWith(['d1'], 'u1');
     expect(answer).not.toHaveBeenCalled();
     expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_FORGOTTEN');
+  });
+
+  it('a cited decision that expired mid-countdown, or holds in another project → failed PRECEDENT_EXPIRED, nothing typed (TER-1014)', async () => {
+    for (const decisionOver of [{ expires_at: '2026-09-26T12:01:00.000Z' }, { scope: 'project' as const, project_id: 'p-other' }]) {
+      const { repos, tabQuestions } = fake({ decisionOver });
+      const answer = vi.fn();
+      expect(await sendDueAutoAnswers(repos as unknown as Repositories, log(), { now, answer })).toBe(0);
+      expect(answer).not.toHaveBeenCalled();
+      expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_EXPIRED');
+    }
   });
 
   it("the same check applies to a concierge countdown's decision sources; its memory items are not decisions", async () => {

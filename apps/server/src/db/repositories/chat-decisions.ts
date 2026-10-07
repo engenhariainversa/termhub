@@ -1,6 +1,7 @@
 import type { PrismaClient } from '../prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
+import { holdsAtSql, type DecisionPlace, type DecisionScope } from './decision-scope.js';
 
 /** One option offered by a remembered `AskUserQuestion` question. */
 export interface DecisionOption {
@@ -36,6 +37,10 @@ export interface ChatDecision {
   accepted_count: number;
   /** Times this decision backed an automatic answer sent by the countdown (spec §D11). */
   auto_count: number;
+  /** Where it holds (TER-1014); a card answer is `user`. */
+  scope: DecisionScope;
+  /** When it stops holding (TER-1014); null = never. */
+  expires_at: string | null;
   created_at: string;
 }
 
@@ -85,17 +90,19 @@ interface RawRow {
   suggested_count: number;
   accepted_count: number;
   auto_count: number;
+  scope: string;
+  expires_at: Date | null;
   created_at: Date;
 }
 
 const DECISION_COLUMNS = Prisma.raw(
-  `id, user_id, project_id, conversation_id, tab_question_id, question_index, header, question, options, multi_select, answer, embed_model, suggested_count, accepted_count, auto_count, created_at`,
+  `id, user_id, project_id, conversation_id, tab_question_id, question_index, header, question, options, multi_select, answer, embed_model, suggested_count, accepted_count, auto_count, scope, expires_at, created_at`,
 );
 
 /** Shared column list for the raw SELECTs below, aliased through `d` and joined to `projects` for
  *  `project_name` — everything but `embedding` itself (never selected — write-only from here). */
 const DECISION_SELECT = Prisma.raw(
-  `d.id, d.user_id, d.project_id, p.name AS project_name, d.conversation_id, d.tab_question_id, d.question_index, d.header, d.question, d.options, d.multi_select, d.answer, d.embed_model, d.suggested_count, d.accepted_count, d.auto_count, d.created_at`,
+  `d.id, d.user_id, d.project_id, p.name AS project_name, d.conversation_id, d.tab_question_id, d.question_index, d.header, d.question, d.options, d.multi_select, d.answer, d.embed_model, d.suggested_count, d.accepted_count, d.auto_count, d.scope, d.expires_at, d.created_at`,
 );
 
 /** The person's picked label(s) and free text, as one tsvector-able string — never the raw jsonb keys
@@ -126,11 +133,22 @@ const mapRaw = (r: RawRow): ChatDecision => ({
   suggested_count: r.suggested_count,
   accepted_count: r.accepted_count,
   auto_count: r.auto_count,
+  scope: r.scope as DecisionScope,
+  expires_at: r.expires_at ? r.expires_at.toISOString() : null,
   created_at: r.created_at.toISOString(),
 });
 
 /** ` AND d.project_id = …` when a search is held to one project, nothing otherwise. */
 const projectFilter = (projectId: string | undefined) => (projectId ? Prisma.sql` AND d.project_id = ${projectId}` : Prisma.empty);
+
+/** ` AND <the decision holds at place>` (TER-1014): in scope there and, unless asked, not expired. */
+const holdsFilter = (place: DecisionPlace, includeExpired = false) =>
+  Prisma.sql` AND ${holdsAtSql({ scope: Prisma.raw('d.scope'), projectId: Prisma.raw('d.project_id'), conversationId: Prisma.raw('d.conversation_id'), expiresAt: Prisma.raw('d.expires_at') }, place, includeExpired)}`;
+
+/** Where a search reads decisions (TER-1014): `place` and whether expired ones count. */
+export interface DecisionSearchPlace extends DecisionPlace {
+  includeExpired?: boolean;
+}
 
 /** Escapes a person's search text for a LIKE/ILIKE pattern: `%`/`_` are wildcards and `\` is the
  *  escape character itself, so all three must be escaped before wrapping in `%…%`. */
@@ -206,13 +224,14 @@ export class ChatDecisionsRepository {
    *  Only rows embedded with exactly `embedModel` (model + text version, `embedTag`): a vector of another
    *  model or text version is not comparable. An exact scan over the user's rows, on purpose: no ANN
    *  index, so no row of this user is ever lost to an approximate index's post-filtering, and one
-   *  person's decisions are few enough to scan. */
-  async nearest(userId: string, vector: number[], opts: { multiSelect: boolean; k: number; embedModel: string }): Promise<DecisionNeighbour[]> {
+   *  person's decisions are few enough to scan. Only decisions that hold at `opts.place` (TER-1014): never
+   *  an expired one, never one scoped to another project or conversation — this is the precedent read. */
+  async nearest(userId: string, vector: number[], opts: { multiSelect: boolean; k: number; embedModel: string; place: DecisionPlace }): Promise<DecisionNeighbour[]> {
     const v = toVector(vector);
     const rows = await this.db.$queryRaw<(RawRow & { similarity: number | string })[]>`
       SELECT ${DECISION_SELECT}, 1 - (d.embedding <=> ${v}::vector) AS similarity
       FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
-      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.multi_select = ${opts.multiSelect} AND d.embed_model = ${opts.embedModel}
+      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.multi_select = ${opts.multiSelect} AND d.embed_model = ${opts.embedModel}${holdsFilter(opts.place)}
       ORDER BY d.embedding <=> ${v}::vector
       LIMIT ${opts.k}`;
     return rows.map((r) => ({ ...mapRaw(r), similarity: Number(r.similarity) }));
@@ -221,13 +240,13 @@ export class ChatDecisionsRepository {
   /** Same as `nearest`, but across both `multi_select` shapes (a `search_memory` caller has no
    *  question payload to match a shape against — only `answer_tab_question`'s own precedent check
    *  does, and it re-verifies the shape itself with `mapAnswer`). `projectId` keeps only that
-   *  project's rows (a tab token's search, TER-212 D3). */
-  async nearestAny(userId: string, vector: number[], k: number, projectId?: string): Promise<DecisionNeighbour[]> {
+   *  project's rows (a tab token's search, TER-212 D3); `place` keeps the ones that hold there (TER-1014). */
+  async nearestAny(userId: string, vector: number[], k: number, projectId?: string, place: DecisionSearchPlace = {}): Promise<DecisionNeighbour[]> {
     const v = toVector(vector);
     const rows = await this.db.$queryRaw<(RawRow & { similarity: number | string })[]>`
       SELECT ${DECISION_SELECT}, 1 - (d.embedding <=> ${v}::vector) AS similarity
       FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
-      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL${projectFilter(projectId)}
+      WHERE d.user_id = ${userId} AND d.embedding IS NOT NULL${projectFilter(projectId)}${holdsFilter(place, place.includeExpired)}
       ORDER BY d.embedding <=> ${v}::vector
       LIMIT ${k}`;
     return rows.map((r) => ({ ...mapRaw(r), similarity: Number(r.similarity) }));
@@ -253,13 +272,14 @@ export class ChatDecisionsRepository {
   /** Postgres full-text over header, question and the answer's labels/text (never the raw jsonb keys),
    *  best `ts_rank` first — same no-index trade-off as `MemoryItemsRepository.textSearch` (D5). A
    *  query with no lexeme (only punctuation) matches nothing rather than throwing. `projectId` keeps
-   *  only that project's rows (a tab token's search, TER-212 D3), as it does for `nearestAny`. */
-  async textSearch(userId: string, query: string, k: number, projectId?: string): Promise<(ChatDecision & { rank: number })[]> {
+   *  only that project's rows (a tab token's search, TER-212 D3), as it does for `nearestAny`, and so
+   *  does `place` (TER-1014). */
+  async textSearch(userId: string, query: string, k: number, projectId?: string, place: DecisionSearchPlace = {}): Promise<(ChatDecision & { rank: number })[]> {
     const rows = await this.db.$queryRaw<RawRow[]>`
       WITH q AS (SELECT websearch_to_tsquery('simple', ${query}) AS tsq)
       SELECT ${DECISION_SELECT}
       FROM "chat_decisions" d CROSS JOIN q LEFT JOIN "projects" p ON p.id = d.project_id
-      WHERE d.user_id = ${userId}${projectFilter(projectId)}
+      WHERE d.user_id = ${userId}${projectFilter(projectId)}${holdsFilter(place, place.includeExpired)}
         AND numnode(q.tsq) > 0
         AND to_tsvector('simple', d.header || ' ' || d.question || ' ' || ${answerTextExpr}) @@ q.tsq
       ORDER BY ts_rank(to_tsvector('simple', d.header || ' ' || d.question || ' ' || ${answerTextExpr}), q.tsq) DESC, d.created_at DESC

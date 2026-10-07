@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import type { Repositories } from '../db/repositories/index.js';
+import type { DecisionScope } from '../db/repositories/decision-scope.js';
 import type { MemoryItem, NewMemoryItem } from '../db/repositories/memory-items.js';
 import { EMBED_TIMEOUT_MS, memoryCode, withTimeout, type Embedder } from '../chat/embeddings.js';
 import { newId } from '../lib/ids.js';
@@ -215,7 +216,18 @@ export async function indexTasks(repos: Repositories, ownerId: string, deps: Mem
  */
 export async function indexNote(
   repos: Pick<Repositories, 'memoryItems'>,
-  note: { owner_id: string; project_id: string | null; question: string; decision: string; reason: string; sources: string[] },
+  note: {
+    owner_id: string;
+    project_id: string | null;
+    question: string;
+    decision: string;
+    reason: string;
+    sources: string[];
+    /** TER-1014: where it holds, the conversation it was taken in, and when it stops holding. */
+    scope?: DecisionScope;
+    conversation_id?: string | null;
+    expires_at?: Date | null;
+  },
   deps: MemoryDeps,
 ): Promise<MemoryItem> {
   const id = newId();
@@ -229,6 +241,9 @@ export async function indexNote(
     title: cleanMemoryText(note.question),
     text: cut(`Decisão: ${note.decision}\nMotivo: ${note.reason}\nFontes: ${note.sources.join(', ')}`),
     trust: 'derived',
+    scope: note.scope ?? null,
+    conversation_id: note.conversation_id ?? null,
+    expires_at: note.expires_at ?? null,
     source_at: new Date(),
   };
   const [inserted] = await repos.memoryItems.upsertMany([item]);

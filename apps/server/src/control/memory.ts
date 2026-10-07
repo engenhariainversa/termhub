@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { ChatDecision, DecisionNeighbour } from '../db/repositories/chat-decisions.js';
+import { holdsAt, inferScope, isExpired, type DecisionPlace, type DecisionScope } from '../db/repositories/decision-scope.js';
 import type { MemoryFilter, MemoryHit, MemoryItem, MemoryKind, MemoryTrust } from '../db/repositories/memory-items.js';
 import { checkChoiceAnswer, choiceAnswerBody, type ChoiceAnswer, type ChoicePayload } from '../chat/tab-question-payload.js';
 import { autoAnswerAllowed, blocklistParts, decisionBacks, scheduleAutoAnswer, type Downgrade } from '../chat/auto-answer.js';
@@ -11,6 +12,7 @@ import { defaultEmbedder, EMBED_TIMEOUT_MS, withTimeout, type Embedder } from '.
 import { sanitisePromptText } from '../chat/tab-question-context.js';
 import { indexNote } from '../memory/index-items.js';
 import { excerpt } from '../memory/text.js';
+import { nextLocalTime, zoneOrUtc } from '../lib/local-time.js';
 import { rrf, type Ranked } from '../memory/fusion.js';
 import { TAB_EXCLUDED_KINDS } from '../mcp/tab-token.js';
 import { ControlError, type ControlContext } from './context.js';
@@ -29,6 +31,11 @@ export interface MemoryResult {
   excerpt: string;
   similarity: number | null;
   match: 'semantic' | 'text' | 'both';
+  /** Only for a `decision` or a `note` (TER-1014): where it holds, when it stops holding (null = never),
+   *  and whether it already has — set only when the search asked for expired ones too. */
+  scope?: DecisionScope;
+  expires_at?: string | null;
+  expired?: boolean;
   /** Only for `kind: 'lesson'` (spec 2026-09-27 failure lessons D8, §5.1), from the item's `meta`:
    *  whether the person marked it verified, its evidence, whether it came from a `docs/lessons/*.md`
    *  file or a project note, the file's path (null for a note lesson), the tab it was recorded from
@@ -70,8 +77,16 @@ const projectOf = (id: string | null, name: string | null): MemoryResult['projec
 const matchOf = (key: string, vecKeys: Set<string>, textKeys: Set<string>): MemoryResult['match'] =>
   vecKeys.has(key) && textKeys.has(key) ? 'both' : vecKeys.has(key) ? 'semantic' : 'text';
 
+/** A decision's or note's scope and expiry for a search result (TER-1014). */
+const validityOf = (row: { scope: DecisionScope; expires_at: string | null }): Pick<MemoryResult, 'scope' | 'expires_at' | 'expired'> => ({
+  scope: row.scope,
+  expires_at: row.expires_at,
+  ...(isExpired(row.expires_at) ? { expired: true } : {}),
+});
+
 function decisionResult(d: ChatDecision, similarity: number | null, match: MemoryResult['match']): MemoryResult {
   return {
+    ...validityOf(d),
     ref: decisionKey(d.id),
     kind: 'decision',
     trust: 'person',
@@ -96,6 +111,7 @@ function itemResult(it: MemoryHit, similarity: number | null, match: MemoryResul
     similarity,
     match,
   };
+  if (it.kind === 'note') return { ...base, ...validityOf(it) };
   if (it.kind !== 'lesson') return base;
   const meta = it.meta;
   return {
@@ -141,10 +157,14 @@ function mergeByRank(decisions: (ChatDecision & { rank: number })[], items: Memo
  * Under a tab token (TER-212 D3) the search is held to the tab's project — decisions included — and
  * never reads the kinds `message` and `action`. The MCP route already pinned `project_id`; the check
  * is repeated here so this function holds the rule on its own.
+ *
+ * Decisions and notes come back only where they hold (TER-1014): one scoped to a project only when no
+ * project or that project is searched, one scoped to a conversation only in that conversation (the
+ * concierge token's), and never an expired one unless `include_expired` asks for it.
  */
 export async function searchMemory(
   ctx: ControlContext,
-  a: { query: string; project_id?: string; kinds?: MemoryRefKind[]; limit?: number },
+  a: { query: string; project_id?: string; kinds?: MemoryRefKind[]; limit?: number; include_expired?: boolean },
   deps: { embedder?: Embedder | null } = {},
 ): Promise<{ note: string; results: MemoryResult[] }> {
   const tab = ctx.token?.tab;
@@ -160,7 +180,9 @@ export async function searchMemory(
   const wantDecision = a.kinds === undefined || a.kinds.includes('decision');
   const itemKinds = a.kinds === undefined ? undefined : (a.kinds.filter((k): k is MemoryKind => k !== 'decision') as MemoryKind[]);
   const skipItems = itemKinds !== undefined && itemKinds.length === 0;
-  const itemFilter: MemoryFilter = { ownerId, projectId: a.project_id, kinds: itemKinds };
+  const place: DecisionPlace = { projectId: a.project_id, conversationId: ctx.token?.chat_conversation_id ?? null };
+  const includeExpired = a.include_expired ?? false;
+  const itemFilter: MemoryFilter = { ownerId, projectId: a.project_id, kinds: itemKinds, place, includeExpired };
 
   let vector: number[] | null = null;
   if (embedder) {
@@ -173,9 +195,9 @@ export async function searchMemory(
   }
 
   const [vecDecisions, vecItems, textDecisions, textItems] = await Promise.all([
-    vector && wantDecision ? ctx.repos.chatDecisions.nearestAny(ownerId, vector, CANDIDATE_K, decisionProject) : Promise.resolve([] as DecisionNeighbour[]),
+    vector && wantDecision ? ctx.repos.chatDecisions.nearestAny(ownerId, vector, CANDIDATE_K, decisionProject, { ...place, includeExpired }) : Promise.resolve([] as DecisionNeighbour[]),
     vector && !skipItems ? ctx.repos.memoryItems.nearest(itemFilter, vector, CANDIDATE_K) : Promise.resolve([] as MemoryHit[]),
-    wantDecision ? ctx.repos.chatDecisions.textSearch(ownerId, a.query, CANDIDATE_K, decisionProject) : Promise.resolve([] as (ChatDecision & { rank: number })[]),
+    wantDecision ? ctx.repos.chatDecisions.textSearch(ownerId, a.query, CANDIDATE_K, decisionProject, { ...place, includeExpired }) : Promise.resolve([] as (ChatDecision & { rank: number })[]),
     skipItems ? Promise.resolve([] as MemoryHit[]) : ctx.repos.memoryItems.textSearch(itemFilter, a.query, CANDIDATE_K),
   ]);
 
@@ -269,6 +291,34 @@ async function verifySources(ctx: ControlContext, sources: string[] | undefined)
   return resolved;
 }
 
+/** Where a resolved source holds (TER-1014): a decision, a note; every other kind always holds. */
+function sourceHolds(s: ResolvedSource, place: DecisionPlace, now: Date): boolean {
+  if (s.kind === 'decision') return holdsAt(s.decision, place, now);
+  if (s.kind === 'note') return holdsAt(s.item, place, now);
+  return true;
+}
+
+/** Every cited source must still hold where the answer goes (TER-1014): an expired decision or note,
+ *  or one scoped to another project or conversation, is never a precedent — the call is refused. */
+function checkSourcesHold(sources: ResolvedSource[], place: DecisionPlace, now = new Date()): void {
+  const stale = sources.find((s) => !sourceHolds(s, place, now));
+  if (stale) throw new ControlError('SOURCE_NOT_VALID', msg('A fonte {{ref}} expirou ou não vale aqui (outro projeto ou outra conversa)', { ref: stale.ref }));
+}
+
+/**
+ * The moment a decision stops holding, from `record_decision`'s input (TER-1014): `expires_at` as given,
+ * or `expires_at_time` ("HH:MM") as the next time the person's clock reads it, in their time zone
+ * (UTC when they have none). Null when neither is given. Either must land in the future.
+ */
+async function expiryOf(ctx: ControlContext, a: { expires_at?: string; expires_at_time?: string }, now: Date): Promise<Date | null> {
+  if (a.expires_at !== undefined && a.expires_at_time !== undefined) throw new ControlError('EXPIRY_TWICE', 'Informe expires_at ou expires_at_time, não os dois');
+  let at: Date | null = null;
+  if (a.expires_at !== undefined) at = new Date(a.expires_at);
+  else if (a.expires_at_time !== undefined) at = nextLocalTime(a.expires_at_time, zoneOrUtc(await ctx.repos.users.timeZone(ctx.scope.user.id)), now);
+  if (at && (Number.isNaN(at.getTime()) || at.getTime() <= now.getTime())) throw new ControlError('EXPIRY_IN_PAST', 'A validade da decisão precisa estar no futuro');
+  return at;
+}
+
 /**
  * `record_decision` (spec 2026-09-26 concierge memory D12, §5.2): writes a `note` memory item, trust
  * `derived`, owned by the calling user — a decision the concierge took alone, or one the person spoke
@@ -280,13 +330,22 @@ async function verifySources(ctx: ControlContext, sources: string[] | undefined)
  * written: an unknown ref refuses the whole call rather than silently dropping the citation. The rate
  * limit (`NOTES_PER_HOUR`) is checked last, right before the write, since it is the gate on the write
  * itself rather than on the input's shape.
+ *
+ * `scope` (TER-1014) says where the note holds: `conversation` (the concierge token's conversation —
+ * refused without one), `project` (needs `project_id`) or `user`; left out, `project` with a project and
+ * `user` without. `expires_at` / `expires_at_time` (`expiryOf`) make it stop holding at that moment.
  */
 export async function recordDecision(
   ctx: ControlContext,
-  a: { question: string; decision: string; reason: string; project_id?: string; sources?: string[] },
-  deps: { embedder?: Embedder | null; log?: Pick<FastifyBaseLogger, 'info' | 'warn'> } = {},
-): Promise<{ ref: string }> {
+  a: { question: string; decision: string; reason: string; project_id?: string; sources?: string[]; scope?: DecisionScope; expires_at?: string; expires_at_time?: string },
+  deps: { embedder?: Embedder | null; log?: Pick<FastifyBaseLogger, 'info' | 'warn'>; now?: Date } = {},
+): Promise<{ ref: string; scope: DecisionScope; expires_at: string | null }> {
   const projectId = a.project_id ? (await ctx.scoped.project(a.project_id)).project.id : null;
+  const conversationId = ctx.token?.chat_conversation_id ?? null;
+  const scope = a.scope ?? inferScope(projectId);
+  if (scope === 'project' && !projectId) throw new ControlError('SCOPE_NEEDS_PROJECT', 'Uma decisão deste projeto precisa de project_id');
+  if (scope === 'conversation' && !conversationId) throw new ControlError('SCOPE_NEEDS_CONVERSATION', 'Uma decisão desta conversa só pode ser registrada no chat do termhub');
+  const expiresAt = await expiryOf(ctx, a, deps.now ?? new Date());
   await verifySources(ctx, a.sources);
   const ownerId = ctx.scope.user.id;
   const count = await ctx.repos.memoryItems.countNotesSince(ownerId, new Date(Date.now() - NOTES_WINDOW_MS));
@@ -294,10 +353,10 @@ export async function recordDecision(
   const { embedder = defaultEmbedder(), log = console } = deps;
   const item = await indexNote(
     ctx.repos,
-    { owner_id: ownerId, project_id: projectId, question: a.question, decision: a.decision, reason: a.reason, sources: a.sources ?? [] },
+    { owner_id: ownerId, project_id: projectId, question: a.question, decision: a.decision, reason: a.reason, sources: a.sources ?? [], scope, conversation_id: conversationId, expires_at: expiresAt },
     { embedder, log },
   );
-  return { ref: `note:${item.id}` };
+  return { ref: `note:${item.id}`, scope, expires_at: expiresAt ? expiresAt.toISOString() : null };
 }
 
 /** `list_tab_questions`'s own note (spec §5.3): the tab's own words, shown to the model as data. */
@@ -474,6 +533,7 @@ export async function answerTabQuestionTool(
   const answer = toChoiceAnswer(payload, a.answers);
   const sources = await verifySources(ctx, a.sources);
   if (sources.length === 0) throw new ControlError('UNKNOWN_SOURCE', 'Cite ao menos uma fonte de search_memory');
+  checkSourcesHold(sources, { projectId: row.project_id, conversationId: row.conversation_id });
 
   let downgrade: Downgrade | undefined;
   if ((a.mode ?? 'auto') === 'auto') {

@@ -100,5 +100,10 @@
   "Só a pessoa muda a exclusividade de uma conta de IA, nunca um agente numa aba": "Only the person changes whether an AI account is exclusive, never an agent in a tab",
   "Isso deixa a conta \"{{account}}\" exclusiva do projeto {{project}}: nenhum outro projeto poderá usá-la; repita com confirm: true para confirmar": "This makes the account \"{{account}}\" exclusive to project {{project}}: no other project will be able to use it; repeat with confirm: true to confirm",
   "Isso libera a conta \"{{account}}\", hoje exclusiva do projeto {{project}}, para qualquer projeto; repita com confirm: true para confirmar": "This frees the account \"{{account}}\", now exclusive to project {{project}}, for any project; repeat with confirm: true to confirm",
-  "Atualize o agente de {{machine}} (npm i -g @termhub/agent, versão {{version}} ou mais nova): o trabalho automático só roda com a trava (termhub-guard).": "Update the agent on {{machine}} (npm i -g @termhub/agent, version {{version}} or newer): automatic work only runs with the hard lock (termhub-guard)."
+  "Atualize o agente de {{machine}} (npm i -g @termhub/agent, versão {{version}} ou mais nova): o trabalho automático só roda com a trava (termhub-guard).": "Update the agent on {{machine}} (npm i -g @termhub/agent, version {{version}} or newer): automatic work only runs with the hard lock (termhub-guard).",
+  "A fonte {{ref}} expirou ou não vale aqui (outro projeto ou outra conversa)": "The source {{ref}} expired or does not apply here (another project or another conversation)",
+  "Informe expires_at ou expires_at_time, não os dois": "Provide expires_at or expires_at_time, not both",
+  "A validade da decisão precisa estar no futuro": "The decision's expiry must be in the future",
+  "Uma decisão deste projeto precisa de project_id": "A decision for this project needs project_id",
+  "Uma decisão desta conversa só pode ser registrada no chat do termhub": "A decision for this conversation can only be recorded in the termhub chat"
 }

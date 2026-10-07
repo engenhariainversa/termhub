@@ -1274,6 +1274,11 @@ model ChatDecision {
   /// Times this decision backed an automatic answer sent by the countdown (spec §D11); those answers
   /// are never recorded as a new row, so this is the only trace of them on the source decision.
   autoCount      Int               @default(0) @map("auto_count")
+  /// Where the decision holds (TER-1014): conversation | project | user. Card answers are `user`, as
+  /// they always were account-wide precedents.
+  scope          String            @default("user")
+  /// When the decision stops holding (TER-1014); null = never. An expired one is never a precedent.
+  expiresAt      DateTime?         @map("expires_at")
   createdAt      DateTime          @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
@@ -1315,6 +1320,13 @@ model MemoryItem {
   /// Lesson metadata (spec §3): { evidence, card, pr, tags, agent, tab_id, origin, path }. Null for
   /// every other kind.
   meta        Json?
+  /// A note's scope (TER-1014): conversation | project | user. Null = written before it, read as
+  /// `project` when the note has a project, else `user`. Null for every other kind.
+  scope          String?   @map("scope")
+  /// The chat conversation a note was recorded in (TER-1014); null for every other kind.
+  conversationId String?   @map("conversation_id")
+  /// When a note stops holding (TER-1014); null = never. Search skips an expired one by default.
+  expiresAt      DateTime? @map("expires_at")
   sourceAt    DateTime @map("source_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

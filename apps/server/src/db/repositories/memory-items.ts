@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { PrismaClient } from '../prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
+import { holdsAtSql, inferScope, type DecisionPlace, type DecisionScope } from './decision-scope.js';
 
 export type MemoryKind = 'task' | 'message' | 'action' | 'doc' | 'note' | 'lesson' | 'project_note';
 export type MemoryTrust = 'person' | 'derived';
@@ -48,6 +49,13 @@ export interface MemoryItem {
    *  it — for a lesson the whole source's text (`source_hash`), for every other kind the chunk's own. */
   verified: boolean;
   verified_at: string | null;
+  /** Where a note holds (TER-1014), inferred for a note written without one (`inferScope`); every
+   *  other kind is `user` — its own project filter is the only narrowing it ever had. */
+  scope: DecisionScope;
+  /** The chat conversation a note was recorded in; null for every other kind. */
+  conversation_id: string | null;
+  /** When a note stops holding (TER-1014); null = never. */
+  expires_at: string | null;
   source_at: string;
   created_at: string;
   updated_at: string;
@@ -72,6 +80,10 @@ export interface NewMemoryItem {
   /** Lesson metadata (spec §3); undefined/null for every other kind. `upsertIn` writes it on every
    *  upsert but never touches `verified_*`/`hidden_hash` — those survive a re-index untouched. */
   meta?: LessonMeta | null;
+  /** A note's scope, conversation and expiry (TER-1014); left out for every other kind. */
+  scope?: DecisionScope | null;
+  conversation_id?: string | null;
+  expires_at?: Date | null;
 }
 
 export interface MemoryHit extends MemoryItem {
@@ -83,6 +95,10 @@ export interface MemoryFilter {
   ownerId: string;
   projectId?: string;
   kinds?: MemoryKind[];
+  /** Where the notes found must hold (TER-1014): in scope there. Absent = any project, no conversation. */
+  place?: DecisionPlace;
+  /** Keep expired notes (a search that asks for them); by default they are skipped. */
+  includeExpired?: boolean;
 }
 
 /** Row shape shared by the raw queries below: every `memory_items` column but `embedding` itself
@@ -104,14 +120,25 @@ interface RawItem {
   meta: LessonMeta | null;
   verified_at: Date | null;
   verified_hash: string | null;
+  scope: string | null;
+  conversation_id: string | null;
+  expires_at: Date | null;
   source_at: Date;
   created_at: Date;
   updated_at: Date;
 }
 
 const ITEM_COLUMNS = Prisma.raw(
-  `m.id, m.owner_id, m.project_id, m.kind, m.source_id, m.chunk_index, m.title, m.text, m.trust, m.content_hash, m.source_hash, m.embed_model, m.meta, m.verified_at, m.verified_hash, m.source_at, m.created_at, m.updated_at`,
+  `m.id, m.owner_id, m.project_id, m.kind, m.source_id, m.chunk_index, m.title, m.text, m.trust, m.content_hash, m.source_hash, m.embed_model, m.meta, m.verified_at, m.verified_hash, m.scope, m.conversation_id, m.expires_at, m.source_at, m.created_at, m.updated_at`,
 );
+
+/** A row's effective scope in SQL (TER-1014): a note's own, or inferred like `inferScope`; `user` for
+ *  every other kind. */
+const SCOPE_SQL = Prisma.raw(`(CASE WHEN m.kind <> 'note' THEN 'user' ELSE COALESCE(m.scope, CASE WHEN m.project_id IS NULL THEN 'user' ELSE 'project' END) END)`);
+
+/** The row holds at the filter's place and, unless asked otherwise, has not expired (TER-1014). */
+const holdsFilter = (filter: MemoryFilter): Prisma.Sql =>
+  holdsAtSql({ scope: SCOPE_SQL, projectId: Prisma.raw('m.project_id'), conversationId: Prisma.raw('m.conversation_id'), expiresAt: Prisma.raw('m.expires_at') }, filter.place ?? {}, filter.includeExpired);
 
 /** pgvector's text input format: `[x,y,z]`. Never-finite components (NaN, Infinity) are zeroed rather
  *  than sent malformed, since a bad embedding would otherwise fail the whole write. */
@@ -152,6 +179,9 @@ const mapRaw = (r: RawItem): MemoryItem => ({
   meta: r.meta,
   verified: r.verified_at !== null && r.verified_hash === markHash(r),
   verified_at: r.verified_at ? r.verified_at.toISOString() : null,
+  scope: r.kind !== 'note' ? 'user' : ((r.scope as DecisionScope | null) ?? inferScope(r.project_id)),
+  conversation_id: r.conversation_id,
+  expires_at: r.expires_at ? r.expires_at.toISOString() : null,
   source_at: r.source_at.toISOString(),
   created_at: r.created_at.toISOString(),
   updated_at: r.updated_at.toISOString(),
@@ -186,15 +216,15 @@ async function upsertIn(tx: RawClient, items: NewMemoryItem[]): Promise<MemoryIt
     const hash = contentHash(it.title, it.text);
     const meta = it.meta ? JSON.stringify(it.meta) : null;
     const [row] = await tx.$queryRaw<(RawItem & { needs_embedding: boolean })[]>`
-      INSERT INTO "memory_items" ("id","owner_id","project_id","kind","source_id","chunk_index","title","text","trust","content_hash","source_hash","meta","source_at","updated_at")
-      VALUES (${it.id ?? newId()}, ${it.owner_id}, ${it.project_id}, ${it.kind}, ${it.source_id}, ${it.chunk_index}, ${it.title}, ${it.text}, ${it.trust}, ${hash}, ${it.source_hash ?? null}, ${meta}::jsonb, ${it.source_at}, now())
+      INSERT INTO "memory_items" ("id","owner_id","project_id","kind","source_id","chunk_index","title","text","trust","content_hash","source_hash","meta","scope","conversation_id","expires_at","source_at","updated_at")
+      VALUES (${it.id ?? newId()}, ${it.owner_id}, ${it.project_id}, ${it.kind}, ${it.source_id}, ${it.chunk_index}, ${it.title}, ${it.text}, ${it.trust}, ${hash}, ${it.source_hash ?? null}, ${meta}::jsonb, ${it.scope ?? null}, ${it.conversation_id ?? null}, ${it.expires_at ?? null}, ${it.source_at}, now())
       ON CONFLICT ("kind","source_id","chunk_index") DO UPDATE SET
         "title" = EXCLUDED."title", "text" = EXCLUDED."text", "trust" = EXCLUDED."trust", "owner_id" = EXCLUDED."owner_id", "project_id" = EXCLUDED."project_id",
         "source_at" = EXCLUDED."source_at", "updated_at" = now(), "content_hash" = EXCLUDED."content_hash", "source_hash" = EXCLUDED."source_hash", "meta" = EXCLUDED."meta",
         "embedding" = CASE WHEN "memory_items"."content_hash" = EXCLUDED."content_hash" THEN "memory_items"."embedding" ELSE NULL END,
         "embed_model" = CASE WHEN "memory_items"."content_hash" = EXCLUDED."content_hash" THEN "memory_items"."embed_model" ELSE NULL END
       RETURNING id, owner_id, project_id, (SELECT name FROM "projects" WHERE id = "project_id") AS project_name,
-                kind, source_id, chunk_index, title, text, trust, content_hash, source_hash, embed_model, meta, verified_at, verified_hash, source_at, created_at, updated_at,
+                kind, source_id, chunk_index, title, text, trust, content_hash, source_hash, embed_model, meta, verified_at, verified_hash, scope, conversation_id, expires_at, source_at, created_at, updated_at,
                 (embedding IS NULL) AS needs_embedding`;
     if (row!.needs_embedding) out.push(mapRaw(row!));
   }
@@ -311,6 +341,7 @@ export class MemoryItemsRepository {
         AND ${NOT_HIDDEN}
         AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))
+        AND ${holdsFilter(filter)}
       ORDER BY m.embedding <=> ${v}::vector
       LIMIT ${k}`;
     return rows.map((r, i) => ({ ...mapRaw(r), similarity: Number(r.similarity), rank: i + 1 }));
@@ -328,6 +359,7 @@ export class MemoryItemsRepository {
         AND ${NOT_HIDDEN}
         AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))
+        AND ${holdsFilter(filter)}
         AND numnode(q.tsq) > 0
         AND to_tsvector('simple', m.title || ' ' || m.text) @@ q.tsq
       ORDER BY ts_rank(to_tsvector('simple', m.title || ' ' || m.text), q.tsq) DESC, m.source_at DESC

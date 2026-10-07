@@ -50,6 +50,13 @@ describe('suggestFor', () => {
     expect(JSON.stringify(l.info.mock.calls)).not.toContain('Qual cor');
   });
 
+  it('asks only for decisions that hold on this card: its project and conversation (TER-1014)', async () => {
+    const repos = fakeRepos();
+    const r = row();
+    await suggestFor(repos as never, r, { embedder: embedder(), threshold: 0.85, log: log() });
+    expect(repos.chatDecisions.nearest).toHaveBeenCalledWith('u1', expect.anything(), expect.objectContaining({ place: { projectId: r.project_id, conversationId: r.conversation_id } }));
+  });
+
   it('ignores candidates below the threshold', async () => {
     const below = neighbour({ id: 'd-low', similarity: 0.84, answer: { labels: ['Sim'] } });
     const repos = fakeRepos({ nearest: async () => [below] });
@@ -78,8 +85,8 @@ describe('suggestFor', () => {
     expect(e.embed).toHaveBeenCalledTimes(1);
     expect(e.embed.mock.calls[0]![0]).toHaveLength(2);
     expect(result?.items).toEqual([{ question_index: 0, decision_id: 'd-match', similarity: 0.9, selected: [0], source: { question: match.question, project_name: match.project_name, answered_at: match.created_at } }]);
-    expect(nearest).toHaveBeenCalledWith('u1', [1, 0], { multiSelect: false, k: 5, embedModel: 'm#q1' });
-    expect(nearest).toHaveBeenCalledWith('u1', [1, 0], { multiSelect: true, k: 5, embedModel: 'm#q1' });
+    expect(nearest).toHaveBeenCalledWith('u1', [1, 0], { multiSelect: false, k: 5, embedModel: 'm#q1', place: { projectId: 'p1', conversationId: 'c1' } });
+    expect(nearest).toHaveBeenCalledWith('u1', [1, 0], { multiSelect: true, k: 5, embedModel: 'm#q1', place: { projectId: 'p1', conversationId: 'c1' } });
   });
 
   it('embeds the normalised question only and searches vectors of the same model and text version', async () => {
@@ -88,7 +95,7 @@ describe('suggestFor', () => {
     const e = embedder();
     await suggestFor(repos as never, row(), { embedder: e, threshold: 0.85, log: log() });
     expect(e.embed).toHaveBeenCalledWith(['qual cor']);
-    expect(nearest).toHaveBeenCalledWith('u1', [1, 0], { multiSelect: false, k: 5, embedModel: 'm#q1' });
+    expect(nearest).toHaveBeenCalledWith('u1', [1, 0], { multiSelect: false, k: 5, embedModel: 'm#q1', place: { projectId: 'p1', conversationId: 'c1' } });
   });
 
   it('gives null without calling the embedder for a non-choice row, no embedder, or suggestions off', async () => {
@@ -155,7 +162,7 @@ describe('suggestFor', () => {
     const repos = { users: { chatSuggestions: vi.fn(async () => true) }, chatDecisions: { nearest, bumpSuggested: vi.fn(async () => {}) } };
     const result = await suggestFor(repos as never, row({ payload: twoQuestions }), { embedder: embedder(), threshold: 0.85, log: log() });
     expect(nearest).toHaveBeenCalledTimes(1);
-    expect(nearest).toHaveBeenCalledWith('u1', [1, 0], { multiSelect: true, k: 5, embedModel: 'm#q1' });
+    expect(nearest).toHaveBeenCalledWith('u1', [1, 0], { multiSelect: true, k: 5, embedModel: 'm#q1', place: { projectId: 'p1', conversationId: 'c1' } });
     expect(result?.items).toEqual([
       { question_index: 1, decision_id: 'd-match', similarity: 0.9, selected: [0, 1], source: { question: match.question, project_name: match.project_name, answered_at: match.created_at } },
     ]);

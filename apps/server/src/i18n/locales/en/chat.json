@@ -31,7 +31,7 @@
   "Só dá para liberar tudo neste projeto numa ação de quadro ou de terminal de um projeto seu": "Allowing everything in this project only works on a board or terminal action of one of your projects",
   "Só dá para liberar sem prazo uma ação de rotina de um projeto seu": "Only a routine action of one of your projects can be allowed with no time limit",
   "A aba desta ação foi fechada: nada foi feito e o pedido expirou. Use “Propor de novo” para o chat pedir de novo numa aba aberta.": "The tab of this action was closed: nothing was done and the request expired. Use “Propose again” to have the chat ask again in an open tab.",
-  "Esta permissão já foi revogada":"This permission was already revoked",
+  "Esta permissão já foi revogada": "This permission was already revoked",
   "Permissão não encontrada": "Permission not found",
   "Cursor inválido": "Invalid cursor",
   "O chat roda em uma máquina sua. Cadastre uma máquina com o agente do termhub para conversar com o concierge.": "The chat runs on one of your machines. Add a machine with the termhub agent to talk to the concierge.",
@@ -68,5 +68,6 @@
   "Sugestão não encontrada": "Suggestion not found",
   "Enviar para a aba precisa da permissão terminals:write na sua role": "Sending to the tab needs the terminals:write permission in your role",
   "Não foi possível enviar para a aba": "Could not send to the tab",
-  "Trabalho automático pausado ou desligado": "Automatic work is paused or turned off"
+  "Trabalho automático pausado ou desligado": "Automatic work is paused or turned off",
+  "A decisão usada expirou ou não vale aqui": "The decision used expired or does not apply here"
 }
