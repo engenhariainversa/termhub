@@ -42,8 +42,13 @@ jobs:
         run: npm test -w @termhub/concierge
       - name: Typecheck + build concierge
         run: npm run typecheck -w @termhub/concierge && npm run build -w @termhub/concierge
+      # A stalled apt mirror once hung this step until the job timeout canceled the whole run:
+      # retry and time out each fetch, and cap the step, so a bad mirror fails fast instead.
       - name: Instalar tmux (teste e2e do agente)
-        run: sudo apt-get update && sudo apt-get install -y tmux
+        timeout-minutes: 5
+        run: |
+          apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo apt-get $apt_opts update && sudo apt-get $apt_opts install -y tmux
       - name: Aplicar migrations (testes de repositório usam o Postgres)
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
