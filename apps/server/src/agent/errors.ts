@@ -65,6 +65,9 @@ export function requireAgentVersion(machine: Machine, min: string): void {
   }
 }
 
+/** First agent release that answers `ai.usage` (spec 2026-10-07 ai-usage-on-machine, D2). */
+export const AI_USAGE_MIN_AGENT_VERSION = '0.20.0';
+
 /** First agent release that advertises `sim` (simulator rpcs + tcp channels). */
 export const SIM_MIN_AGENT_VERSION = '0.5.0';
 

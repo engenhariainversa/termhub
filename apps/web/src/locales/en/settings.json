@@ -361,5 +361,11 @@
   "Exclusiva: {{project}}": "Exclusive: {{project}}",
   "Exclusiva de um projeto": "Exclusive to a project",
   "Não: qualquer projeto pode usar": "No: any project can use it",
-  "Para a conta de um cliente ou empresa: ela só roda nesse projeto, e nenhum outro projeto, troca automática ou chat pode usá-la.": "For a client's or a company's account: it runs only in that project, and no other project, automatic swap or chat can use it."
+  "Para a conta de um cliente ou empresa: ela só roda nesse projeto, e nenhum outro projeto, troca automática ou chat pode usá-la.": "For a client's or a company's account: it runs only in that project, and no other project, automatic swap or chat can use it.",
+  "Consulta de uso": "Usage query",
+  "A credencial de login das ferramentas é lida e usada só na própria máquina; o termhub recebe apenas os números de uso. Desligado, o termhub não lê a credencial e as contas da máquina ficam sem as barras de uso.": "The tools' login credential is read and used only on the machine itself; termhub receives just the usage numbers. When off, termhub does not read the credential and that machine's accounts show no usage bars.",
+  "Consultar o uso das contas de IA em {{machine}}": "Query the AI accounts' usage on {{machine}}",
+  "Consulta de uso desligada nesta máquina": "Usage query turned off on this machine",
+  "Atualize o agente desta máquina para ver o uso": "Update this machine's agent to see the usage",
+  "Ligue em Máquinas › {{machine}}": "Turn it on in Machines › {{machine}}"
 }

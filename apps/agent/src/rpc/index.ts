@@ -38,7 +38,7 @@ export const handlers: Handlers = {
   'hw.probe': hw.probe,
   'fs.list': fs.list,
   'fs.mkdir': fs.mkdir,
-  'ai.credential': ai.credential,
+  'ai.usage': ai.usage,
   'secret.read': secret.read,
   'claude.linkSession': claude.linkSession,
   'docs.scan': docs.scan,

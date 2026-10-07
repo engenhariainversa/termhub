@@ -32,6 +32,7 @@ function makeMachine(overrides: Partial<Machine> & { type: MachineType }): Machi
     agent_last_seen_at: null,
     agent_auto_update: false,
     claude_auto_swap: false,
+    ai_usage_query: true,
     is_local: false,
     owner_id: 'u1',
     owner_name: null,
@@ -281,6 +282,24 @@ describe('PATCH /api/machines/:id (claude_auto_swap)', () => {
   });
 });
 
+describe('PATCH /api/machines/:id (ai_usage_query)', () => {
+  it.each(['agent', 'ssh', 'local'] as const)('reaches the repository with the switch off on a %s machine', async (type) => {
+    store.m1 = makeMachine({ type });
+    const built = buildApp(store);
+    app = built.app;
+    const res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { ai_usage_query: false } });
+    expect(res.statusCode).toBe(200);
+    expect(built.repos.update).toHaveBeenCalledWith('m1', expect.objectContaining({ ai_usage_query: false }));
+  });
+
+  it('rejects a non-boolean value (400)', async () => {
+    store.m1 = makeMachine({ type: 'agent' });
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { ai_usage_query: 'no' } });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
 describe('subtitle (create and edit)', () => {
   it('stores a trimmed subtitle on create', async () => {
     const built = buildApp(store);
@@ -461,7 +480,7 @@ describe('GET /api/machines/:id/network-check (hooks and MCP addresses from the 
 
   it('asks the agent to POST to the hooks address and counts only 401 as reachable', async () => {
     store.m1 = makeMachine({ id: 'm1', type: 'agent' });
-    const rpc = attachAgent('0.20.0', vi.fn(async (_m: string, p: { urls: string[] }) => ({ results: p.urls.map((url) => ({ url, status: 403, error: null })) })), ['net_check']);
+    const rpc = attachAgent('0.21.0', vi.fn(async (_m: string, p: { urls: string[] }) => ({ results: p.urls.map((url) => ({ url, status: 403, error: null })) })), ['net_check']);
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'GET', url: '/api/machines/m1/network-check' });
     expect(res.statusCode).toBe(200);

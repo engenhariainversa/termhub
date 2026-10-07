@@ -100,6 +100,8 @@ export interface Machine {
   agent_auto_update: boolean;
   /** a tab whose Claude hits a usage limit resumes on another Claude account of this machine, on its own */
   claude_auto_swap: boolean;
+  /** TER-735: the AI accounts' usage is queried on this machine (the credential never leaves it); off = no bars */
+  ai_usage_query: boolean;
   automation_allowed: boolean;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
@@ -894,6 +896,11 @@ export interface AiAccountUsage {
   hint: string | null;
   /** last good reading, shown because the provider is rate-limiting the usage query */
   stale?: boolean;
+  /**
+   * TER-735: why there is no reading when it is not an error — 'disabled' = the machine's usage query is
+   * turned off (Máquinas › the machine); 'agent_outdated' = the machine's agent predates the `ai.usage` RPC.
+   */
+  reason?: 'disabled' | 'agent_outdated';
 }
 
 /** Brand names: shown as is in every language. */

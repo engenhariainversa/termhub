@@ -4,7 +4,7 @@ import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, RPC, RPC_METHODS, TMUX_KEYS
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.update', 'ai.credential', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
+      'agent.update', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
       'hooks.uninstall', 'hw.probe', 'net.check', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
@@ -87,7 +87,22 @@ describe('rpc catalog', () => {
     expect(RPC['file.paste'].timeoutMs).toBe(60_000);
     expect(RPC['hw.probe'].timeoutMs).toBe(15_000);
     expect(RPC['tmux.list'].timeoutMs).toBe(8_000);
-    expect(RPC['ai.credential'].timeoutMs).toBe(10_000); // same as the ssh path's credential read
+  });
+  it('ai.usage answers bounded usage numbers, never a credential', () => {
+    const def = RPC['ai.usage'];
+    expect(def.timeoutMs).toBe(60_000); // up to four sequential 12 s provider calls
+    expect(def.params.safeParse({ provider: 'claude', config_dir: null }).success).toBe(true);
+    expect(def.params.safeParse({ provider: 'claude', config_dir: '~/.claude-work' }).success).toBe(true);
+    expect(def.params.safeParse({ provider: 'claude', config_dir: 'relative' }).success).toBe(false);
+    expect(def.params.safeParse({ provider: 'other', config_dir: null }).success).toBe(false);
+    const ok = { ok: true, plan: 'max', windows: [{ key: 'five_hour', label: '5 horas', utilization: 12.5, resets_at: '2026-10-07T12:00:00.000Z', model: 'opus' }], error: null, hint: null };
+    expect(def.result.safeParse(ok).success).toBe(true);
+    expect(def.result.safeParse({ ok: false, plan: null, windows: [], error: 'x', hint: null, rate_limited: true, retry_after_ms: null }).success).toBe(true);
+    expect(def.result.safeParse({ ...ok, windows: [{ ...ok.windows[0], utilization: 101 }] }).success).toBe(false);
+    expect(def.result.safeParse({ ...ok, windows: Array(51).fill(ok.windows[0]) }).success).toBe(false);
+    expect(def.result.safeParse({ ...ok, error: 'x'.repeat(501) }).success).toBe(false);
+    expect(def.result.safeParse({ ...ok, retry_after_ms: -1 }).success).toBe(false);
+    expect('ai.credential' in RPC).toBe(false);
   });
   it('secret.read takes the gh_auth_token source only and bounds the value', () => {
     expect(RPC['secret.read'].params.safeParse({ source: 'gh_auth_token' }).success).toBe(true);

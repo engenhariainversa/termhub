@@ -422,5 +422,7 @@
   "Da máquina, um POST sem token em cada endereço: o termhub responde 401. Se o firewall liberar só o endereço do agente, ele conecta mas o monitor fica mudo.": "From the machine, a POST without a token to each address: termhub answers 401. If the firewall only lets the agent's address through, the agent connects but the monitor stays silent.",
   "respondeu HTTP {{status}} (esperado 401)": "answered HTTP {{status}} (expected 401)",
   "sem resposta": "no answer",
-  "Libere {{url}} no firewall/proxy desta máquina.": "Allow {{url}} in this machine's firewall/proxy."
+  "Libere {{url}} no firewall/proxy desta máquina.": "Allow {{url}} in this machine's firewall/proxy.",
+  "Consultar o uso das contas de IA": "Query the AI accounts' usage",
+  "A credencial de login das ferramentas é lida e usada só nesta máquina; o termhub recebe apenas os números de uso. Desligado, o termhub não lê a credencial e as contas desta máquina ficam sem as barras de uso.": "The tools' login credential is read and used only on this machine; termhub receives just the usage numbers. When off, termhub does not read the credential and this machine's accounts show no usage bars."
 }

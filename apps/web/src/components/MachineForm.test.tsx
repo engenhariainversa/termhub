@@ -18,6 +18,7 @@ vi.mock('./NetworkCheckCard', () => ({ NetworkCheckCard: () => <p>network card</
 vi.mock('./MonitorHooksCard', async (orig) => ({ ...(await orig<typeof import('./MonitorHooksCard')>()), MonitorHooksCard: () => <p>monitor card</p> }));
 vi.mock('./SimulatorSetupCard', () => ({ SimulatorSetupCard: () => <p>simulator card</p> }));
 vi.mock('./AutomationAllowedCard', () => ({ AutomationAllowedCard: () => null }));
+vi.mock('./AiUsageQueryCard', () => ({ AiUsageQueryCard: () => null }));
 
 import { MachineForm } from './MachineForm';
 
