@@ -89,6 +89,19 @@ describe('registerFrontend', () => {
     expect((await app.inject({ method: 'GET', url: '/assets/app.js' })).body).toBe('console.log("app")');
   });
 
+  // The app's index.html goes out through @fastify/static's sendFile: the CSP hook must still see it as HTML (TER-579).
+  it('sends the Content-Security-Policy with the static app document and not with its assets', async () => {
+    const { registerSecurityHeaders } = await import('./lib/security-headers.js');
+    clearPublicCityMemo();
+    const app = Fastify();
+    registerSecurityHeaders(app, { publicUrl: 'https://th.example.org' });
+    await registerFrontend(app, { repos: stubRepos(), webDist: dirs.webDist, cityDist: dirs.cityDist, publicCityUrl: BASE });
+    for (const url of ['/', '/office', '/city/@pedro']) {
+      expect((await app.inject({ method: 'GET', url })).headers['content-security-policy']).toContain("script-src 'self'");
+    }
+    expect((await app.inject({ method: 'GET', url: '/assets/app.js' })).headers['content-security-policy']).toBeUndefined();
+  });
+
   it('answers an unknown /api/ route with a JSON 404, not a document', async () => {
     const res = await (await build()).inject({ method: 'GET', url: '/api/nothing' });
     expect(res.statusCode).toBe(404);
@@ -159,7 +172,11 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('buildApp serving the fron
     expect((await app.fastify.inject({ method: 'GET', url: '/city/assets/city.js' })).body).toBe('console.log("city")');
     const spa = await app.fastify.inject({ method: 'GET', url: '/office' });
     expect(spa.body).toContain(APP_MARKER);
+    // both documents carry the CSP (TER-579); JSON does not need it
+    expect(city.headers['content-security-policy']).toContain("script-src 'self'");
+    expect(spa.headers['content-security-policy']).toContain("script-src 'self'");
     const snapshot = await app.fastify.inject({ method: 'GET', url: `/api/public/city/${nick}` });
+    expect(snapshot.headers['content-security-policy']).toBeUndefined();
     const { publicId } = await import('./public/public-id.js');
     // the building is the project, under its project's public id, and the machine is named nowhere
     expect(snapshot.json().buildings[0].id).toBe(publicId('project', project.id));
