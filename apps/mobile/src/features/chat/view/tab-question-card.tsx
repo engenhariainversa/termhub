@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
-import type { TTabQuestionAnswerBody } from '@/services/api/contract';
+import type { TTabQuestionAnswerBody, TTabQuestionScreenResponse } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
 import { AppText, Button } from '@/ui';
 import { AutoDecisionBadge } from './auto-decision-badge';
@@ -14,7 +14,8 @@ type Props = {
   /** Why this card's last answer did not go through (pt-BR). */
   error?: string | null;
   onAnswer(questionId: string, body: TTabQuestionAnswerBody): void;
-  loadScreen(questionId: string): Promise<string | null>;
+  /** The tab's excerpt and its dialog's options (TER-995); null when it could not be read. */
+  loadScreen(questionId: string): Promise<TTabQuestionScreenResponse | null>;
   /** "Esquecer esta decisão" on a suggestion line (chat decision memory spec 2026-09-26 §5.1):
    *  forgets the past decision it came from, then the card clears that question's pre-selection
    *  regardless of whether the call succeeds — the server answers 204 even for a decision already
@@ -280,6 +281,9 @@ function PermissionBody({ question, busy, onAnswer, loadScreen }: Props & { ques
   const open = question.status === 'open';
   const codex = question.payload.agent === 'codex';
   const [excerpt, setExcerpt] = useState<string | null>(null);
+  // The dialog's own options (TER-995): one button each, so "don't ask again" or "auto mode" can be
+  // chosen from the phone. Empty until the screen is read, or when it shows no menu this card can trust.
+  const [options, setOptions] = useState<NonNullable<TTabQuestionScreenResponse['options']>>([]);
   // Expanded by default: the tool name alone does not say what is about to run.
   const [showing, setShowing] = useState(true);
   const [denying, setDenying] = useState(false);
@@ -288,7 +292,9 @@ function PermissionBody({ question, busy, onAnswer, loadScreen }: Props & { ques
     if (!open) return;
     let alive = true;
     void loadScreen(question.id).then((screen) => {
-      if (alive) setExcerpt(screen);
+      if (!alive) return;
+      setExcerpt(screen?.text ?? null);
+      setOptions(screen?.options ?? []);
     });
     return () => {
       alive = false;
@@ -307,6 +313,20 @@ function PermissionBody({ question, busy, onAnswer, loadScreen }: Props & { ques
       {open && showing && excerpt !== null ? <AppText className="font-mono text-xs">{excerpt}</AppText> : null}
       {open ? (
         <View className="gap-2">
+          {options.length > 0 ? (
+            <View accessibilityLabel={t('Opções da aba')} className="gap-2">
+              {options.map((o) => (
+                <Button
+                  key={o.number}
+                  label={`${o.number}. ${o.summary}`}
+                  variant={o.highlight ? 'primary' : o.allow ? 'secondary' : 'danger'}
+                  onPress={() => onAnswer(question.id, { allow: o.allow, option: { number: o.number, label: o.label } })}
+                  disabled={busy}
+                />
+              ))}
+            </View>
+          ) : null}
+          {/* "Permitir" and "Negar" stay as shortcuts: the dialog's first option, and Escape (its last). */}
           <View className="flex-row gap-2">
             <View className="flex-1">
               <Button label={t('Permitir')} onPress={() => onAnswer(question.id, { allow: true })} disabled={busy} />

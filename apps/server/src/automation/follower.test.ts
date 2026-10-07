@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AGENT_EXITED_TEXT, EXITED_RESUME_PROMPT } from '../chat/agent-exited.js';
-import type { ControlContext } from '../control/context.js';
+import { ControlError, type ControlContext } from '../control/context.js';
 import { DEFAULT_AUTOMATION_TOOLS } from '../control/agents.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
@@ -502,7 +502,7 @@ describe('an agent that exited (spec D15, F-12)', () => {
     const w = world({ tab: exited });
     await followRun(w.deps, w.run.id);
     expect(w.restartLine).toHaveBeenCalledWith(w.repos, w.tab, expect.objectContaining({ id: 'm1' }), {
-      permission: { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: w.run.branch },
+      permission: { mode: 'auto', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: w.run.branch, worktree: w.run.worktree_path },
       prompt: serverMessage(EXITED_RESUME_PROMPT),
     });
     expect(w.typeLine).toHaveBeenCalledWith(expect.anything(), 'tab1', 'claude --resume …');
@@ -514,7 +514,16 @@ describe('an agent that exited (spec D15, F-12)', () => {
   it('the restart keeps the allow list stored on the run, not the setup\'s current one', async () => {
     const w = world({ tab: exited, run: { allowed_tools: ['Bash(make:*)'] } });
     await followRun(w.deps, w.run.id);
-    expect(w.restartLine).toHaveBeenCalledWith(w.repos, w.tab, expect.anything(), expect.objectContaining({ permission: { mode: 'acceptEdits', allowedTools: ['Bash(make:*)'], branch: w.run.branch } }));
+    expect(w.restartLine).toHaveBeenCalledWith(w.repos, w.tab, expect.anything(), expect.objectContaining({ permission: { mode: 'auto', allowedTools: ['Bash(make:*)'], branch: w.run.branch, worktree: w.run.worktree_path } }));
+  });
+
+  it('is never restarted on an account exclusive to another project: the run ends blocked for the person (TER-990)', async () => {
+    const w = world({ tab: exited });
+    w.restartLine.mockRejectedValueOnce(new ControlError('ACCOUNT_EXCLUSIVE', 'Conta exclusiva do projeto DR Horton'));
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'blocked', waiting_reason: 'account_exclusive' });
+    expect(w.kinds()).toEqual(['run_blocked', 'escalated']);
   });
 
   it('a second exit ends the run blocked and escalates it', async () => {

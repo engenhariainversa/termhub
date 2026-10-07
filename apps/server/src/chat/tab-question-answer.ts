@@ -8,6 +8,7 @@ import { forbidden, HttpError, notFound } from '../lib/errors.js';
 import { recordDecisions } from './decision-memory.js';
 import { defaultEmbedder, type Embedder } from './embeddings.js';
 import { lastNonBlankLines, permissionToolOnScreen, promptVisible, rowDialogFooterVisible } from './permission-dialog.js';
+import { findPermissionOption, parsePermissionMenu, type PermissionOption } from './permission-options.js';
 import { answerKeyPlan, type KeyStep } from './tab-question-keys.js';
 import { checkChoiceAnswer, choiceAnswerBody, permissionAnswerBody, type ChoiceAnswer, type ChoicePayload, type PermissionAnswer, type PermissionPayload, type TabQuestionKind } from './tab-question-payload.js';
 import { publishTabQuestions } from './tab-questions.js';
@@ -28,6 +29,9 @@ export const isQuestionRow = (row: TabQuestion | undefined): row is QuestionRow 
 export const promptChanged = () => new HttpError(409, 'A aba já não mostra esta pergunta: nada foi enviado.', 'TAB_PROMPT_CHANGED');
 /** A dialog is on the tab's screen, but it could not be matched to this card (TER-542): nothing is typed
  * and the card stays open — closing it would lose the question over what may be a misread screen. */
+/** The card named an option of the dialog (TER-995) that the screen no longer shows under that number:
+ * nothing is typed and the card stays open, so the person can look at the screen again and choose. */
+export const optionChanged = () => new HttpError(409, 'As opções na tela da aba mudaram, então nada foi enviado. Confira a tela e escolha de novo.', 'TAB_OPTION_CHANGED');
 export const promptNotSeen = () => new HttpError(409, 'Não encontrei esta pergunta na tela da aba, então nada foi enviado. Responda direto na aba.', 'TAB_PROMPT_NOT_SEEN');
 
 /** The body, validated against the row's own kind and question (spec §5.3). */
@@ -115,7 +119,7 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
   // A suggestion has its own routes (tab-suggestion-send.ts): here it is no question at all.
   if (!isQuestionRow(found)) throw notFound('Pergunta não encontrada');
   const row = found;
-  const answer = parseAnswer(row, raw);
+  let answer = parseAnswer(row, raw);
   const { tab } = await scopedTabOfRow(ctx, row, deps.log);
   if (row.status !== 'open') throw promptChanged();
   const latest = await ctx.repos.tabQuestions.findOpenForTab(tab.id);
@@ -156,6 +160,20 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
       throw promptNotSeen();
     }
   }
+  // An option of the dialog (TER-995): the same number must still show the same text on this very read.
+  // What is stored is the screen's own option, so `allow` follows it, not the request.
+  let cursor: number | undefined;
+  const choice = row.kind === 'permission' ? (answer as PermissionAnswer).option : undefined;
+  if (choice) {
+    const menu = parsePermissionMenu(screen);
+    const option = findPermissionOption(menu, choice);
+    if (!menu || !option) {
+      deps.log.warn({ tabQuestionId: row.id, tabId: tab.id, kind: row.kind }, 'tab question option not on screen');
+      throw optionChanged();
+    }
+    cursor = menu.cursor;
+    answer = { allow: option.allow, option: { number: option.number, label: option.label, summary: option.summary } };
+  }
   deps.beforeSend?.(row, answer);
   // The person answered while a countdown runs: it ends first, so the card never shows a countdown for
   // an answered question. The claim below would stop a second send anyway (it needs the row `open`).
@@ -163,7 +181,7 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
   const claimed = await ctx.repos.tabQuestions.claim(row.id, userId, answer, undefined, via);
   if (!claimed) throw promptChanged();
 
-  const steps = row.kind === 'choice' ? answerKeyPlan('choice', row.payload as ChoicePayload, answer as ChoiceAnswer) : answerKeyPlan('permission', row.payload as PermissionPayload, answer as PermissionAnswer);
+  const steps = row.kind === 'choice' ? answerKeyPlan('choice', row.payload as ChoicePayload, answer as ChoiceAnswer) : answerKeyPlan('permission', row.payload as PermissionPayload, answer as PermissionAnswer, cursor);
   try {
     await runKeyPlan(ctx, tab.id, steps, deps.sleep ?? pause);
   } catch (err) {
@@ -192,8 +210,9 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
   return toTabQuestionView(claimed, tab.name);
 }
 
-/** The permission card's live excerpt (spec §6.1): read on demand, never stored nor logged. */
-export async function tabQuestionScreen(ctx: ControlContext, id: string, deps: { log?: Log } = {}): Promise<{ text: string }> {
+/** The permission card's live excerpt (spec §6.1): read on demand, never stored nor logged. With it, the
+ * options of the dialog on screen (TER-995) — only while that dialog is this card's, else `[]`. */
+export async function tabQuestionScreen(ctx: ControlContext, id: string, deps: { log?: Log } = {}): Promise<{ text: string; options: PermissionOption[] }> {
   // Terminal content: the same grant as the MCP read_screen tool.
   if (!(await ctx.can('terminals', 'read'))) throw forbidden('Ver a tela da aba precisa da permissão terminals:read na sua role');
   const row = await ctx.repos.tabQuestions.findByIdForUser(id, ctx.scope.user.id);
@@ -202,7 +221,8 @@ export async function tabQuestionScreen(ctx: ControlContext, id: string, deps: {
   const { tab } = await scopedTabOfRow(ctx, row, deps.log);
   try {
     const { text } = await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_CHECK_LINES }, { plain: true });
-    return { text: lastNonBlankLines(text) };
+    const options = row.kind === 'permission' && promptVisible(text, row) ? (parsePermissionMenu(text)?.options ?? []) : [];
+    return { text: lastNonBlankLines(text), options };
   } catch (err) {
     throw asHttp(err);
   }

@@ -249,7 +249,8 @@ export const tabQuestionSchema = z.discriminatedUnion('kind', [
     ...tabQuestionCommon,
     kind: z.literal('permission'),
     payload: z.object({ tool_name: z.string(), agent: z.string().optional(), question: z.string().optional() }),
-    answer: z.object({ allow: z.boolean(), text: z.string().optional() }).nullable(),
+    // `option` (TER-995): the dialog option chosen on the card; absent from an older server.
+    answer: z.object({ allow: z.boolean(), text: z.string().optional(), option: z.object({ number: z.number().int(), label: z.string(), summary: z.string().optional() }).optional() }).nullable(),
   }),
 ]);
 /** A suggestion's life: `dismissed` is its own ("Dispensar"); a question never has it. */

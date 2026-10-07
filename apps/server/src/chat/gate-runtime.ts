@@ -190,6 +190,22 @@ const targetOf = (args: Record<string, unknown>) => ({
   tab_id: targetId(args.tab_id),
 });
 
+/**
+ * A tab card also keeps its tab's project (TER-986), read owner-scoped when the card is asked: the card
+ * then still says which project it was for once the tab is closed. Only fills a project the call did
+ * not name; a tab that does not resolve (gone, or another user's) adds nothing. Best-effort: a failed
+ * read keeps the target as the call named it.
+ */
+async function withTabProject(ctx: ControlContext, target: ReturnType<typeof targetOf>): Promise<ReturnType<typeof targetOf>> {
+  if (!target.tab_id || target.project_id) return target;
+  try {
+    const [tab] = await ctx.repos.tabs.findByIdsForOwner([target.tab_id], ctx.scope.user.id);
+    return tab ? { ...target, project_id: tab.project_id } : target;
+  } catch {
+    return target;
+  }
+}
+
 /** The subagent that made this call, if the live run saw its tool frame first and it is this
  * conversation's. */
 const originFor = (call: GatedCall, conversationId: string) => {
@@ -337,7 +353,7 @@ function actionNotRecorded(): never {
 
 /** Records the proposal and puts the question in the chat. */
 async function ask(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass): Promise<GateOutcome> {
-  const target = targetOf(call.args);
+  const target = await withTabProject(ctx, targetOf(call.args));
   let row: ChatAction;
   try {
     // `args` is the proposal exactly as the concierge made it — the command, the prompt, the target.

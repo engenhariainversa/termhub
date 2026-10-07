@@ -615,6 +615,21 @@ it('refuses to send at all when the host is offline, leaving no rows and no run 
   expect(vi.mocked(runner.run)).not.toHaveBeenCalled();
 });
 
+it("refuses to run the account-wide chat on the machine's default login when it is exclusive to a project (TER-990)", async () => {
+  const drh = { id: 'acc-drh', provider: 'claude', label: 'drhorton', machine_id: 'm1', config_dir: null, created_at: '', exclusive_project: { id: 'p9', name: 'DR Horton' } };
+  const { service, runner, messages } = build([delta('ok'), done()], { accounts: [drh] as never });
+  await expect(service.send(user, 'oi')).rejects.toMatchObject({ statusCode: 409, code: 'ACCOUNT_EXCLUSIVE', message: 'Conta exclusiva do projeto DR Horton: "drhorton" não pode rodar em outro projeto' });
+  expect(messages).toEqual([]);
+  expect(vi.mocked(runner.run)).not.toHaveBeenCalled();
+});
+
+it('runs on the default login when its exclusivity is for another machine, or when it is free (TER-990)', async () => {
+  const elsewhere = { id: 'acc-x', provider: 'claude', label: 'x', machine_id: 'm2', config_dir: null, created_at: '', exclusive_project: { id: 'p9', name: 'DR Horton' } };
+  const { service, runner } = build([delta('ok'), done()], { accounts: [elsewhere] as never });
+  await service.send(user, 'oi');
+  expect(vi.mocked(runner.run)).toHaveBeenCalled();
+});
+
 it('refuses to send when the user has no machine to run on', async () => {
   const { service, messages } = build([delta('ok'), done()], { host: { machines: [] } });
   await expect(service.send(user, 'oi')).rejects.toMatchObject({ statusCode: 409, code: 'CHAT_NO_MACHINE' });

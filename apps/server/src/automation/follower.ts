@@ -20,7 +20,7 @@ import { isPaused } from './pause.js';
 import { runPermission } from './permission.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 import { MAX_RESTARTS } from './restart.js';
-import { ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT } from './escalation-text.js';
+import { ACCOUNT_EXCLUSIVE, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
 export { NEEDS_PERSON, TRUST_PROMPT, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
@@ -468,10 +468,20 @@ async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: L
   const machine = await repos.machines.findById(tab.machine_id);
   if (!machine) return false;
   // the same tab, the same session, the profile the run started with (preflight F-12)
-  const line = await (deps.restartLine ?? resumeCommandFor)(repos, tab, machine, {
-    permission: await runPermission(repos, run),
-    prompt: serverMessage(EXITED_RESUME_PROMPT),
-  });
+  let line: string;
+  try {
+    line = await (deps.restartLine ?? resumeCommandFor)(repos, tab, machine, {
+      permission: await runPermission(repos, run),
+      prompt: serverMessage(EXITED_RESUME_PROMPT),
+    });
+  } catch (e) {
+    // TER-990: the tab's account is exclusive to another project — never restarted there, the person picks
+    if (e instanceof ControlError && e.code === 'ACCOUNT_EXCLUSIVE') {
+      await finishBlocked(repos, run, ACCOUNT_EXCLUSIVE, null, log);
+      return false;
+    }
+    throw e;
+  }
   if (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id)) return false;
   const count = await repos.automationRuns.bump(run.id, 'restart_count');
   await (deps.typeLine ?? typeCommandInTab)(ready.ctx, tab.id, line);

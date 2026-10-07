@@ -29,7 +29,8 @@ const machines = [
   { id: 'm2', name: 'jarvis', subtitle: 'servidor de casa' },
   { id: 'm3', name: 'hulk', subtitle: null },
 ] as Machine[];
-vi.mock('../lib/data', () => ({ useData: () => ({ machines, statuses: { m1: 'online', m2: 'offline' } }) }));
+const projects = [{ id: 'p9', name: 'DR Horton' }, { id: 'p1', name: 'termhub' }];
+vi.mock('../lib/data', () => ({ useData: () => ({ machines, projects, statuses: { m1: 'online', m2: 'offline' } }) }));
 vi.mock('./AutoSwapSettings', () => ({ AutoSwapSettings: () => null }));
 
 import { AiAccountsView } from './AiAccountsView';
@@ -156,7 +157,7 @@ describe('AiAccountsView: accounts grouped by machine (TER-640)', () => {
     await screen.findAllByRole('listitem');
     fireEvent.click(within(screen.getByRole('region', { name: 'hulk' })).getByRole('button', { name: 'Adicionar conta em hulk' }));
     const form = within(screen.getByRole('dialog'));
-    expect(form.getByRole('combobox')).toHaveValue('m3');
+    expect(form.getByLabelText('Máquina onde o CLI está logado')).toHaveValue('m3');
     fireEvent.click(form.getByRole('button', { name: 'Adicionar' }));
     await waitFor(() => expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ machine_id: 'm3' })));
   });
@@ -165,6 +166,39 @@ describe('AiAccountsView: accounts grouped by machine (TER-640)', () => {
     listMock.mockResolvedValue({ accounts: [account({ id: 'b', machine_id: 'm3' })] });
     render(<AiAccountsView />);
     fireEvent.click(await within(await screen.findByRole('region', { name: 'hulk' })).findByTitle('Editar'));
-    expect(within(screen.getByRole('dialog')).getByRole('combobox')).toHaveValue('m3');
+    expect(within(screen.getByRole('dialog')).getByLabelText('Máquina onde o CLI está logado')).toHaveValue('m3');
+  });
+});
+
+describe('AiAccountsView: accounts exclusive to a project (TER-990)', () => {
+  it('shows the badge on the card', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'drh', exclusive_project: { id: 'p9', name: 'DR Horton' } }), account({ id: 'free' })] });
+    render(<AiAccountsView />);
+    const [drh, free] = await screen.findAllByRole('listitem');
+    expect(within(drh).getByText('Exclusiva: DR Horton')).toBeInTheDocument();
+    expect(free).not.toHaveTextContent('Exclusiva');
+  });
+
+  it('marks an account exclusive from its form, and only sends the field when it changed', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'drh' })] });
+    render(<AiAccountsView />);
+    fireEvent.click(await screen.findByTitle('Editar'));
+    let form = within(screen.getByRole('dialog'));
+    expect(form.getByLabelText('Exclusiva de um projeto')).toHaveValue('');
+    fireEvent.click(form.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith('drh', { label: 'drh', machine_id: 'm1', config_dir: null }));
+    fireEvent.click(await screen.findByTitle('Editar'));
+    form = within(screen.getByRole('dialog'));
+    fireEvent.change(form.getByLabelText('Exclusiva de um projeto'), { target: { value: 'p9' } });
+    fireEvent.click(form.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(updateMock).toHaveBeenLastCalledWith('drh', { label: 'drh', machine_id: 'm1', config_dir: null, exclusive_project_id: 'p9' }));
+  });
+
+  it('a new account is created free, then marked exclusive', async () => {
+    const form = await openNew();
+    fireEvent.change(form.getByLabelText('Exclusiva de um projeto'), { target: { value: 'p9' } });
+    fireEvent.click(form.getByRole('button', { name: 'Adicionar' }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith('new', { exclusive_project_id: 'p9' }));
+    expect(createMock).toHaveBeenCalledWith({ provider: 'claude', label: 'Claude', machine_id: 'm1', config_dir: null });
   });
 });

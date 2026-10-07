@@ -31,7 +31,17 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
 - Default for everyone else is `pr`. What is specific to the maintainer is never the default.
 - The termhub project itself runs at `release` (opt-in, set in its own Setup).
 - Stores: never. A PR that needs a store build waits for a person (`merge_store`).
-- Permissions of automatic tabs: `acceptEdits` plus an allow list; no bypass flag. A fixed deny list
+- Permission mode of automatic tabs (TER-993, the maintainer's decision of 2026-10-07 that replaces
+  "acceptEdits plus a list"): Claude Code's `auto` mode (`--permission-mode auto`, `AUTOMATION_PERMISSION_MODE`
+  in `apps/server/src/control/agents.ts`). Claude Code's own classifier answers what no rule covers, so a
+  typical run (read, edit, test, build, commit, push its branch, open the PR) asks nothing. A run started
+  before takes the mode on its next restart or resume. Auto mode needs a recent model (Opus 4.6, Sonnet 4.6
+  or newer on the Anthropic API) and may be turned off by an organisation; then Claude Code starts the
+  session in its manual mode instead, and the requests escalate as before. The termhub MCP tools for
+  reading and adding cards (`AUTOMATION_MCP_TOOLS`) are answered yes by the server, and the ones that reach
+  past the card (`AUTOMATION_MCP_DENIED_TOOLS`: automation policy, other tabs, agents, machines, deleting
+  cards…) never are.
+- Permissions of automatic tabs: the mode above plus an allow list; no bypass flag. A fixed deny list
   (force/delete/mirror pushes, `.env` reads, `git -c`, release commands, ...) sits in
   `apps/server/src/control/automation-tools.ts` (`AUTOMATION_DENIED_TOOLS`) and beats any project allow
   rule. Every automatic tab also gets a fixed list of read rules (`AUTOMATION_READ_TOOLS`: `grep`, `rg`,
@@ -39,7 +49,11 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
   never asks. Any other permission request is answered by rule or escalated (`permission_needed`); the hook
   does not forward Bash commands, so in practice every Bash request that reaches the server escalates, and
   only what lies outside the rules reaches it. A command with several `cd` always asks (Claude Code's own
-  check); the run prompt tells the agent to avoid it.
+  check); the run prompt tells the agent to avoid it. Every git rule also comes as `git --no-pager …` and as
+  `git -C <the run's worktree> …` (`gitRuleForms`, TER-991), with the matching denies
+  (`AUTOMATION_FORM_DENIED_TOOLS`), on the start and account-swap lines; a `-C` to any other folder asks.
+  A line typed whole (an exited agent brought back) leaves them out until it goes through a launch file
+  (TER-988).
 - No "Revisar" column. Review is the PR of each card plus the daily summary.
 
 ## 3. Before turning it on

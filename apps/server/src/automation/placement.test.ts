@@ -61,6 +61,20 @@ describe('placeRun', () => {
     expect(room).not.toHaveBeenCalled();
   });
 
+  it('TER-990: never an account exclusive to another project, even listed first; the card says why', async () => {
+    reg.online.set('m1', ['worktree']);
+    const drh = { ...account('a1', 'm1'), exclusive_project: { id: 'p9', name: 'DR Horton' } };
+    const repos = fakeRepos({ machines: [machine('m1')], accounts: [drh, account('a2', 'm1')] });
+    const usage = vi.fn(async () => 10);
+    expect(await placeRun({ repos, now: () => new Date(), usage }, project, setup(['a1', 'a2']))).toMatchObject({ account: { id: 'a2' } });
+    expect(usage).not.toHaveBeenCalledWith('a1');
+    const alone = await placeRun({ repos, now: () => new Date(), usage }, project, setup(['a1']));
+    expect(alone).toMatchObject({ waiting: 'no_account', detail: { accounts: expect.arrayContaining([expect.objectContaining({ id: 'a1', why: 'exclusive' })]) } });
+    expect(placeDetailText('pt-BR', (alone as { detail: Parameters<typeof placeDetailText>[1] }).detail)).toContain('conta label-a1 (name-m1): exclusiva de outro projeto');
+    // in its own project it is the account
+    expect(await placeRun({ repos, now: () => new Date(), usage }, { ...project, id: 'p9' }, setup(['a1']))).toMatchObject({ account: { id: 'a1' } });
+  });
+
   it('R6: 80 % is the automatic ceiling for an account', async () => {
     reg.online.set('m1', ['worktree']);
     const repos = fakeRepos({ machines: [machine('m1')], accounts: [account('a1', 'm1')] });

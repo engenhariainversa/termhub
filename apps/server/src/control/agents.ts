@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { MODEL_RE, type ProjectAi } from '../setup/schema.js';
 import { getAccountUsage } from '../ai/index.js';
 import { accountsOn, isAlias, modelFor } from '../ai/project-accounts.js';
+import { guardAccount, usableIn } from '../ai/exclusive.js';
 import { peakUtilization, SWAP_MAX_UTILIZATION } from './account-swap.js';
 import type { AiAccount, AiProvider, Machine, Project, Task } from '../db/repositories/types.js';
 import { HttpError, localizedOf } from '../lib/errors.js';
@@ -14,9 +15,9 @@ import { ControlError, type ControlContext } from './context.js';
 import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
 import { openTab } from './terminals.js';
 import { msg } from '../i18n/index.js';
-import { AUTOMATION_DENIED_TOOLS, automationAllowList } from './automation-tools.js';
+import { automationAllowList, automationDenyList } from './automation-tools.js';
 
-export { AUTOMATION_DENIED_TOOLS, AUTOMATION_READ_TOOLS, automationAllowList, branchFetchRules, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
+export { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_MCP_DENIED_TOOLS, AUTOMATION_MCP_TOOLS, AUTOMATION_READ_TOOLS, automationAllowList, automationDenyList, gitRuleForms, branchFetchRules, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
 /** Same ceiling as one typed input: the prompt travels as a single command-line argument. */
 export const PROMPT_MAX_CHARS = 4000;
@@ -107,8 +108,8 @@ function claudeMcpFlags(tabId: string, extraTools: string[] = []): string {
 }
 
 /**
- * What an automatic tab may do without asking (spec D19, preflight F-6): edits are accepted
- * (`acceptEdits`) and only these commands are pre-allowed; everything else still asks. Never a
+ * What an automatic tab may do without asking (spec D19, preflight F-6): only these commands are
+ * pre-allowed; everything else goes to the `auto` mode's own check (TER-993). Never a
  * permission-bypass flag. No push is listed here: the only pushes pre-allowed are the run's own branch
  * (`branchPushRules`, TER-968 R5), so `git push origin HEAD:main` asks and is escalated. There is no
  * generic `npm run:*` (it would cover `release:ota`). The server-side check of Task 22 also refuses shell
@@ -148,13 +149,28 @@ export const DEFAULT_AUTOMATION_TOOLS: string[] = [
 ];
 
 /**
- * How an automatic tab's Claude is started: `acceptEdits` plus a closed allow list (never a bypass), the
- * run's own branch pushes (`branch`, null for none) and the fixed deny list.
+ * The permission mode an automatic tab's Claude starts in (TER-993): Claude Code's `auto`, where its own
+ * classifier answers the requests no rule covers, instead of asking the person. The allow list stays as a
+ * layer of "no question at all" and the fixed deny list beats both. `acceptEdits` is still accepted, for a
+ * line built from an older profile; a bypass mode never is.
+ */
+export const AUTOMATION_PERMISSION_MODE = 'auto';
+const PERMISSION_MODES: ReadonlySet<string> = new Set([AUTOMATION_PERMISSION_MODE, 'acceptEdits']);
+
+/**
+ * How an automatic tab's Claude is started: the permission mode (`auto`, TER-993) plus a closed allow list
+ * (never a bypass), the run's own branch pushes (`branch`, null for none) and the fixed deny list.
  */
 export interface AgentPermission {
-  mode: 'acceptEdits';
+  mode: typeof AUTOMATION_PERMISSION_MODE | 'acceptEdits';
   allowedTools: string[];
   branch: string | null;
+  /**
+   * The run's worktree, the tab's cwd (TER-991): with it, every git rule also comes as `git -C <worktree> …`
+   * and `git --no-pager …` (`gitRuleForms`), with their denies. Left out of a line typed whole, which has no
+   * room for them.
+   */
+  worktree?: string | null;
 }
 
 /**
@@ -176,10 +192,11 @@ function checkAllowedTools(tools: string[]): string[] {
  * the caller ends the options with `--` (or another option, then `--`).
  */
 function permissionFlags(permission: AgentPermission, mcpTabId: string | null): string {
-  if (permission.mode !== 'acceptEdits') throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
-  const tools = automationAllowList(checkAllowedTools(permission.allowedTools), permission.branch);
+  if (!PERMISSION_MODES.has(permission.mode)) throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
+  const forms = permission.worktree ? { worktree: permission.worktree } : null;
+  const tools = automationAllowList(checkAllowedTools(permission.allowedTools), permission.branch, forms);
   const allow = mcpTabId ? claudeMcpFlags(mcpTabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
-  const deny = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => shellQuote(t)).join(' ')}`;
+  const deny = `--disallowedTools ${automationDenyList(forms !== null).map((t) => shellQuote(t)).join(' ')}`;
   return `--permission-mode ${permission.mode}${allow ? ` ${allow}` : ''} ${deny}`;
 }
 
@@ -270,7 +287,7 @@ export const RESUME_PROMPT = 'A conta anterior atingiu o limite de uso. Continue
  * set when the tab still has a live tab token: its config file is still on the machine, so the resumed
  * session keeps the memory MCP (spec 2026-09-27 agent tab MCP D11). `model`: the project's default (TER-589).
  * `permission`: the tab runs automatic work (an active run, preflight F-12) — the resumed session keeps
- * `acceptEdits` and the allow list it was started with.
+ * the permission mode and the allow list it was started with.
  */
 export function resumeLine(configDir: string | null, sessionId: string, prompt: string, mcpTabId?: string | null, model?: string | null, permission?: AgentPermission | null): string {
   if (!isClaudeSessionId(sessionId)) throw new ControlError('NO_SESSION', 'A sessão do Claude desta aba não é válida');
@@ -336,7 +353,7 @@ async function placeAgent(
   } catch (e) {
     if (!(e instanceof HttpError) || e.code !== 'MACHINE_REQUIRED' || input.account_id !== undefined || ai.accounts.length === 0) throw e;
     const { project, machines } = await ctx.scoped.projectMachines(input.project_id);
-    const onLinked = machines.flatMap(({ machine }) => accountsOn(ai, listed, machine.id)).sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
+    const onLinked = machines.flatMap(({ machine }) => accountsOn(input.project_id, ai, listed, machine.id)).sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
     const machineOf = (a: AiAccount) => machines.find((m) => m.machine.id === a.machine_id)!.machine;
     const pick = (await firstWithRoom(onLinked, machineOf)) ?? onLinked[0];
     if (!pick) throw e;
@@ -344,10 +361,15 @@ async function placeAgent(
   }
   const { project, machine } = placed;
 
-  if (input.account_id !== undefined) return { project, machine, account: await accountOnMachine(ctx, input.account_id, machine), ai, note: null };
-  const candidates = accountsOn(ai, listed, machine.id);
+  if (input.account_id !== undefined) {
+    const account = await accountOnMachine(ctx, input.account_id, machine);
+    // TER-990: an account exclusive to another project never starts here, however it was named
+    await guardAccount(ctx.repos, ctx.log, account, { project_id: project.id, path: 'start_agent', machine_id: machine.id });
+    return { project, machine, account, ai, note: null };
+  }
+  const candidates = accountsOn(input.project_id, ai, listed, machine.id);
   if (candidates.length === 0) {
-    const here = listed.filter((a) => a.machine_id === machine.id);
+    const here = listed.filter((a) => a.machine_id === machine.id && usableIn(a, project.id));
     const list = here.length ? here.map((a) => `${a.label} (${a.provider}, ${a.id})`).join(', ') : 'nenhuma';
     throw new ControlError('ACCOUNT_REQUIRED', msg('Escolha a conta (account_id): o projeto não tem contas configuradas em {{machine}}. Contas lá: {{list}}', { machine: machine.name, list }));
   }
@@ -393,7 +415,7 @@ async function attachTask(ctx: ControlContext, taskId: string, tabId: string): P
  * - `cwd`: the card's worktree on the machine; the tab is opened there and stays there when its session is
  *   recreated. Absolute, without `..`; that it lies under the worktree root is the agent's own check
  *   (`PATH_OUTSIDE_ROOT`) when the worktree was made — `~` only expands on the machine.
- * - `permission`: `acceptEdits` plus the allow list (`DEFAULT_AUTOMATION_TOOLS`), Claude only.
+ * - `permission`: the `auto` mode plus the allow list (`DEFAULT_AUTOMATION_TOOLS`), Claude only.
  * - `setupCommand`: the project's `runner.setup_command`, typed before the CLI line in the same tab.
  * - `promptIsFinal`: the prompt already ends with `LESSONS_REMINDER` (automation prompts add it), so it is
  *   not appended again (preflight F-10).

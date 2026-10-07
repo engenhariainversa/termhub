@@ -175,6 +175,12 @@ describe('ActionCard: expired or stale (TER-477)', () => {
     expect(onRepropose).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1', summary: BASE_ACTION.summary }));
   });
 
+  it('a send_input card whose tab was closed offers no grant at all, only "Propor de novo" (TER-986)', async () => {
+    await renderCard({ tool: 'send_input', args: { tab_id: 't-api', text: 'oi' }, tab_id: 't-api', status: 'failed', error_code: 'TAB_GONE' });
+    expect(screen.getByText('expirou: a aba foi fechada')).toBeTruthy();
+    expect(screen.getAllByRole('button').map((b) => b.props.accessibilityLabel ?? '')).toEqual(['Propor de novo']);
+  });
+
   it.each([
     [{ status: 'failed' as const, error_code: 'MACHINE_OFFLINE' }],
     [{ status: 'failed' as const }],

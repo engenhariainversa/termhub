@@ -1,6 +1,6 @@
 import { currentLocale, i18n } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
-import type { FileRecentResponse } from './types';
+import type { FileRecentResponse, TabQuestionScreen } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -332,7 +332,7 @@ export const api = {
    *  answer stays as the pre-selection. 409 `NOT_SCHEDULED` when no countdown is running. */
   cancelAutoAnswer: (id: string) => request<{ tab_question: TabQuestion }>('POST', `/chat/tab-questions/${encodeURIComponent(id)}/auto-answer/cancel`, {}),
   /** The last lines of the tab, live, for a permission card; 409 once the question is closed. */
-  tabQuestionScreen: (id: string) => request<{ text: string }>('GET', `/chat/tab-questions/${encodeURIComponent(id)}/screen`),
+  tabQuestionScreen: (id: string) => request<TabQuestionScreen>('GET', `/chat/tab-questions/${encodeURIComponent(id)}/screen`),
   /** Sends a tab's suggestion, as edited (409 `TAB_PROMPT_CHANGED` when the tab's prompt changed). */
   sendTabSuggestion: (id: string, text: string) => request<{ tab_suggestion: TabSuggestion }>('POST', `/chat/tab-suggestions/${encodeURIComponent(id)}/send`, { text }),
   /** "Dispensar": closes the card; the tab is not touched. */
@@ -446,7 +446,7 @@ export const api = {
     list: () => request<{ accounts: AiAccount[] }>('GET', '/ai-accounts'),
     create: (input: { provider: AiProvider; label: string; machine_id: string; config_dir?: string | null }) =>
       request<{ account: AiAccount }>('POST', '/ai-accounts', input),
-    update: (id: string, input: { label?: string; machine_id?: string; config_dir?: string | null }) => request<{ account: AiAccount }>('PATCH', `/ai-accounts/${id}`, input),
+    update: (id: string, input: { label?: string; machine_id?: string; config_dir?: string | null; exclusive_project_id?: string | null }) => request<{ account: AiAccount }>('PATCH', `/ai-accounts/${id}`, input),
     remove: (id: string) => request<{ ok: true }>('DELETE', `/ai-accounts/${id}`),
     usage: (refresh = false) => request<{ usage: AiAccountUsage[] }>('GET', `/ai-accounts/usage${refresh ? '?refresh=1' : ''}`),
     usageOf: (id: string, refresh = false) => request<{ usage: AiAccountUsage }>('GET', `/ai-accounts/${id}/usage${refresh ? '?refresh=1' : ''}`),

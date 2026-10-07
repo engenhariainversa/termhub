@@ -337,3 +337,36 @@ describe('TabQuestionCard: "Decisão automática" (TER-641)', () => {
     expect(screen.queryByRole('button', { name: 'Decisão automática' })).toBeNull();
   });
 });
+
+describe('TabQuestionCard: the dialog options of a permission (TER-995)', () => {
+  const PERMISSION = { ...BASE_QUESTION, kind: 'permission', payload: { tool_name: 'Bash' }, answer: null } as TabQuestion;
+  const auto = 'Yes, and switch to auto mode · auto mode handles these prompts for you';
+  const options = [
+    { number: 1, label: 'Yes', summary: 'Yes', allow: true, highlight: false },
+    { number: 2, label: "Yes, and don't ask again for termhub - Create Task commands", summary: "Yes, and don't ask again for termhub - Create Task commands", allow: true, highlight: true },
+    { number: 3, label: auto, summary: 'Yes, and switch to auto mode', allow: true, highlight: true },
+    { number: 4, label: 'No', summary: 'No', allow: false, highlight: false },
+  ];
+  it('offers one button per option and answers with its number and text', async () => {
+    const onAnswer = jest.fn();
+    await render(<TabQuestionCard question={PERMISSION} busy={false} onAnswer={onAnswer} loadScreen={async () => ({ text: 'Do you want to proceed?', options })} />);
+    expect(await screen.findByRole('button', { name: '1. Yes' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: "2. Yes, and don't ask again for termhub - Create Task commands" })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '4. No' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: '3. Yes, and switch to auto mode' }));
+    expect(onAnswer).toHaveBeenLastCalledWith('q1', { allow: true, option: { number: 3, label: auto } });
+    // The shortcuts stay.
+    expect(screen.getByRole('button', { name: 'Permitir' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Negar' })).toBeTruthy();
+  });
+  it('without options from the server, only the shortcuts', async () => {
+    await render(<TabQuestionCard question={PERMISSION} busy={false} onAnswer={jest.fn()} loadScreen={async () => ({ text: 'x' })} />);
+    expect(await screen.findByText('x')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^1\./ })).toBeNull();
+  });
+  it('a closed card names the option chosen', async () => {
+    const answered = { ...PERMISSION, status: 'answered', answer: { allow: true, option: { number: 3, label: auto, summary: 'Yes, and switch to auto mode' } } } as TabQuestion;
+    await render(<TabQuestionCard question={answered} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+    expect(screen.getByText('Permitido: «Yes, and switch to auto mode»')).toBeTruthy();
+  });
+});

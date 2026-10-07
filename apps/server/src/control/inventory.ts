@@ -155,7 +155,7 @@ export async function listAiAccounts(ctx: ControlContext, input: { machine_id?: 
     // is: the account without one is the machine's own login for that CLI (spec 2026-09-30 TER-499 D3).
     accounts: accounts
       .filter((a) => !input.machine_id || a.machine_id === input.machine_id)
-      .map((a) => ({ id: a.id, provider: a.provider, label: a.label, machine_id: a.machine_id, machine_name: names.get(a.machine_id) ?? null, default: a.config_dir === null })),
+      .map((a) => ({ id: a.id, provider: a.provider, label: a.label, machine_id: a.machine_id, machine_name: names.get(a.machine_id) ?? null, default: a.config_dir === null, exclusive_project: a.exclusive_project })),
   };
 }
 
