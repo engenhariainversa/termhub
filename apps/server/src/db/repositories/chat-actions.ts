@@ -389,6 +389,50 @@ export class ChatActionsRepository {
     return count;
   }
 
+  /**
+   * A pending card whose tab is gone (TER-986): nothing it asks can happen any more — not the call, not a
+   * grant on its tab or its tab's project — so it ends `failed` with `TAB_GONE`, the same way the gate ends
+   * an approval whose tab died, and the screens show it as stale. Conditional on `pending`: a card decided
+   * in the same instant is left alone. Resolves the row (with its owner, for the bus) or undefined.
+   */
+  async failPendingTabGone(id: string): Promise<{ action: ChatAction; user_id: string } | undefined> {
+    const { count } = await this.db.chatAction.updateMany({ where: { id, status: 'pending' satisfies ChatActionStatus }, data: { status: 'failed', errorCode: 'TAB_GONE' } });
+    if (count === 0) return undefined;
+    const row = await this.db.chatAction.findUnique({ where: { id }, include: { conversation: { select: { userId: true } } } });
+    return row ? { action: mapAction(row), user_id: row.conversation.userId } : undefined;
+  }
+
+  /** `failPendingTabGone` for every pending card of a tab that was just removed (closed from the UI, by
+   * the concierge, or with its machine or project). Resolves the rows it moved, with their owners. */
+  async failPendingForTab(tabId: string): Promise<Array<{ action: ChatAction; user_id: string }>> {
+    const moved = await this.db.$queryRaw<{ id: string }[]>`
+      UPDATE "chat_actions" SET "status" = 'failed', "error_code" = 'TAB_GONE'
+       WHERE "tab_id" = ${tabId} AND "status" = 'pending'
+      RETURNING "id"`;
+    return this.withOwners(moved.map((r) => r.id));
+  }
+
+  /**
+   * Every pending card whose tab row is gone without a lifecycle event saying so — the other color removed
+   * it during a blue/green switch, or this process was down — moved the same way. At boot and in the
+   * hourly purge, like `TabQuestionsRepository.expireOrphans`.
+   */
+  async failOrphanPending(): Promise<Array<{ action: ChatAction; user_id: string }>> {
+    const moved = await this.db.$queryRaw<{ id: string }[]>`
+      UPDATE "chat_actions" AS a SET "status" = 'failed', "error_code" = 'TAB_GONE'
+       WHERE a."status" = 'pending' AND a."tab_id" IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM "tabs" t WHERE t."id" = a."tab_id")
+      RETURNING a."id"`;
+    return this.withOwners(moved.map((r) => r.id));
+  }
+
+  /** The rows by id with their owners, oldest first. */
+  private async withOwners(ids: string[]): Promise<Array<{ action: ChatAction; user_id: string }>> {
+    if (ids.length === 0) return [];
+    const rows = await this.db.chatAction.findMany({ where: { id: { in: ids } }, include: { conversation: { select: { userId: true } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+    return rows.map((row) => ({ action: mapAction(row), user_id: row.conversation.userId }));
+  }
+
   /** Reset closes every open question of the conversation it archives: nobody reads that session any
    * more, so a pending card or an unconsumed approval must not be injected into it later. */
   async expireOpenForConversation(conversationId: string): Promise<number> {

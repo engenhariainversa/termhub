@@ -729,7 +729,11 @@ export function createChatStore(deps: ChatDeps) {
               if (decision !== 'approve' && decision !== 'deny') void reread(key);
             } catch (e) {
               if (gen !== generation || isCancelled(e)) return;
-              if (isApiError(e) && e.status === 409) {
+              if (isApiError(e, 'TAB_GONE')) {
+                // TER-986: the card's tab was closed, so the server retired it instead of deciding it. The
+                // card itself says so ("expirou: a aba foi fechada", with "Propor de novo"), even before the event.
+                patchSlot(key, (slot) => ({ actions: slot.actions.map((a) => (a.id === actionId && a.status === 'pending' ? { ...a, status: 'failed', error_code: 'TAB_GONE' } : a)) }));
+              } else if (isApiError(e) && e.status === 409) {
                 set({ error: CHAT_MSG.alreadyDecided });
                 void reread(key); // show how it was decided
               } else {

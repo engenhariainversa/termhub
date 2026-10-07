@@ -4,7 +4,7 @@ import { publishTabQuestions } from '../chat/tab-questions.js';
 import { answerTabQuestion } from '../chat/tab-question-answer.js';
 import { checkChoiceAnswer, type ChoiceAnswer, type ChoicePayload, type PermissionPayload } from '../chat/tab-question-payload.js';
 import type { Waker } from '../chat/wake.js';
-import { automationAllowList, automationDenyList } from '../control/automation-tools.js';
+import { AUTOMATION_MCP_DENIED_TOOLS, AUTOMATION_MCP_TOOLS, automationAllowList, automationDenyList } from '../control/automation-tools.js';
 import { controlContextFor } from '../control/context.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -378,7 +378,9 @@ function deniedByList(tool: string, command: string | null): boolean {
  * 2. for `Bash`: a command that is unknown, holds a shell operator (`; & | \` $( > <` or a line break), or
  *    is refused at every level (`refusedCommand`, the run's `branch` for pushes): never;
  * 3. the fixed deny list (`AUTOMATION_DENIED_TOOLS`, TER-968 R5, and `AUTOMATION_FORM_DENIED_TOOLS`), the same one the tab was started with as
- *    `--disallowedTools`: never, whatever `allowed` says;
+ *    `--disallowedTools`, and the termhub MCP tools a run never calls (`AUTOMATION_MCP_DENIED_TOOLS`,
+ *    TER-993): never, whatever `allowed` says; the termhub MCP tools for reading and adding cards
+ *    (`AUTOMATION_MCP_TOOLS`): always;
  * 4. a rule of the tab's whole allow list, `automationAllowList` — the fixed read rules
  *    (`AUTOMATION_READ_TOOLS`, TER-989), `allowed` in Claude Code's syntax less what is too broad for an
  *    automatic tab (`unsafeAllowedTool`, as on the tab's line) and the run's own branch rules
@@ -399,6 +401,8 @@ export function permissionAllowed(req: PermissionRequest, allowed: string[], bra
     if (command === '' || refusedCommand(command, branch)) return false;
   }
   if (deniedByList(req.tool, command)) return false;
+  if (AUTOMATION_MCP_DENIED_TOOLS.includes(req.tool)) return false;
+  if (AUTOMATION_MCP_TOOLS.includes(req.tool)) return true;
   return automationAllowList(allowed, branch, { worktree }).some((raw) => {
     const rule = parseRule(raw);
     if (!rule || rule.tool !== req.tool) return false;
