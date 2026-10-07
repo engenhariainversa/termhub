@@ -1,4 +1,5 @@
 import type { AttachmentKind } from '@termhub/mobile-api';
+import { whisperHeaders } from '../../lib/whisper.js';
 import { ExtractError } from './errors.js';
 import { type Extracted, ZIP_EXPANDED_MAX_BYTES, capText } from './parsers.js';
 import { EXTRACT_WORKER_HEAP_MB, defaultWorkerUrl, runInWorker } from './worker-runner.js';
@@ -14,6 +15,8 @@ export const WHISPER_TIMEOUT_MS = 10 * 60 * 1000;
 export interface ExtractDeps {
   whisperUrl: string | null;
   language: string | null;
+  /** Bearer secret of the whisper service (`WHISPER_SECRET`). */
+  whisperSecret?: string | null;
   fetch?: typeof fetch;
   /** Tests only; production uses the two constants above. */
   timeoutMs?: number;
@@ -70,7 +73,7 @@ async function transcribe(file: Buffer, mime: string, deps: ExtractDeps): Promis
   const url = `${deps.whisperUrl}/transcribe${deps.language ? `?language=${encodeURIComponent(deps.language)}` : ''}`;
   let res: Response;
   try {
-    res = await doFetch(url, { method: 'POST', headers: { 'content-type': mime }, body: new Uint8Array(file), signal: AbortSignal.timeout(deps.timeoutMs ?? WHISPER_TIMEOUT_MS) });
+    res = await doFetch(url, { method: 'POST', headers: whisperHeaders(mime, deps.whisperSecret), body: new Uint8Array(file), signal: AbortSignal.timeout(deps.timeoutMs ?? WHISPER_TIMEOUT_MS) });
   } catch {
     throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper unreachable or too slow');
   }

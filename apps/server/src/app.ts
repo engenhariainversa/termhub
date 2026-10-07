@@ -75,6 +75,7 @@ import { createMobileServices, registerMobileApi } from './mobile/app.js';
 import { TabChatHub } from './tab-chat/hub.js';
 import { revokeDevice } from './mobile/revocation.js';
 import { purgeMobile } from './mobile/purge.js';
+import { purgeRetention } from './retention/purge.js';
 import { actionForMethod, type Resource } from './auth/permissions.js';
 import { startTicketSyncScheduler } from './setup/tickets-sync.js';
 import { startCiSyncScheduler } from './ci/scheduler.js';
@@ -227,7 +228,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     repo: repos.chatAttachments,
     store: attachmentStore,
     extract,
-    whisper: { whisperUrl: config.transcription?.url ?? null, language: config.transcription?.language ?? null },
+    whisper: {
+      whisperUrl: config.transcription?.url ?? null,
+      language: config.transcription?.language ?? null,
+      whisperSecret: config.transcription?.secret ?? null,
+    },
     onDone: (row) => chatBus.publish({ type: 'attachment_status', user_id: row.user_id, conversation_id: row.conversation_id, attachment: toPublicAttachment(row) }),
     log: fastify.log,
   });
@@ -360,6 +365,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
+    // Privacy Policy section 8 (TER-743): tab state history after 90 days, the waitlist after 12 months.
+    void purgeRetention(repos).catch(() => {});
     // Access records past their 6 months (TER-744): the hourly tick is the rotation.
     void repos.accessLogs.purgeBefore(new Date(Date.now() - ACCESS_LOG_RETENTION_MS)).catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'access log: purge failed'));
     // The security trail keeps SECURITY_EVENT_RETENTION_DAYS (TER-577); the purge is the only way a row leaves it.

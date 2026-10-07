@@ -61,6 +61,9 @@ RUN npm prune --omit=dev --include-workspace-root \
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
+# Outbound proxy: fetch, http and https honour HTTPS_PROXY/HTTP_PROXY/NO_PROXY (Node >= 22.21). Inert
+# while none of them is set; with one set, NO_PROXY must list the compose services (see README).
+ENV NODE_USE_ENV_PROXY=1
 # rsvg-convert + font-inter: the public city's link preview card (apps/server/src/public/card.ts)
 # rasterises with the same librsvg tool apps/landing/og/build.sh uses, as a runtime subprocess.
 # Package names are Alpine's (apk), not Debian's librsvg2-bin — this image is node:22-alpine.
