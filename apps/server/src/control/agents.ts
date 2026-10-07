@@ -1,5 +1,5 @@
 import { mcpConfig } from '@termhub/claude-cli';
-import { isClaudeSessionId, shellQuote, TAB_ID_RE, TAB_MCP_DIR_REL } from '@termhub/machine-ops';
+import { buildGuardSettings, isClaudeSessionId, shellQuote, TAB_ID_RE, TAB_MCP_DIR_REL } from '@termhub/machine-ops';
 import { config } from '../config.js';
 import { MODEL_RE, type ProjectAi } from '../setup/schema.js';
 import { getAccountUsage } from '../ai/index.js';
@@ -92,7 +92,7 @@ function accountEnv(configEnv: string, configDir: string | null): { clear: strin
 }
 
 /** A file of the tab's MCP config dir as the machine's shell must read it: `$HOME` expanded there, the rest quoted. */
-function tabMcpPath(tabId: string, file: 'mcp.json' | 'token'): string {
+function tabMcpPath(tabId: string, file: 'mcp.json' | 'token' | 'guard.json'): string {
   if (!TAB_ID_RE.test(tabId)) throw new ControlError('INVALID_TAB', 'Id de aba inválido');
   return `"$HOME"/${shellQuote(`${TAB_MCP_DIR_REL}/${tabId}/${file}`)}`;
 }
@@ -191,13 +191,17 @@ function checkAllowedTools(tools: string[]): string[] {
  * MCP, so there is one variadic `--allowedTools` — then the fixed `--disallowedTools`. Both are variadic:
  * the caller ends the options with `--` (or another option, then `--`).
  */
-function permissionFlags(permission: AgentPermission, mcpTabId: string | null): string {
+function permissionFlags(permission: AgentPermission, mcpTabId: string | null, guardTabId: string | null = null): string {
   if (!PERMISSION_MODES.has(permission.mode)) throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
   const forms = permission.worktree ? { worktree: permission.worktree } : null;
   const tools = automationAllowList(checkAllowedTools(permission.allowedTools), permission.branch, forms);
   const allow = mcpTabId ? claudeMcpFlags(mcpTabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
   const deny = `--disallowedTools ${automationDenyList(forms !== null).map((t) => shellQuote(t)).join(' ')}`;
-  return `--permission-mode ${permission.mode}${allow ? ` ${allow}` : ''} ${deny}`;
+  // The hard-lock PreToolUse hook (TER-993): an automatic run (it has a worktree) also carries
+  // `--settings <its guard.json>`, written to the machine before the line is typed. Independent of the
+  // memory MCP, so a run whose MCP could not be installed still gets the guard.
+  const guard = permission.worktree && guardTabId ? ` --settings ${tabMcpPath(guardTabId, 'guard.json')}` : '';
+  return `--permission-mode ${permission.mode}${allow ? ` ${allow}` : ''} ${deny}${guard}`;
 }
 
 /** What the MCP URL may look like to be spliced into a TOML string inside a quoted argument (D9):
@@ -235,6 +239,7 @@ export function launchLine(
   mcp?: { tabId: string; url: string } | null,
   model?: string | null,
   permission?: AgentPermission | null,
+  guardTabId?: string | null,
 ): string {
   const { binary: bin, configEnv, flags } = launcher(provider);
   const binary = `${bin}${flags}${modelFlag(provider, model)}`;
@@ -243,7 +248,7 @@ export function launchLine(
   if (permission && provider === 'claude') {
     if (mcp && !MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
     // `--allowedTools` is variadic: `--` always ends the options, so the prompt is never read as a tool.
-    return `${clear}${prefix}${binary} ${permissionFlags(permission, mcp?.tabId ?? null)} -- ${shellQuote(prompt)}`;
+    return `${clear}${prefix}${binary} ${permissionFlags(permission, mcp?.tabId ?? null, guardTabId ?? mcp?.tabId ?? null)} -- ${shellQuote(prompt)}`;
   }
   if (!mcp) return `${clear}${prefix}${binary} ${shellQuote(prompt)}`;
   if (!MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
@@ -294,7 +299,7 @@ export function resumeLine(configDir: string | null, sessionId: string, prompt: 
   const { clear, prefix } = accountEnv('CLAUDE_CONFIG_DIR', configDir);
   const quoted = shellQuote(checkPrompt(prompt));
   const claude = `claude${modelFlag('claude', model)}`;
-  if (permission) return `${clear}${prefix}${claude} ${permissionFlags(permission, mcpTabId ?? null)} --resume ${sessionId} -- ${quoted}`;
+  if (permission) return `${clear}${prefix}${claude} ${permissionFlags(permission, mcpTabId ?? null, mcpTabId ?? null)} --resume ${sessionId} -- ${quoted}`;
   if (!mcpTabId) return `${clear}${prefix}${claude} --resume ${sessionId} ${quoted}`;
   return `${clear}${prefix}${claude} ${claudeMcpFlags(mcpTabId)} --resume ${sessionId} -- ${quoted}`;
 }
@@ -308,7 +313,7 @@ export function continueLine(provider: AiProvider, configDir: string | null, aut
   const { binary, configEnv, flags } = launcher(provider);
   const { clear, prefix } = accountEnv(configEnv, configDir);
   // An automatic Claude tab (preflight F-12): its permission profile, its MCP and a first message.
-  if (auto && provider === 'claude') return `${clear}${prefix}${binary}${flags} ${permissionFlags(auto.permission, auto.mcpTabId)} --continue -- ${shellQuote(checkPrompt(auto.prompt))}`;
+  if (auto && provider === 'claude') return `${clear}${prefix}${binary}${flags} ${permissionFlags(auto.permission, auto.mcpTabId, auto.mcpTabId)} --continue -- ${shellQuote(checkPrompt(auto.prompt))}`;
   return provider === 'chatgpt' ? `${clear}${prefix}${binary}${flags} resume --last` : `${clear}${prefix}${binary}${flags} --continue`;
 }
 
@@ -524,11 +529,15 @@ export async function startAgent(
   try {
     await internal?.onTabOpened?.(tab.tab_id);
     mcp = await tabMcp(ctx, machine, account.provider, tab);
+    // The hard-lock guard (TER-993): an automatic run (it has a worktree) gets its PreToolUse guard
+    // settings written to the machine before the line is typed. A failure here is a failed start: a
+    // run must never begin without the guard. Manual and start_agent tabs (no worktree) skip it.
+    if (permission?.worktree) await installTabMcp(machine, tab.tab_id, 'guard.json', buildGuardSettings(permission.branch, permission.worktree));
     line = withSetup(
       internal?.setupCommand,
       mcp.installed
-        ? launchLine(account.provider, account.config_dir, prompt, { tabId: tab.tab_id, url: mcp.url }, model, permission)
-        : launchLine(account.provider, account.config_dir, prompt, null, model, permission),
+        ? launchLine(account.provider, account.config_dir, prompt, { tabId: tab.tab_id, url: mcp.url }, model, permission, tab.tab_id)
+        : launchLine(account.provider, account.config_dir, prompt, null, model, permission, tab.tab_id),
     );
   } catch (e) {
     throw tagged(e);

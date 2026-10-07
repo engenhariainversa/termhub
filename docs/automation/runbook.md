@@ -41,6 +41,17 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
   reading and adding cards (`AUTOMATION_MCP_TOOLS`) are answered yes by the server, and the ones that reach
   past the card (`AUTOMATION_MCP_DENIED_TOOLS`: automation policy, other tabs, agents, machines, deleting
   cards…) never are.
+- Hard-lock PreToolUse hook (TER-993): every automatic run also carries a PreToolUse hook,
+  `~/.termhub/bin/termhub-guard` (bundled in the agent, 0.19.0+, installed next to the monitor hook),
+  registered through `--settings <the run's ~/.termhub/tabs/<tab>/guard.json>` on its launch line. It
+  answers Claude Code's PreToolUse with a `deny`, whatever the mode, for: a `git push` that is not the
+  run's own branch; `gh pr merge`/`workflow`/`release`/`api`/`secret`; `npm`/`pnpm`/`yarn publish`,
+  `npm run release*`, `eas`, `fastlane`; `docker`, `ssh`/`scp`/`rsync`/`kubectl`, `psql`; `rm -r`/`-rf`
+  outside the worktree (or `/tmp`); and reading or editing `.env`, `.npmrc`, `.netrc`, git credentials,
+  `~/.ssh`, `~/.termhub` config/token and `.credentials.json`, or any write outside the worktree. It is
+  the second wall after `--disallowedTools`, and it is what closes auto mode's gap: the classifier can
+  no longer approve a push to another ref. Only automatic tabs get it (manual and `start_agent` tabs
+  have no worktree, so no `--settings`). Each `deny` is listed in the feed as `guard_blocked`.
 - Permissions of automatic tabs: the mode above plus an allow list; no bypass flag. A fixed deny list
   (force/delete/mirror pushes, `.env` reads, `git -c`, release commands, ...) sits in
   `apps/server/src/control/automation-tools.ts` (`AUTOMATION_DENIED_TOOLS`) and beats any project allow
