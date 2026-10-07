@@ -47,6 +47,8 @@ export interface ScheduleInput {
   by: AutoAnswerBy;
   reason: string;
   sources: { kind: MemoryRefKind; id: string }[];
+  /** The precedent's similarity the concierge's check measured (TER-1011): the feed's score. */
+  score?: number | null;
 }
 
 /**
@@ -133,6 +135,7 @@ async function storeAutoAnswer(repos: Repositories, input: ScheduleInput, now: D
     by: input.by,
     reason: input.reason,
     sources: input.sources,
+    ...(typeof input.score === 'number' ? { score: input.score } : {}),
     due_at: new Date(now.getTime() + config.autoAnswerDelayMs).toISOString(),
     status: 'scheduled',
   };

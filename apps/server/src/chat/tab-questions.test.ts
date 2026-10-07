@@ -335,7 +335,7 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
     expect(await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' }, { waker })).toBeNull();
     // awaited inside openTabQuestion: parked before the hook POST returns
     expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'question_unanswered' }, { unlessWaitingFor: 'question_unanswered' });
-    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: 'question_unanswered', tab_id: 't1' } }));
+    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: 'question_unanswered', tab_id: 't1', why: 'no_precedent' } }));
     expect(waker.wake).not.toHaveBeenCalled();
   });
 
@@ -360,7 +360,7 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
     const waker = { wake: vi.fn(async () => true) };
     await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null }, { waker });
     await vi.waitFor(() => expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'permission_needed' }, { unlessWaitingFor: 'permission_needed' }));
-    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', payload: { reason: 'permission_needed', tab_id: 't1' } }));
+    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', payload: { reason: 'permission_needed', tab_id: 't1', why: 'outside_rules' } }));
     expect(waker.wake).not.toHaveBeenCalled();
   });
 

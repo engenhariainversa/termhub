@@ -15,6 +15,7 @@ import { recordEvent } from './events.js';
 import { ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, QUESTION_UNANSWERED, wakeOrEscalate } from './follower.js';
 import { automaticRunOfTab } from './pause.js';
 import { runPermission } from './permission.js';
+import { answerWhy, permissionWhy } from './why.js';
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
 const noopLog: Log = { info: () => {}, warn: () => {} };
@@ -116,10 +117,15 @@ async function cycleReached(deps: AnswerDeps, run: AutomationRun, hash: string):
 
 /** The card as the database has it now: closed, counting down (someone scheduled first), or still waiting. */
 async function cardNow(repos: Repositories, q: TabQuestionRow): Promise<'closed' | 'counting' | 'open'> {
+  return (await cardState(repos, q)).state;
+}
+
+/** `cardNow` with the row as read (the countdown's precedent, for the feed's why). */
+async function cardState(repos: Repositories, q: TabQuestionRow): Promise<{ state: 'closed' | 'counting' | 'open'; row: TabQuestionRow | null }> {
   const open = await repos.tabQuestions.findOpenForTab(q.tab_id);
-  if (open?.id !== q.id) return 'closed';
+  if (open?.id !== q.id) return { state: 'closed', row: null };
   const status = open.auto_answer?.status;
-  return status === 'scheduled' || status === 'sent' ? 'counting' : 'open';
+  return { state: status === 'scheduled' || status === 'sent' ? 'counting' : 'open', row: open };
 }
 
 /**
@@ -145,8 +151,9 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
   const { repos } = deps;
   const log = deps.log ?? noopLog;
   if (q.kind !== 'choice' || q.status !== 'open') return 'closed';
-  const answered = async (via: 'repeat' | 'recommended', cycle: string | null = null) => {
-    await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'question_answered', payload: { via, tab_id: q.tab_id, question_id: q.id, ...(cycle ? { cycle } : {}) } }).catch(() =>
+  // `row`: the card with its countdown, for why it was answered (TER-1011: the precedent and its score)
+  const answered = async (via: 'repeat' | 'recommended', row: TabQuestionRow, cycle: string | null = null) => {
+    await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'question_answered', payload: { via, tab_id: q.tab_id, question_id: q.id, ...(cycle ? { cycle } : {}), ...answerWhy(row, via) } }).catch(() =>
       log.warn({ runId: run.id, tabQuestionId: q.id }, 'automation: question_answered not recorded'),
     );
     log.info({ runId: run.id, tabQuestionId: q.id, via }, 'automation: question answered');
@@ -175,7 +182,7 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
   // 1. memory first
   const counting = q.auto_answer?.status;
   if (counting === 'scheduled' || counting === 'sent') {
-    await answered('repeat', cycle);
+    await answered('repeat', q, cycle);
     return 'repeat';
   }
 
@@ -183,14 +190,15 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
   if (label !== null && recommendedAnswer) {
     const answer = recommendedAnswer;
     if (checkChoiceAnswer(payload, answer) === null && !autoAnswerBlocked(blocklistParts(payload, answer))) {
-      if (await scheduleAutoAnswer(repos, { row: q, answer, by: 'automation', reason: RECOMMENDED_REASON, sources: [] })) {
-        await answered('recommended', cycle);
+      const scheduled = await scheduleAutoAnswer(repos, { row: q, answer, by: 'automation', reason: RECOMMENDED_REASON, sources: [] });
+      if (scheduled) {
+        await answered('recommended', scheduled, cycle);
         return 'recommended';
       }
-      const now = await cardNow(repos, q);
-      if (now === 'closed') return 'closed';
-      if (now === 'counting') {
-        await answered('repeat');
+      const now = await cardState(repos, q);
+      if (now.state === 'closed') return 'closed';
+      if (now.state === 'counting') {
+        await answered('repeat', now.row ?? q);
         return 'repeat';
       }
     }
@@ -206,10 +214,10 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
   }
 
   // 4. the person — unless the card moved on, or something scheduled an answer meanwhile
-  const now = await cardNow(repos, q);
-  if (now === 'closed') return 'closed';
-  if (now === 'counting') {
-    await answered('repeat');
+  const now = await cardState(repos, q);
+  if (now.state === 'closed') return 'closed';
+  if (now.state === 'counting') {
+    await answered('repeat', now.row ?? q);
     return 'repeat';
   }
   return (await escalate(deps, run, QUESTION_UNANSWERED)) ? 'escalated' : 'left';
@@ -392,23 +400,32 @@ function deniedByList(tool: string, command: string | null): boolean {
  * steps (D5), never a permission answered in a tab — so the level is not an input.
  */
 export function permissionAllowed(req: PermissionRequest, allowed: string[], branch: string | null = null, worktree: string | null = null): boolean {
-  if (autoAnswerBlocked([req.tool, req.command ?? ''])) return false;
+  return permissionRule(req, allowed, branch, worktree) !== null;
+}
+
+/**
+ * `permissionAllowed`'s rule (TER-1011): the allow rule the request matched — the tool's own name for
+ * termhub's card tools — or null when it is not allowed. The feed names it as why the permission went out.
+ */
+export function permissionRule(req: PermissionRequest, allowed: string[], branch: string | null = null, worktree: string | null = null): string | null {
+  if (autoAnswerBlocked([req.tool, req.command ?? ''])) return null;
   const isBash = req.tool === 'Bash';
   let command: string | null = null;
   if (isBash) {
-    if (req.command === null || SHELL_OPERATORS.test(req.command)) return false;
+    if (req.command === null || SHELL_OPERATORS.test(req.command)) return null;
     command = squashSpaces(req.command);
-    if (command === '' || refusedCommand(command, branch)) return false;
+    if (command === '' || refusedCommand(command, branch)) return null;
   }
-  if (deniedByList(req.tool, command)) return false;
-  if (AUTOMATION_MCP_DENIED_TOOLS.includes(req.tool)) return false;
-  if (AUTOMATION_MCP_TOOLS.includes(req.tool)) return true;
-  return automationAllowList(allowed, branch, { worktree }).some((raw) => {
+  if (deniedByList(req.tool, command)) return null;
+  if (AUTOMATION_MCP_DENIED_TOOLS.includes(req.tool)) return null;
+  if (AUTOMATION_MCP_TOOLS.includes(req.tool)) return req.tool;
+  const match = automationAllowList(allowed, branch, { worktree }).find((raw) => {
     const rule = parseRule(raw);
     if (!rule || rule.tool !== req.tool) return false;
     if (rule.spec === null) return true;
     return isBash && command !== null && bashSpecMatches(rule.spec, command);
   });
+  return match ?? null;
 }
 
 /** The answer path logs `(object, message)` only, the one form this module's logger has. */
@@ -459,7 +476,8 @@ export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQues
     return handOver(PERMISSION_NEEDED);
   }
   const { allowedTools, worktree } = await runPermission(repos, run);
-  if (!permissionAllowed({ tool, command }, allowedTools, run.branch, worktree ?? null)) {
+  const rule = permissionRule({ tool, command }, allowedTools, run.branch, worktree ?? null);
+  if (rule === null) {
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission outside the rules');
     return handOver(PERMISSION_NEEDED);
   }
@@ -485,8 +503,9 @@ export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQues
   // The feed shows what was approved alone (TER-993): the tool and why. Never the command — the payload
   // carries metadata only (CLAUDE.md: terminal content is never logged). `reason` is 'policy' (an allow
   // rule), or 'mcp' for termhub's own read/add tools, so the line can say which.
+  // TER-1011: `why` and `rule_ref` name the allow rule it matched.
   const reason = AUTOMATION_MCP_TOOLS.includes(tool) ? 'mcp' : 'policy';
-  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'permission_auto_approved', payload: { tab_id: q.tab_id, question_id: q.id, tool, reason } }).catch(() =>
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'permission_auto_approved', payload: { tab_id: q.tab_id, question_id: q.id, tool, reason, ...permissionWhy(rule, reason === 'mcp') } }).catch(() =>
     log.warn({ runId: run.id, tabQuestionId: q.id }, 'automation: permission_auto_approved not recorded'),
   );
   log.info({ runId: run.id, tabQuestionId: q.id, tool }, 'automation: permission allowed');

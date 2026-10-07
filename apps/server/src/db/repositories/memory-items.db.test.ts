@@ -502,4 +502,51 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     await repo.upsertMany([item({ kind: 'doc', source_id: sourceId, text: `v2 ${marker}`, source_hash: 'd'.repeat(64) })]);
     expect((await repo.textSearch({ ownerId: userId }, marker, 10)).map((r) => r.id)).toEqual([doc!.id]);
   });
+
+  it('currentNotes (TER-1011): this project and account-wide notes, newest first; never wrong, superseded, expired or conversation-only ones', async () => {
+    // The status columns come from sibling cards (TER-1013/1014/1015); here they are added inside a
+    // transaction that is rolled back, so the schema is left as the migrations made it (CI checks drift).
+    const ROLLBACK = new Error('rollback');
+    await db
+      .$transaction(
+        async (tx) => {
+          await tx.$executeRawUnsafe(
+            `ALTER TABLE "memory_items" ADD COLUMN IF NOT EXISTS "wrong_at" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "superseded_at" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "expires_at" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "scope" TEXT`,
+          );
+          const r = new MemoryItemsRepository(tx as unknown as PrismaClient);
+          const owner = newId();
+          const project = newId();
+          const elsewhere = newId();
+          await tx.user.create({ data: { id: owner, email: `${owner}@test.local`, name: 'rules' } });
+          await tx.project.create({ data: { id: project, key: `R${project.slice(-5).toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`, name: 'rules', ownerId: owner } });
+          await tx.project.create({ data: { id: elsewhere, key: `S${elsewhere.slice(-5).toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`, name: 'other', ownerId: owner } });
+          const note = (title: string, at: string, projectId: string | null = project) =>
+            r.upsertMany([item({ owner_id: owner, project_id: projectId, source_id: newId(), title, text: `Decisão: ${title}\nMotivo: m\nFontes: `, source_at: new Date(at) })]).then(([row]) => row!);
+          const old = await note('acceptEdits + lista', '2026-10-01T00:00:00.000Z');
+          const auto = await note('modo auto', '2026-10-02T00:00:00.000Z');
+          const account = await note('PRs em inglês', '2026-10-03T00:00:00.000Z', null);
+          const wrong = await note('errada', '2026-10-04T00:00:00.000Z');
+          const expired = await note('durante a noite', '2026-10-05T00:00:00.000Z');
+          const later = await note('até o fim do ano', '2026-10-05T00:00:00.000Z');
+          const chat = await note('só nesta conversa', '2026-10-06T00:00:00.000Z');
+          await note('outro projeto', '2026-10-06T00:00:00.000Z', elsewhere);
+          await tx.$executeRawUnsafe(`UPDATE "memory_items" SET "superseded_at" = now() WHERE id = $1`, old.id);
+          await tx.$executeRawUnsafe(`UPDATE "memory_items" SET "wrong_at" = now() WHERE id = $1`, wrong.id);
+          await tx.$executeRawUnsafe(`UPDATE "memory_items" SET "expires_at" = now() - interval '1 hour' WHERE id = $1`, expired.id);
+          await tx.$executeRawUnsafe(`UPDATE "memory_items" SET "expires_at" = now() + interval '30 days' WHERE id = $1`, later.id);
+          await tx.$executeRawUnsafe(`UPDATE "memory_items" SET "scope" = 'conversation' WHERE id = $1`, chat.id);
+
+          const ids = (await r.currentNotes(owner, project, 20)).map((n) => n.id);
+          expect(new Set(ids)).toEqual(new Set([auto.id, account.id, later.id]));
+          expect(ids).not.toContain(old.id);
+          expect((await r.currentNotes(owner, project, 1)).length).toBe(1);
+          expect((await r.currentNotes(otherUserId, project, 20)).length).toBe(0);
+          throw ROLLBACK;
+        },
+        { timeout: 20_000 },
+      )
+      .catch((e: unknown) => {
+        if (e !== ROLLBACK) throw e;
+      });
+  });
 });

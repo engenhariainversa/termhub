@@ -38,6 +38,8 @@ export interface AutoAnswer {
   by: AutoAnswerBy;
   reason: string;
   sources: { kind: 'decision' | MemoryKind; id: string }[];
+  /** The cited precedent's similarity, when the concierge's check measured it (TER-1011): the feed's score. */
+  score?: number;
   due_at: string;
   status: 'scheduled' | 'cancelled' | 'sent' | 'failed';
   error_code?: string;
