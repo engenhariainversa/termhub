@@ -4,6 +4,7 @@ import { useData } from '../lib/data';
 import { STATUS_DOT, STATUS_LABEL } from '../lib/machine-status';
 import { AI_PROVIDER_LABEL, type AiAccount, type AiAccountUsage, type AiProvider, type AiUsageWindow, type Machine } from '../lib/types';
 import { AutoSwapSettings } from './AutoSwapSettings';
+import { AiUsageQuerySettings } from './AiUsageQueryCard';
 import { ConfirmDialog, Modal } from './Modal';
 import { i18n, tk, Trans, useTranslation } from '../i18n';
 
@@ -88,6 +89,7 @@ export function ExclusiveBadge({ name }: { name: string }) {
 
 function AccountCard({
   account,
+  machineName,
   usage,
   now,
   onRefresh,
@@ -95,6 +97,8 @@ function AccountCard({
   onDelete,
 }: {
   account: AiAccount;
+  /** the account's machine, for the "turn it on in Máquinas" pointer; null when the machine is out of view */
+  machineName: string | null;
   usage: AiAccountUsage | undefined;
   now: number;
   onRefresh: () => void;
@@ -137,7 +141,15 @@ function AccountCard({
 
       <div className="mt-3 flex-1">
         {!usage && <p className="text-xs text-fg-dim">{t('Consultando…')}</p>}
-        {usage && !usage.ok && (
+        {usage && !usage.ok && usage.reason && (
+          <div className="rounded border border-line bg-bg p-2 text-xs text-fg-muted">
+            <p>{usage.reason === 'disabled' ? t('Consulta de uso desligada nesta máquina') : t('Atualize o agente desta máquina para ver o uso')}</p>
+            {usage.reason === 'disabled' && machineName && (
+              <p className="mt-1 text-fg-dim">{t('Ligue em Máquinas › {{machine}}', { machine: machineName })}</p>
+            )}
+          </div>
+        )}
+        {usage && !usage.ok && !usage.reason && (
           <div className="rounded border border-danger/40 bg-danger/10 p-2 text-xs">
             <p className="text-danger">{usage.error}</p>
             {usage.hint && <p className="mt-1 break-all text-fg-muted">{usage.hint}</p>}
@@ -456,6 +468,7 @@ export function AiAccountsView() {
                 <AccountCard
                   key={a.id}
                   account={a}
+                  machineName={m?.name ?? null}
                   usage={usage[a.id]}
                   now={now}
                   onRefresh={() => refreshOne(a.id)}
@@ -470,6 +483,7 @@ export function AiAccountsView() {
       </div>
 
       {accounts && <AutoSwapSettings machines={machines} accounts={accounts} />}
+      {accounts && <AiUsageQuerySettings machines={machines} accounts={accounts} />}
 
       {form.open && (
         <AccountForm
