@@ -4,7 +4,8 @@ import { ActivityIndicator, Image, Modal, Pressable, Text, View } from 'react-na
 import type { TChatAttachment } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
 import { Icon } from '@/ui';
-import { attachmentStatusText, formatBytes, thumbSize } from '../viewmodel/attachments';
+import { ApiError } from '@/services/api/errors';
+import { attachmentStatusText, canRetryAttachment, formatBytes, thumbSize } from '../viewmodel/attachments';
 import { cachedAudio } from '../viewmodel/audio-cache';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ATTACHMENT_ICON, KIND_ICON } from './attachment-chip';
@@ -85,9 +86,10 @@ const PAUSE_ICON = { ios: 'pause.fill', android: 'pause' } as const;
  * transcription the server made of it, folded away until asked for. The bubble's attachment is the one
  * the message was sent with ("transcrevendo…"); what the socket heard since (`attachmentStatuses`) is
  * newer, so the transcription shows up the moment it is ready. The clip is only downloaded on the first
- * play, into the cache (`cachedAudio`): a thread full of notes fetches nothing on open.
+ * play, into the cache (`cachedAudio`): a thread full of notes fetches nothing on open. A transcription
+ * whisper could not do offers "Tentar de novo" (TER-1035), which the parent runs.
  */
-function AudioAttachment({ attachment }: { attachment: TChatAttachment }) {
+function AudioAttachment({ attachment, retrying, retryError, onRetry }: { attachment: TChatAttachment; retrying: boolean; retryError: string | null; onRetry: (id: string) => void }) {
   const { t } = useTranslation();
   const heard = useChatStore((s) => s.attachmentStatuses[attachment.id]);
   const sign = useChatStore((s) => s.attachmentSource);
@@ -155,6 +157,12 @@ function AudioAttachment({ attachment }: { attachment: TChatAttachment }) {
       ) : status ? (
         <Text className={`text-xs ${a.status === 'failed' ? 'text-app-danger' : 'text-white/70'}`}>{status}</Text>
       ) : null}
+      {canRetryAttachment(a) ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={t('Tentar de novo')} disabled={retrying} onPress={() => onRetry(a.id)} className="self-start rounded-md bg-black/20 px-2 py-1" hitSlop={8}>
+          <Text className={`text-xs text-white ${retrying ? 'opacity-50' : ''}`}>{t('Tentar de novo')}</Text>
+        </Pressable>
+      ) : null}
+      {retryError ? <Text className="text-xs text-app-danger">{retryError}</Text> : null}
     </View>
   );
 }
@@ -167,6 +175,24 @@ function AudioAttachment({ attachment }: { attachment: TChatAttachment }) {
 export const MessageAttachments = memo(function MessageAttachments({ attachments }: { attachments: TChatAttachment[] }) {
   const { t } = useTranslation();
   const [viewing, setViewing] = useState<TChatAttachment | null>(null);
+  const retryAttachment = useChatStore((s) => s.retryAttachment);
+  /** The ids whose retry is on its way, and the one the server refused, with why (TER-1035). */
+  const [retrying, setRetrying] = useState<ReadonlySet<string>>(new Set());
+  const [retryError, setRetryError] = useState<{ id: string; message: string } | null>(null);
+  const retry = (id: string) => {
+    setRetrying((s) => new Set(s).add(id));
+    setRetryError(null);
+    // The bubble moves to "transcrevendo…" with the `attachment_status` the server publishes.
+    retryAttachment(id)
+      .catch((e: unknown) => setRetryError({ id, message: e instanceof ApiError ? e.message : t('Não foi possível tentar de novo') }))
+      .finally(() =>
+        setRetrying((s) => {
+          const next = new Set(s);
+          next.delete(id);
+          return next;
+        }),
+      );
+  };
   return (
     <View className="mt-2 gap-2">
       {attachments.map((a) => {
@@ -177,7 +203,9 @@ export const MessageAttachments = memo(function MessageAttachments({ attachments
             </Pressable>
           );
         }
-        if (a.kind === 'audio') return <AudioAttachment key={a.id} attachment={a} />;
+        if (a.kind === 'audio') {
+          return <AudioAttachment key={a.id} attachment={a} retrying={retrying.has(a.id)} retryError={retryError?.id === a.id ? retryError.message : null} onRetry={retry} />;
+        }
         const status = attachmentStatusText(a);
         const tone = a.status === 'failed' ? 'text-app-danger' : 'text-white/70';
         return (
@@ -196,7 +224,13 @@ export const MessageAttachments = memo(function MessageAttachments({ attachments
                   </>
                 ) : null}
               </View>
+              {retryError?.id === a.id ? <Text className="text-xs text-app-danger">{retryError.message}</Text> : null}
             </View>
+            {canRetryAttachment(a) ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={t('Tentar de novo')} disabled={retrying.has(a.id)} onPress={() => retry(a.id)} className="rounded-md bg-black/20 px-2 py-1" hitSlop={8}>
+                <Text className={`text-xs text-white ${retrying.has(a.id) ? 'opacity-50' : ''}`}>{t('Tentar de novo')}</Text>
+              </Pressable>
+            ) : null}
           </View>
         );
       })}

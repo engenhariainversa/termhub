@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '../../lib/api';
 import { MessageAttachments } from './MessageAttachments';
 import type { ChatAttachment } from '../../lib/types';
 
@@ -16,7 +17,10 @@ const att = (over: Partial<ChatAttachment> & { id: string }): ChatAttachment => 
   ...over,
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('MessageAttachments', () => {
   it('shows a file as a download chip with its size and status', () => {
@@ -29,6 +33,31 @@ describe('MessageAttachments', () => {
     expect(screen.getAllByText('2 KB')).toHaveLength(3);
     expect(screen.getByText('transcrevendo…')).toBeTruthy();
     expect(screen.getByText('falhou: arquivo inválido')).toBeTruthy();
+  });
+
+  it('a clip whose transcription was unavailable says why and can be tried again; one whisper could not decode cannot (TER-1035)', async () => {
+    const retry = vi.spyOn(api.chat.attachments, 'retry').mockResolvedValue({ attachment: att({ id: 'c1', kind: 'audio', status: 'pending' }) });
+    render(
+      <MessageAttachments
+        attachments={[
+          att({ id: 'c1', name: 'audio.m4a', kind: 'audio', status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE', meta: { reason: 'refused' } }),
+          att({ id: 'c2', name: 'ruim.m4a', kind: 'audio', status: 'failed', error_code: 'TRANSCRIPTION_FAILED' }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('falhou: o serviço de transcrição recusou o acesso')).toBeTruthy();
+    const buttons = screen.getAllByRole('button', { name: 'tentar de novo' });
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    expect(retry).toHaveBeenCalledWith('c1');
+    await waitFor(() => expect((screen.getByRole('button', { name: 'tentar de novo' }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it('a refused retry shows the server message next to the chip', async () => {
+    vi.spyOn(api.chat.attachments, 'retry').mockRejectedValue(new Error('Este anexo não pode ser processado de novo'));
+    render(<MessageAttachments attachments={[att({ id: 'c1', name: 'audio.m4a', kind: 'audio', status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE' })]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'tentar de novo' }));
+    expect(await screen.findByText('Este anexo não pode ser processado de novo')).toBeTruthy();
   });
 
   it('shows an image as a thumbnail that opens the viewer, which Escape closes', () => {

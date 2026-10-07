@@ -130,6 +130,9 @@ export interface ChatState {
   uploadAttachment(file: PickedFile, onProgress: (fraction: number) => void): Promise<TChatAttachment>;
   /** Drops an unsent attachment (a chip's ✕). Already gone (404) or already sent (409): nothing to do. */
   deleteAttachment(id: string): Promise<void>;
+  /** "Tentar de novo" on a sent clip whose transcription was unavailable (TER-1035). The bubble follows
+   *  the `attachment_status` the server publishes; a refusal is thrown for the bubble to show. */
+  retryAttachment(id: string): Promise<void>;
   /** `<Image source>` for a sent image: the url plus signed headers. */
   attachmentSource(id: string): Promise<{ uri: string; headers: Record<string, string> }>;
   /** "Tentar de novo" on a row whose send failed: the row goes, and its text is sent again as a new one. */
@@ -964,6 +967,16 @@ export function createChatStore(deps: ChatDeps) {
               if (isApiError(e) && (e.status === 404 || e.status === 409)) return;
               throw e;
             });
+          },
+
+          retryAttachment(id) {
+            return api.retryAttachment(session().auth(), id).then(
+              () => undefined,
+              (e: unknown) => {
+                session().handleApiError(e);
+                throw e;
+              },
+            );
           },
 
           async attachmentSource(id) {

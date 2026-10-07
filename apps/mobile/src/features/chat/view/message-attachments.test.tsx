@@ -8,9 +8,11 @@ let signed = 0;
 const mockAttachmentSource = jest.fn(async (id: string) => ({ uri: `https://termhub.dev/api/m/v1/chat/attachments/${id}`, headers: { Authorization: 'Bearer tok', DPoP: `proof-${++signed}` } }));
 /** What the socket heard since the message was sent (`attachment_status`), by id. */
 let mockStatuses: Record<string, TChatAttachment> = {};
+const mockRetryAttachment = jest.fn(async (_id: string): Promise<void> => undefined);
 jest.mock('../viewmodel/useChatStore', () => ({
-  useChatStore: (selector: (s: { attachmentSource: typeof mockAttachmentSource; attachmentStatuses: Record<string, TChatAttachment> }) => unknown) =>
-    selector({ attachmentSource: mockAttachmentSource, attachmentStatuses: mockStatuses }),
+  useChatStore: (
+    selector: (s: { attachmentSource: typeof mockAttachmentSource; attachmentStatuses: Record<string, TChatAttachment>; retryAttachment: typeof mockRetryAttachment }) => unknown,
+  ) => selector({ attachmentSource: mockAttachmentSource, attachmentStatuses: mockStatuses, retryAttachment: mockRetryAttachment }),
 }));
 // The clip is downloaded into the cache on the first play; under jest that is a fixed path.
 const mockCachedAudio = jest.fn(async (_a: { id: string }, _sign: unknown) => 'file:///cache/chat-audio-au1.m4a');
@@ -26,6 +28,31 @@ beforeEach(() => {
   mockStatuses = {};
   mockCachedAudio.mockClear();
   audioFake.__reset();
+  mockRetryAttachment.mockReset();
+  mockRetryAttachment.mockResolvedValue(undefined);
+});
+
+describe('MessageAttachments: a clip whose transcription was unavailable (TER-1035)', () => {
+  const clip = (over: Partial<TChatAttachment> = {}): TChatAttachment => ({
+    id: 'c1', name: 'audio.m4a', mime: 'audio/mp4', kind: 'audio', bytes: 229376, status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE', meta: { reason: 'refused' }, created_at: '2026-10-07T19:29:27.000Z', ...over,
+  });
+
+  it('says why and offers to try again; a clip whisper could not decode does not', async () => {
+    await render(<MessageAttachments attachments={[clip(), clip({ id: 'c2', name: 'ruim.m4a', error_code: 'TRANSCRIPTION_FAILED', meta: null })]} />);
+    expect(screen.getByText('falhou: o serviço de transcrição recusou o acesso')).toBeTruthy();
+    const buttons = screen.getAllByRole('button', { name: 'Tentar de novo' });
+    expect(buttons).toHaveLength(1);
+    await fireEvent.press(buttons[0]!);
+    await waitFor(() => expect(mockRetryAttachment).toHaveBeenCalledWith('c1'));
+  });
+
+  it('shows the server refusal under the clip', async () => {
+    const { ApiError } = jest.requireActual('@/services/api/errors');
+    mockRetryAttachment.mockRejectedValueOnce(new ApiError(409, 'CONFLICT', 'Este anexo não pode ser processado de novo'));
+    await render(<MessageAttachments attachments={[clip()]} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(await screen.findByText('Este anexo não pode ser processado de novo')).toBeTruthy();
+  });
 });
 
 describe('MessageAttachments images', () => {
