@@ -157,6 +157,14 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
   - every credential termhub issues (session, API, agent, hook, mobile) is stored only as a hash;
   - other data is stored in the database as is (see [Known limitations](#known-limitations)).
 - **Terminal content is never written to the server logs.** Logs carry metadata only (tab, machine, sizes), and cookies and authorization headers are redacted.
+- **Access records (Marco Civil, art. 15).** The server keeps a record of every access to the application for 6 months, as Brazilian law requires of an application provider:
+  - one row per API response and per WebSocket upgrade, in the `access_logs` table of the database, so the records survive the blue/green deploys that recreate the app containers;
+  - each row holds only the date and time, the client IP (the one Cloudflare forwards), the user when known (session, API token), the kind (`http` or `ws`), the method, the route and the status;
+  - the route is the server's route pattern (`/api/tabs/:id`), or the path for a WebSocket; never the query string, a request or response body, terminal or chat content, login codes or headers;
+  - static files, the single-page app's own pages and the healthcheck probes (`/api/ready`, `/api/health`) are not recorded;
+  - records are written in batches every few seconds, off the request's path; if the database does not take them, they wait in memory up to a ceiling, past which the oldest are dropped and the count is logged;
+  - rotation: an hourly job deletes the records older than 190 days (6 months plus a margin). Rows have no link to the account, so deleting an account does not remove its records before their 6 months are over;
+  - the records are read only by the operator, through the database, for example to answer a court order. They are not shown in the app.
 - **What the server keeps from your terminals:**
   - it does not store the terminal stream or scrollback;
   - it keeps each tab's latest status and the AI agent's last answer, which show on the home page and in the chat;
@@ -250,6 +258,7 @@ Paths are relative to the repository root.
 | Chat confirmation cards and grants | `apps/server/src/chat/gate.ts`, `apps/server/src/chat/gate-runtime.ts` |
 | AES-256-GCM for integration secrets | `apps/server/src/lib/crypto.ts`, `apps/server/src/db/repositories/integrations.ts` |
 | Terminal content not logged; header redaction; security headers | `apps/server/src/terminal/ws.ts`, `apps/server/src/app.ts` |
+| Access records kept 6 months: what is recorded, batching, hourly purge | `apps/server/src/access-log/recorder.ts`, `apps/server/src/db/repositories/access-logs.ts`, `apps/server/src/ws/router.ts`, `apps/server/src/app.ts` |
 | AI credential read and used on the machine, never sent to the server; per-machine switch | `packages/machine-ops/src/ai-credentials.ts`, `packages/machine-ops/src/ai-usage*.ts`, `apps/agent/src/rpc/ai.ts`, `apps/server/src/ai/` |
 | `gh auth token` read | `apps/agent/src/rpc/secret.ts`, `apps/server/src/control/integrations.ts` |
 | Voice audio not written to disk | `apps/server/src/terminal/transcription.ts` |
