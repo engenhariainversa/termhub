@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { jiraProvider } from './jira.js';
 
+const dns = vi.hoisted(() => ({ lookup: vi.fn(async (_host: string, _opts?: unknown) => [{ address: '104.192.141.1', family: 4 }]) }));
+vi.mock('node:dns/promises', () => ({ lookup: dns.lookup, default: { lookup: dns.lookup } }));
+
 const issue = (k: string) => ({ id: `id-${k}`, key: k, fields: { summary: 's', description: null, updated: 'x', status: { name: 'To Do', statusCategory: { key: 'new' } } } });
 const res = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 const cfg = { baseUrl: 'https://acme.atlassian.net', email: 'a@b' };
@@ -29,5 +32,50 @@ describe('jira.getTicket', () => {
     const t = await jiraProvider.getTicket('t', cfg, { provider_id: 'id-P-3', key: 'P-3', scope: 'P' });
     expect(fetch.mock.calls[0][0]).toMatch(/^https:\/\/acme\.atlassian\.net\/rest\/api\/3\/issue\/id-P-3\?fields=summary,/);
     expect(t).toMatchObject({ sync_key: 'jira:P-3', key: 'P-3', state: 'Concluído', status: 'done' });
+  });
+});
+
+describe('jira requests (TER-578)', () => {
+  const ticket = { provider_id: 'id-P-1', key: 'P-1', scope: 'P' };
+
+  it('asks fetch not to follow redirects on its own', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(res(issue('P-1')));
+    vi.stubGlobal('fetch', fetch);
+    await jiraProvider.getTicket('t', cfg, ticket);
+    expect(fetch.mock.calls[0][1].redirect).toBe('manual');
+  });
+
+  it('follows a redirect on the same site', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: '/rest/api/3/issue/id-P-1?fields=summary' } }))
+      .mockResolvedValueOnce(res(issue('P-1')));
+    vi.stubGlobal('fetch', fetch);
+    await jiraProvider.getTicket('t', cfg, ticket);
+    expect(fetch.mock.calls[1][0]).toBe('https://acme.atlassian.net/rest/api/3/issue/id-P-1?fields=summary');
+  });
+
+  it('refuses a redirect to another host', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: 'http://db:5432/' } }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(jiraProvider.getTicket('t', cfg, ticket)).rejects.toThrow('redirecionamento para fora de acme.atlassian.net recusado');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('never echoes the answer body in an error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('internal secret page', { status: 500 })));
+    const r = await jiraProvider.testConnection('t', cfg);
+    expect(r).toEqual({ ok: false, error: 'Jira 500' });
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('<html>internal secret page</html>', { status: 200 })));
+    const r2 = await jiraProvider.testConnection('t', cfg);
+    expect(r2).toEqual({ ok: false, error: 'Jira: resposta não é JSON' });
+  });
+
+  it('checks the address again before each call: a name now resolving inside is refused', async () => {
+    dns.lookup.mockResolvedValueOnce([{ address: '172.18.0.4', family: 4 }]);
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    await expect(jiraProvider.getTicket('t', cfg, ticket)).rejects.toThrow('rede interna');
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
