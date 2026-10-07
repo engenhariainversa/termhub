@@ -101,11 +101,13 @@ Tickets apagados na origem também são apagados no termhub, na sincronização 
 ### 3.6 Contas de IA
 
 - **O que guardamos.** O nome que você dá à conta e a pasta de configuração dela na sua máquina. **Não guardamos tokens nem senhas das suas contas de IA.**
-- **Como consultamos o uso.** Para mostrar o consumo e os limites, o agente lê a credencial de login da ferramenta na sua máquina e a envia ao nosso servidor. O servidor a usa uma única vez para consultar o fornecedor e a descarta, mantendo em memória só os números de uso.
+- **Como consultamos o uso.** Para mostrar o consumo e os limites, o agente lê a credencial de login da ferramenta na sua máquina e consulta o fornecedor dali mesmo. **A credencial nunca sai da sua máquina**: nosso servidor recebe só os números de uso, que mantém em memória.
+  - Nas máquinas ligadas por SSH, o servidor executa na sua máquina um comando que lê a credencial e consulta o fornecedor ali; o servidor recebe só a resposta do fornecedor, sem a credencial.
   - Os fornecedores consultados são a Anthropic, a OpenAI/ChatGPT e o Google.
+  - **Você pode desligar a consulta em cada máquina** (Máquinas › a máquina › "Consultar o uso das contas de IA"). Desligada, o termhub não lê a credencial e as contas dessa máquina ficam sem as barras de uso.
   - [Ver a nota.]
 
-> Nota: recomendação técnica: mover essa consulta para o agente, para que a credencial nunca saia da máquina. Ver o item A-1.
+> Nota: o parecer sobre o item A-1 ainda está pendente.
 
 - **Troca de conta.** Quando a troca automática de conta está ligada, o agente pode fazer a sessão continuar em outra conta Claude sua, na mesma máquina.
 
@@ -185,7 +187,7 @@ Compartilhamos dados só com quem nos ajuda a prestar o Serviço (operadores) ou
 | **Google (Firebase / Google Analytics)** | dados de navegação e de uso do app, identificadores do aparelho e, com o seu consentimento, o identificador de publicidade | métricas de uso e medição de anúncios | EUA |
 | **Expo**, e por meio dela **Apple** (APNs) e **Google** (FCM) | token do aparelho e texto das notificações | entregar notificações | EUA |
 | **Provedor de e-mail** [NOME] | seu e-mail e o conteúdo das mensagens: código de login, convites, avisos de aparelho | enviar e-mails do Serviço | [PAÍS] |
-| **Anthropic, OpenAI e Google** | credencial da sua conta de IA, na consulta de uso (seção 3.6) | mostrar consumo e limites | EUA |
+| **Anthropic, OpenAI e Google** | a credencial da sua conta de IA, enviada pela sua própria máquina direto ao fornecedor na consulta de uso; o termhub recebe só os números (seção 3.6) | mostrar consumo e limites | EUA |
 | **GitHub, Linear, Atlassian (Jira)** | o token que você informou e as consultas e atualizações que você pediu | integrações que você ligou | EUA / outros |
 | **Type to Access (77a.it)** | o endereço da sua cidade pública e o seu apelido | criar o link curto da cidade pública, quando você a publica | [PAÍS] |
 | **Intermediador de pagamentos** [NOME], quando os planos forem lançados | dados de cobrança | processar pagamentos | [PAÍS] |
