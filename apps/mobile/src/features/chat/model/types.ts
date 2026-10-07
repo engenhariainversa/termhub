@@ -15,6 +15,9 @@ export type ChatMessage = TChatMessage & {
   local?: 'sending' | 'failed';
   /** pt-BR, with `local: 'failed'`: why. */
   local_error?: string;
+  /** The list key of a row this device sent: its `local:` id, kept once the `202` renames it, so the
+   * row is not remounted (a flash) when it becomes the server's (TER-1001). */
+  row_key?: string;
 };
 export type ChatAction = TChatAction;
 export type ChatConversation = TChatConversation;

@@ -20,7 +20,7 @@ import { epicBranchName, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
 import { cleanupRuns, type CleanupDeps } from './cleanup.js';
-import { CI_CAP, CONFLICT_CAP } from './escalation-text.js';
+import { CI_CAP, CONFLICT_CAP, MERGE_PERSON_CARD } from './escalation-text.js';
 import { postAutomationLine } from './chat-line.js';
 import { claimEvent, publishEvent, recordEvent, settleEvent } from './events.js';
 import { defaultType, endRunsOfMergedCard, escalateDelivery } from './follower.js';
@@ -103,8 +103,9 @@ interface PullCtx {
   setup: ProjectSetupData;
   token: string;
   repo: string;
-  /** the PR's rows (one per card it names), all of automatic cards */
+  /** the PR's rows (one per card it cites) */
   rows: TaskPullRequest[];
+  /** the cards the merge acts on: the primary alone (TER-1004: a card the PR only cites is not part of it) */
   tasks: Task[];
   /** the card whose automatic run worked on the PR's head branch */
   primary: Task;
@@ -116,28 +117,34 @@ interface PullCtx {
 const now = (deps: MergeDeps) => deps.now?.() ?? new Date();
 const waitOn = (c: PullCtx, wait: MergeWait) => noteMergeWait(c.tasks.map((t) => t.id), wait, now(c.deps));
 
+/** A PR of an automatic card that termhub leaves to a person (TER-1004): it also cites a person's card that is not done. */
+interface HeldPull {
+  held: { primary: Task; people: Task[]; row: TaskPullRequest };
+}
+
 /**
- * Whether termhub may merge this PR at all, from its rows: every card it names is automatic, its head branch
- * is the branch an automatic run of one of them worked on (that card is the primary), and its base is that
- * card's epic branch or the project's base branch. A PR anyone else opened that only mentions a card, or one
- * into another branch, is ignored: no merge and no card. The epic PR, linked to its automatic epic alone, is
- * the one PR whose head may be an epic branch (`epicCandidate`). Null when it is not a candidate.
+ * Whether termhub may merge this PR at all, from its rows (one per card it cites). The PR is the automatic
+ * card whose run worked on its head branch (the primary); its base is that card's epic branch or the
+ * project's base branch. A PR anyone else opened that only cites a card, or one into another branch, is
+ * ignored: no merge and no card. The epic PR, linked to its automatic epic alone, is the one PR whose head
+ * may be an epic branch (`epicCandidate`). Null when it is not a candidate.
+ *
+ * The other cards the PR cites are references, not part of it (TER-1004): they are not moved to done or
+ * told of the merge. A person's card that is not done yet still holds the merge for a person (`held`); one
+ * already done, or a card that no longer exists, does not.
  */
 async function candidateOf(
   deps: MergeDeps,
   base: Omit<PullCtx, 'rows' | 'tasks' | 'primary' | 'epicBranch' | 'baseBranch'>,
   rows: TaskPullRequest[],
-): Promise<PullCtx | null> {
+): Promise<PullCtx | HeldPull | null> {
   const { repos } = deps;
   const row = rows[0];
   if (!row?.base_ref) return null;
-  const found = await Promise.all(rows.map((r) => repos.tasks.findById(r.task_id)));
-  // a PR that names a card a person works on is merged by a person
-  if (found.some((task) => !task || !task.auto)) return null;
-  const tasks = found as Task[];
+  const tasks = (await Promise.all(rows.map((r) => repos.tasks.findById(r.task_id)))).filter((t): t is Task => !!t);
   let primary: Task | undefined;
   for (const task of tasks) {
-    if ((await repos.automationRuns.branchesOfTask(task.id)).includes(row.head_ref)) {
+    if (task.auto && (await repos.automationRuns.branchesOfTask(task.id)).includes(row.head_ref)) {
       primary = task;
       break;
     }
@@ -150,8 +157,26 @@ async function candidateOf(
   if (row.base_ref !== baseBranch && row.base_ref !== epicBranch) return null;
   // a head named like the base or the epic branch is never a card's own branch
   if (row.head_ref === baseBranch || row.head_ref === epicBranch) return null;
-  return { ...base, rows, tasks, primary, epicBranch, baseBranch };
+  // a PR that cites a card a person still works on is merged by a person
+  const people = tasks.filter((t) => !t.auto && t.status !== 'done');
+  if (people.length > 0) return { held: { primary, people, row } };
+  return { ...base, rows, tasks: [primary], primary, epicBranch, baseBranch };
 }
+
+/**
+ * Tells why an automatic card's PR is not merged (TER-1004): the queue shows it on every pass, and once the
+ * PR is green the feed (with a push and a chat line) says it once per PR head.
+ */
+async function onHeld(deps: MergeDeps, projectId: string, { primary, people, row }: HeldPull['held']): Promise<void> {
+  const { repos } = deps;
+  noteMergeWait([primary.id], 'merge_person_card', now(deps));
+  if (row.ci_state !== 'passed') return;
+  if (await repos.automationEvents.findOnce(primary.id, 'escalated', { reason: MERGE_PERSON_CARD, pr: row.number, sha: row.head_sha })) return;
+  const cards = people.map((t) => t.ref).join(', ');
+  await escalateDelivery(repos, { project_id: projectId, task_id: primary.id }, MERGE_PERSON_CARD, deps.log ?? noopLog, { pr: row.number, url: row.url, sha: row.head_sha, cards });
+}
+
+const isHeld = (c: PullCtx | HeldPull | null): c is HeldPull => !!c && 'held' in c;
 
 /**
  * The epic PR (spec §10.2, D20): the epic's own branch, which its integrator run worked on, into the project's
@@ -216,6 +241,10 @@ export async function runMergeExecutor(deps: MergeDeps, projectId: string): Prom
     if (deps.lifecycle.draining) return;
     const c = await candidateOf(deps, { deps, project: owned, setup, ...access }, rows);
     if (!c) continue;
+    if (isHeld(c)) {
+      await onHeld(deps, projectId, c.held).catch((e: unknown) => log.warn({ projectId, pr: rows[0]!.number, code: codeOf(e) }, 'automation: held PR not reported'));
+      continue;
+    }
     try {
       await handlePull(c);
     } catch (e) {
@@ -669,7 +698,7 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
   const row = rows[0];
   if (!row || row.head_sha !== args.head_sha) return void (await close('HEAD_MOVED'));
   const c = await candidateOf(deps, { deps, project: owned, setup, ...access }, rows);
-  if (!c) return void (await close('NOT_CANDIDATE'));
+  if (!c || isHeld(c)) return void (await close('NOT_CANDIDATE'));
   // the approval was for this base: a PR retargeted since (say from the epic branch to the deploying base) is a new question
   if (row.base_ref !== args.base) return void (await close('BASE_CHANGED'));
 

@@ -28,7 +28,11 @@ vi.mock('../lib/data', () => {
     }),
   };
 });
-vi.mock('../components/MachineForm', () => ({ MachineForm: ({ open }: { open: boolean }) => (open ? <div>machine-form-marker</div> : null) }));
+vi.mock('../components/MachineForm', () => ({
+  MACHINE_FORM_TABS: ['general', 'agent', 'monitor', 'simulator'],
+  MachineForm: ({ open, machine, initialTab }: { open: boolean; machine?: { name: string } | null; initialTab?: string }) =>
+    open ? <div>machine-form-marker {machine?.name} {initialTab ?? 'general'}</div> : null,
+}));
 
 import { MachinesPage } from './MachinesPage';
 
@@ -72,9 +76,9 @@ describe('MachinesPage', () => {
 
   it('"+ máquina" opens the machine form', () => {
     mount();
-    expect(screen.queryByText('machine-form-marker')).not.toBeInTheDocument();
+    expect(screen.queryByText(/machine-form-marker/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '+ máquina' }));
-    expect(screen.getByText('machine-form-marker')).toBeInTheDocument();
+    expect(screen.getByText(/machine-form-marker/)).toBeInTheDocument();
   });
 
   it('deletes a machine after confirming', async () => {
@@ -91,5 +95,23 @@ describe('MachinesPage', () => {
     mount();
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Máquinas']);
     expect(screen.getByRole('button', { name: '+ máquina' }).closest('header')).not.toBeNull();
+  });
+
+  it('opens a machine\'s form on the tab a direct link asks for', () => {
+    render(
+      <MemoryRouter initialEntries={['/machines?edit=m2&tab=agent']}>
+        <MachinesPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('machine-form-marker jarvis agent')).toBeInTheDocument();
+  });
+
+  it('falls back to Geral when the link names an unknown tab', () => {
+    render(
+      <MemoryRouter initialEntries={['/machines?edit=m1&tab=nope']}>
+        <MachinesPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('machine-form-marker mac general')).toBeInTheDocument();
   });
 });

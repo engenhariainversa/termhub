@@ -482,9 +482,13 @@ export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQues
     if ((await cardNow(repos, q)) === 'closed') return 'closed';
     return handOver(PERMISSION_NEEDED);
   }
-  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'question_answered', payload: { via: 'permission', tab_id: q.tab_id, question_id: q.id } }).catch(() =>
-    log.warn({ runId: run.id, tabQuestionId: q.id }, 'automation: question_answered not recorded'),
+  // The feed shows what was approved alone (TER-993): the tool and why. Never the command — the payload
+  // carries metadata only (CLAUDE.md: terminal content is never logged). `reason` is 'policy' (an allow
+  // rule), or 'mcp' for termhub's own read/add tools, so the line can say which.
+  const reason = AUTOMATION_MCP_TOOLS.includes(tool) ? 'mcp' : 'policy';
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'permission_auto_approved', payload: { tab_id: q.tab_id, question_id: q.id, tool, reason } }).catch(() =>
+    log.warn({ runId: run.id, tabQuestionId: q.id }, 'automation: permission_auto_approved not recorded'),
   );
-  log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission allowed');
+  log.info({ runId: run.id, tabQuestionId: q.id, tool }, 'automation: permission allowed');
   return 'allowed';
 }

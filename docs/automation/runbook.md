@@ -41,6 +41,17 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
   reading and adding cards (`AUTOMATION_MCP_TOOLS`) are answered yes by the server, and the ones that reach
   past the card (`AUTOMATION_MCP_DENIED_TOOLS`: automation policy, other tabs, agents, machines, deleting
   cards…) never are.
+- Hard-lock PreToolUse hook (TER-993): every automatic run also carries a PreToolUse hook,
+  `~/.termhub/bin/termhub-guard` (bundled in the agent, 0.19.0+, installed next to the monitor hook),
+  registered through `--settings <the run's ~/.termhub/tabs/<tab>/guard.json>` on its launch line. It
+  answers Claude Code's PreToolUse with a `deny`, whatever the mode, for: a `git push` that is not the
+  run's own branch; `gh pr merge`/`workflow`/`release`/`api`/`secret`; `npm`/`pnpm`/`yarn publish`,
+  `npm run release*`, `eas`, `fastlane`; `docker`, `ssh`/`scp`/`rsync`/`kubectl`, `psql`; `rm -r`/`-rf`
+  outside the worktree (or `/tmp`); and reading or editing `.env`, `.npmrc`, `.netrc`, git credentials,
+  `~/.ssh`, `~/.termhub` config/token and `.credentials.json`, or any write outside the worktree. It is
+  the second wall after `--disallowedTools`, and it is what closes auto mode's gap: the classifier can
+  no longer approve a push to another ref. Only automatic tabs get it (manual and `start_agent` tabs
+  have no worktree, so no `--settings`). Each `deny` is listed in the feed as `guard_blocked`.
 - Permissions of automatic tabs: the mode above plus an allow list; no bypass flag. A fixed deny list
   (force/delete/mirror pushes, `.env` reads, `git -c`, release commands, ...) sits in
   `apps/server/src/control/automation-tools.ts` (`AUTOMATION_DENIED_TOOLS`) and beats any project allow
@@ -180,6 +191,11 @@ escalations. The daily summary is posted at `summary_hour` and lists what merged
 budgets are set, what it cost. With no review column, this plus the PRs is the review: read the summary,
 open any PR you want a second look at.
 
+A PR belongs to the automatic card whose run worked on its head branch. Other cards it cites in its title
+or body are only references (TER-1004): the merge does not move them to done, and deploys and releases are
+reported on the PR's own card. A cited manual card that is not done yet holds the merge for a person
+(`merge_person_card` in the queue and, once the PR is green, an escalation once per head); a done one does not.
+
 ## 8. Approving a merge above the level
 
 When a PR needs more than the project's level (for example a `release_paths` change at `deploy`, or any PR
@@ -206,6 +222,7 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 | `reported_blocked` | The agent said it is stuck | Read its report, unblock or take over |
 | `ci_cap` | CI still red after the fix attempts | Open the PR, fix it, push; the merge follows when green |
 | `conflict_cap` | Conflict after the fix attempts | Resolve it; the merge follows when CI is green |
+| `merge_person_card` | The PR is green but also cites a manual card that is not done (refs in `cards`) | Merge it by hand, or remove the citation from the PR text (or finish that card); the next pass merges it |
 | `deploy_failed` | The deploy failed after a merge; the project is paused | Section 10, then "Retomar automático" |
 | `deploy_failed_not_paused` | Same, and the pause could not be applied | Pause the project yourself first, then section 10 |
 | `release_failed` | A release workflow failed after a merge; nothing is paused | Section 10 |

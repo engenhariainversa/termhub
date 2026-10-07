@@ -181,5 +181,6 @@
   "Arquivos": "Files",
   "Arquivos do projeto": "Project files",
   "Ver detalhes": "Show details",
-  "↓ novas mensagens": "↓ new messages"
+  "↓ {{count}} novas mensagens_one": "↓ {{count}} new message",
+  "↓ {{count}} novas mensagens_other": "↓ {{count}} new messages"
 }

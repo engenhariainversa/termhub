@@ -4,5 +4,7 @@
   "{{count}} pendentes_one": "{{count}} pendente",
   "{{count}} pendentes_other": "{{count}} pendentes",
   "{{count}} confirmações pendentes_one": "{{count}} confirmação pendente",
-  "{{count}} confirmações pendentes_other": "{{count}} confirmações pendentes"
+  "{{count}} confirmações pendentes_other": "{{count}} confirmações pendentes",
+  "↓ {{count}} novas mensagens_one": "↓ {{count}} nova mensagem",
+  "↓ {{count}} novas mensagens_other": "↓ {{count}} novas mensagens"
 }

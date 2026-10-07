@@ -7,6 +7,8 @@ import {
   CODEX_HOOKS_REL,
   HOOK_ENV_REL,
   HOOK_MARK,
+  GUARD_SCRIPT,
+  GUARD_SCRIPT_REL,
   HOOK_SCRIPT,
   HOOK_SCRIPT_REL,
   claudeConfigDirs,
@@ -186,6 +188,11 @@ export async function install(params: RpcParams<'hooks.install'>, home = os.home
     await writeAtomic(path.join(home, HOOK_ENV_REL), hookEnvFile(params.hooks_url, params.token), 0o600);
     current = `~/${HOOK_SCRIPT_REL}`;
     await writeAtomic(scriptPath, HOOK_SCRIPT, 0o755);
+    // The hard-lock PreToolUse hook for automatic runs (TER-993). Written next to the monitor hook; a
+    // run's launch line points `--settings` at it. Harmless on a machine that never runs automatic work.
+    current = `~/${GUARD_SCRIPT_REL}`;
+    await writeAtomic(path.join(home, GUARD_SCRIPT_REL), GUARD_SCRIPT, 0o755);
+    current = `~/${HOOK_SCRIPT_REL}`;
     for (const { target, body } of merged) {
       current = target.shown;
       await mkdir(target.dir, { recursive: true });
@@ -236,6 +243,10 @@ export async function heal(home = os.homedir()): Promise<string[]> {
   // only when it really differs (same atomic 0o755 write `install` uses; comparing the content, not
   // a version, is what keeps every later change to the script reaching machines by itself).
   if (script !== HOOK_SCRIPT) await writeAtomic(scriptPath, HOOK_SCRIPT, 0o755);
+  // The guard script (TER-993) ships with the agent too: bring it up to what this agent carries, so a
+  // change to it reaches machines on the next reconnect, like the monitor hook above.
+  const guardPath = path.join(home, GUARD_SCRIPT_REL);
+  if ((await readOrEmpty(guardPath)) !== GUARD_SCRIPT) await writeAtomic(guardPath, GUARD_SCRIPT, 0o755);
 
   // One failing repair must not take the others down: a settings.json on a read-only mount, or one
   // owned by somebody else, would otherwise reject before Cursor and Codex are even looked at, and

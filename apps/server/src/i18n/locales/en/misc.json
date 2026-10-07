@@ -63,6 +63,8 @@
   "precisa de build nas lojas": "needs an app store build",
   "Esperando os checks obrigatórios do PR": "Waiting for the PR's required checks",
   "Branch base vermelha": "Base branch is red",
+  "O PR cita um card manual que não está em Feito; uma pessoa mescla": "The PR cites a manual card that is not Done; a person merges it",
+  "O PR está verde, mas cita um card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão ou tire a citação do PR.": "The PR is green, but it cites a manual card that is not Done yet, so automation does not merge it. Merge it by hand or remove the citation from the PR.",
   "Esperando a CI e a entrega da branch base": "Waiting for the base branch's CI and delivery",
   "Atualizando o PR com a branch base": "Updating the PR with the base branch",
   "Integração do GitHub sem permissão de escrita": "The GitHub integration has no write permission",
