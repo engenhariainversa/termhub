@@ -7,6 +7,20 @@ import { GIT_BRANCH_RE } from '@termhub/agent-protocol';
  */
 
 /**
+ * termhub MCP tools an automatic tab never calls (TER-993), from the person's own `termhub` MCP when their
+ * Claude config loads it: what would let a run reach past its card — change what automation may do, drive or
+ * close other tabs, start agents, answer the person's cards, touch machines, repositories, integrations or
+ * external tickets, delete cards. Not on the tab's line (a resume line is typed whole and has no room for
+ * them): the server never answers yes to them (`permissionAllowed`).
+ */
+export const AUTOMATION_MCP_DENIED_TOOLS: readonly string[] = [
+  'set_automation_policy', 'resume_automation', 'resume_automation_run', 'escalate_automation_run', 'set_machine_automation',
+  'start_agent', 'open_tab', 'close_tab', 'send_input', 'send_key', 'run_command', 'answer_tab_question',
+  'link_project_machine', 'unlink_project_machine', 'set_project_machine_cwd', 'set_project_repo',
+  'create_integration', 'push_ticket_status', 'delete_task',
+].map((t) => `mcp__termhub__${t}`);
+
+/**
  * What an automatic tab never does, whatever its project allows (TER-968, spec R5): fixed here, not
  * editable per project, passed as `--disallowedTools` on every automatic line and applied again by the
  * server's `permissionAllowed`, where it beats any `allowed_tools` entry.
@@ -162,6 +176,19 @@ export const AUTOMATION_READ_TOOLS: readonly string[] = [
   'Bash(git branch --show-current)',
   'Bash(git remote -v)',
 ];
+
+/**
+ * termhub's own MCP tools an automatic tab may call (TER-993), from the person's `termhub` MCP when their
+ * Claude config loads it: reading and adding cards. The server answers yes to their permission requests
+ * (`permissionAllowed`); they are not on the tab's line, which has no room left. The tab MCP's tools
+ * (`termhub_tab`) come pre-allowed with its `--mcp-config`. Exact names only: `mcp__termhub__*` would cover
+ * `AUTOMATION_MCP_DENIED_TOOLS`. Moving or editing a card (`move_task`, `update_task`) is left to the mode.
+ */
+export const AUTOMATION_MCP_TOOLS: readonly string[] = [
+  'find', 'search_memory', 'get_automation_policy', 'get_project_setup', 'get_ticket', 'list_tasks', 'list_tickets', 'list_projects',
+  'list_project_groups', 'list_machines', 'list_tabs', 'list_automation_events', 'list_automation_queue', 'read_attachment',
+  'create_task', 'add_subtasks', 'record_lesson',
+].map((t) => `mcp__termhub__${t}`);
 
 /**
  * The pushes an automatic run may send without asking (TER-968, spec R5): exact rules naming its own

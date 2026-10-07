@@ -109,7 +109,7 @@ describe('notifyAgentExited (TER-643)', () => {
     await notifyAgentExited(r, log(), tab(), machine, AT);
     expect(open).toHaveBeenCalledTimes(1);
     const payload = (open.mock.calls[0] as unknown as [{ payload: { text: string } }])[0].payload;
-    expect(payload.text).toContain(`--permission-mode acceptEdits --allowedTools ${READ} 'Bash(make:*)'`);
+    expect(payload.text).toContain(`--permission-mode auto --allowedTools ${READ} 'Bash(make:*)'`);
     expect(payload.text).toContain(`--resume ${SID} -- '${EXITED_RESUME_PROMPT}'`);
   });
 
