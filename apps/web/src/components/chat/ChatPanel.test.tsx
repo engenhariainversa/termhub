@@ -15,6 +15,7 @@ const setHostMock = vi.fn();
 const machinesMock = vi.fn();
 const accountsMock = vi.fn();
 const resetMock = vi.fn();
+const deleteChatMock = vi.fn();
 const revokeMock = vi.fn();
 const answerMock = vi.fn();
 const screenMock = vi.fn();
@@ -54,6 +55,7 @@ vi.mock('../../lib/api', () => {
       decideChatActions: (...a: unknown[]) => decideManyMock(...a),
       setChatHost: (...a: unknown[]) => setHostMock(...a),
       resetChat: (...a: unknown[]) => resetMock(...a),
+      deleteChat: (...a: unknown[]) => deleteChatMock(...a),
       compactChat: (...a: unknown[]) => compactMock(...a),
       revokeChatGrant: (...a: unknown[]) => revokeMock(...a),
       answerTabQuestion: (...a: unknown[]) => answerMock(...a),
@@ -276,6 +278,30 @@ it('Nova conversa asks first, resets, and swaps in the empty conversation', asyn
   expect(resetMock).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Começar de novo' }));
   await waitFor(() => expect(resetMock).toHaveBeenCalledWith('p1'));
+  await waitFor(() => expect(screen.queryByText('antigo')).toBeNull());
+});
+
+it('Apagar conversa asks first, deletes, and swaps in the empty conversation (TER-743)', async () => {
+  chatMock
+    .mockResolvedValueOnce({
+      conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
+      messages: [{ id: 'm1', conversation_id: 'c_p1', role: 'user', text: 'antigo', error_code: null, created_at: '' }],
+      actions: [],
+      host: READY,
+    })
+    .mockResolvedValue({ conversation: { id: 'c_new', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY });
+  deleteChatMock.mockResolvedValue({ conversation: { id: 'c_new', project_id: 'p1' } });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await screen.findByText('antigo');
+  fireEvent.click(screen.getByRole('button', { name: 'Apagar conversa' }));
+  expect(deleteChatMock).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Apagar' }));
+  await waitFor(() => expect(deleteChatMock).toHaveBeenCalledWith('p1'));
+  expect(resetMock).not.toHaveBeenCalled();
   await waitFor(() => expect(screen.queryByText('antigo')).toBeNull());
 });
 
