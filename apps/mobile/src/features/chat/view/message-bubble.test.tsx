@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react-native';
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ router: { push: (...a: unknown[]) => mockPush(...a) } }));
 import type { ChatMessage } from '../model/types';
+import { codeRules } from './code-block';
 import { MessageBubble } from './message-bubble';
 
 const answer = (over: Partial<ChatMessage>): ChatMessage =>
@@ -41,6 +42,11 @@ describe('MessageBubble file paths', () => {
     await render(<MessageBubble message={answer({ text: 'Escrevi /tmp/x.md' })} streamed={undefined} started fileContext={{ tabId: 't1' }} />);
     lastMarkdown().onLinkPress?.('termhub-file:%2Ftmp%2Fx.md');
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/file-preview', params: { path: '/tmp/x.md', tab_id: 't1' } });
+  });
+
+  it('renders code blocks with the copy button, in the chat and in a tab session alike (TER-994)', async () => {
+    await render(<MessageBubble message={answer({ text: '```sh\nls\n```' })} streamed={undefined} started />);
+    expect(lastMarkdown()).toMatchObject({ rules: codeRules });
   });
 
   it('leaves paths as text without a context', async () => {

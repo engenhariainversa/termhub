@@ -10,6 +10,7 @@ import { failureSentence } from '../model/copy';
 import { limitSentence, swapSentence } from '../model/notice';
 import { splitSettled } from '../model/markdown-split';
 import type { ChatMessage } from '../model/types';
+import { codeRules } from './code-block';
 import { markdownStyle } from './markdown-style';
 import { MessageAttachments } from './message-attachments';
 import { ReplyQuote } from './reply-quote';
@@ -37,7 +38,7 @@ type OnLink = ((url: string) => boolean) | undefined;
 /** The part of a streaming answer that no later delta can change: parsed once per distinct text. */
 const SettledMarkdown = memo(function SettledMarkdown({ text, scheme, onLink }: { text: string; scheme: SchemeName; onLink: OnLink }) {
   return (
-    <Markdown style={markdownStyle(scheme)} onLinkPress={onLink}>
+    <Markdown style={markdownStyle(scheme)} rules={codeRules} onLinkPress={onLink}>
       {text}
     </Markdown>
   );
@@ -97,7 +98,7 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
       {message.notice?.kind === 'account_swap' ? <AppText variant="muted">{swapSentence(message.notice)}</AppText> : null}
       {settled ? <SettledMarkdown text={settled} scheme={scheme} onLink={linking ? onLink : undefined} /> : null}
       {tail ? (
-        <Markdown style={markdownStyle(scheme)} onLinkPress={linking ? onLink : undefined}>
+        <Markdown style={markdownStyle(scheme)} rules={codeRules} onLinkPress={linking ? onLink : undefined}>
           {tail}
         </Markdown>
       ) : null}

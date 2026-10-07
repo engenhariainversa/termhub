@@ -181,5 +181,11 @@
   "Arquivos": "Files",
   "Arquivos do projeto": "Project files",
   "Ver detalhes": "Show details",
-  "↓ novas mensagens": "↓ new messages"
+  "↓ novas mensagens": "↓ new messages",
+  "Copiar": "Copy",
+  "Copiar código": "Copy code",
+  "Copiado ✓": "Copied ✓",
+  "Código copiado": "Code copied",
+  "Não foi possível copiar": "Could not copy",
+  "Não foi possível copiar o código": "Could not copy the code"
 }

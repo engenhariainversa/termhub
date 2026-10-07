@@ -1,6 +1,6 @@
 {
   "name": "@termhub/mobile",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "license": "MIT",
   "private": true,
   "main": "index.ts",
@@ -31,6 +31,7 @@
     "expo-application": "~57.0.3",
     "expo-audio": "~57.0.5",
     "expo-build-properties": "~57.0.22",
+    "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.19",
     "expo-dev-client": "~57.0.19",
     "expo-device": "~57.0.2",
