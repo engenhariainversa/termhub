@@ -164,10 +164,13 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 
 ### Credentials that belong to the machine
 
-- **AI subscription logins** (Claude, ChatGPT/Codex, Gemini):
-  - To show usage limits, the server asks the agent to read the CLI's login file on demand and uses it once to query the provider's usage endpoint.
-  - The credential is **not stored** on the server; only the usage numbers are cached, in memory.
-  - It does travel to the server over the encrypted agent connection for that query. If that is not acceptable, don't add AI accounts in termhub; everything else keeps working.
+- **AI subscription logins** (Claude, ChatGPT/Codex, Gemini, Antigravity): the credential is read **and used** on the machine that holds it, and never travels to the server.
+  - **Agent machines** (agent 0.20.0 or later): to show usage limits, the agent reads the CLI's login on demand, queries the provider's usage endpoint itself and returns only the usage numbers.
+  - **SSH machines:** the server runs a script on the machine that reads the login and calls the provider with `curl` there; the token is passed to `curl` on stdin, so it is neither printed nor on a command line. The server receives only the provider's response. The machine needs `curl`.
+  - **The local machine** (the server's own host): the server process does the same in-process, since the credential is already on that host.
+  - **Older agents** do not fall back to sending the credential: the account card says to update the agent, and shows no usage until then.
+  - Nothing is stored: only the usage numbers are cached, in memory.
+  - **The query can be turned off per machine** (Máquinas › the machine, "Consultar o uso das contas de IA", on by default). When off, termhub does not read the credential at all and that machine's accounts show no usage bars; everything else keeps working.
 - **The chat's Claude login** never leaves the machine: the CLI runs there.
 - **`gh auth token`** is read only when you confirm a "create GitHub integration" card. It is then stored encrypted, like any integration token.
 
@@ -194,7 +197,7 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 3. **Exempt those hosts from TLS inspection.**
 4. **No explicit proxy on the agent's path** (not supported yet): direct egress, or a transparent proxy.
 5. **Machine prerequisites:** macOS or Linux, Node.js 20+, tmux, and a user account; on Linux, also `make`, a C++ compiler and `python3` (`build-essential python3` on apt, `"Development Tools" python3` on dnf, `base-devel python` on pacman). No root, apart from installing those packages with your package manager.
-6. Optional: the hosts of the AI CLIs your users run, and your package mirrors for tmux and the build tools.
+6. Optional: the hosts of the AI CLIs your users run (the usage bars query `api.anthropic.com`, `chatgpt.com` and `cloudcode-pa.googleapis.com` from the machine), and your package mirrors for tmux and the build tools.
 7. **Test from the machine:**
    ```bash
    npm i -g @termhub/agent                # reaches registry.npmjs.org
@@ -245,8 +248,8 @@ Paths are relative to the repository root.
 | Chat confirmation cards and grants | `apps/server/src/chat/gate.ts`, `apps/server/src/chat/gate-runtime.ts` |
 | AES-256-GCM for integration secrets | `apps/server/src/lib/crypto.ts`, `apps/server/src/db/repositories/integrations.ts` |
 | Terminal content not logged; header redaction; security headers | `apps/server/src/terminal/ws.ts`, `apps/server/src/app.ts` |
-| AI credential read on demand, not stored | `packages/machine-ops/src/ai-credentials.ts`, `apps/agent/src/rpc/ai.ts`, `apps/server/src/ai/` |
+| AI credential read and used on the machine, never sent to the server; per-machine switch | `packages/machine-ops/src/ai-credentials.ts`, `packages/machine-ops/src/ai-usage*.ts`, `apps/agent/src/rpc/ai.ts`, `apps/server/src/ai/` |
 | `gh auth token` read | `apps/agent/src/rpc/secret.ts`, `apps/server/src/control/integrations.ts` |
 | Voice audio not written to disk | `apps/server/src/terminal/transcription.ts` |
 | npm provenance | `.github/workflows/publish-agent.yml` |
-| Server outbound calls (self-hosting): `registry.npmjs.org`, `oauth2.googleapis.com`, `www.googleapis.com`, `api.github.com`, `api.linear.app`, Jira base URL, `api.anthropic.com`, `chatgpt.com`, `cloudcode-pa.googleapis.com`, `exp.host`, SMTP, Cloudflare API | `apps/server/src/agent/latest-version.ts`, `apps/server/src/auth/google.ts`, `apps/server/src/integrations/`, `apps/server/src/ai/`, `apps/server/src/mobile/push.ts`, `apps/server/src/email/mailer.ts`, `apps/server/src/cloudflare/access.ts` |
+| Server outbound calls (self-hosting): `registry.npmjs.org`, `oauth2.googleapis.com`, `www.googleapis.com`, `api.github.com`, `api.linear.app`, Jira base URL, `api.anthropic.com`, `chatgpt.com`, `cloudcode-pa.googleapis.com` (AI usage, only for accounts on the server's own host), `exp.host`, SMTP, Cloudflare API | `apps/server/src/agent/latest-version.ts`, `apps/server/src/auth/google.ts`, `apps/server/src/integrations/`, `packages/machine-ops/src/ai-usage*.ts`, `apps/server/src/mobile/push.ts`, `apps/server/src/email/mailer.ts`, `apps/server/src/cloudflare/access.ts` |
