@@ -75,6 +75,9 @@ export const rpcErrorSchema = z.object({
 });
 export type RpcError = z.infer<typeof rpcErrorSchema>;
 
+/** Our hook entries in one config file (`HookEntriesState` in @termhub/machine-ops). */
+const hookEntriesState = z.enum(['missing', 'outdated', 'current', 'unreadable']);
+
 const DEFAULT_TIMEOUT = 8_000;
 const def = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(params: P, result: R, timeoutMs = DEFAULT_TIMEOUT) => ({ params, result, timeoutMs });
 
@@ -275,6 +278,20 @@ export const RPC = {
     15_000,
   ),
   'hooks.uninstall': def(z.object({ claude_dirs: z.array(machinePath).max(16).optional() }), z.object({ removed: z.boolean() }), 15_000),
+  /**
+   * What the monitor hooks look like here (`hooksStatus` in @termhub/machine-ops, TER-1023): states only,
+   * never a file's content or the token. `claude_dirs` as in `hooks.install`. Since agent 0.20.0.
+   */
+  'hooks.status': def(
+    z.object({ claude_dirs: z.array(machinePath).max(16).optional() }),
+    z.object({
+      script: z.object({ installed: z.boolean(), version: z.string().max(64).nullable(), expected_version: z.string().max(64), outdated: z.boolean() }),
+      claude: z.object({ present: z.boolean(), state: hookEntriesState, dirs: z.array(z.object({ dir: z.string().max(4096), state: hookEntriesState })).max(64) }),
+      codex: z.object({ present: z.boolean(), state: hookEntriesState, notify: z.boolean(), trusted: z.enum(['all', 'some', 'none']).nullable() }),
+      cursor: z.object({ present: z.boolean(), state: hookEntriesState }),
+    }),
+    15_000,
+  ),
   /** Installs `version` of @termhub/agent with npm; when the agent runs as a service it then exits so the service relaunches the new code (since agent 0.2.1). */
   'agent.update': def(
     z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/) }),

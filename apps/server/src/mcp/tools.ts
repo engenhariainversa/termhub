@@ -26,6 +26,7 @@ import { answerTabQuestionTool, listTabQuestions, recordDecision, searchMemory, 
 import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } from '../control/integrations.js';
 import { recordLesson } from '../control/lessons.js';
 import { recapPendingCards } from '../control/pending.js';
+import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
@@ -311,6 +312,23 @@ export const TOOLS: ToolDef[] = [
     strict: true,
     input: { machine_id: id, accept: z.boolean() },
     run: (ctx, a) => setMachineAutomation(ctx, a as { machine_id: string; accept: boolean }),
+  },
+  {
+    name: 'get_machine_hooks',
+    description:
+      "Read the termhub monitor hooks on a machine — what makes the tabs' Claude Code, Codex and Cursor report their state and send their questions and approvals to the chat. Per CLI (claude, codex, cursor): present (the CLI's config dir is there), installed, outdated (an install would change something) and state (missing, outdated, current, unreadable); claude lists each config dir; codex says whether our notify line is there and trusted (all, some or none: Codex runs the hooks only after the person trusts them in Codex itself). script has the forwarding script's version and whether it is outdated. Reads only; never returns a file's content or a token. An agent older than 0.20.0 answers AGENT_OUTDATED with the version to update to.",
+    scope: 'read', resource: 'machines', action: 'read',
+    input: { machine_id: id },
+    run: (ctx, a) => getMachineHooks(ctx, a as { machine_id: string }),
+  },
+  {
+    name: 'install_machine_hooks',
+    description:
+      "Install or update the termhub monitor hooks on a machine through its agent, as the Install button of the machine screen does: the forwarding script with a fresh token, and our entries in each Claude config dir, Codex (hooks.json and notify) and the Cursor CLI that are on the machine; the person's own settings and hooks are kept. Use it to set up a machine instead of asking the person for a command. tools (claude, codex, cursor) names the CLIs the person expects hooked: the call refuses, changing nothing, when one of them is not on the machine; the install always covers every CLI found there. It changes config files on the machine, so it always asks the person first. Answers what changed per CLI (before → after) and the new state, as get_machine_hooks. Codex then asks the person to trust the hooks the next time it opens. An agent older than 0.20.0 answers AGENT_OUTDATED with the version to update to.",
+    scope: 'terminals', resource: 'machines', action: 'update',
+    strict: true,
+    input: { machine_id: id, tools: z.array(z.enum(HOOK_TOOLS)).min(1).max(3).optional() },
+    run: (ctx, a) => installMachineHooks(ctx, a as { machine_id: string; tools?: HookTool[] }),
   },
   {
     name: 'report_card',
