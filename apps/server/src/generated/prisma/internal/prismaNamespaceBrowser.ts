@@ -103,10 +103,12 @@ export const ModelName = {
   Device: 'Device',
   DeviceToken: 'DeviceToken',
   DeviceChallenge: 'DeviceChallenge',
+  AccessLog: 'AccessLog',
   DeviceEvent: 'DeviceEvent',
   PushTicket: 'PushTicket',
   UserNotification: 'UserNotification',
   AutomationSummary: 'AutomationSummary',
+  ViewAsAudit: 'ViewAsAudit',
   SecurityEvent: 'SecurityEvent'
 } as const
 
@@ -1004,6 +1006,20 @@ export const DeviceChallengeScalarFieldEnum = {
 export type DeviceChallengeScalarFieldEnum = (typeof DeviceChallengeScalarFieldEnum)[keyof typeof DeviceChallengeScalarFieldEnum]
 
 
+export const AccessLogScalarFieldEnum = {
+  id: 'id',
+  createdAt: 'createdAt',
+  ip: 'ip',
+  userId: 'userId',
+  kind: 'kind',
+  method: 'method',
+  route: 'route',
+  status: 'status'
+} as const
+
+export type AccessLogScalarFieldEnum = (typeof AccessLogScalarFieldEnum)[keyof typeof AccessLogScalarFieldEnum]
+
+
 export const DeviceEventScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -1055,6 +1071,19 @@ export const AutomationSummaryScalarFieldEnum = {
 } as const
 
 export type AutomationSummaryScalarFieldEnum = (typeof AutomationSummaryScalarFieldEnum)[keyof typeof AutomationSummaryScalarFieldEnum]
+
+
+export const ViewAsAuditScalarFieldEnum = {
+  id: 'id',
+  adminId: 'adminId',
+  scope: 'scope',
+  targetUserId: 'targetUserId',
+  ip: 'ip',
+  startedAt: 'startedAt',
+  endedAt: 'endedAt'
+} as const
+
+export type ViewAsAuditScalarFieldEnum = (typeof ViewAsAuditScalarFieldEnum)[keyof typeof ViewAsAuditScalarFieldEnum]
 
 
 export const SecurityEventScalarFieldEnum = {

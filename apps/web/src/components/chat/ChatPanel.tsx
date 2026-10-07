@@ -837,7 +837,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     stick.current = false;
   }, []);
 
-  const [confirmReset, setConfirmReset] = useState(false);
+  /** Which confirmation is open: "Nova conversa" (archive) or "Apagar conversa" (TER-743, delete for good). */
+  const [confirmReset, setConfirmReset] = useState<'reset' | 'delete' | null>(null);
   const [resetting, setResetting] = useState(false);
   /** Whether an answer is being written right now — the only time a reset is refused (409): any row the
    *  thread lists, empty and started. With injected and queued messages the open row is not always the
@@ -845,13 +846,15 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const answering = sending || messages.some((m) => m.role === 'assistant' && !m.text && !m.error_code && fold.get(m.id)?.started === true);
 
   /** "Nova conversa": archives the current conversation (its transcript is kept, just off this screen)
-   *  and swaps in the fresh one `load()` brings back. */
-  const reset = async () => {
+   *  and swaps in the fresh one `load()` brings back. "Apagar conversa" (TER-743) does the same, but the
+   *  server deletes the old conversation for good, with what the memory indexed from it. */
+  const reset = async (mode: 'reset' | 'delete') => {
     setResetting(true);
     setError(null);
     try {
-      await api.resetChat(projectId);
-      setConfirmReset(false);
+      if (mode === 'delete') await api.deleteChat(projectId);
+      else await api.resetChat(projectId);
+      setConfirmReset(null);
       setActions([]);
       setQueuedNotes({});
       setGrants([]);
@@ -866,7 +869,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setCompactNote(null);
       await load();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível começar uma nova conversa'));
+      setError(e instanceof ApiError ? e.message : mode === 'delete' ? i18n.t('Não foi possível apagar a conversa') : i18n.t('Não foi possível começar uma nova conversa'));
     } finally {
       setResetting(false);
     }
@@ -944,8 +947,11 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
             {activeGrantsLabel(activeGrantCount)}
           </Link>
         )}
-        <button type="button" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50" disabled={answering || resetting || compacting || messages.length === 0} onClick={() => setConfirmReset(true)}>
+        <button type="button" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50" disabled={answering || resetting || compacting || messages.length === 0} onClick={() => setConfirmReset('reset')}>
           {t('Nova conversa')}
+        </button>
+        <button type="button" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50" disabled={answering || resetting || compacting || messages.length === 0} onClick={() => setConfirmReset('delete')}>
+          {t('Apagar conversa')}
         </button>
         {subagentsOpen && (
           <div
@@ -960,12 +966,21 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         )}
       </div>
       <ConfirmDialog
-        open={confirmReset}
+        open={confirmReset === 'reset'}
         title={t('Nova conversa')}
         message={t('O contexto atual desta conversa será descartado. As mensagens saem da tela e o concierge começa do zero.')}
         confirmLabel={t('Começar de novo')}
-        onCancel={() => setConfirmReset(false)}
-        onConfirm={() => void reset()}
+        onCancel={() => setConfirmReset(null)}
+        onConfirm={() => void reset('reset')}
+      />
+      <ConfirmDialog
+        open={confirmReset === 'delete'}
+        title={t('Apagar conversa')}
+        message={t('As mensagens, os cards e os anexos desta conversa serão apagados de vez, junto com o que a memória guardou deles. Não dá para desfazer.')}
+        confirmLabel={t('Apagar')}
+        danger
+        onCancel={() => setConfirmReset(null)}
+        onConfirm={() => void reset('delete')}
       />
       {/* Where this conversation runs, above the thread, before anything is typed — and, when it cannot
           run, the one thing to do about it. Presentational: every decision it renders is decided here.

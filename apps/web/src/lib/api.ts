@@ -296,6 +296,8 @@ export const api = {
    *  fresh one. 409 CHAT_BUSY while an answer is being written, 409 CHAT_ARCHIVED if the send that lost
    *  the race already ran against the conversation this call just archived. */
   resetChat: (projectId?: string | null) => request<{ conversation: ChatConversation }>('POST', '/chat/reset', projectId ? { project_id: projectId } : {}),
+  /** "Apagar conversa" (TER-743): like `resetChat`, but the old conversation is deleted for good. Same 409s. */
+  deleteChat: (projectId?: string | null) => request<{ conversation: ChatConversation }>('POST', '/chat/delete', projectId ? { project_id: projectId } : {}),
   /** "Compactar" (TER-315): runs `/compact` on the scope's session. 202 once it started; the end comes
    *  over /ws/chat (`compact`, `context`). 409 CHAT_BUSY while an answer is being written,
    *  CHAT_NOTHING_TO_COMPACT before the first answer, and the host 409s (each with its pt-BR sentence). */
