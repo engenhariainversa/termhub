@@ -77,6 +77,15 @@ it('refuses a run with the wrong secret', async () => {
   expect(res.status).toBe(401);
 });
 
+it('secretMatches: an empty configured secret refuses even an empty header', async () => {
+  const { secretMatches } = await import('./index.js');
+  expect(secretMatches('', '')).toBe(false);
+  expect(secretMatches(undefined, SECRET)).toBe(false);
+  expect(secretMatches([SECRET], SECRET)).toBe(false);
+  expect(secretMatches(SECRET.slice(0, -1), SECRET)).toBe(false);
+  expect(secretMatches(SECRET, SECRET)).toBe(true);
+});
+
 it('accepts the correct secret', async () => {
   fakeCli(`echo '{"type":"result","session_id":"'"$2"'"}'`);
   const res = await post('/run', runBody());
