@@ -104,7 +104,7 @@ export function AttachmentMenu({
   return (
     <Modal transparent animationType="fade" visible={open} onRequestClose={close}>
       <Pressable className="absolute inset-0" onPress={close} accessibilityRole="button" accessibilityLabel={t('Fechar')} />
-      <View style={{ position: 'absolute', ...place }} className="min-w-56 rounded-3xl border border-app-border bg-app-surface p-2 shadow-lg">
+      <View testID="attachment-menu" style={{ position: 'absolute', ...place }} className="min-w-56 rounded-3xl border border-app-border bg-app-surface p-2 shadow-lg">
         {recorder.state === 'recording' ? (
           <>
             <View className="flex-row items-center gap-2 px-3 py-2">

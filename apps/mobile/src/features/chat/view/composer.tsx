@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
+import { Keyboard, Pressable, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { MAX_ATTACHMENTS_PER_MESSAGE, type TChatAttachment } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
-import { Icon, type IconName } from '@/ui';
+import { Icon, useAfterKeyboardMoves, type IconName } from '@/ui';
 import { onChatFiles, takeChatFiles } from '../model/chat-inbox';
 import { CHAT_MSG } from '../model/messages';
 import { useAttachmentDrafts, type PickedFile } from '../viewmodel/attachments';
@@ -65,6 +65,8 @@ function useGlide(target: number, still: boolean): SharedValue<number> {
   return value;
 }
 
+/** How long the + waits for the keyboard to finish going down before it opens its menu anyway. */
+const KEYBOARD_SETTLE_MS = 700;
 /** The number of chips the + menu stops at. */
 const MAX_CHIPS = MAX_ATTACHMENTS_PER_MESSAGE;
 
@@ -264,8 +266,32 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   // No + while dictation holds the microphone or its clip: the menu's recorder would release the
   // audio session under it (one recorder at a time), and five chips is the message's limit.
   const attachOff = disabled || attachments.drafts.length >= MAX_CHIPS || voice.state === 'starting' || recording || busy;
+  // The menu hangs off the + (TER-1022), and the + moves with the keyboard: with the keyboard up, it
+  // goes down first and the menu opens once the pill has landed; open, the menu follows the button
+  // whenever the keyboard moves again. Unmeasured, the menu uses a default place.
+  const [opening, setOpening] = useState(false);
+  const openingRef = useRef(false);
+  const placeMenu = useCallback(() => {
+    attachRef.current?.measureInWindow((x, y) => setAnchor({ x, y }));
+    if (!openingRef.current) return;
+    openingRef.current = false;
+    setOpening(false);
+    setPicking(true);
+  }, []);
+  useAfterKeyboardMoves(placeMenu, picking || opening);
+  useEffect(() => {
+    if (!opening) return;
+    // No "did hide" (the keyboard went down another way meanwhile): open where the button is anyway.
+    const timer = setTimeout(placeMenu, KEYBOARD_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [opening, placeMenu]);
   const openMenu = () => {
-    // Where the button is now (the pill moves with the keyboard); unmeasured, the menu uses a default place.
+    if (Keyboard.isVisible()) {
+      openingRef.current = true;
+      setOpening(true);
+      Keyboard.dismiss();
+      return;
+    }
     attachRef.current?.measureInWindow((x, y) => setAnchor({ x, y }));
     setPicking(true);
   };

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import { DeviceEventEmitter, Dimensions, Keyboard, StyleSheet } from 'react-native';
 import type { TChatAttachment } from '@/services/api/contract';
 import { Composer } from './composer';
 
@@ -136,6 +137,38 @@ describe('Composer attachments', () => {
     for (const name of ['Foto ou vídeo', 'Arquivo', 'Gravar áudio']) expect(screen.getByRole('button', { name })).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Fechar' }));
     expect(screen.queryByRole('button', { name: 'Arquivo' })).toBeNull();
+  });
+
+  it('+ with the keyboard up takes it down first and opens the menu where the button lands, then follows it (TER-1022)', async () => {
+    const nativeMethods = require('@react-native/jest-preset/jest/MockNativeMethods').default as { measureInWindow: jest.Mock };
+    let buttonY = 400; // the + on the keyboard
+    nativeMethods.measureInWindow.mockImplementation((cb: (x: number, y: number, w: number, h: number) => void) => cb(12, buttonY, 36, 36));
+    const visible = jest.spyOn(Keyboard, 'isVisible').mockReturnValue(true);
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+    const bottom = () => StyleSheet.flatten(screen.getByTestId('attachment-menu').props.style).bottom;
+    const { height } = Dimensions.get('window');
+    try {
+      await renderComposer();
+      await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
+      expect(dismiss).toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Arquivo' })).toBeNull();
+      // The keyboard is down and the pill with it: the menu opens over the + where it now is.
+      buttonY = 760;
+      visible.mockReturnValue(false);
+      await act(() => DeviceEventEmitter.emit('keyboardDidHide', { endCoordinates: { screenX: 0, screenY: height, width: 390, height: 0 } }));
+      expect(await screen.findByRole('button', { name: 'Arquivo' })).toBeTruthy();
+      expect(bottom()).toBe(height - 760 + 8);
+      // Open, the keyboard moves again: the menu goes with the button.
+      buttonY = 420;
+      await act(() => DeviceEventEmitter.emit('keyboardDidShow', { endCoordinates: { screenX: 0, screenY: 500, width: 390, height: 300 } }));
+      await waitFor(() => expect(bottom()).toBe(height - 420 + 8));
+    } finally {
+      // Keyboard keeps what the last event said: leave it down for the next test.
+      DeviceEventEmitter.emit('keyboardDidHide', { endCoordinates: { screenX: 0, screenY: height, width: 390, height: 0 } });
+      visible.mockRestore();
+      dismiss.mockRestore();
+      nativeMethods.measureInWindow.mockReset();
+    }
   });
 
   it('a chip follows the status the store heard: "processando…" becomes "falhou: arquivo inválido", and the send is blocked until it is removed', async () => {
