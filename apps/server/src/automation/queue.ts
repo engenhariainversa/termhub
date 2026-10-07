@@ -4,7 +4,7 @@ import { agents } from '../agent/registry.js';
 import type { ControlContext } from '../control/context.js';
 import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 import { eligibilityOf, REASON_TEXT, type IneligibleReason } from './eligibility.js';
-import { mergeWaitOf } from './merge-wait.js';
+import { mergeWaitEntryOf, type MergeWaitEntry } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { WAITING_AS_REASON, waitingOf } from './placement.js';
 import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
@@ -33,8 +33,8 @@ export async function automationQueue(ctx: ControlContext, projectId: string, lo
   return Promise.all(
     items.map(async (item) => {
       // a card past `todo` whose PR the merge executor holds says why it is not merged yet
-      const merge = item.reason === 'not_in_todo' ? mergeWaitOf(item.task_id, now) : null;
-      if (merge) return { ...item, reason: merge, reason_text: t(locale, REASON_TEXT[merge]) };
+      const merge = item.reason === 'not_in_todo' ? mergeWaitEntryOf(item.task_id, now) : null;
+      if (merge) return { ...item, reason: merge.wait, reason_text: mergeWaitText(merge, locale) };
       if (item.eligible) {
         const retry = await startRetryOf(ctx, item.task_id, locale, now);
         if (retry) return { ...item, eligible: false, reason: 'start_backoff' as const, reason_text: retry };
@@ -46,6 +46,12 @@ export async function automationQueue(ctx: ControlContext, projectId: string, lo
       return { ...item, eligible: false, reason, reason_text: detail ? `${t(locale, REASON_TEXT[reason])}: ${detail}` : t(locale, REASON_TEXT[reason]) };
     }),
   );
+}
+
+/** A merge wait's text: a conflict escalation names the PR head it is about, so a new push visibly ends it (TER-1016). */
+function mergeWaitText({ wait, sha }: MergeWaitEntry, locale: Locale): string {
+  if (wait === 'merge_conflict_cap' && sha) return t(locale, 'Escalado por conflito em {{sha}}; aguardando um push que resolva', { sha: sha.slice(0, 7) });
+  return t(locale, REASON_TEXT[wait]);
 }
 
 /** The text of a card waiting for its next start after a failed one, or null when it is not waiting. */
