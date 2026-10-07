@@ -1,5 +1,5 @@
 import type { TAutomationSetup } from '@/services/api/contract';
-import { autonomyConfirmText, isChanged, needsConfirm, toggleType } from './automation';
+import { autonomyConfirmText, hourLabel, isChanged, needsConfirm, SUMMARY_HOURS, summaryHourOf, toggleType, withSummaryHour } from './automation';
 
 const block = (over: Partial<TAutomationSetup> = {}): TAutomationSetup => ({ enabled: false, types: ['story', 'task', 'bug'], autonomy: 'pr', worktrees_dir: '~/wt', ...over });
 
@@ -34,5 +34,17 @@ describe('automation setup rules', () => {
     const next = toggleType(saved, 'spike');
     expect(isChanged(saved, next)).toBe(true);
     expect(next.worktrees_dir).toBe('~/wt');
+  });
+
+  it('reads, sets and clears the daily summary hour, keeping the rest (TER-974)', () => {
+    expect(summaryHourOf(block())).toBeNull();
+    expect(summaryHourOf(block({ summary_hour: 7 } as Partial<TAutomationSetup>))).toBe(7);
+    expect(summaryHourOf(block({ summary_hour: 24 } as Partial<TAutomationSetup>))).toBeNull();
+    const at8 = withSummaryHour(block(), 8);
+    expect(summaryHourOf(at8)).toBe(8);
+    expect(at8.worktrees_dir).toBe('~/wt');
+    expect(summaryHourOf(withSummaryHour(at8, null))).toBeNull();
+    expect(SUMMARY_HOURS).toHaveLength(24);
+    expect([hourLabel(0), hourLabel(8), hourLabel(23)]).toEqual(['00:00', '08:00', '23:00']);
   });
 });

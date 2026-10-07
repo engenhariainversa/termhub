@@ -328,8 +328,11 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/ai`, projectAiResponse, { token: a.accessToken, body: { ai } }),
     getAutomationSetup: (a: Auth, projectId: string) =>
       call('GET', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, { token: a.accessToken }).then((r) => r.automation),
-    saveAutomationSetup: (a: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }) =>
-      call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, { token: a.accessToken, body: { automation, ...proof } }).then((r) => r.automation),
+    saveAutomationSetup: (a: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }, timeZone?: string) =>
+      call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, {
+        token: a.accessToken,
+        body: { automation, ...proof, ...(timeZone ? { time_zone: timeZone } : {}) },
+      }).then((r) => r.automation),
     getPauseState: (a: Auth) => call('GET', '/api/m/v1/automation/state', pauseState, { token: a.accessToken }),
     pauseAutomation: (a: Auth, scope: string, interrupt = false) =>
       call('POST', '/api/m/v1/automation/pause', pauseResponse, { token: a.accessToken, body: { scope, interrupt } }).then((r) => r.paused_at),

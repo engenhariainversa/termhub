@@ -163,8 +163,9 @@ export interface MobileApi {
   getAutomationSetup(auth: Auth, projectId: string): Promise<TAutomationSetup>;
   /** Saves the block. Turning it on, or raising the level to deploy/release, needs `proof` (a PIN proof over a
    * decision challenge for `automationSetupActionId(projectId)`, signed `automation_setup`): without one the
-   * server answers 401 `PIN_REQUIRED`. Lowering the level or turning off never asks. */
-  saveAutomationSetup(auth: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }): Promise<TAutomationSetup>;
+   * server answers 401 `PIN_REQUIRED`. Lowering the level or turning off never asks. `timeZone` (TER-974): the
+   * phone's zone, sent with a summary hour so the daily summary runs on the person's clock. */
+  saveAutomationSetup(auth: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }, timeZone?: string): Promise<TAutomationSetup>;
   /** Tags or untags a card for automatic work; answers the tag as it now stands. No PIN. 404 outside the scope. */
   setCardAuto(auth: Auth, taskId: string, auto: boolean): Promise<boolean>;
   /** The pause switch ("Pausar tudo"): the person's pause and the projects paused on their own. */

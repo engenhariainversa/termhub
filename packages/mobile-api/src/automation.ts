@@ -31,6 +31,10 @@ export const automationSetupBody = z.object({
   automation: automationSetup,
   challenge: z.string().min(1).max(128).optional(),
   pin_proof: z.string().min(1).max(128).optional(),
+  /** The phone's IANA zone (TER-974): the daily summary (`summary_hour`) runs on the person's own clock, so
+   *  the app sends it with an hour set, as the web does. Optional: an older app does not send it, an older
+   *  server ignores it. A zone the server does not know is ignored, never a failed save. */
+  time_zone: z.string().min(1).max(64).optional(),
 });
 export type AutomationSetupBody = z.infer<typeof automationSetupBody>;
 

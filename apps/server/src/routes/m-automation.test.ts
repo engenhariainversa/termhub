@@ -18,11 +18,13 @@ async function build(stored: unknown = {}) {
     return { project_id: 'p1', version: 2, data, updated_at: 'now' };
   });
   const setAuto = vi.fn(async () => ({ changed: 1 }));
+  const setTimeZone = vi.fn(async () => {});
   const repos = {
     projects: { findById: vi.fn(async (id: string) => (id === 'p1' ? { id, owner_id: 'u1' } : undefined)) },
     tasks: { findById: vi.fn(async () => ({ id: 't1', project_id: 'p1', auto: true })), setAuto },
     projectSetup: { get: vi.fn(async () => ({ project_id: 'p1', version: 2, data, updated_at: null })), save },
     automationEvents: { insert: vi.fn(async (e: object) => ({ id: 'ev', created_at: '', ...e })) },
+    users: { setTimeZone },
   } as unknown as Repositories;
   const session = {
     consumeDecisionChallenge: vi.fn(async (_d: Device, challenge: string, actionId: string) => challenge === 'c1' && actionId === ACTION),
@@ -40,7 +42,7 @@ async function build(stored: unknown = {}) {
   await app.register((a) => mobileAutomationSetupRoutes(a, repos, { session: session as unknown as SessionService }), { prefix: '/projects' });
   await app.register((a) => mobileCardAutoRoutes(a, repos), { prefix: '/tasks' });
   await app.ready();
-  return { app, save, setAuto, session, data: () => data };
+  return { app, save, setAuto, setTimeZone, session, data: () => data };
 }
 
 const put = (app: FastifyInstance, automation: object, proof?: object) =>
@@ -90,7 +92,17 @@ describe('mobile automation setup routes', () => {
       expect(t.save).toHaveBeenCalledTimes(1);
     });
 
-    it('an invalid block is a 400 validation error', async () => {
+    it('saves the phone\'s time zone with a summary hour, and only then; an unknown zone is ignored (TER-974)', async () => {
+      const send = (automation: object, time_zone: string) => t.app.inject({ method: 'PUT', url: '/projects/p1/setup/automation', payload: { automation, time_zone } });
+      expect((await send({ ...t.data().automation, summary_hour: 8 }, 'America/Sao_Paulo')).statusCode).toBe(200);
+      expect(t.setTimeZone).toHaveBeenCalledWith('u1', 'America/Sao_Paulo');
+      expect((await send({ ...t.data().automation, summary_hour: 9 }, 'Not/A_Zone')).statusCode).toBe(200);
+      expect((await send({ ...t.data().automation, summary_hour: null }, 'Europe/Lisbon')).statusCode).toBe(200);
+      expect(t.setTimeZone).toHaveBeenCalledTimes(1);
+      expect(t.data().automation.summary_hour).toBeNull();
+    });
+
+        it('an invalid block is a 400 validation error', async () => {
       const r = await put(t.app, { ...t.data().automation, epic_branch_pattern: 'sem-ref' });
       expect(r.statusCode).toBe(400);
     });
