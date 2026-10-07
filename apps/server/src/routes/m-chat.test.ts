@@ -43,7 +43,7 @@ function deferred<T>() {
 function build(opts: {
   start?: ReturnType<typeof vi.fn>;
   reset?: ReturnType<typeof vi.fn>;
-  resumeAfterDecision?: ReturnType<typeof vi.fn>;
+  startAfterDecision?: ReturnType<typeof vi.fn>;
   decide?: ReturnType<typeof vi.fn>;
   findByIdForUser?: ReturnType<typeof vi.fn>;
   checkPin?: ReturnType<typeof vi.fn>;
@@ -83,14 +83,16 @@ function build(opts: {
   const extraProjects = opts.extraProjects ?? [];
   const decide = opts.decide ?? vi.fn(async (_id: string, _userId: string, status: string) => ({ ...pendingAction, status }));
   const findByIdForUser = opts.findByIdForUser ?? vi.fn(async () => ({ ...pendingAction, status: 'pending' }));
-  const resumeAfterDecision = opts.resumeAfterDecision ?? vi.fn(async () => ({ id: 'm3', role: 'assistant', text: 'Feito.' }));
+  const startAfterDecision =
+    opts.startAfterDecision ??
+    vi.fn(async () => ({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'm3', done: Promise.resolve({ id: 'm3', role: 'assistant', text: 'Feito.' }) }));
   const start =
     opts.start ??
     vi.fn(async () => ({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'ma', done: new Promise(() => undefined) }));
   const service = {
     conversationFor: opts.conversationFor ?? vi.fn(async () => ({ id: 'c1', user_id: 'u1', review_mode: false, machine_id: 'm1', ai_account_id: null, cli_session_id: null })),
     start,
-    resumeAfterDecision,
+    startAfterDecision,
     afterDecisions: vi.fn(),
     reset: opts.reset ?? vi.fn(async () => ({ id: 'c_new', project_id: 'p1' })),
     hostFor: vi.fn(async () => ({ kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null })),
@@ -220,7 +222,7 @@ function build(opts: {
   const indexActions = vi.fn(async () => {});
   app.register((a) => mobileChatRoutes(a, repos as never, { chat: service as never, agents, session: session as never, indexActions }), { prefix: '/chat' });
   app.register((a) => mobileMeRoutes(a, repos as never), { prefix: '' });
-  return { app, service, session, agents, repos, decide, findByIdForUser, resumeAfterDecision, start, setHost, indexActions };
+  return { app, service, session, agents, repos, decide, findByIdForUser, startAfterDecision, start, setHost, indexActions };
 }
 
 const approve = { decision: 'approve', challenge: 'chal-1', pin_proof: 'proof-1' };
@@ -542,7 +544,7 @@ describe('POST /chat/messages', () => {
 
 describe('POST /chat/actions/:id/decision', () => {
   it('deny: decides, publishes the event and resumes, with no PIN involvement', async () => {
-    const { app, decide, resumeAfterDecision, session, indexActions, service } = build();
+    const { app, decide, startAfterDecision, session, indexActions, service } = build();
     const events: ChatEvent[] = [];
     const unsubscribe = chatBus.subscribe((e) => events.push(e));
     let res;
@@ -554,10 +556,10 @@ describe('POST /chat/actions/:id/decision', () => {
     expect(res.statusCode).toBe(200);
     expect(decide).toHaveBeenCalledWith('act1', 'u1', 'denied');
     expect(events).toContainEqual({ type: 'decision', user_id: 'u1', conversation_id: 'c1', action_id: 'act1', status: 'denied' });
-    expect(resumeAfterDecision.mock.calls[0][1]).toMatchObject({ id: 'act1', status: 'denied' });
+    expect(startAfterDecision.mock.calls[0][1]).toMatchObject({ id: 'act1', status: 'denied' });
     expect(service.afterDecisions).toHaveBeenCalledWith([expect.objectContaining({ id: 'act1', status: 'denied' })]);
     expect(res.json()).toEqual({ action: expect.objectContaining({ id: 'act1', status: 'denied' }), queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
     expect(session.checkPin).not.toHaveBeenCalled();
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     // Memory (spec 2026-09-26 concierge memory §4): the decided row is indexed, fire-and-forget.
@@ -572,14 +574,14 @@ describe('POST /chat/actions/:id/decision', () => {
   });
 
   it('approve: a write card without a proof is approved with no challenge and no PIN work', async () => {
-    const { app, session, decide, resumeAfterDecision } = build();
+    const { app, session, decide, startAfterDecision } = build();
     const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve' } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ queued: true });
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     expect(session.checkPin).not.toHaveBeenCalled();
     expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
-    await vi.waitFor(() => expect(resumeAfterDecision).toHaveBeenCalled());
+    await vi.waitFor(() => expect(startAfterDecision).toHaveBeenCalled());
   });
 
   it('approve: an irreversible card without a proof is 401 PIN_REQUIRED and stays pending, nothing consumed', async () => {
@@ -663,13 +665,13 @@ describe('POST /chat/actions/:id/decision', () => {
   });
 
   it('approve: a wrong PIN is 401 with the failures, and the action stays pending', async () => {
-    const { app, session, decide, resumeAfterDecision } = build({ checkPin: vi.fn(async () => ({ ok: false, code: 'PIN_INVALID', failures: 2 })) });
+    const { app, session, decide, startAfterDecision } = build({ checkPin: vi.fn(async () => ({ ok: false, code: 'PIN_INVALID', failures: 2 })) });
     const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: approve });
     expect(res.statusCode).toBe(401);
     expect(res.json()).toMatchObject({ code: 'PIN_INVALID', failures: 2 });
     expect(session.checkPin).toHaveBeenCalledWith(device, decisionProofMessage('chal-1', 'act1', 'approve'), 'proof-1', expect.objectContaining({ ip: expect.any(String) }));
     expect(decide).not.toHaveBeenCalled();
-    expect(resumeAfterDecision).not.toHaveBeenCalled();
+    expect(startAfterDecision).not.toHaveBeenCalled();
   });
 
   it('approve: a locked device is 423 with retry-after in whole seconds', async () => {
@@ -690,7 +692,7 @@ describe('POST /chat/actions/:id/decision', () => {
   });
 
   it('approve: with a good proof decides, publishes the event and resumes', async () => {
-    const { app, decide, resumeAfterDecision, session } = build();
+    const { app, decide, startAfterDecision, session } = build();
     const events: ChatEvent[] = [];
     const unsubscribe = chatBus.subscribe((e) => events.push(e));
     let res;
@@ -708,9 +710,9 @@ describe('POST /chat/actions/:id/decision', () => {
     expect(consumed).toBeLessThan(checked);
     expect(checked).toBeLessThan(decided);
     expect(events).toContainEqual({ type: 'decision', user_id: 'u1', conversation_id: 'c1', action_id: 'act1', status: 'approved' });
-    expect(resumeAfterDecision.mock.calls[0][1]).toMatchObject({ id: 'act1', status: 'approved' });
+    expect(startAfterDecision.mock.calls[0][1]).toMatchObject({ id: 'act1', status: 'approved' });
     expect(res.json()).toEqual({ action: expect.objectContaining({ id: 'act1', status: 'approved' }), queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
   });
 
   it('approve: a race lost to the web after the proof ends in the same 409', async () => {
@@ -718,20 +720,20 @@ describe('POST /chat/actions/:id/decision', () => {
       .fn()
       .mockResolvedValueOnce({ ...pendingAction, status: 'pending' })
       .mockResolvedValueOnce({ ...pendingAction, status: 'approved' });
-    const { app, resumeAfterDecision } = build({ decide: vi.fn(async () => undefined), findByIdForUser });
+    const { app, startAfterDecision } = build({ decide: vi.fn(async () => undefined), findByIdForUser });
     const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: approve });
     expect(res.statusCode).toBe(409);
-    expect(resumeAfterDecision).not.toHaveBeenCalled();
+    expect(startAfterDecision).not.toHaveBeenCalled();
   });
 
-  it('answers at once, without waiting for the resumed run', async () => {
+  it('answers at once, without waiting for the resumed run to start', async () => {
     let finish!: () => void;
-    const resumeAfterDecision = vi.fn(() => new Promise((resolve) => { finish = () => resolve({ id: 'm3' }); }));
-    const { app } = build({ resumeAfterDecision });
+    const startAfterDecision = vi.fn(() => new Promise((resolve) => { finish = () => resolve(undefined); }));
+    const { app } = build({ startAfterDecision });
     const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: approve });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
     finish();
   });
 
@@ -743,19 +745,36 @@ describe('POST /chat/actions/:id/decision', () => {
     const onUnhandled = (reason: unknown) => unhandled.push(reason);
     process.on('unhandledRejection', onUnhandled);
     try {
-      const resumeAfterDecision = vi.fn(async () => { throw failure; });
-      const { app } = build({ resumeAfterDecision });
+      const startAfterDecision = vi.fn(async () => { throw failure; });
+      const { app } = build({ startAfterDecision });
       for (const payload of [approve, { decision: 'deny' }]) {
         const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload });
         expect(res.statusCode).toBe(200);
         expect(res.json()).toMatchObject({ queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
       }
       await new Promise((r) => setTimeout(r, 20));
-      expect(resumeAfterDecision).toHaveBeenCalledTimes(2);
+      expect(startAfterDecision).toHaveBeenCalledTimes(2);
       expect(unhandled).toEqual([]);
     } finally {
       process.off('unhandledRejection', onUnhandled);
     }
+  });
+
+  it('TER-473: a run that fails after it started is not logged again by the route', async () => {
+    const warn = vi.fn();
+    // `startAfterDecision` already caught and logged `done`; the route must not await it.
+    const done = Promise.reject(new Error('boom'));
+    done.catch(() => undefined);
+    const startAfterDecision = vi.fn(async () => ({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'm3', done }));
+    const { app } = build({ startAfterDecision });
+    app.addHook('onRequest', async (request) => {
+      request.log.warn = warn as never;
+    });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'deny' } });
+    expect(res.statusCode).toBe(200);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalledWith(expect.anything(), 'mobile decision resume failed');
   });
 
   it('approve_tab: with a valid challenge and proof, decides, grants the tab and publishes both events', async () => {
@@ -779,8 +798,8 @@ describe('POST /chat/actions/:id/decision', () => {
 
   it('approve_tab whose grant fails still approves and resumes, with no grant in the answer or on the bus', async () => {
     const eligible = { ...pendingAction, status: 'pending', args: { tab_id: 't1', text: 'oi' } };
-    const resumeAfterDecision = vi.fn(async () => undefined);
-    const { app, decide, repos } = build({ resumeAfterDecision, findByIdForUser: vi.fn(async () => eligible), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
+    const startAfterDecision = vi.fn(async () => undefined);
+    const { app, decide, repos } = build({ startAfterDecision, findByIdForUser: vi.fn(async () => eligible), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
     vi.mocked(repos.chatGrants.grant).mockRejectedValueOnce(new Error('connection terminated'));
     const events: ChatEvent[] = [];
     const unsubscribe = chatBus.subscribe((e) => events.push(e));
@@ -796,7 +815,7 @@ describe('POST /chat/actions/:id/decision', () => {
     expect(res.json().action).toMatchObject({ id: 'act1', status: 'approved' });
     expect(res.json()).toMatchObject({ queued: true });
     expect(res.json()).not.toHaveProperty('grant');
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
     expect(events.map((e) => e.type)).toContain('decision');
     expect(events.map((e) => e.type)).not.toContain('grant');
   });
@@ -887,8 +906,8 @@ describe('POST /chat/actions/:id/decision: approve_project', () => {
   });
 
   it('whose grant fails still approves and resumes, with no project_grant in the answer or on the bus', async () => {
-    const resumeAfterDecision = vi.fn(async () => undefined);
-    const { app, decide, repos } = build({ resumeAfterDecision, findByIdForUser: vi.fn(async () => boardCard), boardTasks: [{ id: 'k1', project_id: 'p1' }] });
+    const startAfterDecision = vi.fn(async () => undefined);
+    const { app, decide, repos } = build({ startAfterDecision, findByIdForUser: vi.fn(async () => boardCard), boardTasks: [{ id: 'k1', project_id: 'p1' }] });
     vi.mocked(repos.chatProjectGrants.grant).mockRejectedValueOnce(new Error('connection terminated'));
     const events: ChatEvent[] = [];
     const unsubscribe = chatBus.subscribe((e) => events.push(e));
@@ -903,7 +922,7 @@ describe('POST /chat/actions/:id/decision: approve_project', () => {
     expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
     expect(res.json()).toMatchObject({ queued: true });
     expect(res.json()).not.toHaveProperty('project_grant');
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
     expect(events.map((e) => e.type)).not.toContain('project_grant');
   });
 
@@ -1159,7 +1178,7 @@ describe('POST /chat/actions/decisions (batch)', () => {
 
   it('proves the approval, decides both, resumes once and answers queued', async () => {
     const decide = decideById();
-    const { app, session, resumeAfterDecision, indexActions, service } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const { app, session, startAfterDecision, indexActions, service } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
     const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }, { id: 'a2', decision: 'deny' }]);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'denied' }], skipped: [], queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
@@ -1170,7 +1189,7 @@ describe('POST /chat/actions/decisions (batch)', () => {
     expect(decide).toHaveBeenCalledWith('a1', 'u1', 'approved');
     expect(decide).toHaveBeenCalledWith('a2', 'u1', 'denied');
     expect(session.checkPin.mock.invocationCallOrder[0]).toBeLessThan(decide.mock.invocationCallOrder[0]);
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
     // Memory (spec 2026-09-26 concierge memory §4): the whole decided batch is indexed, fire-and-forget.
     expect(indexActions).toHaveBeenCalledWith('u1', [
       expect.objectContaining({ id: 'a1', status: 'approved' }),
@@ -1182,7 +1201,7 @@ describe('POST /chat/actions/decisions (batch)', () => {
 
   it('a wrong PIN on the second approval is 401 and decides nothing', async () => {
     const checkPin = vi.fn().mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false, code: 'PIN_INVALID', failures: 1 });
-    const { app, decide, resumeAfterDecision } = build({ checkPin, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const { app, decide, startAfterDecision } = build({ checkPin, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
     const res = await post(app, [
       { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
       { id: 'a2', decision: 'approve', challenge: 'ch2', pin_proof: 'pp2' },
@@ -1191,7 +1210,7 @@ describe('POST /chat/actions/decisions (batch)', () => {
     expect(res.json()).toMatchObject({ code: 'PIN_INVALID', failures: 1 });
     expect(checkPin).toHaveBeenCalledTimes(2);
     expect(decide).not.toHaveBeenCalled();
-    expect(resumeAfterDecision).not.toHaveBeenCalled();
+    expect(startAfterDecision).not.toHaveBeenCalled();
   });
 
   it('a refused challenge is 400 CHALLENGE_INVALID and decides nothing', async () => {
@@ -1265,7 +1284,7 @@ describe('POST /chat/actions/decisions (batch)', () => {
   });
 
   it('nothing left to decide is 409, with no challenge spent and nothing decided', async () => {
-    const { app, session, decide, resumeAfterDecision } = build({ findByIdForUser: rowsOf({ a1: { status: 'approved' } }) });
+    const { app, session, decide, startAfterDecision } = build({ findByIdForUser: rowsOf({ a1: { status: 'approved' } }) });
     const res = await post(app, [
       { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
       { id: 'a2', decision: 'deny' },
@@ -1273,41 +1292,41 @@ describe('POST /chat/actions/decisions (batch)', () => {
     expect(res.statusCode).toBe(409);
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
-    expect(resumeAfterDecision).not.toHaveBeenCalled();
+    expect(startAfterDecision).not.toHaveBeenCalled();
   });
 
   it('a deny-only batch never touches the challenge or the PIN', async () => {
     const decide = decideById();
-    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const { app, session, startAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
     const res = await post(app, [{ id: 'a1', decision: 'deny' }, { id: 'a2', decision: 'deny' }]);
     expect(res.statusCode).toBe(200);
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     expect(session.checkPin).not.toHaveBeenCalled();
     expect(decide).toHaveBeenCalledTimes(2);
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
   });
 
   it('TER-92: write approvals without a proof are decided with no challenge and no PIN work', async () => {
     const decide = decideById();
-    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' }, a3: { status: 'pending' } }) });
+    const { app, session, startAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' }, a3: { status: 'pending' } }) });
     const res = await post(app, [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve' }, { id: 'a3', decision: 'deny' }]);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'approved' }, { id: 'a3', status: 'denied' }], skipped: [] });
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     expect(session.checkPin).not.toHaveBeenCalled();
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
   });
 
   it('TER-92: an irreversible approval without a proof is 401 PIN_REQUIRED and decides nothing, not even the write one', async () => {
     const decide = decideById();
-    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending', class: 'irreversible' }, a3: { status: 'pending' } }) });
+    const { app, session, startAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending', class: 'irreversible' }, a3: { status: 'pending' } }) });
     const res = await post(app, [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve' }, { id: 'a3', decision: 'deny' }]);
     expect(res.statusCode).toBe(401);
     expect(res.json()).toEqual({ error: 'Confirme com o PIN para autorizar esta ação.', code: 'PIN_REQUIRED' });
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     expect(session.checkPin).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
-    expect(resumeAfterDecision).not.toHaveBeenCalled();
+    expect(startAfterDecision).not.toHaveBeenCalled();
   });
 
   it('TER-92: a read approval without a proof is PIN_REQUIRED too (only write goes without the PIN)', async () => {
