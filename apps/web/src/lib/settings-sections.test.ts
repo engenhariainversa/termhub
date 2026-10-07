@@ -19,6 +19,7 @@ describe('settings sections', () => {
       'admin:roles',
       'admin:permissions',
       'admin:uploads',
+      'admin:security',
     ]);
   });
 
@@ -54,6 +55,11 @@ describe('settings sections', () => {
   it('puts Permissões do chat under Conta, gated by the chat resource', () => {
     expect(SETTINGS_SECTIONS.find((s) => s.key === 'chat-grants')).toEqual({ key: 'chat-grants', label: 'Permissões do chat', resource: 'chat', group: 'account' });
     expect(visibleSettingsSections((r) => r === 'chat').map((s) => s.key)).toEqual(['profile', 'city', 'chat-grants']);
+  });
+
+  it('puts Auditoria under Administração, gated by the security trail resource (TER-577)', () => {
+    expect(SETTINGS_SECTIONS.find((s) => s.key === 'security')).toEqual({ key: 'security', label: 'Auditoria', resource: 'security_events', group: 'admin' });
+    expect(visibleSettingsSections((r) => r === 'security_events').map((s) => s.key)).toEqual(['profile', 'city', 'security']);
   });
 
   it('leaves Administração out when nothing in it is visible', () => {
