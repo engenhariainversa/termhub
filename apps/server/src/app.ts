@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, ROOT_DIR } from './config.js';
 import { getPrisma, closePrisma } from './db/prisma.js';
-import { ACCESS_LOG_RETENTION_MS, AUTOMATION_EVENT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
+import { ACCESS_LOG_RETENTION_MS, AUTOMATION_EVENT_RETENTION_MS, VIEW_AS_AUDIT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
 import { createMailer } from './email/mailer.js';
 import { createAccessAllowlist } from './cloudflare/access.js';
 import { AuthService, authRoutes, buildAuthHook, type AuthContext } from './auth/index.js';
@@ -365,6 +365,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
+    // The admin "view as" trail is kept a year after each period ends (TER-746).
+    void repos.viewAsAudit.purgeBefore(new Date(Date.now() - VIEW_AS_AUDIT_RETENTION_MS)).catch(() => {});
     // Privacy Policy section 8 (TER-743): tab state history after 90 days, the waitlist after 12 months.
     void purgeRetention(repos).catch(() => {});
     // Access records past their 6 months (TER-744): the hourly tick is the rotation.
