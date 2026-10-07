@@ -257,6 +257,16 @@ export function createChatStore(deps: ChatDeps) {
    * through the same path as live ones; the others go. Emptied when another conversation opens.
    */
   let early: { key: string; events: ChatEvent[] } | null = null;
+  /**
+   * The open slot's conversation may have been replaced elsewhere ("Nova conversa" on another device,
+   * TER-469): the events of the new one carry an id no slot knows, and used to be dropped until the
+   * next read. The first such event starts one re-read of the open slot, holding that conversation's
+   * events meanwhile. If the slot then shows it, they are replayed as `early`'s are; otherwise the id
+   * is another conversation's (another project, one this device never opened), remembered in
+   * `foreign`, and its later events go without another read.
+   */
+  let switched: { key: string; id: string; events: ChatEvent[] } | null = null;
+  const foreign = new Set<string>();
   /** App-level taps into every raw event (`subscribeEvents`), independent of the open conversation
    * and never cleared by `close()`/`generation` — a subscriber outlives any one socket connection. */
   const eventListeners = new Set<(e: ChatEvent) => void>();
@@ -295,7 +305,8 @@ export function createChatStore(deps: ChatDeps) {
           return isApiError(e) ? e.message : CHAT_MSG.network;
         };
 
-        const reread = async (key: string): Promise<void> => {
+        /** Re-reads slot `key`. True when this read's snapshot was applied (not superseded, not failed). */
+        const reread = async (key: string): Promise<boolean> => {
           const gen = generation;
           const seq = (readSeq.get(key) ?? 0) + 1;
           readSeq.set(key, seq);
@@ -305,7 +316,7 @@ export function createChatStore(deps: ChatDeps) {
           reads.set(key, inFlight.add(arrived));
           try {
             const res = await api.chat(session().auth(), projectOf(key));
-            if (stale()) return;
+            if (stale()) return false;
             // The same conversation: the snapshot merges into the thread by id (spec 2026-09-29 §5):
             // a row that ended or was removed while the GET was in flight is not brought back, a row
             // whose `message` event landed meanwhile (a final answer, the person's row renamed on its
@@ -345,9 +356,11 @@ export function createChatStore(deps: ChatDeps) {
                 for (const e of held) if ('conversation_id' in e && e.conversation_id === res.conversation.id) applyOwn(key, e);
               }
             }
+            return true;
           } catch (e) {
-            if (stale() || isLocked(e) || session().handleApiError(e)) return;
+            if (stale() || isLocked(e) || session().handleApiError(e)) return false;
             patchSlot(key, () => ({ error: isApiError(e) ? e.message : CHAT_MSG.network }));
+            return false;
           } finally {
             // Not a `.finally` on the GET: that would add a tick between its answer and the merge.
             inFlight.delete(arrived);
@@ -383,8 +396,34 @@ export function createChatStore(deps: ChatDeps) {
             early = { key, events: [...events.slice(-(EARLY_EVENTS_CAP - 1)), e] };
             return;
           }
-          if (!belongsTo(conversationId)(e)) return;
+          if (!belongsTo(conversationId)(e)) {
+            if ('conversation_id' in e) checkSwitched(key, e.conversation_id, e);
+            return;
+          }
           applyOwn(key, e);
+        };
+
+        /** An event of conversation `id`, which is not the open slot's: see `switched`. */
+        const checkSwitched = (key: string, id: string, e: ChatEvent): void => {
+          if (foreign.has(id) || Object.values(get().conversations).some((slot) => slot.conversation?.id === id)) return;
+          if (switched !== null) {
+            // One check at a time; another conversation's event waits for its own after this one.
+            if (switched.key === key && switched.id === id) switched.events = [...switched.events.slice(-(EARLY_EVENTS_CAP - 1)), e];
+            return;
+          }
+          const check = { key, id, events: [e] };
+          switched = check;
+          const gen = generation;
+          void reread(key).then((applied) => {
+            if (switched === check) switched = null;
+            if (!applied || gen !== generation || activeKey() !== key) return;
+            if (get().conversations[key]?.conversation?.id !== id) {
+              foreign.add(id);
+              return;
+            }
+            // Same tick as the snapshot: no live event of this conversation landed in between.
+            for (const held of check.events) applyOwn(key, held);
+          });
         };
 
         /** One event of the open conversation, live or held: the slice takes it, then its side effects. */
@@ -614,6 +653,7 @@ export function createChatStore(deps: ChatDeps) {
           close() {
             generation++;
             early = null;
+            switched = null;
             closeSocket?.();
             closeSocket = null;
             readSeq.clear();
