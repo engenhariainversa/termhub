@@ -33,7 +33,7 @@ export interface QueueDeps {
   repo: ChatAttachmentsRepo;
   store: Pick<AttachmentStore, 'read'>;
   extract: typeof extractFn;
-  whisper: { whisperUrl: string | null; language: string | null };
+  whisper: { whisperUrl: string | null; language: string | null; whisperSecret?: string | null };
   /** The updated row, to publish `attachment_status`. Not called for a row deleted meanwhile. */
   onDone(row: AttachmentRow): void;
   log: { warn(obj: object, msg: string): void; info(obj: object, msg: string): void };
