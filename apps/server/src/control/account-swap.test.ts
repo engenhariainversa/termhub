@@ -44,7 +44,7 @@ const SID = '6d127d73-4bd0-42d6-b4a6-d96899507e62';
 const TRANSCRIPT = `/home/p/.claude_a/projects/-src-app/${SID}.jsonl`;
 
 const machine = (over: Partial<Machine> = {}): Machine =>
-  ({ id: 'm1', name: 'jarvis', type: 'agent', os: 'linux', capabilities: ['tmux', 'claude'], owner_id: 'u1', claude_auto_swap: false, ...over }) as Machine;
+  ({ id: 'm1', name: 'jarvis', type: 'agent', os: 'linux', capabilities: ['tmux', 'claude'], owner_id: 'u1', claude_auto_swap: false, ai_usage_query: true, ...over }) as Machine;
 const account = (over: Partial<AiAccount> & { id: string; machine_id: string }): AiAccount => ({ provider: 'claude', label: over.id, config_dir: null, created_at: '', ...over });
 const accounts = [
   account({ id: 'a1', machine_id: 'm1', config_dir: '~/.claude_a' }),

@@ -3765,7 +3765,7 @@ describe('usage limit (TER-588)', () => {
     JSON.stringify({ type: 'result', is_error: true, api_error_status: 429, session_id: SID, result: "You've hit your session limit" }),
     errorFrame('run_failed'),
   ];
-  const jarvis = (over: Record<string, unknown> = {}) => ({ id: 'm1', name: 'jarvis', type: 'agent', agent_version: '0.7.0', owner_id: 'u1', claude_auto_swap: true, ...over });
+  const jarvis = (over: Record<string, unknown> = {}) => ({ id: 'm1', name: 'jarvis', type: 'agent', agent_version: '0.7.0', owner_id: 'u1', claude_auto_swap: true, ai_usage_query: true, ...over });
   const work = { id: 'acc_w', provider: 'claude', machine_id: 'm1', config_dir: '~/.claude-work', label: 'Trabalho' };
   const usage = (peak: number) => ({ account_id: 'x', fetched_at: '', ok: true, plan: null, error: null, hint: null, windows: [{ key: 'five_hour', label: '', utilization: peak, resets_at: null }] });
 
