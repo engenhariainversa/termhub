@@ -81,7 +81,7 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
   const { t } = useTranslation();
   const { can } = useAuth();
   const { projects, machinesOf, loading } = useData();
-  const { items: monitorItems, openTabs } = useMonitor();
+  const { items: monitorItems, openTabs, autoRuns } = useMonitor();
   const waiting = useMemo(() => needsYouByProject(monitorItems), [monitorItems]);
   // every open terminal tab, reported a state or not: "Em execução" means a tab is open
   const agents = useMemo(() => agentsByProject(openTabs), [openTabs]);
@@ -286,6 +286,7 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
         project={p}
         section={nameOf(section)}
         agents={agents.get(p.id) ?? []}
+        autoRuns={autoRuns}
         machines={machinesOf(p)}
         waiting={waiting.get(p.id) ?? 0}
         expanded={!collapsed.has(p.id)}

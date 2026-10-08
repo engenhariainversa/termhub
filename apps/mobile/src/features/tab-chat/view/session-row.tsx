@@ -4,26 +4,19 @@ import type { TTabSummary } from '@/services/api/contract';
 import { AppText } from '@/ui';
 import { availabilityText } from '../model/availability-text';
 import { stateLine } from '../model/state-line';
+import { StatusDot } from './status-dot';
 
-/** The dot's colour: the accent while it works, the danger tone when it needs the person or failed, the
- * ok tone once it finished with a report (TER-972). */
-function dotClass(tab: TTabSummary): string {
-  if (tab.availability !== 'ready') return 'bg-app-muted';
-  if (tab.needs_you || tab.state === 'error') return 'bg-app-danger';
-  if (tab.state === 'working') return 'bg-app-accent';
-  if (tab.state === 'idle' && tab.finished) return 'bg-app-ok';
-  return 'bg-app-border';
-}
-
-/** One tab of the Sessões list: name, machine and its state line — or, for a tab that cannot be read
+/** One tab of the Sessões list: its status dot (status-dot.tsx), name, machine and its state line — or, for a tab that cannot be read
  * as a conversation, why (it still opens: the screen offers "Ver tela"). */
-export function SessionRow({ tab, onPress }: { tab: TTabSummary; onPress(): void }) {
-  useTranslation();
+export function SessionRow({ tab, onPress, onScreen = true }: { tab: TTabSummary; onPress(): void; onScreen?: boolean }) {
+  const { t } = useTranslation();
   const why = availabilityText(tab.availability);
   const line = why ?? stateLine(tab);
+  // "Trabalhando · Bash (automático, TER-123)": the automatic run's card, for whoever hears the row (TER-1044)
+  const heard = tab.auto_ref ? t('{{state}} (automático, {{ref}})', { state: line, ref: tab.auto_ref }) : line;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${tab.name}, ${tab.machine.name}, ${line}`} onPress={onPress} className="flex-row items-center gap-3 border-b border-app-border px-6 py-4">
-      <View className={`h-2.5 w-2.5 rounded-full ${dotClass(tab)}`} />
+    <Pressable accessibilityRole="button" accessibilityLabel={`${tab.name}, ${tab.machine.name}, ${heard}`} onPress={onPress} className="flex-row items-center gap-3 border-b border-app-border px-6 py-4">
+      <StatusDot tab={tab} onScreen={onScreen} />
       <View className="flex-1 gap-0.5">
         <View className="flex-row items-center gap-2">
           <AppText className="shrink font-semibold" numberOfLines={1}>
