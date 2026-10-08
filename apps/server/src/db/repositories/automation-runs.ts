@@ -144,6 +144,19 @@ export class AutomationRunsRepository {
   }
 
   /**
+   * The card's runs that ended `done` or `blocked` in a tab, newest end first (TER-1051): the tabs a fixer
+   * may find still open in the card's worktree. Markers have no tab and are not among them.
+   */
+  async endedInTabs(taskId: string): Promise<AutomationRun[]> {
+    const rows = await this.db.automationRun.findMany({
+      where: { taskId, status: { in: ['done', 'blocked'] }, tabId: { not: null }, endedAt: { not: null } },
+      orderBy: { endedAt: 'desc' },
+      take: 20,
+    });
+    return rows.map(map);
+  }
+
+  /**
    * Writes the patch while `instance` still drives the run: after a takeover by another instance the row
    * is theirs, and this one's late writes are dropped. False when nothing was written.
    */
@@ -182,6 +195,34 @@ export class AutomationRunsRepository {
       data: { status: patch.status, waitingReason: patch.waiting_reason, endedAt: patch.ended_at },
     });
     return count === 1;
+  }
+
+  /**
+   * A `blocked` run to `done`, once (TER-1049: a PR from its branch showed up after the block). Whoever drives
+   * it: the run ended, so its colour may be gone. `ended_at` and `waiting_reason` stay (the run did end then,
+   * and why it was blocked stays readable). False when the run was not blocked: another colour adopted it first.
+   */
+  async finishBlockedAsDone(id: string): Promise<boolean> {
+    const { count } = await this.db.automationRun.updateMany({ where: { id, status: 'blocked' }, data: { status: 'done' } });
+    return count === 1;
+  }
+
+  /**
+   * The project's `blocked` implementer runs that ended at `since` or later, with a branch (TER-1049): the
+   * ones a PR from their branch may still adopt. Markers (`insertMarker`) are left out by their trigger.
+   */
+  async blockedSince(projectId: string, since: Date): Promise<AutomationRun[]> {
+    const rows = await this.db.automationRun.findMany({
+      where: { projectId, status: 'blocked', role: 'implementer', taskId: { not: null }, branch: { not: null }, triggerSha: null, endedAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map(map);
+  }
+
+  /** The card's newest run, in any status (markers included). */
+  async latestOfTask(taskId: string): Promise<AutomationRun | null> {
+    const row = await this.db.automationRun.findFirst({ where: { taskId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    return row ? map(row) : null;
   }
 
   /**
@@ -317,45 +358,6 @@ export class AutomationRunsRepository {
   async latestByTab(tabId: string): Promise<AutomationRun | null> {
     const row = await this.db.automationRun.findFirst({ where: { tabId }, orderBy: { createdAt: 'desc' } });
     return row ? map(row) : null;
-  }
-
-  /**
-   * The project's implementer runs that ended `blocked` since `since`, with a branch and not a marker: the
-   * runs a PR from their branch may still be adopted for (spike TER-1031 §5.1). Covered by `(project_id, status)`.
-   */
-  async blockedSince(projectId: string, since: Date): Promise<AutomationRun[]> {
-    const rows = await this.db.automationRun.findMany({
-      where: { projectId, status: 'blocked', role: 'implementer', branch: { not: null }, triggerSha: null, endedAt: { gte: since } },
-      orderBy: { createdAt: 'asc' },
-    });
-    return rows.map(map);
-  }
-
-  /**
-   * Whether the card has a run that takes over from `run`: an active one, or one created after it (the card
-   * was dispatched again, or a fixer answered its PR). Markers (no branch, a trigger) do not count.
-   */
-  async hasSuccessor(run: Pick<AutomationRun, 'id' | 'task_id' | 'created_at'>): Promise<boolean> {
-    if (!run.task_id) return false;
-    const row = await this.db.automationRun.findFirst({
-      where: {
-        taskId: run.task_id,
-        id: { not: run.id },
-        OR: [{ status: active }, { createdAt: { gt: run.created_at }, NOT: { branch: null, triggerSha: { not: null } } }],
-      },
-      select: { id: true },
-    });
-    return row !== null;
-  }
-
-  /**
-   * The one move between terminal states (spike TER-1031 §5.2): a `blocked` run whose PR showed up later ends
-   * `done`. `ended_at` and `waiting_reason` stay (the run did end then, and why it was blocked stays readable).
-   * Conditional on `blocked`, so only one caller (or colour) wins it. False when nothing was written.
-   */
-  async finishBlockedAsDone(id: string): Promise<boolean> {
-    const { count } = await this.db.automationRun.updateMany({ where: { id, status: 'blocked' }, data: { status: 'done' } });
-    return count === 1;
   }
 
   /** The `running` and `waiting` runs this instance drives: what its follower looks at again on each sweep. */

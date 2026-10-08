@@ -138,7 +138,7 @@ describe('syncProjectCi', () => {
     const branches: Record<string, string[]> = { cited: ['TER-9-other'], owner: ['TER-8-own'] };
     Object.assign(deps.repos, {
       tasks: { findById: vi.fn(async (id: string) => ({ id, ref: id, auto: true })) },
-      automationRuns: { branchesOfTask: vi.fn(async (id: string) => branches[id] ?? []), blockedSince: vi.fn(async () => []) },
+      automationRuns: { branchesOfTask: vi.fn(async (id: string) => branches[id] ?? []) },
       automationEvents: { insert: vi.fn(async (e: { kind: string; task_id: string | null }) => (events.push(e), { id: 'e', created_at: '', ...e })) },
       chat: { findLatestActiveForProject: vi.fn(async () => undefined), getOrCreateForProject: vi.fn(async () => undefined) },
       users: { findById: vi.fn(async () => ({ id: 'u1', locale: null })) },
@@ -149,6 +149,20 @@ describe('syncProjectCi', () => {
     vi.mocked(github.listRuns).mockResolvedValue([{ id: 3, name: 'Deploy', path: '.github/workflows/deploy.yml', status: 'completed', conclusion: 'success', html_url: 'r3', created_at: '2026-09-27T12:00:00Z' }]);
     await syncProjectCi(deps, 'p1');
     expect(events).toEqual([expect.objectContaining({ kind: 'deploy_ok', task_id: 'owner' })]);
+  });
+
+  it('TER-1049: with automation on, looks for blocked runs to adopt right after linking the PRs; off, never', async () => {
+    const on = setup({ automation: { enabled: true } });
+    const blockedSince = vi.fn(async () => []);
+    Object.assign(on.deps.repos, { automationRuns: { blockedSince } });
+    await syncProjectCi(on.deps, 'p1');
+    expect(blockedSince).toHaveBeenCalledWith('p1', new Date(Date.parse('2026-09-27T12:00:00Z') - 7 * 24 * 3600_000));
+    expect(on.replaceLinks.mock.invocationCallOrder[0]).toBeLessThan(blockedSince.mock.invocationCallOrder[0]!);
+    const off = setup();
+    const notCalled = vi.fn(async () => []);
+    Object.assign(off.deps.repos, { automationRuns: { blockedSince: notCalled } });
+    await syncProjectCi(off.deps, 'p1');
+    expect(notCalled).not.toHaveBeenCalled();
   });
 
   it('with automation off, never reads release workflows', async () => {

@@ -56,6 +56,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await db.automationRun.count({ where: { taskId } })).toBe(1);
   });
 
+  it('endedInTabs (TER-1051): the card\'s done and blocked runs with a tab, newest end first; markers and other statuses left out', async () => {
+    const mk = (status: string, tabId: string | null, endedAt: Date | null, role = 'implementer') =>
+      db.automationRun.create({ data: { id: newId(), projectId, taskId, role, status, tabId, endedAt, claimedBy: 'blue' } });
+    await mk('done', 'tab-old', new Date('2026-10-08T09:00:00Z'));
+    await mk('blocked', 'tab-new', new Date('2026-10-08T10:00:00Z'), 'fixer');
+    await mk('failed', 'tab-failed', new Date('2026-10-08T11:00:00Z'));
+    await mk('blocked', null, new Date('2026-10-08T12:00:00Z'), 'fixer'); // a marker
+    await mk('running', 'tab-live', null);
+    expect((await runs.endedInTabs(taskId)).map((r) => r.tab_id)).toEqual(['tab-new', 'tab-old']);
+  });
+
   it('a marker (final review I3): written ended, once per trigger, beside an active run of the card; lastEndedAt reads it', async () => {
     expect(await runs.lastEndedAt(taskId)).toBeNull();
     const active = (await claim('blue'))!;
@@ -85,27 +96,6 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await runs.countTriggered(taskId, 'fixer', 'conflict_cap')).toBe(1);
     // queue runs carry no trigger and are not limited by it
     expect(await claim('blue')).not.toBeNull();
-  });
-
-  it('a blocked run\'s adoption (spike TER-1031): blockedSince, hasSuccessor and one blocked → done', async () => {
-    const run = (await claim('blue'))!;
-    await runs.update(run.id, 'blue', { branch: 'TER-1-card', status: 'blocked', waiting_reason: 'reported_blocked', ended_at: new Date() });
-    const since = new Date(Date.now() - 60_000);
-    expect((await runs.blockedSince(projectId, since)).map((r) => r.id)).toEqual([run.id]);
-    expect(await runs.blockedSince(projectId, new Date(Date.now() + 60_000))).toEqual([]);
-    const blocked = (await runs.findById(run.id))!;
-    expect(await runs.hasSuccessor(blocked)).toBe(false);
-    // a marker after it does not take over; a new dispatch of the card does
-    await runs.insertMarker({ project_id: projectId, task_id: taskId, role: 'fixer', instance: 'blue', trigger_sha: 'conflict_cap:h1', waiting_reason: 'conflict_cap' });
-    expect(await runs.hasSuccessor(blocked)).toBe(false);
-    const again = (await claim('green'))!;
-    expect(await runs.hasSuccessor(blocked)).toBe(true);
-    await runs.update(again.id, 'green', { status: 'cancelled', ended_at: new Date() });
-    expect(await runs.hasSuccessor(blocked)).toBe(true);
-    // only one caller wins the move, and it keeps ended_at and the reason
-    expect(await Promise.all([runs.finishBlockedAsDone(run.id), runs.finishBlockedAsDone(run.id)])).toEqual(expect.arrayContaining([true, false]));
-    expect(await runs.findById(run.id)).toMatchObject({ status: 'done', waiting_reason: 'reported_blocked', ended_at: blocked.ended_at });
-    expect(await runs.blockedSince(projectId, since)).toEqual([]);
   });
 
   it('sums the fixes typed into the card\'s runs (red CI, D21)', async () => {

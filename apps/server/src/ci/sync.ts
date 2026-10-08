@@ -106,6 +106,8 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
       if (page.etag) deps.etags.set(projectId, page.etag);
       pulls = page.pulls.length;
     }
+    // a PR from the branch of a run that ended blocked takes that run over (TER-1049)
+    if (setup.automation?.enabled) await adoptBlockedRuns(repos, projectId, deps.log, deps.now?.() ?? new Date());
     const seen = new Set<number>();
     // Only the current repo's PRs; merged ones only when there is a deploy or a release to follow.
     const releases = !!setup.automation?.enabled && setup.automation.release_workflows.length > 0;
@@ -128,9 +130,7 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
     if (e instanceof GithubCiError) setCiError(projectId, MESSAGES[e.kind](e.status));
     throw e;
   }
-  // A project that never turned automation on gets nothing more than the sync (spec D3). A PR linked from the
-  // branch of a run that ended blocked is adopted before the merge executor looks at it (spike TER-1031 §5.3).
-  if (setup.automation?.enabled) await adoptBlockedRuns(repos, projectId, deps.log, deps.now?.() ?? new Date());
+  // A project that never turned automation on gets nothing more than the sync (spec D3).
   if (setup.automation?.enabled && deps.merge) await deps.merge(projectId);
   return result;
 }

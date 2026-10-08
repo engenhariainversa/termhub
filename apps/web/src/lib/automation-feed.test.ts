@@ -63,3 +63,10 @@ describe('a start that failed (TER-987)', () => {
     expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'The machine did not answer' }))).toBe('TER-9 did not start: The machine did not answer');
   });
 });
+
+describe('a blocked run a PR took over (TER-1049)', () => {
+  it('says so on its run_done line, and keeps the plain line for any other', () => {
+    expect(feedLine(ev({ kind: 'run_done', reason_text: 'PR aberto depois do bloqueio; o automático acompanha até o merge' }))).toBe('TER-9: PR aberto depois do bloqueio; o automático acompanha até o merge');
+    expect(feedLine(ev({ kind: 'run_done' }))).toBe('TER-9: agente terminou');
+  });
+});

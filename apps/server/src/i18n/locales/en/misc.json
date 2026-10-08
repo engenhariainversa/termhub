@@ -44,7 +44,6 @@
   "O trabalho automático desta aba já está bloqueado e a pessoa já foi avisada; não há o que reportar": "This tab's automatic work is already blocked and the person has been told; there is nothing to report",
   "O trabalho automático desta aba terminou bloqueado; mande status done com o pr_url do PR aberto do branch dele": "This tab's automatic work ended blocked; send status done with the pr_url of the PR opened from its branch",
   "O PR ainda não está ligado ao card; a sincronização de CI liga o PR do branch {{branch}} em até {{minutes}} minutos e o automático passa a acompanhá-lo": "The PR is not linked to the card yet; the CI sync links the PR from branch {{branch}} within {{minutes}} minutes and automatic work follows it from then on",
-  "PR #{{number}} do {{ref}} aberto depois do bloqueio; o automático acompanha até o merge": "PR #{{number}} of {{ref}} opened after the block; automatic work follows it until the merge",
   "O agente parou na confirmação de confiança da pasta; confirme na aba para continuar.": "The agent stopped at the folder trust confirmation; confirm it in the tab to continue.",
   "O agente fez uma pergunta que o modo automático não soube responder; responda no card.": "The agent asked a question automatic mode could not answer; answer it on the card.",
   "O card da pergunta do agente fechou sem resposta; responda na aba para continuar.": "The agent's question card closed without an answer; answer it in the tab to continue.",
@@ -80,6 +79,8 @@
   "A execução terminou, mas o PR continua com conflito em {{sha}} (nenhum push novo); resolva o conflito e o termhub mescla quando o CI ficar verde.": "The run ended, but the PR is still in conflict at {{sha}} (no new push); resolve the conflict and termhub merges it once CI is green.",
   "O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.": "The PR is still in conflict after the fix attempts; resolve the conflict and termhub merges it once CI is green.",
   "Automático mesclou o PR #{{n}} de {{ref}}: {{url}}": "Automatic work merged PR #{{n}} of {{ref}}: {{url}}",
+  "PR #{{n}} do {{ref}} aberto depois do bloqueio; o automático acompanha até o merge": "PR #{{n}} of {{ref}} opened after the block; automatic work follows it until the merge",
+  "PR aberto depois do bloqueio; o automático acompanha até o merge": "PR opened after the block; automatic work follows it until the merge",
   "O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.": "The deploy failed after the merge; automatic work on the project was paused. Check the deploy and resume once it is resolved.",
   "Um workflow de publicação falhou depois do merge; confira a execução.": "A publishing workflow failed after the merge; check the run.",
   "O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.": "The deploy failed after the merge and automatic work on the project could not be paused; pause the project and check the deploy.",
@@ -128,5 +129,6 @@
   "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "The agent exited and this machine has no automatic-work hard lock; update the agent (0.19.0 or newer) and resume.",
   "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub kept failing on the push or the PR after the automatic retries; check the tab and resume.",
   "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub is unstable; the CI fix is asked again once it is back",
-  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "The deploy failed because of a GitHub problem; running it again ({{attempt}} of {{max}}): {{url}}"
+  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "The deploy failed because of a GitHub problem; running it again ({{attempt}} of {{max}}): {{url}}",
+  "A correção do PR espera a aba do card ficar livre; feche a aba para abrir outra": "The PR fix waits for the card's tab to be free; close the tab to open another"
 }
