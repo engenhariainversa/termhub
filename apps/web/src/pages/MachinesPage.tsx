@@ -179,7 +179,7 @@ export function MachinesPage() {
                 <span>
                   <span className="text-fg">{t('Também desinstalar da máquina')}</span>
                   <span className="mt-0.5 block text-fg-dim">
-                    {t('Remove os hooks, encerra as sessões de terminal das tabs desta máquina e remove o serviço e o token do agente. O pacote npm continua instalado (npm rm -g @termhub/agent).')}
+                    {t('Remove os hooks, encerra as sessões de terminal das tabs desta máquina e remove o serviço e a credencial do agente. O pacote npm continua instalado (npm rm -g @termhub/agent).')}
                   </span>
                 </span>
               </label>

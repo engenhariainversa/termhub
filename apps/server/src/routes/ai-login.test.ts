@@ -12,7 +12,7 @@ vi.mock('../agent/registry.js', async (importOriginal) => ({
     awaitAgent: async (m: { id: string }) => online.has(m.id),
     isOnline: (id: string) => online.has(id),
     capabilities: (id: string) => caps.get(id) ?? null,
-    info: (id: string) => (online.has(id) ? { agent_version: '0.25.0', os: 'macos', tools: [], connected_at: '' } : null),
+    info: (id: string) => (online.has(id) ? { agent_version: '0.26.0', os: 'macos', tools: [], connected_at: '' } : null),
   },
 }));
 const screens = new Map<string, string>();

@@ -5,7 +5,7 @@ import { RpcFailure, agentEnv, run, tmuxPath } from '../exec.js';
 import { ENTER_PAUSE_MS, processFailure } from './tmux.js';
 
 /**
- * Re-login of a machine's Claude Code / Codex CLI from a modal (TER-1047, since agent 0.25.0). The CLI's
+ * Re-login of a machine's Claude Code / Codex CLI from a modal (TER-1047, since agent 0.26.0). The CLI's
  * own login runs in a hidden tmux session the server names (`termhub-login-<id>`, never a work tab), under
  * the account's config dir. The agent reads the login URL (and Codex's device code) off the pane, types
  * the code the person pasted back, and asks the CLI's status command whether the login took.

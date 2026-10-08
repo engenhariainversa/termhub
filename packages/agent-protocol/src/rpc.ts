@@ -174,7 +174,7 @@ export const RPC = {
   'ai.usage': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), aiUsageResult, 60_000),
   /**
    * Whether the CLI login of the account whose config dir is `config_dir` (null: the machine's default
-   * login) is valid (TER-1047, since agent 0.25.0): `claude auth status` / `codex login status`.
+   * login) is valid (TER-1047, since agent 0.26.0): `claude auth status` / `codex login status`.
    * `supported: false` for a provider without a CLI login the agent can drive (Gemini, Antigravity).
    */
   'ai.login.status': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), aiLoginStatusResult, 20_000),
@@ -182,21 +182,21 @@ export const RPC = {
    * Starts the CLI's login in the hidden tmux session `session` (any session of that name is killed
    * first) and answers what the person needs to finish it in a browser: the login `url`, and for
    * Codex's device flow the one-time `user_code`. `needs_code`: the CLI waits for a code pasted back
-   * (Claude); false when it polls on its own (Codex). Since agent 0.25.0.
+   * (Claude); false when it polls on its own (Codex). Since agent 0.26.0.
    */
   'ai.login.start': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable(), session: sessionName }), aiLoginStartResult, 45_000),
   /**
    * Types `code` into the login session (null: nothing to type, Codex) and waits up to 45 s for the
    * login to finish. The code is never logged nor echoed back: `message` drops any line containing it.
    * The session is killed once the login is done or failed; a Codex session that only timed out is kept
-   * so a later submit can wait again. Since agent 0.25.0.
+   * so a later submit can wait again. Since agent 0.26.0.
    */
   'ai.login.submit': def(
     z.object({ provider: aiProvider, config_dir: machinePath.nullable(), session: sessionName, code: z.string().min(1).max(2000).nullable() }),
     aiLoginSubmitResult,
     60_000,
   ),
-  /** Kills the hidden login session (since agent 0.25.0). */
+  /** Kills the hidden login session (since agent 0.26.0). */
   'ai.login.cancel': def(z.object({ session: sessionName }), z.object({ cancelled: z.boolean() })),
   /**
    * A secret the machine already holds, read for the server to store encrypted (spec 2026-09-28 MCP

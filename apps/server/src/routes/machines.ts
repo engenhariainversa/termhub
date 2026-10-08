@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CLOSE } from '@termhub/agent-protocol';
+import { CLOSE, PAIRING_TTL_MS } from '@termhub/agent-protocol';
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError, badRequest, conflict, forbidden, localizedOf } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
@@ -110,27 +110,35 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     };
   });
 
-  /** New machines are agent-only: mints the enrollment token, shown to the caller this once. */
+  /**
+   * New machines are agent-only: mints the pairing token, shown to the caller this once. It is single use
+   * and expires after `PAIRING_TTL_MS`; `connect` trades it for a device key (TER-1017).
+   */
   app.post('/', async (request, reply) => {
     const body = createBody.parse(request.body);
     if (body.type !== 'agent') throw badRequest('Novas máquinas usam o agente; SSH e local não podem mais ser adicionados');
     const { token, hash } = newAgentToken();
+    const expiresAt = new Date(Date.now() + PAIRING_TTL_MS);
     const machine = await repos.machines.create({ ...body, subtitle: body.subtitle ?? null, host: null, ssh_user: null, owner_id: request.scope.createAs });
-    await repos.machines.rotateAgentToken(machine.id, hash);
+    await repos.machines.startAgentPairing(machine.id, hash, expiresAt);
     await audit(repos, request, 'machine.create', { target: { type: 'machine', id: machine.id, label: machine.name }, meta: { owner_id: machine.owner_id } });
-    return reply.code(201).send({ machine, agent_token: token });
+    return reply.code(201).send({ machine, agent_token: token, agent_token_expires_at: expiresAt.toISOString() });
   });
 
-  /** Rotates an agent machine's enrollment token and kicks the current connection (if any). */
+  /**
+   * "Pair again": mints a new pairing token, revokes the device key (or the legacy bearer token) and
+   * kicks the current connection (if any). The path keeps its old name so older web builds still work.
+   */
   app.post('/:id/agent-token', { config: { action: 'update' } }, async (request) => {
     const { id } = idParam.parse(request.params);
     const machine = await scoped(repos, request).machine(id);
     if (machine.type !== 'agent') throw badRequest('Máquina não usa agente');
     const { token, hash } = newAgentToken();
-    await repos.machines.rotateAgentToken(id, hash);
+    const expiresAt = new Date(Date.now() + PAIRING_TTL_MS);
+    await repos.machines.startAgentPairing(id, hash, expiresAt);
     agents.disconnect(id, CLOSE.UNAUTHORIZED, 'rotated');
     await audit(repos, request, 'machine.agent_token_rotate', { target: { type: 'machine', id, label: machine.name } });
-    return { agent_token: token };
+    return { agent_token: token, agent_token_expires_at: expiresAt.toISOString() };
   });
 
   app.get('/:id', async (request) => {

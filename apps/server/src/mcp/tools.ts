@@ -141,7 +141,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'start_ai_login',
     description:
-      "Redo the CLI login of an AI account (Claude or Codex) whose login expired, without going to the machine: the machine's agent (0.25.0 or newer) starts the CLI's login in a hidden session and this answers the url the person opens in a browser, the user_code to type there (Codex) and needs_code. Claude (needs_code: true): the person signs in and copies the code the page shows; send it with submit_ai_login_code. Codex (needs_code: false): the person types user_code on the page and authorizes; then call submit_ai_login_code without code. The flow expires at expires_at (15 min). Only the machine's owner can do it; agent tabs cannot call it. Gemini and Antigravity accounts are refused with the manual instruction.",
+      "Redo the CLI login of an AI account (Claude or Codex) whose login expired, without going to the machine: the machine's agent (0.26.0 or newer) starts the CLI's login in a hidden session and this answers the url the person opens in a browser, the user_code to type there (Codex) and needs_code. Claude (needs_code: true): the person signs in and copies the code the page shows; send it with submit_ai_login_code. Codex (needs_code: false): the person types user_code on the page and authorizes; then call submit_ai_login_code without code. The flow expires at expires_at (15 min). Only the machine's owner can do it; agent tabs cannot call it. Gemini and Antigravity accounts are refused with the manual instruction.",
     scope: 'terminals', resource: 'ai_accounts', action: 'update',
     input: { account_id: id },
     run: async (ctx, a) => {

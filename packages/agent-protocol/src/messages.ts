@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { rpcErrorSchema, rpcMethod, sessionName, machinePath, wdaPort } from './rpc.js';
+import { helloPair, helloProof } from './auth.js';
 
 export const PROTOCOL_VERSION = 1;
 export const CLOSE = { UNAUTHORIZED: 4401, CONFLICT: 4409, VIOLATION: 1008 } as const;
@@ -83,7 +84,7 @@ export const NET_CHECK_MIN_AGENT_VERSION = '0.23.0';
  *  web or the app. The server requires it before any of those; an older agent drops an unknown RPC,
  *  which would read as a timeout. */
 export const CAPABILITY_AI_LOGIN = 'ai_login';
-export const AI_LOGIN_MIN_AGENT_VERSION = '0.25.0';
+export const AI_LOGIN_MIN_AGENT_VERSION = '0.26.0';
 
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
@@ -114,6 +115,10 @@ export const helloMessage = z.object({
   // rather than failing validation or coming back `undefined`. The server decides whether it
   // may open a `claude` channel from this list, before it ever tries.
   capabilities: z.array(z.string().max(64)).max(32).default([]),
+  /** Pairing dial (`connect`, TER-1017): the device key to store in exchange for the pairing token. See `auth.ts`. */
+  pair: helloPair.optional(),
+  /** Device-key dial: the signed answer to the server's `challenge`. See `auth.ts`. */
+  proof: helloProof.optional(),
 });
 
 // zod's discriminatedUnion rejects two members with the same 'type' literal, so the
