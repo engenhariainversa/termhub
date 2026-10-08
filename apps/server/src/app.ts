@@ -57,7 +57,7 @@ import { startDecisionSweeper } from './chat/decision-memory.js';
 import { startAutoAnswerSweeper } from './chat/auto-answer.js';
 import { createWaker } from './chat/wake.js';
 import { startMemorySweeper } from './memory/sweeper.js';
-import { agentRunner } from './chat/runner.js';
+import { agentRunner } from './chat/agent-runner.js';
 import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
 import { expireOrphanTabActions, startTabGoneActionExpiry } from './chat/tab-gone-actions.js';
 import { stopTabSuggestions } from './chat/tab-suggestions.js';
