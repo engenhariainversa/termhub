@@ -170,6 +170,12 @@ regex). The server accepts a ref only when:
 - it is at most `ON_BEHALF_MAX_AGE` old (proposal: 24 h; decision 10.3);
 - the tab is in that user's scope (already true: `terminal(ctx, …)` is scoped).
 
+**TER-1037:** in practice the concierge never searched for the ref of the message it was relaying, so
+every relayed order arrived as `assistant`. Each message the person types now reaches the concierge
+with a `[termhub]` line giving `message:<chat message id>`, and the server also accepts that id, as long
+as the chat message has its `message` memory item (only typed messages are indexed, so a wake or a
+re-injected decision still fails).
+
 An invalid ref fails the call with a clear error (`ON_BEHALF_INVALID`), so the concierge learns at
 once instead of the tab quietly receiving a weaker mark. `on_behalf_of` is accepted only on the gated
 (chat) token: from any other token it is refused, because only the chat has the person's messages.

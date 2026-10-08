@@ -26,6 +26,9 @@ export interface ChatConversation {
   context_tokens: number | null;
   /** The model's context window as that turn reported it; null when the CLI did not say. */
   context_window: number | null;
+  /** When that session was last compacted ("Compactar" or the CLI's auto-compact, TER-1038); null
+   *  when it never was, and again once the session is dropped. */
+  context_compacted_at: string | null;
   last_message_at: string | null;
   created_at: string;
 }
@@ -34,10 +37,11 @@ export interface ChatConversation {
 export interface ChatContextUsage {
   tokens: number;
   window: number | null;
+  compacted_at: string | null;
 }
 
 /** What dropping a CLI session drops with it: the fill belonged to that session. */
-const NO_SESSION = { cliSessionId: null, contextTokens: null, contextWindow: null } as const;
+const NO_SESSION = { cliSessionId: null, contextTokens: null, contextWindow: null, contextCompactedAt: null } as const;
 
 /**
  * What the chat says about an answer besides its text (TER-588), in the one shape the app's contract
@@ -86,6 +90,7 @@ const mapConversation = (c: PrismaConversation): ChatConversation => ({
   review_mode: c.reviewMode,
   context_tokens: c.contextTokens,
   context_window: c.contextWindow,
+  context_compacted_at: c.contextCompactedAt?.toISOString() ?? null,
   last_message_at: c.lastMessageAt?.toISOString() ?? null,
   created_at: c.createdAt.toISOString(),
 });
@@ -169,6 +174,26 @@ export class ChatRepository {
     await this.db.chatConversation.updateMany({ where: { id, archivedAt: null }, data: { archivedAt: new Date() } });
   }
 
+  /**
+   * "Apagar conversa" (TER-743): the row goes, and its transcript, actions, attachments, subagents and
+   * grants cascade with it. The memory rows indexed from its messages and decided actions point at them
+   * without a foreign key, so they go here, in the same transaction. Attachment files left on the volume
+   * lose their row and the hourly sweep removes them. Decisions on tab question cards stay (their
+   * conversation is nulled): they are the person's answers, forgotten from "Memória do chat".
+   */
+  async deleteConversation(id: string, userId: string): Promise<boolean> {
+    return this.db.$transaction(async (tx) => {
+      const [messages, actions] = await Promise.all([
+        tx.chatMessage.findMany({ where: { conversationId: id, conversation: { userId } }, select: { id: true } }),
+        tx.chatAction.findMany({ where: { conversationId: id, conversation: { userId } }, select: { id: true } }),
+      ]);
+      if (messages.length) await tx.memoryItem.deleteMany({ where: { ownerId: userId, kind: 'message', sourceId: { in: messages.map((m) => m.id) } } });
+      if (actions.length) await tx.memoryItem.deleteMany({ where: { ownerId: userId, kind: 'action', sourceId: { in: actions.map((a) => a.id) } } });
+      const { count } = await tx.chatConversation.deleteMany({ where: { id, userId } });
+      return count > 0;
+    });
+  }
+
   /** A host change moves every project conversation too: their CLI sessions live in the old host's
    * config dir and cannot be resumed anywhere else (user-hosted spec §3). */
   async clearProjectSessions(userId: string): Promise<void> {
@@ -209,13 +234,14 @@ export class ChatRepository {
 
   /** Stores how full the session's context is (TER-315). A turn that did not report the window keeps
    *  the one stored before. Answers the stored pair. */
-  async setContext(id: string, usage: { tokens: number; window?: number | null }): Promise<ChatContextUsage> {
+  /** `compacted`: this fill is what a compaction left, so it also stamps `context_compacted_at`. */
+  async setContext(id: string, usage: { tokens: number; window?: number | null; compacted?: boolean }): Promise<ChatContextUsage> {
     const row = await this.db.chatConversation.update({
       where: { id },
-      data: { contextTokens: usage.tokens, ...(usage.window != null ? { contextWindow: usage.window } : {}) },
-      select: { contextTokens: true, contextWindow: true },
+      data: { contextTokens: usage.tokens, ...(usage.window != null ? { contextWindow: usage.window } : {}), ...(usage.compacted ? { contextCompactedAt: new Date() } : {}) },
+      select: { contextTokens: true, contextWindow: true, contextCompactedAt: true },
     });
-    return { tokens: row.contextTokens ?? usage.tokens, window: row.contextWindow };
+    return { tokens: row.contextTokens ?? usage.tokens, window: row.contextWindow, compacted_at: row.contextCompactedAt?.toISOString() ?? null };
   }
 
   /**

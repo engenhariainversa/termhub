@@ -2,8 +2,8 @@ import { useId, type HTMLAttributes } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { i18n, useTranslation } from '../i18n';
 import { pinTab, previewTab, updateEditorTabs, useEditorTabs } from '../lib/editor-tabs';
-import { tabDotClass, tabNeedsYou } from '../lib/needs-you';
 import { TAB_STATE_LABEL, type Machine, type Project, type Tab } from '../lib/types';
+import { TabDot } from './TabDot';
 
 interface Props {
   project: Project;
@@ -11,6 +11,8 @@ interface Props {
   section: string;
   /** the project's open terminal tabs ("agents"), already ordered */
   agents: Tab[];
+  /** the card ref of the automatic run working in a tab, by tab id (TER-1044) */
+  autoRuns?: ReadonlyMap<string, string>;
   /** the project's linked machines: its terminals are listed under the machine each runs on */
   machines: Machine[];
   /** how many of its tabs are waiting for you */
@@ -43,7 +45,7 @@ function byMachine(agents: Tab[], machines: Machine[]): { id: string; name: stri
 }
 
 /** One project in the sidebar: its link and actions, and its running agents underneath. */
-export function ProjectRow({ project: p, section, agents, machines, waiting, expanded, onToggle, chat, favorite, onToggleFavorite, onOpenGroups, dragProps, onEndTerminal }: Props) {
+export function ProjectRow({ project: p, section, agents, autoRuns, machines, waiting, expanded, onToggle, chat, favorite, onToggleFavorite, onOpenGroups, dragProps, onEndTerminal }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const hasAgents = agents.length > 0;
@@ -160,7 +162,6 @@ export function ProjectRow({ project: p, section, agents, machines, waiting, exp
                   // click pins it; the ✕ here is the one that ends the terminal (the tab's ✕ only closes the tab)
                   const open = !!editorTabs?.open.includes(tab.id);
                   const preview = editorTabs?.preview === tab.id;
-                  const needsYou = tabNeedsYou(tab);
                   return (
                     <li key={tab.id} className="group/t flex min-w-0 items-center rounded hover:bg-bg-3">
                       <Link
@@ -176,12 +177,7 @@ export function ProjectRow({ project: p, section, agents, machines, waiting, exp
                         title={open ? (preview ? t('{{name}} · aberta em prévia (duplo clique fixa)', { name: tab.name }) : t('{{name}} · aba aberta', { name: tab.name })) : t('{{name}} · clique abre em prévia, duplo clique fixa', { name: tab.name })}
                       >
                         {/* an open tab is a live one here: no state = the neutral dot the tab bar shows */}
-                        <span
-                          data-dot
-                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${tabDotClass(true, tab)}`}
-                          title={tab.state ? t(TAB_STATE_LABEL[tab.state]) : undefined}
-                          aria-label={needsYou ? t('esperando você') : undefined}
-                        />
+                        <TabDot alive tab={tab} autoRef={autoRuns?.get(tab.id)} title={tab.state ? t(TAB_STATE_LABEL[tab.state]) : undefined} />
                         <span className={`min-w-0 truncate ${preview ? 'pr-0.5 italic' : ''}`}>{tab.name}</span>
                       </Link>
                       {onEndTerminal && (

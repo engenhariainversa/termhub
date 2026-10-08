@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatPage } from './ChatPage';
@@ -717,6 +717,13 @@ it('renders a streamed delta as Markdown too, while it is still being written', 
 /** The page renders a `Link` for the enrol path, so the host tests need a router around it. */
 const renderChat = () => render(<ChatPage />, { wrapper: MemoryRouter });
 
+/** "Configurações da conversa" (TER-1039): a host that is fine is only a line of information, and
+ *  lives in the dialog the header's cog opens; a host that needs something stays above the thread. */
+async function openSettings() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Configurações da conversa' }));
+  return within(await screen.findByRole('dialog', { name: 'Configurações da conversa' }));
+}
+
 const conversationWith = (host: unknown, over: Record<string, unknown> = {}) => ({
   conversation: { id: 'c1', title: null, model: null, review_mode: false, last_message_at: null },
   messages: [],
@@ -754,18 +761,21 @@ it('picking one of the machines sets the host and re-reads the conversation', as
   // The pair travels in one call, and a machine change carries no account: a login belongs to a
   // machine, so the new host starts on its own default one.
   await waitFor(() => expect(setHostMock).toHaveBeenCalledWith('m2', null));
-  expect(await screen.findByText(/máquina jarvis/i)).toBeTruthy();
   // The transcript is ours and survives a fresh CLI session: the conversation is read again.
   await waitFor(() => expect(chatMock.mock.calls.length).toBeGreaterThanOrEqual(2));
-  expect(screen.queryByText(/escolha em qual/i)).toBeNull();
+  // Chosen and fine, the host leaves the space above the thread for the settings.
+  await waitFor(() => expect(screen.queryByText(/escolha em qual/i)).toBeNull());
+  expect(screen.queryByText(/máquina jarvis/i)).toBeNull();
+  expect((await openSettings()).getByText(/máquina jarvis/i)).toBeTruthy();
 });
 
 it('says which machine and which account are running the conversation', async () => {
   chatMock.mockResolvedValue(conversationWith({ kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: '/home/u/.claude-work', account: { kind: 'chosen', id: 'acc1', label: 'trabalho' } }));
   renderChat();
 
-  expect(await screen.findByText(/máquina jarvis/i)).toBeTruthy();
-  expect(screen.getByText(/conta trabalho/i)).toBeTruthy();
+  const settings = await openSettings();
+  expect(await settings.findByText(/máquina jarvis/i)).toBeTruthy();
+  expect(settings.getByText(/conta trabalho/i)).toBeTruthy();
   expect((screen.getByRole('button', { name: /enviar/i }) as HTMLButtonElement).disabled).toBe(true); // empty box, not a blocked host
   expect(screen.queryByText(/cadastre uma máquina/i)).toBeNull();
 });
@@ -829,20 +839,58 @@ it('sends the account with the machine, so the chat can actually run on a chosen
   setHostMock.mockResolvedValue({ conversation: { id: 'c1', ai_account_id: 'acc1' }, host: chosen });
   renderChat();
 
-  fireEvent.click(await screen.findByRole('button', { name: /trocar máquina/i }));
+  // A ready host is changed from the settings, where its line now lives.
+  const settings = await openSettings();
+  fireEvent.click(await settings.findByRole('button', { name: /trocar máquina/i }));
 
-  expect(await screen.findByRole('button', { name: /trocar para trabalho/i })).toBeTruthy();
-  expect(screen.queryByRole('button', { name: /trocar para gpt/i })).toBeNull();
-  expect(screen.queryByRole('button', { name: /trocar para outra máquina/i })).toBeNull();
+  expect(await settings.findByRole('button', { name: /trocar para trabalho/i })).toBeTruthy();
+  expect(settings.queryByRole('button', { name: /trocar para gpt/i })).toBeNull();
+  expect(settings.queryByRole('button', { name: /trocar para outra máquina/i })).toBeNull();
 
-  fireEvent.click(screen.getByRole('button', { name: /trocar para trabalho/i }));
+  fireEvent.click(settings.getByRole('button', { name: /trocar para trabalho/i }));
 
   // The pair in one call: the account the person picked, on the machine that already hosts the
   // conversation. Nothing in the product sent this before, so `chosen` and `lost` were unreachable.
   await waitFor(() => expect(setHostMock).toHaveBeenCalledWith('m1', 'acc1'));
-  // …and the header now names it: the `chosen` state is reachable through the product, not only in
+  // …and the host line now names it: the `chosen` state is reachable through the product, not only in
   // the server's type.
-  expect(await screen.findByText(/conta trabalho/i)).toBeTruthy();
+  expect(await settings.findByText(/conta trabalho/i)).toBeTruthy();
+});
+
+it('a ready host is said in the settings, not above the thread', async () => {
+  chatMock.mockResolvedValue(conversationWith({ kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null, account: { kind: 'default' }, sessionAtStake: false }));
+  renderChat();
+
+  await screen.findByRole('list', { name: 'Conversa' });
+  expect(screen.queryByText(/máquina jarvis/i)).toBeNull();
+  expect(screen.queryByRole('button', { name: /trocar máquina/i })).toBeNull();
+  const settings = await openSettings();
+  const dialog = screen.getByRole('dialog', { name: 'Configurações da conversa' });
+  // Every "Máquina do chat" region on screen — the dialog's section and the card itself — is in the dialog.
+  const regions = screen.getAllByRole('region', { name: 'Máquina do chat' });
+  expect(regions.length).toBeGreaterThan(0);
+  for (const r of regions) expect(dialog.contains(r)).toBe(true);
+  expect(settings.getByText(/máquina jarvis/i)).toBeTruthy();
+  expect(settings.getByRole('button', { name: /trocar máquina/i })).toBeTruthy();
+});
+
+it('a host that needs something stays above the thread, and the settings carry no host line', async () => {
+  chatMock.mockResolvedValue(conversationWith({ kind: 'offline', machine: { id: 'm2', name: 'jarvis' } }));
+  renderChat();
+
+  expect(await screen.findByText(/máquina jarvis está offline/i)).toBeTruthy();
+  const settings = await openSettings();
+  expect(settings.queryByRole('region', { name: 'Máquina do chat' })).toBeNull();
+  expect(settings.queryByText(/máquina jarvis/i)).toBeNull();
+});
+
+it('a ready host whose old session is at stake stays above the thread too', async () => {
+  chatMock.mockResolvedValue(conversationWith({ kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null, account: { kind: 'default' }, sessionAtStake: true }));
+  renderChat();
+
+  expect(await screen.findByText(/máquina jarvis/i)).toBeTruthy();
+  const settings = await openSettings();
+  expect(settings.queryByRole('region', { name: 'Máquina do chat' })).toBeNull();
 });
 
 it('under “ver como” says how to make the host changeable, instead of showing empty lists', async () => {

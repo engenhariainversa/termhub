@@ -72,6 +72,12 @@ export const WORKTREE_MIN_AGENT_VERSION = '0.18.0';
  *  before the call; a machine whose agent lacks it is skipped and the list says to update the agent. */
 export const CAPABILITY_FILE_LIST = 'file_list';
 
+/** The agent answers `net.check` (TER-586): from the machine, a POST without a token to the monitor hooks
+ *  and MCP addresses, so the machine screen says whether the firewall lets them through. The server
+ *  requires it before the call; an older agent drops an unknown RPC, which would read as a timeout. */
+export const CAPABILITY_NET_CHECK = 'net_check';
+export const NET_CHECK_MIN_AGENT_VERSION = '0.23.0';
+
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
 export function streamUserMessageLine(text: string, uuid: string): string {
@@ -143,6 +149,14 @@ export const claudeOpenParams = z.object({
  *  WDA port ranges — the agent re-checks before connecting. `strict` so a future `host` cannot sneak in. */
 export const tcpOpenParams = z.object({ port: wdaPort }).strict();
 
+/**
+ * Sent on a `probe` hello right before the 1000 `probe-ok` close (TER-586): the other addresses the
+ * machine must reach besides `/agent/ws` — where the monitor hooks post (`hooks_url`) and the tabs' MCP
+ * (`mcp_url`, null when the server has none). `doctor` POSTs to each without a token. An agent older
+ * than 0.23.0 drops it as an invalid server message, and still reads the close as before.
+ */
+export const probeInfoMessage = z.object({ type: z.literal('probe_info'), hooks_url: z.string().url().max(2048), mcp_url: z.string().url().max(2048).nullable() });
+
 const openPty = z.object({ type: z.literal('open'), ch: channel, kind: z.literal('pty'), params: ptyOpenParams });
 const openClaude = z.object({ type: z.literal('open'), ch: channel, kind: z.literal('claude'), params: claudeOpenParams });
 const openTcp = z.object({ type: z.literal('open'), ch: channel, kind: z.literal('tcp'), params: tcpOpenParams });
@@ -154,6 +168,7 @@ const openTcp = z.object({ type: z.literal('open'), ch: channel, kind: z.literal
 // params (or the reverse) matches neither member and is rejected, not silently accepted.
 export const serverMessage = z.union([
   z.object({ type: z.literal('rpc'), id: rpcId, method: rpcMethod, params: z.unknown() }),
+  probeInfoMessage,
   openPty,
   openClaude,
   openTcp,

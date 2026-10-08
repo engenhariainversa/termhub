@@ -343,6 +343,8 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     uploadAttachment: (a: Auth, file, projectId, onProgress) =>
       uploadCall(`/api/m/v1/chat/attachments?name=${encodeURIComponent(file.name)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ''}`, file.uri, file.mime, chatAttachmentResponse, a.accessToken, onProgress).then((r) => r.attachment),
     deleteAttachment: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/attachments/${encodeURIComponent(id)}`, { token: a.accessToken }),
+    retryAttachment: (a: Auth, id: string) =>
+      call('POST', `/api/m/v1/chat/attachments/${encodeURIComponent(id)}/retry`, chatAttachmentResponse, { token: a.accessToken }).then((r) => r.attachment),
     attachmentSource: async (a: Auth, id: string) => {
       const path = `/api/m/v1/chat/attachments/${encodeURIComponent(id)}`;
       return {
@@ -364,7 +366,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     },
     forgetChatDecision: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/decisions/${encodeURIComponent(id)}`, { token: a.accessToken }),
     chatMemory: (a: Auth) => call('GET', '/api/m/v1/chat/memory', chatMemoryResponse, { token: a.accessToken }),
-    setChatMemory: (a: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean }) =>
+    setChatMemory: (a: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }) =>
       call('PATCH', '/api/m/v1/chat/memory', chatMemoryResponse, { token: a.accessToken, body: typeof body === 'boolean' ? { enabled: body } : body }),
     chatNotes: (a: Auth, cursor) => {
       const params = new URLSearchParams();

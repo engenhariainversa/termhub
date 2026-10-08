@@ -14,9 +14,11 @@ vi.mock('../lib/api', () => ({
 }));
 vi.mock('./AgentEnrollment', () => ({ AgentEnrollment: () => null }));
 vi.mock('./AgentUpdateCard', () => ({ AgentUpdateCard: () => <p>agent card</p> }));
+vi.mock('./NetworkCheckCard', () => ({ NetworkCheckCard: () => <p>network card</p> }));
 vi.mock('./MonitorHooksCard', async (orig) => ({ ...(await orig<typeof import('./MonitorHooksCard')>()), MonitorHooksCard: () => <p>monitor card</p> }));
 vi.mock('./SimulatorSetupCard', () => ({ SimulatorSetupCard: () => <p>simulator card</p> }));
 vi.mock('./AutomationAllowedCard', () => ({ AutomationAllowedCard: () => null }));
+vi.mock('./AiUsageQueryCard', () => ({ AiUsageQueryCard: () => null }));
 
 import { MachineForm } from './MachineForm';
 

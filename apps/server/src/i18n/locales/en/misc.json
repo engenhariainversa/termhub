@@ -68,6 +68,10 @@
   "Atualizando o PR com a branch base": "Updating the PR with the base branch",
   "Integração do GitHub sem permissão de escrita": "The GitHub integration has no write permission",
   "PR com conflito depois das tentativas de correção": "PR still in conflict after the fix attempts",
+  "Escalado por conflito em {{sha}}; aguardando um push que resolva": "Escalated for a conflict at {{sha}}; waiting for a push that resolves it",
+  "O PR continua com conflito em {{sha}} depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.": "The PR is still in conflict at {{sha}} after the fix attempts; resolve the conflict and termhub merges it once CI is green.",
+  "A correção do conflito em {{sha}} terminou sem push; resolva o conflito e o termhub mescla quando o CI ficar verde.": "The conflict fix at {{sha}} ended without a push; resolve the conflict and termhub merges it once CI is green.",
+  "A execução terminou, mas o PR continua com conflito em {{sha}} (nenhum push novo); resolva o conflito e o termhub mescla quando o CI ficar verde.": "The run ended, but the PR is still in conflict at {{sha}} (no new push); resolve the conflict and termhub merges it once CI is green.",
   "O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.": "The PR is still in conflict after the fix attempts; resolve the conflict and termhub merges it once CI is green.",
   "Automático mesclou o PR #{{n}} de {{ref}}: {{url}}": "Automatic work merged PR #{{n}} of {{ref}}: {{url}}",
   "O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.": "The deploy failed after the merge; automatic work on the project was paused. Check the deploy and resume once it is resolved.",
@@ -113,5 +117,8 @@
   "Nenhuma máquina com agente 0.19 ligada ao projeto; atualize o agente": "No machine with agent 0.19 linked to the project; update the agent",
   "agente sem a trava; atualize o agente (0.19)": "agent without the hard lock; update the agent (0.19)",
   "O agente não chegou a iniciar: a aba voltou ao terminal. Confira o erro na tela e retome.": "The agent never started: the tab went back to the shell. Check the error on screen and resume.",
-  "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "The agent exited and this machine has no automatic-work hard lock; update the agent (0.19.0 or newer) and resume."
+  "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "The agent exited and this machine has no automatic-work hard lock; update the agent (0.19.0 or newer) and resume.",
+  "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub kept failing on the push or the PR after the automatic retries; check the tab and resume.",
+  "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub is unstable; the CI fix is asked again once it is back",
+  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "The deploy failed because of a GitHub problem; running it again ({{attempt}} of {{max}}): {{url}}"
 }

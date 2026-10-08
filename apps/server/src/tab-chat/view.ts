@@ -9,6 +9,7 @@ export function tabSummaryOf(
   project: Pick<Project, 'id' | 'key' | 'name'>,
   machine: Pick<Machine, 'id' | 'name'>,
   availability: TabChatAvailability,
+  autoRef: string | null = null,
 ): TTabSummary {
   return {
     id: tab.id,
@@ -25,5 +26,6 @@ export function tabSummaryOf(
     activity: tab.activity,
     activity_verb: tab.activity_verb,
     availability,
+    auto_ref: autoRef,
   };
 }

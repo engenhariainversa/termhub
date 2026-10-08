@@ -1,8 +1,22 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatLayout } from './ChatLayout';
+import { ChatPage } from '../pages/ChatPage';
+
+// Just enough of the chat for `ChatPage` to mount under the layout: the conversation's cog is the
+// panel's, portalled into this header (TER-1039), so the header can only be tested with a panel in it.
+vi.mock('../lib/api', () => ({
+  ApiError: class extends Error {},
+  api: {
+    chat: () => Promise.resolve({ conversation: { id: 'c1', ai_account_id: null }, messages: [], actions: [], host: { kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null, account: { kind: 'default' }, sessionAtStake: false } }),
+    machines: { list: () => Promise.resolve({ machines: [], latest_agent_version: null }) },
+    aiAccounts: { list: () => Promise.resolve({ accounts: [] }) },
+  },
+}));
+vi.mock('../lib/auth', () => ({ useAuth: () => ({ user: { id: 'u1' }, viewAs: null }) }));
+vi.mock('../lib/chat', () => ({ useChatStream: () => ({ connected: true }) }));
 
 function Marker() {
   return <p>conteúdo do chat</p>;
@@ -18,6 +32,25 @@ function mount() {
       </Routes>
     </MemoryRouter>,
   );
+}
+
+/** The real `/chat` page under the layout, as the app routes it. */
+function mountChat() {
+  return render(
+    <MemoryRouter initialEntries={['/chat']}>
+      <Routes>
+        <Route element={<ChatLayout />}>
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat/memoria" element={<p>tela da memória</p>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+async function openSettings() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Configurações da conversa' }));
+  return within(await screen.findByRole('dialog', { name: 'Configurações da conversa' }));
 }
 
 afterEach(() => {
@@ -52,10 +85,31 @@ describe('ChatLayout', () => {
     expect(back.getAttribute('href')).toBe('/');
   });
 
-  it('links to "Memória do chat"', () => {
-    mount();
-    const link = screen.getByRole('link', { name: 'Memória' });
+  it('keeps the header to the way back, the title and the cog: no "Memória" link of its own (TER-1039)', async () => {
+    mountChat();
+    const header = screen.getByRole('banner');
+    await within(header).findByRole('button', { name: 'Configurações da conversa' });
+    expect(within(header).queryByRole('link', { name: 'Memória' })).toBeNull();
+    expect(within(header).queryByTitle('build')).toBeNull();
+    expect(within(header).getAllByRole('link')).toHaveLength(1); // ← Voltar
+  });
+
+  it("portals the chat panel's cog into its header, not above the thread", async () => {
+    mountChat();
+    const cog = await screen.findByRole('button', { name: 'Configurações da conversa' });
+    expect(screen.getByRole('banner').contains(cog)).toBe(true);
+    expect(screen.getByRole('main').contains(cog)).toBe(false);
+    expect(screen.getAllByRole('button', { name: 'Configurações da conversa' })).toHaveLength(1);
+  });
+
+  it('links to "Memória do chat" from the conversation settings, and closes them on the way', async () => {
+    mountChat();
+    const settings = await openSettings();
+    const link = settings.getByRole('link', { name: 'Memória' });
     expect(link.getAttribute('href')).toBe('/chat/memoria');
+    fireEvent.click(link);
+    expect(await screen.findByText('tela da memória')).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Configurações da conversa' })).toBeNull();
   });
 
 it('locks the document while it is mounted, and gives it back on the way out', () => {
@@ -111,21 +165,14 @@ it('on a desktop (no touch screen) it leaves the height to CSS: no keyboard can 
   unmount();
 });
 
-it('shows which bundle it is running', () => {
-  // So "it did not change on my phone" is answered by reading the header, not by guessing between a
-  // stale page and a fix that does not work.
-  render(
-    <MemoryRouter initialEntries={['/chat']}>
-      <Routes>
-        <Route element={<ChatLayout />}>
-          <Route path="/chat" element={<p>conversa</p>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
-  );
+it('shows which bundle it is running, in the conversation settings', async () => {
+  // So "it did not change on my phone" is answered by reading the settings (TER-1039: no longer the
+  // header), not by guessing between a stale page and a fix that does not work.
+  mountChat();
+  const settings = await openSettings();
   // Version first, because that is what was asked for; then whatever identifies the build — the
   // commit in a deployed image, the build time in a local one, since the version alone has not
   // moved since 0.1.0 and could never tell two deploys apart.
-  expect(screen.getByTitle('build').textContent).toMatch(/^v\d+\.\d+\.\d+ · .+/);
+  expect(settings.getByTitle('build').textContent).toMatch(/^v\d+\.\d+\.\d+ · .+/);
 });
 });
