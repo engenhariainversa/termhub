@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ChatPref } from '../../lib/project-chat-prefs';
@@ -8,13 +8,26 @@ const mounts = vi.hoisted(() => new Map<string, number>());
 const renders = vi.hoisted(() => new Map<string, number>());
 vi.mock('./ChatPanel', async () => {
   const { useEffect } = await import('react');
+  const { createPortal } = await import('react-dom');
+  const { useChatHeaderSlot } = await import('./chat-header-slot');
+  // Stands in for `ChatSettingsButton` (TER-1039): the one part of the panel that reads the header slot,
+  // a child of its own, so the panel itself does not re-render when the slot arrives — as in the real one.
+  const Cog = ({ projectId }: { projectId: string }) => {
+    const slot = useChatHeaderSlot();
+    return slot ? createPortal(<button type="button">engrenagem {projectId}</button>, slot) : null;
+  };
   return {
     // A plain component (not memoized itself), so `ChatDock`'s own `memo(ChatPanel)` is what the test
     // below exercises.
     ChatPanel: ({ projectId }: { projectId: string }) => {
       renders.set(projectId, (renders.get(projectId) ?? 0) + 1);
       useEffect(() => void mounts.set(projectId, (mounts.get(projectId) ?? 0) + 1), [projectId]);
-      return <div>painel {projectId}</div>;
+      return (
+        <div>
+          painel {projectId}
+          <Cog projectId={projectId} />
+        </div>
+      );
     },
   };
 });
@@ -202,6 +215,22 @@ it('memoizes the mounted panel: a pref change for another project does not re-re
   chat.prefs = { p1: chat.prefs.p1, p2: open(600) };
   rerender(<MemoryRouter><ChatDock /></MemoryRouter>);
   expect(renders.get('p1')).toBe(1);
+});
+
+it("puts each panel's cog in its own header, before the window controls (TER-1039)", () => {
+  chat.alive = ['p1', 'p2'];
+  chat.shownProjectId = 'p2';
+  chat.prefs = { p1: open(), p2: open() };
+  renderDock();
+  const headers = [...document.querySelectorAll('aside header')] as HTMLElement[];
+  expect(headers).toHaveLength(2);
+  for (const [i, id] of ['p1', 'p2'].entries()) {
+    const cog = screen.getByRole('button', { name: `engrenagem ${id}`, hidden: true });
+    expect(headers[i]!.contains(cog)).toBe(true);
+    // Before ✕, so the dock's own controls stay at the end of the bar.
+    const close = within(headers[i]!).getByRole('button', { name: 'Fechar chat', hidden: true });
+    expect(cog.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  }
 });
 
 it('the separator commits the width of the shown project', () => {
