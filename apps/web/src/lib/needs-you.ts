@@ -28,16 +28,23 @@ export function needsYouByProject(items: MonitorItem[]): Map<string, number> {
   return counts;
 }
 
-/** Colour of the tab's status dot: orange while the tab needs you (waiting and not seen yet). */
+/**
+ * Colour and motion of the tab's status dot (TER-1044): orange and blinking slowly while the tab needs
+ * you (waiting and not seen yet), blue and pulsing while it works — its own background work included
+ * (TER-644), never the "needs you" orange — and still otherwise. The motion classes live in index.css,
+ * which turns them off for whoever asked the system for no motion.
+ */
 export function tabDotClass(alive: boolean, tab: NeedsYouTab | null | undefined): string {
-  if (tab && tabNeedsYou(tab)) return 'animate-pulse bg-attention';
+  if (tab && tabNeedsYou(tab)) return 'bg-attention tab-dot-blink';
   if (tab?.state === 'error') return 'bg-danger';
-  // waiting on its own background work (TER-644): neutral, not the "needs you" orange
-  if (tab?.state === 'waiting_background') return alive ? 'bg-fg-muted' : 'bg-fg-dim';
-  // done, with a report and no question (TER-972): green, never pulsing
-  if (tab?.state === 'finished') return alive ? 'bg-ok' : 'bg-fg-dim';
+  if (tab?.state === 'working' || tab?.state === 'waiting_background') return alive ? 'bg-accent tab-dot-working' : 'bg-fg-dim';
+  // done, with a report and no question (TER-972): green, never moving
   return alive ? 'bg-ok' : 'bg-fg-dim';
 }
+
+/** Whether the dot shows the tab at work: the automatic ring turns only then. */
+export const tabDotWorking = (alive: boolean, tab: NeedsYouTab | null | undefined): boolean =>
+  alive && (tab?.state === 'working' || tab?.state === 'waiting_background') && !tabNeedsYou(tab);
 
 /** What the alert says: the tool's own message, or a line for the state. */
 export function needsYouText(tab: Tab): string {
