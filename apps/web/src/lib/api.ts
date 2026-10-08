@@ -1,6 +1,7 @@
 import { currentLocale, i18n, type Locale } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
 import type { AutomationFeedEvent, FileRecentResponse, NetworkCheck, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
 
@@ -145,6 +146,12 @@ export const api = {
      *  401 REAUTH_FAILED (wrong password/code), 429 LOCKED, 409 LAST_ADMIN. */
     requestDeletion: (reauth: { password: string } | { code: string }) => request<AccountDeletionStatus>('POST', '/account/deletion', reauth),
     cancelDeletion: () => request<AccountDeletionStatus>('DELETE', '/account/deletion'),
+    /** "Exportar meus dados" (TER-741): the latest request and when another may be asked. */
+    dataExport: () => request<DataExportStatus>('GET', '/account/export'),
+    /** builds the archive in the background and e-mails when it is ready; 409 EXPORT_IN_PROGRESS, 429 RATE_LIMITED (one a day) */
+    requestDataExport: () => request<DataExportStatus>('POST', '/account/export'),
+    /** The zip, for the signed-in account only (404 EXPORT_NOT_FOUND once its 7 days are over). */
+    dataExportUrl: (id: string) => `/api/account/export/${encodeURIComponent(id)}/download`,
   },
   machines: {
     list: () => request<{ machines: Machine[]; latest_agent_version: string | null }>('GET', '/machines'),

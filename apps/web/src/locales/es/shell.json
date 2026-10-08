@@ -193,5 +193,15 @@
   "← trocar e-mail": "← cambiar correo",
   "← Voltar": "← Volver",
   "✓ liberado": "✓ permitido",
+  "Exportar meus dados": "Exportar mis datos",
+  "Não foi possível carregar a exportação.": "No se pudo cargar la exportación.",
+  "Não foi possível pedir a exportação.": "No se pudo solicitar la exportación.",
+  "Gera um arquivo .zip com sua conta, projetos, cards, notas, tickets, chats, memória, abas, máquinas, integrações (sem tokens), contas de IA, aparelhos e notificações. Você recebe um e-mail quando ele fica pronto, e o download fica aqui por 7 dias.": "Genera un archivo .zip con tu cuenta, proyectos, tarjetas, notas, tickets, chats, memoria, pestañas, máquinas, integraciones (sin tokens), cuentas de IA, dispositivos y notificaciones. Recibes un correo cuando esté listo, y la descarga queda aquí durante 7 días.",
+  "Preparando o arquivo… Você recebe um e-mail quando ele ficar pronto.": "Preparando el archivo… Recibirás un correo cuando esté listo.",
+  "Baixar ({{size}})": "Descargar ({{size}})",
+  "Disponível até {{date}}.": "Disponible hasta el {{date}}.",
+  "Não foi possível gerar o arquivo. Peça de novo.": "No se pudo generar el archivo. Pídelo de nuevo.",
+  "O arquivo da última exportação expirou.": "El archivo de la última exportación expiró.",
+  "Você pode pedir outra exportação a partir de {{date}}.": "Puedes pedir otra exportación a partir del {{date}}.",
   "Auditoria": "Auditoría"
 }

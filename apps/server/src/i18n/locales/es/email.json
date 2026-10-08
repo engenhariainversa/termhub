@@ -39,5 +39,10 @@
   "Alguém pediu, na página de exclusão do termhub, para excluir a conta deste e-mail.": "Alguien pidió, en la página de eliminación de termhub, eliminar la cuenta de este correo.",
   "Para confirmar, use o botão abaixo nos próximos {{minutes}} minutos. A conta fica desativada por 30 dias e depois é excluída definitivamente; até lá, entrar no termhub permite cancelar.": "Para confirmar, usa el botón de abajo en los próximos {{minutes}} minutos. La cuenta queda desactivada durante 30 días y luego se elimina definitivamente; hasta entonces, iniciar sesión en termhub te permite cancelar.",
   "Se não foi você, ignore este e-mail: nada muda na sua conta.": "Si no fuiste tú, ignora este correo: nada cambia en tu cuenta.",
-  "Confirmar exclusão": "Confirmar eliminación"
+  "Confirmar exclusão": "Confirmar eliminación",
+  "Seus dados do termhub estão prontos para baixar": "Tus datos de termhub están listos para descargar",
+  "O arquivo que você pediu, com os dados da sua conta, está pronto.": "El archivo que pediste, con los datos de tu cuenta, está listo.",
+  "Baixe pelo Perfil, com a sua conta aberta, até {{date}}. Depois disso o arquivo é apagado e você pode pedir outro.": "Descárgalo desde Perfil, con tu cuenta abierta, hasta el {{date}}. Después el archivo se borra y puedes pedir otro.",
+  "Se não foi você que pediu, troque sua senha e confira os aparelhos e tokens da conta.": "Si no fuiste tú quien lo pidió, cambia tu contraseña y revisa los dispositivos y tokens de la cuenta.",
+  "Baixar meus dados": "Descargar mis datos"
 }

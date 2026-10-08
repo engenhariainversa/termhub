@@ -1,7 +1,7 @@
 /** Synthetic office for the harness (office-harness.html): pure, so the harness's own knobs can be tested. */
 import type { OfficeBuilding, OfficeCity, OfficeMachine, OfficeTab, TabActivity, TabState } from '../lib/types';
 
-export const HARNESS_STATES: Array<TabState | null> = ['working', 'working', 'working', 'waiting_input', 'waiting_permission', 'idle', 'idle', 'error', null];
+export const HARNESS_STATES: Array<TabState | null> = ['working', 'working', 'working', 'waiting_input', 'waiting_permission', 'idle', 'idle', 'error', 'waiting_background', 'finished', null];
 const ACTIVITIES: TabActivity[] = ['coding', 'reading', 'researching', 'planning', 'terminal', 'working'];
 /** Three machines, so one building's desks sit on several of them; two carry a subtitle for the desk tag. */
 const MACHINES = [
@@ -90,6 +90,12 @@ export function harnessCity(o: HarnessOptions): OfficeCity {
   });
   const machines = MACHINES.map((m, i): OfficeMachine => ({ ...m, type: 'agent', online: i !== o.offline, reachable: i !== o.offline && i !== o.silent }));
   return { projects, machines };
+}
+
+/** `?auto=1`: every third desk (t1, t4, t7…) is an automatic run's, with a made-up card — a robot sits there (TER-1048). */
+export function harnessAutoRef(tabId: string): string | undefined {
+  const n = Number(/-t(\d+)$/.exec(tabId)?.[1] ?? NaN);
+  return n % 3 === 1 ? `TER-${100 + n}` : undefined;
 }
 
 /** The id of the desk `churned` adds and removes. */
