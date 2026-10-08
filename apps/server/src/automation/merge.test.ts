@@ -8,6 +8,7 @@ import { GithubCiError } from '../integrations/github-ci.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import { setupSchema, type ProjectSetupData } from '../setup/schema.js';
 import { epicBranchName } from './branches.js';
+import type { TriggeredStart } from './dispatcher.js';
 import { mergeApproved, mergeKey, MERGE_TOOL, runMergeExecutor, type MergeDeps } from './merge.js';
 import { mergeWaitEntryOf, mergeWaitOf, resetMergeWaits } from './merge-wait.js';
 
@@ -206,7 +207,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
   };
   const ci = { listRuns: vi.fn(async (_t: string, _r: string, _sha: string): Promise<WorkflowRun[]> => [run('ci', 'completed', 'success')]) };
   // a started fixer is a run keyed by the head; it ends at once here (each test drives the runs it needs active)
-  const startFixer = vi.fn(async (i: { taskId: string; triggerSha: string; branch: string }): Promise<'started' | 'taken' | 'waiting' | 'halted'> => {
+  const startFixer = vi.fn(async (i: { taskId: string; triggerSha: string; branch: string }): Promise<TriggeredStart> => {
     state.runs.push({ id: `r${state.runs.length + 1}`, task_id: i.taskId, role: 'fixer', trigger_sha: i.triggerSha, status: 'done', waiting_reason: null, tab_id: null, branch: i.branch, fix_count: 0 });
     return 'started';
   });
@@ -1040,6 +1041,27 @@ describe('red CI (spec D21)', () => {
     await runMergeExecutor(w.deps, 'p1');
     expect(w.startFixer).toHaveBeenCalledTimes(2);
     expect(requests(w)).toHaveLength(1);
+  });
+
+  it('the card\'s open tab is busy or in use (TER-1051): the board says the fix waits for it, asked again at the next sync', async () => {
+    const w = world({ prs: [red('h1')] });
+    w.startFixer.mockResolvedValueOnce('tab_busy');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(requests(w)).toEqual([]);
+    expect(mergeWaitOf('c1', new Date('2026-10-05T12:00:00Z'))).toBe('merge_fix_waits_for_tab');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.startFixer).toHaveBeenCalledTimes(2);
+    expect(requests(w)).toHaveLength(1);
+  });
+
+  it('a conflict whose fixer waits for the card\'s open tab (TER-1051): no escalation, the board says why', async () => {
+    const w = world();
+    w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: false, mergeable_state: 'dirty', head_sha: 'h1', base_ref: EPIC_BRANCH }));
+    w.startFixer.mockResolvedValueOnce('tab_busy');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(mergeWaitOf('c1', new Date('2026-10-05T12:00:00Z'))).toBe('merge_fix_waits_for_tab');
+    expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(0);
+    expect(w.gh.merge).not.toHaveBeenCalled();
   });
 
   it('two colours on the same red head at once: one line typed, one fix counted, one request (F-27)', async () => {
