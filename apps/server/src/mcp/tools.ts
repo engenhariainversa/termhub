@@ -142,21 +142,23 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'start_ai_login',
     description:
-      "Redo the CLI login of an AI account (Claude or Codex) whose login expired, without going to the machine: the machine's agent (0.26.0 or newer) starts the CLI's login in a hidden session and this answers the url the person opens in a browser, the user_code to type there (Codex) and needs_code. Claude (needs_code: true): the person signs in and copies the code the page shows; send it with submit_ai_login_code. Codex (needs_code: false): the person types user_code on the page and authorizes; then call submit_ai_login_code without code. The flow expires at expires_at (15 min). Only the machine's owner can do it; agent tabs cannot call it. Gemini and Antigravity accounts are refused with the manual instruction.",
+      "Redo the CLI login of an AI account (Claude or Codex) whose login expired, without going to the machine: the machine's agent (0.26.0 or newer) starts the CLI's login in a hidden session and this answers the url the person opens in a browser, the user_code to type there (Codex) and needs_code. Claude (needs_code: true): the person signs in and copies the code the page shows; send it with submit_ai_login_code. Codex (needs_code: false): the person types user_code on the page and authorizes; then call submit_ai_login_code without code. logged_in: true means the CLI already finished on the machine (its own browser took the login): there is no url and nothing to submit; stuck_tabs lists that account's tabs still showing the login error. The flow expires at expires_at (15 min). Only the machine's owner can do it; agent tabs cannot call it. Gemini and Antigravity accounts are refused with the manual instruction.",
     scope: 'terminals', resource: 'ai_accounts', action: 'update',
     input: { account_id: id },
     run: async (ctx, a) => {
       const started = await startAiLogin(ctx, a as { account_id: string });
-      const instruction = started.needs_code
-        ? 'Give the person the url to open and sign in. Ask them for the code the page shows, then call submit_ai_login_code with login_id and code. Never repeat the code back.'
-        : 'Give the person the url and the user_code to type on that page. Once they say it is authorized, call submit_ai_login_code with login_id and no code.';
+      const instruction = started.logged_in
+        ? 'The login already finished on the machine: tell the person it is done. If stuck_tabs is not empty, ask before typing continue into them (send_input).'
+        : started.needs_code
+          ? 'Give the person the url to open and sign in. Ask them for the code the page shows, then call submit_ai_login_code with login_id and code. Never repeat the code back.'
+          : 'Give the person the url and the user_code to type on that page. Once they say it is authorized, call submit_ai_login_code with login_id and no code.';
       return { ...started, instruction };
     },
   },
   {
     name: 'submit_ai_login_code',
     description:
-      "Finish a login started by start_ai_login: code is what the login page showed (Claude; required when needs_code was true), omitted for Codex. Waits up to about 45 s for the CLI to confirm. ok: true means the account is logged in again; stuck_tabs then lists that account's tabs still showing the login error — ask the person before typing continue into them (send_input). ok: false carries message; for Codex the person may finish authorizing and you call it again, for Claude start over with start_ai_login. Agent tabs cannot call it.",
+      "Finish a login started by start_ai_login: code is what the login page showed (Claude), omitted for Codex — and for a Claude login the person finished in the machine's own browser instead. Waits up to about 45 s for the CLI to confirm. ok: true means the account is logged in again; stuck_tabs then lists that account's tabs still showing the login error — ask the person before typing continue into them (send_input). ok: false carries message; for Codex the person may finish authorizing and you call it again, for Claude start over with start_ai_login. Agent tabs cannot call it.",
     scope: 'terminals', resource: 'ai_accounts', action: 'update',
     strict: true,
     input: { login_id: id, code: z.string().trim().min(1).max(2000).optional() },

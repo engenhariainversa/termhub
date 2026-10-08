@@ -118,6 +118,9 @@ describe('rpc catalog', () => {
     expect(submit.safeParse({ provider: 'claude', config_dir: null, session: 's', code: 'x'.repeat(2001) }).success).toBe(false);
     expect(RPC['ai.login.start'].result.safeParse({ url: 'https://auth.openai.com/codex/device', user_code: 'LCWQ-WSPV8', needs_code: false }).success).toBe(true);
     expect(RPC['ai.login.start'].result.safeParse({ url: '', user_code: null, needs_code: true }).success).toBe(false);
+    // TER-1054: an older agent leaves `logged_in` out; a newer one says the CLI finished on its own.
+    expect(RPC['ai.login.start'].result.parse({ url: 'https://x/oauth/authorize', user_code: null, needs_code: true })).toMatchObject({ logged_in: false });
+    expect(RPC['ai.login.start'].result.safeParse({ url: null, user_code: null, needs_code: false, logged_in: true }).success).toBe(true);
     expect(RPC['ai.login.submit'].result.safeParse({ logged_in: false, message: null }).success).toBe(true);
     expect(RPC['ai.login.cancel'].params.safeParse({ session: 'termhub-login-abc' }).success).toBe(true);
   });

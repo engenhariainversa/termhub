@@ -2,6 +2,10 @@
 //
 //   starting → open (the page to open; Claude: paste the code, Codex: "Já autorizei") → verifying
 //            → done (then "Retomar N abas?") | failed ("Tentar de novo" starts over)
+//   starting → done, when the CLI finished on the machine itself, in its own browser (TER-1054)
+//
+// Claude's `submit(null)` is "Já entrei pelo navegador da máquina": the server checks the login without a
+// code. What the CLI printed on a failure is `detail`, shown apart from the error itself.
 //
 // A Codex "Já autorizei" that is not ok yet goes back to `open` with the reason, so the person can try
 // again; a Claude code that is not ok ends the flow on the server, so it is `failed`. `close()` (the modal
@@ -32,6 +36,8 @@ export interface AiLoginFlowState {
   login: AiLoginStartResponse | null;
   /** Why the last step failed (the server's own sentence when it gave one). */
   error: string | null;
+  /** What the CLI printed when the login failed on the machine: a detail under `error`. */
+  detail: string | null;
   stuckTabs: AiLoginStuckTab[];
   resume: ResumeState;
   resumed: number;
@@ -39,7 +45,7 @@ export interface AiLoginFlowState {
 
   /** Starts (or starts over) the flow on the machine. */
   start(): Promise<void>;
-  /** Claude: the pasted code; Codex: `null`. */
+  /** Claude: the pasted code, or `null` once the login finished in the machine's browser; Codex: `null`. */
   submit(code: string | null): Promise<void>;
   resumeTabs(): Promise<void>;
   skipResume(): void;
@@ -48,6 +54,8 @@ export interface AiLoginFlowState {
 }
 
 const failure = (e: unknown): string => (e instanceof ApiError ? e.message : AI_LOGIN_MSG.network);
+/** A MACHINE_FAILED answer carries what the CLI printed: a detail, never the error itself. */
+const cliOutput = (e: unknown): string | null => (e instanceof ApiError && e.code === 'MACHINE_FAILED' ? e.message : null);
 
 export function createAiLoginFlow(deps: AiLoginFlowDeps) {
   const { api, session, accountId } = deps;
@@ -67,6 +75,7 @@ export function createAiLoginFlow(deps: AiLoginFlowDeps) {
     phase: 'idle',
     login: null,
     error: null,
+    detail: null,
     stuckTabs: [],
     resume: 'none',
     resumed: 0,
@@ -77,28 +86,35 @@ export function createAiLoginFlow(deps: AiLoginFlowDeps) {
       const previous = get().login;
       if (previous && (get().phase === 'open' || get().phase === 'verifying')) cancelOnServer(previous.login_id);
       const mine = ++attempt;
-      set({ phase: 'starting', login: null, error: null, stuckTabs: [], resume: 'none', resumed: 0, resumeError: null });
+      set({ phase: 'starting', login: null, error: null, detail: null, stuckTabs: [], resume: 'none', resumed: 0, resumeError: null });
       try {
         const login = await api.startAiLogin(session().auth(), accountId);
         if (closed || mine !== attempt) {
           // The modal went (or started over) while the machine was opening this one.
-          cancelOnServer(login.login_id);
+          if (!login.logged_in) cancelOnServer(login.login_id);
+          return;
+        }
+        if (login.logged_in) {
+          // The CLI finished on the machine itself (its own browser): nothing left to open.
+          set({ phase: 'done', login: null, stuckTabs: login.stuck_tabs, resume: login.stuck_tabs.length > 0 ? 'ask' : 'none' });
+          deps.onLoggedIn?.(accountId);
           return;
         }
         set({ phase: 'open', login });
       } catch (e) {
         if (closed || mine !== attempt || session().handleApiError(e)) return;
-        set({ phase: 'failed', error: failure(e) });
+        const detail = cliOutput(e);
+        set({ phase: 'failed', error: detail ? AI_LOGIN_MSG.couldNotOpen : failure(e), detail });
       }
     },
 
     async submit(code) {
       const { login, phase } = get();
       if (closed || !login || phase !== 'open') return;
-      const sent = login.needs_code ? (code ?? '').trim() : null;
-      if (login.needs_code && !sent) return;
+      const sent = login.needs_code && code !== null ? code.trim() : null;
+      if (sent === '') return;
       const mine = attempt;
-      set({ phase: 'verifying', error: null });
+      set({ phase: 'verifying', error: null, detail: null });
       try {
         const res = await api.submitAiLogin(session().auth(), accountId, login.login_id, sent);
         if (closed || mine !== attempt) return;
@@ -107,7 +123,7 @@ export function createAiLoginFlow(deps: AiLoginFlowDeps) {
           deps.onLoggedIn?.(accountId);
         } else if (login.needs_code) {
           // Claude: the session on the machine is gone; only a new start helps.
-          set({ phase: 'failed', login: null, error: res.message ?? AI_LOGIN_MSG.failed });
+          set({ phase: 'failed', login: null, error: AI_LOGIN_MSG.notConfirmed, detail: res.message });
         } else {
           // Codex: still polling on the machine; "Já autorizei" again once the page says so.
           set({ phase: 'open', error: res.message ?? AI_LOGIN_MSG.failed });
@@ -115,7 +131,8 @@ export function createAiLoginFlow(deps: AiLoginFlowDeps) {
       } catch (e) {
         if (closed || mine !== attempt || session().handleApiError(e)) return;
         // The flow may have expired or ended on the server: start over.
-        set({ phase: 'failed', login: null, error: failure(e) });
+        const detail = cliOutput(e);
+        set({ phase: 'failed', login: null, error: detail ? AI_LOGIN_MSG.notConfirmed : failure(e), detail });
       }
     },
 

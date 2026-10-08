@@ -37,8 +37,18 @@ export const aiUsageResult = z.object({
 /** `ai.login.status` answer (TER-1047). */
 export const aiLoginStatusResult = z.object({ supported: z.boolean(), logged_in: z.boolean() });
 export type AiLoginStatusResult = z.infer<typeof aiLoginStatusResult>;
-/** `ai.login.start` answer: the page to open and, for a device flow, the code to type there. */
-export const aiLoginStartResult = z.object({ url: z.string().min(1).max(4000), user_code: z.string().max(64).nullable(), needs_code: z.boolean() });
+/**
+ * `ai.login.start` answer: the page to open and, for a device flow, the code to type there.
+ * `logged_in: true` (since agent 0.27.0, TER-1054): the CLI finished the login on its own (the machine's
+ * browser) and its status confirms it; `url` is null and there is nothing left to do. Older agents leave
+ * it out, which reads as false.
+ */
+export const aiLoginStartResult = z.object({
+  url: z.string().min(1).max(4000).nullable(),
+  user_code: z.string().max(64).nullable(),
+  needs_code: z.boolean(),
+  logged_in: z.boolean().default(false),
+});
 export type AiLoginStartResult = z.infer<typeof aiLoginStartResult>;
 /** `ai.login.submit` answer. `message`: why it did not finish, never containing the submitted code. */
 export const aiLoginSubmitResult = z.object({ logged_in: z.boolean(), message: z.string().max(500).nullable() });
@@ -186,8 +196,8 @@ export const RPC = {
    */
   'ai.login.start': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable(), session: sessionName }), aiLoginStartResult, 45_000),
   /**
-   * Types `code` into the login session (null: nothing to type, Codex) and waits up to 45 s for the
-   * login to finish. The code is never logged nor echoed back: `message` drops any line containing it.
+   * Types `code` into the login session (null: nothing to type — Codex, or a Claude login the person
+   * finished in the machine's own browser) and waits up to 45 s for the login to finish. The code is never logged nor echoed back: `message` drops any line containing it.
    * The session is killed once the login is done or failed; a Codex session that only timed out is kept
    * so a later submit can wait again. Since agent 0.26.0.
    */

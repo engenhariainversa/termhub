@@ -52,11 +52,34 @@ describe('Claude (a code to paste)', () => {
     expect(flow.getState()).toMatchObject({ resume: 'resumed', resumed: 1 });
   });
 
+  it('the CLI finished on the machine before any link: done at once, with the stuck tabs (TER-1054)', async () => {
+    const { flow, api, controls, onLoggedIn } = await setup('acc-2');
+    controls.setAiLoginState('acc-2', 'login_required');
+    controls.finishAiLoginOnMachine('acc-2');
+    const submit = jest.spyOn(api, 'submitAiLogin');
+    const cancel = jest.spyOn(api, 'cancelAiLogin');
+    await flow.getState().start();
+    expect(flow.getState()).toMatchObject({ phase: 'done', login: null, resume: 'ask', stuckTabs: [{ id: 't-api' }] });
+    expect(onLoggedIn).toHaveBeenCalledWith('acc-2');
+    flow.getState().close();
+    expect(submit).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('"Já entrei pelo navegador da máquina": a Claude submit without a code', async () => {
+    const { flow, api } = await setup('acc-2');
+    const submit = jest.spyOn(api, 'submitAiLogin');
+    await flow.getState().start();
+    await flow.getState().submit(null);
+    expect(submit).toHaveBeenCalledWith(expect.anything(), 'acc-2', 'login-1', null);
+    expect(flow.getState().phase).toBe('done');
+  });
+
   it('a refused code ends the flow: failed with the reason, and "Tentar de novo" starts a new one', async () => {
     const { flow, api } = await setup('acc-1');
     await flow.getState().start();
     await flow.getState().submit('errado');
-    expect(flow.getState()).toMatchObject({ phase: 'failed', login: null, error: 'O Claude recusou o código. Comece de novo.' });
+    expect(flow.getState()).toMatchObject({ phase: 'failed', login: null, error: 'O login não foi confirmado.', detail: 'OAuth error: invalid_grant' });
 
     const start = jest.spyOn(api, 'startAiLogin');
     await flow.getState().start();

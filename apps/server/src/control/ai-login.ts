@@ -56,8 +56,8 @@ export async function aiLoginStatus(ctx: ControlContext, refresh: boolean): Prom
 
 export async function startAiLogin(ctx: ControlContext, input: { account_id: string }): Promise<StartedLogin> {
   const { account, machine } = await ownAccount(ctx, input.account_id);
-  const started = await aiLogin.startLogin(account, machine, ctx.scope.user.id);
-  ctx.log?.info({ accountId: account.id, machineId: machine.id, loginId: started.login_id }, 'ai login started');
+  const started = await aiLogin.startLogin(ctx.repos, account, machine, ctx.scope.user.id);
+  ctx.log?.info({ accountId: account.id, machineId: machine.id, loginId: started.login_id, loggedIn: started.logged_in }, started.logged_in ? 'ai login finished on the machine' : 'ai login started');
   return started;
 }
 
@@ -73,9 +73,14 @@ export async function submitAiLogin(ctx: ControlContext, input: { login_id: stri
   return result;
 }
 
+/**
+ * Ends the flow, then asks the machine again: the person may have closed the modal because they finished
+ * the login in the machine's own browser (TER-1054), and the warning should go with it.
+ */
 export async function cancelAiLogin(ctx: ControlContext, input: { login_id: string; account_id: string }): Promise<{ cancelled: true }> {
-  await ownAccount(ctx, input.account_id);
+  const { account, machine } = await ownAccount(ctx, input.account_id);
   await aiLogin.cancelLogin(input.login_id, ctx.scope.user.id, input.account_id);
+  await aiLogin.checkAccountLogin(account, machine, 'force');
   return { cancelled: true };
 }
 

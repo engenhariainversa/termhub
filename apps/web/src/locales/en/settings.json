@@ -473,5 +473,9 @@
   "Ligar para essa pessoa": "Turn on for this person",
   "Ligou ou desligou um recurso em teste": "Turned a feature in testing on or off",
   "Mudou um recurso em teste para uma pessoa": "Changed a feature in testing for one person",
-  "Recursos em teste": "Features in testing"
+  "Recursos em teste": "Features in testing",
+  "Não deu para abrir o login na máquina": "Could not open the login on the machine",
+  "A página abriu na própria máquina e o login terminou lá?": "Did the page open on the machine itself and the login finish there?",
+  "Já entrei pelo navegador da máquina": "I signed in from the machine's browser",
+  "Saída da CLI": "CLI output"
 }

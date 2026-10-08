@@ -64,6 +64,45 @@ echo "error: network unreachable"
 exit 1
 `;
 
+/** The machine's own browser took the callback before any URL was printed (TER-1054, macOS). */
+const BROWSER_CLAUDE = (defaultDir: string) => `#!/bin/sh
+dir="\${CLAUDE_CONFIG_DIR:-${defaultDir}}"
+if [ "$1" = auth ] && [ "$2" = status ]; then
+  if [ -f "$dir/logged-in" ]; then echo '{"loggedIn": true}'; exit 0; fi
+  echo '{"loggedIn": false}'; exit 1
+fi
+echo "Opening browser to sign in…"
+printf 'Paste code here if prompted > '
+sleep 0.3
+touch "$dir/logged-in"
+echo "Login successful."
+exit 0
+`;
+
+/** Prints the URL, then the machine's browser finishes the login on its own after a moment. */
+const LATE_BROWSER_CLAUDE = (defaultDir: string) => `#!/bin/sh
+dir="\${CLAUDE_CONFIG_DIR:-${defaultDir}}"
+if [ "$1" = auth ] && [ "$2" = status ]; then
+  if [ -f "$dir/logged-in" ]; then echo '{"loggedIn": true}'; exit 0; fi
+  echo '{"loggedIn": false}'; exit 1
+fi
+echo "Opening browser to sign in…"
+echo "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&state=y"
+printf 'Paste code here if prompted > '
+while [ ! -f "$dir/approve" ]; do sleep 0.1; done
+touch "$dir/logged-in"
+echo "Login successful."
+exit 0
+`;
+
+/** Says it logged in, but its status never agrees. */
+const LYING_CLAUDE = `#!/bin/sh
+if [ "$1" = auth ] && [ "$2" = status ]; then echo '{"loggedIn": false}'; exit 1; fi
+echo "Opening browser to sign in…"
+echo "Login successful."
+exit 0
+`;
+
 describe.skipIf(!hasTmux)('ai.login against a real tmux and fake CLIs', () => {
   let root: string;
   let bin: string;
@@ -133,7 +172,7 @@ describe.skipIf(!hasTmux)('ai.login against a real tmux and fake CLIs', () => {
     expect(await login.status({ provider: 'claude', config_dir: dir })).toEqual({ supported: true, logged_in: false });
 
     const started = await login.start({ provider: 'claude', config_dir: dir, session });
-    expect(started).toEqual({ url: 'https://claude.com/cai/oauth/authorize?code=true&state=x', user_code: null, needs_code: true });
+    expect(started).toEqual({ url: 'https://claude.com/cai/oauth/authorize?code=true&state=x', user_code: null, needs_code: true, logged_in: false });
 
     expect(await login.submit({ provider: 'claude', config_dir: dir, session, code: 'good-code' })).toEqual({ logged_in: true, message: null });
     expect(existsSync(join(dir, 'logged-in'))).toBe(true);
@@ -175,11 +214,55 @@ describe.skipIf(!hasTmux)('ai.login against a real tmux and fake CLIs', () => {
     expect(hasSession(session)).toBe(false);
   });
 
+  it('claude: a login the machine\'s browser finished before any URL is a login, not an error (TER-1054)', async () => {
+    const dir = accountDir('claude-browser');
+    const browser = createAiLogin({
+      env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
+      bins: { claude: script('claude-browser', BROWSER_CLAUDE(defaultDir)), chatgpt: join(bin, 'codex') },
+      startPollMs: 100,
+      startTimeoutMs: 5_000,
+    });
+    const session = 'termhub-login-browser';
+    expect(await browser.start({ provider: 'claude', config_dir: dir, session })).toEqual({ url: null, user_code: null, needs_code: false, logged_in: true });
+    expect(hasSession(session)).toBe(false);
+  });
+
+  it('claude: after the URL, the machine\'s browser finishing the login is seen by a submit without a code', async () => {
+    const dir = accountDir('claude-late-browser');
+    const late = createAiLogin({
+      env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
+      bins: { claude: script('claude-late-browser', LATE_BROWSER_CLAUDE(defaultDir)), chatgpt: join(bin, 'codex') },
+      startPollMs: 100,
+      startTimeoutMs: 5_000,
+      submitPollMs: 100,
+      submitTimeoutMs: 5_000,
+    });
+    const session = 'termhub-login-late-browser';
+    const started = await late.start({ provider: 'claude', config_dir: dir, session });
+    expect(started).toMatchObject({ needs_code: true, logged_in: false });
+    writeFileSync(join(dir, 'approve'), '');
+    expect(await late.submit({ provider: 'claude', config_dir: dir, session, code: null })).toEqual({ logged_in: true, message: null });
+    expect(hasSession(session)).toBe(false);
+  });
+
+  it('claude: "Login successful" that the status never confirms is still a failure', async () => {
+    const lying = createAiLogin({
+      env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
+      bins: { claude: script('claude-lying', LYING_CLAUDE), chatgpt: join(bin, 'codex') },
+      startPollMs: 100,
+      startTimeoutMs: 5_000,
+    });
+    await expect(lying.start({ provider: 'claude', config_dir: accountDir('claude-lying'), session: 'termhub-login-lying' })).rejects.toMatchObject({
+      code: 'failed',
+      message: 'Opening browser to sign in…\nLogin successful.',
+    });
+  }, 15_000);
+
   it('codex: device flow shows URL and code, a timed-out submit keeps the session, approval logs in', async () => {
     const dir = accountDir('codex');
     const session = 'termhub-login-codex';
     const started = await login.start({ provider: 'chatgpt', config_dir: dir, session });
-    expect(started).toEqual({ url: 'https://auth.openai.com/codex/device', user_code: 'LCWQ-WSPV8', needs_code: false });
+    expect(started).toEqual({ url: 'https://auth.openai.com/codex/device', user_code: 'LCWQ-WSPV8', needs_code: false, logged_in: false });
 
     const impatient = createAiLogin({
       env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),

@@ -473,5 +473,9 @@
   "Ligar para essa pessoa": "Activar para esta persona",
   "Ligou ou desligou um recurso em teste": "Activó o desactivó una función en prueba",
   "Mudou um recurso em teste para uma pessoa": "Cambió una función en prueba para una persona",
-  "Recursos em teste": "Funciones en prueba"
+  "Recursos em teste": "Funciones en prueba",
+  "Não deu para abrir o login na máquina": "No se pudo abrir el login en la máquina",
+  "A página abriu na própria máquina e o login terminou lá?": "¿La página se abrió en la propia máquina y el login terminó allí?",
+  "Já entrei pelo navegador da máquina": "Ya entré desde el navegador de la máquina",
+  "Saída da CLI": "Salida de la CLI"
 }

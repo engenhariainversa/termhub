@@ -12,7 +12,9 @@ const INPUT = 'rounded-xl border border-app-border bg-app-surface px-4 py-3 text
 /**
  * "Refazer login" (TER-1047, spec 2026-10-08 §2), a modal over the app: the machine runs the CLI's login
  * in a hidden session, the phone opens its page; Claude's code is pasted back here, Codex's device code is
- * typed on that page. Leaving before the end cancels the flow on the machine.
+ * typed on that page. The CLI may also finish on the machine itself, in its own browser (TER-1054): the
+ * start then ends logged in, or "Já entrei pelo navegador da máquina" checks without a code. Leaving
+ * before the end cancels the flow on the machine.
  */
 export function AiLoginView({ accountId }: { accountId: string }) {
   // Re-renders on a language change (the copy is read through getters).
@@ -28,6 +30,7 @@ export function AiLoginView({ accountId }: { accountId: string }) {
   const phase = flow((s) => s.phase);
   const login = flow((s) => s.login);
   const error = flow((s) => s.error);
+  const detail = flow((s) => s.detail);
   const stuckTabs = flow((s) => s.stuckTabs);
   const resume = flow((s) => s.resume);
   const resumed = flow((s) => s.resumed);
@@ -77,6 +80,14 @@ export function AiLoginView({ accountId }: { accountId: string }) {
       return (
         <View className="gap-3">
           <Banner tone="danger" text={error ?? AI_LOGIN_MSG.failed} />
+          {detail ? (
+            <View className="gap-1">
+              <AppText variant="muted">{AI_LOGIN_MSG.cliOutput}</AppText>
+              <AppText variant="code" selectable>
+                {detail}
+              </AppText>
+            </View>
+          ) : null}
           <Button label={AI_LOGIN_MSG.retry} onPress={restart} />
         </View>
       );
@@ -106,7 +117,7 @@ export function AiLoginView({ accountId }: { accountId: string }) {
     const verifying = phase === 'verifying';
     return (
       <View className="gap-4">
-        {login ? <Button label={AI_LOGIN_MSG.openPage} variant="secondary" onPress={() => void Linking.openURL(login.url).catch(() => undefined)} /> : null}
+        {login?.url ? <Button label={AI_LOGIN_MSG.openPage} variant="secondary" onPress={() => void Linking.openURL(login.url!).catch(() => undefined)} /> : null}
         {error ? <Banner tone="danger" text={error} /> : null}
         {login?.needs_code ? (
           <View className="gap-3">
@@ -123,6 +134,7 @@ export function AiLoginView({ accountId }: { accountId: string }) {
               className={INPUT}
             />
             <Button label={AI_LOGIN_MSG.sendCode} loading={verifying} disabled={code.trim() === ''} onPress={() => void flow.getState().submit(code)} />
+            <Button label={AI_LOGIN_MSG.finishedOnMachine} variant="ghost" disabled={verifying} onPress={() => void flow.getState().submit(null)} />
           </View>
         ) : (
           <View className="gap-3">

@@ -83,5 +83,5 @@
   "Flag não encontrada": "Flag no encontrada",
   "Login não encontrado ou expirado": "Login no encontrado o expirado",
   "Refazer login pela tela só funciona com Claude e Codex. Faça o login na própria máquina: {{hint}}": "Rehacer el login desde la pantalla solo funciona con Claude y Codex. Haz el login en la propia máquina: {{hint}}",
-  "Cole o código mostrado na página de login": "Pega el código que muestra la página de login"
+  "A máquina não mostrou a página de login": "La máquina no mostró la página de login"
 }

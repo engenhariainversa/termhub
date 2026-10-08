@@ -67,7 +67,10 @@ describe('Refazer login', () => {
     await render(<AiLoginScreen />);
     await fireEvent.changeText(await screen.findByLabelText('Cole o código aqui', undefined, LOAD), 'errado');
     await fireEvent.press(screen.getByRole('button', { name: 'Enviar código' }));
-    expect(await screen.findByText('O Claude recusou o código. Comece de novo.', undefined, LOAD)).toBeTruthy();
+    expect(await screen.findByText('O login não foi confirmado.', undefined, LOAD)).toBeTruthy();
+    // what the CLI printed is a detail under the error
+    expect(screen.getByText('Saída da CLI')).toBeTruthy();
+    expect(screen.getByText('OAuth error: invalid_grant')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Tentar de novo' }));
     expect(await screen.findByLabelText('Cole o código aqui', undefined, LOAD)).toBeTruthy();
     expect(start).toHaveBeenCalledTimes(2);
@@ -82,6 +85,26 @@ describe('Refazer login', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Já autorizei' }));
     expect(await screen.findByText('Login refeito', undefined, LOAD)).toBeTruthy();
     expect(submit).toHaveBeenCalledWith(expect.anything(), 'acc-3', expect.any(String), null);
+  });
+
+  it('Claude: a login the machine\'s browser finished before any link ends logged in (TER-1054)', async () => {
+    mockAccountId = 'acc-1';
+    stores.controls.finishAiLoginOnMachine('acc-1');
+    const submit = jest.spyOn(stores.api, 'submitAiLogin');
+    await render(<AiLoginScreen />);
+    expect(await screen.findByText('Login refeito', undefined, LOAD)).toBeTruthy();
+    expect(screen.queryByText('Abrir página de login')).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('Claude: "Já entrei pelo navegador da máquina" checks without a code (TER-1054)', async () => {
+    mockAccountId = 'acc-1';
+    const submit = jest.spyOn(stores.api, 'submitAiLogin');
+    await render(<AiLoginScreen />);
+    await screen.findByLabelText('Cole o código aqui', undefined, LOAD);
+    await fireEvent.press(screen.getByRole('button', { name: 'Já entrei pelo navegador da máquina' }));
+    expect(await screen.findByText('Login refeito', undefined, LOAD)).toBeTruthy();
+    expect(submit).toHaveBeenCalledWith(expect.anything(), 'acc-1', expect.any(String), null);
   });
 
   it('closing before the end cancels the flow on the machine', async () => {

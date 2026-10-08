@@ -81,6 +81,17 @@ describe('POST /ai-accounts/:id/login', () => {
     expect(rpc).toHaveBeenCalledWith('m1', 'ai.login.start', { provider: 'claude', config_dir: '~/.claude-2', session: `termhub-login-${body.login_id}` });
   });
 
+  it('the CLI finished on its own in the machine\'s browser: logged in, no flow left, stuck tabs listed (TER-1054)', async () => {
+    aiLogin.markLoginRequired('a1');
+    screens.set('th-t1', 'Please run /login');
+    rpc.mockResolvedValueOnce({ url: null, user_code: null, needs_code: false, logged_in: true });
+    const res = await build().inject({ method: 'POST', url: '/ai-accounts/a1/login' });
+    expect(res.statusCode).toBe(200);
+    expect(aiLoginStartResponse.parse(res.json())).toMatchObject({ url: null, logged_in: true, stuck_tabs: [{ id: 't1', name: 'aba t1', project_id: 'p1' }] });
+    expect(aiLogin.loginStatusOf('a1').state).toBe('ok');
+    expect(aiLogin.openFlows).toBe(0);
+  });
+
   it('refuses an admin viewing as the owner: only the machine owner redoes the login', async () => {
     const res = await build({ viewer: 'admin' }).inject({ method: 'POST', url: '/ai-accounts/a1/login' });
     expect(res.statusCode).toBe(403);
@@ -137,13 +148,22 @@ describe('POST /ai-accounts/:id/login/:loginId/submit', () => {
     expect(aiLogin.openFlows).toBe(0);
   });
 
-  it('Claude: needs the code; a failure ends the flow', async () => {
+  it('Claude: a submit without a code waits for a login finished in the machine\'s browser (TER-1054)', async () => {
     rpc.mockResolvedValueOnce({ url: CLAUDE_URL, user_code: null, needs_code: true });
     const app = build();
     const { login_id } = (await app.inject({ method: 'POST', url: '/ai-accounts/a1/login' })).json();
-    const missing = await app.inject({ method: 'POST', url: `/ai-accounts/a1/login/${login_id}/submit`, payload: {} });
-    expect(missing.statusCode).toBe(400);
-    expect(missing.json().code).toBe('CODE_REQUIRED');
+    rpc.mockResolvedValueOnce({ logged_in: true, message: null });
+    const res = await app.inject({ method: 'POST', url: `/ai-accounts/a1/login/${login_id}/submit`, payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true });
+    expect(rpc).toHaveBeenLastCalledWith('m1', 'ai.login.submit', { provider: 'claude', config_dir: null, session: `termhub-login-${login_id}`, code: null });
+    expect(aiLogin.loginStatusOf('a1').state).toBe('ok');
+  });
+
+  it('Claude: a wrong code ends the flow', async () => {
+    rpc.mockResolvedValueOnce({ url: CLAUDE_URL, user_code: null, needs_code: true });
+    const app = build();
+    const { login_id } = (await app.inject({ method: 'POST', url: '/ai-accounts/a1/login' })).json();
     rpc.mockResolvedValueOnce({ logged_in: false, message: 'Invalid code' });
     const failed = await app.inject({ method: 'POST', url: `/ai-accounts/a1/login/${login_id}/submit`, payload: { code: 'wrong' } });
     expect(failed.json()).toEqual({ ok: false, message: 'Invalid code', stuck_tabs: [] });
@@ -190,8 +210,18 @@ describe('DELETE /ai-accounts/:id/login/:loginId', () => {
     const { login_id } = (await app.inject({ method: 'POST', url: '/ai-accounts/a1/login' })).json();
     const res = await app.inject({ method: 'DELETE', url: `/ai-accounts/a1/login/${login_id}` });
     expect(res.json()).toEqual({ cancelled: true });
-    expect(rpc).toHaveBeenLastCalledWith('m1', 'ai.login.cancel', { session: `termhub-login-${login_id}` });
+    expect(rpc).toHaveBeenCalledWith('m1', 'ai.login.cancel', { session: `termhub-login-${login_id}` });
     expect(aiLogin.openFlows).toBe(0);
+  });
+
+  it('asks the machine again, so a login finished in the machine\'s browser clears the warning (TER-1054)', async () => {
+    aiLogin.markLoginRequired('a1');
+    rpc.mockResolvedValueOnce({ url: CLAUDE_URL, user_code: null, needs_code: true }).mockResolvedValueOnce({ cancelled: true }).mockResolvedValueOnce({ supported: true, logged_in: true });
+    const app = build();
+    const { login_id } = (await app.inject({ method: 'POST', url: '/ai-accounts/a1/login' })).json();
+    await app.inject({ method: 'DELETE', url: `/ai-accounts/a1/login/${login_id}` });
+    expect(rpc).toHaveBeenLastCalledWith('m1', 'ai.login.status', { provider: 'claude', config_dir: null });
+    expect(aiLogin.loginStatusOf('a1').state).toBe('ok');
   });
 });
 
