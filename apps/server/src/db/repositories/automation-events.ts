@@ -10,6 +10,9 @@ export type AutomationEventKind =
   | 'run_blocked'
   | 'run_cancelled'
   | 'question_answered'
+  // TER-1043: a decision automatic work took alone ({ via: 'agent' | 'nudge', tab_id, summary? }): the agent's
+  // own summary from report_card, or the server telling a tab that stopped on a question to follow its recommendation
+  | 'decided_by_recommendation'
   | 'permission_auto_approved'
   | 'guard_blocked'
   | 'escalated'
