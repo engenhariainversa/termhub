@@ -20,6 +20,7 @@ describe('settings sections', () => {
       'admin:permissions',
       'admin:uploads',
       'admin:security',
+      'admin:feature-flags',
     ]);
   });
 

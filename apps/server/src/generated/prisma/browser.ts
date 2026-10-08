@@ -397,3 +397,16 @@ export type ViewAsAudit = Prisma.ViewAsAuditModel
  * never typed text, passwords, codes or tokens.
  */
 export type SecurityEvent = Prisma.SecurityEventModel
+/**
+ * Model FeatureFlag
+ * An instance-wide feature flag (TER-1040, docs/feature-flags.md): a feature that ships dark and an
+ * admin turns on in Configurações → Recursos em teste, without a deploy. No row = the flag's default
+ * in code (`FEATURE_FLAGS`, apps/server/src/features/flags.ts), which is off.
+ */
+export type FeatureFlag = Prisma.FeatureFlagModel
+/**
+ * Model FeatureFlagOverride
+ * One person's own value for a flag (testing a feature before it is released): wins over the
+ * instance-wide value for that person only.
+ */
+export type FeatureFlagOverride = Prisma.FeatureFlagOverrideModel
