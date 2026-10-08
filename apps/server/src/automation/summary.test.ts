@@ -5,7 +5,7 @@ import { sendDueSummaries, summaryMessage } from './summary.js';
 
 const setup = (o: object) => setupSchema.parse({ automation: { enabled: true, ...o } });
 
-function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: number | null }>; zone?: string | null; claimed?: Set<string>; cost?: number | null; previous?: Date | null } = {}) {
+function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: number | null }>; zone?: string | null; claimed?: Set<string>; cost?: number | null; previous?: Date | null; decisions?: Array<{ task_id: string | null; summary: string | null }> } = {}) {
   const projects = o.projects ?? [{ id: 'p1', owner: 'u1', summary_hour: 9 }];
   const claimed = o.claimed ?? new Set<string>();
   const lines: string[] = [];
@@ -28,6 +28,7 @@ function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: 
       costOfDays: vi.fn(async (_p: string[], _f: string, _t: string) => (o.cost === undefined ? 1.5 : o.cost)),
       parkedRuns: vi.fn(async () => [{ task_id: 't1', reason: 'trust_prompt' }]),
       pendingCards: vi.fn(async () => [{ project_id: 'p1', number: 12 }]),
+      decisions: vi.fn(async () => o.decisions ?? []),
     },
     tasks: { findByIds: vi.fn(async () => [{ id: 't1', ref: 'TER-9' }]) },
     chat: {
@@ -120,6 +121,12 @@ describe('daily summary (TER-894)', () => {
         'Custo estimado do dia: US$ 1.50',
       ].join('\n'),
     );
+  });
+
+  it('lists the decisions taken alone, for the person to review (TER-1043)', async () => {
+    const f = fakes({ decisions: [{ task_id: 't1', summary: 'Cor do botão? → Azul' }, { task_id: null, summary: null }] });
+    await sendDueSummaries({ repos: f.repos, lifecycle: live }, new Date('2026-10-05T09:00:00Z'));
+    expect(f.lines[0]).toContain('Decidido sozinho: TER-9: Cor do botão? → Azul; Um card: seguiu a própria recomendação');
   });
 
   it('shows — when nothing was priced and "nada" when nothing waits; english on request', () => {

@@ -207,6 +207,35 @@ or body are only references (TER-1004): the merge does not move them to done, an
 reported on the PR's own card. A cited manual card that is not done yet holds the merge for a person
 (`merge_person_card` in the queue and, once the PR is green, an escalation once per head); a done one does not.
 
+## 7a. Decisions automatic work takes alone (TER-1043)
+
+"Era pra ir no automático, então as decisões deveriam já ter sido tomadas." A run does not stop to ask the
+person which of two options to take.
+
+- **The prompt** of the implementer, the fixer and the integrator (`apps/server/src/automation/prompts.ts`,
+  `decideLine`) says: on a product or technical decision, follow the person's precedent from
+  `search_memory` (decisions and notes) or else the agent's own recommendation; record it (the implementer
+  in the PR body, section "Decisões tomadas", with options, choice and reason) and in `report_card`
+  (`decisions`); never end the turn on a question.
+- **Exceptions that still stop** (the agent calls `report_card` blocked): credentials or `.env`, deploy,
+  merge or publish by hand, the stores and EAS, `rm` outside the worktree, docker or ssh, irreversible acts
+  on production data, and a change of scope beyond the card. The guard's fixed locks still refuse those
+  commands whatever the agent decides.
+- **Safety net** (`apps/server/src/automation/decision.ts`, `onQuestionStop` in `follower.ts`): when a run's
+  tab stops and its last answer asks something (a `?` outside code, or "Decisão sua", "você decide"…), the
+  server types `[termhub automático]` + `DECIDE_TEXT` (look for the person's precedent, else follow the
+  recommendation, record it, go on) and records `decided_by_recommendation` (`via: nudge`) instead of a plain
+  resume. At most `DECIDE_NUDGES_MAX` (3) per run; after that the stop takes the ordinary resumes and wake.
+  A question that names an exception escalates as `decision_exception` with nothing typed.
+- **Visibility**: each decision reported in `report_card` becomes a `decided_by_recommendation` event
+  (`via: agent`, with "question → choice") shown in the feed ("TER-12 decidiu sozinho: …"), a line
+  "Decidido sozinho: …" in the daily summary, and a memory note (trust `derived`, citing the card) that the
+  next run finds as a precedent. To overturn a decision, say so on the PR or in the chat; the person's own
+  answer then outranks the note.
+- **Opt out**: Setup → Trabalho automático → "Parar em decisões de produto" (`stop_on_decisions`, off by
+  default). On, the prompt keeps the old "pare e pergunte" line and a stop on a question escalates as
+  `decision_needed`.
+
 ## 8. Approving a merge above the level
 
 When a PR needs more than the project's level (for example a `release_paths` change at `deploy`, or any PR
@@ -232,6 +261,8 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 | `agent_exited` | The agent exited again after its restart | Open the tab, see why |
 | `card_budget` | The card passed `card_budget_usd` | Check the tab, resume if worth it |
 | `reported_blocked` | The agent said it is stuck | Read its report, unblock or take over |
+| `decision_exception` | Stopped on a question that names an exception (credentials, deploy, stores, production data, scope) | Answer in the tab; the run is followed again once the tab moves |
+| `decision_needed` | Stopped on a question and the project has "Parar em decisões de produto" on | Answer in the tab |
 | `ci_cap` | CI still red after the fix attempts | Open the PR, fix it, push; the merge follows when green |
 | `conflict_cap` | Conflict after the fix attempts | Resolve it; the merge follows when CI is green |
 | `merge_person_card` | The PR is green but also cites a manual card that is not done (refs in `cards`) | Merge it by hand, or remove the citation from the PR text (or finish that card); the next pass merges it |
@@ -351,3 +382,7 @@ branch. A cleanup that was waiting on the stuck run (after a merge) goes on by i
 
 None by default: automation is off until a project turns it on, the default level for anyone who does is
 `pr`, and `release` is set only in termhub's own Setup. This runbook changes no product code.
+
+TER-1043 (section 7a) raises autonomy for everyone who has automation on: their runs now decide product
+and technical questions alone and record them, instead of waiting. The project setting "Parar em decisões
+de produto" (off by default) brings the old behaviour back per project.
