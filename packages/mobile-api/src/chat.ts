@@ -215,6 +215,39 @@ export const tabSuggestionSendBody = z.object({ text: z.string().trim().min(1).m
  * (eventually) other screens show it — never the embedding, the owning user, the conversation or the
  * tab question it came from. */
 export const decisionOptionView = z.object({ label: z.string(), description: z.string() });
+
+/** Where a decision or a concierge note stands on the Memória screen (TER-1013): `current` (vigente),
+ * `outdated` (desatualizada), `wrong` (errada) or `superseded` (substituída por outro item). Anything
+ * but `current` is out of the default memory search and never a precedent. */
+export const memoryStatusSchema = z.enum(['current', 'outdated', 'wrong', 'superseded']);
+/** The item that replaces a `superseded` one: its ref (`decision:<id>` / `note:<id>`) and title. */
+export const memorySupersederView = z.object({ ref: z.string(), title: z.string() });
+/** The status fields of a decision and of a note; the defaults read an older server's rows as current. */
+const memoryStatusFields = {
+  status: memoryStatusSchema.default('current'),
+  expires_at: z.string().nullable().default(null),
+  /** Only for `superseded`; `null` when the replacing item was forgotten since. */
+  superseded_by: memorySupersederView.nullable().default(null),
+};
+/** A decision's or a note's ref, as "Substituída por…" picks it. */
+export const memoryRefSchema = z.string().regex(/^(decision|note):[a-z0-9]{1,64}$/);
+/** `PUT chat/decisions/:id/status` and `PUT chat/notes/:id/status` (TER-1013): `current` undoes any
+ * mark ("Desfazer"); `superseded` needs `superseded_by`, the item that replaces this one. */
+export const memoryStatusBody = z
+  .object({ status: memoryStatusSchema, superseded_by: memoryRefSchema.optional() })
+  .refine((b) => b.status !== 'superseded' || b.superseded_by !== undefined, { message: 'Informe superseded_by', path: ['superseded_by'] });
+/** One candidate of the "Substituída por…" picker: a current decision (title = its question, detail =
+ * its answer) or note (title = its title, detail = its decision). */
+export const memoryReplacementView = z.object({
+  ref: z.string(),
+  kind: z.enum(['decision', 'note']),
+  title: z.string(),
+  detail: z.string(),
+  project_name: z.string().nullable(),
+  created_at: z.string(),
+});
+/** `GET chat/memory/replacements?q=&exclude=`: newest first, current items only, never `exclude`. */
+export const memoryReplacementsResponse = z.object({ items: z.array(memoryReplacementView) });
 export const decisionAnswerView = z.object({ labels: z.array(z.string()), text: z.string().optional() });
 export const decisionViewSchema = z.object({
   id: z.string(),
@@ -228,7 +261,10 @@ export const decisionViewSchema = z.object({
   suggested_count: z.number().int(),
   accepted_count: z.number().int(),
   created_at: z.string(),
+  ...memoryStatusFields,
 });
+/** `PUT chat/decisions/:id/status`: the decision as the list now shows it. */
+export const decisionStatusResponse = z.object({ decision: decisionViewSchema });
 /** `GET chat/decisions`: newest first, 50 per page, with a keyset `next_cursor` (opaque, `null` on the
  * last page). */
 export const decisionsResponse = z.object({ decisions: z.array(decisionViewSchema), next_cursor: z.string().nullable() });
@@ -271,7 +307,10 @@ export const conciergeNoteView = z.object({
   decision: z.string(),
   reason: z.string(),
   created_at: z.string(),
+  ...memoryStatusFields,
 });
+/** `PUT chat/notes/:id/status`: the note as the list now shows it. */
+export const noteStatusResponse = z.object({ note: conciergeNoteView });
 /** `GET chat/notes`: newest first, 50 per page, with a keyset `next_cursor` (opaque, `null` on the
  * last page) — the same pagination shape as `decisionsResponse`. */
 export const notesResponse = z.object({ notes: z.array(conciergeNoteView), next_cursor: z.string().nullable() });

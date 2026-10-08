@@ -258,5 +258,17 @@
   "atualizar ticket": "update ticket",
   "criar integração": "create integration",
   "definir repositório": "set repository",
-  "Ver ações": "Show actions"
+  "Ver ações": "Show actions",
+  "Vigente": "Current",
+  "Desatualizada": "Outdated",
+  "Errada": "Wrong",
+  "Substituída": "Superseded",
+  "Substituída por «{{title}}»": "Superseded by “{{title}}”",
+  "Substituída por…": "Superseded by…",
+  "Desfazer": "Undo",
+  "Qual item substitui este?": "Which item replaces this one?",
+  "Buscar decisões e anotações": "Search decisions and notes",
+  "Nenhum item vigente encontrado.": "No current item found.",
+  "Decisão": "Decision",
+  "Anotação": "Note"
 }

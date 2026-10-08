@@ -164,5 +164,7 @@
   "Nenhuma fala reconhecida": "No se reconoció ninguna voz",
   "Gravação muito curta": "Grabación demasiado corta",
   "Resposta automática cancelada: o trabalho automático foi pausado ou desligado.": "Respuesta automática cancelada: el trabajo automático se pausó o se desactivó.",
-  "Opção recomendada pelo agente": "Opción recomendada por el agente"
+  "Opção recomendada pelo agente": "Opción recomendada por el agente",
+  "Não foi possível alterar o estado do item": "No se pudo cambiar el estado del elemento",
+  "Não foi possível buscar os itens da memória": "No se pudieron buscar los elementos de la memoria"
 }

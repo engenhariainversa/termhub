@@ -37,6 +37,10 @@ import type {
   TMobileDecisionBody,
   TMobileMessageBody,
   TNotesResponse,
+  TChatDecision,
+  TConciergeNote,
+  TMemoryReplacementsResponse,
+  TMemoryStatus,
   TNotificationsResponse,
   TProgressResponse,
   TAutomationSetup,
@@ -229,6 +233,12 @@ export interface MobileApi {
   /** Idempotent and silent about whether `id` ever existed, was someone else's, or was some other
    *  memory kind — always 204. */
   forgetChatNote(auth: Auth, id: string): Promise<void>;
+  /** "Desatualizada" / "Errada" / "Substituída por…" (TER-1013); `current` is "Desfazer". Answers the
+   *  item as its list shows it; 404 for another user's row, 400/409 for a replacement the server refuses. */
+  setChatDecisionStatus(auth: Auth, id: string, status: TMemoryStatus, supersededBy?: string): Promise<TChatDecision>;
+  setChatNoteStatus(auth: Auth, id: string, status: TMemoryStatus, supersededBy?: string): Promise<TConciergeNote>;
+  /** "Substituída por…"'s picker: the user's current decisions and notes matching `q`, never `exclude`. */
+  chatMemoryReplacements(auth: Auth, q: string, exclude: string): Promise<TMemoryReplacementsResponse>;
   /** "Lições" (spec 2026-09-27 failure lessons §6/§8): the twin of the web's
    *  `api.chat.lessons.list`/`verify`/`unverify`/`forget`. Newest `source_at` first, 50 per page;
    *  `q` filters title/text, `cursor` is `next_cursor`. No PIN. */

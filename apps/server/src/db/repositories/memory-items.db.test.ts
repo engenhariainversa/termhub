@@ -247,7 +247,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     const docKind = (await repo.upsertMany([item({ project_id: projectId, kind: 'doc', source_id: newId(), title: 'D', text: 'd' })]))[0]!;
     await repo.setEmbedding(docKind.id, mix(1, 4, 0.2), 'm');
 
-    const neighbours = await repo.nearest({ ownerId: userId }, vec(1), 10);
+    const neighbours = await repo.nearest({ ownerId: userId }, vec(1), 10, 'm');
     const ids = neighbours.map((n) => n.id);
     expect(ids[0]).toBe(a.id);
     expect(neighbours[0]!.similarity).toBeCloseTo(1, 5);
@@ -257,11 +257,14 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     expect(ids).not.toContain(unembedded.id);
     expect(ids).not.toContain(otherOwnerRow.id);
 
-    const byProject = await repo.nearest({ ownerId: userId, projectId }, vec(1), 10);
+    const byProject = await repo.nearest({ ownerId: userId, projectId }, vec(1), 10, 'm');
     expect(byProject.map((n) => n.id)).not.toContain(inOtherProject.id);
 
-    const byKind = await repo.nearest({ ownerId: userId, kinds: ['doc'] }, vec(1), 10);
+    const byKind = await repo.nearest({ ownerId: userId, kinds: ['doc'] }, vec(1), 10, 'm');
     expect(byKind.map((n) => n.id)).toEqual([docKind.id]);
+
+    // A vector of another model is never compared (TER-1006).
+    expect((await repo.nearest({ ownerId: userId }, vec(1), 10, 'other-model')).map((n) => n.id)).not.toContain(a.id);
   });
 
   it('textSearch: matches case-insensitively, never another owner\'s row, similarity null, punctuation-only query returns []', async () => {
@@ -387,8 +390,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
 
     expect(await repo.hideSource(chunk0Id, userId)).toBe(true);
 
-    expect((await repo.nearest({ ownerId: userId }, vec(5), 10)).map((r) => r.id)).not.toContain(chunk0Id);
-    expect((await repo.nearest({ ownerId: userId }, vec(5), 10)).map((r) => r.id)).not.toContain(chunk1!.id);
+    expect((await repo.nearest({ ownerId: userId }, vec(5), 10, 'm')).map((r) => r.id)).not.toContain(chunk0Id);
+    expect((await repo.nearest({ ownerId: userId }, vec(5), 10, 'm')).map((r) => r.id)).not.toContain(chunk1!.id);
     expect((await repo.textSearch({ ownerId: userId }, 'hideme-marker', 10)).map((r) => r.id)).toEqual([]);
     expect((await repo.listLessons(userId, { limit: 1000 })).items.map((r) => r.id)).not.toContain(chunk0Id);
 
@@ -460,7 +463,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     // A hit on chunk 1 (not the one the person clicked) is just as verified.
     const hit1 = (await repo.textSearch({ ownerId: userId, kinds: ['lesson'] }, marker, 10)).find((h) => h.chunk_index === 1);
     expect(hit1!.verified).toBe(true);
-    expect((await repo.nearest({ ownerId: userId, kinds: ['lesson'] }, vec(7), 10)).filter((h) => h.source_id === sourceId).every((h) => h.verified)).toBe(true);
+    expect((await repo.nearest({ ownerId: userId, kinds: ['lesson'] }, vec(7), 10, 'm')).filter((h) => h.source_id === sourceId).every((h) => h.verified)).toBe(true);
 
     // Only the Fix section (chunk 1) changes: chunk 0's own text is identical, but the file's hash is new.
     await repo.replaceSourceChunks('lesson', sourceId, file('fix v2', 'b'.repeat(64)));
@@ -478,7 +481,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     for (const id of ids) await repo.setEmbedding(id, vec(7), 'm');
     expect(await repo.hideSource(ids[0]!, userId)).toBe(true);
     const visible = async () => ({
-      near: (await repo.nearest({ ownerId: userId, kinds: ['lesson'] }, vec(7), 50)).filter((h) => h.source_id === sourceId).length,
+      near: (await repo.nearest({ ownerId: userId, kinds: ['lesson'] }, vec(7), 50, 'm')).filter((h) => h.source_id === sourceId).length,
       text: (await repo.textSearch({ ownerId: userId, kinds: ['lesson'] }, marker, 50)).length,
       list: (await repo.listLessons(userId, { q: marker, limit: 10 })).items.length,
     });
@@ -527,7 +530,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
       expect(await titles({ includeExpired: true })).toEqual(['expired', 'later', 'legacy-project', 'legacy-user']);
       // nearest ranks every embedded note of the owner, so keep only this test's rows (other tests leave user-scope notes behind).
       const ours = new Set(rows.map((r) => r.id));
-      const near = (await repo.nearest({ ownerId: userId, kinds: ['note'], place: { projectId: userProjectId } }, vec(13), 50))
+      const near = (await repo.nearest({ ownerId: userId, kinds: ['note'], place: { projectId: userProjectId } }, vec(13), 50, 'm'))
         .filter((r) => ours.has(r.id))
         .map((r) => r.title)
         .sort();

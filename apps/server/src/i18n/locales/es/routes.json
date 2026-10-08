@@ -83,5 +83,10 @@
   "Flag não encontrada": "Flag no encontrada",
   "Login não encontrado ou expirado": "Login no encontrado o expirado",
   "Refazer login pela tela só funciona com Claude e Codex. Faça o login na própria máquina: {{hint}}": "Rehacer el login desde la pantalla solo funciona con Claude y Codex. Haz el login en la propia máquina: {{hint}}",
-  "Cole o código mostrado na página de login": "Pega el código que muestra la página de login"
+  "Cole o código mostrado na página de login": "Pega el código que muestra la página de login",
+  "O item escolhido para substituir não foi encontrado": "No se encontró el elemento elegido para reemplazar",
+  "Um item não pode substituir a si mesmo": "Un elemento no puede reemplazarse a sí mismo",
+  "O item escolhido já substitui outro; desfaça aquela substituição antes": "El elemento elegido ya reemplaza a otro; deshaz ese reemplazo antes",
+  "Este item já substitui o escolhido; desfaça aquela substituição antes": "Este elemento ya reemplaza al elegido; deshaz ese reemplazo antes",
+  "O endereço do ai-memory precisa ser local (127.0.0.1, localhost) ou de rede privada": "La dirección de ai-memory debe ser local (127.0.0.1, localhost) o de red privada"
 }

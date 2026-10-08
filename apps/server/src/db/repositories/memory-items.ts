@@ -3,6 +3,7 @@ import type { PrismaClient } from '../prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { holdsAtSql, inferScope, type DecisionPlace, type DecisionScope } from './decision-scope.js';
+import { currentSql, statusOf, statusSearchSql, type MemoryStatus, type StatusSearch } from '../../memory/status.js';
 
 export type MemoryKind = 'task' | 'message' | 'action' | 'doc' | 'note' | 'lesson' | 'project_note';
 export type MemoryTrust = 'person' | 'derived';
@@ -54,11 +55,15 @@ export interface MemoryItem {
   scope: DecisionScope;
   /** The chat conversation a note was recorded in; null for every other kind. */
   conversation_id: string | null;
-  /** When a note stops holding (TER-1014); null = never. */
+  /** TER-1013: where the person put it on the Memória screen (only ever marked on a `note`); anything
+   *  but `current` is out of the default search. */
+  status: MemoryStatus;
+  /** When a note stops holding (TER-1014, or "Desatualizada", TER-1013); null = never. */
   expires_at: string | null;
-  /** The ref (`note:<id>` / `decision:<id>`) this `record_decision` note replaced (TER-1015); null otherwise. */
+  /** The ref (`decision:<id>` / `note:<id>`) of the item this one replaces (TER-1013 / TER-1015). */
   supersedes: string | null;
-  /** When a newer note replaced this one (TER-1015): out of the default search and the conflict check. */
+  /** When it was marked substituída or a newer `record_decision` note replaced it (TER-1013 / TER-1015):
+   *  out of the default search and the conflict check. */
   superseded_at: string | null;
   source_at: string;
   created_at: string;
@@ -103,10 +108,12 @@ export interface MemoryFilter {
   kinds?: MemoryKind[];
   /** Where the notes found must hold (TER-1014): in scope there. Absent = any project, no conversation. */
   place?: DecisionPlace;
-  /** Keep expired notes (a search that asks for them); by default they are skipped. */
-  includeExpired?: boolean;
-  /** Also return rows a newer note replaced (TER-1015). Off by default: a replaced decision is history. */
-  includeSuperseded?: boolean;
+  /** TER-1014: also expired notes (left out by default). */
+  includeExpired?: StatusSearch['includeExpired'];
+  /** TER-1013: also rows marked desatualizada, errada or substituída (left out by default). */
+  includeInactive?: StatusSearch['includeInactive'];
+  /** TER-1015: also rows a newer note replaced, but still not the wrong or outdated ones. */
+  includeSuperseded?: StatusSearch['includeSuperseded'];
 }
 
 /** Row shape shared by the raw queries below: every `memory_items` column but `embedding` itself
@@ -131,6 +138,7 @@ interface RawItem {
   scope: string | null;
   conversation_id: string | null;
   expires_at: Date | null;
+  wrong_at: Date | null;
   supersedes: string | null;
   superseded_at: Date | null;
   source_at: Date;
@@ -139,7 +147,7 @@ interface RawItem {
 }
 
 const ITEM_COLUMNS = Prisma.raw(
-  `m.id, m.owner_id, m.project_id, m.kind, m.source_id, m.chunk_index, m.title, m.text, m.trust, m.content_hash, m.source_hash, m.embed_model, m.meta, m.verified_at, m.verified_hash, m.scope, m.conversation_id, m.expires_at, m.supersedes, m.superseded_at, m.source_at, m.created_at, m.updated_at`,
+  `m.id, m.owner_id, m.project_id, m.kind, m.source_id, m.chunk_index, m.title, m.text, m.trust, m.content_hash, m.source_hash, m.embed_model, m.meta, m.verified_at, m.verified_hash, m.scope, m.conversation_id, m.expires_at, m.wrong_at, m.supersedes, m.superseded_at, m.source_at, m.created_at, m.updated_at`,
 );
 
 /** `currentNotes`' status filter on the row alias `m`, read through `to_jsonb` so a mark whose column does
@@ -154,9 +162,10 @@ const CURRENT_NOTE = Prisma.raw(
  *  every other kind. */
 const SCOPE_SQL = Prisma.raw(`(CASE WHEN m.kind <> 'note' THEN 'user' ELSE COALESCE(m.scope, CASE WHEN m.project_id IS NULL THEN 'user' ELSE 'project' END) END)`);
 
-/** The row holds at the filter's place and, unless asked otherwise, has not expired (TER-1014). */
+/** The row's scope covers the filter's place (TER-1014). Expiry is part of the status (TER-1013):
+ *  `statusFilter` leaves expired rows out unless the filter asks for them. */
 const holdsFilter = (filter: MemoryFilter): Prisma.Sql =>
-  holdsAtSql({ scope: SCOPE_SQL, projectId: Prisma.raw('m.project_id'), conversationId: Prisma.raw('m.conversation_id'), expiresAt: Prisma.raw('m.expires_at') }, filter.place ?? {}, filter.includeExpired);
+  holdsAtSql({ scope: SCOPE_SQL, projectId: Prisma.raw('m.project_id'), conversationId: Prisma.raw('m.conversation_id'), expiresAt: Prisma.raw('m.expires_at') }, filter.place ?? {}, true);
 
 /** pgvector's text input format: `[x,y,z]`. Never-finite components (NaN, Infinity) are zeroed rather
  *  than sent malformed, since a bad embedding would otherwise fail the whole write. */
@@ -179,8 +188,8 @@ const markHash = (r: { kind: string; content_hash: string; source_hash: string |
 const MARK_HASH_SQL = Prisma.raw(`(CASE WHEN m."kind" = 'lesson' THEN COALESCE(m."source_hash", m."content_hash") ELSE m."content_hash" END)`);
 /** "Not hidden" (`hideSource`): no mark, or a mark for a text that has since changed. */
 const NOT_HIDDEN = Prisma.sql`(m.hidden_hash IS NULL OR m.hidden_hash <> ${MARK_HASH_SQL})`;
-/** "Still current" unless the caller asked for replaced rows too (TER-1015). */
-const currentUnless = (includeSuperseded: boolean | undefined) => (includeSuperseded ? Prisma.empty : Prisma.sql` AND m.superseded_at IS NULL`);
+/** TER-1013: only current rows, unless the search asked for every status. */
+const statusFilter = (f: MemoryFilter) => statusSearchSql('m', f);
 
 const mapRaw = (r: RawItem): MemoryItem => ({
   id: r.id,
@@ -201,6 +210,7 @@ const mapRaw = (r: RawItem): MemoryItem => ({
   verified_at: r.verified_at ? r.verified_at.toISOString() : null,
   scope: r.kind !== 'note' ? 'user' : ((r.scope as DecisionScope | null) ?? inferScope(r.project_id)),
   conversation_id: r.conversation_id,
+  status: statusOf(r),
   expires_at: r.expires_at ? r.expires_at.toISOString() : null,
   supersedes: r.supersedes,
   superseded_at: r.superseded_at ? r.superseded_at.toISOString() : null,
@@ -249,7 +259,7 @@ async function upsertIn(tx: RawClient, items: NewMemoryItem[]): Promise<MemoryIt
         "embedding" = CASE WHEN "memory_items"."content_hash" = EXCLUDED."content_hash" THEN "memory_items"."embedding" ELSE NULL END,
         "embed_model" = CASE WHEN "memory_items"."content_hash" = EXCLUDED."content_hash" THEN "memory_items"."embed_model" ELSE NULL END
       RETURNING id, owner_id, project_id, (SELECT name FROM "projects" WHERE id = "project_id") AS project_name,
-                kind, source_id, chunk_index, title, text, trust, content_hash, source_hash, embed_model, meta, verified_at, verified_hash, scope, conversation_id, expires_at, supersedes, superseded_at, source_at, created_at, updated_at,
+                kind, source_id, chunk_index, title, text, trust, content_hash, source_hash, embed_model, meta, verified_at, verified_hash, scope, conversation_id, expires_at, wrong_at, supersedes, superseded_at, source_at, created_at, updated_at,
                 (embedding IS NULL) AS needs_embedding`;
     if (row!.needs_embedding) out.push(mapRaw(row!));
   }
@@ -354,16 +364,17 @@ export class MemoryItemsRepository {
   /**
    * The `k` nearest items of this owner, best (highest cosine similarity) first: an exact scan, no ANN
    * index (spec D5) — never another owner's rows, never an unembedded row, `projectId`/`kinds` narrow
-   * further when given. `rank` is the 1-based position in this result.
+   * further when given. Only rows embedded with exactly `embedModel`, the query vector's own model
+   * (TER-1006): a vector of another model is not comparable. `rank` is the 1-based position in this result.
    */
-  async nearest(filter: MemoryFilter, vector: number[], k: number): Promise<MemoryHit[]> {
+  async nearest(filter: MemoryFilter, vector: number[], k: number, embedModel: string): Promise<MemoryHit[]> {
     const v = toVector(vector);
     const rows = await this.db.$queryRaw<(RawItem & { similarity: number | string })[]>`
       SELECT ${ITEM_COLUMNS}, p.name AS project_name,
              1 - (m.embedding <=> ${v}::vector) AS similarity
       FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
-      WHERE m.owner_id = ${filter.ownerId} AND m.embedding IS NOT NULL
-        AND ${NOT_HIDDEN}${currentUnless(filter.includeSuperseded)}
+      WHERE m.owner_id = ${filter.ownerId} AND m.embedding IS NOT NULL AND m.embed_model = ${embedModel}
+        AND ${NOT_HIDDEN} AND ${statusFilter(filter)}
         AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))
         AND ${holdsFilter(filter)}
@@ -381,7 +392,7 @@ export class MemoryItemsRepository {
       SELECT ${ITEM_COLUMNS}, p.name AS project_name
       FROM "memory_items" m CROSS JOIN q LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${filter.ownerId}
-        AND ${NOT_HIDDEN}${currentUnless(filter.includeSuperseded)}
+        AND ${NOT_HIDDEN} AND ${statusFilter(filter)}
         AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))
         AND ${holdsFilter(filter)}
@@ -415,7 +426,7 @@ export class MemoryItemsRepository {
         SELECT ${ITEM_COLUMNS}, p.name AS project_name, 1 - (m.embedding <=> ${v}::vector) AS similarity
         FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
         WHERE m.owner_id = ${ownerId} AND m.kind = 'note' AND m.embedding IS NOT NULL AND m.embed_model = ${o.embedModel}
-          AND m.superseded_at IS NULL AND ${NOT_HIDDEN}
+          AND ${currentSql('m')} AND ${NOT_HIDDEN}
           AND m.project_id IS NOT DISTINCT FROM ${projectId}::text
       ) s
       WHERE s.similarity >= ${o.minSimilarity}
@@ -465,13 +476,17 @@ export class MemoryItemsRepository {
     return this.db.memoryItem.count({ where: { ownerId, kind: 'note', createdAt: { gte: since } } });
   }
 
-  /** "Anotações do concierge" (spec D12): newest first, keyset cursor over `(created_at, id)`. */
-  async listNotes(ownerId: string, opts: { cursor?: string; limit: number }): Promise<{ items: MemoryItem[]; next_cursor: string | null }> {
+  /** "Anotações do concierge" (spec D12): newest first, keyset cursor over `(created_at, id)`; `q`
+   *  (TER-1013's replacement picker) is a case-insensitive substring of the title or text. */
+  async listNotes(ownerId: string, opts: { q?: string; cursor?: string; limit: number }): Promise<{ items: MemoryItem[]; next_cursor: string | null }> {
     const cur = opts.cursor ? decodeCursor(opts.cursor) : null;
+    const q = opts.q?.trim();
+    const like = q ? `%${escapeLike(q)}%` : null;
     const rows = await this.db.$queryRaw<RawItem[]>`
       SELECT ${ITEM_COLUMNS}, p.name AS project_name
       FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${ownerId} AND m.kind = 'note'
+        AND (${like}::text IS NULL OR m.title ILIKE ${like} ESCAPE '\\' OR m.text ILIKE ${like} ESCAPE '\\')
         AND (${cur === null}::boolean OR (m.created_at, m.id) < (${cur?.createdAt ?? new Date(0)}, ${cur?.id ?? ''}))
       ORDER BY m.created_at DESC, m.id DESC
       LIMIT ${opts.limit + 1}`;

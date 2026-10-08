@@ -8,6 +8,7 @@ import { AgentUpdateCard } from './AgentUpdateCard';
 import { NetworkCheckCard } from './NetworkCheckCard';
 import { AutomationAllowedCard } from './AutomationAllowedCard';
 import { AiUsageQueryCard } from './AiUsageQueryCard';
+import { AiMemoryCard } from './AiMemoryCard';
 import { MonitorHooksCard, monitorHealthNote } from './MonitorHooksCard';
 import { useData } from '../lib/data';
 import type { Machine, User } from '../lib/types';
@@ -298,6 +299,7 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
       )}
       {machine && machine.type === 'agent' && <AutomationAllowedCard machine={machine} />}
       {machine && <AiUsageQueryCard machine={machine} />}
+      {machine && <AiMemoryCard machine={machine} />}
     </>
   );
 

@@ -204,12 +204,12 @@ describe('decisionsOf', () => {
       {
         user_id: 'u2', project_id: 'p1', conversation_id: 'c1', tab_question_id: 'q1', question_index: 0,
         header: 'Cor', question: 'Qual cor?', options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }],
-        multi_select: false, answer: { labels: ['Sim'] },
+        multi_select: false, answer: { labels: ['Sim'] }, trust: 'person',
       },
       {
         user_id: 'u2', project_id: 'p1', conversation_id: 'c1', tab_question_id: 'q1', question_index: 1,
         header: 'Frutas', question: 'Quais frutas?', options: [{ label: 'Maçã', description: 'fruta' }, { label: 'Banana', description: '' }],
-        multi_select: true, answer: { labels: ['Banana', 'Maçã'] },
+        multi_select: true, answer: { labels: ['Banana', 'Maçã'] }, trust: 'person',
       },
     ]);
   });
@@ -291,7 +291,7 @@ describe('recordDecisions', () => {
 
 describe('backfillDecisions', () => {
   it('turns answered choice rows without a decision into insertMany calls and returns the inserted count', async () => {
-    const ansRow: AnsweredChoiceRow = { id: 'tq1', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', payload: { questions: [item] }, answer: { answers: [{ selected: [0] }] } };
+    const ansRow: AnsweredChoiceRow = { id: 'tq1', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', answered_via: 'card', payload: { questions: [item] }, answer: { answers: [{ selected: [0] }] } };
     const chatDecisions = fakeChatDecisions({ listAnsweredChoicesWithoutDecision: vi.fn(async (limit: number) => (limit > 0 ? [ansRow] : [])) });
     const result = await backfillDecisions({ chatDecisions } as never);
     expect(result).toEqual({ inserted: 1, skipped: [] });
@@ -300,10 +300,30 @@ describe('backfillDecisions', () => {
     );
   });
 
+  it('records a click (or a row from before answered_via) as person, an automatic answer as derived (TER-1006)', async () => {
+    const base = { project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', payload: { questions: [item] }, answer: { answers: [{ selected: [0] }] } };
+    const rows: AnsweredChoiceRow[] = [
+      { ...base, id: 'tq1', answered_via: 'card' },
+      { ...base, id: 'tq2', answered_via: null },
+      { ...base, id: 'tq3', answered_via: 'auto' },
+      { ...base, id: 'tq4', answered_via: 'automation' },
+    ];
+    const chatDecisions = fakeChatDecisions({ listAnsweredChoicesWithoutDecision: vi.fn(async () => rows) });
+    const result = await backfillDecisions({ chatDecisions } as never);
+    expect(result).toEqual({ inserted: 4, skipped: [] });
+    const trustOf = vi.mocked(chatDecisions.insertMany).mock.calls.map(([d]) => [d[0]!.tab_question_id, d[0]!.trust]);
+    expect(trustOf).toEqual([
+      ['tq1', 'person'],
+      ['tq2', 'person'],
+      ['tq3', 'derived'],
+      ['tq4', 'derived'],
+    ]);
+  });
+
   it('skips a row whose payload or answer does not parse, without aborting the rest of the batch', async () => {
-    const badPayload = { id: 'tq1', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', payload: { nope: true }, answer: { answers: [{ selected: [0] }] } };
-    const badAnswer = { id: 'tq2', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', payload: { questions: [item] }, answer: { nope: true } };
-    const good: AnsweredChoiceRow = { id: 'tq3', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', payload: { questions: [item] }, answer: { answers: [{ selected: [0] }] } };
+    const badPayload = { id: 'tq1', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', answered_via: 'card', payload: { nope: true }, answer: { answers: [{ selected: [0] }] } };
+    const badAnswer = { id: 'tq2', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', answered_via: 'card', payload: { questions: [item] }, answer: { nope: true } };
+    const good: AnsweredChoiceRow = { id: 'tq3', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', answered_via: 'card', payload: { questions: [item] }, answer: { answers: [{ selected: [0] }] } };
     const chatDecisions = fakeChatDecisions({ listAnsweredChoicesWithoutDecision: vi.fn(async () => [badPayload, badAnswer, good]) });
     const result = await backfillDecisions({ chatDecisions } as never);
     expect(result).toEqual({ inserted: 1, skipped: ['tq1', 'tq2'] });
@@ -315,8 +335,8 @@ describe('backfillDecisions', () => {
     // `item` has 2 options: index 5 does not exist. This parses fine on its own (both `choicePayload`
     // and `choiceAnswerBody` are shape-only schemas) but `checkChoiceAnswer` catches the mismatch —
     // without that check, `answerToDecision` would throw and abort the whole batch (the bug being fixed).
-    const misfit = { id: 'tq1', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', payload: { questions: [item] }, answer: { answers: [{ selected: [5] }] } };
-    const good: AnsweredChoiceRow = { id: 'tq2', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', payload: { questions: [item] }, answer: { answers: [{ selected: [0] }] } };
+    const misfit = { id: 'tq1', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', answered_via: 'card', payload: { questions: [item] }, answer: { answers: [{ selected: [5] }] } };
+    const good: AnsweredChoiceRow = { id: 'tq2', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', answered_via: 'card', payload: { questions: [item] }, answer: { answers: [{ selected: [0] }] } };
     const chatDecisions = fakeChatDecisions({ listAnsweredChoicesWithoutDecision: vi.fn(async () => [misfit, good]) });
     const result = await backfillDecisions({ chatDecisions } as never);
     expect(result).toEqual({ inserted: 1, skipped: ['tq1'] });
@@ -324,8 +344,8 @@ describe('backfillDecisions', () => {
   });
 
   it('skips a row whose insert itself throws, without aborting the rest of the batch', async () => {
-    const rowA: AnsweredChoiceRow = { id: 'tq1', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', payload: { questions: [item] }, answer: { answers: [{ selected: [0] }] } };
-    const rowB: AnsweredChoiceRow = { id: 'tq2', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', payload: { questions: [item] }, answer: { answers: [{ selected: [1] }] } };
+    const rowA: AnsweredChoiceRow = { id: 'tq1', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', answered_via: 'card', payload: { questions: [item] }, answer: { answers: [{ selected: [0] }] } };
+    const rowB: AnsweredChoiceRow = { id: 'tq2', project_id: 'p1', conversation_id: 'c1', answered_by: 'u9', answered_via: 'card', payload: { questions: [item] }, answer: { answers: [{ selected: [1] }] } };
     const insertMany = vi.fn(async (rows: NewDecision[]) => {
       if (rows[0]!.tab_question_id === 'tq1') throw new Error('db down');
       return rows.map((r, i) => ({ id: `d${i + 1}`, ...r, project_name: null, embed_model: null, suggested_count: 0, accepted_count: 0, created_at: '2026-09-26T00:00:00.000Z' }));

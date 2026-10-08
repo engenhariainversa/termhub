@@ -5,6 +5,7 @@ import { api, ApiError } from '../lib/api';
 import type { ChatDecision, ChatMemory, ConciergeNote, LessonItem } from '../lib/types';
 import { ContextLimitField } from '../components/chat/ContextLimitField';
 import { formatDate } from '../lib/format';
+import { MemoryStatusBadge, MemoryStatusControls } from '../components/MemoryStatusControls';
 
 const fmtDate = (iso: string) => formatDate(iso);
 
@@ -33,7 +34,9 @@ function answerText(d: ChatDecision): string {
 /**
  * "Memória do chat" (spec 2026-09-26 §5.2), at `/chat/memoria`: the switch, a search field and the
  * list of remembered decisions, paginated. Forgetting here is the same hard delete as "Esquecer esta
- * decisão" on a card — a card still pointing at a row removed here simply stops offering it.
+ * decisão" on a card — a card still pointing at a row removed here simply stops offering it. Marking
+ * a decision or note "Desatualizada", "Errada" or "Substituída por…" (TER-1013) keeps it listed but out
+ * of the default search and the precedents, and can be undone.
  */
 export function ChatMemoryPage() {
   const { t } = useTranslation();
@@ -433,8 +436,8 @@ export function ChatMemoryPage() {
       ) : (
         <ul className="mt-4 space-y-2">
           {decisions.map((d) => (
-            <li key={d.id} className="rounded-lg border border-line bg-bg-2 p-3 text-sm">
-              <p className="whitespace-pre-wrap text-fg">{d.question}</p>
+            <li key={d.id} className="rounded-lg border border-line bg-bg-2 p-3 text-sm" data-status={d.status}>
+              <p className={`whitespace-pre-wrap ${d.status === 'current' ? 'text-fg' : 'text-fg-muted line-through'}`}>{d.question}</p>
               <p className="mt-1 text-fg-muted">{`→ ${answerText(d)}`}</p>
               <p className="mt-1 text-xs text-fg-dim">
                 {t('{{project}} · {{date}} · sugerida {{suggested}}× · aceita {{accepted}}×', {
@@ -443,7 +446,17 @@ export function ChatMemoryPage() {
                   suggested: d.suggested_count,
                   accepted: d.accepted_count,
                 })}
+                {' · '}
+                <MemoryStatusBadge status={d.status} supersededBy={d.superseded_by} />
               </p>
+              <MemoryStatusControls
+                kind="decision"
+                id={d.id}
+                status={d.status}
+                setStatus={(status, by) => api.setDecisionStatus(d.id, status, by).then((r) => r.decision)}
+                onChange={(updated) => setDecisions((prev) => (prev ?? []).map((x) => (x.id === updated.id ? updated : x)))}
+                onError={setError}
+              />
               <button type="button" className="btn-ghost mt-2 text-xs text-danger" disabled={forgettingId === d.id} onClick={() => void forget(d)}>
                 {t('Esquecer')}
               </button>
@@ -470,10 +483,21 @@ export function ChatMemoryPage() {
       ) : (
         <ul className="mt-4 space-y-2">
           {notes.map((n) => (
-            <li key={n.id} className="rounded-lg border border-line bg-bg-2 p-3 text-sm">
-              <p className="whitespace-pre-wrap text-fg">{n.question}</p>
+            <li key={n.id} className="rounded-lg border border-line bg-bg-2 p-3 text-sm" data-status={n.status}>
+              <p className={`whitespace-pre-wrap ${n.status === 'current' ? 'text-fg' : 'text-fg-muted line-through'}`}>{n.question}</p>
               <p className="mt-1 text-fg-muted">{`→ ${n.decision}`}</p>
-              <p className="mt-1 text-xs text-fg-dim">{`${n.reason} · ${n.project_name ?? t('sem projeto')} · ${fmtDate(n.created_at)}`}</p>
+              <p className="mt-1 text-xs text-fg-dim">
+                {`${n.reason} · ${n.project_name ?? t('sem projeto')} · ${fmtDate(n.created_at)} · `}
+                <MemoryStatusBadge status={n.status} supersededBy={n.superseded_by} />
+              </p>
+              <MemoryStatusControls
+                kind="note"
+                id={n.id}
+                status={n.status}
+                setStatus={(status, by) => api.setNoteStatus(n.id, status, by).then((r) => r.note)}
+                onChange={(updated) => setNotes((prev) => (prev ?? []).map((x) => (x.id === updated.id ? updated : x)))}
+                onError={setNotesError}
+              />
               <button type="button" className="btn-ghost mt-2 text-xs text-danger" disabled={forgettingNoteId === n.id} onClick={() => void forgetNote(n)}>
                 {t('Esquecer')}
               </button>

@@ -84,6 +84,10 @@ export function renderLessonBlock(id: string, at: Date, tab: string | null, l: L
 
 const HEADING_RE = /^#{1,3}\s+(.+)$/;
 
+/** A section with nothing but headings (`## Lições` once its blocks are taken out, an empty `### Ideias`):
+ *  a title alone is nothing to find, and every query about notes would match it (TER-1006). */
+export const headingOnly = (section: Pick<NoteSection, 'text'>): boolean => section.text.split('\n').every((line) => line.trim() === '' || HEADING_RE.test(line.trim()));
+
 /**
  * Splits the person's own note text (blocks already removed) by heading, like `chunkMarkdown` does
  * for a doc — but, unlike it, never drops a heading that has no body: a note is free-form, and a

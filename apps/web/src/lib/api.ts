@@ -4,6 +4,7 @@ import type { AutomationFeedEvent, FileRecentResponse, NetworkCheck, TabChatActi
 import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
+import type { MemoryReplacement, MemoryStatus, AiMemoryState } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -182,6 +183,7 @@ export const api = {
     installHooks: (id: string) => request<MachineHooks & { claude: 'installed' | 'skipped'; codex: 'installed' | 'skipped'; cursor?: 'installed' | 'skipped' | 'agent_outdated'; claude_dirs?: string[] }>('POST', `/machines/${id}/hooks`),
     removeHooks: (id: string) => request<{ ok: true }>('DELETE', `/machines/${id}/hooks`),
     networkCheck: (id: string) => request<{ checks: NetworkCheck[] }>('GET', `/machines/${id}/network-check`),
+    aiMemory: (id: string) => request<AiMemoryState>('GET', `/machines/${id}/ai-memory`),
     startWdaSetup: (id: string) => request<{ ok: true }>('POST', `/machines/${id}/simulator/setup`, {}),
     /** subpastas de `path` (padrão $HOME) + discos/mounts da máquina */
     hardware: (id: string) => request<{ hardware: HardwareSnapshot }>('GET', `/machines/${id}/hardware`),
@@ -384,6 +386,18 @@ export const api = {
   },
   /** "Esquecer" a concierge note: hard delete, 204 even if it was already gone or someone else's. */
   forgetChatNote: (id: string) => request<void>('DELETE', `/chat/notes/${encodeURIComponent(id)}`),
+  /** "Desatualizada" / "Errada" / "Substituída por…" on a decision or a note (TER-1013); `current` is
+   *  "Desfazer". Answers the item as its list shows it. */
+  setDecisionStatus: (id: string, status: MemoryStatus, supersededBy?: string) =>
+    request<{ decision: ChatDecision }>('PUT', `/chat/decisions/${encodeURIComponent(id)}/status`, { status, superseded_by: supersededBy }),
+  setNoteStatus: (id: string, status: MemoryStatus, supersededBy?: string) =>
+    request<{ note: ConciergeNote }>('PUT', `/chat/notes/${encodeURIComponent(id)}/status`, { status, superseded_by: supersededBy }),
+  /** "Substituída por…"'s picker: current decisions and notes matching `q`, never `exclude` (the item being marked). */
+  memoryReplacements: (q: string, exclude: string) => {
+    const params = new URLSearchParams({ exclude });
+    if (q) params.set('q', q);
+    return request<{ items: MemoryReplacement[] }>('GET', `/chat/memory/replacements?${params.toString()}`);
+  },
   monitor: {
     tabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/tabs'),
     /** every open terminal tab of the scope, reported a state or not (the sidebar's agents) */

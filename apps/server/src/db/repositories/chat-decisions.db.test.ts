@@ -283,7 +283,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
     expect(beforeIds).not.toContain(permissionId);
     expect(beforeIds).not.toContain(openChoiceId);
     const found = before.find((r) => r.id === answeredChoiceId)!;
-    expect(found).toMatchObject({ project_id: projectId, conversation_id: conversationId, answered_by: userId });
+    expect(found).toMatchObject({ project_id: projectId, conversation_id: conversationId, answered_by: userId, answered_via: null });
 
     // excludeIds: the row is skipped while listed, back once it is not.
     const excluded = await repo.listAnsweredChoicesWithoutDecision(10_000, [answeredChoiceId]);
@@ -348,11 +348,36 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
     ]);
     await repo.setEmbedding(otherUserRow!.id, vec(1), 'm');
 
-    const neighbours = await repo.nearestAny(userId, vec(1), 10);
+    const [otherModel] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'Any5', question: 'Any pergunta 5?' })]);
+    await repo.setEmbedding(otherModel!.id, vec(1), 'm#old');
+    const [derived] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'Any6', question: 'Any pergunta 6?', trust: 'derived' })]);
+    await repo.setEmbedding(derived!.id, vec(1), 'm');
+
+    const neighbours = await repo.nearestAny(userId, vec(1), 10, 'm');
     const ids = neighbours.map((n) => n.id);
     expect(ids.indexOf(single!.id)).toBeLessThan(ids.indexOf(multi!.id)); // both shapes present, best first
     expect(ids).not.toContain(unembedded!.id);
     expect(ids).not.toContain(otherUserRow!.id);
+    expect(ids).not.toContain(otherModel!.id); // another model / text version is never compared (TER-1006)
+    // search_memory still finds a derived decision, and says so
+    expect(neighbours.find((n) => n.id === derived!.id)?.trust).toBe('derived');
+    expect(neighbours.find((n) => n.id === single!.id)?.trust).toBe('person');
+  });
+
+  it('a derived decision (an answer the countdown sent) is never a precedent: nearest and similarityTo skip it (TER-1006)', async () => {
+    const [person] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'Trust1', question: 'Trust pergunta 1?' })]);
+    const [derived] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'Trust2', question: 'Trust pergunta 2?', trust: 'derived' })]);
+    expect(person!.trust).toBe('person');
+    expect(derived!.trust).toBe('derived');
+    for (const row of [person, derived]) await repo.setEmbedding(row!.id, vec(11), 'm#q1');
+
+    const near = (await repo.nearest(userId, vec(11), { multiSelect: false, k: 50, embedModel: 'm#q1', place: {} })).map((n) => n.id);
+    expect(near).toContain(person!.id);
+    expect(near).not.toContain(derived!.id);
+    const sims = await repo.similarityTo([person!.id, derived!.id], userId, vec(11), 'm#q1');
+    expect(sims.has(person!.id)).toBe(true);
+    expect(sims.has(derived!.id)).toBe(false);
+    expect((await repo.findManyForUser([derived!.id], userId))[0]?.trust).toBe('derived');
   });
 
   it('similarityTo: cosine similarity of the named rows to a vector, only this user\'s embedded rows', async () => {
@@ -405,7 +430,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
 
       expect((await repo.textSearch(userId, 'Quasar888', 10)).map((d) => d.id).sort()).toEqual([mine!.id, elsewhere!.id, noProject!.id].sort());
       expect((await repo.textSearch(userId, 'Quasar888', 10, projectId)).map((d) => d.id)).toEqual([mine!.id]);
-      const near = (await repo.nearestAny(userId, vec(9), 50, projectId)).map((d) => d.id);
+      const near = (await repo.nearestAny(userId, vec(9), 50, 'm', projectId)).map((d) => d.id);
       expect(near).toContain(mine!.id);
       expect(near).not.toContain(elsewhere!.id);
       expect(near).not.toContain(noProject!.id);
@@ -454,7 +479,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
       expect(search).toEqual(expect.arrayContaining([user.id, project.id, later.id]));
       expect(search).not.toContain(conversation.id);
       expect(search).not.toContain(expired.id);
-      const withExpired = (await repo.nearestAny(userId, vec(11), 50, undefined, { includeExpired: true })).map((d) => d.id);
+      const withExpired = (await repo.nearestAny(userId, vec(11), 50, 'm#q1', undefined, { includeExpired: true })).map((d) => d.id);
       expect(withExpired).toContain(expired.id);
       const read = (await repo.findManyForUser([expired.id], userId))[0]!;
       expect(read.expires_at).not.toBeNull();

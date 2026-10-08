@@ -33,6 +33,7 @@ import { TabLimitNoticesRepository } from './tab-limit-notices.js';
 import { ChatAttachmentsRepository, type ChatAttachmentsRepo } from './chat-attachments.js';
 import { ChatDecisionsRepository } from './chat-decisions.js';
 import { MemoryItemsRepository } from './memory-items.js';
+import { MemoryStatusRepository } from './memory-status.js';
 import { InstanceSecretsRepository } from './instance-secrets.js';
 import { ProjectGroupsRepository } from './project-groups.js';
 import { DeviceRequestsRepository } from './device-requests.js';
@@ -54,6 +55,7 @@ import { TabUsageRepository } from './tab-usage.js';
 import { AccessLogsRepository } from './access-logs.js';
 import { SecurityEventsRepository } from './security-events.js';
 import { FeatureFlagsRepository } from './feature-flags.js';
+import { AiMemoryPagesRepository } from './ai-memory-pages.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -90,6 +92,7 @@ export interface Repositories {
   chatAttachments: ChatAttachmentsRepo;
   chatDecisions: ChatDecisionsRepository;
   memoryItems: MemoryItemsRepository;
+  memoryStatus: MemoryStatusRepository;
   instanceSecrets: InstanceSecretsRepository;
   projectGroups: ProjectGroupsRepository;
   deviceRequests: DeviceRequestsRepository;
@@ -111,6 +114,7 @@ export interface Repositories {
   aiAccountExhaustions: AiAccountExhaustionsRepository;
   securityEvents: SecurityEventsRepository;
   featureFlags: FeatureFlagsRepository;
+  aiMemoryPages: AiMemoryPagesRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
 }
@@ -151,6 +155,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     chatAttachments: new ChatAttachmentsRepository(db),
     chatDecisions: new ChatDecisionsRepository(db),
     memoryItems: new MemoryItemsRepository(db),
+    memoryStatus: new MemoryStatusRepository(db),
     instanceSecrets: new InstanceSecretsRepository(db),
     projectGroups: new ProjectGroupsRepository(db),
     deviceRequests: new DeviceRequestsRepository(db),
@@ -172,6 +177,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
     securityEvents: new SecurityEventsRepository(db),
     featureFlags: new FeatureFlagsRepository(db),
+    aiMemoryPages: new AiMemoryPagesRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
 }
@@ -207,6 +213,7 @@ export type { TaskPullRequest, PullRequestInfo, PrState, CiState, CiSummary } fr
 export { WATCH_MERGED_FOR_MS } from './task-pull-requests.js';
 export type { PurgedAccount, AccountDeletionLink } from './account-deletion.js';
 export type { PauseState } from './automation-pauses.js';
+export type { AiMemoryPageRow } from './ai-memory-pages.js';
 export type { UsageCursor, UsageTokens, UsageWrite, UsageSum } from './tab-usage.js';
 export type { AutomationEvent, AutomationEventKind, AutomationEventPayload, AutomationEventInput } from './automation-events.js';
 export { ACCESS_LOG_RETENTION_MS, type AccessLogInput } from './access-logs.js';

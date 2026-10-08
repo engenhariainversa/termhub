@@ -221,6 +221,10 @@ model Machine {
   aiUsageQuery          Boolean            @default(true) @map("ai_usage_query")
   /// R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
   automationAllowed     Boolean            @default(true) @map("automation_allowed")
+  /// TER-1018: "Usar ai-memory nesta máquina" (opt-in). Only gates the detection shown in Máquinas for now; nothing ai-memory stores reaches the server.
+  aiMemoryEnabled       Boolean            @default(false) @map("ai_memory_enabled")
+  /// Its local server, loopback or private network only (null = http://127.0.0.1:49374)
+  aiMemoryUrl           String?            @map("ai_memory_url")
   /// The user's own computer (an agent machine): browsers other than the one that added it hide it
   isLocal               Boolean            @default(false) @map("is_local")
   /// Owner: everything under the machine (projects, tabs, tasks, notes, AI accounts) is visible only to
@@ -235,6 +239,8 @@ model Machine {
   uploads               Upload[]
   /// Conversations hosted here (the chat's "terminal geral"); deleting the machine nulls the column.
   chatConversations     ChatConversation[]
+  /// Rule pages termhub wrote to ai-memory on this machine (TER-1019).
+  aiMemoryPages         AiMemoryPage[]
 
   @@index([ownerId])
   @@map("machines")
@@ -285,6 +291,8 @@ model Project {
   tabUsageDays        TabUsageDay[]
   /// AI accounts only this project may run on (TER-990)
   exclusiveAiAccounts AiAccount[]
+  /// Current rules published as pinned ai-memory pages on the project's machines (TER-1019)
+  aiMemoryPages       AiMemoryPage[]
 
   @@index([ownerId])
   @@map("projects")
@@ -690,6 +698,26 @@ model TabUsageDay {
   @@index([projectId, day])
   @@index([taskId])
   @@map("tab_usage_days")
+}
+
+/// A current rule termhub published as a pinned ai-memory page in one checkout of a machine (TER-1019):
+/// what it wrote, so it knows what to delete and skips a page whose content did not change.
+model AiMemoryPage {
+  projectId   String   @map("project_id")
+  machineId   String   @map("machine_id")
+  /// the checkout the page was written in (the link's cwd then): deletes still reach it after an unlink
+  cwd         String
+  /// `_rules/termhub-<slug>-<note id>.md`
+  path        String
+  /// sha256 of the page's title and body
+  hash        String
+  publishedAt DateTime @default(now()) @map("published_at") @db.Timestamptz
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  machine     Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, machineId, cwd, path])
+  @@index([machineId])
+  @@map("ai_memory_pages")
 }
 
 /// An AI account at its usage limit until `until` (agentic board, spec D21): the dispatcher skips it.
@@ -1297,11 +1325,19 @@ model ChatDecision {
   /// Where the decision holds (TER-1014): conversation | project | user. Card answers are `user`, as
   /// they always were account-wide precedents.
   scope          String                      @default("user")
-  /// When the decision stops holding (TER-1014); null = never. An expired one is never a precedent.
+  /// When the decision stops holding (TER-1014, or "Desatualizada" on the Memória screen, TER-1013, which
+  /// sets it to now); null = never. A row past it is out of the default search and never a precedent.
+  /// "Errada" sets wrongAt; "Substituída por…" (or a `record_decision` note that replaced it, TER-1015)
+  /// sets supersededAt here and puts this row's ref (`decision:<id>`) in `supersedes` of the row that
+  /// replaces it.
   expiresAt      DateTime?                   @map("expires_at")
-  /// When a `record_decision` note replaced it (TER-1015): it leaves the default search and never again
-  /// backs a suggestion or an automatic answer.
+  wrongAt        DateTime?                   @map("wrong_at")
   supersededAt   DateTime?                   @map("superseded_at")
+  /// The ref (`decision:<id>` / `note:<id>`) of the row this one replaces.
+  supersedes     String?
+  /// `person` (the person clicked the card) | `derived` (the countdown answered it, TER-1006): only a
+  /// `person` decision is ever a precedent for a suggestion or an automatic answer (spec D2/D11).
+  trust          String                      @default("person")
   createdAt      DateTime                    @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
@@ -1348,12 +1384,14 @@ model MemoryItem {
   scope          String?                     @map("scope")
   /// The chat conversation a note was recorded in (TER-1014); null for every other kind.
   conversationId String?                     @map("conversation_id")
-  /// When a note stops holding (TER-1014); null = never. Search skips an expired one by default.
+  /// When a note stops holding (TER-1014); null = never. Memory status (TER-1013), same meaning as on
+  /// `ChatDecision`; only ever set on a `note`. A newer `record_decision` note also sets supersededAt
+  /// (TER-1015): out of the default search and the conflict check.
   expiresAt      DateTime?                   @map("expires_at")
-  /// The ref (`note:<id>` / `decision:<id>`) a `record_decision` note replaced (TER-1015); null otherwise.
-  supersedes     String?                     @map("supersedes")
-  /// When a newer note replaced this one (TER-1015): it leaves the default search and the conflict check.
+  wrongAt        DateTime?                   @map("wrong_at")
   supersededAt   DateTime?                   @map("superseded_at")
+  /// The ref (`note:<id>` / `decision:<id>`) of the row this one replaces (TER-1013 / TER-1015).
+  supersedes     String?                     @map("supersedes")
   sourceAt       DateTime                    @map("source_at")
   createdAt      DateTime                    @default(now()) @map("created_at")
   updatedAt      DateTime                    @updatedAt @map("updated_at")

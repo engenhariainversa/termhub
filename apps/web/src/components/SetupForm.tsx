@@ -384,6 +384,17 @@ export function SetupForm({ project }: Props) {
 
       {data.automation && <AutomationSetup value={data.automation} onChange={(next) => patch('automation', next)} />}
 
+      {data.ai_memory && (
+        <Card
+          title={t('Memória dos agentes (ai-memory)')}
+          hint={t('Grava as regras vigentes como páginas fixadas do ai-memory nas máquinas do projeto que já usam o ai-memory neste checkout, para o Claude Code e o Codex lerem no início de cada sessão.')}
+        >
+          <Check checked={data.ai_memory.publish_rules} onChange={(v) => patch('ai_memory', { ...data.ai_memory!, publish_rules: v })}>
+            {t('Publicar regras vigentes no ai-memory')}
+          </Check>
+        </Card>
+      )}
+
       <div className="sticky bottom-0 flex items-center gap-3 border-t border-line bg-bg pb-6 pt-3">
         <button type="button" className="btn-primary" onClick={() => void save()} disabled={busy || !dirty || anyDuplicate}>
           {t('Salvar setup')}

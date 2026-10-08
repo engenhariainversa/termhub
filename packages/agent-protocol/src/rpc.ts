@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { aiMemoryUrl } from './ai-memory.js';
 
 export const SESSION_RE = /^[A-Za-z0-9_-]+$/;
 export const sessionName = z.string().min(1).max(128).regex(SESSION_RE);
@@ -13,6 +14,10 @@ export const DOC_PATH_RE = /^docs\/(?:superpowers\/(?:specs|plans)\/[A-Za-z0-9._
 export const docPath = z.string().regex(DOC_PATH_RE);
 /** An npm `dist.integrity` in SHA-512 form: `sha512-` plus the base64 of the 64-byte digest. */
 export const SHA512_INTEGRITY_RE = /^sha512-[A-Za-z0-9+/]{86}==$/;
+/** A termhub rule page in ai-memory (TER-1019): `_rules/termhub-<slug>-<note id>.md`. The same regex lives
+ *  in `@termhub/machine-ops` (`ai-memory-script.ts`), which cannot depend on this package. */
+export const AI_MEMORY_RULE_PATH_RE = /^_rules\/termhub-[a-z0-9-]{1,40}-[A-Za-z0-9_-]{1,64}\.md$/;
+export const aiMemoryRulePath = z.string().regex(AI_MEMORY_RULE_PATH_RE);
 export const aiProvider = z.enum(['claude', 'chatgpt', 'gemini', 'antigravity']);
 
 /** One usage window of an AI account (`ai.usage`); mirrors @termhub/machine-ops AiUsageWindow. */
@@ -395,6 +400,22 @@ export const RPC = {
    */
   'docs.read': def(z.object({ cwd: machinePath, paths: z.array(docPath).min(1).max(20) }), z.object({ stdout: z.string() }), 20_000),
   /**
+   * Current rules as pinned ai-memory pages (TER-1019): runs `@termhub/machine-ops`'s
+   * `buildAiMemoryRulesScript` in `cwd` (the checkout) against the ai-memory server at `server_url`.
+   * Raw tagged stdout (`skip …`, `ok|fail write|delete <path>`, `ok|fail briefing`); `parseAiMemorySync`
+   * on the server reads it back (since agent 0.27.0).
+   */
+  'ai_memory.rules.sync': def(
+    z.object({
+      cwd: machinePath,
+      server_url: z.string().max(512).regex(/^https?:\/\/[^\s]+$/),
+      writes: z.array(z.object({ path: aiMemoryRulePath, title: z.string().min(1).max(200), body: z.string().min(1).max(2000) })).max(16),
+      deletes: z.array(aiMemoryRulePath).max(64),
+    }),
+    z.object({ stdout: z.string() }),
+    60_000,
+  ),
+  /**
    * Writes a tab's private MCP config file (`~/.termhub/tabs/<tab_id>/<file>`, spec D7): `body`
    * travels only on stdin, never in this params object's serialized form on disk/log (since agent 0.10.0).
    */
@@ -410,6 +431,16 @@ export const RPC = {
   'net.check': def(
     z.object({ urls: z.array(z.string().url().max(2048).regex(/^https?:\/\//)).min(1).max(4) }),
     z.object({ results: z.array(z.object({ url: z.string().max(2048), status: z.number().int().nullable(), error: z.string().max(500).nullable() })).max(4) }),
+    15_000,
+  ),
+  /**
+   * Is `ai-memory` on the machine, which version, and does its server answer at `url` (loopback or a
+   * private network only, TER-1018)? Only these three facts travel back: nothing ai-memory stores
+   * (observations, sessions, pages) ever reaches the server (since agent 0.27.0).
+   */
+  'aimemory.status': def(
+    z.object({ url: aiMemoryUrl }),
+    z.object({ installed: z.boolean(), version: z.string().max(32).nullable(), server_up: z.boolean() }),
     15_000,
   ),
 } as const;

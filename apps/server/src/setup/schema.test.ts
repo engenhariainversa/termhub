@@ -132,3 +132,16 @@ describe('automation allow rules too broad for an automatic tab (TER-968)', () =
     expect(data.automation.allowed_tools).toEqual(['Bash']);
   });
 });
+
+describe('setup ai_memory (TER-1019)', () => {
+  it('defaults publish_rules to false for a setup saved before the block existed', () => {
+    expect(normalizeSetup({ automation: { enabled: true } }, 2).ai_memory).toEqual({ publish_rules: false });
+    expect(normalizeSetup(undefined, 2).ai_memory).toEqual({ publish_rules: false });
+  });
+  it('keeps a saved publish_rules, and a broken block alone falls back without losing the rest', () => {
+    expect(normalizeSetup({ ai_memory: { publish_rules: true } }, 2).ai_memory.publish_rules).toBe(true);
+    const broken = normalizeSetup({ ai_memory: { publish_rules: 'yes' }, automation: { enabled: true } }, 2);
+    expect(broken.ai_memory.publish_rules).toBe(false);
+    expect(broken.automation.enabled).toBe(true);
+  });
+});

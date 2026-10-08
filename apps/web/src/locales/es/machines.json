@@ -429,5 +429,16 @@
   "Remove os hooks, encerra as sessões de terminal das tabs desta máquina e remove o serviço e a credencial do agente. O pacote npm continua instalado (npm rm -g @termhub/agent).": "Quita los hooks, cierra las sesiones de terminal de las pestañas de esta máquina y quita el servicio y la credencial del agente. El paquete npm sigue instalado (npm rm -g @termhub/agent).",
   "O agente continua instalado na máquina. Para removê-lo, rode nela:": "El agente sigue instalado en la máquina. Para quitarlo, ejecuta en ella:",
   "Chave do dispositivo: o agente prova que a tem a cada conexão.": "Clave del dispositivo: el agente demuestra que la tiene en cada conexión.",
-  "Token permanente (antigo). Atualize o agente e use Parear de novo para trocá-lo por uma chave do dispositivo.": "Token permanente (antiguo). Actualiza el agente y usa Emparejar de nuevo para cambiarlo por una clave del dispositivo."
+  "Token permanente (antigo). Atualize o agente e use Parear de novo para trocá-lo por uma chave do dispositivo.": "Token permanente (antiguo). Actualiza el agente y usa Emparejar de nuevo para cambiarlo por una clave del dispositivo.",
+  "Memória dos agentes (ai-memory)": "Memoria de los agentes (ai-memory)",
+  "Grava as regras vigentes como páginas fixadas do ai-memory nas máquinas do projeto que já usam o ai-memory neste checkout, para o Claude Code e o Codex lerem no início de cada sessão.": "Guarda las reglas vigentes como páginas fijadas de ai-memory en las máquinas del proyecto que ya usan ai-memory en este checkout, para que Claude Code y Codex las lean al inicio de cada sesión.",
+  "Publicar regras vigentes no ai-memory": "Publicar las reglas vigentes en ai-memory",
+  "ai-memory não encontrado nesta máquina (comando ai-memory fora do PATH).": "ai-memory no encontrado en esta máquina (el comando ai-memory no está en el PATH).",
+  "ai-memory {{version}} instalado · servidor no ar em {{url}}": "ai-memory {{version}} instalado · servidor activo en {{url}}",
+  "ai-memory {{version}} instalado · servidor fora do ar em {{url}} (rode ai-memory serve)": "ai-memory {{version}} instalado · servidor caído en {{url}} (ejecuta ai-memory serve)",
+  "Usar ai-memory nesta máquina": "Usar ai-memory en esta máquina",
+  "Detecta o ai-memory (memória local compartilhada entre Claude Code, Codex e outras CLIs) e o servidor dele nesta máquina. O que ele guarda fica na máquina: nada vai para o termhub.": "Detecta ai-memory (memoria local compartida entre Claude Code, Codex y otros CLI) y su servidor en esta máquina. Lo que guarda se queda en la máquina: nada va a termhub.",
+  "Servidor local": "Servidor local",
+  "Verificar de novo": "Verificar de nuevo",
+  "Só endereços locais (127.0.0.1, localhost) ou de rede privada.": "Solo direcciones locales (127.0.0.1, localhost) o de red privada."
 }

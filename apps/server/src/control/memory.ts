@@ -11,6 +11,7 @@ import { autoAnswerBlocked } from '../memory/blocklist.js';
 import { defaultEmbedder, EMBED_TIMEOUT_MS, withTimeout, type Embedder } from '../chat/embeddings.js';
 import { sanitisePromptText } from '../chat/tab-question-context.js';
 import { indexNote, noteItem } from '../memory/index-items.js';
+import { nudgeAiMemoryRules, nudgeAiMemoryRulesForOwner } from '../memory/ai-memory-sync.js';
 import { excerpt, memoryText } from '../memory/text.js';
 import { nextLocalTime, zoneOrUtc } from '../lib/local-time.js';
 import { rrf, type Ranked } from '../memory/fusion.js';
@@ -21,6 +22,7 @@ import { ControlError, type ControlContext } from './context.js';
 export { MEMORY_REF, parseRef, type MemoryRefKind } from '../memory/refs.js';
 import { parseRef, type MemoryRefKind } from '../memory/refs.js';
 import { msg, tk } from '../i18n/index.js';
+import type { MemoryStatus } from '../memory/status.js';
 import { recordEvent } from '../automation/events.js';
 import { automaticRunOfTab } from '../automation/pause.js';
 import { answerWhy, roundScore } from '../automation/why.js';
@@ -41,6 +43,9 @@ export interface MemoryResult {
   scope?: DecisionScope;
   expires_at?: string | null;
   expired?: boolean;
+  /** Only with `include_inactive` and only for a decision or note the person marked on the Memória
+   *  screen (TER-1013): `outdated`, `wrong` or `superseded`. Absent for a current item. */
+  status?: Exclude<MemoryStatus, 'current'>;
   /** Only for `kind: 'lesson'` (spec 2026-09-27 failure lessons D8, §5.1), from the item's `meta`:
    *  whether the person marked it verified, its evidence, whether it came from a `docs/lessons/*.md`
    *  file or a project note, the file's path (null for a note lesson), the tab it was recorded from
@@ -93,6 +98,7 @@ const validityOf = (row: { scope: DecisionScope; expires_at: string | null }): P
   ...(isExpired(row.expires_at) ? { expired: true } : {}),
 });
 
+const withStatus = (r: MemoryResult, status: MemoryStatus | undefined): MemoryResult => (status && status !== 'current' ? { ...r, status } : r);
 /** The TER-1015 fields of a result, present only when they say something. */
 const supersedeFields = (r: { superseded_at: string | null; supersedes?: string | null }): Pick<MemoryResult, 'superseded_at' | 'supersedes'> => ({
   ...(r.superseded_at ? { superseded_at: r.superseded_at } : {}),
@@ -100,11 +106,11 @@ const supersedeFields = (r: { superseded_at: string | null; supersedes?: string 
 });
 
 function decisionResult(d: ChatDecision, similarity: number | null, match: MemoryResult['match']): MemoryResult {
-  return {
+  return withStatus({
     ...validityOf(d),
     ref: decisionKey(d.id),
     kind: 'decision',
-    trust: 'person',
+    trust: d.trust,
     project: projectOf(d.project_id, d.project_name),
     date: d.created_at,
     title: decisionTitle(d),
@@ -112,7 +118,7 @@ function decisionResult(d: ChatDecision, similarity: number | null, match: Memor
     similarity,
     match,
     ...supersedeFields(d),
-  };
+  }, d.status);
 }
 
 function itemResult(it: MemoryHit, similarity: number | null, match: MemoryResult['match']): MemoryResult {
@@ -128,8 +134,8 @@ function itemResult(it: MemoryHit, similarity: number | null, match: MemoryResul
     match,
     ...supersedeFields(it),
   };
-  if (it.kind === 'note') return { ...base, ...validityOf(it) };
-  if (it.kind !== 'lesson') return base;
+  if (it.kind === 'note') return withStatus({ ...base, ...validityOf(it) }, it.status);
+  if (it.kind !== 'lesson') return withStatus(base, it.status);
   const meta = it.meta;
   return {
     ...base,
@@ -173,8 +179,10 @@ function mergeByRank(decisions: (ChatDecision & { rank: number })[], items: Memo
  * budget), falls back to full-text alone — it never throws for that. Never logs the query, a title or
  * an excerpt: only counts and codes belong in a log line, and this function does not log at all.
  *
- * A note or decision a newer note replaced (TER-1015) is left out unless `include_superseded` is true;
- * then it carries `superseded_at`, so it never reads as the current rule.
+ * Decisions and notes the person marked desatualizada, errada or substituída (TER-1013) are left out
+ * unless `include_inactive`; then they come back tagged with their `status`. A note or decision a newer
+ * note replaced (TER-1015) also comes back with `include_superseded` alone; it then carries
+ * `superseded_at`, so it never reads as the current rule.
  *
  * Under a tab token (TER-212 D3) the search is held to the tab's project — decisions included — and
  * never reads the kinds `message` and `action`. The MCP route already pinned `project_id`; the check
@@ -186,7 +194,7 @@ function mergeByRank(decisions: (ChatDecision & { rank: number })[], items: Memo
  */
 export async function searchMemory(
   ctx: ControlContext,
-  a: { query: string; project_id?: string; kinds?: MemoryRefKind[]; limit?: number; include_expired?: boolean; include_superseded?: boolean },
+  a: { query: string; project_id?: string; kinds?: MemoryRefKind[]; limit?: number; include_expired?: boolean; include_inactive?: boolean; include_superseded?: boolean },
   deps: { embedder?: Embedder | null } = {},
 ): Promise<{ note: string; results: MemoryResult[] }> {
   const tab = ctx.token?.tab;
@@ -204,23 +212,26 @@ export async function searchMemory(
   const skipItems = itemKinds !== undefined && itemKinds.length === 0;
   const place: DecisionPlace = { projectId: a.project_id, conversationId: ctx.token?.chat_conversation_id ?? null };
   const includeExpired = a.include_expired ?? false;
+  const includeInactive = a.include_inactive === true;
   const includeSuperseded = a.include_superseded === true;
-  const itemFilter: MemoryFilter = { ownerId, projectId: a.project_id, kinds: itemKinds, place, includeExpired, includeSuperseded };
+  const itemFilter: MemoryFilter = { ownerId, projectId: a.project_id, kinds: itemKinds, place, includeExpired, includeInactive, includeSuperseded };
 
   let vector: number[] | null = null;
+  let model = '';
   if (embedder) {
     try {
-      const { vectors } = await withTimeout(embedder.embed([a.query]), EMBED_TIMEOUT_MS, () => {});
-      vector = vectors[0] ?? null;
+      const out = await withTimeout(embedder.embed([a.query]), EMBED_TIMEOUT_MS, () => {});
+      vector = out.vectors[0] ?? null;
+      model = out.model;
     } catch {
       vector = null; // best effort: an unreachable or slow embed service falls back to full-text alone
     }
   }
 
   const [vecDecisions, vecItems, textDecisions, textItems] = await Promise.all([
-    vector && wantDecision ? ctx.repos.chatDecisions.nearestAny(ownerId, vector, CANDIDATE_K, decisionProject, { ...place, includeExpired, includeSuperseded }) : Promise.resolve([] as DecisionNeighbour[]),
-    vector && !skipItems ? ctx.repos.memoryItems.nearest(itemFilter, vector, CANDIDATE_K) : Promise.resolve([] as MemoryHit[]),
-    wantDecision ? ctx.repos.chatDecisions.textSearch(ownerId, a.query, CANDIDATE_K, decisionProject, { ...place, includeExpired, includeSuperseded }) : Promise.resolve([] as (ChatDecision & { rank: number })[]),
+    vector && wantDecision ? ctx.repos.chatDecisions.nearestAny(ownerId, vector, CANDIDATE_K, embedTag(model), decisionProject, { ...place, includeExpired, includeInactive, includeSuperseded }) : Promise.resolve([] as DecisionNeighbour[]),
+    vector && !skipItems ? ctx.repos.memoryItems.nearest(itemFilter, vector, CANDIDATE_K, model) : Promise.resolve([] as MemoryHit[]),
+    wantDecision ? ctx.repos.chatDecisions.textSearch(ownerId, a.query, CANDIDATE_K, decisionProject, { ...place, includeExpired, includeInactive, includeSuperseded }) : Promise.resolve([] as (ChatDecision & { rank: number })[]),
     skipItems ? Promise.resolve([] as MemoryHit[]) : ctx.repos.memoryItems.textSearch(itemFilter, a.query, CANDIDATE_K),
   ]);
 
@@ -417,6 +428,9 @@ export async function recordDecision(
 
   const row = await indexNote(ctx.repos, item, { embedder, log, supersedes: target, embedding: check.embedding });
   if (!row) throw new ControlError('SUPERSEDE_GONE', msg('{{ref}} já foi substituído ou esquecido', { ref: a.supersedes! }));
+  // The project's current rules changed: republish its ai-memory pages (TER-1019), in the background.
+  if (projectId) nudgeAiMemoryRules(ctx.repos, projectId, log);
+  else nudgeAiMemoryRulesForOwner(ctx.repos, ownerId, log);
   return {
     recorded: true,
     ref: `note:${row.id}`,
@@ -656,6 +670,15 @@ async function similarEnough(ctx: ControlContext, payload: ChoicePayload, backer
   return score;
 }
 
+/** `answer_tab_question`'s result. `other_project_sources`: the cited decisions answered in another
+ *  project than the card's (TER-1006), only when there is one. */
+export interface AnswerToolResult {
+  mode: 'auto' | 'suggest';
+  due_at?: string;
+  downgraded_because?: Downgrade;
+  other_project_sources?: string[];
+}
+
 /**
  * `answer_tab_question` (spec 2026-09-26 concierge memory D6, D7, D8, D11, §5.4): answers one of the
  * person's open `choice` cards from memory, never by typing — either a cancellable countdown
@@ -672,7 +695,7 @@ async function similarEnough(ctx: ControlContext, payload: ChoicePayload, backer
  * documents), when the person's "Responder sozinho" switch is off; when the person already cancelled a
  * countdown on this card; when any question's header, text or chosen answer (label, description or
  * free text) hits the blocklist; when
- * not every question has a cited `decision` (a person's own past answer) that maps to exactly the
+ * not every question has a cited `decision` (a person's own past answer, trust `person`) that maps to exactly the
  * proposed answer, option descriptions included (`decisionBacks`); or when those decisions are not about a similar enough question
  * (`similarEnough`, fail closed). A doc, card, message or note can never back `auto`: text an agent
  * wrote may carry an injection (D2).
@@ -686,7 +709,7 @@ export async function answerTabQuestionTool(
   ctx: ControlContext,
   a: { question_id: string; answers: ProposedAnswer[]; reason: string; sources: string[]; mode?: 'auto' | 'suggest' },
   deps: { embedder?: Embedder | null } = {},
-): Promise<{ mode: 'auto' | 'suggest'; due_at?: string; downgraded_because?: Downgrade }> {
+): Promise<AnswerToolResult> {
   const userId = ctx.scope.user.id;
   const row = await ctx.repos.tabQuestions.findByIdForUser(a.question_id, userId);
   if (!row) throw new ControlError('QUESTION_NOT_FOUND', 'Pergunta não encontrada');
@@ -699,12 +722,17 @@ export async function answerTabQuestionTool(
   const sources = await verifySources(ctx, a.sources);
   if (sources.length === 0) throw new ControlError('UNKNOWN_SOURCE', 'Cite ao menos uma fonte de search_memory');
   checkSourcesHold(sources, { projectId: row.project_id, conversationId: row.conversation_id });
+  // The search stays account-wide (a decision from another project can be the right one), but the model
+  // is told which cited decisions were answered in another project, so it can weigh them (TER-1006).
+  const otherProject = sources.flatMap((s) => (s.kind === 'decision' && s.decision.project_id !== row.project_id ? [s.ref] : []));
+  const result = (r: AnswerToolResult): AnswerToolResult => (otherProject.length > 0 ? { ...r, other_project_sources: otherProject } : r);
 
   let downgrade: Downgrade | undefined;
   let score: number | null = null;
   if ((a.mode ?? 'auto') === 'auto') {
     // A replaced decision (TER-1015) never backs `auto`: citing only that one is `no_person_precedent`.
-    const decisions = sources.flatMap((s) => (s.kind === 'decision' && !s.decision.superseded_at ? [s.decision] : []));
+    // Nor does one the countdown made: only the person's own click is a precedent (`derived`, TER-1006, D2/D11).
+    const decisions = sources.flatMap((s) => (s.kind === 'decision' && !s.decision.superseded_at && s.decision.trust === 'person' ? [s.decision] : []));
     const backers = payload.questions.map((item, i) => decisions.filter((d) => decisionBacks(d, item, answer.answers[i]!)));
     const backed = backers.filter((ds) => ds.length > 0).length;
     const parts = blocklistParts(payload, answer);
@@ -721,7 +749,7 @@ export async function answerTabQuestionTool(
       const scheduled = await scheduleAutoAnswer(ctx.repos, { row, answer, by: 'concierge', reason: a.reason, sources: sources.map((s) => ({ kind: s.kind, id: s.id })), score: roundScore(score) });
       if (scheduled?.auto_answer) {
         await noteAutomaticAnswer(ctx, scheduled);
-        return { mode: 'auto', due_at: scheduled.auto_answer.due_at };
+        return result({ mode: 'auto', due_at: scheduled.auto_answer.due_at });
       }
       // The write lost. If the person cancelled a countdown meanwhile (an overlapping call scheduled
       // one during the embed above, and the person stopped it), that is the same `cancelled_by_person`
@@ -750,5 +778,5 @@ export async function answerTabQuestionTool(
   const updated = await ctx.repos.tabQuestions.setSuggestion(row.id, { items });
   if (!updated) throw new ControlError('QUESTION_CLOSED', QUESTION_CLOSED);
   await publishTabQuestions(ctx.repos, 'tab_question', [updated], { update: true });
-  return downgrade ? { mode: 'suggest', downgraded_because: downgrade } : { mode: 'suggest' };
+  return result(downgrade ? { mode: 'suggest', downgraded_because: downgrade } : { mode: 'suggest' });
 }

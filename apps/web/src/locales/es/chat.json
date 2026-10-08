@@ -477,5 +477,21 @@
   "Contexto": "Contexto",
   "Nenhum subagente rodando agora.": "Ningún subagente en ejecución ahora.",
   "Atalhos": "Atajos",
-  "Memória": "Memoria"
+  "Memória": "Memoria",
+  "Vigente": "Vigente",
+  "Desatualizada": "Desactualizada",
+  "Errada": "Errónea",
+  "Substituída": "Reemplazada",
+  "Substituída por «{{title}}»": "Reemplazada por «{{title}}»",
+  "Substituída por…": "Reemplazada por…",
+  "Desfazer": "Deshacer",
+  "Deixa de valer a partir de agora": "Deja de valer a partir de ahora",
+  "Sai dos precedentes e da busca padrão": "Sale de los precedentes y de la búsqueda predeterminada",
+  "Qual item substitui este?": "¿Qué elemento reemplaza a este?",
+  "Buscar decisões e anotações": "Buscar decisiones y notas",
+  "Nenhum item vigente encontrado.": "No se encontró ningún elemento vigente.",
+  "Decisão": "Decisión",
+  "Anotação": "Nota",
+  "Não foi possível buscar os itens da memória": "No se pudieron buscar los elementos de la memoria",
+  "Não foi possível alterar o estado do item": "No se pudo cambiar el estado del elemento"
 }

@@ -164,5 +164,7 @@
   "Nenhuma fala reconhecida": "No speech recognized",
   "Gravação muito curta": "Recording too short",
   "Resposta automática cancelada: o trabalho automático foi pausado ou desligado.": "Automatic answer cancelled: automatic work was paused or turned off.",
-  "Opção recomendada pelo agente": "Option the agent recommended"
+  "Opção recomendada pelo agente": "Option the agent recommended",
+  "Não foi possível alterar o estado do item": "Could not change the item's status",
+  "Não foi possível buscar os itens da memória": "Could not search the memory items"
 }

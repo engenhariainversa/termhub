@@ -258,5 +258,17 @@
   "atualizar ticket": "actualizar ticket",
   "criar integração": "crear integración",
   "definir repositório": "definir repositorio",
-  "Ver ações": "Ver acciones"
+  "Ver ações": "Ver acciones",
+  "Vigente": "Vigente",
+  "Desatualizada": "Desactualizada",
+  "Errada": "Errónea",
+  "Substituída": "Reemplazada",
+  "Substituída por «{{title}}»": "Reemplazada por «{{title}}»",
+  "Substituída por…": "Reemplazada por…",
+  "Desfazer": "Deshacer",
+  "Qual item substitui este?": "¿Qué elemento reemplaza a este?",
+  "Buscar decisões e anotações": "Buscar decisiones y notas",
+  "Nenhum item vigente encontrado.": "No se encontró ningún elemento vigente.",
+  "Decisão": "Decisión",
+  "Anotação": "Nota"
 }

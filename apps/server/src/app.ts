@@ -59,6 +59,7 @@ import { startDecisionSweeper } from './chat/decision-memory.js';
 import { startAutoAnswerSweeper } from './chat/auto-answer.js';
 import { createWaker } from './chat/wake.js';
 import { startMemorySweeper } from './memory/sweeper.js';
+import { startAiMemoryRulesSweeper } from './memory/ai-memory-sync.js';
 import { agentRunner } from './chat/agent-runner.js';
 import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
 import { expireOrphanTabActions, startTabGoneActionExpiry } from './chat/tab-gone-actions.js';
@@ -404,6 +405,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
   const stopMemorySweeper = startMemorySweeper(repos, fastify.log);
+  const stopAiMemoryRules = startAiMemoryRulesSweeper(repos, fastify.log);
   // Live concierge runs survive a restart or a deploy (spec 2026-09-26 panel §3): this instance proves
   // its own are alive, picks up those another instance released or left stale (once shortly after
   // boot, then on a timer), and releases its own on a graceful shutdown. Each call logs its own
@@ -464,6 +466,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopStaleWorking();
     stopDecisionSweeper();
     stopMemorySweeper();
+    stopAiMemoryRules();
     // Before the database closes: a send in flight finishes (or records its failure) first.
     await stopAutoAnswerSweeper();
     await automation.stop();

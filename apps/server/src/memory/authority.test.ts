@@ -123,4 +123,8 @@ describe('isInactive', () => {
     expect(isInactive({ expires_at: new Date('2026-10-07T11:00:00.000Z') }, now)).toBe(true);
     expect(isInactive({ expires_at: '2026-10-08T00:00:00.000Z' }, now)).toBe(false);
   });
+  it('is true for any Memória screen mark (TER-1013), false for current', () => {
+    for (const status of ['outdated', 'wrong', 'superseded']) expect(isInactive({ status, expires_at: null }, now)).toBe(true);
+    expect(isInactive({ status: 'current', expires_at: null }, now)).toBe(false);
+  });
 });

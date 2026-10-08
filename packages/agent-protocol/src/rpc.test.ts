@@ -4,7 +4,7 @@ import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, RPC, RPC_METHODS, TMUX_KEYS
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.uninstall', 'agent.update', 'ai.login.cancel', 'ai.login.start', 'ai.login.status', 'ai.login.submit', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
+      'agent.uninstall', 'agent.update', 'ai.login.cancel', 'ai.login.start', 'ai.login.status', 'ai.login.submit', 'ai.usage', 'ai_memory.rules.sync', 'aimemory.status', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
       'hooks.status', 'hooks.uninstall', 'hw.probe', 'net.check', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
@@ -147,6 +147,19 @@ describe('rpc catalog', () => {
     expect(RPC['hooks.uninstall'].params.safeParse({}).success).toBe(true);
     expect(RPC['hooks.status'].params.safeParse({ claude_dirs: ['~/.claude-work'] }).success).toBe(true);
     expect(RPC['hooks.status'].params.safeParse({ claude_dirs: ['~/x\n'] }).success).toBe(false);
+  });
+  it('ai_memory.rules.sync takes only termhub rule pages and a http(s) server url (TER-1019)', () => {
+    const page = '_rules/termhub-usar-pnpm-abc123.md';
+    const good = { cwd: '/home/u/proj', server_url: 'http://127.0.0.1:49374', writes: [{ path: page, title: 'T', body: 'B' }], deletes: [page] };
+    const sync = RPC['ai_memory.rules.sync'].params;
+    expect(sync.safeParse(good).success).toBe(true);
+    expect(sync.safeParse({ ...good, writes: [], deletes: [] }).success).toBe(true);
+    expect(sync.safeParse({ ...good, deletes: ['_rules/other.md'] }).success).toBe(false);
+    expect(sync.safeParse({ ...good, deletes: ['_rules/termhub-a-b/../../x.md'] }).success).toBe(false);
+    expect(sync.safeParse({ ...good, writes: [{ path: 'notes/x.md', title: 'T', body: 'B' }] }).success).toBe(false);
+    expect(sync.safeParse({ ...good, server_url: 'file:///etc/passwd' }).success).toBe(false);
+    expect(sync.safeParse({ ...good, cwd: 'relative' }).success).toBe(false);
+    expect(RPC['ai_memory.rules.sync'].timeoutMs).toBe(60_000);
   });
   it('docs.scan takes an absolute/~ cwd and has a 15 s budget', () => {
     expect(RPC['docs.scan'].params.safeParse({ cwd: '/home/u/proj' }).success).toBe(true);

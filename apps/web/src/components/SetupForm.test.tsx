@@ -110,3 +110,22 @@ describe('SetupForm — ticket sources', () => {
     expect(sentData.ticket_sources[0]).toEqual(source0);
   });
 });
+
+describe('SetupForm — ai-memory (TER-1019)', () => {
+  it('turns "Publicar regras vigentes no ai-memory" on and sends it', async () => {
+    getMock.mockResolvedValue({ setup: { project_id: 'p1', version: 2, data: setupData({ ai_memory: { publish_rules: false } }), updated_at: null } });
+    mount();
+    const box = await screen.findByRole('checkbox', { name: 'Publicar regras vigentes no ai-memory' });
+    expect(box).not.toBeChecked();
+    fireEvent.click(box);
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar setup' }));
+    await waitFor(() => expect(saveMock).toHaveBeenCalled());
+    expect((saveMock.mock.calls[0][1] as ProjectSetupData).ai_memory).toEqual({ publish_rules: true });
+  });
+
+  it('hides the option for a server that does not know it', async () => {
+    mount();
+    await screen.findByRole('button', { name: 'Adicionar fonte' });
+    expect(screen.queryByRole('checkbox', { name: 'Publicar regras vigentes no ai-memory' })).not.toBeInTheDocument();
+  });
+});

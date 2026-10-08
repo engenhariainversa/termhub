@@ -27,6 +27,7 @@ import {
   decisionChallengesBody,
   decisionChallengesResponse,
   decisionsResponse,
+  decisionStatusResponse,
   decisionViewSchema,
   deviceActivateBody,
   deviceActivateResponse,
@@ -40,6 +41,10 @@ import {
   lessonForgetSchema,
   lessonItemSchema,
   lessonListSchema,
+  memoryReplacementsResponse,
+  memoryReplacementView,
+  memoryStatusSchema,
+  noteStatusResponse,
   mobileBatchDecisionBody,
   mobileDecisionBody,
   mobileMessageBody,
@@ -263,6 +268,13 @@ export type TChatMemory = z.infer<typeof chatMemoryResponse>;
 export type TChatMemoryPatchBody = z.infer<typeof chatMemoryPatchBody>;
 export type TConciergeNote = z.infer<typeof conciergeNoteView>;
 export type TNotesResponse = z.infer<typeof notesResponse>;
+// TER-1013: "Desatualizada" / "Errada" / "Substituída por…" on a decision or a note — mirrors the web's
+// `setDecisionStatus`/`setNoteStatus`/`memoryReplacements`.
+export type TMemoryStatus = z.infer<typeof memoryStatusSchema>;
+export type TMemoryReplacement = z.infer<typeof memoryReplacementView>;
+export type TMemoryReplacementsResponse = z.infer<typeof memoryReplacementsResponse>;
+export type TDecisionStatusResponse = z.infer<typeof decisionStatusResponse>;
+export type TNoteStatusResponse = z.infer<typeof noteStatusResponse>;
 // "Lições" (spec 2026-09-27 failure lessons §6/§8): mirrors `apps/web/src/lib/api.ts`'s
 // `api.chat.lessons.list`/`verify`/`unverify`/`forget`.
 export type TLessonItem = z.infer<typeof lessonItemSchema>;

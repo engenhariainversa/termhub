@@ -73,6 +73,7 @@ export const ModelName = {
   AutomationRun: 'AutomationRun',
   TabUsage: 'TabUsage',
   TabUsageDay: 'TabUsageDay',
+  AiMemoryPage: 'AiMemoryPage',
   AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
@@ -256,6 +257,8 @@ export const MachineScalarFieldEnum = {
   claudeAutoSwap: 'claudeAutoSwap',
   aiUsageQuery: 'aiUsageQuery',
   automationAllowed: 'automationAllowed',
+  aiMemoryEnabled: 'aiMemoryEnabled',
+  aiMemoryUrl: 'aiMemoryUrl',
   isLocal: 'isLocal',
   ownerId: 'ownerId',
   createdAt: 'createdAt'
@@ -512,6 +515,18 @@ export const TabUsageDayScalarFieldEnum = {
 } as const
 
 export type TabUsageDayScalarFieldEnum = (typeof TabUsageDayScalarFieldEnum)[keyof typeof TabUsageDayScalarFieldEnum]
+
+
+export const AiMemoryPageScalarFieldEnum = {
+  projectId: 'projectId',
+  machineId: 'machineId',
+  cwd: 'cwd',
+  path: 'path',
+  hash: 'hash',
+  publishedAt: 'publishedAt'
+} as const
+
+export type AiMemoryPageScalarFieldEnum = (typeof AiMemoryPageScalarFieldEnum)[keyof typeof AiMemoryPageScalarFieldEnum]
 
 
 export const AiAccountExhaustionScalarFieldEnum = {
@@ -878,7 +893,10 @@ export const ChatDecisionScalarFieldEnum = {
   autoCount: 'autoCount',
   scope: 'scope',
   expiresAt: 'expiresAt',
+  wrongAt: 'wrongAt',
   supersededAt: 'supersededAt',
+  supersedes: 'supersedes',
+  trust: 'trust',
   createdAt: 'createdAt'
 } as const
 
@@ -906,8 +924,9 @@ export const MemoryItemScalarFieldEnum = {
   scope: 'scope',
   conversationId: 'conversationId',
   expiresAt: 'expiresAt',
-  supersedes: 'supersedes',
+  wrongAt: 'wrongAt',
   supersededAt: 'supersededAt',
+  supersedes: 'supersedes',
   sourceAt: 'sourceAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

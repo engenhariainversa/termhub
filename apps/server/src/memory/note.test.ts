@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { NewMemoryItem } from '../db/repositories/memory-items.js';
-import { renderLessonBlock } from '../lessons/note.js';
+import { appendLessonBlock, renderLessonBlock } from '../lessons/note.js';
 import { indexProjectNote } from './note.js';
 import { ITEM_TEXT_MAX } from './text.js';
 
@@ -56,6 +56,18 @@ describe('indexProjectNote', () => {
 
     expect(repos.memoryItems.deleteChunksFrom).toHaveBeenCalledWith('project_note', 'note:p1', 1);
     expect(repos.memoryItems.deleteBySource).not.toHaveBeenCalled();
+  });
+
+  it('leaves out a section that is only a heading, like `## Lições` once its blocks are taken out (TER-1006)', async () => {
+    const content = appendLessonBlock(['# Contexto', 'texto do contexto', '', '### Ideias', ''].join('\n'), block('l1', 'tab1'));
+    const repos = fakeRepos({ content });
+    const r = await indexProjectNote(repos as never, 'p1', { embedder: null, log: log() });
+
+    expect(r).toEqual({ sections: 1, lessons: 1 });
+    const sectionItems = repos.memoryItems.upsertMany.mock.calls[0]![0] as NewMemoryItem[];
+    expect(sectionItems.map((it) => [it.chunk_index, it.title])).toEqual([[0, 'Notas do projeto › Contexto']]);
+    // The trim drops the heading-only chunks an earlier index stored past the kept ones.
+    expect(repos.memoryItems.deleteChunksFrom).toHaveBeenCalledWith('project_note', 'note:p1', 1);
   });
 
   it('maps the pt-BR evidence word back to the column enum', async () => {
