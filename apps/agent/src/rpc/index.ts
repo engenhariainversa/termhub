@@ -14,6 +14,7 @@ import * as tabMcp from './tab-mcp.js';
 import * as tmux from './tmux.js';
 import * as tools from './tools.js';
 import * as transcript from './transcript.js';
+import * as uninstall from './uninstall.js';
 import * as update from './update.js';
 import * as wda from './wda.js';
 import * as worktree from './worktree.js';
@@ -49,6 +50,7 @@ export const handlers: Handlers = {
   'hooks.uninstall': hooks.uninstall,
   'hooks.status': hooks.status,
   'agent.update': update.update,
+  'agent.uninstall': uninstall.uninstall,
   'sim.list': sim.list,
   'sim.boot': sim.boot,
   'wda.runner.start': wda.runnerStart,
