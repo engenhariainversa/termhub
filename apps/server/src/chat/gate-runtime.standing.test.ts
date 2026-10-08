@@ -216,8 +216,12 @@ describe('standing grants in the gate', () => {
 
   it('a granted close_tab whose tab turned waiting_permission before execute fails WAITING_PERMISSION', async () => {
     seedStanding('close_tab');
-    // The gate reads a tab waiting for input; by the time `execute()` looks again it asks a permission.
-    tabsFind.mockImplementationOnce(async () => [tab('t1', 'waiting_input')]).mockImplementationOnce(async () => [tab('t1', 'waiting_permission')]);
+    // The gate reads a tab waiting for input (twice: the grant's check, then the row keeps its name,
+    // TER-1024); by the time `execute()` looks again it asks a permission.
+    tabsFind
+      .mockImplementationOnce(async () => [tab('t1', 'waiting_input')])
+      .mockImplementationOnce(async () => [tab('t1', 'waiting_input')])
+      .mockImplementationOnce(async () => [tab('t1', 'waiting_permission')]);
     const res = await call('close_tab', { tab_id: 't1' });
     expect(res).toMatchObject({ ok: false, code: 'WAITING_PERMISSION' });
     expect((res as { message: string }).message).toMatch(/antes desta ação/);

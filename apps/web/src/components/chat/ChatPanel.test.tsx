@@ -1747,3 +1747,40 @@ it('a call granted mid-turn reads compact, above the answer of its turn, so the 
   expect(rows[rows.length - 1]).toHaveTextContent('Publicado.');
   expect(card).toBeLessThan(rows.length - 1);
 });
+
+// TER-1024: a turn's settled cards read as one closed accordion above its answer; pending ones stay out.
+it('folds a turn\'s settled cards into one closed accordion above its answer, and leaves a pending card out', async () => {
+  const at = (n: number) => `2026-09-21T00:0${n}:00.000Z`;
+  chatMock.mockResolvedValue({
+    conversation: { id: 'c1', ai_account_id: null },
+    messages: [
+      { id: 'u1', conversation_id: 'c1', role: 'user', text: 'fecha as abas paradas', error_code: null, created_at: at(0) },
+      { id: 'm1', conversation_id: 'c1', role: 'assistant', text: 'Fechei as abas paradas.', error_code: null, created_at: at(1) },
+    ],
+    actions: [
+      action({ id: 'a1', tool: 'close_tab', status: 'executed', grant_id: 'sg1', summary: 'fechar a aba «Figma 849»', created_at: at(2) }),
+      action({ id: 'a2', tool: 'close_tab', status: 'executed', grant_id: 'sg1', summary: 'fechar a aba «Figma 851»', created_at: at(3) }),
+      action({ id: 'a3', tool: 'close_tab', status: 'denied', summary: 'fechar a aba «api»', created_at: at(4) }),
+      action({ id: 'p1', status: 'pending', summary: 'digitar `y` na aba api', created_at: at(5) }),
+    ],
+    host: READY,
+  });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId={null} />
+    </MemoryRouter>,
+  );
+  const toggle = await screen.findByRole('button', { name: /3 ações · 2 executadas, 1 recusada · fechar aba ×3/ });
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByText('fechar a aba «Figma 849»')).toBeNull();
+  // The pending card is never folded away, and reads after the answer that asked it.
+  expect(screen.getByText('digitar `y` na aba api')).toBeInTheDocument();
+  const rows = [...within(screen.getByRole('list', { name: 'Conversa' })).getAllByRole('listitem')].filter((li) => li.parentElement?.getAttribute('aria-label') === 'Conversa');
+  const order = rows.map((li) => (li.hasAttribute('data-chat-trail') ? 'trail' : li.getAttribute('data-message-id') ?? li.getAttribute('data-chat-card')));
+  expect(order).toEqual(['u1', 'trail', 'm1', 'p1']);
+
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByText('fechar a aba «Figma 849»')).toBeInTheDocument();
+  expect(screen.getByText('fechar a aba «api»')).toBeInTheDocument();
+});
