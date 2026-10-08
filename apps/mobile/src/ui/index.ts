@@ -5,6 +5,7 @@ export * from './countdown';
 export * from './empty-state';
 export * from './field';
 export * from './icon';
+export * from './keyboard-inset';
 export * from './layout';
 export * from './pin-dots';
 export * from './pin-input';
