@@ -124,6 +124,34 @@ export async function uninstall(deps: SystemdDeps = {}): Promise<void> {
   await runFn('systemctl', ['--user', 'daemon-reload']);
 }
 
+/**
+ * First half of `agent.uninstall`, run from inside the service: disables the unit (no `--now` —
+ * stopping it would kill this very process before it can reply), deletes the unit file and
+ * daemon-reloads. The running instance stays up until `stop()`. Returns whether there was a unit
+ * file to remove; throws when disabling or the reload fails.
+ */
+export async function removeDefinition(deps: SystemdDeps = {}): Promise<boolean> {
+  const file = unitPath(deps.home);
+  if (!fs.existsSync(file)) return false;
+  const runFn = deps.run ?? run;
+  const disable = await runFn('systemctl', ['--user', 'disable', UNIT_NAME]);
+  if (disable.code !== 0) throw new Error(`systemctl disable failed (code ${disable.code}): ${disable.stderr.trim()}`);
+  try {
+    fs.unlinkSync(file);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+  const reload = await runFn('systemctl', ['--user', 'daemon-reload']);
+  if (reload.code !== 0) throw new Error(`systemctl daemon-reload failed (code ${reload.code}): ${reload.stderr.trim()}`);
+  return true;
+}
+
+/** Second half of `agent.uninstall`: stops the (already disabled) unit, terminating this process. */
+export async function stop(deps: SystemdDeps = {}): Promise<void> {
+  const runFn = deps.run ?? run;
+  await runFn('systemctl', ['--user', 'stop', UNIT_NAME]);
+}
+
 /** True when systemd reports the unit as active. */
 export async function status(deps: SystemdDeps = {}): Promise<boolean> {
   const runFn = deps.run ?? run;
