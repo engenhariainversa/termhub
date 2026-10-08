@@ -281,6 +281,12 @@ lost its CLI login on the machine (TER-1047, spec `docs/superpowers/specs/2026-1
   hidden tmux session named `termhub-login-<loginId>`, never a work tab (the tab lists ignore these
   sessions). Claude: open the link, sign in, paste the code back. Codex: open the link, type the device code
   shown, then "Já autorizei". The pasted code is never logged.
+- On a machine with a desktop (macOS), `claude auth login` also opens the machine's own browser
+  (`BROWSER=true` does not stop it there). Signing in on that browser finishes the login without a code:
+  since agent 0.27.0 (TER-1054) the modal reads that as "Login refeito" (straight away, or through "Já
+  entrei pelo navegador da máquina" once the link showed), confirmed by `claude auth status`. Closing the
+  modal also re-checks the account, so the warning goes either way. The CLI's output only shows as a
+  detail ("Saída da CLI") under an error.
 - A flow lives **15 minutes**, in the memory of the server colour that started it: then (or after a deploy)
   it is gone and the person starts again. The server kills its session when it expires; if one is left
   behind (the server died mid-flow), remove it on the machine: `tmux ls | grep termhub-login-`, then
