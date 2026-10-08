@@ -52,6 +52,7 @@ import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
 import { AccessLogsRepository } from './access-logs.js';
 import { SecurityEventsRepository } from './security-events.js';
+import { FeatureFlagsRepository } from './feature-flags.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -107,6 +108,7 @@ export interface Repositories {
   accessLogs: AccessLogsRepository;
   aiAccountExhaustions: AiAccountExhaustionsRepository;
   securityEvents: SecurityEventsRepository;
+  featureFlags: FeatureFlagsRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
 }
@@ -166,6 +168,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     accessLogs: new AccessLogsRepository(db),
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
     securityEvents: new SecurityEventsRepository(db),
+    featureFlags: new FeatureFlagsRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
 }
@@ -176,6 +179,7 @@ export type { ProjectSetup } from './project-setup.js';
 export type { WaitlistEntry } from './waitlist.js';
 export type { Role, PermissionGrant } from './roles.js';
 export type { Upload } from './uploads.js';
+export type { FeatureFlagRow, FeatureFlagOverride } from './feature-flags.js';
 export { SYSTEM_ROLE_IDS } from './roles.js';
 export type { ChatConversation, ChatMessage, ChatRole } from './chat.js';
 export type { ChatAction, ChatActionClass, ChatActionStatus, InsertPendingInput, InsertApprovedInput } from './chat-actions.js';

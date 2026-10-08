@@ -69,6 +69,7 @@ import { uploadRoutes } from './routes/uploads.js';
 import { apiTokenRoutes } from './routes/api-tokens.js';
 import { deviceRoutes } from './routes/devices.js';
 import { securityEventRoutes } from './routes/security-events.js';
+import { featureFlagRoutes, publicFeatureRoutes } from './routes/feature-flags.js';
 import { securityEventCutoff } from './auth/audit.js';
 import { mcpRoutes } from './mcp/route.js';
 import { createMobileServices, registerMobileApi } from './mobile/app.js';
@@ -315,6 +316,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('users', (a) => userRoutes(a, repos, { mailer, access, deletion, revoke: mobile ? (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer, log: fastify.log }, id, input) : null }), '/users');
       await guarded('uploads', (a) => uploadRoutes(a, repos), '/uploads');
       await guarded('api_tokens', (a) => apiTokenRoutes(a, repos, { mcpUrl: config.mcpUrl }), '/api-tokens');
+      await guarded('feature_flags', (a) => featureFlagRoutes(a, repos), '/feature-flags');
       await guarded('security_events', (a) => securityEventRoutes(a, repos, { retentionDays: config.securityEventRetentionDays }), '/security-events');
       await guarded('chat', (a) => chatRoutes(a, repos, { service: chat }), '/chat');
       await guarded('chat', (a) => chatAttachmentRoutes(a, repos, attachments), '/chat/attachments');
@@ -326,6 +328,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
         );
       }
       await api.register((a) => publicCityRoutes(a, repos), { prefix: '/public' });
+      await api.register((a) => publicFeatureRoutes(a, repos), { prefix: '/public' });
       api.get('/health', { config: { public: true } }, async () => ({ ok: true }));
       await api.register((a) => readyRoutes(a, { ping: () => repos.ping(), lifecycle }));
       api.setNotFoundHandler((request, reply) => sendError(request, reply, 404, 'Rota não encontrada', 'NOT_FOUND'));

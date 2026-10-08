@@ -38,6 +38,30 @@ export interface User {
   deletion_requested_at: string | null;
   /** when the account is deleted for good; non-null = deletion pending, the account is deactivated */
   deletion_scheduled_at: string | null;
+  /** feature flags resolved for this person (TER-1040); absent on older servers = everything off */
+  features?: Partial<Record<FeatureFlagKey, boolean>>;
+}
+
+/** Feature flags the server knows (apps/server/src/features/flags.ts, docs/feature-flags.md). */
+export type FeatureFlagKey = 'subscriptions';
+
+/** One person's own value for a flag (Configurações → Recursos em teste). */
+export interface FeatureFlagOverride {
+  flag: string;
+  user_id: string;
+  email: string;
+  name: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+/** GET /api/feature-flags: a flag, its instance value and who has their own. */
+export interface FeatureFlagInfo {
+  key: FeatureFlagKey;
+  default: boolean;
+  enabled: boolean;
+  updated_at: string | null;
+  overrides: FeatureFlagOverride[];
 }
 
 /** GET/POST/DELETE /api/account/deletion. */
