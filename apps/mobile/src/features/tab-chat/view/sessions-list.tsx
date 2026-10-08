@@ -6,6 +6,7 @@ import { AppText, Banner, Button, EmptyState } from '@/ui';
 import { TAB_CHAT_MSG } from '../model/messages';
 import { useSessionsStore } from '../viewmodel/useSessionsStore';
 import { SessionRow } from './session-row';
+import { useListOnScreen } from './status-dot';
 
 /** Sessões (spec 2026-10-01 tab chat §6, D14): the terminal tabs of the person's projects, grouped by
  * project, each opening as a conversation; "Nova sessão" starts one. Loaded once when shown. */
@@ -20,6 +21,7 @@ export function SessionsList() {
   const error = useSessionsStore((s) => s.error);
   const load = useSessionsStore((s) => s.load);
   const refresh = useSessionsStore((s) => s.refresh);
+  const onScreen = useListOnScreen();
 
   useEffect(() => {
     void load();
@@ -46,7 +48,8 @@ export function SessionsList() {
           <AppText variant="label">{section.title}</AppText>
         </View>
       )}
-      renderItem={({ item }) => <SessionRow tab={item} onPress={() => router.push(`/session/${item.id}` as Href)} />}
+      renderItem={({ item }) => <SessionRow tab={item} onScreen={onScreen} onPress={() => router.push(`/session/${item.id}` as Href)} />}
+      extraData={onScreen}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
       stickySectionHeadersEnabled={false}
     />
