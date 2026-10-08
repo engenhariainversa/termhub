@@ -353,3 +353,18 @@ export function deletionLinkMail(to: string, opts: { link: string; ttlMinutes: n
     { label: t(locale, 'Confirmar exclusão'), url: opts.link },
   );
 }
+
+/** "Exportar meus dados" (TER-741): the archive is ready; the button opens Perfil, where it downloads while signed in. */
+export function dataExportReadyMail(to: string, opts: { url: string; expiresAt: Date }, locale: Locale = DEFAULT_LOCALE): Mail {
+  return noticeMail(
+    locale,
+    to,
+    t(locale, 'Seus dados do termhub estão prontos para baixar'),
+    [
+      t(locale, 'O arquivo que você pediu, com os dados da sua conta, está pronto.'),
+      t(locale, 'Baixe pelo Perfil, com a sua conta aberta, até {{date}}. Depois disso o arquivo é apagado e você pode pedir outro.', { date: deletionDateLabel(opts.expiresAt, locale) }),
+      t(locale, 'Se não foi você que pediu, troque sua senha e confira os aparelhos e tokens da conta.'),
+    ],
+    { label: t(locale, 'Baixar meus dados'), url: opts.url },
+  );
+}
