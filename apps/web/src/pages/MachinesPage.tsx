@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/data';
 import type { Machine } from '../lib/types';
-import { agentVersionBadge, machineTitle } from '../lib/machine-labels';
+import { AGENT_UNINSTALL_MIN_VERSION, agentVersionBadge, machineTitle, versionAtLeast } from '../lib/machine-labels';
 import { STATUS_DOT, STATUS_LABEL, TYPE_LABEL } from '../lib/machine-status';
 import { MACHINE_FORM_TABS, MachineForm, type MachineFormTab } from '../components/MachineForm';
 import { ConfirmDialog } from '../components/Modal';
 import { PageFrame } from '../components/PageHeader';
 import { Trans, useTranslation } from '../i18n';
+
+/** Shell commands to remove an agent by hand (offline or older than 0.22.0); commands, not copy, so not translated. */
+const MANUAL_UNINSTALL_STEPS = ['termhub-agent service uninstall', 'termhub-agent disconnect', 'npm rm -g @termhub/agent'].join('\n');
 
 /** `/machines`: every machine in the scope, with the projects it's linked to and edit/delete actions. */
 export function MachinesPage() {
@@ -29,6 +32,12 @@ export function MachinesPage() {
   }, [editId, machines, params, setParams]);
   const [deleting, setDeleting] = useState<Machine | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // "Também desinstalar da máquina": on by default every time the dialog opens.
+  const [uninstall, setUninstall] = useState(true);
+  // Enter and the button both confirm: one request at a time.
+  const deletingBusy = useRef(false);
+  const isAgent = deleting?.type === 'agent';
+  const canUninstall = !!deleting && isAgent && statuses[deleting.id] === 'online' && versionAtLeast(deleting.agent_version, AGENT_UNINSTALL_MIN_VERSION);
 
   return (
     <PageFrame
@@ -108,6 +117,7 @@ export function MachinesPage() {
                     title={t('Excluir')}
                     onClick={() => {
                       setDeleteError(null);
+                      setUninstall(true);
                       setDeleting(m);
                     }}
                   >
@@ -161,6 +171,25 @@ export function MachinesPage() {
               values={{ name: deleting?.name ?? '' }}
               components={[<strong key="n" />]}
             />
+            {canUninstall && (
+              <label className="mt-3 flex items-start gap-2 text-xs">
+                <input type="checkbox" className="mt-0.5" checked={uninstall} onChange={(e) => setUninstall(e.target.checked)} />
+                <span>
+                  <span className="text-fg">{t('Também desinstalar da máquina')}</span>
+                  <span className="mt-0.5 block text-fg-dim">
+                    {t('Remove os hooks, encerra as sessões de terminal das tabs desta máquina e remove o serviço e o token do agente. O pacote npm continua instalado (npm rm -g @termhub/agent).')}
+                  </span>
+                </span>
+              </label>
+            )}
+            {isAgent && !canUninstall && (
+              <div className="mt-3 text-xs text-fg-dim">
+                <p>{t('O agente continua instalado na máquina. Para removê-lo, rode nela:')}</p>
+                <pre className="mt-1 overflow-x-auto rounded bg-bg-3 px-2 py-1.5 font-mono text-[11px] text-fg-muted">
+                  <code>{MANUAL_UNINSTALL_STEPS}</code>
+                </pre>
+              </div>
+            )}
             {deleteError && <p className="mt-2 text-danger">{deleteError}</p>}
           </>
         }
@@ -168,12 +197,16 @@ export function MachinesPage() {
         danger
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
-          if (!deleting) return;
+          if (!deleting || deletingBusy.current) return;
+          deletingBusy.current = true;
+          setDeleteError(null);
           try {
-            await deleteMachine(deleting.id);
+            await deleteMachine(deleting.id, { uninstall: canUninstall && uninstall });
             setDeleting(null);
           } catch (e) {
             setDeleteError((e as Error).message || t('Erro ao excluir'));
+          } finally {
+            deletingBusy.current = false;
           }
         }}
       />
