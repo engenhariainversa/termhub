@@ -14,6 +14,8 @@ export interface MachineInput {
   agent_auto_update?: boolean;
   claude_auto_swap?: boolean;
   automation_allowed?: boolean;
+  ai_memory_enabled?: boolean;
+  ai_memory_url?: string | null;
 }
 
 /** Visibility filter: a user id, or null for everything (admin "all" view). */
@@ -106,6 +108,8 @@ export class MachinesRepository {
         agentAutoUpdate: next.agent_auto_update ?? false,
         claudeAutoSwap: next.claude_auto_swap ?? false,
         automationAllowed: next.automation_allowed ?? true,
+        aiMemoryEnabled: next.ai_memory_enabled ?? false,
+        aiMemoryUrl: next.ai_memory_url ?? null,
         ...(patch.owner_id !== undefined ? { ownerId: patch.owner_id } : {}),
       },
       include: withOwner,

@@ -59,6 +59,7 @@ export const handlers: Handlers = {
   'wda.setup.state': wda.setupState,
   'tab.mcp.write': tabMcp.write,
   'tab.mcp.remove': tabMcp.remove,
+  'aimemory.status': aiMemory.status,
   'transcript.read': transcript.read,
   'git.worktree.ensure': worktree.ensure,
   'git.worktree.remove': worktree.remove,

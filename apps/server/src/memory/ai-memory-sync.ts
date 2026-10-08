@@ -7,6 +7,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { runOnMachineWithInput, shellQuote } from '../terminal/machine-exec.js';
+import { aiMemoryUrlOf } from './ai-memory.js';
 import { planSync, rulePages, type RulePage } from './ai-memory-rules.js';
 import { RULES_LIMIT, ruleOf } from './current-rules.js';
 
@@ -20,8 +21,6 @@ import { RULES_LIMIT, ruleOf } from './current-rules.js';
 
 /** First agent release that answers `ai_memory.rules.sync`. An older agent is skipped. */
 export const AI_MEMORY_MIN_AGENT_VERSION = '0.23.0';
-/** ai-memory's default local server. */
-export const AI_MEMORY_DEFAULT_SERVER_URL = 'http://127.0.0.1:49374';
 /** How often the sweeper syncs every project (catches expired rules and machines that came back). */
 export const AI_MEMORY_SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 /** A checkout that answered "no ai-memory here" (no marker, no binary, no cwd) is not asked again for this long,
@@ -32,12 +31,12 @@ const DELETES_PER_RUN = 64;
 const SCRIPT_TIMEOUT_MS = 60_000;
 
 /**
- * The ai-memory server a machine's CLI talks to. The default loopback URL until TER-1018 adds the
- * per-machine setting ("Usar ai-memory nesta máquina" and its server URL); TER-1018 also adds its own
- * "on" flag here.
+ * The ai-memory server a machine's CLI talks to: the machine's own server URL (TER-1018, Máquinas), else
+ * ai-memory's default loopback one. TER-1018's "Usar ai-memory nesta máquina" flag only gates the
+ * detection for now, so it does not gate publishing: the checkout's marker does.
  */
-export function aiMemoryServerUrl(_machine: Machine): string {
-  return AI_MEMORY_DEFAULT_SERVER_URL;
+export function aiMemoryServerUrl(machine: Machine): string {
+  return aiMemoryUrlOf(machine);
 }
 
 /** How the sync reaches a checkout. `sync` returns the script's raw stdout and throws (an `HttpError`

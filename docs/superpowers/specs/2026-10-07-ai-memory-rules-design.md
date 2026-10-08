@@ -20,12 +20,12 @@ machine, inside termhub or not, through the ai-memory session brief.
 
 - **Project:** `setup.ai_memory.publish_rules` (default `false`), "Publicar regras vigentes no
   ai-memory" in the project settings.
-- **Machine:** TER-1018 (per-machine "Usar ai-memory nesta máquina" and server URL) is not merged yet.
-  Until it is, a machine takes part only when the person already set ai-memory up for that checkout:
+- **Machine:** a machine takes part only when the person already set ai-memory up for that checkout:
   the `ai-memory` binary is on the PATH **and** the checkout has a `.ai-memory.toml` marker. termhub
   never creates the marker (it turns on capture for the repo). The server URL comes from one seam,
-  `aiMemoryServerUrl(machine)`, that returns the default loopback URL today and TER-1018's setting
-  later; TER-1018 also adds its own "on" flag to that seam.
+  `aiMemoryServerUrl(machine)`: the machine's server URL from TER-1018 (Máquinas), else the default
+  loopback URL. TER-1018's "Usar ai-memory nesta máquina" flag only gates the detection for now, so
+  it does not gate publishing.
 
 ## What is published
 
