@@ -79,5 +79,6 @@
   "Invalid profile": "Invalid profile",
   "Too many sign-ups from this address; try again later": "Too many sign-ups from this address; try again later",
   "Entry not found": "Entry not found",
-  "Confirme com o PIN para ligar ou ampliar o trabalho automático.": "Confirm with your PIN to turn on or widen automatic work."
+  "Confirme com o PIN para ligar ou ampliar o trabalho automático.": "Confirm with your PIN to turn on or widen automatic work.",
+  "Flag não encontrada": "Flag not found"
 }

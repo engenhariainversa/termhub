@@ -16,6 +16,7 @@ import { answerTabQuestion, requirePinFor, tabQuestionScreen } from '../chat/tab
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
 import { permissionsOf } from '../auth/permissions.js';
+import { featuresFor } from '../features/flags.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
@@ -502,10 +503,15 @@ export async function mobileMeRoutes(app: FastifyInstance, repos: Repositories) 
   app.get('/me', { config: { action: 'read' } }, async (request) => {
     const device = deviceOf(request);
     const user = request.scope.user;
-    const [permissions, unread] = await Promise.all([permissionsOf(repos, user), repos.userNotifications.countUnread(user.id)]);
+    const [permissions, unread, features] = await Promise.all([
+      permissionsOf(repos, user),
+      repos.userNotifications.countUnread(user.id),
+      featuresFor({ repos, userId: user.id }),
+    ]);
     return {
       user: { id: user.id, email: user.email, name: user.name, nickname: user.nickname },
       permissions,
+      features,
       device: toDeviceSelf(device),
       unread_notifications: unread,
     };

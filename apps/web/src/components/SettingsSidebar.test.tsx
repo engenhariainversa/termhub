@@ -48,6 +48,7 @@ describe('SettingsSidebar', () => {
       ['Permissões', '/settings/permissions'],
       ['Arquivos', '/settings/uploads'],
       ['Auditoria', '/settings/security'],
+      ['Recursos em teste', '/settings/feature-flags'],
     ]);
     expect(screen.getByRole('link', { name: 'Perfil' }).querySelector('svg')).not.toBeNull();
   });

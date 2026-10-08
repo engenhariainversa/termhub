@@ -432,5 +432,19 @@
   "Consultar o uso das contas de IA em {{machine}}": "Query the AI accounts' usage on {{machine}}",
   "Consulta de uso desligada nesta máquina": "Usage query turned off on this machine",
   "Atualize o agente desta máquina para ver o uso": "Update this machine's agent to see the usage",
-  "Ligue em Máquinas › {{machine}}": "Turn it on in Machines › {{machine}}"
+  "Ligue em Máquinas › {{machine}}": "Turn it on in Machines › {{machine}}",
+  "Assinaturas": "Subscriptions",
+  "Planos, checkout, paywall e limites do período de teste. Desligado, nada disso aparece na web, no app nem na landing, as rotas de cobrança não existem e os webhooks do provedor de pagamento são ignorados.": "Plans, checkout, paywall and trial limits. While off, none of it shows on the web, in the app or on the landing page, the billing routes do not exist and the payment provider's webhooks are ignored.",
+  "Recursos que ainda não foram liberados. Ligue para todos aqui, sem deploy, ou só para algumas pessoas testarem antes.": "Features that have not been released yet. Turn one on for everyone here, without a deploy, or only for a few people to test first.",
+  "{{name}} para todos": "{{name}} for everyone",
+  "Ligado para todos.": "On for everyone.",
+  "Desligado para todos, exceto quem estiver na lista abaixo.": "Off for everyone, except the people listed below.",
+  "Valor próprio por pessoa": "Per-person value",
+  "Ninguém tem um valor próprio.": "Nobody has their own value.",
+  "{{name}} para {{email}}": "{{name}} for {{email}}",
+  "E-mail de quem vai testar": "E-mail of the tester",
+  "Ligar para essa pessoa": "Turn on for this person",
+  "Ligou ou desligou um recurso em teste": "Turned a feature in testing on or off",
+  "Mudou um recurso em teste para uma pessoa": "Changed a feature in testing for one person",
+  "Recursos em teste": "Features in testing"
 }

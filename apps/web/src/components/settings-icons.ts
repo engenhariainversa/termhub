@@ -1,4 +1,4 @@
-import { Bot, ClipboardList, Cpu, Folder, KeyRound, ScrollText, ListChecks, Map as MapIcon, Plug, Shield, ShieldCheck, Smartphone, User as UserIcon, Users, type LucideIcon } from 'lucide-react';
+import { Bot, ClipboardList, Cpu, FlaskConical, Folder, KeyRound, ScrollText, ListChecks, Map as MapIcon, Plug, Shield, ShieldCheck, Smartphone, User as UserIcon, Users, type LucideIcon } from 'lucide-react';
 import type { SettingsSection } from '../lib/settings-sections';
 
 /** Each settings section's line icon (spec 2026-09-23 app chrome §2), for the settings sidebar and the rail. */
@@ -17,4 +17,5 @@ export const SETTINGS_ICONS: Record<SettingsSection, LucideIcon> = {
   permissions: ListChecks,
   uploads: Folder,
   security: ScrollText,
+  'feature-flags': FlaskConical,
 };
