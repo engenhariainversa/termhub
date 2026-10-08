@@ -31,6 +31,8 @@ import { automationPauseRoutes, projectAutomationEventRoutes, projectAutomationR
 import { projectAiRoutes } from './routes/project-ai.js';
 import { projectTicketRoutes, taskTicketRoutes } from './routes/tickets.js';
 import { aiAccountRoutes } from './routes/ai-accounts.js';
+import { aiLoginRoutes } from './routes/ai-login.js';
+import { startAiLoginChecks } from './ai/login-checks.js';
 import { waitlistRoutes } from './routes/waitlist.js';
 import { publicCityRoutes } from './routes/public-city.js';
 import { cityLinkRoutes } from './routes/city-link.js';
@@ -321,6 +323,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('terminals', (a) => monitorRoutes(a, repos), '/monitor');
       await guarded('terminals', (a) => hooksRoutes(a, repos, { waker, onTabEvent: (tabId) => tabChat.poke(tabId) }), '/hooks');
       await guarded('ai_accounts', (a) => aiAccountRoutes(a, repos), '/ai-accounts');
+      // "Refazer login" of an account (TER-1047); the app registers the same plugin.
+      await guarded('ai_accounts', (a) => aiLoginRoutes(a, repos), '/ai-accounts');
       await guarded('waitlist', (a) => waitlistRoutes(a, repos), '/waitlist');
       await guarded('roles', (a) => roleRoutes(a, repos), '/roles');
       await guarded('users', (a) => userRoutes(a, repos, { mailer, access, deletion, revoke: mobile ? (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer, log: fastify.log }, id, input) : null }), '/users');
@@ -440,6 +444,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   chat.onApproved(MERGE_TOOL, (action) => automation.mergeApproved(action.id));
   // The daily summary of the automatic work (spec D26): both colours tick, the claim row sends it once; a draining colour sends nothing.
   const stopSummaries = startSummaryTimer({ repos, lifecycle, log: fastify.log, push: mobile ? (...a) => mobile.push.automationSummary(...a) : undefined });
+  // AI CLI logins (TER-1047): every 10 min the accounts of online agent machines are checked, and an expired
+  // login pushes once to the machine's owner. Also stops the login flows' expiry sweep.
+  const stopAiLoginChecks = startAiLoginChecks({ repos, log: fastify.log, push: mobile ? (...a) => mobile.push.aiLoginRequired(...a) : undefined });
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     clearInterval(liveBeat);
@@ -450,6 +457,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopSync();
     stopCiSync();
     stopSummaries();
+    stopAiLoginChecks();
     stopAgentUpdates();
     stopTabQuestionExpiry();
     stopTabGoneActionExpiry();

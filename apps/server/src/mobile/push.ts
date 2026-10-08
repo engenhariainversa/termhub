@@ -5,11 +5,11 @@ import { failureLabel } from '../chat/service.js';
 import type { Device } from '../db/repositories/devices.js';
 import type { DeviceRequest } from '../db/repositories/device-requests.js';
 import type { Repositories } from '../db/repositories/index.js';
-import type { User } from '../db/repositories/types.js';
+import type { AiProvider, User } from '../db/repositories/types.js';
 import type { PushTestKind, PushTestResponse } from '@termhub/mobile-api';
 import { HttpError } from '../lib/errors.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
-import { automationEscalationText, confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
+import { aiLoginRequiredText, automationEscalationText, confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
 import { escalationReasonText } from '../automation/escalation-text.js';
 import { heldQuestion } from '../automation/question-hold.js';
@@ -295,6 +295,23 @@ export class MobilePushService {
    */
   async automationSummary(userId: string, textFor: (locale: Locale) => PushText, data: Record<string, unknown>, collapseId: string): Promise<void> {
     await this.deliver(userId, 'reply', textFor, data, await this.deps.repos.devices.listActiveWithPush(userId), collapseId);
+  }
+
+  /**
+   * An AI account's CLI login expired (TER-1047): one push to every device of the machine's owner, so they
+   * can redo it from the phone. The caller sends it once per expiry (until the login is back). The data
+   * carries the account id only; the tap opens "Refazer login" for it. History kind `confirmation` (it
+   * needs the person), which every app version parses.
+   */
+  async aiLoginRequired(userId: string, info: { accountId: string; machineName: string; provider: AiProvider }): Promise<void> {
+    await this.deliver(
+      userId,
+      'confirmation',
+      (locale) => aiLoginRequiredText(info.provider, info.machineName, locale),
+      { kind: 'ai_login', account_id: info.accountId },
+      await this.deps.repos.devices.listActiveWithPush(userId),
+      `ai_login:${info.accountId}`,
+    );
   }
 
   /** Called by the enrolment service for a real request: goes to every device, live or not. */

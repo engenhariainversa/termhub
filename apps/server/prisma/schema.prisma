@@ -188,45 +188,53 @@ model LoginAttempt {
 }
 
 model Machine {
-  id                  String             @id
-  name                String
+  id                    String             @id
+  name                  String
   /// Optional line under the name ("MacBook do escritório"); private: the public city never carries it
-  subtitle            String?
-  host                String?
-  sshUser             String?            @map("ssh_user")
-  sshPort             Int                @default(22) @map("ssh_port")
-  type                MachineType
+  subtitle              String?
+  host                  String?
+  sshUser               String?            @map("ssh_user")
+  sshPort               Int                @default(22) @map("ssh_port")
+  type                  MachineType
   /// Detectado no status: "macos" | "linux" | ... e ferramentas disponíveis (claude, gh, xcode, ...)
-  os                  String?
-  capabilities        Json               @default("[]")
-  checkedAt           DateTime?          @map("checked_at")
-  /// agent transport: sha256 of the enrollment token (null for local/ssh); the token itself is never stored
-  agentTokenHash      String?            @unique @map("agent_token_hash")
-  agentTokenCreatedAt DateTime?          @map("agent_token_created_at")
-  agentVersion        String?            @map("agent_version")
-  agentLastSeenAt     DateTime?          @map("agent_last_seen_at")
+  os                    String?
+  capabilities          Json               @default("[]")
+  checkedAt             DateTime?          @map("checked_at")
+  /// agent transport, legacy bearer: sha256 of the permanent token agents paired before TER-1017 dial with
+  /// (null once the machine is paired again); the token itself is never stored
+  agentTokenHash        String?            @unique @map("agent_token_hash")
+  /// when the app last minted a token for this machine (legacy bearer or pairing)
+  agentTokenCreatedAt   DateTime?          @map("agent_token_created_at")
+  /// TER-1017: sha256 of the single-use pairing token the app showed, and when it stops being accepted
+  agentPairingHash      String?            @unique @map("agent_pairing_hash")
+  agentPairingExpiresAt DateTime?          @map("agent_pairing_expires_at")
+  /// TER-1017: the agent's Ed25519 device key (base64 SPKI DER); every dial signs the server's nonce with its pair
+  agentPublicKey        String?            @map("agent_public_key")
+  agentPairedAt         DateTime?          @map("agent_paired_at")
+  agentVersion          String?            @map("agent_version")
+  agentLastSeenAt       DateTime?          @map("agent_last_seen_at")
   /// Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts)
-  agentAutoUpdate     Boolean            @default(false) @map("agent_auto_update")
+  agentAutoUpdate       Boolean            @default(false) @map("agent_auto_update")
   /// Swap a tab's Claude to another account of this machine by itself when it hits a usage limit (on by default, TER-587).
-  claudeAutoSwap      Boolean            @default(true) @map("claude_auto_swap")
+  claudeAutoSwap        Boolean            @default(true) @map("claude_auto_swap")
   /// TER-735: show the AI accounts' usage of this machine; when false, termhub never reads the AI CLI credential on it.
-  aiUsageQuery        Boolean            @default(true) @map("ai_usage_query")
+  aiUsageQuery          Boolean            @default(true) @map("ai_usage_query")
   /// R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
-  automationAllowed   Boolean            @default(true) @map("automation_allowed")
+  automationAllowed     Boolean            @default(true) @map("automation_allowed")
   /// The user's own computer (an agent machine): browsers other than the one that added it hide it
-  isLocal             Boolean            @default(false) @map("is_local")
+  isLocal               Boolean            @default(false) @map("is_local")
   /// Owner: everything under the machine (projects, tabs, tasks, notes, AI accounts) is visible only to
   /// them (and to admins viewing as them or as "all"). Null = orphan (previous owner deleted / seeded).
-  ownerId             String?            @map("owner_id")
-  owner               User?              @relation("MachineOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  createdAt           DateTime           @default(now()) @map("created_at")
-  projectLinks        ProjectMachine[]
-  tabs                Tab[]
-  aiAccounts          AiAccount[]
-  hook                MachineHook?
-  uploads             Upload[]
+  ownerId               String?            @map("owner_id")
+  owner                 User?              @relation("MachineOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt             DateTime           @default(now()) @map("created_at")
+  projectLinks          ProjectMachine[]
+  tabs                  Tab[]
+  aiAccounts            AiAccount[]
+  hook                  MachineHook?
+  uploads               Upload[]
   /// Conversations hosted here (the chat's "terminal geral"); deleting the machine nulls the column.
-  chatConversations   ChatConversation[]
+  chatConversations     ChatConversation[]
 
   @@index([ownerId])
   @@map("machines")

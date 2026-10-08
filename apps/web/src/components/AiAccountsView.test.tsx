@@ -9,6 +9,7 @@ const usageMock = vi.fn();
 const usageOfMock = vi.fn();
 const createMock = vi.fn();
 const updateMock = vi.fn();
+const loginStatusMock = vi.fn();
 vi.mock('../lib/api', () => {
   class ApiError extends Error {}
   return {
@@ -20,6 +21,7 @@ vi.mock('../lib/api', () => {
         usageOf: (...a: unknown[]) => usageOfMock(...a),
         create: (...a: unknown[]) => createMock(...a),
         update: (...a: unknown[]) => updateMock(...a),
+        loginStatus: (...a: unknown[]) => loginStatusMock(...a),
       },
     },
   };
@@ -35,6 +37,7 @@ vi.mock('./AutoSwapSettings', () => ({ AutoSwapSettings: () => null }));
 vi.mock('./AiUsageQueryCard', () => ({ AiUsageQuerySettings: () => null }));
 
 import { AiAccountsView } from './AiAccountsView';
+import { resetAiLoginStatusForTests } from '../lib/ai-login-status';
 
 const account = (over: Partial<AiAccount> & { id: string }): AiAccount => ({ provider: 'claude', label: over.id, machine_id: 'm1', config_dir: null, created_at: '', ...over });
 
@@ -42,6 +45,7 @@ beforeEach(() => {
   localStorage.clear();
   listMock.mockResolvedValue({ accounts: [] });
   usageMock.mockResolvedValue({ usage: [] });
+  loginStatusMock.mockResolvedValue({ accounts: [] });
   usageOfMock.mockResolvedValue({ usage: { account_id: 'x', ok: false, windows: [], error: null, hint: null, plan: null, fetched_at: '', stale: false } });
   createMock.mockImplementation(async (input: Partial<AiAccount>) => ({ account: account({ id: 'new', ...input }) }));
   updateMock.mockImplementation(async (id: string, input: Partial<AiAccount>) => ({ account: account({ id, ...input }) }));
@@ -50,6 +54,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  resetAiLoginStatusForTests();
 });
 
 async function openNew() {
@@ -226,5 +231,40 @@ describe('AiAccountsView: usage that is off or needs a newer agent (TER-735)', (
     expect(screen.queryByText('disabled')).not.toBeInTheDocument();
     expect(screen.queryByText('outdated')).not.toBeInTheDocument();
     expect(screen.getByText('Token expirado')).toHaveClass('text-danger');
+  });
+});
+
+describe('AiAccountsView: expired CLI login (TER-1047)', () => {
+  const row = (account_id: string, state: 'ok' | 'login_required' | 'unknown', supported = true) => ({
+    account_id,
+    label: account_id,
+    provider: 'claude' as const,
+    machine_id: 'm1',
+    machine_name: 'mac',
+    state,
+    checked_at: null,
+    supported,
+  });
+
+  it('marks the account whose login expired and offers to log in again', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'home' }), account({ id: 'work', config_dir: '~/.claude-work' })] });
+    loginStatusMock.mockResolvedValue({ accounts: [row('home', 'ok'), row('work', 'login_required')] });
+    render(<AiAccountsView />);
+    await waitFor(() => expect(screen.getByText('Login necessário')).toBeInTheDocument());
+    const [home, work] = screen.getAllByRole('listitem');
+    expect(within(work!).getByText('Login necessário')).toBeInTheDocument();
+    expect(within(work!).getByRole('button', { name: 'Refazer login' })).toBeInTheDocument();
+    expect(within(home!).queryByText('Login necessário')).not.toBeInTheDocument();
+    // a logged-in account keeps a small way to log in again
+    expect(within(home!).getByRole('button', { name: 'Refazer login' })).toBeInTheDocument();
+  });
+
+  it('offers nothing where the login cannot be redone from here', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'home' })] });
+    loginStatusMock.mockResolvedValue({ accounts: [row('home', 'unknown', false)] });
+    render(<AiAccountsView />);
+    await screen.findAllByRole('listitem');
+    await waitFor(() => expect(loginStatusMock).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Refazer login' })).not.toBeInTheDocument();
   });
 });

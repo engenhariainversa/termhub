@@ -3,6 +3,7 @@
 // hold only plural forms: every other pt-BR text is its own key.
 import type { Resource } from 'i18next';
 import en_app from '@/locales/en/app.json';
+import en_aiLogin from '@/locales/en/ai-login.json';
 import en_ui from '@/locales/en/ui.json';
 import en_account from '@/locales/en/account.json';
 import en_chat from '@/locales/en/chat.json';
@@ -22,6 +23,7 @@ import en_shared from '@/locales/en/shared.json';
 import en_tabChat from '@/locales/en/tab-chat.json';
 import en_services from '@/locales/en/services.json';
 import pt_app from '@/locales/pt-BR/app.json';
+import pt_aiLogin from '@/locales/pt-BR/ai-login.json';
 import pt_ui from '@/locales/pt-BR/ui.json';
 import pt_account from '@/locales/pt-BR/account.json';
 import pt_chat from '@/locales/pt-BR/chat.json';
@@ -48,6 +50,7 @@ export const EN_AREAS: Record<string, Catalog> = {
   'app': en_app,
   'ui': en_ui,
   'account': en_account,
+  'ai-login': en_aiLogin,
   'chat': en_chat,
   'chat-view': en_chatView,
   'chat-grants': en_chatGrants,
@@ -71,6 +74,7 @@ export const PT_AREAS: Record<string, Catalog> = {
   'app': pt_app,
   'ui': pt_ui,
   'account': pt_account,
+  'ai-login': pt_aiLogin,
   'chat': pt_chat,
   'chat-view': pt_chatView,
   'chat-grants': pt_chatGrants,

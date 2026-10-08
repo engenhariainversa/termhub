@@ -43,5 +43,7 @@
   "Aba terminou": "Tab finished",
   "{{tab}} terminou e espera você.": "{{tab}} finished and is waiting for you.",
   "{{ref}} parou: {{reason}}": "{{ref}} stopped: {{reason}}",
-  "Um card": "A card"
+  "Um card": "A card",
+  "Login do {{provider}} expirou": "{{provider}} login expired",
+  "{{machine}}: toque para refazer o login": "{{machine}}: tap to redo the login"
 }

@@ -132,13 +132,18 @@ export async function machineStatus(machine: Machine): Promise<MachineStatus> {
   return { online, tmux: det.capabilities.includes('tmux'), ...det };
 }
 
-function parseSessions(stdout: string): Set<string> {
+/** The hidden tmux sessions an AI CLI login runs in (TER-1047): never a tab's, so never listed as one. */
+export const AI_LOGIN_SESSION_PREFIX = 'termhub-login-';
+
+/** A machine's session names, without the hidden login sessions. */
+function sessionSet(names: Iterable<string>): Set<string> {
   const set = new Set<string>();
-  for (const line of stdout.split('\n')) {
-    const name = line.trim();
-    if (name) set.add(name);
-  }
+  for (const name of names) if (name && !name.startsWith(AI_LOGIN_SESSION_PREFIX)) set.add(name);
   return set;
+}
+
+function parseSessions(stdout: string): Set<string> {
+  return sessionSet(stdout.split('\n').map((line) => line.trim()));
 }
 
 /** Lista as sessões tmux ativas na máquina (vazio se o servidor tmux não está rodando). */
@@ -146,7 +151,7 @@ export async function listTmuxSessions(machine: Machine): Promise<Set<string>> {
   if (machine.type === 'agent') {
     try {
       const { sessions } = await agents.rpc(machine.id, 'tmux.list', {});
-      return new Set(sessions);
+      return sessionSet(sessions);
     } catch (err) {
       // Same behaviour as the shell path returning a non-zero exit: no sessions, no error.
       if (err instanceof AgentOfflineError) return new Set();
@@ -187,7 +192,7 @@ export async function probeTmuxSessions(machine: Machine): Promise<TmuxProbe> {
     if (!(await agents.awaitHandover(machine))) return unreachable('agent offline');
     try {
       const { sessions } = await agents.rpc(machine.id, 'tmux.list', {});
-      return { reachable: true, sessions: new Set(sessions) };
+      return { reachable: true, sessions: sessionSet(sessions) };
     } catch (err) {
       return unreachable(err instanceof AgentOfflineError ? 'agent offline' : 'agent rpc failed');
     }
