@@ -144,6 +144,19 @@ export class AutomationRunsRepository {
   }
 
   /**
+   * The card's runs that ended `done` or `blocked` in a tab, newest end first (TER-1051): the tabs a fixer
+   * may find still open in the card's worktree. Markers have no tab and are not among them.
+   */
+  async endedInTabs(taskId: string): Promise<AutomationRun[]> {
+    const rows = await this.db.automationRun.findMany({
+      where: { taskId, status: { in: ['done', 'blocked'] }, tabId: { not: null }, endedAt: { not: null } },
+      orderBy: { endedAt: 'desc' },
+      take: 20,
+    });
+    return rows.map(map);
+  }
+
+  /**
    * Writes the patch while `instance` still drives the run: after a takeover by another instance the row
    * is theirs, and this one's late writes are dropped. False when nothing was written.
    */

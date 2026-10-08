@@ -56,6 +56,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await db.automationRun.count({ where: { taskId } })).toBe(1);
   });
 
+  it('endedInTabs (TER-1051): the card\'s done and blocked runs with a tab, newest end first; markers and other statuses left out', async () => {
+    const mk = (status: string, tabId: string | null, endedAt: Date | null, role = 'implementer') =>
+      db.automationRun.create({ data: { id: newId(), projectId, taskId, role, status, tabId, endedAt, claimedBy: 'blue' } });
+    await mk('done', 'tab-old', new Date('2026-10-08T09:00:00Z'));
+    await mk('blocked', 'tab-new', new Date('2026-10-08T10:00:00Z'), 'fixer');
+    await mk('failed', 'tab-failed', new Date('2026-10-08T11:00:00Z'));
+    await mk('blocked', null, new Date('2026-10-08T12:00:00Z'), 'fixer'); // a marker
+    await mk('running', 'tab-live', null);
+    expect((await runs.endedInTabs(taskId)).map((r) => r.tab_id)).toEqual(['tab-new', 'tab-old']);
+  });
+
   it('a marker (final review I3): written ended, once per trigger, beside an active run of the card; lastEndedAt reads it', async () => {
     expect(await runs.lastEndedAt(taskId)).toBeNull();
     const active = (await claim('blue'))!;

@@ -128,5 +128,6 @@
   "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "El agente salió y esta máquina no tiene el bloqueo del trabajo automático; actualiza el agente (0.19.0 o más reciente) y reanuda.",
   "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub siguió fallando en el push o en el PR después de los reintentos automáticos; revisa la pestaña y reanuda.",
   "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub inestable; la corrección del CI se pide de nuevo cuando vuelva",
-  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "El deploy falló por un problema de GitHub; ejecutándolo de nuevo ({{attempt}} de {{max}}): {{url}}"
+  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "El deploy falló por un problema de GitHub; ejecutándolo de nuevo ({{attempt}} de {{max}}): {{url}}",
+  "A correção do PR espera a aba do card ficar livre; feche a aba para abrir outra": "La corrección del PR espera a que la pestaña de la tarjeta quede libre; cierra la pestaña para abrir otra"
 }
