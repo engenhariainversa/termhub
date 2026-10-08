@@ -41,8 +41,30 @@ const BUDGET = PROMPT_MAX_CHARS - ORIGIN_REMINDER.length - 2 - TAIL.length;
 
 const clip = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, Math.max(0, max - 1))}…`);
 
-/** Joins the parts and fills what is left of the budget with the (optional) description excerpt. */
-function assemble(parts: (string | null)[], description: string | null): string {
+/**
+ * The current rules block (TER-1011) cut to `room`: whole lines from the top (the newest rules), with a closing
+ * line saying the rest is in the memory; null when not even one rule fits.
+ */
+function fitRules(rules: string, room: number): string | null {
+  if (rules.length <= room) return rules;
+  const more = '- … (outras em search_memory)';
+  const [head, ...lines] = rules.split('\n');
+  let out = head!;
+  for (const line of lines) {
+    if (line === more) continue;
+    if (out.length + 1 + line.length + 1 + more.length > room) break;
+    out = `${out}\n${line}`;
+  }
+  return out === head ? null : `${out}\n${more}`;
+}
+
+/** Joins the parts and fills what is left of the budget with the (optional) description excerpt. The rules
+ *  part (`rules`, its index in `parts`) only takes what the fixed parts leave. */
+function assemble(parts: (string | null)[], description: string | null, rules: number | null = null): string {
+  if (rules !== null && parts[rules]) {
+    const fixed = parts.filter((p, i): p is string => p !== null && i !== rules).join('\n\n');
+    parts = parts.map((p, i) => (i === rules ? fitRules(p!, BUDGET - fixed.length - 2) : p));
+  }
   const head = parts.filter((p): p is string => p !== null);
   const body = head.join('\n\n');
   const room = BUDGET - body.length - '\n\nDescrição do card:\n'.length - 2;
@@ -60,6 +82,8 @@ export function implementerPrompt(i: {
   policy: string;
   custom: string | null;
   description?: string | null;
+  /** The project's current rules (`currentRulesBlock`, TER-1011), or null. */
+  rules?: string | null;
 }): string {
   return assemble(
     [
@@ -67,12 +91,14 @@ export function implementerPrompt(i: {
       `Trabalhe na branch ${i.branch} (base ${i.base}). ${pushLine(i.branch)}`,
       i.custom?.trim() || DEFAULT_IMPLEMENTER_TEXT,
       policyLine(i.policy),
+      i.rules ?? null,
       TRUST_LINE,
       SHELL_LINE,
       `Quando terminar, abra o PR contra ${i.base} e chame report_card com status done e a URL; se travar, chame report_card com status blocked e o motivo.`,
       ASK_LINE,
     ],
     i.description ?? null,
+    4,
   );
 }
 
@@ -83,6 +109,7 @@ export function integratorPrompt(i: {
   prUrl: string;
   policy: string;
   custom: string | null;
+  rules?: string | null;
 }): string {
   return assemble(
     [
@@ -90,12 +117,14 @@ export function integratorPrompt(i: {
       `A branch do épico é ${i.branch} (base ${i.base}); o PR do épico é ${i.prUrl}. ${pushLine(i.branch)}`,
       i.custom?.trim() || DEFAULT_INTEGRATOR_TEXT(i.base),
       policyLine(i.policy),
+      i.rules ?? null,
       TRUST_LINE,
       SHELL_LINE,
       `Quando terminar, chame report_card com status done e a URL do PR; se travar, chame report_card com status blocked e o motivo.`,
       ASK_LINE,
     ],
     null,
+    4,
   );
 }
 
@@ -106,6 +135,7 @@ export function fixerPrompt(i: {
   reason: 'conflict' | 'ci';
   detail: string;
   custom: string | null;
+  rules?: string | null;
 }): string {
   const what = i.reason === 'conflict' ? `O PR do card ${i.ref} tem conflito com ${i.base}.` : `O CI do PR do card ${i.ref} falhou.`;
   return assemble(
@@ -116,11 +146,13 @@ export function fixerPrompt(i: {
         (i.reason === 'conflict'
           ? DEFAULT_FIXER_CONFLICT_TEXT(i.base)
           : DEFAULT_FIXER_CI_TEXT),
+      i.rules ?? null,
       TRUST_LINE,
       SHELL_LINE,
       `Quando o PR estiver corrigido, chame report_card com status done; se travar, chame report_card com status blocked e o motivo.`,
       ASK_LINE,
     ],
     null,
+    3,
   );
 }

@@ -136,6 +136,12 @@ export const automationFeedEvent = z.object({
   paused: z.boolean().nullable().default(null),
   /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
   tool: z.string().nullable().default(null),
+  /** TER-1011: why an automatic answer or an escalation happened, already in the reader's language */
+  why_text: z.string().nullable().default(null),
+  /** TER-1011: the precedent (`decision:<id>`, `note:<id>`) or allow rule (`Bash(npm test:*)`) it rests on */
+  rule_ref: z.string().nullable().default(null),
+  /** TER-1011: the precedent's similarity, 0..1 */
+  score: z.number().nullable().default(null),
 });
 
 export const progressResponse = z.object({

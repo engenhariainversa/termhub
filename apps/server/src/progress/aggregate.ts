@@ -2,6 +2,7 @@ import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, Prog
 import type { TabState } from '../db/repositories/types.js';
 import type { AutomationEvent } from '../db/repositories/index.js';
 import { ESCALATION_FALLBACK, ESCALATION_TEXT } from '../automation/escalation-text.js';
+import { whyText } from '../automation/why.js';
 import { t, type Locale } from '../i18n/index.js';
 import { NEEDS_YOU } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
@@ -211,6 +212,8 @@ export const FEED_KINDS = [
   'run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed',
   'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup',
   'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out',
+  // TER-1011: every automatic answer is in the feed with its why, permissions included
+  'permission_auto_approved',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** An event with what its sentence names, looked up by the repository. */
@@ -264,6 +267,10 @@ export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): A
       reason_text: e.kind === 'escalated' ? t(locale, (reason && ESCALATION_TEXT[reason]) || ESCALATION_FALLBACK) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : null,
       // the tool a permission_auto_approved / guard_blocked line names (TER-993)
       tool: str(p.tool),
+      // TER-1011: why an automatic answer or an escalation happened, the rule or precedent, its similarity
+      why_text: whyText(str(p.why), locale),
+      rule_ref: str(p.rule_ref),
+      score: num(p.score),
     };
   });
 }

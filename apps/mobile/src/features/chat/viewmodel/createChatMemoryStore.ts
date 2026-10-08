@@ -27,7 +27,7 @@
 import { create } from 'zustand';
 import { sessionEnded } from '@/features/shared/signals';
 import { t } from '@/i18n';
-import type { TChatDecision, TChatMemory, TConciergeNote, TLessonItem } from '@/services/api/contract';
+import type { TChatDecision, TChatMemory, TConciergeNote, TLessonItem, TMemoryReplacement, TMemoryStatus } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { Auth, MobileApi } from '@/services/api/types';
 
@@ -93,6 +93,16 @@ export interface ChatMemoryState {
   /** "Esquecer" on a note: the same hard delete as a decision's, its own busy id and error line. */
   forgetNote(id: string): Promise<void>;
 
+  /** The ref (`decision:<id>` / `note:<id>`) whose status change (TER-1013) is in flight. */
+  statusBusyRef: string | null;
+  /** "Desatualizada" / "Errada" / "Substituída por…" on a decision or note, `current` for "Desfazer"
+   * (TER-1013): the row is replaced by the server's answer; a failure goes to the list's own error
+   * line (`error` for decisions, `notesError` for notes). Resolves whether it worked. */
+  setStatus(kind: 'decision' | 'note', id: string, status: TMemoryStatus, supersededBy?: string): Promise<boolean>;
+  /** "Substituída por…"'s picker: the user's other current decisions and notes matching `q`. Not
+   * kept in the store — the picker owns its results; a failure resolves `null`. */
+  searchReplacements(q: string, exclude: string): Promise<TMemoryReplacement[] | null>;
+
   /** "Lições" (spec 2026-09-27 failure lessons §6/§8): its own search box and pagination,
    * independent of both `decisions` and `notes` above — the mobile twin of `ChatMemoryPage`'s own
    * `lessons`/`lessonsCursor`/`lessonsQ`. */
@@ -146,6 +156,7 @@ const initialData = (): Data => ({
   loadingMoreNotes: false,
   forgettingNoteId: null,
   notesError: null,
+  statusBusyRef: null,
   lessons: null,
   lessonsCursor: null,
   lessonsQ: '',
@@ -361,6 +372,38 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
           set({ forgettingNoteId: null });
           if (session().handleApiError(e)) return;
           set({ notesError: isApiError(e) ? e.message : t('Não foi possível esquecer a anotação') });
+        }
+      },
+
+      async setStatus(kind, id, status, supersededBy) {
+        const ref = `${kind}:${id}`;
+        if (get().statusBusyRef !== null) return false;
+        const showError = (message: string | null) => set(kind === 'decision' ? { error: message } : { notesError: message });
+        set({ statusBusyRef: ref });
+        showError(null);
+        try {
+          if (kind === 'decision') {
+            const updated = await api.setChatDecisionStatus(session().auth(), id, status, supersededBy);
+            set((s) => ({ decisions: (s.decisions ?? []).map((d) => (d.id === updated.id ? updated : d)), statusBusyRef: null }));
+          } else {
+            const updated = await api.setChatNoteStatus(session().auth(), id, status, supersededBy);
+            set((s) => ({ notes: (s.notes ?? []).map((n) => (n.id === updated.id ? updated : n)), statusBusyRef: null }));
+          }
+          return true;
+        } catch (e) {
+          set({ statusBusyRef: null });
+          if (session().handleApiError(e)) return false;
+          showError(isApiError(e) ? e.message : t('Não foi possível alterar o estado do item'));
+          return false;
+        }
+      },
+
+      async searchReplacements(q, exclude) {
+        try {
+          return (await api.chatMemoryReplacements(session().auth(), q.trim(), exclude)).items;
+        } catch (e) {
+          if (!session().handleApiError(e)) set({ error: isApiError(e) ? e.message : t('Não foi possível buscar os itens da memória') });
+          return null;
         }
       },
 

@@ -64,7 +64,7 @@ function fakeRepos(
     chatDecisions: {
       findManyForUser: vi.fn(async (ids: string[], userId: string) =>
         ids.includes('d1') && userId === 'u1'
-          ? [{ id: 'd1', user_id: 'u1', project_id: 'p1', project_name: 'Proj', conversation_id: null, tab_question_id: null, question_index: 0, header: 'Cor', question: 'Qual cor?', options: [{ label: 'Azul', description: '' }, { label: 'Verde', description: '' }], multi_select: false, answer: { labels: ['Azul'] }, embed_model: 'm', suggested_count: 0, accepted_count: 0, auto_count: 0, trust: 'person', created_at: '2026-09-20T00:00:00.000Z' }]
+          ? [{ id: 'd1', user_id: 'u1', project_id: 'p1', project_name: 'Proj', conversation_id: null, tab_question_id: null, question_index: 0, header: 'Cor', question: 'Qual cor?', options: [{ label: 'Azul', description: '' }, { label: 'Verde', description: '' }], multi_select: false, answer: { labels: ['Azul'] }, embed_model: 'm', suggested_count: 0, accepted_count: 0, auto_count: 0, status: 'current', expires_at: null, supersedes: null, trust: 'person', created_at: '2026-09-20T00:00:00.000Z' }]
           : [],
       ),
     },
@@ -335,7 +335,7 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
     expect(await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' }, { waker })).toBeNull();
     // awaited inside openTabQuestion: parked before the hook POST returns
     expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'question_unanswered' }, { unlessWaitingFor: 'question_unanswered' });
-    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: 'question_unanswered', tab_id: 't1' } }));
+    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', run_id: 'run1', payload: { reason: 'question_unanswered', tab_id: 't1', why: 'no_precedent' } }));
     expect(waker.wake).not.toHaveBeenCalled();
   });
 
@@ -360,7 +360,7 @@ describe('openTabQuestion in a tab with an automatic run (agentic board D18)', (
     const waker = { wake: vi.fn(async () => true) };
     await openTabQuestion(asRepos(repos), tab, { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null }, { waker });
     await vi.waitFor(() => expect(repos.automationRuns.updateActive).toHaveBeenCalledWith('run1', 'me', { status: 'waiting', waiting_reason: 'permission_needed' }, { unlessWaitingFor: 'permission_needed' }));
-    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', payload: { reason: 'permission_needed', tab_id: 't1' } }));
+    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'escalated', payload: { reason: 'permission_needed', tab_id: 't1', why: 'outside_rules' } }));
     expect(waker.wake).not.toHaveBeenCalled();
   });
 

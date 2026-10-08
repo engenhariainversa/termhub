@@ -293,6 +293,7 @@ export type ProjectWhereInput = {
   automationRuns?: Prisma.AutomationRunListRelationFilter
   tabUsageDays?: Prisma.TabUsageDayListRelationFilter
   exclusiveAiAccounts?: Prisma.AiAccountListRelationFilter
+  aiMemoryPages?: Prisma.AiMemoryPageListRelationFilter
 }
 
 export type ProjectOrderByWithRelationInput = {
@@ -329,6 +330,7 @@ export type ProjectOrderByWithRelationInput = {
   automationRuns?: Prisma.AutomationRunOrderByRelationAggregateInput
   tabUsageDays?: Prisma.TabUsageDayOrderByRelationAggregateInput
   exclusiveAiAccounts?: Prisma.AiAccountOrderByRelationAggregateInput
+  aiMemoryPages?: Prisma.AiMemoryPageOrderByRelationAggregateInput
 }
 
 export type ProjectWhereUniqueInput = Prisma.AtLeast<{
@@ -368,6 +370,7 @@ export type ProjectWhereUniqueInput = Prisma.AtLeast<{
   automationRuns?: Prisma.AutomationRunListRelationFilter
   tabUsageDays?: Prisma.TabUsageDayListRelationFilter
   exclusiveAiAccounts?: Prisma.AiAccountListRelationFilter
+  aiMemoryPages?: Prisma.AiMemoryPageListRelationFilter
 }, "id" | "key">
 
 export type ProjectOrderByWithAggregationInput = {
@@ -440,6 +443,7 @@ export type ProjectCreateInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateInput = {
@@ -474,6 +478,7 @@ export type ProjectUncheckedCreateInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUpdateInput = {
@@ -508,6 +513,7 @@ export type ProjectUpdateInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateInput = {
@@ -542,6 +548,7 @@ export type ProjectUncheckedUpdateInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateManyInput = {
@@ -874,6 +881,20 @@ export type ProjectUpdateOneRequiredWithoutTabUsageDaysNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectUpdateToOneWithWhereWithoutTabUsageDaysInput, Prisma.ProjectUpdateWithoutTabUsageDaysInput>, Prisma.ProjectUncheckedUpdateWithoutTabUsageDaysInput>
 }
 
+export type ProjectCreateNestedOneWithoutAiMemoryPagesInput = {
+  create?: Prisma.XOR<Prisma.ProjectCreateWithoutAiMemoryPagesInput, Prisma.ProjectUncheckedCreateWithoutAiMemoryPagesInput>
+  connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutAiMemoryPagesInput
+  connect?: Prisma.ProjectWhereUniqueInput
+}
+
+export type ProjectUpdateOneRequiredWithoutAiMemoryPagesNestedInput = {
+  create?: Prisma.XOR<Prisma.ProjectCreateWithoutAiMemoryPagesInput, Prisma.ProjectUncheckedCreateWithoutAiMemoryPagesInput>
+  connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutAiMemoryPagesInput
+  upsert?: Prisma.ProjectUpsertWithoutAiMemoryPagesInput
+  connect?: Prisma.ProjectWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectUpdateToOneWithWhereWithoutAiMemoryPagesInput, Prisma.ProjectUpdateWithoutAiMemoryPagesInput>, Prisma.ProjectUncheckedUpdateWithoutAiMemoryPagesInput>
+}
+
 export type ProjectCreateNestedOneWithoutNoteInput = {
   create?: Prisma.XOR<Prisma.ProjectCreateWithoutNoteInput, Prisma.ProjectUncheckedCreateWithoutNoteInput>
   connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutNoteInput
@@ -1053,6 +1074,7 @@ export type ProjectCreateWithoutOwnerInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutOwnerInput = {
@@ -1086,6 +1108,7 @@ export type ProjectUncheckedCreateWithoutOwnerInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutOwnerInput = {
@@ -1163,6 +1186,7 @@ export type ProjectCreateWithoutMachinesInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutMachinesInput = {
@@ -1196,6 +1220,7 @@ export type ProjectUncheckedCreateWithoutMachinesInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutMachinesInput = {
@@ -1245,6 +1270,7 @@ export type ProjectUpdateWithoutMachinesInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutMachinesInput = {
@@ -1278,6 +1304,7 @@ export type ProjectUncheckedUpdateWithoutMachinesInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutTabsInput = {
@@ -1311,6 +1338,7 @@ export type ProjectCreateWithoutTabsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutTabsInput = {
@@ -1344,6 +1372,7 @@ export type ProjectUncheckedCreateWithoutTabsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutTabsInput = {
@@ -1393,6 +1422,7 @@ export type ProjectUpdateWithoutTabsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutTabsInput = {
@@ -1426,6 +1456,7 @@ export type ProjectUncheckedUpdateWithoutTabsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutTicketsInput = {
@@ -1459,6 +1490,7 @@ export type ProjectCreateWithoutTicketsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutTicketsInput = {
@@ -1492,6 +1524,7 @@ export type ProjectUncheckedCreateWithoutTicketsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutTicketsInput = {
@@ -1541,6 +1574,7 @@ export type ProjectUpdateWithoutTicketsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutTicketsInput = {
@@ -1574,6 +1608,7 @@ export type ProjectUncheckedUpdateWithoutTicketsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutColumnsInput = {
@@ -1607,6 +1642,7 @@ export type ProjectCreateWithoutColumnsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutColumnsInput = {
@@ -1640,6 +1676,7 @@ export type ProjectUncheckedCreateWithoutColumnsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutColumnsInput = {
@@ -1678,6 +1715,7 @@ export type ProjectCreateWithoutAgentColumnInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutAgentColumnInput = {
@@ -1711,6 +1749,7 @@ export type ProjectUncheckedCreateWithoutAgentColumnInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutAgentColumnInput = {
@@ -1765,6 +1804,7 @@ export type ProjectUpdateWithoutColumnsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutColumnsInput = {
@@ -1798,6 +1838,7 @@ export type ProjectUncheckedUpdateWithoutColumnsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUpsertWithWhereUniqueWithoutAgentColumnInput = {
@@ -1847,6 +1888,7 @@ export type ProjectCreateWithoutTasksInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutTasksInput = {
@@ -1880,6 +1922,7 @@ export type ProjectUncheckedCreateWithoutTasksInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutTasksInput = {
@@ -1929,6 +1972,7 @@ export type ProjectUpdateWithoutTasksInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutTasksInput = {
@@ -1962,6 +2006,7 @@ export type ProjectUncheckedUpdateWithoutTasksInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutPullRequestsInput = {
@@ -1995,6 +2040,7 @@ export type ProjectCreateWithoutPullRequestsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutPullRequestsInput = {
@@ -2028,6 +2074,7 @@ export type ProjectUncheckedCreateWithoutPullRequestsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutPullRequestsInput = {
@@ -2077,6 +2124,7 @@ export type ProjectUpdateWithoutPullRequestsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutPullRequestsInput = {
@@ -2110,6 +2158,7 @@ export type ProjectUncheckedUpdateWithoutPullRequestsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutAutomationEventsInput = {
@@ -2143,6 +2192,7 @@ export type ProjectCreateWithoutAutomationEventsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutAutomationEventsInput = {
@@ -2176,6 +2226,7 @@ export type ProjectUncheckedCreateWithoutAutomationEventsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutAutomationEventsInput = {
@@ -2225,6 +2276,7 @@ export type ProjectUpdateWithoutAutomationEventsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutAutomationEventsInput = {
@@ -2258,6 +2310,7 @@ export type ProjectUncheckedUpdateWithoutAutomationEventsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutAutomationRunsInput = {
@@ -2291,6 +2344,7 @@ export type ProjectCreateWithoutAutomationRunsInput = {
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutAutomationRunsInput = {
@@ -2324,6 +2378,7 @@ export type ProjectUncheckedCreateWithoutAutomationRunsInput = {
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutAutomationRunsInput = {
@@ -2373,6 +2428,7 @@ export type ProjectUpdateWithoutAutomationRunsInput = {
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutAutomationRunsInput = {
@@ -2406,6 +2462,7 @@ export type ProjectUncheckedUpdateWithoutAutomationRunsInput = {
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutTabUsageDaysInput = {
@@ -2439,6 +2496,7 @@ export type ProjectCreateWithoutTabUsageDaysInput = {
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutTabUsageDaysInput = {
@@ -2472,6 +2530,7 @@ export type ProjectUncheckedCreateWithoutTabUsageDaysInput = {
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutTabUsageDaysInput = {
@@ -2521,6 +2580,7 @@ export type ProjectUpdateWithoutTabUsageDaysInput = {
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutTabUsageDaysInput = {
@@ -2553,6 +2613,159 @@ export type ProjectUncheckedUpdateWithoutTabUsageDaysInput = {
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
+  exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
+}
+
+export type ProjectCreateWithoutAiMemoryPagesInput = {
+  id: string
+  key: string
+  nextTaskNumber?: number
+  name: string
+  status?: $Enums.ProjectStatus
+  description?: string | null
+  isPublic?: boolean
+  lastTerminalAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  createdAt?: Date | string
+  owner?: Prisma.UserCreateNestedOneWithoutProjectsInput
+  machines?: Prisma.ProjectMachineCreateNestedManyWithoutProjectInput
+  tabs?: Prisma.TabCreateNestedManyWithoutProjectInput
+  tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
+  note?: Prisma.NoteCreateNestedOneWithoutProjectInput
+  setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
+  tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
+  tabLimitNotices?: Prisma.TabLimitNoticeCreateNestedManyWithoutProjectInput
+  chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutProjectInput
+  groupItems?: Prisma.ProjectGroupItemCreateNestedManyWithoutProjectInput
+  memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutProjectInput
+  agentColumn?: Prisma.TaskColumnCreateNestedOneWithoutAgentForInput
+  columns?: Prisma.TaskColumnCreateNestedManyWithoutProjectInput
+  pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
+  standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
+  automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
+  tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
+  exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+}
+
+export type ProjectUncheckedCreateWithoutAiMemoryPagesInput = {
+  id: string
+  ownerId?: string | null
+  key: string
+  nextTaskNumber?: number
+  name: string
+  status?: $Enums.ProjectStatus
+  description?: string | null
+  isPublic?: boolean
+  agentColumnId?: string | null
+  lastTerminalAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  createdAt?: Date | string
+  machines?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutProjectInput
+  tabs?: Prisma.TabUncheckedCreateNestedManyWithoutProjectInput
+  tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
+  note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
+  setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
+  tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUncheckedCreateNestedManyWithoutProjectInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutProjectInput
+  groupItems?: Prisma.ProjectGroupItemUncheckedCreateNestedManyWithoutProjectInput
+  memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutProjectInput
+  columns?: Prisma.TaskColumnUncheckedCreateNestedManyWithoutProjectInput
+  pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
+  automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
+  tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
+  exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+}
+
+export type ProjectCreateOrConnectWithoutAiMemoryPagesInput = {
+  where: Prisma.ProjectWhereUniqueInput
+  create: Prisma.XOR<Prisma.ProjectCreateWithoutAiMemoryPagesInput, Prisma.ProjectUncheckedCreateWithoutAiMemoryPagesInput>
+}
+
+export type ProjectUpsertWithoutAiMemoryPagesInput = {
+  update: Prisma.XOR<Prisma.ProjectUpdateWithoutAiMemoryPagesInput, Prisma.ProjectUncheckedUpdateWithoutAiMemoryPagesInput>
+  create: Prisma.XOR<Prisma.ProjectCreateWithoutAiMemoryPagesInput, Prisma.ProjectUncheckedCreateWithoutAiMemoryPagesInput>
+  where?: Prisma.ProjectWhereInput
+}
+
+export type ProjectUpdateToOneWithWhereWithoutAiMemoryPagesInput = {
+  where?: Prisma.ProjectWhereInput
+  data: Prisma.XOR<Prisma.ProjectUpdateWithoutAiMemoryPagesInput, Prisma.ProjectUncheckedUpdateWithoutAiMemoryPagesInput>
+}
+
+export type ProjectUpdateWithoutAiMemoryPagesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  nextTaskNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumProjectStatusFieldUpdateOperationsInput | $Enums.ProjectStatus
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastTerminalAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  owner?: Prisma.UserUpdateOneWithoutProjectsNestedInput
+  machines?: Prisma.ProjectMachineUpdateManyWithoutProjectNestedInput
+  tabs?: Prisma.TabUpdateManyWithoutProjectNestedInput
+  tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
+  note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
+  setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
+  tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUpdateManyWithoutProjectNestedInput
+  chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutProjectNestedInput
+  groupItems?: Prisma.ProjectGroupItemUpdateManyWithoutProjectNestedInput
+  memoryItems?: Prisma.MemoryItemUpdateManyWithoutProjectNestedInput
+  agentColumn?: Prisma.TaskColumnUpdateOneWithoutAgentForNestedInput
+  columns?: Prisma.TaskColumnUpdateManyWithoutProjectNestedInput
+  pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
+  automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
+  tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
+  exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+}
+
+export type ProjectUncheckedUpdateWithoutAiMemoryPagesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  nextTaskNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumProjectStatusFieldUpdateOperationsInput | $Enums.ProjectStatus
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  agentColumnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastTerminalAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  machines?: Prisma.ProjectMachineUncheckedUpdateManyWithoutProjectNestedInput
+  tabs?: Prisma.TabUncheckedUpdateManyWithoutProjectNestedInput
+  tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
+  note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
+  setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
+  tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUncheckedUpdateManyWithoutProjectNestedInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutProjectNestedInput
+  groupItems?: Prisma.ProjectGroupItemUncheckedUpdateManyWithoutProjectNestedInput
+  memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutProjectNestedInput
+  columns?: Prisma.TaskColumnUncheckedUpdateManyWithoutProjectNestedInput
+  pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
+  automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
+  tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
 }
 
@@ -2587,6 +2800,7 @@ export type ProjectCreateWithoutNoteInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutNoteInput = {
@@ -2620,6 +2834,7 @@ export type ProjectUncheckedCreateWithoutNoteInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutNoteInput = {
@@ -2669,6 +2884,7 @@ export type ProjectUpdateWithoutNoteInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutNoteInput = {
@@ -2702,6 +2918,7 @@ export type ProjectUncheckedUpdateWithoutNoteInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutSetupInput = {
@@ -2735,6 +2952,7 @@ export type ProjectCreateWithoutSetupInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutSetupInput = {
@@ -2768,6 +2986,7 @@ export type ProjectUncheckedCreateWithoutSetupInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutSetupInput = {
@@ -2817,6 +3036,7 @@ export type ProjectUpdateWithoutSetupInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutSetupInput = {
@@ -2850,6 +3070,7 @@ export type ProjectUncheckedUpdateWithoutSetupInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutExclusiveAiAccountsInput = {
@@ -2883,6 +3104,7 @@ export type ProjectCreateWithoutExclusiveAiAccountsInput = {
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutExclusiveAiAccountsInput = {
@@ -2916,6 +3138,7 @@ export type ProjectUncheckedCreateWithoutExclusiveAiAccountsInput = {
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutExclusiveAiAccountsInput = {
@@ -2965,6 +3188,7 @@ export type ProjectUpdateWithoutExclusiveAiAccountsInput = {
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutExclusiveAiAccountsInput = {
@@ -2998,6 +3222,7 @@ export type ProjectUncheckedUpdateWithoutExclusiveAiAccountsInput = {
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutChatConversationsInput = {
@@ -3031,6 +3256,7 @@ export type ProjectCreateWithoutChatConversationsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutChatConversationsInput = {
@@ -3064,6 +3290,7 @@ export type ProjectUncheckedCreateWithoutChatConversationsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutChatConversationsInput = {
@@ -3113,6 +3340,7 @@ export type ProjectUpdateWithoutChatConversationsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutChatConversationsInput = {
@@ -3146,6 +3374,7 @@ export type ProjectUncheckedUpdateWithoutChatConversationsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutStandingGrantsInput = {
@@ -3179,6 +3408,7 @@ export type ProjectCreateWithoutStandingGrantsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutStandingGrantsInput = {
@@ -3212,6 +3442,7 @@ export type ProjectUncheckedCreateWithoutStandingGrantsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutStandingGrantsInput = {
@@ -3261,6 +3492,7 @@ export type ProjectUpdateWithoutStandingGrantsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutStandingGrantsInput = {
@@ -3294,6 +3526,7 @@ export type ProjectUncheckedUpdateWithoutStandingGrantsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutTabLimitNoticesInput = {
@@ -3327,6 +3560,7 @@ export type ProjectCreateWithoutTabLimitNoticesInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutTabLimitNoticesInput = {
@@ -3360,6 +3594,7 @@ export type ProjectUncheckedCreateWithoutTabLimitNoticesInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutTabLimitNoticesInput = {
@@ -3409,6 +3644,7 @@ export type ProjectUpdateWithoutTabLimitNoticesInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutTabLimitNoticesInput = {
@@ -3442,6 +3678,7 @@ export type ProjectUncheckedUpdateWithoutTabLimitNoticesInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutTabQuestionsInput = {
@@ -3475,6 +3712,7 @@ export type ProjectCreateWithoutTabQuestionsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutTabQuestionsInput = {
@@ -3508,6 +3746,7 @@ export type ProjectUncheckedCreateWithoutTabQuestionsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutTabQuestionsInput = {
@@ -3557,6 +3796,7 @@ export type ProjectUpdateWithoutTabQuestionsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutTabQuestionsInput = {
@@ -3590,6 +3830,7 @@ export type ProjectUncheckedUpdateWithoutTabQuestionsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutChatDecisionsInput = {
@@ -3623,6 +3864,7 @@ export type ProjectCreateWithoutChatDecisionsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutChatDecisionsInput = {
@@ -3656,6 +3898,7 @@ export type ProjectUncheckedCreateWithoutChatDecisionsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutChatDecisionsInput = {
@@ -3705,6 +3948,7 @@ export type ProjectUpdateWithoutChatDecisionsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutChatDecisionsInput = {
@@ -3738,6 +3982,7 @@ export type ProjectUncheckedUpdateWithoutChatDecisionsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutMemoryItemsInput = {
@@ -3771,6 +4016,7 @@ export type ProjectCreateWithoutMemoryItemsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutMemoryItemsInput = {
@@ -3804,6 +4050,7 @@ export type ProjectUncheckedCreateWithoutMemoryItemsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutMemoryItemsInput = {
@@ -3853,6 +4100,7 @@ export type ProjectUpdateWithoutMemoryItemsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutMemoryItemsInput = {
@@ -3886,6 +4134,7 @@ export type ProjectUncheckedUpdateWithoutMemoryItemsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutGroupItemsInput = {
@@ -3919,6 +4168,7 @@ export type ProjectCreateWithoutGroupItemsInput = {
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutGroupItemsInput = {
@@ -3952,6 +4202,7 @@ export type ProjectUncheckedCreateWithoutGroupItemsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutGroupItemsInput = {
@@ -4001,6 +4252,7 @@ export type ProjectUpdateWithoutGroupItemsInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutGroupItemsInput = {
@@ -4034,6 +4286,7 @@ export type ProjectUncheckedUpdateWithoutGroupItemsInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateManyOwnerInput = {
@@ -4081,6 +4334,7 @@ export type ProjectUpdateWithoutOwnerInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutOwnerInput = {
@@ -4114,6 +4368,7 @@ export type ProjectUncheckedUpdateWithoutOwnerInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateManyWithoutOwnerInput = {
@@ -4175,6 +4430,7 @@ export type ProjectUpdateWithoutAgentColumnInput = {
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutAgentColumnInput = {
@@ -4208,6 +4464,7 @@ export type ProjectUncheckedUpdateWithoutAgentColumnInput = {
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateManyWithoutAgentColumnInput = {
@@ -4247,6 +4504,7 @@ export type ProjectCountOutputType = {
   automationRuns: number
   tabUsageDays: number
   exclusiveAiAccounts: number
+  aiMemoryPages: number
 }
 
 export type ProjectCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -4267,6 +4525,7 @@ export type ProjectCountOutputTypeSelect<ExtArgs extends runtime.Types.Extension
   automationRuns?: boolean | ProjectCountOutputTypeCountAutomationRunsArgs
   tabUsageDays?: boolean | ProjectCountOutputTypeCountTabUsageDaysArgs
   exclusiveAiAccounts?: boolean | ProjectCountOutputTypeCountExclusiveAiAccountsArgs
+  aiMemoryPages?: boolean | ProjectCountOutputTypeCountAiMemoryPagesArgs
 }
 
 /**
@@ -4398,6 +4657,13 @@ export type ProjectCountOutputTypeCountExclusiveAiAccountsArgs<ExtArgs extends r
   where?: Prisma.AiAccountWhereInput
 }
 
+/**
+ * ProjectCountOutputType without action
+ */
+export type ProjectCountOutputTypeCountAiMemoryPagesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.AiMemoryPageWhereInput
+}
+
 
 export type ProjectSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -4433,6 +4699,7 @@ export type ProjectSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   automationRuns?: boolean | Prisma.Project$automationRunsArgs<ExtArgs>
   tabUsageDays?: boolean | Prisma.Project$tabUsageDaysArgs<ExtArgs>
   exclusiveAiAccounts?: boolean | Prisma.Project$exclusiveAiAccountsArgs<ExtArgs>
+  aiMemoryPages?: boolean | Prisma.Project$aiMemoryPagesArgs<ExtArgs>
   _count?: boolean | Prisma.ProjectCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["project"]>
 
@@ -4508,6 +4775,7 @@ export type ProjectInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs
   automationRuns?: boolean | Prisma.Project$automationRunsArgs<ExtArgs>
   tabUsageDays?: boolean | Prisma.Project$tabUsageDaysArgs<ExtArgs>
   exclusiveAiAccounts?: boolean | Prisma.Project$exclusiveAiAccountsArgs<ExtArgs>
+  aiMemoryPages?: boolean | Prisma.Project$aiMemoryPagesArgs<ExtArgs>
   _count?: boolean | Prisma.ProjectCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type ProjectIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -4552,6 +4820,10 @@ export type $ProjectPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
      * AI accounts only this project may run on (TER-990)
      */
     exclusiveAiAccounts: Prisma.$AiAccountPayload<ExtArgs>[]
+    /**
+     * Current rules published as pinned ai-memory pages on the project's machines (TER-1019)
+     */
+    aiMemoryPages: Prisma.$AiMemoryPagePayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -5001,6 +5273,7 @@ export interface Prisma__ProjectClient<T, Null = never, ExtArgs extends runtime.
   automationRuns<T extends Prisma.Project$automationRunsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$automationRunsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   tabUsageDays<T extends Prisma.Project$tabUsageDaysArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$tabUsageDaysArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TabUsageDayPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   exclusiveAiAccounts<T extends Prisma.Project$exclusiveAiAccountsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$exclusiveAiAccountsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AiAccountPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  aiMemoryPages<T extends Prisma.Project$aiMemoryPagesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$aiMemoryPagesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AiMemoryPagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -5924,6 +6197,30 @@ export type Project$exclusiveAiAccountsArgs<ExtArgs extends runtime.Types.Extens
   take?: number
   skip?: number
   distinct?: Prisma.AiAccountScalarFieldEnum | Prisma.AiAccountScalarFieldEnum[]
+}
+
+/**
+ * Project.aiMemoryPages
+ */
+export type Project$aiMemoryPagesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the AiMemoryPage
+   */
+  select?: Prisma.AiMemoryPageSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the AiMemoryPage
+   */
+  omit?: Prisma.AiMemoryPageOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.AiMemoryPageInclude<ExtArgs> | null
+  where?: Prisma.AiMemoryPageWhereInput
+  orderBy?: Prisma.AiMemoryPageOrderByWithRelationInput | Prisma.AiMemoryPageOrderByWithRelationInput[]
+  cursor?: Prisma.AiMemoryPageWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.AiMemoryPageScalarFieldEnum | Prisma.AiMemoryPageScalarFieldEnum[]
 }
 
 /**

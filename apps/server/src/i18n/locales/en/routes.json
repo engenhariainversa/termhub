@@ -77,5 +77,10 @@
   "Invalid profile": "Invalid profile",
   "Too many sign-ups from this address; try again later": "Too many sign-ups from this address; try again later",
   "Entry not found": "Entry not found",
-  "Confirme com o PIN para ligar ou ampliar o trabalho automático.": "Confirm with your PIN to turn on or widen automatic work."
+  "Confirme com o PIN para ligar ou ampliar o trabalho automático.": "Confirm with your PIN to turn on or widen automatic work.",
+  "O item escolhido para substituir não foi encontrado": "The item picked as the replacement was not found",
+  "Um item não pode substituir a si mesmo": "An item cannot replace itself",
+  "O item escolhido já substitui outro; desfaça aquela substituição antes": "The item picked already replaces another one; undo that replacement first",
+  "Este item já substitui o escolhido; desfaça aquela substituição antes": "This item already replaces the one picked; undo that replacement first",
+  "O endereço do ai-memory precisa ser local (127.0.0.1, localhost) ou de rede privada": "The ai-memory address must be local (127.0.0.1, localhost) or on a private network"
 }

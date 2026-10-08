@@ -412,5 +412,16 @@
   "— sem dono (só visível em \"todas as máquinas\") —": "— no owner (only visible in \"all machines\") —",
   "— sem repositório —": "— no repository —",
   "Aceita trabalho automático": "Accepts automatic work",
-  "Desmarcada, o termhub nunca inicia sozinho um card do quadro nesta máquina. Abas abertas por você continuam como sempre.": "When unchecked, termhub never starts a board card on this machine by itself. Tabs you open keep working as usual."
+  "Desmarcada, o termhub nunca inicia sozinho um card do quadro nesta máquina. Abas abertas por você continuam como sempre.": "When unchecked, termhub never starts a board card on this machine by itself. Tabs you open keep working as usual.",
+  "Memória dos agentes (ai-memory)": "Agent memory (ai-memory)",
+  "Grava as regras vigentes como páginas fixadas do ai-memory nas máquinas do projeto que já usam o ai-memory neste checkout, para o Claude Code e o Codex lerem no início de cada sessão.": "Writes the current rules as pinned ai-memory pages on the project's machines that already use ai-memory in this checkout, so Claude Code and Codex read them at the start of every session.",
+  "Publicar regras vigentes no ai-memory": "Publish current rules to ai-memory",
+  "ai-memory não encontrado nesta máquina (comando ai-memory fora do PATH).": "ai-memory not found on this machine (no ai-memory command on the PATH).",
+  "ai-memory {{version}} instalado · servidor no ar em {{url}}": "ai-memory {{version}} installed · server up at {{url}}",
+  "ai-memory {{version}} instalado · servidor fora do ar em {{url}} (rode ai-memory serve)": "ai-memory {{version}} installed · server down at {{url}} (run ai-memory serve)",
+  "Usar ai-memory nesta máquina": "Use ai-memory on this machine",
+  "Detecta o ai-memory (memória local compartilhada entre Claude Code, Codex e outras CLIs) e o servidor dele nesta máquina. O que ele guarda fica na máquina: nada vai para o termhub.": "Detects ai-memory (a local memory shared by Claude Code, Codex and other CLIs) and its server on this machine. What it stores stays on the machine: nothing goes to termhub.",
+  "Servidor local": "Local server",
+  "Verificar de novo": "Check again",
+  "Só endereços locais (127.0.0.1, localhost) ou de rede privada.": "Local (127.0.0.1, localhost) or private network addresses only."
 }

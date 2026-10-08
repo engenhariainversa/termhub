@@ -37,6 +37,9 @@ const decision = (over: Partial<ChatDecision> & { id: string }): ChatDecision =>
   suggested_count: 0,
   accepted_count: 0,
   auto_count: 0,
+  status: 'current',
+  expires_at: null,
+  supersedes: null,
   trust: 'person',
   created_at: '2026-09-24T10:00:00.000Z',
   ...over,
@@ -94,6 +97,12 @@ describe('precedentBacks', () => {
     const d = decision({ id: 'd1' });
     expect(precedentBacks([d], two, { answers: [{ selected: [0] }, { selected: [1] }] })).toBe(false);
     expect(precedentBacks([d], two, { answers: [{ selected: [0] }, { selected: [0] }] })).toBe(true);
+  });
+
+  it('a decision marked desatualizada, errada or substituída is no precedent (TER-1013)', () => {
+    for (const status of ['outdated', 'wrong', 'superseded'] as const) {
+      expect(precedentBacks([decision({ id: 'd1', status })], payload, { answers: [{ selected: [0] }] })).toBe(false);
+    }
   });
 
   it('no decisions backs nothing', () => {
@@ -255,6 +264,12 @@ describe('maybeScheduleRepeat', () => {
     expect(await maybeScheduleRepeat(same.repos, row({ payload: { questions: [described('rodar os testes de novo')] }, suggestion: { items: [item()] } }), now)).not.toBeNull();
   });
 
+  it('a cited decision a newer one replaced (TER-1015) → null: never a precedent', async () => {
+    const { repos, setAutoAnswer } = reposFor(true, [decision({ id: 'd1', superseded_at: '2026-10-03T12:04:00.000Z' })]);
+    expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now)).toBeNull();
+    expect(setAutoAnswer).not.toHaveBeenCalled();
+  });
+
   it('a cited decision forgotten since the suggestion (or another user\'s) → null', async () => {
     const { repos, setAutoAnswer } = reposFor(true, []);
     expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now)).toBeNull();
@@ -412,6 +427,15 @@ describe('sendDueAutoAnswers', () => {
     expect(repos.chatDecisions.findManyForUser).toHaveBeenCalledWith(['d1'], 'u1');
     expect(answer).not.toHaveBeenCalled();
     expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_FORGOTTEN');
+  });
+
+  it('a cited decision replaced by a newer one mid-countdown → failed PRECEDENT_SUPERSEDED, nothing typed (TER-1015)', async () => {
+    const { repos, tabQuestions } = fake();
+    repos.chatDecisions.findManyForUser.mockImplementationOnce(async (ids: string[]) => ids.map((id) => decision({ id, superseded_at: '2026-10-03T12:04:00.000Z' })));
+    const answer = vi.fn();
+    expect(await sendDueAutoAnswers(repos as unknown as Repositories, log(), { now, answer })).toBe(0);
+    expect(answer).not.toHaveBeenCalled();
+    expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_SUPERSEDED');
   });
 
   it('a cited decision downgraded to derived meanwhile is no precedent: PRECEDENT_FORGOTTEN (TER-1006)', async () => {

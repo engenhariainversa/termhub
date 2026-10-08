@@ -101,6 +101,10 @@ export interface Machine {
   /** a tab whose Claude hits a usage limit resumes on another Claude account of this machine, on its own */
   claude_auto_swap: boolean;
   automation_allowed: boolean;
+  /** TER-1018: "Usar ai-memory nesta máquina" (opt-in, off by default) */
+  ai_memory_enabled?: boolean;
+  /** its local server; null = the default `http://127.0.0.1:49374` */
+  ai_memory_url?: string | null;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */
@@ -375,6 +379,12 @@ export interface AutomationFeedEvent {
   paused: boolean | null;
   /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
   tool: string | null;
+  /** TER-1011: why an automatic answer or an escalation happened (reader's language); absent from an older server */
+  why_text?: string | null;
+  /** TER-1011: the precedent (`decision:<id>`, `note:<id>`) or allow rule it rests on */
+  rule_ref?: string | null;
+  /** TER-1011: the precedent's similarity, 0..1 */
+  score?: number | null;
 }
 export interface ProgressResponse {
   epics: EpicProgress[];
@@ -581,6 +591,8 @@ export interface ProjectSetupData {
   approvals: Record<'spec' | 'plan' | 'pr' | 'merge' | 'tool_permissions' | 'questions', DecisionMode>;
   /** absent from an older server; the form sends back what it received */
   automation?: ProjectAutomation;
+  /** TER-1019; absent from an older server */
+  ai_memory?: { publish_rules: boolean };
 }
 
 export interface ProjectSetup {
@@ -681,6 +693,11 @@ export interface TabEvent {
 }
 
 /** Monitor hooks on a machine (GET /machines/:id/hooks). */
+/** GET /machines/:id/ai-memory: off → not probed; on → what the machine reported. */
+export type AiMemoryState =
+  | { enabled: false; url: string }
+  | { enabled: true; url: string; checked_at: string; installed: boolean; version: string | null; server_up: boolean };
+
 export interface MachineHooks {
   installed_at: string | null;
   hooks_url: string;
@@ -1345,6 +1362,27 @@ export interface ChatDecision {
   suggested_count: number;
   accepted_count: number;
   created_at: string;
+  status: MemoryStatus;
+  expires_at: string | null;
+  superseded_by: MemorySuperseder | null;
+}
+/** Where a decision or a concierge note stands on the Memória screen (TER-1013): vigente, desatualizada,
+ * errada or substituída por outro item. Anything but `current` is out of the default memory search and
+ * never a precedent. */
+export type MemoryStatus = 'current' | 'outdated' | 'wrong' | 'superseded';
+/** The item that replaces a `superseded` one (`null` when it was forgotten since). */
+export interface MemorySuperseder {
+  ref: string;
+  title: string;
+}
+/** One candidate of the "Substituída por…" picker (`GET /chat/memory/replacements`). */
+export interface MemoryReplacement {
+  ref: string;
+  kind: 'decision' | 'note';
+  title: string;
+  detail: string;
+  project_name: string | null;
+  created_at: string;
 }
 /** `GET /chat/memory`: the suggestion switch, "Responder sozinho quando houver precedente" (spec D8),
  * whether embeddings are configured on this server at all (`available: false` hides both switches
@@ -1371,6 +1409,9 @@ export interface ConciergeNote {
   decision: string;
   reason: string;
   created_at: string;
+  status: MemoryStatus;
+  expires_at: string | null;
+  superseded_by: MemorySuperseder | null;
 }
 
 /** "Lições" (spec 2026-09-27 failure lessons §6/§8): one `lesson` item (chunk 0), as the "Lições"

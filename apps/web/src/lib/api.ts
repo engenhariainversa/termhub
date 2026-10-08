@@ -1,6 +1,6 @@
 import { currentLocale, i18n } from '../i18n';
-import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
-import type { FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, MemoryReplacement, MemoryStatus, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
+import type { AiMemoryState, FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -167,6 +167,7 @@ export const api = {
     hooks: (id: string) => request<MachineHooks>('GET', `/machines/${id}/hooks`),
     installHooks: (id: string) => request<MachineHooks & { claude: 'installed' | 'skipped'; codex: 'installed' | 'skipped'; cursor?: 'installed' | 'skipped' | 'agent_outdated'; claude_dirs?: string[] }>('POST', `/machines/${id}/hooks`),
     removeHooks: (id: string) => request<{ ok: true }>('DELETE', `/machines/${id}/hooks`),
+    aiMemory: (id: string) => request<AiMemoryState>('GET', `/machines/${id}/ai-memory`),
     startWdaSetup: (id: string) => request<{ ok: true }>('POST', `/machines/${id}/simulator/setup`, {}),
     /** subpastas de `path` (padrão $HOME) + discos/mounts da máquina */
     hardware: (id: string) => request<{ hardware: HardwareSnapshot }>('GET', `/machines/${id}/hardware`),
@@ -365,6 +366,18 @@ export const api = {
   },
   /** "Esquecer" a concierge note: hard delete, 204 even if it was already gone or someone else's. */
   forgetChatNote: (id: string) => request<void>('DELETE', `/chat/notes/${encodeURIComponent(id)}`),
+  /** "Desatualizada" / "Errada" / "Substituída por…" on a decision or a note (TER-1013); `current` is
+   *  "Desfazer". Answers the item as its list shows it. */
+  setDecisionStatus: (id: string, status: MemoryStatus, supersededBy?: string) =>
+    request<{ decision: ChatDecision }>('PUT', `/chat/decisions/${encodeURIComponent(id)}/status`, { status, superseded_by: supersededBy }),
+  setNoteStatus: (id: string, status: MemoryStatus, supersededBy?: string) =>
+    request<{ note: ConciergeNote }>('PUT', `/chat/notes/${encodeURIComponent(id)}/status`, { status, superseded_by: supersededBy }),
+  /** "Substituída por…"'s picker: current decisions and notes matching `q`, never `exclude` (the item being marked). */
+  memoryReplacements: (q: string, exclude: string) => {
+    const params = new URLSearchParams({ exclude });
+    if (q) params.set('q', q);
+    return request<{ items: MemoryReplacement[] }>('GET', `/chat/memory/replacements?${params.toString()}`);
+  },
   monitor: {
     tabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/tabs'),
     /** every open terminal tab of the scope, reported a state or not (the sidebar's agents) */

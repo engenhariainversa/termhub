@@ -39,6 +39,9 @@ import {
   lessonListSchema,
   meResponse,
   notesResponse,
+  decisionStatusResponse,
+  noteStatusResponse,
+  memoryReplacementsResponse,
   notificationsResponse,
   progressResponse,
   projectAiResponse,
@@ -373,6 +376,15 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       return call('GET', `/api/m/v1/chat/notes${qs ? `?${qs}` : ''}`, notesResponse, { token: a.accessToken });
     },
     forgetChatNote: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/notes/${encodeURIComponent(id)}`, { token: a.accessToken }),
+    setChatDecisionStatus: (a: Auth, id, status, supersededBy) =>
+      call('PUT', `/api/m/v1/chat/decisions/${encodeURIComponent(id)}/status`, decisionStatusResponse, { token: a.accessToken, body: { status, superseded_by: supersededBy } }).then((r) => r.decision),
+    setChatNoteStatus: (a: Auth, id, status, supersededBy) =>
+      call('PUT', `/api/m/v1/chat/notes/${encodeURIComponent(id)}/status`, noteStatusResponse, { token: a.accessToken, body: { status, superseded_by: supersededBy } }).then((r) => r.note),
+    chatMemoryReplacements: (a: Auth, q, exclude) => {
+      const params = new URLSearchParams({ exclude });
+      if (q) params.set('q', q);
+      return call('GET', `/api/m/v1/chat/memory/replacements?${params.toString()}`, memoryReplacementsResponse, { token: a.accessToken });
+    },
     chatLessons: (a: Auth, q, cursor) => {
       const params = new URLSearchParams();
       if (q) params.set('q', q);
