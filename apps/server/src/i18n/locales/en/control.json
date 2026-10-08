@@ -107,5 +107,8 @@
   "Não foi possível ler a configuração da máquina": "Could not read the machine's configuration",
   "Instalar os hooks mexe nos arquivos de configuração da máquina e precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.": "Installing the hooks changes the machine's config files and needs the person's confirmation in the chat. Nothing was changed: propose the call again.",
   "{{tools}} não está instalado nesta máquina: os hooks só são instalados para os CLIs que já estão lá. Nada foi alterado.": "{{tools}} is not installed on this machine: the hooks are only installed for the CLIs already there. Nothing was changed.",
-  "Esta ferramenta só funciona no chat do termhub: ela lê o contexto da própria conversa.": "This tool only works in the termhub chat: it reads the conversation's own context."
+  "Esta ferramenta só funciona no chat do termhub: ela lê o contexto da própria conversa.": "This tool only works in the termhub chat: it reads the conversation's own context.",
+  "Só a pessoa refaz o login de uma conta de IA, nunca um agente numa aba": "Only the person redoes an AI account's login, never an agent in a tab",
+  "Só a dona da máquina pode refazer o login": "Only the machine's owner can redo the login",
+  "Sem permissão para escrever nas abas": "No permission to type into tabs"
 }

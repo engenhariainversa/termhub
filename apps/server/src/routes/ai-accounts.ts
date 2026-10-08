@@ -4,6 +4,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
 import { forgetAccountUsage, getAccountUsage } from '../ai/index.js';
+import { aiLogin } from '../ai/login.js';
 import { setAccountExclusive } from '../control/account-exclusive.js';
 import { ControlError, controlContextForRequest } from '../control/context.js';
 
@@ -50,6 +51,8 @@ export async function aiAccountRoutes(app: FastifyInstance, repos: Repositories)
       });
     }
     forgetAccountUsage(id);
+    // Another machine or config dir is another login: its state is checked again, an open flow ends.
+    if (patch.machine_id !== undefined || patch.config_dir !== undefined) aiLogin.forget(id);
     return { account: await repos.aiAccounts.update(id, { ...patch, config_dir: patch.config_dir === undefined ? undefined : patch.config_dir || null }) };
   });
 
@@ -58,6 +61,7 @@ export async function aiAccountRoutes(app: FastifyInstance, repos: Repositories)
     await scoped(repos, request).aiAccount(id);
     await repos.aiAccounts.delete(id);
     forgetAccountUsage(id);
+    aiLogin.forget(id);
     return { ok: true };
   });
 
