@@ -185,6 +185,34 @@ export class AutomationRunsRepository {
   }
 
   /**
+   * A `blocked` run to `done`, once (TER-1049: a PR from its branch showed up after the block). Whoever drives
+   * it: the run ended, so its colour may be gone. `ended_at` and `waiting_reason` stay (the run did end then,
+   * and why it was blocked stays readable). False when the run was not blocked: another colour adopted it first.
+   */
+  async finishBlockedAsDone(id: string): Promise<boolean> {
+    const { count } = await this.db.automationRun.updateMany({ where: { id, status: 'blocked' }, data: { status: 'done' } });
+    return count === 1;
+  }
+
+  /**
+   * The project's `blocked` implementer runs that ended at `since` or later, with a branch (TER-1049): the
+   * ones a PR from their branch may still adopt. Markers (`insertMarker`) are left out by their trigger.
+   */
+  async blockedSince(projectId: string, since: Date): Promise<AutomationRun[]> {
+    const rows = await this.db.automationRun.findMany({
+      where: { projectId, status: 'blocked', role: 'implementer', taskId: { not: null }, branch: { not: null }, triggerSha: null, endedAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map(map);
+  }
+
+  /** The card's newest run, in any status (markers included). */
+  async latestOfTask(taskId: string): Promise<AutomationRun | null> {
+    const row = await this.db.automationRun.findFirst({ where: { taskId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    return row ? map(row) : null;
+  }
+
+  /**
    * Releases a claim that never started (no place for it, or the card changed after the claim): the row
    * goes away, so the card is free again and no event or history is left per tick. Only the claiming
    * instance releases, and only before the run started.

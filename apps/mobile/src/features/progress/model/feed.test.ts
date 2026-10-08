@@ -23,6 +23,9 @@ describe('feedLine', () => {
     // TER-987: a start that failed says why
     expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'A máquina não respondeu' }))).toBe('TER-9 não começou: A máquina não respondeu');
     expect(feedLine(ev({ kind: 'run_blocked' }))).toBe('TER-9: parou e espera você');
+    // TER-1049: a blocked run a PR took over says so
+    expect(feedLine(ev({ kind: 'run_done', reason_text: 'PR aberto depois do bloqueio; o automático acompanha até o merge' }))).toBe('TER-9: PR aberto depois do bloqueio; o automático acompanha até o merge');
+    expect(feedLine(ev({ kind: 'run_done' }))).toBe('TER-9: agente terminou');
     // TER-975: changes to what automatic work may do
     expect(feedLine(ev({ kind: 'automation_on' }))).toBe('Automático ligado no projeto');
     expect(feedLine(ev({ kind: 'tagged' }))).toBe('TER-9: marcado como automático');

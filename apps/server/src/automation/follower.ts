@@ -25,6 +25,7 @@ import { writesDegraded, type GithubHealthReader } from '../integrations/github-
 import { MAX_RESTARTS } from './restart.js';
 import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, GITHUB_TRANSIENT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
+import { postAutomationLine } from './chat-line.js';
 export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
 
@@ -324,8 +325,14 @@ async function placeDoneCard(repos: Repositories, run: AutomationRun, log: Log):
 
 /** Ends the run `done` (a report, a PR from its branch, or its card's PR merged) and places its card (not
  *  after a merge: the merge already moved it to done). False when another instance wrote it first. */
-async function finishDone(repos: Repositories, run: AutomationRun, via: 'report_card' | 'pull_request' | 'merged', pr: { url: string; number?: number } | null, log: Log): Promise<boolean> {
+async function finishDone(repos: Repositories, run: AutomationRun, via: Exclude<RunDoneVia, typeof ADOPTED_VIA>, pr: { url: string; number?: number } | null, log: Log): Promise<boolean> {
   if (!(await writeRun(repos, run, { status: 'done', waiting_reason: null, ended_at: new Date() }))) return false;
+  await recordDone(repos, run, via, pr, log);
+  return true;
+}
+
+/** What follows the write that ended a run `done`: its card placed (not after a merge), `run_done` and `pr_opened`. */
+async function recordDone(repos: Repositories, run: AutomationRun, via: RunDoneVia, pr: { url: string; number?: number } | null, log: Log): Promise<void> {
   if (via !== 'merged') await placeDoneCard(repos, run, log);
   const base = { project_id: run.project_id, task_id: run.task_id, run_id: run.id };
   await recordEvent(repos, { ...base, kind: 'run_done', payload: { via, tab_id: run.tab_id, pr_url: pr?.url ?? null } }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_done not recorded'));
@@ -335,7 +342,45 @@ async function finishDone(repos: Repositories, run: AutomationRun, via: 'report_
     );
   }
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, via }, 'automation: run done');
-  return true;
+}
+
+/** How a run ended `done` (`run_done.payload.via`). */
+export type RunDoneVia = 'report_card' | 'pull_request' | 'merged' | typeof ADOPTED_VIA;
+
+/** `run_done.payload.via` of a blocked run whose branch got a PR afterwards (TER-1049). */
+export const ADOPTED_VIA = 'pull_request_after_blocked';
+
+/** How long after a blocked run ended a PR from its branch still adopts it (spike TER-1031 §8): an old
+ *  blocked card picked up much later is a person's own PR. */
+export const ADOPT_WINDOW_MS = 7 * 24 * 3600_000;
+
+/**
+ * A PR from the branch of a run that already ended `blocked` (spike TER-1031 §5.1–5.3): the work was finished
+ * by hand, and the merge executor already follows the PR, so the run is adopted — `blocked → done` once,
+ * `run_done` (`via: pull_request_after_blocked`) and `pr_opened` recorded, and one line, no push, in the
+ * project chat the block was told in. Only the implementer run with a branch that ended within ADOPT_WINDOW_MS,
+ * whose card is still tagged and has no newer run (one dispatched again owns the PR; an active run is newer
+ * too). Run by the CI sync right after it links the PRs, on either colour: one conditional write decides
+ * which. Returns how many runs this call adopted. Never throws.
+ */
+export async function adoptBlockedRuns(repos: Repositories, projectId: string, log: Log = noopLog, now: Date = new Date()): Promise<number> {
+  let adopted = 0;
+  try {
+    for (const run of await repos.automationRuns.blockedSince(projectId, new Date(now.getTime() - ADOPT_WINDOW_MS))) {
+      if (!run.task_id) continue;
+      const task = await repos.tasks.findById(run.task_id);
+      if (!task?.auto) continue;
+      if ((await repos.automationRuns.latestOfTask(task.id))?.id !== run.id) continue;
+      const pr = await openPrOfRun(repos, run);
+      if (!pr || !(await repos.automationRuns.finishBlockedAsDone(run.id))) continue;
+      adopted++;
+      await recordDone(repos, run, ADOPTED_VIA, pr, log);
+      await postAutomationLine(repos, projectId, (locale) => t(locale, 'PR #{{n}} do {{ref}} aberto depois do bloqueio; o automático acompanha até o merge', { n: pr.number, ref: task.ref }), log);
+    }
+  } catch (e) {
+    log.warn({ projectId, code: errorCode(e) }, 'automation: blocked runs not adopted');
+  }
+  return adopted;
 }
 
 /** Ends the run `blocked` and escalates it (spec D15, D17). */

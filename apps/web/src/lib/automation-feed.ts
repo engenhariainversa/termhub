@@ -24,7 +24,8 @@ export function feedLine(e: AutomationFeedEvent): string | null {
     case 'run_resumed':
       return t('{{ref}}: retomado', { ref });
     case 'run_done':
-      return t('{{ref}}: agente terminou', { ref });
+      // a blocked run a PR from its branch took over says so (TER-1049)
+      return e.reason_text ? t('{{ref}}: {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: agente terminou', { ref });
     case 'run_blocked':
       // a start that failed says why (TER-987)
       return e.reason_text ? t('{{ref}} não começou: {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: parou e espera você', { ref });

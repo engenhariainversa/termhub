@@ -74,6 +74,8 @@
   "A execução terminou, mas o PR continua com conflito em {{sha}} (nenhum push novo); resolva o conflito e o termhub mescla quando o CI ficar verde.": "La ejecución terminó, pero el PR sigue con conflicto en {{sha}} (ningún push nuevo); resuelve el conflicto y termhub lo fusiona cuando la CI esté en verde.",
   "O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.": "El PR sigue con conflicto después de los intentos de corrección; resuelve el conflicto y termhub lo fusiona cuando la CI esté en verde.",
   "Automático mesclou o PR #{{n}} de {{ref}}: {{url}}": "El trabajo automático fusionó el PR #{{n}} de {{ref}}: {{url}}",
+  "PR #{{n}} do {{ref}} aberto depois do bloqueio; o automático acompanha até o merge": "PR #{{n}} de {{ref}} abierto después del bloqueo; el trabajo automático lo sigue hasta el merge",
+  "PR aberto depois do bloqueio; o automático acompanha até o merge": "PR abierto después del bloqueo; el trabajo automático lo sigue hasta el merge",
   "O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.": "El despliegue falló después del merge; el trabajo automático del proyecto se pausó. Revisa el despliegue y reanúdalo cuando esté resuelto.",
   "Um workflow de publicação falhou depois do merge; confira a execução.": "Un workflow de publicación falló después del merge; revisa la ejecución.",
   "O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.": "El despliegue falló después del merge y el trabajo automático del proyecto no se pudo pausar; pausa el proyecto y revisa el despliegue.",
