@@ -73,7 +73,7 @@ const START_AGENT_RESTRICTIONS_NOTE =
 
 /** TER-851: how the concierge relays the person's order so the tab can tell it is theirs. */
 const ON_BEHALF_NOTE =
-  "The tab's session is told who wrote each text: without on_behalf_of, what you send reads as your own words, not the person's. When you relay something the person asked for, pass on_behalf_of with the search_memory refs (message:…, kinds [\"message\"]) of their chat messages that ask for it, at most 24 h old; the tab sees their exact words next to your text. Never write in the person's name (\"<name> aqui…\", \"<name> autorizou…\"): say what to do and let the quote carry the authority.";
+  "The tab's session is told who wrote each text: without on_behalf_of, what you send reads as your own words, not the person's. When you relay something the person asked for, pass on_behalf_of with the refs of their chat messages that ask for it (message:…, the ref each message they type comes with, or a search_memory ref of kind \"message\"), at most 24 h old; the tab sees their exact words next to your text. Never write in the person's name (\"<name> aqui…\", \"<name> autorizou…\"): say what to do and let the quote carry the authority.";
 
 /** The object schema a tool's arguments are validated against — by `parseArgs` and by the MCP SDK. */
 export function inputSchemaOf(tool: ToolDef) {

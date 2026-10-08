@@ -83,7 +83,7 @@
   "não existe": "no existe",
   "não é uma mensagem do chat": "no es un mensaje del chat",
   "on_behalf_of só vale no chat do termhub: só ele tem as mensagens da pessoa": "on_behalf_of solo funciona en el chat de termhub: solo él tiene los mensajes de la persona",
-  "on_behalf_of: {{ref}} {{why}}. Use a ref message:… que o search_memory devolve para uma mensagem da pessoa das últimas 24 h.": "on_behalf_of: {{ref}} {{why}}. Usa la ref message:… que search_memory devuelve para un mensaje de la persona de las últimas 24 h.",
+  "on_behalf_of: {{ref}} {{why}}. Use a ref message:… que acompanha a mensagem da pessoa, ou a que o search_memory devolve, de uma mensagem das últimas 24 h.": "on_behalf_of: {{ref}} {{why}}. Usa la ref message:… que acompaña el mensaje de la persona, o la que devuelve search_memory, de un mensaje de las últimas 24 h.",
   "pergunta não registrada": "pregunta no registrada",
   "{{binary}} não foi detectado em {{machine}} (list_machines mostra o que cada máquina tem). Se está instalado: com agente, atualize o termhub-agent (0.2.3 ou mais novo) e deixe-o reconectar; em máquina local/ssh, abra a lista de máquinas no app para refazer a detecção.": "{{binary}} no se detectó en {{machine}} (list_machines muestra lo que tiene cada máquina). Si está instalado: con agente, actualiza termhub-agent (0.2.3 o más reciente) y deja que se reconecte; en una máquina local/ssh, abre la lista de máquinas en la app para repetir la detección.",
   "{{key}} é ambíguo: {{names}}. Use a chave completa.": "{{key}} es ambiguo: {{names}}. Usa la clave completa.",
