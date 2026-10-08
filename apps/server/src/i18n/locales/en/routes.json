@@ -7,6 +7,7 @@
   "Token não encontrado": "Token not found",
   "O arquivo deste anexo não está mais disponível": "This attachment's file is no longer available",
   "Este anexo já foi enviado": "This attachment was already sent",
+  "Este anexo não pode ser processado de novo": "This attachment cannot be processed again",
   "O arquivo continua no repositório; apague-o por um PR para sumir de vez": "The file is still in the repository; delete it in a PR to remove it for good",
   "O chat só roda em uma máquina com o agente do termhub instalado": "The chat only runs on a machine with the termhub agent installed",
   "Conta de IA não encontrada nessa máquina": "AI account not found on that machine",

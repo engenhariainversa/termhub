@@ -51,7 +51,7 @@ After:
 2. Only a verified version becomes the "latest" the app shows and the auto-update installs. A version
    that fails is logged (`warn`) and skipped: the previous verified version stays, so the app never
    offers an update the server could not vouch for. Verification is retried on the next hourly poll.
-3. `agent.update` carries the approved `integrity`. An agent that knows it (0.20.0+) downloads the
+3. `agent.update` carries the approved `integrity`. An agent that knows it (0.22.0+) downloads the
    tarball with `npm pack @termhub/agent@<version>` into a private temp dir, checks its SHA-512
    against `integrity`, and installs **that file** (`npm install -g <file>.tgz`). A mismatch fails the
    update without installing anything. Older agents ignore the field and install by version, which npm
@@ -68,7 +68,7 @@ Before: deleting a machine dropped the agent's connection (4401) and the row; th
 service, the hooks and the tabs' tmux sessions stayed on the machine, and the service kept retrying
 until it saw the 4401.
 
-After, the delete dialog of an **online agent machine on agent 0.20.0+** has a checkbox (on by
+After, the delete dialog of an **online agent machine on agent 0.22.0+** has a checkbox (on by
 default) "Também desinstalar da máquina". With it, `DELETE /api/machines/:id?uninstall=1`:
 
 1. removes the monitor hooks (`hooks.uninstall`, with the Claude account dirs, as "remover hooks" does);
@@ -99,7 +99,7 @@ So it cannot simply stop when no machine has auto-update on. What changes: the p
 
 - Auto-update and the update button: same behaviour for everyone, but a release whose provenance does
   not verify is no longer offered. Nothing to configure.
-- Deleting a machine: the uninstall checkbox is on by default for online agents on 0.20.0+; unticking
+- Deleting a machine: the uninstall checkbox is on by default for online agents on 0.22.0+; unticking
   it keeps today's behaviour. Offline/older machines get the manual steps. Default, per action.
 - Servers with no agent connected stop polling npm until one connects.
 - The credential change (§1) is a proposal only; nothing changes for anyone yet.

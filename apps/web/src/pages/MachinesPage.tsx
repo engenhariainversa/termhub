@@ -10,7 +10,7 @@ import { ConfirmDialog } from '../components/Modal';
 import { PageFrame } from '../components/PageHeader';
 import { Trans, useTranslation } from '../i18n';
 
-/** Shell commands to remove an agent by hand (offline or older than 0.20.0); commands, not copy, so not translated. */
+/** Shell commands to remove an agent by hand (offline or older than 0.22.0); commands, not copy, so not translated. */
 const MANUAL_UNINSTALL_STEPS = ['termhub-agent service uninstall', 'termhub-agent disconnect', 'npm rm -g @termhub/agent'].join('\n');
 
 /** `/machines`: every machine in the scope, with the projects it's linked to and edit/delete actions. */

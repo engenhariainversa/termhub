@@ -2,7 +2,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { SHA512_INTEGRITY_RE } from '@termhub/agent-protocol';
 import type { Bundle, VerifyOptions } from 'sigstore';
-import { httpJson, isObj } from '../ai/credentials.js';
+import { httpJson } from '../lib/http-json.js';
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * Provenance check of an @termhub/agent release before the server offers it (spec 2026-10-07 agent

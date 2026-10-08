@@ -15,6 +15,7 @@ const setHostMock = vi.fn();
 const machinesMock = vi.fn();
 const accountsMock = vi.fn();
 const resetMock = vi.fn();
+const deleteChatMock = vi.fn();
 const revokeMock = vi.fn();
 const answerMock = vi.fn();
 const screenMock = vi.fn();
@@ -54,6 +55,7 @@ vi.mock('../../lib/api', () => {
       decideChatActions: (...a: unknown[]) => decideManyMock(...a),
       setChatHost: (...a: unknown[]) => setHostMock(...a),
       resetChat: (...a: unknown[]) => resetMock(...a),
+      deleteChat: (...a: unknown[]) => deleteChatMock(...a),
       compactChat: (...a: unknown[]) => compactMock(...a),
       revokeChatGrant: (...a: unknown[]) => revokeMock(...a),
       answerTabQuestion: (...a: unknown[]) => answerMock(...a),
@@ -276,6 +278,30 @@ it('Nova conversa asks first, resets, and swaps in the empty conversation', asyn
   expect(resetMock).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Começar de novo' }));
   await waitFor(() => expect(resetMock).toHaveBeenCalledWith('p1'));
+  await waitFor(() => expect(screen.queryByText('antigo')).toBeNull());
+});
+
+it('Apagar conversa asks first, deletes, and swaps in the empty conversation (TER-743)', async () => {
+  chatMock
+    .mockResolvedValueOnce({
+      conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
+      messages: [{ id: 'm1', conversation_id: 'c_p1', role: 'user', text: 'antigo', error_code: null, created_at: '' }],
+      actions: [],
+      host: READY,
+    })
+    .mockResolvedValue({ conversation: { id: 'c_new', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY });
+  deleteChatMock.mockResolvedValue({ conversation: { id: 'c_new', project_id: 'p1' } });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await screen.findByText('antigo');
+  fireEvent.click(screen.getByRole('button', { name: 'Apagar conversa' }));
+  expect(deleteChatMock).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Apagar' }));
+  await waitFor(() => expect(deleteChatMock).toHaveBeenCalledWith('p1'));
+  expect(resetMock).not.toHaveBeenCalled();
   await waitFor(() => expect(screen.queryByText('antigo')).toBeNull());
 });
 
@@ -1480,6 +1506,31 @@ describe('which answers are being written (spec 2026-09-29 §5)', () => {
     await waitFor(() => expect(resetMock).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByText('resposta antiga')).toBeNull());
     expect(screen.queryByText('antiga')).toBeNull();
+  });
+
+  it('TER-468: a read of the old conversation that answers after "Nova conversa" does not bring it back', async () => {
+    let resolveStale!: (value: unknown) => void;
+    chatMock
+      .mockResolvedValueOnce(thread([q('q1', 'antiga', 0), a('a1', 1, 'resposta antiga')], []))
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveStale = resolve)))
+      .mockResolvedValue(thread([q('q2', 'nova', 2)], [], 'c2'));
+    resetMock.mockResolvedValue({ conversation: { id: 'c2' } });
+    mount();
+    await screen.findByText('resposta antiga');
+    // A reconnect re-reads the old conversation; its answer is slow.
+    let stale!: Promise<void>;
+    act(() => {
+      stale = onReconnect();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Nova conversa' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Começar de novo' }));
+    expect(await screen.findByText('nova')).toBeInTheDocument();
+    await act(async () => {
+      resolveStale(thread([q('q1', 'antiga', 0), a('a1', 1, 'resposta antiga')], []));
+      await stale;
+    });
+    expect(screen.getByText('nova')).toBeInTheDocument();
+    expect(screen.queryByText('resposta antiga')).toBeNull();
   });
 
   it('a final message held before the panel knew its conversation reaches the thread', async () => {

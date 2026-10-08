@@ -15,6 +15,25 @@ export const docPath = z.string().regex(DOC_PATH_RE);
 export const SHA512_INTEGRITY_RE = /^sha512-[A-Za-z0-9+/]{86}==$/;
 export const aiProvider = z.enum(['claude', 'chatgpt', 'gemini', 'antigravity']);
 
+/** One usage window of an AI account (`ai.usage`); mirrors @termhub/machine-ops AiUsageWindow. */
+export const aiUsageWindow = z.object({
+  key: z.string().max(200),
+  label: z.string().max(200),
+  utilization: z.number().min(0).max(100),
+  resets_at: z.string().max(64).nullable(),
+  model: z.string().max(64).optional(),
+});
+/** `ai.usage` answer; mirrors @termhub/machine-ops AiUsageResult. Never carries the credential. */
+export const aiUsageResult = z.object({
+  ok: z.boolean(),
+  plan: z.string().max(100).nullable(),
+  windows: z.array(aiUsageWindow).max(50),
+  error: z.string().max(500).nullable(),
+  hint: z.string().max(500).nullable(),
+  rate_limited: z.boolean().optional(),
+  retry_after_ms: z.number().min(0).nullable().optional(),
+});
+
 /** A tab id, as minted by the server (see @termhub/machine-ops TAB_ID_RE, which this must match). */
 export const TAB_ID_RE = /^[a-z0-9]{1,64}$/;
 export const tabId = z.string().regex(TAB_ID_RE);
@@ -77,6 +96,9 @@ export const rpcErrorSchema = z.object({
 });
 export type RpcError = z.infer<typeof rpcErrorSchema>;
 
+/** Our hook entries in one config file (`HookEntriesState` in @termhub/machine-ops). */
+const hookEntriesState = z.enum(['missing', 'outdated', 'current', 'unreadable']);
+
 const DEFAULT_TIMEOUT = 8_000;
 const def = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(params: P, result: R, timeoutMs = DEFAULT_TIMEOUT) => ({ params, result, timeoutMs });
 
@@ -133,7 +155,13 @@ export const RPC = {
     }),
     z.object({ stdout: z.string() }),
   ),
-  'ai.credential': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), z.object({ stdout: z.string() }), 10_000),
+  /**
+   * Usage of the AI account whose CLI login lives in `config_dir` (spec 2026-10-07 ai-usage-on-machine,
+   * D2; since agent 0.20.0, replacing `ai.credential`). The credential is read and used on the machine,
+   * which asks the provider itself: only the numbers travel. Code Assist makes up to four sequential
+   * 12 s calls, hence the timeout.
+   */
+  'ai.usage': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), aiUsageResult, 60_000),
   /**
    * A secret the machine already holds, read for the server to store encrypted (spec 2026-09-28 MCP
    * integrations D1/D2). One source only: `gh_auth_token` (`gh auth token`); new sources are added one
@@ -278,8 +306,22 @@ export const RPC = {
   ),
   'hooks.uninstall': def(z.object({ claude_dirs: z.array(machinePath).max(16).optional() }), z.object({ removed: z.boolean() }), 15_000),
   /**
+   * What the monitor hooks look like here (`hooksStatus` in @termhub/machine-ops, TER-1023): states only,
+   * never a file's content or the token. `claude_dirs` as in `hooks.install`. Since agent 0.21.0.
+   */
+  'hooks.status': def(
+    z.object({ claude_dirs: z.array(machinePath).max(16).optional() }),
+    z.object({
+      script: z.object({ installed: z.boolean(), version: z.string().max(64).nullable(), expected_version: z.string().max(64), outdated: z.boolean() }),
+      claude: z.object({ present: z.boolean(), state: hookEntriesState, dirs: z.array(z.object({ dir: z.string().max(4096), state: hookEntriesState })).max(64) }),
+      codex: z.object({ present: z.boolean(), state: hookEntriesState, notify: z.boolean(), trusted: z.enum(['all', 'some', 'none']).nullable() }),
+      cursor: z.object({ present: z.boolean(), state: hookEntriesState }),
+    }),
+    15_000,
+  ),
+  /**
    * Installs `version` of @termhub/agent with npm; when the agent runs as a service it then exits so the service relaunches the new code (since agent 0.2.1).
-   * `integrity`: the `sha512-…` the server verified against the release's provenance (spec 2026-10-07 agent release trust). Since agent 0.20.0
+   * `integrity`: the `sha512-…` the server verified against the release's provenance (spec 2026-10-07 agent release trust). Since agent 0.22.0
    * the agent downloads the tarball, checks it against this and installs that file; older agents strip the field and install by version.
    */
   'agent.update': def(
@@ -288,7 +330,7 @@ export const RPC = {
     180_000,
   ),
   /**
-   * "Uninstall from the machine" before the machine is deleted (since agent 0.20.0): removes the service definition, deletes the agent's
+   * "Uninstall from the machine" before the machine is deleted (since agent 0.22.0): removes the service definition, deletes the agent's
    * config (its token), replies, then stops. `service`: whether a launchd/systemd service was there to remove. Hooks and tmux sessions
    * are removed by the server through `hooks.uninstall` / `tmux.kill` first.
    */

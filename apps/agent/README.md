@@ -69,13 +69,13 @@ time the new agent starts.
 The agent updates itself when the server asks it to (the update button in Máquinas, or hourly on
 machines with auto-update on): it installs the new version with npm and, when it runs as a service,
 restarts into it. The server first verifies each release against its npm provenance (signed by this
-repository's publish workflow) and sends the tarball's SHA-512 with the request; since 0.20.0 the
+repository's publish workflow) and sends the tarball's SHA-512 with the request; since 0.22.0 the
 agent downloads the tarball into a private temp dir, checks it against that SHA-512 and installs only
 that file, failing the update without installing anything when they differ.
 
 ## Remove from a machine
 
-When you delete an online machine running agent 0.20.0 or later, the delete dialog offers
+When you delete an online machine running agent 0.22.0 or later, the delete dialog offers
 **Também desinstalar da máquina** (on by default). It removes the monitor hooks, closes the tmux
 sessions of the machine's tabs, removes the background service and deletes the agent's config (its
 token); the agent then stops. The npm package stays installed: remove it with

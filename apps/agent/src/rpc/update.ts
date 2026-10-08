@@ -16,7 +16,7 @@ import { AGENT_VERSION } from '../version.js';
  * service definition. npm always runs in argv form: the version and integrity are validated by
  * the RPC schema and never reach a shell.
  *
- * With `integrity` (since 0.20.0, spec 2026-10-07 agent release trust): the server has verified
+ * With `integrity` (since 0.22.0, spec 2026-10-07 agent release trust): the server has verified
  * the release's provenance and sends the `sha512-…` it vouches for. The agent downloads the
  * tarball with `npm pack @termhub/agent@<version>` into a private temp dir, checks its SHA-512
  * against `integrity`, and installs that very file (`npm install -g <abs>.tgz`); a mismatch

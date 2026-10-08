@@ -11,8 +11,8 @@ vi.mock('../lib/data', () => {
   const machines = [
     { id: 'm1', name: 'mac', subtitle: 'MacBook do escritório', type: 'agent', capabilities: [], is_local: false, os: null, owner_name: null, hooks_installed_at: new Date().toISOString() },
     { id: 'm2', name: 'jarvis', type: 'agent', capabilities: [], is_local: false, os: null, owner_name: null, hooks_installed_at: new Date().toISOString() },
-    { id: 'm3', name: 'mini', type: 'agent', agent_version: '0.20.0', capabilities: [], is_local: false, os: null, owner_name: null, hooks_installed_at: new Date().toISOString() },
-    { id: 'm4', name: 'old', type: 'agent', agent_version: '0.19.3', capabilities: [], is_local: false, os: null, owner_name: null, hooks_installed_at: new Date().toISOString() },
+    { id: 'm3', name: 'mini', type: 'agent', agent_version: '0.22.0', capabilities: [], is_local: false, os: null, owner_name: null, hooks_installed_at: new Date().toISOString() },
+    { id: 'm4', name: 'old', type: 'agent', agent_version: '0.21.3', capabilities: [], is_local: false, os: null, owner_name: null, hooks_installed_at: new Date().toISOString() },
   ];
   const projects = [
     { id: 'p1', key: 'ALPHA', name: 'alpha', status: 'active', machines: [{ machine_id: 'm1', cwd: '/a', position: 0 }] },
@@ -98,7 +98,7 @@ describe('MachinesPage', () => {
     fireEvent.click(within(row).getByRole('button', { name: '✕' }));
   };
 
-  it('offers to uninstall an online agent on 0.20.0+, ticked by default', async () => {
+  it('offers to uninstall an online agent on 0.22.0+, ticked by default', async () => {
     deleteMachine.mockResolvedValue(undefined);
     mount();
     openDelete('mini');
@@ -133,14 +133,14 @@ describe('MachinesPage', () => {
     finish();
   });
 
-  it('shows the manual uninstall steps for an offline agent or one older than 0.20.0', () => {
+  it('shows the manual uninstall steps for an offline agent or one older than 0.22.0', () => {
     mount();
     openDelete('mac'); // offline
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByText(/O agente continua instalado na máquina/)).toBeInTheDocument();
     expect(screen.getByText(/termhub-agent service uninstall/)).toHaveTextContent('npm rm -g @termhub/agent');
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
-    openDelete('old'); // online, but 0.19.3
+    openDelete('old'); // online, but 0.21.3
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByText(/termhub-agent disconnect/)).toBeInTheDocument();
   });

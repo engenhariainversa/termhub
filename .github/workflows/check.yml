@@ -18,6 +18,8 @@ jobs:
           cache: npm
       - name: Testes do smoke test e do rollback automático (deploy/)
         run: bash deploy/post-deploy.test.sh
+      - name: Testes do ensure-secrets (deploy/)
+        run: bash deploy/ensure-secrets.test.sh
       - name: Instalar dependências
         run: npm ci
       - name: Gerar Prisma Client
@@ -43,7 +45,20 @@ jobs:
       - name: Typecheck + build concierge
         run: npm run typecheck -w @termhub/concierge && npm run build -w @termhub/concierge
       - name: Instalar tmux (teste e2e do agente)
-        run: sudo apt-get update && sudo apt-get install -y tmux
+        # A hung Ubuntu mirror once held `apt-get update` until the job timeout cancelled the whole
+        # check; bound each attempt and retry instead (docs/lessons/2026-10-07-ci-apt-get-update-hangs.md).
+        timeout-minutes: 8
+        run: |
+          if command -v tmux >/dev/null; then exit 0; fi
+          apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          for attempt in 1 2 3; do
+            if sudo timeout 120 apt-get $apt_opts update && sudo timeout 120 apt-get $apt_opts install -y tmux; then
+              exit 0
+            fi
+            echo "apt-get failed or timed out (attempt $attempt); retrying"
+            sleep 10
+          done
+          exit 1
       - name: Aplicar migrations (testes de repositório usam o Postgres)
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub

@@ -48,4 +48,4 @@ export function versionAtLeast(version: string | null | undefined, min: string):
 }
 
 /** First agent release that can uninstall itself when its machine is deleted (`DELETE /machines/:id?uninstall=1`). */
-export const AGENT_UNINSTALL_MIN_VERSION = '0.20.0';
+export const AGENT_UNINSTALL_MIN_VERSION = '0.22.0';

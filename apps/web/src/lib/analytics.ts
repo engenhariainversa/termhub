@@ -29,6 +29,8 @@ export type AnalyticsEvent = 'page_view' | 'login' | 'machine_enroll_start' | 'm
 let pending: Promise<Analytics | null> | null = null;
 /** Set by `disableAnalytics`: withdrawing consent has to bite on this page view, not the next one. */
 let disabled = false;
+/** The current route as reported (`pagePath`), kept even before consent so the SDK starts on it. */
+let currentPath = '/';
 
 function firebaseConfig() {
   return {
@@ -100,7 +102,11 @@ function setCollection(enabled: boolean): Promise<void> {
 async function load(): Promise<Analytics | null> {
   const sdk = await loadSdk();
   if (!sdk || !(await sdk.isSupported())) return null;
-  const analytics = sdk.getAnalytics(sdk.initializeApp(firebaseConfig()));
+  // `send_page_view: false`: the SDK's automatic page_view would carry the raw URL; `trackPageView`
+  // sends ours. `page_location` replaces the raw URL that gtag otherwise attaches to every event.
+  const analytics = sdk.initializeAnalytics(sdk.initializeApp(firebaseConfig()), {
+    config: { send_page_view: false, page_location: pageLocation() },
+  });
   // the user may have withdrawn consent while the SDK was loading
   if (disabled) {
     sdk.setAnalyticsCollectionEnabled(analytics, false);
@@ -158,12 +164,36 @@ export function track(event: AnalyticsEvent, params?: Record<string, string | nu
   });
 }
 
-/** The route as reported to GA: project ids are replaced so no identifier leaves the app. */
+/** Routes whose segment after the prefix is an identifier (see the routes in `App.tsx`). */
+const ID_ROUTES: ReadonlyArray<[RegExp, string]> = [
+  [/^\/projects\/[^/]+/, '/projects/:id'],
+  [/^\/project\/[^/]+/, '/project/:ref'],
+  [/^\/office\/[^/]+/, '/office/:projectId'],
+];
+
+/** The route as reported to GA: project ids and card refs are replaced so no identifier leaves the app. */
 export function pagePath(pathname: string): string {
-  return pathname.replace(/^\/projects\/[^/]+/, '/projects/:id');
+  for (const [pattern, replacement] of ID_ROUTES) {
+    if (pattern.test(pathname)) return pathname.replace(pattern, replacement);
+  }
+  return pathname;
 }
 
-/** Reports a route change. The SDK's automatic page_view is not used, since it would carry the raw URL. */
+/** The URL GA sees for the current route: origin plus `pagePath`, never the query string or hash. */
+function pageLocation(): string {
+  return `${window.location.origin}${currentPath}`;
+}
+
+/** Reports a route change. The SDK's automatic page_view is off, since it would carry the raw URL. */
 export function trackPageView(pathname: string): void {
-  track('page_view', { page_path: pagePath(pathname) });
+  currentPath = pagePath(pathname);
+  if (!ANALYTICS_ENABLED || disabled || !pending) return;
+  const page_location = pageLocation();
+  void pending.then(async (analytics) => {
+    if (!analytics || disabled) return;
+    const sdk = await loadSdk();
+    // every later event (ours and the SDK's own, like user_engagement) reports this route
+    sdk?.setDefaultEventParameters({ page_location });
+  });
+  track('page_view', { page_path: currentPath, page_location });
 }

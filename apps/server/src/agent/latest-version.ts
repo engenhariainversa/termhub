@@ -1,4 +1,4 @@
-import { httpJson } from '../ai/credentials.js';
+import { httpJson } from '../lib/http-json.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError } from '../lib/errors.js';
 import { AgentClosedError, AgentRpcError } from './connection.js';
@@ -28,7 +28,7 @@ export interface VersionLog {
 }
 
 /** First agent that knows the agent.uninstall RPC ("uninstall from the machine" on delete). */
-export const AGENT_UNINSTALL_MIN_VERSION = '0.20.0';
+export const AGENT_UNINSTALL_MIN_VERSION = '0.22.0';
 
 let cached: VerifiedRelease | null = null;
 /** version → when its verification last failed, so a bad release is retried once per poll, not in a loop. */
@@ -158,7 +158,7 @@ export interface AgentUpdateOutcome {
 
 /**
  * Runs agent.update on a connected agent with a verified release: the version plus the integrity an agent on
- * 0.20.0+ checks the downloaded tarball against (older agents drop the field and install by version).
+ * 0.22.0+ checks the downloaded tarball against (older agents drop the field and install by version).
  * The connection closing mid-call means the agent already left to restart.
  */
 export async function runAgentUpdate(machineId: string, release: VerifiedRelease, log: VersionLog): Promise<AgentUpdateOutcome> {

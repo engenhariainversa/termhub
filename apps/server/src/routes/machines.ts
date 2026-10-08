@@ -16,13 +16,14 @@ import { AGENT_UNINSTALL_MIN_VERSION, isOutdated, latestAgentRelease, latestAgen
 import { AgentClosedError } from '../agent/connection.js';
 import { agentRpc, requireAgentVersion, requireSimCapable, toHttpError } from '../agent/errors.js';
 import { config } from '../config.js';
-import { installHooks, uninstallHooks } from '../monitor/install.js';
-import { newHookToken } from '../monitor/token.js';
+import { uninstallHooks } from '../monitor/install.js';
+import { claudeAccountDirs, installMachineHooksOn } from '../monitor/machine-hooks.js';
 import type { Machine, Tab } from '../db/repositories/types.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved, publishTabsRemoved } from '../monitor/tab-events.js';
 import { msg, tk } from '../i18n/index.js';
 import { recordMachineSwitch } from '../automation/setup-tools.js';
+import { audit } from '../auth/audit.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 /** `?uninstall=1`: also remove the agent from the machine before deleting it (spec 2026-10-07 §3). */
@@ -55,6 +56,7 @@ const machineBody = z
     is_local: z.boolean().optional(),
     agent_auto_update: z.boolean().optional(),
     claude_auto_swap: z.boolean().optional(),
+    ai_usage_query: z.boolean().optional(),
     automation_allowed: z.boolean().optional(),
   })
   .superRefine((m, ctx) => {
@@ -64,13 +66,6 @@ const machineBody = z
       ctx.addIssue({ code: 'custom', path: ['agent_auto_update'], message: 'só máquinas com agente atualizam sozinhas' });
     }
   });
-
-/** Config dirs of the Claude accounts registered on the machine (CLAUDE_CONFIG_DIR): the hooks go there too. */
-async function claudeAccountDirs(repos: Repositories, machineId: string): Promise<string[]> {
-  return (await repos.aiAccounts.list())
-    .filter((a) => a.machine_id === machineId && a.provider === 'claude' && a.config_dir)
-    .map((a) => a.config_dir as string);
-}
 
 const ownerPatch = z.object({ owner_id: z.string().min(1).max(64).nullable().optional() });
 
@@ -122,6 +117,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     const { token, hash } = newAgentToken();
     const machine = await repos.machines.create({ ...body, subtitle: body.subtitle ?? null, host: null, ssh_user: null, owner_id: request.scope.createAs });
     await repos.machines.rotateAgentToken(machine.id, hash);
+    await audit(repos, request, 'machine.create', { target: { type: 'machine', id: machine.id, label: machine.name }, meta: { owner_id: machine.owner_id } });
     return reply.code(201).send({ machine, agent_token: token });
   });
 
@@ -133,6 +129,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     const { token, hash } = newAgentToken();
     await repos.machines.rotateAgentToken(id, hash);
     agents.disconnect(id, CLOSE.UNAUTHORIZED, 'rotated');
+    await audit(repos, request, 'machine.agent_token_rotate', { target: { type: 'machine', id, label: machine.name } });
     return { agent_token: token };
   });
 
@@ -162,6 +159,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     // published (they belong to their owners, not to the machine). Any public page showing them
     // hangs up and re-reads.
     if (owner_id !== undefined && owner_id !== current.owner_id) {
+      await audit(repos, request, 'machine.transfer', { target: { type: 'machine', id, label: current.name }, meta: { from: current.owner_id, to: owner_id } });
       publicBus.publishRobotsGone({ machine_id: id });
       request.log.info({ machineId: id }, 'machine transferred: its robots left its old owner\'s public city');
       // its tabs leave the old owner's open tabs (sidebar) and join the new owner's
@@ -174,7 +172,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
   });
 
   /**
-   * Deletes the machine. With `?uninstall=1` (an online agent on 0.20.0+) it first removes what the agent
+   * Deletes the machine. With `?uninstall=1` (an online agent on 0.22.0+) it first removes what the agent
    * left on the machine: the monitor hooks, the tmux sessions of its tabs (best effort) and, through
    * `agent.uninstall`, the service definition and the agent's config (its token). A failure removing the
    * hooks or the agent aborts before anything is deleted here, so the person can retry or skip the uninstall.
@@ -193,6 +191,7 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     // its robots leave every public city at once (the projects, and their publish switch, stay)
     publicBus.publishRobotsGone({ machine_id: id });
     agents.disconnect(id, CLOSE.UNAUTHORIZED, 'deleted');
+    await audit(repos, request, 'machine.delete', { target: { type: 'machine', id, label: machine.name }, meta: { owner_id: machine.owner_id, tabs: tabs.length } });
     return { ok: true };
   });
 
@@ -273,18 +272,17 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
   app.post('/:id/hooks', { config: { action: 'update' } }, async (request) => {
     const { id } = idParam.parse(request.params);
     const machine = await scoped(repos, request).machine(id);
-    const { token, hash } = newHookToken();
-    let report;
+    let done;
     try {
-      report = await installHooks(machine, token, config.hooksUrl, await claudeAccountDirs(repos, machine.id));
+      done = await installMachineHooksOn(repos, machine);
     } catch (err) {
       // Agent failures (offline, outdated, what the machine reported) already carry their own status.
       if (err instanceof HttpError) throw err;
       throw conflict(err instanceof Error ? localizedOf(err) : tk('Instalação falhou'));
     }
-    const hook = await repos.machineHooks.upsert(machine.id, hash);
+    const { report, installed_at } = done;
     request.log.info({ machineId: machine.id, claude: report.claude, claudeDirs: report.claude_dirs.length, codex: report.codex, cursor: report.cursor }, 'monitor: hooks installed');
-    return { installed_at: hook.installed_at, hooks_url: report.hooks_url, claude: report.claude, codex: report.codex, cursor: report.cursor, claude_dirs: report.claude_dirs };
+    return { installed_at, hooks_url: report.hooks_url, claude: report.claude, codex: report.codex, cursor: report.cursor, claude_dirs: report.claude_dirs };
   });
 
   /** Removes the hooks from the machine and revokes its token. */

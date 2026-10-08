@@ -37,6 +37,23 @@ export interface ApiTokenEventInput {
   duration_ms: number;
 }
 
+/** One MCP call as Settings → Tokens de API shows it (TER-577): the names are read now, null once the row is gone. */
+export interface ApiTokenEvent {
+  id: string;
+  tool: string;
+  ok: boolean;
+  error_code: string | null;
+  duration_ms: number;
+  machine_id: string | null;
+  machine_name: string | null;
+  project_id: string | null;
+  project_name: string | null;
+  tab_id: string | null;
+  tab_name: string | null;
+  attachment_id: string | null;
+  created_at: string;
+}
+
 const TOUCH_INTERVAL_MS = 60_000;
 
 const mapApiToken = (t: PrismaApiToken): ApiToken => ({
@@ -154,6 +171,39 @@ export class ApiTokensRepository {
         durationMs: e.duration_ms,
       },
     });
+  }
+
+  /**
+   * The newest calls made with one of `userId`'s own tokens; undefined when the token is not theirs.
+   * Names come from the rows as they are now (a call keeps only ids).
+   */
+  async listEvents(tokenId: string, userId: string, limit: number): Promise<ApiTokenEvent[] | undefined> {
+    const token = await this.db.apiToken.findFirst({ where: { id: tokenId, userId }, select: { id: true } });
+    if (!token) return undefined;
+    const rows = await this.db.apiTokenEvent.findMany({ where: { tokenId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit });
+    const ids = (k: 'machineId' | 'projectId' | 'tabId') => [...new Set(rows.map((r) => r[k]).filter((v): v is string => !!v))];
+    const [machines, projects, tabs] = await Promise.all([
+      this.db.machine.findMany({ where: { id: { in: ids('machineId') } }, select: { id: true, name: true } }),
+      this.db.project.findMany({ where: { id: { in: ids('projectId') } }, select: { id: true, name: true } }),
+      this.db.tab.findMany({ where: { id: { in: ids('tabId') } }, select: { id: true, name: true } }),
+    ]);
+    const nameOf = (list: { id: string; name: string }[]) => new Map(list.map((x) => [x.id, x.name]));
+    const [m, p, t] = [nameOf(machines), nameOf(projects), nameOf(tabs)];
+    return rows.map((r) => ({
+      id: r.id,
+      tool: r.tool,
+      ok: r.ok,
+      error_code: r.errorCode,
+      duration_ms: r.durationMs,
+      machine_id: r.machineId,
+      machine_name: r.machineId ? (m.get(r.machineId) ?? null) : null,
+      project_id: r.projectId,
+      project_name: r.projectId ? (p.get(r.projectId) ?? null) : null,
+      tab_id: r.tabId,
+      tab_name: r.tabId ? (t.get(r.tabId) ?? null) : null,
+      attachment_id: r.attachmentId,
+      created_at: r.createdAt.toISOString(),
+    }));
   }
 
   async purgeEventsBefore(cutoff: Date): Promise<number> {
