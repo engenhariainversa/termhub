@@ -11,6 +11,7 @@ import {
   gateDecision,
   grantable,
   idempotencyKeyFor,
+  redactSecretArgs,
   standingKindOf,
   STANDING_BUDGET_WINDOW_MS,
   STANDING_GRANT_BUDGETS,
@@ -280,5 +281,20 @@ describe('defaultKindOf (TER-627)', () => {
     expect(isDefaultGrantId('default:board:u1')).toBe(true);
     expect(isDefaultGrantId('sg1')).toBe(false);
     expect(isDefaultGrantId(null)).toBe(false);
+  });
+});
+
+describe('redactSecretArgs (TER-1047)', () => {
+  it('redacts the login code and keeps everything else', () => {
+    expect(redactSecretArgs('submit_ai_login_code', { login_id: 'l1', code: 'abc' })).toEqual({ login_id: 'l1', code: '[redacted]' });
+  });
+
+  it('returns the same object when there is nothing to redact', () => {
+    const none = { login_id: 'l1' };
+    const done = { login_id: 'l1', code: '[redacted]' };
+    const other = { tab_id: 't1', text: 'abc' };
+    expect(redactSecretArgs('submit_ai_login_code', none)).toBe(none);
+    expect(redactSecretArgs('submit_ai_login_code', done)).toBe(done);
+    expect(redactSecretArgs('send_input', other)).toBe(other);
   });
 });

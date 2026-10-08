@@ -39,7 +39,11 @@ person redoes it from a modal in the web or the app, without going to the machin
 
 - The code and tokens are never logged nor persisted. The code travels in memory from the server to the
   agent over the authenticated WebSocket; the agent types it with `send-keys -l` and never returns it
-  (any pane line that contains it is dropped from error messages).
+  (any pane line that contains it is dropped from error messages). One exception: when the concierge
+  sends it with `submit_ai_login_code`, the chat gate keeps the call's arguments on the confirmation row
+  while it is open, because the model is told to repeat the approved call with them. Once the row closes
+  (run, failed, denied or expired) the code is replaced by `[redacted]` (`SECRET_ARGS` in chat/gate.ts),
+  right away in the gate's execute() and by the hourly sweep for the rest.
 - A login flow lives 15 minutes; then the server cancels it (kills the hidden session) and its id stops
   working.
 - Only the machine's owner can start or continue a flow (`machine.ownerId === request.scope.user.id`):
