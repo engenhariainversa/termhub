@@ -1,5 +1,6 @@
 import type { RpcMethod, RpcParams, RpcResult } from '@termhub/agent-protocol';
 import * as ai from './ai.js';
+import * as aiLogin from './ai-login.js';
 import * as claude from './claude.js';
 import * as docs from './docs.js';
 import * as fileList from './file-list.js';
@@ -40,6 +41,10 @@ export const handlers: Handlers = {
   'fs.list': fs.list,
   'fs.mkdir': fs.mkdir,
   'ai.usage': ai.usage,
+  'ai.login.status': aiLogin.status,
+  'ai.login.start': aiLogin.start,
+  'ai.login.submit': aiLogin.submit,
+  'ai.login.cancel': aiLogin.cancel,
   'secret.read': secret.read,
   'claude.linkSession': claude.linkSession,
   'docs.scan': docs.scan,

@@ -78,6 +78,13 @@ export const CAPABILITY_FILE_LIST = 'file_list';
 export const CAPABILITY_NET_CHECK = 'net_check';
 export const NET_CHECK_MIN_AGENT_VERSION = '0.23.0';
 
+/** The agent answers `ai.login.status|start|submit|cancel` (TER-1047): it runs `claude auth login` /
+ *  `codex login --device-auth` in a hidden tmux session so the person can redo an expired login from the
+ *  web or the app. The server requires it before any of those; an older agent drops an unknown RPC,
+ *  which would read as a timeout. */
+export const CAPABILITY_AI_LOGIN = 'ai_login';
+export const AI_LOGIN_MIN_AGENT_VERSION = '0.25.0';
+
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
 export function streamUserMessageLine(text: string, uuid: string): string {
