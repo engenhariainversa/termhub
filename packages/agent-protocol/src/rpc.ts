@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { aiMemoryUrl } from './ai-memory.js';
 
 export const SESSION_RE = /^[A-Za-z0-9_-]+$/;
 export const sessionName = z.string().min(1).max(128).regex(SESSION_RE);
@@ -311,6 +312,16 @@ export const RPC = {
   'tab.mcp.write': def(z.object({ tab_id: tabId, file: tabMcpFile, body: z.string().min(1).max(8192) }), z.object({ ok: z.literal(true) }), 10_000),
   /** Deletes a tab's whole MCP config dir on close (spec D12); best effort (since agent 0.10.0). */
   'tab.mcp.remove': def(z.object({ tab_id: tabId }), z.object({ ok: z.literal(true) }), 10_000),
+  /**
+   * Is `ai-memory` on the machine, which version, and does its server answer at `url` (loopback or a
+   * private network only, TER-1018)? Only these three facts travel back: nothing ai-memory stores
+   * (observations, sessions, pages) ever reaches the server (since agent 0.22.0).
+   */
+  'aimemory.status': def(
+    z.object({ url: aiMemoryUrl }),
+    z.object({ installed: z.boolean(), version: z.string().max(32).nullable(), server_up: z.boolean() }),
+    15_000,
+  ),
 } as const;
 
 export type RpcMethod = keyof typeof RPC;
