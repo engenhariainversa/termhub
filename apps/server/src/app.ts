@@ -398,8 +398,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);
   const stopTabQuestionExpiry = startTabQuestionExpiry(repos, fastify.log);
   const stopTabGoneActionExpiry = startTabGoneActionExpiry(repos, fastify.log);
-  // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615).
-  const stopStaleWorking = startStaleWorkingSweeper(repos, fastify.log);
+  // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615),
+  // and one left waiting on background work that never reports ends after a timeout (TER-1053).
+  const stopStaleWorking = startStaleWorkingSweeper(repos, fastify.log, config.monitorBackgroundTimeoutMs);
   void expireOrphanTabQuestions(repos, fastify.log);
   void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);

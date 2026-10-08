@@ -355,6 +355,7 @@ See [.env.example](.env.example). Main ones:
 | `ALPHA_COMMUNITY_URL` | WhatsApp group linked from the alpha-tester e-mail (Waitlist tab → Convidar); default `https://77a.it/comunidadetermhub` |
 | `TYPETOACCESS_API_KEY` | TypeToAccess key: creates each public city's short link (`77a.it/<nickname>`) and lets owners paste their own in Minha cidade; unset = long city links only |
 | `BIND_ADDR` | (compose) host IP that publishes Mailpit's UI port; the prod app has no host port of its own (proxy nginx only) |
+| `MONITOR_BACKGROUND_TIMEOUT_MINUTES` | minutes a Claude tab may wait on its own background work (a Monitor, a background shell) with no hook event, back at its prompt on a still screen, before it is read as done and the person is told; default `20`, `0` = never |
 | `ENCRYPTION_KEY` | base64 of 32 bytes (`openssl rand -base64 32`) for integration secrets |
 | `VITE_FIREBASE_*` | Firebase Analytics for the landing page and the app (same Firebase web app); build args of both images, empty = no analytics |
 | `WHISPER_URL` | speech-to-text service for dictation (`http://whisper:8000` in compose); unset hides the microphone |

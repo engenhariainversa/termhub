@@ -120,6 +120,9 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().default('termhub <termhub@localhost>'),
   LOGIN_CODE_TTL_MINUTES: z.coerce.number().int().positive().default(10),
 
+  /** Minutes a Claude tab may wait on its own background work with no hook event before the monitor reads it as done (TER-1053); 0 = never. */
+  MONITOR_BACKGROUND_TIMEOUT_MINUTES: z.coerce.number().int().min(0).default(20),
+
   // Chave (base64, 32 bytes) para criptografar segredos das integrações. Gere com: openssl rand -base64 32
   ENCRYPTION_KEY: z.string().optional(),
 
@@ -228,6 +231,7 @@ export const config = {
   publicUrl: env.PUBLIC_URL.replace(/\/$/, ''),
   trustProxy: parseTrustProxy(env.TRUST_PROXY),
   hooksUrl: env.HOOKS_URL ?? `${env.PUBLIC_URL.replace(/\/$/, '')}/api/hooks/events`,
+  monitorBackgroundTimeoutMs: env.MONITOR_BACKGROUND_TIMEOUT_MINUTES * 60_000,
   mcpUrl: env.MCP_URL ?? null,
   publicCityUrl: resolvePublicCityUrl(env),
   accountDeletionUrl: env.ACCOUNT_DELETION_URL ?? `${new URL(resolvePublicCityUrl(env)).origin}/excluir-conta/`,

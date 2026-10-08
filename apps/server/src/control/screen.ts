@@ -126,6 +126,30 @@ const result = (tab: Tab, timedOut: boolean): WaitResult => ({ tab_id: tab.id, s
  * `return_on_background` asks to hear about it.
  */
 export async function waitForState(ctx: ControlContext, input: { tab_id: string; timeout_seconds?: number; return_on_background?: boolean }, signal?: AbortSignal): Promise<WaitResult> {
+  const r = await waitUntilStopped(ctx, input, signal);
+  return r.timed_out ? r : withBackgroundNote(ctx, r);
+}
+
+export const BACKGROUND_LEFT_NOTE = 'O agente terminou o turno, mas há processos em segundo plano dele ainda rodando (um Monitor, um shell em background). Se um deles avisar, um novo turno começa sozinho.';
+
+/** The Stop rows that end a turn, and the timeout that ends a background wait (monitor/stale-working.ts). */
+const TURN_END_EVENTS = new Set(['Stop', 'BackgroundTimeout']);
+
+/**
+ * A tab back at its prompt whose turn ended with background work still running (TER-1053): the agent is done,
+ * but that work may still wake it. Said in `note`, from the tab's newest event past any idle_prompt reminder,
+ * when that is the turn's end. A failed read just leaves the note out.
+ */
+async function withBackgroundNote(ctx: ControlContext, r: WaitResult): Promise<WaitResult> {
+  if (r.note || (r.state !== 'finished' && r.state !== 'waiting_input')) return r;
+  const events = await ctx.repos.tabs.listEvents(r.tab_id, 3).catch(() => []);
+  const end = events.find((e) => e.meta?.event !== 'Notification');
+  if (!end || typeof end.meta?.event !== 'string' || !TURN_END_EVENTS.has(end.meta.event)) return r;
+  const background = end.meta.event === 'BackgroundTimeout' || (typeof end.meta.background_tasks === 'number' && end.meta.background_tasks > 0);
+  return background ? { ...r, note: BACKGROUND_LEFT_NOTE } : r;
+}
+
+async function waitUntilStopped(ctx: ControlContext, input: { tab_id: string; timeout_seconds?: number; return_on_background?: boolean }, signal?: AbortSignal): Promise<WaitResult> {
   const { tab } = await ctx.scoped.tab(input.tab_id);
   if (tab.state === null) {
     return { ...result(tab, false), note: 'Esta aba não tem estado do monitor (hooks não instalados na máquina ou nenhuma ferramenta rodou nela). Use read_screen para ver o terminal.' };

@@ -45,3 +45,34 @@ export function classifyTurnEnd(message: string | null): TurnEnd {
   const plain = prose.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ');
   return ASKS.test(` ${plain} `) ? 'waiting_input' : 'finished';
 }
+
+/**
+ * Says the agent waits on the work it left running: it will check, report or carry on once that work is
+ * done. Matched like `ASKS`. The real end of such a turn is the next Stop, which that work's notification
+ * starts (TER-644).
+ */
+const WAITS_ON_WORK = new RegExp(
+  `(?:^|[^a-z])(?:${[
+    'aguardando', 'vou aguardar', 'aguardar (?:o|a|os|as) ', 'esperando (?:o|a|os|as) ', 'vou esperar', 'acompanhando',
+    'vou acompanhar', 'vigiando', 'vou vigiar', 'monitorando', 'vou monitorar', 'assim que', 'quando [^.\\n]{0,60}?(?:terminar|acabar|concluir|finalizar|voltar|retornar|chegar)',
+    'em segundo plano', 'em background', 'no background', '(?:ainda )?(?:esta|estao) rodando', 'volto (?:com|quando|assim)', 'te aviso', 'aviso quando',
+    'vou consolidar', 'retomo',
+    'waiting (?:for|on) (?!you)', "i'?ll (?:check|report|follow|let you know|continue|wait|resume|consolidate)", 'i will (?:check|report|follow|wait|continue|resume)',
+    'once (?:it|they|the)\\b', 'when (?:it|they|the)\\b[^.\\n]{0,60}?(?:finish|complete|done|return)', 'in the background', 'still running', 'monitoring', 'watching',
+  ].join('|')})`,
+);
+
+/**
+ * How a Claude turn that ended with background work still running reads (TER-1053). Claude Code says the
+ * turn is done ("done 5:27 PM · 1 monitor still running") and a Monitor may run for ever, so that work
+ * alone does not hold the tab: only a message that says it waits on it keeps `waiting_background` (and so
+ * does a blank one, which says nothing). Any other message is read as a turn with nothing left running:
+ * a report is `finished`, a request is `waiting_input`. Pure; the message is never logged.
+ */
+export function classifyBackgroundTurnEnd(message: string | null): TurnEnd | 'waiting_background' {
+  const text = message?.trim();
+  if (!text) return 'waiting_background';
+  const prose = text.replace(CODE_BLOCK, ' ').replace(INLINE_CODE, ' ').replace(URL, ' ');
+  const plain = prose.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ');
+  return WAITS_ON_WORK.test(` ${plain} `) ? 'waiting_background' : classifyTurnEnd(text);
+}
