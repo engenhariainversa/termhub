@@ -6,6 +6,7 @@ import type { Machine } from '../lib/types';
 import { AGENT_UNINSTALL_MIN_VERSION, agentVersionBadge, machineTitle, versionAtLeast } from '../lib/machine-labels';
 import { STATUS_DOT, STATUS_LABEL, TYPE_LABEL } from '../lib/machine-status';
 import { MACHINE_FORM_TABS, MachineForm, type MachineFormTab } from '../components/MachineForm';
+import { AiLoginWarnings } from '../components/AiLoginWarnings';
 import { ConfirmDialog } from '../components/Modal';
 import { PageFrame } from '../components/PageHeader';
 import { Trans, useTranslation } from '../i18n';
@@ -136,6 +137,7 @@ export function MachinesPage() {
                   ))
                 )}
               </div>
+              <AiLoginWarnings machineId={m.id} className="mt-2" />
             </li>
           );
         })}
