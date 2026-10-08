@@ -222,7 +222,11 @@ describe('typeCommandInTab', () => {
 describe('sendInput: who wrote the text (TER-851)', () => {
   const HOUR = 60 * 60_000;
   const memoryRepos = (createdAgo = HOUR, over: Record<string, unknown> = {}) => ({
-    memoryItems: { findManyForOwner: vi.fn(async (ids: string[], owner: string) => (owner === 'u1' ? ids.filter((i) => i.startsWith('mi')).map((i) => ({ id: i, kind: 'message', trust: 'person', source_id: `cm-${i}`, ...over })) : [])) },
+    memoryItems: {
+      findManyForOwner: vi.fn(async (ids: string[], owner: string) => (owner === 'u1' ? ids.filter((i) => i.startsWith('mi')).map((i) => ({ id: i, kind: 'message', trust: 'person', source_id: `cm-${i}`, ...over })) : [])),
+      // A chat message `cmN` the person typed is indexed by the item `ixN` (TER-1037).
+      findMessagesBySource: vi.fn(async (ids: string[], owner: string) => (owner === 'u1' ? ids.filter((i) => /^cm\d+$/.test(i)).map((i) => ({ id: `ix${i.slice(2)}`, kind: 'message', trust: 'person', source_id: i, ...over })) : [])),
+    },
     chat: { findUserMessagesForUser: vi.fn(async (ids: string[]) => ids.map((i) => ({ id: i, role: 'user', created_at: new Date(Date.now() - createdAgo).toISOString() }))) },
   });
   const gated = { id: 'chat-tok', scopes: ['terminals'], gated: true };
@@ -236,6 +240,18 @@ describe('sendInput: who wrote the text (TER-851)', () => {
   it('marks the person’s request, with their messages, when on_behalf_of checks out', async () => {
     await sendInput(ctxWith({ token: gated, repos: memoryRepos() }), { tab_id: 't1', text: 'pode mesclar', on_behalf_of: ['message:mi1', 'message:mi2'] });
     expect(takeInputOrigin('t1', 'pode mesclar')).toEqual({ level: 'person_requested', userId: 'u1', messageIds: ['cm-mi1', 'cm-mi2'] });
+  });
+
+  it('takes the ref of the chat message itself, the one the chat hands the concierge (TER-1037)', async () => {
+    await sendInput(ctxWith({ token: gated, repos: memoryRepos() }), { tab_id: 't1', text: 'pode mesclar', on_behalf_of: ['message:cm7', 'message:mi1'] });
+    expect(takeInputOrigin('t1', 'pode mesclar')).toEqual({ level: 'person_requested', userId: 'u1', messageIds: ['cm7', 'cm-mi1'] });
+  });
+
+  it('refuses the ref of a chat message nothing indexed (a wake, an injected decision)', async () => {
+    const repos = memoryRepos();
+    repos.memoryItems.findMessagesBySource.mockResolvedValueOnce([]);
+    await expect(sendInput(ctxWith({ token: gated, repos }), { tab_id: 't1', text: 'x', on_behalf_of: ['message:cm7'] })).rejects.toMatchObject({ code: 'ON_BEHALF_INVALID' });
+    expect(sendTextToSession).not.toHaveBeenCalled();
   });
 
   it('marks a clicked confirmation card as the person’s approval, even under the chat token', async () => {
