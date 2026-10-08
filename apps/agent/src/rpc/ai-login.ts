@@ -10,6 +10,12 @@ import { ENTER_PAUSE_MS, processFailure } from './tmux.js';
  * the account's config dir. The agent reads the login URL (and Codex's device code) off the pane, types
  * the code the person pasted back, and asks the CLI's status command whether the login took.
  *
+ * The CLI may also finish on its own, without a URL read or a code typed: on a machine with a desktop,
+ * `claude auth login` opens the machine's browser (`BROWSER=true` did not stop it on macOS), and a person sitting there
+ * signs in and the CLI takes the callback itself, prints "Login successful." and exits 0 (TER-1054).
+ * `start` and `submit` read that as a login, confirmed by the status command: `start` answers
+ * `logged_in: true` with no URL, `submit` answers logged in.
+ *
  * Nothing here is ever logged: the URL carries an OAuth state, the code is a credential, and the pane
  * text may hold either. The only text that goes back to the server is `failureMessage`, which drops
  * every line containing the submitted code.
@@ -61,6 +67,11 @@ const PANE_HEIGHT = '50';
 
 const SUBMIT_TIMEOUT_MESSAGE = 'Timed out waiting for the login to finish';
 const SESSION_GONE_MESSAGE = 'The login session ended before the login finished';
+/** What Claude Code prints once the login is saved, right before it exits 0. */
+const CLI_SUCCESS_RE = /\bLogin successful\b/i;
+/** A CLI that just said it logged in may still be writing the credentials: the status gets a few more looks. */
+const CONFIRM_POLLS = 3;
+const CONFIRM_POLL_MS = 1_000;
 
 function spec(provider: RpcParams<'ai.login.status'>['provider'], deps: AiLoginDeps): CliSpec | null {
   if (provider === 'claude') return { bin: deps.bins.claude, envVar: 'CLAUDE_CONFIG_DIR', status: ['auth', 'status'], login: ['auth', 'login'], needsCode: true };
@@ -165,11 +176,24 @@ async function capturePane(session: string): Promise<string | null> {
   return r.code === 0 ? r.stdout : null;
 }
 
-/** 'alive', 'dead' (the CLI exited; the pane stays thanks to remain-on-exit) or 'gone' (no session). */
-async function paneState(session: string): Promise<'alive' | 'dead' | 'gone'> {
-  const r = await tmux(['display-message', '-p', '-t', pane(session), '#{pane_dead}']);
-  if (r.code !== 0) return 'gone';
-  return r.stdout.trim() === '1' ? 'dead' : 'alive';
+interface PaneState {
+  /** 'alive', 'dead' (the CLI exited; the pane stays thanks to remain-on-exit) or 'gone' (no session). */
+  state: 'alive' | 'dead' | 'gone';
+  /** The CLI's exit status once it is dead; null otherwise or when tmux does not say. */
+  exitCode: number | null;
+}
+
+async function paneState(session: string): Promise<PaneState> {
+  const r = await tmux(['display-message', '-p', '-t', pane(session), '#{pane_dead} #{pane_dead_status}']);
+  if (r.code !== 0) return { state: 'gone', exitCode: null };
+  const [dead, status] = r.stdout.trim().split(/\s+/);
+  if (dead !== '1') return { state: 'alive', exitCode: null };
+  return { state: 'dead', exitCode: status && /^\d+$/.test(status) ? Number(status) : null };
+}
+
+/** The CLI ended its login itself: exit 0, or its success line on the pane. */
+export function cliReportedSuccess(exitCode: number | null, text: string): boolean {
+  return exitCode === 0 || CLI_SUCCESS_RE.test(text);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -181,6 +205,24 @@ async function checkStatus(cli: CliSpec, dir: string | null, deps: AiLoginDeps):
   if (r.error === 'enoent') throw new RpcFailure('notfound', `${cli.bin} not found on this machine`);
   if (r.timedOut) throw new RpcFailure('timeout', `${cli.bin} did not answer in time`);
   return cli.envVar === 'CLAUDE_CONFIG_DIR' ? parseClaudeStatus(r.stdout) : parseCodexStatus(r.code, `${r.stdout}\n${r.stderr}`);
+}
+
+/**
+ * Whether the account is logged in after its CLI exited. A CLI that reported success gets a few more
+ * looks at the status (the credentials may land a moment after); a status that cannot answer reads as
+ * not logged in. `notfound` still throws.
+ */
+async function confirmAfterExit(cli: CliSpec, dir: string | null, deps: AiLoginDeps, reportedSuccess: boolean): Promise<boolean> {
+  const polls = reportedSuccess ? CONFIRM_POLLS : 1;
+  for (let i = 0; i < polls; i++) {
+    if (i > 0) await sleep(CONFIRM_POLL_MS);
+    try {
+      if (await checkStatus(cli, dir, deps)) return true;
+    } catch (err) {
+      if (!(err instanceof RpcFailure && err.code === 'timeout')) throw err;
+    }
+  }
+  return false;
 }
 
 export function createAiLogin(overrides: Partial<AiLoginDeps> = {}) {
@@ -219,14 +261,21 @@ export function createAiLogin(overrides: Partial<AiLoginDeps> = {}) {
     let text = '';
     let extraPolls = 0;
     for (;;) {
-      const state = await paneState(params.session);
+      const { state, exitCode } = await paneState(params.session);
       text = (await capturePane(params.session)) ?? text;
+      if (state === 'dead') {
+        // The CLI already exited: either it finished the login on its own (the machine's browser), or it
+        // failed. A URL on the pane is no use any more, so the status decides, not the screen.
+        await killSession(params.session);
+        if (await confirmAfterExit(cli, params.config_dir, deps, cliReportedSuccess(exitCode, text))) return { url: null, user_code: null, needs_code: false, logged_in: true };
+        throw new RpcFailure('failed', failureMessage(text) ?? SESSION_GONE_MESSAGE);
+      }
       if (cli.needsCode) {
         const { url } = parseClaudeLoginScreen(text);
-        if (url) return { url: url.slice(0, 4000), user_code: null, needs_code: true };
+        if (url && state === 'alive') return { url: url.slice(0, 4000), user_code: null, needs_code: true, logged_in: false };
       } else {
         const { url, userCode } = parseCodexLoginScreen(text);
-        if (url && (userCode || extraPolls >= CODE_EXTRA_POLLS || state !== 'alive')) return { url: url.slice(0, 4000), user_code: userCode, needs_code: false };
+        if (url && state === 'alive' && (userCode || extraPolls >= CODE_EXTRA_POLLS)) return { url: url.slice(0, 4000), user_code: userCode, needs_code: false, logged_in: false };
         if (url) extraPolls++;
       }
       if (state !== 'alive' || Date.now() >= deadline) {
@@ -253,7 +302,7 @@ export function createAiLogin(overrides: Partial<AiLoginDeps> = {}) {
     for (;;) {
       // The pane state is read before the status: a CLI that saved the login and exited in between
       // is then seen as logged in, never as a failure.
-      const state = await paneState(params.session);
+      const { state, exitCode } = await paneState(params.session);
       let loggedIn = false;
       try {
         loggedIn = await checkStatus(cli, params.config_dir, deps);
@@ -267,6 +316,11 @@ export function createAiLogin(overrides: Partial<AiLoginDeps> = {}) {
       if (state !== 'alive') {
         const text = state === 'dead' ? await capturePane(params.session) : null;
         await killSession(params.session);
+        // A CLI that said "Login successful" (or exited 0) gets a few more looks at the status before
+        // its own word is taken as a failure.
+        if (state === 'dead' && cliReportedSuccess(exitCode, text ?? '') && (await confirmAfterExit(cli, params.config_dir, deps, true))) {
+          return { logged_in: true, message: null };
+        }
         return { logged_in: false, message: (text && failureMessage(text, params.code)) || SESSION_GONE_MESSAGE };
       }
       if (Date.now() >= deadline) {
