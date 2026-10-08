@@ -9,7 +9,6 @@
     "apps/web",
     "apps/landing",
     "apps/agent",
-    "apps/concierge",
     "apps/mobile",
     "packages/*"
   ],

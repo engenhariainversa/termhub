@@ -329,8 +329,8 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
 
 const delta = (text: string) => JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text } } });
 const done = (session = '3f1e9b1e-0000-4000-8000-000000000001') => JSON.stringify({ type: 'result', session_id: session, usage: { input_tokens: 5 } });
-/** Exactly what the container writes when the CLI exits non-zero: a code and a classified reason,
- * never stderr's text (see apps/concierge/src/index.ts). */
+/** Exactly what the runner writes when the CLI exits non-zero: a code and a classified reason,
+ * never stderr's text (see `failureLine` in agent-runner.ts). */
 const errorFrame = (reason: 'missing_session' | 'run_failed') => JSON.stringify({ type: 'termhub_error', code: 1, reason });
 
 /** One macrotask turn: enough for a drain scheduled from `send`'s `finally` — and for the drain that
@@ -524,7 +524,7 @@ it('records an action and its failed result without breaking the answer', async 
 });
 
 it('starts a fresh session when resuming the old one fails, and tells the client to reset the answer', async () => {
-  // The runner never throws the CLI's phrase: the container classifies the failure (it is the only
+  // The runner never throws the CLI's phrase: the machine's agent classifies the failure (it is the only
   // side that sees stderr) and appends an error frame carrying `missing_session`. This is the shape
   // production really produces, so the retry is triggered off the frame, not off an error's text.
   const { service, runner, conversation, chat } = build([errorFrame('missing_session')]);
