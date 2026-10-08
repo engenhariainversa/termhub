@@ -4,7 +4,7 @@ import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, RPC, RPC_METHODS, TMUX_KEYS
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.uninstall', 'agent.update', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
+      'agent.uninstall', 'agent.update', 'ai.login.cancel', 'ai.login.start', 'ai.login.status', 'ai.login.submit', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
       'hooks.status', 'hooks.uninstall', 'hw.probe', 'net.check', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
@@ -103,6 +103,23 @@ describe('rpc catalog', () => {
     expect(def.result.safeParse({ ...ok, error: 'x'.repeat(501) }).success).toBe(false);
     expect(def.result.safeParse({ ...ok, retry_after_ms: -1 }).success).toBe(false);
     expect('ai.credential' in RPC).toBe(false);
+  });
+  it('ai.login.* take a provider, a config dir and a tmux session name, and bound the code', () => {
+    expect(RPC['ai.login.status'].timeoutMs).toBe(20_000);
+    expect(RPC['ai.login.start'].timeoutMs).toBe(45_000);
+    expect(RPC['ai.login.submit'].timeoutMs).toBe(60_000);
+    expect(RPC['ai.login.status'].params.safeParse({ provider: 'chatgpt', config_dir: null }).success).toBe(true);
+    expect(RPC['ai.login.start'].params.safeParse({ provider: 'claude', config_dir: '~/.claude-work', session: 'termhub-login-abc' }).success).toBe(true);
+    expect(RPC['ai.login.start'].params.safeParse({ provider: 'claude', config_dir: null, session: 'bad name' }).success).toBe(false);
+    const submit = RPC['ai.login.submit'].params;
+    expect(submit.safeParse({ provider: 'claude', config_dir: null, session: 's', code: 'abc#def' }).success).toBe(true);
+    expect(submit.safeParse({ provider: 'chatgpt', config_dir: null, session: 's', code: null }).success).toBe(true);
+    expect(submit.safeParse({ provider: 'claude', config_dir: null, session: 's', code: '' }).success).toBe(false);
+    expect(submit.safeParse({ provider: 'claude', config_dir: null, session: 's', code: 'x'.repeat(2001) }).success).toBe(false);
+    expect(RPC['ai.login.start'].result.safeParse({ url: 'https://auth.openai.com/codex/device', user_code: 'LCWQ-WSPV8', needs_code: false }).success).toBe(true);
+    expect(RPC['ai.login.start'].result.safeParse({ url: '', user_code: null, needs_code: true }).success).toBe(false);
+    expect(RPC['ai.login.submit'].result.safeParse({ logged_in: false, message: null }).success).toBe(true);
+    expect(RPC['ai.login.cancel'].params.safeParse({ session: 'termhub-login-abc' }).success).toBe(true);
   });
   it('secret.read takes the gh_auth_token source only and bounds the value', () => {
     expect(RPC['secret.read'].params.safeParse({ source: 'gh_auth_token' }).success).toBe(true);

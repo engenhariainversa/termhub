@@ -24,6 +24,8 @@ export interface MockControls {
   patchTab(tabId: string, patch: Partial<TTabSummary>): void;
   /** Drops every tab socket with a non-final close, so the app reconnects. */
   dropTabSockets(): void;
+  /** "Refazer login" (TER-1047): an AI account's login state (`ok`, `login_required`, `unknown`). */
+  setAiLoginState(accountId: string, loginState: string): void;
 }
 
 export function createMockControls(state: MockState, now: () => number): MockControls {
@@ -90,6 +92,10 @@ export function createMockControls(state: MockState, now: () => number): MockCon
 
     dropTabSockets() {
       for (const socket of [...state.tabSockets]) socket.close(1006);
+    },
+
+    setAiLoginState(accountId, loginState) {
+      state.aiLoginStates.set(accountId, loginState);
     },
   };
 }

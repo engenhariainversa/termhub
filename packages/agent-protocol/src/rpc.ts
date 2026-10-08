@@ -34,6 +34,16 @@ export const aiUsageResult = z.object({
   retry_after_ms: z.number().min(0).nullable().optional(),
 });
 
+/** `ai.login.status` answer (TER-1047). */
+export const aiLoginStatusResult = z.object({ supported: z.boolean(), logged_in: z.boolean() });
+export type AiLoginStatusResult = z.infer<typeof aiLoginStatusResult>;
+/** `ai.login.start` answer: the page to open and, for a device flow, the code to type there. */
+export const aiLoginStartResult = z.object({ url: z.string().min(1).max(4000), user_code: z.string().max(64).nullable(), needs_code: z.boolean() });
+export type AiLoginStartResult = z.infer<typeof aiLoginStartResult>;
+/** `ai.login.submit` answer. `message`: why it did not finish, never containing the submitted code. */
+export const aiLoginSubmitResult = z.object({ logged_in: z.boolean(), message: z.string().max(500).nullable() });
+export type AiLoginSubmitResult = z.infer<typeof aiLoginSubmitResult>;
+
 /** A tab id, as minted by the server (see @termhub/machine-ops TAB_ID_RE, which this must match). */
 export const TAB_ID_RE = /^[a-z0-9]{1,64}$/;
 export const tabId = z.string().regex(TAB_ID_RE);
@@ -162,6 +172,32 @@ export const RPC = {
    * 12 s calls, hence the timeout.
    */
   'ai.usage': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), aiUsageResult, 60_000),
+  /**
+   * Whether the CLI login of the account whose config dir is `config_dir` (null: the machine's default
+   * login) is valid (TER-1047, since agent 0.26.0): `claude auth status` / `codex login status`.
+   * `supported: false` for a provider without a CLI login the agent can drive (Gemini, Antigravity).
+   */
+  'ai.login.status': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), aiLoginStatusResult, 20_000),
+  /**
+   * Starts the CLI's login in the hidden tmux session `session` (any session of that name is killed
+   * first) and answers what the person needs to finish it in a browser: the login `url`, and for
+   * Codex's device flow the one-time `user_code`. `needs_code`: the CLI waits for a code pasted back
+   * (Claude); false when it polls on its own (Codex). Since agent 0.26.0.
+   */
+  'ai.login.start': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable(), session: sessionName }), aiLoginStartResult, 45_000),
+  /**
+   * Types `code` into the login session (null: nothing to type, Codex) and waits up to 45 s for the
+   * login to finish. The code is never logged nor echoed back: `message` drops any line containing it.
+   * The session is killed once the login is done or failed; a Codex session that only timed out is kept
+   * so a later submit can wait again. Since agent 0.26.0.
+   */
+  'ai.login.submit': def(
+    z.object({ provider: aiProvider, config_dir: machinePath.nullable(), session: sessionName, code: z.string().min(1).max(2000).nullable() }),
+    aiLoginSubmitResult,
+    60_000,
+  ),
+  /** Kills the hidden login session (since agent 0.26.0). */
+  'ai.login.cancel': def(z.object({ session: sessionName }), z.object({ cancelled: z.boolean() })),
   /**
    * A secret the machine already holds, read for the server to store encrypted (spec 2026-09-28 MCP
    * integrations D1/D2). One source only: `gh_auth_token` (`gh auth token`); new sources are added one

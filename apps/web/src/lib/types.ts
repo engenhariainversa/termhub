@@ -954,6 +954,48 @@ export interface AiAccountUsage {
   reason?: 'disabled' | 'agent_outdated';
 }
 
+/** TER-1047: whether an account's CLI is logged in on its machine (GET /ai-accounts/login-status). */
+export type AiLoginState = 'ok' | 'login_required' | 'unknown';
+
+export interface AiLoginStatusRow {
+  account_id: string;
+  label: string;
+  provider: AiProvider;
+  machine_id: string;
+  machine_name: string | null;
+  state: AiLoginState;
+  checked_at: string | null;
+  /** the login can be redone from the modal (Claude/Codex on an agent machine with the `ai_login` capability) */
+  supported: boolean;
+}
+
+/** POST /ai-accounts/:id/login */
+export interface AiLoginStart {
+  login_id: string;
+  /** the page to open in a browser */
+  url: string;
+  /** Codex's one-time device code to type on that page; null for Claude */
+  user_code: string | null;
+  /** true (Claude): paste the code the page shows back; false (Codex): just confirm once authorized */
+  needs_code: boolean;
+  expires_at: string;
+}
+
+export interface AiLoginStuckTab {
+  id: string;
+  name: string;
+  project_id: string;
+}
+
+/** POST /ai-accounts/:id/login/:loginId/submit */
+export interface AiLoginSubmitResult {
+  ok: boolean;
+  /** why it did not finish; never the code */
+  message: string | null;
+  /** after a successful login: the account's tabs still showing the login error */
+  stuck_tabs: AiLoginStuckTab[];
+}
+
 /** Brand names: shown as is in every language. */
 export const AI_PROVIDER_LABEL: Record<AiProvider, string> = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini', antigravity: 'Antigravity' };
 

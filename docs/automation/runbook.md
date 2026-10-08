@@ -265,6 +265,30 @@ resolva") and so does the feed line. When a run of the card ends after the escal
 move (it reported done but pushed nothing), the person is told once more for that head, with
 `cause: run_done_no_push` (TER-1016): check that the run really pushed its merge with the base.
 
+## 9a. Refazer login de uma CLI de IA (an expired Claude Code or Codex login)
+
+An agent tab or an automatic run that stops on "Please run /login" / "Login expired" / "Not logged in" has
+lost its CLI login on the machine (TER-1047, spec `docs/superpowers/specs/2026-10-08-ai-cli-login-modal-design.md`).
+
+- The server checks every Claude/Codex account of an online agent machine every 10 minutes (and 30 s after
+  an agent connects). An account found logged out shows a red warning (web sidebar, Contas de IA, the app's
+  banner), and the machine's owner gets one push ("Login do Claude expirou"); no other until it is back.
+- "Refazer login" (web, app, or the chat's `start_ai_login` / `submit_ai_login_code`) needs the machine's
+  agent at **0.25.0 or newer** (capability `ai_login`); an older one answers 409 `AGENT_OUTDATED`. SSH and
+  local machines, and Gemini/Antigravity accounts, are redone by hand on the machine. Only the machine's
+  owner can do it (not an admin viewing as them, not an agent tab).
+- The agent runs `claude auth login` / `codex login --device-auth` with the account's config dir in a
+  hidden tmux session named `termhub-login-<loginId>`, never a work tab (the tab lists ignore these
+  sessions). Claude: open the link, sign in, paste the code back. Codex: open the link, type the device code
+  shown, then "Já autorizei". The pasted code is never logged.
+- A flow lives **15 minutes**, in the memory of the server colour that started it: then (or after a deploy)
+  it is gone and the person starts again. The server kills its session when it expires; if one is left
+  behind (the server died mid-flow), remove it on the machine: `tmux ls | grep termhub-login-`, then
+  `tmux kill-session -t termhub-login-<id>`.
+- After a successful login the modal offers to resume the account's tabs still showing the login error: it
+  types `continue` into each. Automatic runs escalated because of the login are not resumed by this; unblock
+  them as in section 9.
+
 ## 10. After a failed deploy or release
 
 A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no

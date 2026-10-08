@@ -80,10 +80,40 @@ const writeTools = new Set([
 // automation_merge is the card the merge executor asks for a PR above the project's level (agentic board
 // D7): never a concierge tool, never covered by a grant; approving it merges that PR once.
 // set_ai_account_exclusive decides where a client's account may run (TER-990): always the person's card.
-const irreversibleTools = new Set(['close_tab', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'automation_merge', 'set_ai_account_exclusive']);
+// start_ai_login and submit_ai_login_code change what a machine's AI CLI is logged in as (TER-1047): always a card.
+const irreversibleTools = new Set([
+  'close_tab',
+  'delete_task',
+  'push_ticket_status',
+  'create_integration',
+  'set_project_repo',
+  'automation_merge',
+  'set_ai_account_exclusive',
+  'start_ai_login',
+  'submit_ai_login_code',
+]);
 
 // Keys that interrupt the running process and cannot be undone
 const interruptingKeys = new Set(['C-c', 'Escape']);
+
+/**
+ * Arguments that are secrets (TER-1047: the code pasted to finish an AI CLI login). The row keeps them
+ * only while it is open, because the model is told to repeat an approved call with the stored arguments;
+ * once the row is closed they are replaced by `REDACTED_ARG` (`scrubSecretArgs` in chat/service.ts).
+ */
+export const SECRET_ARGS: Readonly<Record<string, readonly string[]>> = { submit_ai_login_code: ['code'] };
+export const REDACTED_ARG = '[redacted]';
+
+/** The arguments with their secrets redacted; the same object when there is nothing to redact. */
+export function redactSecretArgs(tool: string, args: unknown): unknown {
+  const keys = SECRET_ARGS[tool];
+  if (!keys || !args || typeof args !== 'object') return args;
+  const record = args as Record<string, unknown>;
+  if (!keys.some((k) => record[k] != null && record[k] !== REDACTED_ARG)) return args;
+  const out: Record<string, unknown> = { ...record };
+  for (const k of keys) if (out[k] != null) out[k] = REDACTED_ARG;
+  return out;
+}
 
 /**
  * Classifies a proposed tool action by its reversibility.
