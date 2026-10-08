@@ -206,6 +206,10 @@ model Machine {
   claudeAutoSwap  Boolean  @default(true) @map("claude_auto_swap")
   /// R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
   automationAllowed Boolean @default(true) @map("automation_allowed")
+  /// TER-1018: "Usar ai-memory nesta máquina" (opt-in). Only gates the detection shown in Máquinas for now; nothing ai-memory stores reaches the server.
+  aiMemoryEnabled Boolean @default(false) @map("ai_memory_enabled")
+  /// Its local server, loopback or private network only (null = http://127.0.0.1:49374)
+  aiMemoryUrl     String? @map("ai_memory_url")
   /// The user's own computer (an agent machine): browsers other than the one that added it hide it
   isLocal             Boolean   @default(false) @map("is_local")
   /// Owner: everything under the machine (projects, tabs, tasks, notes, AI accounts) is visible only to
