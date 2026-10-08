@@ -40,10 +40,6 @@ jobs:
         run: npm run typecheck -w @termhub/agent
       - name: Build agent
         run: npm run build -w @termhub/agent
-      - name: Testes concierge
-        run: npm test -w @termhub/concierge
-      - name: Typecheck + build concierge
-        run: npm run typecheck -w @termhub/concierge && npm run build -w @termhub/concierge
       - name: Instalar tmux (teste e2e do agente)
         # A hung Ubuntu mirror once held `apt-get update` until the job timeout cancelled the whole
         # check; bound each attempt and retry instead (docs/lessons/2026-10-07-ci-apt-get-update-hangs.md).

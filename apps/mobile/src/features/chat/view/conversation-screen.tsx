@@ -1,13 +1,13 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, FlatList, Keyboard, Pressable, View } from 'react-native';
 import { useTranslation } from '@/i18n';
 import type { TChatAttachment, TTabQuestionAnswerBody } from '@/services/api/contract';
-import { AppText, Banner, Button, EmptyState, Icon, type IconName, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
+import { AppText, Banner, Button, EmptyState, Icon, type IconName, KeyboardInsetView, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
 import { inboxKey } from '../model/chat-inbox';
 import { activeGrantIndex } from '../model/grant-time';
 import { isReplyable, replyRefOf, replyRefOfCard, type ReplyableCard, type ReplyRef } from '../model/reply';
+import { contextMeter } from '../model/context';
 import { isActive } from '../model/subagents';
 import { chatTimeline, groupPendingActions, groupSettledActions, type ChatEntry } from '../model/timeline';
 import type { ChatAction, ChatMessage, ChatStandingGrant } from '../model/types';
@@ -17,6 +17,7 @@ import { ActionCard } from './action-card';
 import { ActionGroupCard } from './action-group-card';
 import { ActionTrailCard } from './action-trail-card';
 import { Composer } from './composer';
+import { ContextMeter } from './context-meter';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
 import { PendingBar } from './pending-bar';
@@ -138,11 +139,6 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   const answerTabLimit = useChatStore((s) => s.answerTabLimit);
   /** "Ver separadas" holds only for the cards it was clicked on: a new or decided card groups again. */
   const [separate, setSeparate] = useState(false);
-  const insets = useSafeAreaInsets();
-  /** Where the keyboard-avoiding view's parent starts on screen; `null` until measured. */
-  const bodyRef = useRef<View>(null);
-  const [bodyTop, setBodyTop] = useState<number | null>(null);
-  const measureBody = useCallback(() => bodyRef.current?.measureInWindow((_x, y) => setBodyTop(y)), []);
 
   // The subagents panel lives in the conversation's settings (TER-1039); a dot on the cog keeps a
   // running subagent noticeable from here.
@@ -387,18 +383,17 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
 
   const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? t('Conversa')) : t('Chat geral');
   const shownError = error ?? slot?.error ?? null;
+  const meter = useMemo(() => contextMeter(slot?.conversation, slot?.contextLimit), [slot?.conversation, slot?.contextLimit]);
 
   return (
     <Screen padded={false} width="full">
-      {/* `padding` on iOS, `height` on Android (spec §4.2 "Keyboard"): stock behaviour on both, no
-          extra native module. The avoiding view compares its frame, relative to its parent, with the
-          keyboard's top on screen: the offset is where that parent really starts on screen, measured,
-          so the composer lands right on the keyboard. It used to be assumed to be the top safe-area
-          inset; wherever the screen really starts elsewhere, the pill floated off the keyboard by the
-          difference. */}
-      <View ref={bodyRef} testID="conversation-body" className="flex-1" onLayout={measureBody}>
-      <KeyboardAvoidingView testID="conversation-keyboard" className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={bodyTop ?? insets.top}>
-        {/* The header block — title, host line, error — and the footer block below — pending bar, composer —
+      {/* The body leaves the keyboard's overlap with it at its bottom (TER-1022): one source for the
+          keyboard's height, taken from each event's end frame and the body's place measured right then,
+          so the composer sits right on the keyboard — QuickType bar included — and back on the safe
+          area however the keyboard went (drag, tap outside, send). The stock KeyboardAvoidingView
+          followed show/hide only and could keep a stale height. */}
+      <KeyboardInsetView testID="conversation-body">
+        {/* The header block — title, host line, error — and the footer block below — grants, composer —
             are siblings of the list, never rows inside it: a line appearing there changes the list's
             frame, not its content, and the inverted list keeps its end pinned through that. */}
         <View>
@@ -407,6 +402,8 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
             <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
               {title}
             </AppText>
+            {/* TER-1038: "ctx 150k/200k", against the person's own limit when they set one. */}
+            <ContextMeter meter={meter} />
             {/* Everything else about the conversation — where it runs, subagents, trusted tabs, memory,
                 "Nova conversa" — is one tap away, in its settings (TER-1039). */}
             <Pressable
@@ -477,8 +474,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
           <PendingBar entries={timeline} deciding={decidingId !== null} onJump={onJump} onApprove={onApproveWrites} />
           <Composer sending={sending} onSend={onSend} replyTo={replyTo} onCancelReply={cancelReply} uploadAttachment={uploadAttachment} deleteAttachment={deleteAttachment} attachmentStatuses={attachmentStatuses} inbox={activeProject === undefined ? undefined : inboxKey(activeProject)} />
         </View>
-      </KeyboardAvoidingView>
-      </View>
+      </KeyboardInsetView>
     </Screen>
   );
 }

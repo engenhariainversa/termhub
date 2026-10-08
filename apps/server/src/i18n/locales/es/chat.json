@@ -39,7 +39,6 @@
   "A máquina {{name}} está offline. Ligue-a ou escolha outra máquina para o chat.": "La máquina {{name}} está desconectada. Enciéndela o elige otra máquina para el chat.",
   "O agente da máquina {{name}} (versão {{version}}) ainda não sabe rodar o chat. Atualize o agente e tente de novo.": "El agente de la máquina {{name}} (versión {{version}}) todavía no puede ejecutar el chat. Actualiza el agente y vuelve a intentarlo.",
   "O agente da máquina {{name}} ainda não sabe rodar o chat. Atualize o agente e tente de novo.": "El agente de la máquina {{name}} todavía no puede ejecutar el chat. Actualiza el agente y vuelve a intentarlo.",
-  "O concierge não respondeu": "El concierge no respondió",
   "O servidor está reiniciando; tente de novo em instantes": "El servidor se está reiniciando; vuelve a intentarlo en un momento",
   "A mensagem citada não está mais disponível. Cancele a citação e envie de novo.": "El mensaje citado ya no está disponible. Quita la cita y vuelve a enviarlo.",
   "Um dos anexos não está disponível: envie de novo": "Uno de los adjuntos no está disponible: vuelve a enviarlo",

@@ -16,6 +16,7 @@ import { answerTabQuestion, requirePinFor, tabQuestionScreen } from '../chat/tab
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
 import { permissionsOf } from '../auth/permissions.js';
+import { featuresFor } from '../features/flags.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
@@ -116,7 +117,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     const projectId = project ?? null;
     const user = request.scope.user;
     const conversation = await deps.chat.conversationFor(user, projectId);
-    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows] = await Promise.all([
+    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows, context_limit] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       deps.chat.hostFor(user, projectId),
@@ -131,6 +132,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       deps.chat.openAnswerIds(conversation.id),
       // Usage-limit cards (TER-589): their own list, like suggestions, for the apps that parse tab_questions strictly.
       repos.tabLimitNotices.listByConversation(conversation.id),
+      // What the context meter measures against (TER-1038): null = the model's window.
+      repos.users.chatContextLimit(user.id),
     ]);
     const actions = await describeActions(repos, rows, user.id);
     const { tab_questions, tab_suggestions } = splitTabRows(await describeTabQuestions(repos, questionRows, user.id));
@@ -148,6 +151,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       subagents,
       // The rows a screen opened in the middle of a run shows as being answered (spec 2026-09-29).
       open_answer_ids: openAnswersIn(messages, open),
+      context_limit,
     };
   });
 
@@ -502,10 +506,15 @@ export async function mobileMeRoutes(app: FastifyInstance, repos: Repositories) 
   app.get('/me', { config: { action: 'read' } }, async (request) => {
     const device = deviceOf(request);
     const user = request.scope.user;
-    const [permissions, unread] = await Promise.all([permissionsOf(repos, user), repos.userNotifications.countUnread(user.id)]);
+    const [permissions, unread, features] = await Promise.all([
+      permissionsOf(repos, user),
+      repos.userNotifications.countUnread(user.id),
+      featuresFor({ repos, userId: user.id }),
+    ]);
     return {
       user: { id: user.id, email: user.email, name: user.name, nickname: user.nickname },
       permissions,
+      features,
       device: toDeviceSelf(device),
       unread_notifications: unread,
     };

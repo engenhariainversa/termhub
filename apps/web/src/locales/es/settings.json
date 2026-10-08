@@ -432,5 +432,19 @@
   "Consultar o uso das contas de IA em {{machine}}": "Consultar el uso de las cuentas de IA en {{machine}}",
   "Consulta de uso desligada nesta máquina": "Consulta de uso desactivada en esta máquina",
   "Atualize o agente desta máquina para ver o uso": "Actualiza el agente de esta máquina para ver el uso",
-  "Ligue em Máquinas › {{machine}}": "Actívala en Máquinas › {{machine}}"
+  "Ligue em Máquinas › {{machine}}": "Actívala en Máquinas › {{machine}}",
+  "Assinaturas": "Suscripciones",
+  "Planos, checkout, paywall e limites do período de teste. Desligado, nada disso aparece na web, no app nem na landing, as rotas de cobrança não existem e os webhooks do provedor de pagamento são ignorados.": "Planes, checkout, paywall y límites del período de prueba. Desactivado, nada de esto aparece en la web, en la app ni en la landing, las rutas de cobro no existen y los webhooks del proveedor de pagos se ignoran.",
+  "Recursos que ainda não foram liberados. Ligue para todos aqui, sem deploy, ou só para algumas pessoas testarem antes.": "Funciones que aún no se han lanzado. Actívalas para todos aquí, sin deploy, o solo para que algunas personas las prueben antes.",
+  "{{name}} para todos": "{{name}} para todos",
+  "Ligado para todos.": "Activado para todos.",
+  "Desligado para todos, exceto quem estiver na lista abaixo.": "Desactivado para todos, excepto quien esté en la lista de abajo.",
+  "Valor próprio por pessoa": "Valor propio por persona",
+  "Ninguém tem um valor próprio.": "Nadie tiene un valor propio.",
+  "{{name}} para {{email}}": "{{name}} para {{email}}",
+  "E-mail de quem vai testar": "Correo de quien va a probar",
+  "Ligar para essa pessoa": "Activar para esta persona",
+  "Ligou ou desligou um recurso em teste": "Activó o desactivó una función en prueba",
+  "Mudou um recurso em teste para uma pessoa": "Cambió una función en prueba para una persona",
+  "Recursos em teste": "Funciones en prueba"
 }

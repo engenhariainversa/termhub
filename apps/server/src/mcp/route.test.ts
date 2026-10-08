@@ -564,8 +564,8 @@ describe('read_attachment', () => {
 
   it('is offered to a read token whose user can read the chat, and hidden otherwise', async () => {
     const offered = await rpc(build({ grants: chatGrants }).app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
-    // search_memory shares the same chat:read grant as read_attachment.
-    expect(offered.json().result.tools.map((t: { name: string }) => t.name)).toEqual(['read_attachment', 'search_memory']);
+    // search_memory and get_chat_context (TER-1038) share the same chat:read grant as read_attachment.
+    expect(offered.json().result.tools.map((t: { name: string }) => t.name)).toEqual(['read_attachment', 'search_memory', 'get_chat_context']);
     const hidden = await rpc(build({ grants: ['machines:read'] }).app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
     expect(hidden.json().result.tools.map((t: { name: string }) => t.name)).not.toContain('read_attachment');
     expect(hidden.json().result.tools.map((t: { name: string }) => t.name)).not.toContain('search_memory');

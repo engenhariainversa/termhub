@@ -106,5 +106,6 @@
   "Algum arquivo de configuração não pôde ser lido ou não é JSON válido; a instalação vai recusá-lo até ele ser corrigido na máquina.": "Algún archivo de configuración no se pudo leer o no es JSON válido; la instalación lo rechazará hasta que se corrija en la máquina.",
   "Não foi possível ler a configuração da máquina": "No se pudo leer la configuración de la máquina",
   "Instalar os hooks mexe nos arquivos de configuração da máquina e precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.": "Instalar los hooks modifica los archivos de configuración de la máquina y requiere la confirmación de la persona en el chat. No se cambió nada: propón la llamada de nuevo.",
-  "{{tools}} não está instalado nesta máquina: os hooks só são instalados para os CLIs que já estão lá. Nada foi alterado.": "{{tools}} no está instalado en esta máquina: los hooks solo se instalan para los CLI que ya están ahí. No se cambió nada."
+  "{{tools}} não está instalado nesta máquina: os hooks só são instalados para os CLIs que já estão lá. Nada foi alterado.": "{{tools}} no está instalado en esta máquina: los hooks solo se instalan para los CLI que ya están ahí. No se cambió nada.",
+  "Esta ferramenta só funciona no chat do termhub: ela lê o contexto da própria conversa.": "Esta herramienta solo funciona en el chat de termhub: lee el contexto de la propia conversación."
 }

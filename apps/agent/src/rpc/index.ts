@@ -7,6 +7,7 @@ import * as fileRead from './file-read.js';
 import * as fs from './fs.js';
 import * as hooks from './hooks.js';
 import * as hw from './hw.js';
+import * as net from './net.js';
 import * as paste from './paste.js';
 import * as secret from './secret.js';
 import * as sim from './sim.js';
@@ -63,4 +64,5 @@ export const handlers: Handlers = {
   'transcript.read': transcript.read,
   'git.worktree.ensure': worktree.ensure,
   'git.worktree.remove': worktree.remove,
+  'net.check': net.check,
 };

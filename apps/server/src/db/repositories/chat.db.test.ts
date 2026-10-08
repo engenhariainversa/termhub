@@ -58,8 +58,11 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatRepository (Postgres)
     const c = await repo.getOrCreateForProject(userId, projectId);
     expect(c.context_tokens).toBeNull();
     await repo.setCliSession(c.id, '3f1e9b1e-0000-4000-8000-000000000002');
-    expect(await repo.setContext(c.id, { tokens: 25_000, window: 1_000_000 })).toEqual({ tokens: 25_000, window: 1_000_000 });
-    expect(await repo.setContext(c.id, { tokens: 1_950 })).toEqual({ tokens: 1_950, window: 1_000_000 });
+    expect(await repo.setContext(c.id, { tokens: 25_000, window: 1_000_000 })).toEqual({ tokens: 25_000, window: 1_000_000, compacted_at: null });
+    // A compaction's fill also stamps when (TER-1038); a later turn keeps that stamp.
+    const compacted = await repo.setContext(c.id, { tokens: 1_950, compacted: true });
+    expect(compacted).toMatchObject({ tokens: 1_950, window: 1_000_000, compacted_at: expect.any(String) });
+    expect(await repo.setContext(c.id, { tokens: 1_950 })).toEqual({ tokens: 1_950, window: 1_000_000, compacted_at: compacted.compacted_at });
     const stored = await repo.findByIdForUser(c.id, userId);
     expect([stored?.context_tokens, stored?.context_window]).toEqual([1_950, 1_000_000]);
     // Another session id keeps the fill (a turn reports it right after); no session drops it.
@@ -67,7 +70,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatRepository (Postgres)
     expect((await repo.findByIdForUser(c.id, userId))?.context_tokens).toBe(1_950);
     await repo.setCliSession(c.id, null);
     const cleared = await repo.findByIdForUser(c.id, userId);
-    expect([cleared?.cli_session_id, cleared?.context_tokens, cleared?.context_window]).toEqual([null, null, null]);
+    expect([cleared?.cli_session_id, cleared?.context_tokens, cleared?.context_window, cleared?.context_compacted_at]).toEqual([null, null, null, null]);
     // A host move strands the project sessions, and their fill with them.
     await repo.setCliSession(c.id, '3f1e9b1e-0000-4000-8000-000000000004');
     await repo.setContext(c.id, { tokens: 10, window: 200_000 });
