@@ -437,5 +437,12 @@
   "Motivo: {{why}}": "Why: {{why}}",
   "Precedente: {{ref}}": "Precedent: {{ref}}",
   "Regra: {{ref}}": "Rule: {{ref}}",
-  "Similaridade: {{score}}%": "Similarity: {{score}}%"
+  "Similaridade: {{score}}%": "Similarity: {{score}}%",
+  "Novas tentativas do deploy": "Deploy retries",
+  "quando o deploy falha por problema do GitHub; 0 = pausa na hora": "when the deploy fails because of GitHub; 0 = pause at once",
+  "Retomadas após erro do GitHub": "Resumes after a GitHub error",
+  "push ou PR com erro do GitHub; depois disso, chama você": "a push or PR failing on GitHub's side; past this, you are called",
+  "Deploy falhou por problema do GitHub; rodando de novo": "Deploy failed because of GitHub; running it again",
+  "{{ref}}: erro do GitHub; o termhub tenta de novo quando ele voltar": "{{ref}}: GitHub error; termhub retries once it is back",
+  "{{ref}}: confiança da pasta confirmada sozinha": "{{ref}}: folder trust confirmed automatically"
 }

@@ -214,6 +214,8 @@ export const FEED_KINDS = [
   'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out',
   // TER-1011: every automatic answer is in the feed with its why, permissions included
   'permission_auto_approved',
+  // TER-1025
+  'deploy_retried', 'github_wait', 'trust_auto_accepted',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** An event with what its sentence names, looked up by the repository. */
