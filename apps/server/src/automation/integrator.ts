@@ -128,6 +128,7 @@ export async function integrateEpic(deps: IntegratorDeps, epic: Task, setup: Pro
     prUrl: pull.url,
     policy: policyText(setup.automation, setup.repo?.deploy_workflow ?? null),
     custom: setup.automation.prompts.integrator,
+    stopOnDecisions: setup.automation.stop_on_decisions,
   });
   const started = await deps.startTriggered({ projectId: project.id, taskId: epic.id, role: 'integrator', triggerSha: head, branch: epicBranch, base: baseBranch, prompt });
   if (started === 'started') log.info({ projectId: project.id, taskId: epic.id, pr: pull.number }, 'automation: integrator started');

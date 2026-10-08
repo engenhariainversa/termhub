@@ -46,6 +46,15 @@ describe('auto-approved and guard-blocked lines (TER-993)', () => {
   });
 });
 
+describe('decisions taken alone (TER-1043)', () => {
+  it('shows the agent\'s summary, or the nudge line without one, in pt-BR and en', async () => {
+    expect(feedLine(ev({ kind: 'decided_by_recommendation', summary: 'Cor do botão? → Azul' }))).toBe('TER-9 decidiu sozinho: Cor do botão? → Azul');
+    expect(feedLine(ev({ kind: 'decided_by_recommendation' }))).toBe('TER-9: seguiu a própria recomendação (registrada no PR)');
+    await i18n.changeLanguage('en');
+    expect(feedLine(ev({ kind: 'decided_by_recommendation', summary: 'x → y' }))).toBe('TER-9 decided alone: x → y');
+  });
+});
+
 describe('a start that failed (TER-987)', () => {
   it('says why it did not start, and keeps the plain line for any other block', async () => {
     expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'A máquina não respondeu' }))).toBe('TER-9 não começou: A máquina não respondeu');

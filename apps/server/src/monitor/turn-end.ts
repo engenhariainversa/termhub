@@ -34,10 +34,13 @@ const ASKS = new RegExp(
   ].join('|')})`,
 );
 
+/** The message without code and URLs: a `?` left in it is a question. */
+export const proseOf = (text: string): string => text.replace(CODE_BLOCK, ' ').replace(INLINE_CODE, ' ').replace(URL, ' ');
+
 export function classifyTurnEnd(message: string | null): TurnEnd {
   const text = message?.trim();
   if (!text) return 'waiting_input';
-  const prose = text.replace(CODE_BLOCK, ' ').replace(INLINE_CODE, ' ').replace(URL, ' ');
+  const prose = proseOf(text);
   if (prose.includes('?')) return 'waiting_input';
   const plain = prose.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ');
   return ASKS.test(` ${plain} `) ? 'waiting_input' : 'finished';
