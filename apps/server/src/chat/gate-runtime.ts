@@ -191,16 +191,17 @@ const targetOf = (args: Record<string, unknown>) => ({
 });
 
 /**
- * A tab card also keeps its tab's project (TER-986), read owner-scoped when the card is asked: the card
- * then still says which project it was for once the tab is closed. Only fills a project the call did
- * not name; a tab that does not resolve (gone, or another user's) adds nothing. Best-effort: a failed
- * read keeps the target as the call named it.
+ * A tab card also keeps its tab's project (TER-986) and its name (TER-1024), read owner-scoped when the
+ * card is asked: the card then still says which tab, of which project, it was for once the tab is
+ * closed. Only fills a project the call did not name; a tab that does not resolve (gone, or another
+ * user's) adds nothing. Best-effort: a failed read keeps the target as the call named it.
  */
-async function withTabProject(ctx: ControlContext, target: ReturnType<typeof targetOf>): Promise<ReturnType<typeof targetOf>> {
-  if (!target.tab_id || target.project_id) return target;
+type Target = ReturnType<typeof targetOf> & { tab_name?: string | null };
+async function withTabSnapshot(ctx: ControlContext, target: ReturnType<typeof targetOf>): Promise<Target> {
+  if (!target.tab_id) return target;
   try {
     const [tab] = await ctx.repos.tabs.findByIdsForOwner([target.tab_id], ctx.scope.user.id);
-    return tab ? { ...target, project_id: tab.project_id } : target;
+    return tab ? { ...target, project_id: target.project_id ?? tab.project_id, tab_name: tab.name } : target;
   } catch {
     return target;
   }
@@ -353,7 +354,7 @@ function actionNotRecorded(): never {
 
 /** Records the proposal and puts the question in the chat. */
 async function ask(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass): Promise<GateOutcome> {
-  const target = await withTabProject(ctx, targetOf(call.args));
+  const target = await withTabSnapshot(ctx, targetOf(call.args));
   let row: ChatAction;
   try {
     // `args` is the proposal exactly as the concierge made it — the command, the prompt, the target.
@@ -443,9 +444,10 @@ export async function askForAutomation(
  * live, since no card was ever shown for it.
  */
 async function executeGranted(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass, grantId: string): Promise<GateOutcome> {
+  const target = await withTabSnapshot(ctx, targetOf(call.args));
   let row: ChatAction;
   try {
-    row = await ctx.repos.chatActions.insertApproved({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...targetOf(call.args), ...originFor(call, conversationId), grant_id: grantId, decided_by: ctx.scope.user.id });
+    row = await ctx.repos.chatActions.insertApproved({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...target, ...originFor(call, conversationId), grant_id: grantId, decided_by: ctx.scope.user.id });
   } catch {
     // Either reading of a failed insert: the partial unique index refused it because an identical
     // call arrived in the same instant and its (approved) row already occupies the key — the same
