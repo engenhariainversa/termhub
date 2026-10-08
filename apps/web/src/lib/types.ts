@@ -972,13 +972,17 @@ export interface AiLoginStatusRow {
 /** POST /ai-accounts/:id/login */
 export interface AiLoginStart {
   login_id: string;
-  /** the page to open in a browser */
-  url: string;
+  /** the page to open in a browser; null when `logged_in` */
+  url: string | null;
   /** Codex's one-time device code to type on that page; null for Claude */
   user_code: string | null;
   /** true (Claude): paste the code the page shows back; false (Codex): just confirm once authorized */
   needs_code: boolean;
   expires_at: string;
+  /** the CLI already finished the login on the machine (its own browser took it, TER-1054): nothing to open */
+  logged_in: boolean;
+  /** with `logged_in`: the account's tabs still showing the login error */
+  stuck_tabs: AiLoginStuckTab[];
 }
 
 export interface AiLoginStuckTab {
