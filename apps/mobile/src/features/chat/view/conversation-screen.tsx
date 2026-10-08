@@ -10,12 +10,13 @@ import { inboxKey } from '../model/chat-inbox';
 import { activeGrantIndex, isGrantActive } from '../model/grant-time';
 import { isReplyable, replyRefOf, replyRefOfCard, type ReplyableCard, type ReplyRef } from '../model/reply';
 import { isActive } from '../model/subagents';
-import { chatTimeline, groupPendingActions, type ChatEntry } from '../model/timeline';
+import { chatTimeline, groupPendingActions, groupSettledActions, type ChatEntry } from '../model/timeline';
 import type { ChatAction, ChatMessage, ChatStandingGrant } from '../model/types';
 import type { ChatDecision } from '../viewmodel/createChatStore';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ActionCard } from './action-card';
 import { ActionGroupCard } from './action-group-card';
+import { ActionTrailCard } from './action-trail-card';
 import { Composer } from './composer';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
@@ -47,6 +48,8 @@ const entryKey = (entry: ChatEntry) =>
       ? `a:${entry.action.id}`
       : entry.kind === 'action_group'
         ? `g:${entry.actions[0]!.id}`
+        : entry.kind === 'action_trail'
+          ? `t:${entry.actions[0]!.id}`
         : entry.kind === 'tab_suggestion'
           ? `s:${entry.suggestion.id}`
           : entry.kind === 'tab_limit'
@@ -56,7 +59,7 @@ const entryKey = (entry: ChatEntry) =>
 /** Whether `entry` is the card of the action or question `id` — a group holds several actions. */
 const holds = (entry: ChatEntry, id: string): boolean =>
   (entry.kind === 'action' && entry.action.id === id) ||
-  (entry.kind === 'action_group' && entry.actions.some((a) => a.id === id)) ||
+  ((entry.kind === 'action_group' || entry.kind === 'action_trail') && entry.actions.some((a) => a.id === id)) ||
   (entry.kind === 'tab_question' && entry.question.id === id);
 
 /** How long the thread waits, after an approximate scroll, to retry a jump to a row not measured yet. */
@@ -236,8 +239,9 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
     .map((a) => a.id)
     .join(',');
   useEffect(() => setSeparate(false), [pendingKey]);
-  // Newest first, for the inverted list that keeps the thread pinned to its end.
-  const entries = useMemo(() => (separate ? timeline : groupPendingActions(timeline)).slice().reverse(), [separate, timeline]);
+  // Newest first, for the inverted list that keeps the thread pinned to its end. A turn's settled cards
+  // fold into one accordion above its answer (TER-1024); pending ones never do.
+  const entries = useMemo(() => groupSettledActions(separate ? timeline : groupPendingActions(timeline)).slice().reverse(), [separate, timeline]);
   // The pending bar's jump (TER-477): scrolls the thread to the row that holds the card. A row far
   // up the list may not be measured yet: `onScrollToIndexFailed` scrolls to its estimated offset,
   // which renders it, then tries once more.
@@ -315,6 +319,25 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   // so neither this callback nor `extra` change while an answer streams. The memoised rows re-render
   // only where their own props changed.
   const onShowSeparately = useCallback(() => setSeparate(true), []);
+  /** One gate card, alone in the thread or inside a turn's accordion (TER-1024). */
+  const renderAction = useCallback(
+    (action: ChatAction) => (
+      <SwipeToReply onReply={() => onReplyCard({ kind: 'action', action })}>
+        <ActionCard
+          action={action}
+          busy={decidingId !== null}
+          onDecide={onDecide}
+          grant={grantIndex.get(action.id)}
+          projectGrant={projectGrantIndex.get(action.id)}
+          standingGrant={standingGrantIndex.get(action.id)}
+          revoking={revokingId !== null}
+          onRevoke={onRevoke}
+          onRepropose={onRepropose}
+        />
+      </SwipeToReply>
+    ),
+    [onReplyCard, decidingId, onDecide, grantIndex, projectGrantIndex, standingGrantIndex, revokingId, onRevoke, onRepropose],
+  );
   const renderItem = useCallback(
     ({ item }: { item: ChatEntry }) =>
       item.kind === 'tab_suggestion' ? (
@@ -343,20 +366,10 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
         <MessageRow message={item.message} onReply={onReply} onOpenReply={onOpenReply} highlighted={highlightId === item.message.id} />
       ) : item.kind === 'action_group' ? (
         <ActionGroupCard actions={item.actions} busy={decidingId !== null} onDecide={onDecideMany} onShowSeparately={onShowSeparately} />
+      ) : item.kind === 'action_trail' ? (
+        <ActionTrailCard actions={item.actions} renderAction={renderAction} />
       ) : (
-        <SwipeToReply onReply={() => onReplyCard({ kind: 'action', action: item.action })}>
-          <ActionCard
-            action={item.action}
-            busy={decidingId !== null}
-            onDecide={onDecide}
-            grant={grantIndex.get(item.action.id)}
-            projectGrant={projectGrantIndex.get(item.action.id)}
-            standingGrant={standingGrantIndex.get(item.action.id)}
-            revoking={revokingId !== null}
-            onRevoke={onRevoke}
-            onRepropose={onRepropose}
-          />
-        </SwipeToReply>
+        renderAction(item.action)
       ),
     [
       answeringQuestionIds,
@@ -385,6 +398,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
       onRevoke,
       onRepropose,
       onSendSuggestion,
+      renderAction,
       revokingId,
     ],
   );
