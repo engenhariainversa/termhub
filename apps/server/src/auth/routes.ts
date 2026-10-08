@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { toPublicUser, type User } from '../db/repositories/types.js';
 import { isAdmin, permissionsOf } from './permissions.js';
+import { featuresFor } from '../features/flags.js';
 import { VIEW_AS_ALL, VIEW_AS_COOKIE, type Scope } from './scope.js';
 import { HttpError, badRequest, forbidden, unauthorized, sendError } from '../lib/errors.js';
 import type { AuthContext } from './middleware.js';
@@ -85,6 +86,8 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
       ...toPublicUser(u),
       role_info: role ? { id: role.id, name: role.name, label: role.label, is_admin: role.is_admin } : null,
       permissions: await permissionsOf(ctx.repos, u),
+      // Feature flags resolved for this person (TER-1040): the web hides what is still off.
+      features: await featuresFor({ repos: ctx.repos, userId: u.id }),
     };
   };
 

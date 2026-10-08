@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+// Loaded at boot so it hears the first `sessionStarted` and reads the feature flags (TER-1040).
+import '@/features/feature-flags/viewmodel/useFeatureFlagsStore';
 import { PushPrimerSheet } from '@/features/permissions/view/push-primer-sheet';
 import { setSystemSettingsOpener } from '@/features/permissions/viewmodel/usePermissionsStore';
 import { useNotificationsStore } from '@/features/notifications/viewmodel/useNotificationsStore';
