@@ -101,6 +101,12 @@ export interface Rearm {
 const NEW: WaitOutcome = { action: 'record', seen: 'none', continuing: false };
 
 const isWait = (kind: TabState | null): boolean => kind === 'waiting_input' || kind === 'waiting_permission';
+/**
+ * A turn that ended in something other than a wait: a report that asks nothing (`finished`, TER-972), a run
+ * that reported itself blocked or Claude Code's login error (`blocked`, `auth_required`, TER-1046). Never
+ * a wait (`isWait`), and no reminder or subagent tool call turns it into one.
+ */
+const isTurnOver = (kind: TabState | null): boolean => kind === 'finished' || kind === 'blocked' || kind === 'auth_required';
 const isQuiet = (row: HistoryRow): boolean => row.kind === 'working' && row.event !== null && QUIET_EVENTS.has(row.event);
 
 /**
@@ -114,8 +120,8 @@ function noTurnSinceLastWait(history: HistoryRow[]): boolean {
   if (!last || !isQuiet(last)) return false;
   for (const row of history) {
     if (isQuiet(row) || row.kind === 'idle') continue;
-    // a turn that ended with a report (TER-972) is as much a turn end as a wait
-    return isWait(row.kind) || row.kind === 'finished';
+    // a turn that ended with a report (TER-972), blocked or on a login error (TER-1046) is as much a turn end as a wait
+    return isWait(row.kind) || isTurnOver(row.kind);
   }
   // Nothing but quiet rows: a session nobody asked anything — unless the rows that are kept ran
   // out, and a prompt may sit just beyond them.
@@ -151,11 +157,12 @@ export function decideWait(current: WaitCurrent, history: HistoryRow[], event: W
   // main thread sends later would take the tab out of working again. Only the subagent whose own
   // prompt the tab waits on is back at work when it calls a tool: the person approved it. A main thread
   // that waits on its own background work (TER-644) stays there too: those tool calls are that work. So
-  // does one that ended its turn with a report (TER-972): its turn is over, whatever a subagent still does.
+  // does one that ended its turn with a report (TER-972), blocked or on a login error (TER-1046): its turn is
+  // over, whatever a subagent still does.
   if (
     event.kind === 'working' &&
     event.subagent &&
-    (isWait(current.state) || current.state === 'waiting_background' || current.state === 'finished') &&
+    (isWait(current.state) || current.state === 'waiting_background' || isTurnOver(current.state)) &&
     !waitOwnedBy(history, event.subagent)
   ) {
     return { action: 'drop', reason: 'subagent_during_wait' };
@@ -167,9 +174,9 @@ export function decideWait(current: WaitCurrent, history: HistoryRow[], event: W
     return { action: 'drop', reason: 'reminder_during_background' };
   }
 
-  // Nor does a turn that ended with a report that asks nothing (TER-972): the reminder would turn a
-  // finished tab back into a wait for the person. A `finished` event itself is never a wait (`isWait`).
-  if (event.continuesWait && event.keepsWaitText && event.kind === 'waiting_input' && current.state === 'finished') {
+  // Nor does a turn that ended with a report that asks nothing (TER-972), blocked or on a login error
+  // (TER-1046): the reminder would turn such a tab back into a plain wait for the person.
+  if (event.continuesWait && event.keepsWaitText && event.kind === 'waiting_input' && isTurnOver(current.state)) {
     return { action: 'drop', reason: 'reminder_after_finished' };
   }
 

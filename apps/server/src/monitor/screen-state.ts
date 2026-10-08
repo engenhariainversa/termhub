@@ -1,4 +1,5 @@
 import { dialogFooterVisible, lastNonBlankLines, permissionDialogVisible } from '../chat/permission-dialog.js';
+import { isAuthMessage } from './turn-end.js';
 
 /**
  * What a Claude Code tab shows, read from a plain capture of its pane (TER-615): the hooks said
@@ -8,6 +9,9 @@ import { dialogFooterVisible, lastNonBlankLines, permissionDialogVisible } from 
  * - `busy`: the spinner of a turn in progress (`✢ Catapulting… (14s · ↓ 145 tokens)`);
  * - `background`: the turn ended and Claude Code waits on background work it started
  *   (`✻ Waiting for 1 background agent to finish`, TER-644) — not a wait for the person;
+ * - `trust`: Claude Code asks whether the folder is trusted, before any hook fires (TER-1046);
+ * - `auth`: Claude Code is back at its input box and its last answer is its login error ("Login expired ·
+ *   Please run /login", TER-1046);
  * - `prompt`: Claude Code is back at its input box with no turn running;
  * - null: anything else (a shell after Claude Code exited, an empty pane) — nothing is derived.
  *
@@ -17,7 +21,7 @@ import { dialogFooterVisible, lastNonBlankLines, permissionDialogVisible } from 
  * 1 background agent to finish"). The transcript never starts a line with a spinner glyph: an
  * answer's first line starts with "●" and the rest are indented. Never logged.
  */
-export type ScreenState = 'dialog' | 'busy' | 'background' | 'prompt';
+export type ScreenState = 'dialog' | 'busy' | 'background' | 'trust' | 'auth' | 'prompt';
 
 /** How many non-blank rows, from the bottom, are read: the spinner, the input box and the footer. */
 export const SCREEN_STATE_LINES = 30;
@@ -31,13 +35,51 @@ const RULE = /^\s*[─━]{10,}\s*$/;
 /** The input box's first row: the prompt glyph at column 0 (`>` is the ASCII fallback). */
 const INPUT = /^[❯>](?: |$)/;
 
+/** The folder trust dialog (Claude Code 2.1.x): its question and its "Yes" option (automation/trust.ts answers it). */
+const TRUST_QUESTION = /one you trust|trust this folder|trust the files in this folder/i;
+const TRUST_YES = /^\s*(?:❯\s*)?1\.\s*Yes, I trust this folder/;
+/** The first line of an answer in the transcript ("⏺", "●" on terminals without it). */
+const ANSWER = /^[⏺●] /u;
+/** The line a finished turn leaves under its answer: "✻ Worked for 0s · done 9:09 AM". */
+const TURN_SUMMARY = /^[·✢✳✶✻✽*] /u;
+
+/** Whether the screen shows the folder trust dialog, whatever option is selected (TER-1046). */
+export function trustDialogVisible(screen: string): boolean {
+  const lines = lastNonBlankLines(screen, SCREEN_STATE_LINES).split('\n');
+  return TRUST_QUESTION.test(lines.join('\n')) && lines.some((l) => TRUST_YES.test(l));
+}
+
+/**
+ * The last answer above the input box at row `input` (the rule's row): the rows from its "⏺" line down to the
+ * turn's summary line or the rule. Null when no answer is on screen.
+ */
+function lastAnswer(lines: string[], input: number): string | null {
+  let start = -1;
+  for (let i = input - 1; i >= 0; i--) {
+    if (ANSWER.test(lines[i]!)) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return null;
+  const out: string[] = [];
+  for (let i = start; i < input; i++) {
+    if (i > start && (TURN_SUMMARY.test(lines[i]!) || RULE.test(lines[i]!))) break;
+    out.push(lines[i]!.replace(ANSWER, '').trim());
+  }
+  return out.join(' ').trim();
+}
+
 export function claudeScreenState(screen: string): ScreenState | null {
+  if (trustDialogVisible(screen)) return 'trust';
   if (dialogFooterVisible(screen) || permissionDialogVisible(screen)) return 'dialog';
   const lines = lastNonBlankLines(screen, SCREEN_STATE_LINES).split('\n').map((l) => l.trimEnd());
   if (lines.some((l) => SPINNER.test(l))) return 'busy';
   if (lines.some((l) => BACKGROUND.test(l))) return 'background';
   for (let i = 1; i < lines.length; i++) {
-    if (INPUT.test(lines[i]!) && RULE.test(lines[i - 1]!)) return 'prompt';
+    if (!INPUT.test(lines[i]!) || !RULE.test(lines[i - 1]!)) continue;
+    const answer = lastAnswer(lines, i - 1);
+    return answer && isAuthMessage(answer) ? 'auth' : 'prompt';
   }
   return null;
 }

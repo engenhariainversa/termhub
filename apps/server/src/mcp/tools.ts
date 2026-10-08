@@ -116,7 +116,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'list_tabs',
-    description: 'List the tabs of a project (or of every project of a machine): whether the tmux session is alive, what the tool in it is doing (working, waiting_input, waiting_permission, idle, error, or waiting_background: it ended its turn while its own subagents, background shells or monitors still run — still at work, not waiting for the person; or finished: it ended its turn with a report and asks nothing — done, not waiting for the person), its pending question, and the task linked to it.',
+    description: 'List the tabs of a project (or of every project of a machine): whether the tmux session is alive, what the tool in it is doing (working, waiting_input, waiting_permission, idle, error, or waiting_background: it ended its turn while its own subagents, background shells or monitors still run — still at work, not waiting for the person; or finished: it ended its turn with a report and asks nothing — done, not waiting for the person; or blocked: its automatic run reported itself blocked — automation or the chat acts, not the person; or auth_required: the Claude Code login expired and the person must run /login in that tab — urgent; or trust_prompt: Claude Code asks whether the folder is trusted, before it starts), its pending question, and the task linked to it. A tab needs the person in waiting_input, waiting_permission, auth_required and trust_prompt.',
     scope: 'read', resource: 'terminals', action: 'read',
     input: { project_id: id.optional(), machine_id: id.optional() },
     run: (ctx, a) => listTabs(ctx, a as { project_id?: string; machine_id?: string }),

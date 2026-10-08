@@ -41,7 +41,9 @@ export const agentOnCard = z.object({
    * TER-644) is sent as `working` with `background: true`: an app that predates the flag keeps parsing the
    * state and shows it at work, never as waiting for the person. One that ended its turn with a report
    * and asks nothing (the tab's `finished`, TER-972) is sent as `idle` with `finished: true`, so an older
-   * app shows it stopped, never as waiting for the person.
+   * app shows it stopped, never as waiting for the person. TER-1046: a run that reported itself blocked
+   * travels as `idle` with `blocked: true`, a login that expired as `error` with `auth_required: true` and
+   * the folder trust dialog as `waiting_input` with `trust_prompt: true`.
    */
   state: progressTabState.nullable(),
   state_at: z.string().nullable(),
@@ -49,6 +51,12 @@ export const agentOnCard = z.object({
   background: z.boolean().default(false),
   /** the agent finished its work with a report and asks nothing (TER-972); only with `state: 'idle'` */
   finished: z.boolean().default(false),
+  /** the tab's automatic run reported itself blocked: automation or the chat acts (TER-1046); only with `state: 'idle'` */
+  blocked: z.boolean().default(false),
+  /** Claude Code needs a new /login (TER-1046); only with `state: 'error'` */
+  auth_required: z.boolean().default(false),
+  /** Claude Code asks whether the folder is trusted (TER-1046); only with `state: 'waiting_input'` */
+  trust_prompt: z.boolean().default(false),
   needs_you: z.boolean(),
   activity: z.string().nullable(),
   activity_verb: z.string().nullable(),

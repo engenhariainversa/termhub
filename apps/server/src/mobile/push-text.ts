@@ -60,6 +60,20 @@ export function tabFinishedText(ctx: PushContext, locale: Locale = DEFAULT_LOCAL
   };
 }
 
+/**
+ * A tab's Claude Code cannot use its account until the person logs in again (TER-1046): the machine and the
+ * account's label, never what the tab showed.
+ */
+export function tabAuthRequiredText(ctx: PushContext & { accountLabel: string | null }, locale: Locale = DEFAULT_LOCALE): PushText {
+  const where = ctx.machineName ?? t(locale, 'uma máquina');
+  return {
+    title: t(locale, 'Login expirado em {{machine}}', { machine: where }),
+    body: ctx.accountLabel
+      ? t(locale, 'A conta {{account}} precisa de /login. Abra a aba {{tab}} e entre de novo.', { account: ctx.accountLabel, tab: ctx.tabName ?? '—' })
+      : t(locale, 'O Claude Code precisa de /login. Abra a aba {{tab}} e entre de novo.', { tab: ctx.tabName ?? '—' }),
+  };
+}
+
 /** A tab asked something in a project's chat (spec 2026-09-25 §6.1): which tab, never what it asked. */
 export function tabQuestionText(ctx: PushContext, kind: 'choice' | 'permission', locale: Locale = DEFAULT_LOCALE): PushText {
   const tab = ctx.tabName ? msg('A aba {{tab}}', { tab: ctx.tabName }) : msg('Uma aba');

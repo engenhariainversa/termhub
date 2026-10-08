@@ -54,6 +54,28 @@ describe('claudeScreenState — what a Claude Code tab shows (TER-615)', () => {
     expect(claudeScreenState(answer)).toBe('prompt');
   });
 
+  // TER-1046: real screens of 2026-10-08 (Claude Code 2.1.289), paths replaced
+  const screen289 = (name: string) => readFileSync(new URL(`./fixtures/claude-screens/${name}-2.1.289.txt`, import.meta.url), 'utf8');
+
+  it('the login error as the last answer above the input box is auth (TER-1046)', () => {
+    expect(claudeScreenState(screen289('login-expired'))).toBe('auth');
+    const invalid = ['❯ oi', '', '● Invalid API key · Please run /login', '', '────────────', '❯ ', '────────────'].join('\n');
+    expect(claudeScreenState(invalid)).toBe('auth');
+  });
+
+  it('a login error in an earlier answer, or quoted in a long one, is a plain prompt (TER-1046)', () => {
+    const later = ['⏺ Login expired · Please run /login', '', '❯ /login', '', '⏺ Login successful.', '', '✻ Worked for 1s', '', '────────────', '❯ ', '────────────'].join('\n');
+    expect(claudeScreenState(later)).toBe('prompt');
+    const quoted = ['⏺ Documentei o caso "Login expired · Please run /login" no runbook.', ...Array.from({ length: 6 }, () => '  Mais detalhes sobre o que muda para quem usa o termhub no dia a dia, com exemplos.'), '', '✻ Brewed for 3s', '', '────────────', '❯ ', '────────────'].join('\n');
+    expect(claudeScreenState(quoted)).toBe('prompt');
+  });
+
+  it('the folder trust dialog is trust, whichever option is selected (TER-1046)', () => {
+    const screen = screen289('trust');
+    expect(claudeScreenState(screen)).toBe('trust');
+    expect(claudeScreenState(screen.replace('❯ 1.', '  1.').replace('  2. No', '❯ 2. No'))).toBe('trust');
+  });
+
   it('is unknown for a screen that is not Claude Code (a shell after it exited, an empty pane)', () => {
     expect(claudeScreenState('pedro@jarvis:~/termhub$ ')).toBeNull();
     expect(claudeScreenState('')).toBeNull();

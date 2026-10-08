@@ -3,7 +3,7 @@ import type { TabState } from '../db/repositories/types.js';
 import type { AutomationEvent } from '../db/repositories/index.js';
 import { escalationEventText } from '../automation/escalation-text.js';
 import type { Locale } from '../i18n/index.js';
-import { NEEDS_YOU } from '../monitor/state.js';
+import { NEEDS_YOU, contractStateOf } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
 
 type TaskStatus = 'backlog' | 'todo' | 'doing' | 'done';
@@ -58,12 +58,9 @@ function agentOf(tab: ProgressTabRow, subtaskRef: string | null): AgentOnCard {
     tab_name: tab.name,
     machine_name: tab.machine_name,
     subtask_ref: subtaskRef,
-    // the contract's state predates `waiting_background`: still at work, flagged (TER-644); and `finished`:
-    // stopped, flagged, never waiting for the person (TER-972)
-    state: tab.state === 'waiting_background' ? 'working' : tab.state === 'finished' ? 'idle' : tab.state,
+    // the contract's state predates the newer states: each travels as an older one, flagged (contractStateOf)
+    ...contractStateOf(tab.state),
     state_at: iso(tab.state_at),
-    background: tab.state === 'waiting_background',
-    finished: tab.state === 'finished',
     needs_you: tab.state !== null && NEEDS_YOU.includes(tab.state),
     activity: tab.activity,
     activity_verb: tab.activity_verb,

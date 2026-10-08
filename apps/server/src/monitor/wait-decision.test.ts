@@ -346,6 +346,14 @@ describe('decideWait — a main thread waiting on its own background work (TER-6
   });
 });
 
+describe('decideWait — a blocked run and a login error (TER-1046)', () => {
+  it('the idle_prompt after them is dropped: the tab stays blocked or auth_required', () => {
+    for (const state of ['blocked', 'auth_required'] as const) {
+      expect(decideWait(current({ state }), [row(state, 'Stop', 500)], reminder)).toEqual({ action: 'drop', reason: 'reminder_after_finished' });
+    }
+  });
+});
+
 describe('decideWait — a turn that ended with a report (TER-972)', () => {
   const finished = [row('finished', 'Stop', 500), row('working', 'UserPromptSubmit', 30_000)];
 

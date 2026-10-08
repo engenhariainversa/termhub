@@ -358,6 +358,12 @@ enum TabState {
   waiting_background
   /// The agent ended its turn with a report that asks nothing: done, not waiting for the person (TER-972).
   finished
+  /// The automatic run of the tab reported itself blocked: automation or the chat acts, not the person (TER-1046).
+  blocked
+  /// Claude Code cannot use its account ("Login expired · Please run /login"): the person has to log in again (TER-1046).
+  auth_required
+  /// Claude Code asks whether the folder is trusted, before any hook fires (TER-1046).
+  trust_prompt
 }
 
 /// What a working agent is doing, from the tool it is about to call (monitor/activity.ts).

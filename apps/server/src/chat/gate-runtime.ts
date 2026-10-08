@@ -500,7 +500,7 @@ const textOutsideGrant = (args: Record<string, unknown>) =>
 async function grantCoversTab(ctx: ControlContext, tabId: string): Promise<boolean> {
   const [tab] = await ctx.repos.tabs.findByIdsForOwner([tabId], ctx.scope.user.id);
   if (!tab) return true; // recorded as TAB_GONE by `execute()`
-  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'finished' || tab.state === 'waiting_permission';
+  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'finished' || tab.state === 'blocked' || tab.state === 'waiting_permission';
 }
 
 /**
@@ -584,10 +584,11 @@ async function standingGrantCovering(ctx: ControlContext, call: GatedCall): Prom
 }
 
 /** Tab states a default close is for (TER-627): the agent is not at work — `finished` among them, an agent
- * that reported and asks nothing (TER-972). `null` (a tab that never reported, a bare shell that may be
+ * that reported and asks nothing (TER-972), and `blocked`, a run that reported itself blocked (TER-1046). A
+ * login that expired is the person's to see. `null` (a tab that never reported, a bare shell that may be
  * running anything) is not among them, nor `working` read at face value, nor `waiting_permission`, which
  * the person has to see. */
-const STOPPED_TAB_STATES: ReadonlySet<string> = new Set(['waiting_input', 'finished', 'idle', 'error']);
+const STOPPED_TAB_STATES: ReadonlySet<string> = new Set(['waiting_input', 'finished', 'blocked', 'idle', 'error']);
 
 /**
  * A Claude Code `working` tab whose state is stale in the TER-615 sense — no hook event for `STALE_WORKING_MS` — and
@@ -602,7 +603,9 @@ async function idleDespiteWorking(ctx: ControlContext, tab: Tab): Promise<boolea
   if (!Number.isFinite(since) || Date.now() - since < STALE_WORKING_MS) return false;
   try {
     const { text } = await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_STATE_LINES + 20 }, { plain: true });
-    return claudeScreenState(text) === 'prompt';
+    // back at the input box, also when its last answer is the login error (TER-1046)
+    const screen = claudeScreenState(text);
+    return screen === 'prompt' || screen === 'auth';
   } catch {
     return false;
   }
@@ -633,7 +636,7 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
     if (!target) return null;
     tab = target.tab;
   }
-  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input' && tab?.state !== 'finished') return null;
+  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input' && tab?.state !== 'finished' && tab?.state !== 'blocked') return null;
   if (kind === 'close_tab' && !(tab && (STOPPED_TAB_STATES.has(tab.state ?? '') || (tab.state === 'working' && (await idleDespiteWorking(ctx, tab)))))) return null;
   const grantId = defaultGrantId(ctx.scope.user.id, kind);
   const used = await ctx.repos.chatActions.countByGrantSince(grantId, new Date(Date.now() - STANDING_BUDGET_WINDOW_MS));

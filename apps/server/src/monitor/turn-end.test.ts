@@ -84,13 +84,72 @@ const PENDING_SECTION = [
   '- Rodar `sudo ./svc.sh install && sudo ./svc.sh start`. É o que liga o runner.',
 ].join('\n');
 
-describe('classifyTurnEnd — a turn that ends with a report is finished, not waiting for you (TER-972)', () => {
+// TER-1046: last messages of the tabs that were yellow on 2026-10-08, trimmed. Most only reported.
+
+/** A report that ends with an offer ("posso removê-lo se quiser"). */
+const CI_FRONT = [
+  'O #492 foi mergeado na `master` e o deploy de produção disparou; quando conferi, ainda estava no começo.',
+  '',
+  '- **Merge:** feito com merge commit, o padrão do repo.',
+  '- **Deploy de produção:** o run 37566042829 começou às 03:17. Não acompanhei até o fim; dá para ver com `gh run watch 37566042829`.',
+  '',
+  'Registrei a lição como corrigida na memória do termhub. O worktree `financeiro-fonts-wt` continua lá; posso removê-lo se quiser.',
+].join('\n');
+
+/** A report with "é só me pedir". */
+const PUSHED = [
+  'O projeto está no GitHub, no repositório `pedrogoiania/reactnative-for-challenges`, branch `main`.',
+  '',
+  'O `AGENTS.md` e a pasta `.claude/` foram enviados também. Se quiser tirá-los do repositório antes do teste, é só me pedir.',
+].join('\n');
+
+/** A spike that closed its PR and lists cards to create; "posso marcar como pronto quando você quiser". */
+const SPIKE_DONE = [
+  'Fechei o spec do TER-1031 e o PR #449: https://github.com/engenhariainversa/termhub/pull/449. Ele continua como draft, como no pedido original; posso marcar como pronto quando você quiser.',
+  '',
+  '**Decisões registradas no spec:**',
+  '- A run passa de `blocked` para `done` uma única vez, quando aparece um PR do branch dela.',
+  '',
+  '**Cards para criar:**',
+  '1. Automático: adotar o PR aberto do branch de uma run que terminou blocked',
+].join('\n');
+
+/** An analysis that stops for the person's decisions. */
+const NEEDS_DECISIONS = [
+  'Terminei a análise do REA-3 e não alterei nada ainda. Antes de mexer, preciso de algumas decisões suas, porque as mudanças afetam produção e a ordem de deploy importa.',
+  '',
+  '## Plano, na ordem',
+  '',
+  '1. **BFF, autenticação:** parar de confiar no token só decodificado.',
+].join('\n');
+
+/** A PR left open, with a section for the person. */
+const FOR_THE_PERSON = [
+  'O **PR #55** está aberto e eu parei aí: sem merge e sem deploy.',
+  '',
+  '**Para o Pedro decidir:** autorizar o merge e o deploy.',
+].join('\n');
+
+describe('classifyTurnEnd — a turn that ends with a report is finished, not waiting for you (TER-972, TER-1046)', () => {
   it.each([
     ['TER-912: merge, deploy and card done, nothing asked', TER_912],
     ['a dev setup report', DEV_LOCAL],
     ['a cleanup report', BRANCHES_DELETED],
     ['a one-word report', 'Feito.'],
     ['an English report', 'Merged PR #312 and the deploy is healthy. The card is in Done.'],
+    // TER-1046: offers, next steps and pending items are part of a report
+    ['an offer ("Se quiser, rodo…")', OFFER_INSTALL],
+    ['an offer after a report ("Se quiser, apago também.")', OFFER_DELETE],
+    ['something left to the person, not asked', LEFT_TO_THE_PERSON],
+    ['a pending section and a test to run', PENDING_SECTION],
+    ['"Posso…" without a question mark', 'Os testes passam. Posso abrir o PR.'],
+    ['"você pode…"', 'PR #463 aberto, CI verde. Você pode acompanhar o deploy pelo Actions.'],
+    ['a failure it reports', 'O deploy falhou no healthcheck da cor blue; reverti e a green segue ativa.'],
+    ['a report that ends with an offer (real, 2026-10-08)', CI_FRONT],
+    ['"é só me pedir" (real, 2026-10-08)', PUSHED],
+    ['a finished spike (real, 2026-10-08)', SPIKE_DONE],
+    ['a question in an earlier block only', 'Por que falhava? O cache.\n\nCorrigi o cache e os testes passam.'],
+    ['a report that quotes the login error', `Documentei o caso "Login expired · Please run /login" no runbook. ${'Mais detalhes no PR. '.repeat(15)}`],
   ])('%s → finished', (_label, text) => {
     expect(classifyTurnEnd(text)).toBe('finished');
   });
@@ -98,16 +157,12 @@ describe('classifyTurnEnd — a turn that ends with a report is finished, not wa
   it.each([
     ['TER-851: decisions 2 to 6 are the person\'s', TER_851],
     ['a question at the end', QUESTION_AT_END],
-    ['an offer ("Se quiser, rodo…")', OFFER_INSTALL],
-    ['an offer after a report ("Se quiser, apago também.")', OFFER_DELETE],
-    ['something left to the person', LEFT_TO_THE_PERSON],
-    ['a pending section and a test to run', PENDING_SECTION],
-    ['"Posso…" without a question mark', 'Os testes passam. Posso abrir o PR.'],
-    ['"Quer que…"', 'Revisão feita. Quer que eu faça o merge'],
+    ['"Quer que eu…" without a question mark', 'Revisão feita. Quer que eu faça o merge'],
     ['"preciso que você"', 'Preciso que você aprove o acesso ao banco.'],
     ['"você decide"', 'As duas opções funcionam; você decide.'],
     ['a blocker', 'Não consegui rodar a suíte: o Docker não está de pé.'],
-    ['a failure', 'O deploy falhou no healthcheck da cor blue.'],
+    ['decisions the person owes (real, 2026-10-08)', NEEDS_DECISIONS],
+    ['"Para o Pedro decidir" (real, 2026-10-08)', FOR_THE_PERSON],
     ['English: let me know', 'The draft is ready. Let me know which one you prefer.'],
     ['English: should I', 'Tests pass. Should I merge'],
     ['English: blocked', 'I am blocked on the missing API key.'],
@@ -124,6 +179,14 @@ describe('classifyTurnEnd — a turn that ends with a report is finished, not wa
   it('ignores question marks in code, inline code and URLs', () => {
     expect(classifyTurnEnd('Corrigi a regex `^a?b$` e a URL https://termhub.dev/x?tab=1 agora abre a aba.')).toBe('finished');
     expect(classifyTurnEnd('Troquei o filtro:\n\n```ts\nconst x = a ?? b;\nconst y = ok ? 1 : 2;\n```\n\nO build passa.')).toBe('finished');
+  });
+
+  it.each([
+    ['Login expired · Please run /login'],
+    ['Invalid API key · Please run /login'],
+    ['API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"OAuth token has expired."}} · Please run /login'],
+  ])('Claude Code\'s login error "%s" → auth_required (TER-1046)', (text) => {
+    expect(classifyTurnEnd(text)).toBe('auth_required');
   });
 
   it('reads accents loosely: "voce decide" and "nao consegui" count too', () => {

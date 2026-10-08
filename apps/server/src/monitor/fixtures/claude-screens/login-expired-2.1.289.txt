@@ -1,0 +1,19 @@
+  - Os testes de repositório com Postgres e a checagem de drift da migração
+    ficam para o CI.
+
+  Docs atualizados: docs/security-and-network.md e o README do agente.
+
+✻ Sautéed for 15m 15s · done 9:53 PM
+
+❯ Siga a sua recomendação: o pareamento é feito pelo /agent/ws. Rode os
+  testes, suba na branch do PR e conclua.
+
+⏺ Login expired · Please run /login
+
+✻ Worked for 0s · done 9:09 AM
+                                        new task? /clear to save 224.3k tokens
+────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | TER-1017 | ctx 0/200.0k (0%) · out 154.0k | 5h - · 7d 15% (reset…
+  ⏵⏵ auto mode on (shift+tab to cycle) · PR #454 · ← for agents

@@ -9,7 +9,7 @@ import type { User } from '../db/repositories/types.js';
 import type { PushTestKind, PushTestResponse } from '@termhub/mobile-api';
 import { HttpError } from '../lib/errors.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
-import { automationEscalationText, confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
+import { automationEscalationText, confirmationText, deviceRequestText, replyText, tabAuthRequiredText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
 import { escalationReasonText } from '../automation/escalation-text.js';
 import { heldQuestion } from '../automation/question-hold.js';
@@ -257,6 +257,8 @@ export class MobilePushService {
   /** Escalations already pushed, by run and reason (D25: once per episode — a run's keys go when it
    * resumes). In memory: the event is published only in the process that recorded it. */
   private readonly escalations = new Set<string>();
+  /** Tabs already told about their expired login (TER-1046): once until the tab works again. */
+  private readonly authAlerted = new Set<string>();
 
   /** The live subscription's unsubscribe, so a second `start()` never subscribes twice. */
   private stop: (() => void) | null = null;
@@ -414,6 +416,16 @@ export class MobilePushService {
    * or its agent (`idle`): maybe "aba terminou". */
   private onTabState({ tab, owner_id }: TabStateChange): void {
     const pending = this.settling.get(tab.id);
+    if (tab.state === 'auth_required') {
+      this.working.delete(tab.id);
+      if (owner_id && !this.authAlerted.has(tab.id)) {
+        if (this.authAlerted.size > 10_000) this.authAlerted.clear();
+        this.authAlerted.add(tab.id);
+        void this.authRequired(tab, owner_id).catch((err) => this.deps.log.warn({ err: failureLabel(err), userId: owner_id, tabId: tab.id }, 'mobile push failed'));
+      }
+      return;
+    }
+    if (tab.state === 'working') this.authAlerted.delete(tab.id);
     if (tab.state === 'working') {
       if (pending) clearTimeout(pending);
       this.settling.delete(tab.id);
@@ -454,6 +466,21 @@ export class MobilePushService {
     const conversation = await repos.chat.findLatestActiveForProject(tab.project_id, ownerId);
     const data = { kind: 'tab_finished', tab_id: tab.id, project_id: tab.project_id, ...(conversation ? { conversation_id: conversation.id } : {}) };
     await this.deliver(ownerId, 'reply', (locale) => tabFinishedText(ctx, locale), data, await this.offline(ownerId), `tab:${tab.id}`);
+  }
+
+  /**
+   * A tab's Claude Code needs a new login (TER-1046): urgent and only the person can do it, so it goes to every
+   * device of the owner, like an escalation, and into the notification history with the machine and the
+   * account. The tap opens the tab (`data.tab_id`) on a newer app, the project's chat on an older one.
+   */
+  private async authRequired(tab: TabStateChange['tab'], ownerId: string): Promise<void> {
+    const { repos } = this.deps;
+    const ctx = await this.names(ownerId, tab.project_id, tab.id, tab.machine_id);
+    const account = tab.ai_account_id ? await repos.aiAccounts.findById(tab.ai_account_id) : undefined;
+    const accountLabel = account && account.machine_id === tab.machine_id ? account.label : null;
+    const conversation = await repos.chat.findLatestActiveForProject(tab.project_id, ownerId);
+    const data = { kind: 'tab_auth_required', tab_id: tab.id, project_id: tab.project_id, machine_id: tab.machine_id, ...(conversation ? { conversation_id: conversation.id } : {}) };
+    await this.deliver(ownerId, 'confirmation', (locale) => tabAuthRequiredText({ ...ctx, accountLabel }, locale), data, await repos.devices.listActiveWithPush(ownerId), `auth:${tab.id}`);
   }
 
   /**

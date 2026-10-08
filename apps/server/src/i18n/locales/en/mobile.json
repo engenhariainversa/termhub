@@ -43,5 +43,9 @@
   "Aba terminou": "Tab finished",
   "{{tab}} terminou e espera você.": "{{tab}} finished and is waiting for you.",
   "{{ref}} parou: {{reason}}": "{{ref}} stopped: {{reason}}",
+  "uma máquina": "a machine",
+  "Login expirado em {{machine}}": "Login expired on {{machine}}",
+  "A conta {{account}} precisa de /login. Abra a aba {{tab}} e entre de novo.": "Account {{account}} needs /login. Open tab {{tab}} and sign in again.",
+  "O Claude Code precisa de /login. Abra a aba {{tab}} e entre de novo.": "Claude Code needs /login. Open tab {{tab}} and sign in again.",
   "Um card": "A card"
 }

@@ -9,6 +9,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { Tab } from '../db/repositories/types.js';
 import { takeInputOrigin } from '../terminal/input-origin.js';
 import { buildOriginNote } from '../terminal/origin-note.js';
+import { applyRunOutcome, checkAuthOnScreen, defaultAuthScreenDeps } from './attention.js';
 import { monitorBus } from './bus.js';
 import { claudeSessionOf, interpretHookEvent, isRateLimit, type HookTool, type Interpreted } from './state.js';
 
@@ -77,7 +78,10 @@ async function ingestForTab(
   input: { machineId: string; tool: HookTool; session: string; event: unknown },
   waker?: Waker,
 ): Promise<IngestResult> {
-  const interpreted = interpretHookEvent(input.tool, input.event);
+  const raw = interpretHookEvent(input.tool, input.event);
+  // A turn end right after the tab's automatic run reported: its report decides between finished and blocked
+  // (TER-1046). A failed read keeps the hook's own reading.
+  const interpreted = raw ? await applyRunOutcome(repos, tab, input.tool, raw).catch(() => raw) : raw;
   // A subagent ended (spec 2026-09-30 tab questions per subagent §5): the tab's screen and state are
   // its main thread's, so nothing is recorded and a suggestion check still waiting is left alone.
   if (interpreted?.closeOnly) {
@@ -119,6 +123,11 @@ async function ingestForTab(
   // never throws, and the hook's answer does not wait for the card.
   if (input.tool === 'codex' && interpreted.meta.event === 'Stop' && interpreted.meta.subagent !== true) void openCodexReply(repos, log, updated.id, interpreted.answer ?? interpreted.text);
   if (isRateLimit(interpreted)) autoSwapOnLimit(repos, log, updated);
+  // Claude's idle reminder on a wait: the turn may have ended on its login error with nothing in the Stop
+  // (TER-1046). Not awaited; it never throws.
+  if (input.tool === 'claude' && interpreted.meta.event === 'Notification' && interpreted.meta.type === 'idle_prompt' && updated.state === 'waiting_input') {
+    void checkAuthOnScreen(repos, log, updated, defaultAuthScreenDeps(publishTabChange));
+  }
   return { ok: true, tab: updated };
 }
 

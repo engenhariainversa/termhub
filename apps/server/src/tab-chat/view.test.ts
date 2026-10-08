@@ -18,6 +18,9 @@ describe('tabSummaryOf', () => {
       state: 'working',
       background: false,
       finished: false,
+      blocked: false,
+      auth_required: false,
+      trust_prompt: false,
       state_at: '2026-10-01T10:00:00.000Z',
       needs_you: false,
       activity: 'coding',
@@ -38,6 +41,15 @@ describe('tabSummaryOf', () => {
     // an older payload without the flag reads as false
     const { finished: _f, ...older } = summary;
     expect(tabSummary.parse(older).finished).toBe(false);
+  });
+
+  it('the TER-1046 states travel as older ones, flagged; a login and the trust dialog need you, a blocked run does not', () => {
+    const at = '2026-10-08T10:00:00.000Z';
+    expect(tabSummaryOf(tab({ state: 'blocked', state_at: at }), project, machine, 'ready')).toMatchObject({ state: 'idle', blocked: true, needs_you: false });
+    expect(tabSummaryOf(tab({ state: 'auth_required', state_at: at }), project, machine, 'ready')).toMatchObject({ state: 'error', auth_required: true, needs_you: true });
+    expect(tabSummaryOf(tab({ state: 'trust_prompt', state_at: at }), project, machine, 'ready')).toMatchObject({ state: 'waiting_input', trust_prompt: true, needs_you: true });
+    const { blocked: _b, auth_required: _a, trust_prompt: _t, ...older } = tabSummaryOf(tab({ state: 'blocked', state_at: at }), project, machine, 'ready');
+    expect(tabSummary.parse(older)).toMatchObject({ blocked: false, auth_required: false, trust_prompt: false });
   });
 
   it('needs you while waiting and not seen since the state began', () => {
