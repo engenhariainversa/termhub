@@ -11,7 +11,7 @@
     "start": "node dist/index.js",
     "create-user": "tsx src/cli/create-user.ts",
     "mobile-client": "tsx src/cli/mobile-client.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.parity.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "i18n:check": "tsx scripts/i18n-check.ts",
@@ -41,6 +41,7 @@
     "nodemailer": "^10.0.10",
     "pg": "^8.23.0",
     "prisma": "^7.10.0",
+    "sigstore": "^4.1.1",
     "unpdf": "^1.7.0",
     "ws": "^8.18.0",
     "zod": "^3.24.1"

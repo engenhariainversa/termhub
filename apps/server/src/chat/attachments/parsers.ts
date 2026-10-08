@@ -4,6 +4,10 @@ import mammoth from 'mammoth';
 import { extractText as pdfExtractText } from 'unpdf';
 import { inflatedBytes, readZipDirectory, zipExpandedBytes } from './zip.js';
 import { ExtractError } from './errors.js';
+import { fixUnzipperEarlyEnd } from './unzipper-end.js';
+
+// Before any workbook is read: without it the streaming reader loses entries at random (TER-475).
+fixUnzipperEarlyEnd();
 
 /**
  * What the concierge will be able to read of a file (spec 2026-09-26 §5.4). Every parser treats

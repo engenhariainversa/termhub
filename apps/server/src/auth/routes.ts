@@ -1,8 +1,9 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { toPublicUser, type User } from '../db/repositories/types.js';
 import { isAdmin, permissionsOf } from './permissions.js';
+import { featuresFor } from '../features/flags.js';
 import { VIEW_AS_ALL, VIEW_AS_COOKIE, type Scope } from './scope.js';
 import { HttpError, badRequest, forbidden, unauthorized, sendError } from '../lib/errors.js';
 import type { AuthContext } from './middleware.js';
@@ -85,10 +86,17 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
       ...toPublicUser(u),
       role_info: role ? { id: role.id, name: role.name, label: role.label, is_admin: role.is_admin } : null,
       permissions: await permissionsOf(ctx.repos, u),
+      // Feature flags resolved for this person (TER-1040): the web hides what is still off.
+      features: await featuresFor({ repos: ctx.repos, userId: u.id }),
     };
   };
 
   const { service } = ctx;
+
+  /** Closes the admin's open "view as" period; best effort, since the cookie is cleared either way. */
+  async function endViewAsAudit(adminId: string, log: FastifyBaseLogger) {
+    await ctx.repos.viewAsAudit.end(adminId).catch((err: unknown) => log.warn({ err, adminId }, 'view-as: could not close the audit period'));
+  }
 
   app.get('/config', { config: { public: true } }, async () => ({
     modes: [...config.auth.modes],
@@ -154,17 +162,23 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     const { user_id } = viewAsSchema.parse(request.body);
     const base = { path: '/', sameSite: 'lax' as const, secure: config.auth.cookieSecure, httpOnly: true };
     if (!user_id || user_id === request.user.id) {
+      // Leaving another scope only narrows access: a failed audit write must not keep the admin in it.
+      await endViewAsAudit(request.user.id, request.log);
       reply.clearCookie(VIEW_AS_COOKIE, { path: '/' });
       if (request.scope?.viewAs.kind !== 'self') await audit(ctx.repos, request, 'auth.view_as_end');
       return { view_as: null };
     }
+    // Entering one is recorded first (TER-746): no audit row, no switch.
     if (user_id === VIEW_AS_ALL) {
+      await ctx.repos.viewAsAudit.start({ admin_id: request.user.id, scope: 'all', ip: request.ip });
       reply.setCookie(VIEW_AS_COOKIE, VIEW_AS_ALL, base);
+      request.log.info({ adminId: request.user.id, viewAs: VIEW_AS_ALL }, 'view-as set');
       await audit(ctx.repos, request, 'auth.view_as', { target: { type: 'user', id: VIEW_AS_ALL, label: 'all' } });
       return { view_as: 'all' as const };
     }
     const target = await ctx.repos.users.findById(user_id);
     if (!target) throw badRequest('Usuário inexistente');
+    await ctx.repos.viewAsAudit.start({ admin_id: request.user.id, scope: 'user', target_user_id: target.id, ip: request.ip });
     reply.setCookie(VIEW_AS_COOKIE, target.id, base);
     request.log.info({ adminId: request.user.id, viewAs: target.id }, 'view-as set');
     await audit(ctx.repos, request, 'auth.view_as', { target: { type: 'user', id: target.id, label: target.email } });
@@ -230,6 +244,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     const token = request.cookies[SESSION_COOKIE];
     if (request.user) await audit(ctx.repos, request, 'auth.logout');
     if (token) await service.destroySession(token);
+    if (request.user && request.cookies[VIEW_AS_COOKIE]) await endViewAsAudit(request.user.id, request.log);
     clearSessionCookies(reply);
     return { ok: true };
   });

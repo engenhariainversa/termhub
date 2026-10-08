@@ -179,6 +179,8 @@ export interface MobileApi {
   uploadAttachment(auth: Auth, file: UploadFile, projectId: string | null, onProgress?: (fraction: number) => void): Promise<TChatAttachment>;
   /** Only while unsent: 404 unknown, 409 once it was sent with a message. */
   deleteAttachment(auth: Auth, id: string): Promise<void>;
+  /** A transcription whisper could not do goes back to the queue (TER-1035): answers the row pending; 409 when a retry cannot help. */
+  retryAttachment(auth: Auth, id: string): Promise<TChatAttachment>;
   /** The download url plus the headers a `<Image source>` needs to fetch it (bearer and a fresh DPoP proof). */
   attachmentSource(auth: Auth, id: string): Promise<{ uri: string; headers: Record<string, string> }>;
 
@@ -203,7 +205,7 @@ export interface MobileApi {
   /** A plain boolean is the same as `{ enabled: boolean }` (the pre-D8 shape every caller still
    *  uses); `{ enabled?, autodecide? }` is the D8 shape for "Responder sozinho quando houver
    *  precedente" — the server refuses a body with neither key. */
-  setChatMemory(auth: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean }): Promise<TChatMemory>;
+  setChatMemory(auth: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }): Promise<TChatMemory>;
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, `cursor` is `next_cursor`. */
   chatNotes(auth: Auth, cursor?: string | null): Promise<TNotesResponse>;
   /** Idempotent and silent about whether `id` ever existed, was someone else's, or was some other

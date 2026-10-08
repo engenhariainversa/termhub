@@ -170,6 +170,10 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       return automationPolicyPhrase(args);
     case 'set_machine_automation':
       return args.accept === true ? 'fazer a máquina aceitar trabalho automático' : 'fazer a máquina recusar trabalho automático';
+    case 'install_machine_hooks': {
+      const tools = Array.isArray(args.tools) ? args.tools.filter((x): x is string => typeof x === 'string') : [];
+      return `instalar ou atualizar os hooks do termhub (${tools.length ? tools.join(', ') : 'Claude Code, Codex e Cursor que estiverem lá'}), mexendo nos arquivos de configuração deles`;
+    }
     case 'resume_automation_run':
       return 'retomar o trabalho automático de um card';
     case 'automation_merge': {
@@ -229,6 +233,11 @@ interface Location {
   project?: string;
   machine?: string;
   missing?: 'tab' | 'project' | 'machine';
+  /** A gone tab's name as the row kept it when it was asked (TER-1024): the card names it rather than
+   * saying "uma aba que não existe mais". Only ever set alongside `missing: 'tab'`. */
+  goneTab?: string;
+  /** The action closes that tab itself: "fechar a aba «X»", not "fechar a aba na aba «X», já fechada". */
+  closesTab?: boolean;
   /** close_tab only: who opened the tab being closed, in parentheses right after its name — set by
    * `describeActions` from the tab's `created_by_token_id`, never resolved here (see there for why:
    * it takes an owner-scoped `apiTokens.listByUser` lookup that `describeActions` has a repos handle
@@ -240,6 +249,10 @@ interface Location {
  * "na aba X do projeto Y, no Z" when all three are known, degrading gracefully as fewer are; says so
  * plainly, in pt-BR, when the one reference the action actually named did not resolve. */
 function targetPhrase(loc: Location): string {
+  if (loc.missing === 'tab' && loc.goneTab) {
+    const tab = loc.closesTab ? `«${loc.goneTab}»` : `na aba «${loc.goneTab}», já fechada,`;
+    return loc.project ? `${tab} do projeto ${loc.project}` : tab.replace(/,$/, '');
+  }
   if (loc.missing === 'tab') return loc.project ? `numa aba que não existe mais do projeto ${loc.project}` : 'numa aba que não existe mais';
   if (loc.missing === 'project') return 'num projeto que não existe mais';
   if (loc.missing === 'machine') return 'numa máquina que não existe mais';
@@ -380,7 +393,14 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
     if (action.tab_id) {
       const tab = tabById.get(action.tab_id);
       // A gone tab's card still names its project when the row kept it (TER-986: stored when asked).
-      if (!tab) loc = { missing: 'tab', project: action.project_id ? projectById.get(action.project_id)?.name : undefined };
+      // And its name (TER-1024), so a closed tab's card still says which tab it was.
+      if (!tab) {
+        loc = { missing: 'tab', project: action.project_id ? projectById.get(action.project_id)?.name : undefined };
+        if (action.tab_name) {
+          loc.goneTab = action.tab_name;
+          loc.closesTab = action.tool === 'close_tab';
+        }
+      }
       else {
         const project = projectById.get(tab.project_id);
         loc = { tab: tab.name, project: project?.name, machine: machineById.get(tab.machine_id)?.name };

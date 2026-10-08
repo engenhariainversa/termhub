@@ -34,6 +34,8 @@ function buildApp(opts: { user?: typeof admin | null; viewAs?: 'self' | 'user'; 
       permissionsOf: vi.fn(async () => []),
     },
     securityEvents: { record: vi.fn(async (e: SecurityEventInput) => void rows.push(e)) },
+    viewAsAudit: { start: vi.fn(async () => {}), end: vi.fn(async () => {}) },
+    featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async () => null) },
   } as unknown as Repositories;
   const service = {
     loginWithPassword: vi.fn(async () => opts.login ?? { ok: true, user: other }),
@@ -85,7 +87,7 @@ describe('security trail: sign-in', () => {
     const record = vi.fn(async () => {
       throw new Error('db down');
     });
-    const repos = { roles: { findById: vi.fn(async () => undefined) }, securityEvents: { record } };
+    const repos = { roles: { findById: vi.fn(async () => undefined) }, securityEvents: { record }, featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async () => null) } };
     app.register((a) => authRoutes(a, { repos, service } as never), { prefix: '/auth' });
     expect((await login(app)).statusCode).toBe(200);
     expect(record).toHaveBeenCalledOnce();

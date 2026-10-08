@@ -41,6 +41,10 @@ const readTools = new Set([
   'get_project_setup',
   // TER-627: lists the tabs' question cards and their answers; nothing is sent or changed.
   'list_tab_questions',
+  // TER-1023: the hooks' state on a machine; nothing on the machine is written.
+  'get_machine_hooks',
+  // TER-1038: the chat's own context fill; nothing is changed.
+  'get_chat_context',
 ]);
 
 const writeTools = new Set([
@@ -61,6 +65,9 @@ const writeTools = new Set([
   'resume_automation',
   // Hands one parked automatic run back: the follower may type into its tab again.
   'resume_automation_run',
+  // TER-1023: rewrites the hooks' entries in the machine's config files (the person's own are kept, an
+  // uninstall gives them back). Always a card: no grant or default covers it.
+  'install_machine_hooks',
 ]);
 
 // close_tab stays irreversible. control/terminals.ts skips its per-token ownership check for a gated
