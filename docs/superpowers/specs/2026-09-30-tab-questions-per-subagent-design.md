@@ -173,7 +173,8 @@ export function dialogTool(screen: string): string | null
 
 - Cards for queued dialogs (a queued permission opens nothing, as today).
 - Showing, and checking on screen, what a permission approves (a hint of the tool's input): a product
-  decision about what leaves the machine, written up as a follow-up card.
+  decision about what leaves the machine, written up as a follow-up card. Decided in TER-614 as an
+  opt-in per machine (`2026-10-08-permission-hints-design.md`).
 - Two dialogs of the same tool in a row with a lost or late hook in between: the queue covers the
   ordinary case, and only the hint above would cover this one.
 - Codex and Cursor subagents.

@@ -4,6 +4,7 @@
  * rule without importing the answer flow, which reaches back into the gate through `service.ts`.
  */
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
+import { hintMarkers } from './permission-hint.js';
 import type { ChoicePayload, PermissionPayload } from './tab-question-payload.js';
 
 /** How much of the pane the excerpt shown with a question reads. */
@@ -129,15 +130,43 @@ export function rowDialogFooterVisible(screen: string, row: Pick<TabQuestion, 'p
  * every option label of that question, within the whole capture. Both sides are reduced to letters and
  * digits (`squash`) before comparing. A permission is also refused when the known title under the lowest
  * box rule belongs to another tool (spec 2026-09-30 tab questions per subagent §5). That check fails open
- * on purpose: an unknown or renamed title makes it a no-op, not a refusal of every card. A Codex row
+ * on purpose: an unknown or renamed title makes it a no-op, not a refusal of every card. A permission with
+ * a hint (TER-614) must also show that hint in its dialog (`hintVisible`). A Codex row
  * (`payload.agent === 'codex'`) takes Codex's own rule instead (`codexPromptVisible`).
  */
 export function promptVisible(screen: string, row: Pick<TabQuestion, 'kind' | 'payload'>): boolean {
   if ((row.payload as { agent?: string }).agent === 'codex') return codexPromptVisible(lastNonBlankLines(screen, PROMPT_MARKER_LINES), row);
   if (!dialogShown(screen, row)) return false;
   if (row.kind !== 'permission') return true;
+  const payload = row.payload as PermissionPayload;
   const tool = dialogTool(screen);
-  return tool === null || tool === (row.payload as PermissionPayload).tool_name;
+  return (tool === null || tool === payload.tool_name) && hintVisible(screen, payload);
+}
+
+/**
+ * Whether a permission's hint (TER-614) is in the dialog on screen: the capture from its lowest box rule
+ * down (the dialog's title, then the command or the file), holding each of `hintMarkers` in order, both
+ * sides NFC and reduced to letters and digits (`squash`), so a wrapped line, an accent written decomposed
+ * or a redacted value does not matter. This is what tells two "Bash command" dialogs apart. A card with no
+ * hint, and a capture with no rule (a dialog taller than the screen, its top scrolled off), pass: the check
+ * refuses a dialog it can read, never one it cannot.
+ */
+export function hintVisible(screen: string, payload: Pick<PermissionPayload, 'tool_name' | 'hint'>): boolean {
+  if (!payload.hint) return true;
+  const lines = screen.split('\n').filter((l) => l.trim() !== '');
+  let rule = -1;
+  for (let i = lines.length - 1; i >= 0 && rule < 0; i--) if (RULE.test(lines[i]!)) rule = i;
+  if (rule < 0) return true;
+  const shown = squash(lines.slice(rule + 1).join('\n').normalize('NFC'));
+  let from = 0;
+  for (const marker of hintMarkers(payload.tool_name, payload.hint)) {
+    const wanted = squash(marker.normalize('NFC'));
+    if (!wanted) continue;
+    const at = shown.indexOf(wanted, from);
+    if (at < 0) return false;
+    from = at + wanted.length;
+  }
+  return true;
 }
 
 /** The shared footer/marker check, independent of the permission card's tool. */

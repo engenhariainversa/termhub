@@ -331,6 +331,7 @@ function PermissionBody({ question, answering, onAnswer, loadScreen }: TabQuesti
   return (
     <>
       <p className="whitespace-pre-wrap text-fg">{permissionTitle(question)}</p>
+      {!codex && question.payload.hint && <p className="mt-1 whitespace-pre-wrap break-all font-mono text-xs text-fg">{question.payload.hint}</p>}
       {codex && (
         <>
           {question.payload.question && <p className="mt-1 whitespace-pre-wrap text-fg">{question.payload.question}</p>}

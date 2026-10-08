@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { GUARD_SCRIPT, HOOK_SCRIPT } from '@termhub/machine-ops';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { heal, install, uninstall } from './hooks.js';
+import { heal, hint, install, uninstall } from './hooks.js';
 
 let home: string;
 const params = { hooks_url: 'https://app.termhub.dev/api/hooks', token: 'thb_hk_abc-123' };
@@ -278,6 +278,21 @@ describe('hooks.uninstall', () => {
 
     await expect(stat(path.join(home, '.termhub/bin/termhub-hook'))).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await read('.cursor')).toBe('not a directory');
+  });
+});
+
+describe('hooks.hint (TER-614)', () => {
+  it('writes the opt-in file (600), removes it, and uninstall removes it too', async () => {
+    await expect(hint({ enabled: true }, home)).resolves.toEqual({ enabled: true });
+    expect(await read('.termhub/permission-hint')).toBe('');
+    expect(await mode('.termhub/permission-hint')).toBe(0o600);
+    await expect(hint({ enabled: false }, home)).resolves.toEqual({ enabled: false });
+    await expect(stat(path.join(home, '.termhub/permission-hint'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(hint({ enabled: false }, home)).resolves.toEqual({ enabled: false });
+    await install(params, home);
+    await hint({ enabled: true }, home);
+    await uninstall({}, home);
+    await expect(stat(path.join(home, '.termhub/permission-hint'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 

@@ -303,6 +303,7 @@ function PermissionBody({ question, busy, onAnswer, loadScreen }: Props & { ques
   return (
     <View className="gap-2">
       <AppText>{permissionTitle(question)}</AppText>
+      {!codex && question.payload.hint ? <AppText className="font-mono text-xs">{question.payload.hint}</AppText> : null}
       {codex ? (
         <View className="gap-1">
           {question.payload.question ? <AppText>{question.payload.question}</AppText> : null}

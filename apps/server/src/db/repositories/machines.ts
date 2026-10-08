@@ -118,6 +118,12 @@ export class MachinesRepository {
     await this.db.machine.updateMany({ where: { id }, data: { automationAllowed: allowed } });
   }
 
+  /** The machine's "Mostrar o que a permissão aprova" switch alone (TER-614), set once the machine has its file. */
+  async setPermissionHint(id: string, enabled: boolean): Promise<Machine | undefined> {
+    await this.db.machine.updateMany({ where: { id }, data: { permissionHint: enabled } });
+    return this.findById(id);
+  }
+
   /** Agent machines that opted into automatic updates (the scheduler checks online/idle itself). */
   async listAutoUpdate(): Promise<Machine[]> {
     const rows = await this.db.machine.findMany({ where: { type: 'agent', agentAutoUpdate: true }, include: withOwner });

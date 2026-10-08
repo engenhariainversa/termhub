@@ -4,6 +4,7 @@ import {
   claudeDirsFromHome,
   configDirsFromRc,
   HOOK_ENV_REL,
+  HOOK_HINT_REL,
   HOOK_MARK,
   HOOK_SCRIPT,
   HOOK_SCRIPT_REL,
@@ -22,6 +23,8 @@ import {
   stripCursorHooks,
 } from '@termhub/machine-ops';
 import { agentRpc, requireAgentVersion } from '../agent/errors.js';
+import { tk } from '../i18n/index.js';
+import { conflict } from '../lib/errors.js';
 import type { Machine } from '../db/repositories/types.js';
 import { REMOTE_PATH_PREFIX, runOnMachine, runOnMachineWithInput, shellQuote } from '../terminal/machine-exec.js';
 
@@ -313,7 +316,7 @@ export async function uninstallHooks(machine: Machine, accountDirs: string[] = [
   const q = shellQuote;
   const script = [
     'set -e',
-    `rm -f ${q(`${home}/${HOOK_SCRIPT_REL}`)} ${q(`${home}/${HOOK_ENV_REL}`)}`,
+    `rm -f ${q(`${home}/${HOOK_SCRIPT_REL}`)} ${q(`${home}/${HOOK_ENV_REL}`)} ${q(`${home}/${HOOK_HINT_REL}`)}`,
     ...stripped.flatMap((s) => replaceFile(s.file, s.body)),
     ...(hasCodex && codexConfig.includes(HOOK_MARK) ? replaceFile(`${home}/.codex/config.toml`, stripCodexConfig(codexConfig)) : []),
     ...codexHooksUninstallSteps(configs),
@@ -322,4 +325,24 @@ export async function uninstallHooks(machine: Machine, accountDirs: string[] = [
   ].join('\n');
   const r = await shOnMachine(machine, script);
   if (r.code !== 0 || !r.stdout.includes('ok')) throw new Error(r.timedOut ? 'A máquina não respondeu a tempo' : `Remoção falhou: ${r.stderr.trim().split('\n').pop() || 'erro desconhecido'}`);
+}
+
+/** First agent release that answers `hooks.hint` (TER-614). */
+export const PERMISSION_HINT_MIN_AGENT_VERSION = '0.20.0';
+
+/**
+ * Writes or removes the machine's opt-in to permission hints (TER-614), ~/.termhub/permission-hint: the
+ * file the hook script checks before it lets a Claude permission prompt travel whole. Throws when the
+ * machine cannot be reached or refused, so the switch is only saved once the machine agrees with it.
+ */
+export async function setPermissionHintOnMachine(machine: Machine, enabled: boolean): Promise<void> {
+  if (machine.type === 'agent') {
+    requireAgentVersion(machine, PERMISSION_HINT_MIN_AGENT_VERSION);
+    await agentRpc(machine, 'hooks.hint', { enabled });
+    return;
+  }
+  const file = `"$HOME"/${shellQuote(HOOK_HINT_REL)}`;
+  const script = enabled ? ['set -e', 'mkdir -p "$HOME/.termhub"', 'umask 077', `: > ${file}`, 'echo ok'] : ['set -e', `rm -f ${file}`, 'echo ok'];
+  const r = await shOnMachine(machine, script.join('\n'));
+  if (r.code !== 0 || !r.stdout.includes('ok')) throw conflict(tk('Não foi possível mudar a opção na máquina'));
 }

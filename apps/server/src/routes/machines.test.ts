@@ -78,6 +78,10 @@ function buildApp(
     delete store[id];
     return true;
   });
+  const setPermissionHint = vi.fn(async (id: string, enabled: boolean) => {
+    store[id] = { ...store[id], permission_hint: enabled } as Machine;
+    return store[id];
+  });
 
   const revokeForTabs = vi.fn(async (ids: string[]) => ids.length);
 
@@ -103,6 +107,7 @@ function buildApp(
       rotateAgentToken,
       update,
       delete: del,
+      setPermissionHint,
     },
     users: {
       findById: async () => undefined,
@@ -110,7 +115,7 @@ function buildApp(
   } as unknown as Repositories;
 
   app.register((instance) => machineRoutes(instance, repos), { prefix: '/api/machines' });
-  return { app, repos: { create, rotateAgentToken, update, delete: del, machineHooks, revokeForTabs } };
+  return { app, repos: { create, rotateAgentToken, update, delete: del, machineHooks, revokeForTabs, setPermissionHint } };
 }
 
 let app: FastifyInstance;
@@ -444,6 +449,58 @@ describe('GET /api/machines/:id/simulators', () => {
     expect(res.statusCode).toBe(503);
     expect(res.json().code).toBe('AGENT_OFFLINE');
     expect(execFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('/api/machines/:id/permission-hint (TER-614)', () => {
+  const put = (enabled: unknown) => app.inject({ method: 'PUT', url: '/api/machines/m1/permission-hint', payload: { enabled } });
+
+  it('changes the machine through hooks.hint first, then saves the switch', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const rpc = attachAgent('0.20.0', vi.fn(async () => ({ enabled: true })));
+    const built = buildApp(store);
+    app = built.app;
+    const res = await put(true);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().machine.permission_hint).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('hooks.hint', { enabled: true }, undefined);
+    expect(built.repos.setPermissionHint).toHaveBeenCalledWith('m1', true);
+  });
+
+  it('saves nothing when the agent predates hooks.hint, is offline, or the machine refused', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const old = attachAgent('0.19.0');
+    let built = buildApp(store);
+    app = built.app;
+    const outdated = await put(true);
+    expect(outdated.statusCode).toBe(409);
+    expect(outdated.json().code).toBe('AGENT_OUTDATED');
+    expect(old).not.toHaveBeenCalled();
+
+    agents.reset();
+    built = buildApp(store);
+    app = built.app;
+    expect((await put(true)).statusCode).toBe(503);
+
+    attachAgent('0.20.0', vi.fn(async () => { throw new AgentRpcError({ code: 'failed', message: 'EACCES', path: '.termhub/permission-hint' }); }));
+    built = buildApp(store);
+    app = built.app;
+    expect((await put(true)).statusCode).toBe(502);
+    expect(built.repos.setPermissionHint).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body that is not a boolean', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    ({ app } = buildApp(store));
+    expect((await put('yes')).statusCode).toBe(400);
+  });
+
+  it('puts the opt-in file back on a reinstall when the switch is on', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent', permission_hint: true });
+    const rpc = attachAgent('0.20.0', vi.fn(async (method: string) => (method === 'hooks.hint' ? { enabled: true } : { home: '/Users/p', claude: 'installed', codex: 'skipped' })));
+    ({ app } = buildApp(store));
+    expect((await app.inject({ method: 'POST', url: '/api/machines/m1/hooks' })).statusCode).toBe(200);
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(['hooks.install', 'hooks.hint']);
   });
 });
 

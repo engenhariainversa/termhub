@@ -412,5 +412,7 @@
   "— sem dono (só visível em \"todas as máquinas\") —": "— no owner (only visible in \"all machines\") —",
   "— sem repositório —": "— no repository —",
   "Aceita trabalho automático": "Accepts automatic work",
-  "Desmarcada, o termhub nunca inicia sozinho um card do quadro nesta máquina. Abas abertas por você continuam como sempre.": "When unchecked, termhub never starts a board card on this machine by itself. Tabs you open keep working as usual."
+  "Desmarcada, o termhub nunca inicia sozinho um card do quadro nesta máquina. Abas abertas por você continuam como sempre.": "When unchecked, termhub never starts a board card on this machine by itself. Tabs you open keep working as usual.",
+  "Mostrar o que a permissão aprova": "Show what a permission approves",
+  "O card de permissão do Claude passa a mostrar o começo do comando ou o nome do arquivo, e só aprova o diálogo que mostra esse trecho. Para isso o pedido de permissão sai inteiro da máquina; o termhub guarda só o trecho, com tokens, senhas e chaves trocados por •••. O filtro não pega todo segredo possível: ligue só se aceitar isso.": "Claude's permission card shows the start of the command or the file's name, and only approves the dialog that shows that excerpt. For that, the permission request leaves the machine whole; termhub keeps only the excerpt, with tokens, passwords and keys replaced by •••. The filter does not catch every possible secret: turn this on only if you accept that."
 }

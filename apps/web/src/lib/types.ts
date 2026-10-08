@@ -101,6 +101,8 @@ export interface Machine {
   /** a tab whose Claude hits a usage limit resumes on another Claude account of this machine, on its own */
   claude_auto_swap: boolean;
   automation_allowed: boolean;
+  /** TER-614: Claude permission cards of this machine show an excerpt of the command or file (opt-in) */
+  permission_hint: boolean;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */
@@ -1316,7 +1318,7 @@ interface TabQuestionBase {
   auto_decision?: AutoDecision | null;
 }
 export type TabQuestionChoice = TabQuestionBase & { kind: 'choice'; payload: { questions: TabQuestionItem[]; agent?: 'codex' }; answer: ChoiceAnswer | null };
-export type TabQuestionPermission = TabQuestionBase & { kind: 'permission'; payload: { tool_name: string; agent?: 'codex'; question?: string }; answer: PermissionAnswer | null };
+export type TabQuestionPermission = TabQuestionBase & { kind: 'permission'; payload: { tool_name: string; agent?: 'codex'; question?: string; hint?: string }; answer: PermissionAnswer | null };
 /**
  * A question an agent in a tab asked (spec 2026-09-25): shown as a card in the project's chat and
  * answered from there. Plain text only — never render any of it as HTML: it is what an agent wrote.

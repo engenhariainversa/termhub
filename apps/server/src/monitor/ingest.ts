@@ -77,7 +77,7 @@ async function ingestForTab(
   input: { machineId: string; tool: HookTool; session: string; event: unknown },
   waker?: Waker,
 ): Promise<IngestResult> {
-  const interpreted = interpretHookEvent(input.tool, input.event);
+  const interpreted = await dropHintUnlessOptedIn(repos, tab, interpretHookEvent(input.tool, input.event));
   // A subagent ended (spec 2026-09-30 tab questions per subagent §5): the tab's screen and state are
   // its main thread's, so nothing is recorded and a suggestion check still waiting is left alone.
   if (interpreted?.closeOnly) {
@@ -126,6 +126,20 @@ interface Recorded {
   tab: Tab;
   /** the wait rule dropped the event: the tab is as it was and nothing was published */
   dropped: boolean;
+}
+
+/**
+ * A permission hint (TER-614) only survives from a machine whose switch is on. The hook script sends the
+ * prompt whole only while the machine's opt-in file exists, but that file lives on the machine: one left
+ * behind (a switch turned off while the machine was offline, a hand-made file) must not put commands on
+ * cards the person turned off.
+ */
+async function dropHintUnlessOptedIn(repos: Repositories, tab: Tab, interpreted: Interpreted | null): Promise<Interpreted | null> {
+  const question = interpreted?.question;
+  if (!interpreted || question?.kind !== 'permission' || question.payload.hint === undefined) return interpreted;
+  if ((await repos.machines.findById(tab.machine_id))?.permission_hint) return interpreted;
+  const { hint: _hint, ...payload } = question.payload;
+  return { ...interpreted, question: { ...question, payload } };
 }
 
 /** The tab's side of an interpreted event: the light activity path, or a recorded state. */

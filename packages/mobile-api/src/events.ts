@@ -248,7 +248,8 @@ export const tabQuestionSchema = z.discriminatedUnion('kind', [
   z.object({
     ...tabQuestionCommon,
     kind: z.literal('permission'),
-    payload: z.object({ tool_name: z.string(), agent: z.string().optional(), question: z.string().optional() }),
+    // `hint` (TER-614): the start of the command or the file's name, from a machine that opted in.
+    payload: z.object({ tool_name: z.string(), agent: z.string().optional(), question: z.string().optional(), hint: z.string().optional() }),
     // `option` (TER-995): the dialog option chosen on the card; absent from an older server.
     answer: z.object({ allow: z.boolean(), text: z.string().optional(), option: z.object({ number: z.number().int(), label: z.string(), summary: z.string().optional() }).optional() }).nullable(),
   }),

@@ -15,7 +15,7 @@ import { agents } from '../agent/registry.js';
 import { isOutdated, latestAgentVersion, MIN_SELF_UPDATE_VERSION, runAgentUpdate } from '../agent/latest-version.js';
 import { agentRpc, requireAgentVersion, requireSimCapable } from '../agent/errors.js';
 import { config } from '../config.js';
-import { installHooks, uninstallHooks } from '../monitor/install.js';
+import { installHooks, setPermissionHintOnMachine, uninstallHooks } from '../monitor/install.js';
 import { newHookToken } from '../monitor/token.js';
 import type { Machine } from '../db/repositories/types.js';
 import { publicBus } from '../public/bus.js';
@@ -26,6 +26,7 @@ import { recordMachineSwitch } from '../automation/setup-tools.js';
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const fsQuery = z.object({ path: z.string().max(4096).optional() });
 const mkdirBody = z.object({ parent: z.string().min(1).max(4096), name: z.string().trim().min(1).max(255) });
+const permissionHintBody = z.object({ enabled: z.boolean() });
 
 /** Optional line under the name: trimmed, at most 80 chars, and an empty one is no subtitle at all. */
 const subtitleField = z
@@ -273,6 +274,13 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     }
     const hook = await repos.machineHooks.upsert(machine.id, hash);
     request.log.info({ machineId: machine.id, claude: report.claude, claudeDirs: report.claude_dirs.length, codex: report.codex, cursor: report.cursor }, 'monitor: hooks installed');
+    // Removing the hooks removed the permission-hint opt-in file too: a reinstall puts back what the
+    // switch says (TER-614). The hooks work without it, so a failure here only leaves cards name-only.
+    if (machine.permission_hint) {
+      await setPermissionHintOnMachine(machine, true).catch((err: unknown) =>
+        request.log.warn({ machineId: machine.id, err: err instanceof Error ? err.message : String(err) }, 'monitor: permission hint not restored'),
+      );
+    }
     return { installed_at: hook.installed_at, hooks_url: report.hooks_url, claude: report.claude, codex: report.codex, cursor: report.cursor, claude_dirs: report.claude_dirs };
   });
 
@@ -289,6 +297,23 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     await repos.machineHooks.delete(machine.id);
     request.log.info({ machineId: machine.id }, 'monitor: hooks removed');
     return { ok: true };
+  });
+
+  /**
+   * The machine's "Mostrar o que a permissão aprova" switch (TER-614), off by default: on, its Claude
+   * permission cards show an excerpt of the command or the file, secrets filtered (chat/permission-hint.ts).
+   * The machine is changed first (its opt-in file is what lets the hook script send the prompt whole) and
+   * the row only once that worked, so the switch never says on while the machine still sends names only,
+   * nor off while it still sends whole prompts. Not part of PATCH, which saves without asking the machine.
+   */
+  app.put('/:id/permission-hint', async (request) => {
+    const { id } = idParam.parse(request.params);
+    const { enabled } = permissionHintBody.parse(request.body);
+    const machine = await scoped(repos, request).machine(id);
+    await setPermissionHintOnMachine(machine, enabled);
+    const updated = await repos.machines.setPermissionHint(id, enabled);
+    request.log.info({ machineId: id, enabled }, 'monitor: permission hint switched');
+    return { machine: updated };
   });
 
   /** Installs the latest @termhub/agent on the machine through the agent itself; the agent restarts when it runs as a service. */

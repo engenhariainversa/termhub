@@ -83,6 +83,30 @@ describe('interpretHookEvent — claude', () => {
   });
 });
 
+describe('interpretHookEvent — claude permission hints (TER-614)', () => {
+  it('keeps only the filtered excerpt of a prompt sent whole, on the card', () => {
+    const out = interpretHookEvent('claude', {
+      session_id: 's1', cwd: '/w', permission_mode: 'default', hook_event_name: 'PermissionRequest', tool_name: 'Bash',
+      tool_input: { command: "curl -H 'Authorization: Bearer abc123' https://x.test", description: 'Call' }, permission_suggestions: [{ type: 'addRules' }],
+    });
+    expect(out).toEqual({
+      kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'Bash' },
+      question: { kind: 'permission', payload: { tool_name: 'Bash', hint: "curl -H 'Authorization: •••' https://x.test" }, tool_use_id: null },
+    });
+  });
+
+  it("names a subagent's file relative to its directory, and keeps the id", () => {
+    const out = interpretHookEvent('claude', { cwd: '/w', agent_id: 'a1b2c3', agent_type: 'general-purpose', hook_event_name: 'PermissionRequest', tool_name: 'Edit', tool_input: { file_path: '/w/src/a.ts', old_string: 'x', new_string: 'y' } });
+    expect(out).toMatchObject({ meta: { subagent: true, agent_id: 'a1b2c3' }, question: { payload: { tool_name: 'Edit', hint: 'src/a.ts' } } });
+  });
+
+  it('has no hint for a reduced prompt, another tool, or Codex', () => {
+    expect(interpretHookEvent('claude', { hook_event_name: 'PermissionRequest', tool_name: 'Bash' })?.question?.payload).toEqual({ tool_name: 'Bash' });
+    expect(interpretHookEvent('claude', { hook_event_name: 'PermissionRequest', tool_name: 'WebFetch', tool_input: { url: 'https://x.test' } })?.question?.payload).toEqual({ tool_name: 'WebFetch' });
+    expect(interpretHookEvent('codex', { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'ls', description: 'Listar?' } })?.question?.payload).not.toHaveProperty('hint');
+  });
+});
+
 describe('interpretHookEvent — claude subagents (spec 2026-09-26 §4.5)', () => {
   it('flags an event the script marked, or one that carries its own agent_id', () => {
     expect(interpretHookEvent('claude', { hook_event_name: 'PreToolUse', tool_name: 'Bash', subagent: true })).toEqual({
@@ -528,10 +552,12 @@ describe('interpretHookEvent — claude questions (spec 2026-09-25 §4.2)', () =
       meta: { event: 'PermissionRequest', tool: 'Bash' },
       question: { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null },
     });
-    // The whole captured event (an old script, or a future one) still yields the name only.
+    // The whole captured event (a machine that opted in to hints, TER-614) yields the name and the
+    // filtered excerpt of the command only: never the description or the suggestions, never in meta or
+    // text. The ingest drops the hint again when the machine's switch is off.
     const whole = interpretHookEvent('claude', fixture('permissionrequest-bash.json'));
-    expect(JSON.stringify(whole)).not.toContain('probe-file');
-    expect(whole?.question).toEqual({ kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null });
+    expect(whole?.question).toEqual({ kind: 'permission', payload: { tool_name: 'Bash', hint: 'touch probe-file.txt' }, tool_use_id: null });
+    expect({ ...whole, question: undefined }).toEqual({ kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'Bash' }, question: undefined });
   });
 
   it('AskUserQuestion\'s own PermissionRequest opens nothing (its PreToolUse did), and an odd name neither', () => {

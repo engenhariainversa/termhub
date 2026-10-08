@@ -33,6 +33,7 @@
   "Só administradores transferem máquinas": "Only administrators transfer machines",
   "Instalação falhou": "Installation failed",
   "Remoção falhou": "Removal failed",
+  "Não foi possível mudar a opção na máquina": "Could not change the setting on the machine",
   "Só máquinas com agente são atualizadas por aqui": "Only machines with the agent are updated here",
   "Versão mais nova do agente ainda desconhecida (npm)": "The newest agent version is not known yet (npm)",
   "O agente já está na versão {{version}}": "The agent is already on version {{version}}",

@@ -9,6 +9,15 @@ import { shellQuote } from './shell.js';
 
 export const HOOK_SCRIPT_REL = '.termhub/bin/termhub-hook';
 export const HOOK_ENV_REL = '.termhub/hook.env';
+/**
+ * The machine's opt-in to permission hints (TER-614): while this file exists, a Claude permission prompt
+ * of one of `HINT_TOOLS` travels whole, so the server can show a filtered excerpt of the command or the
+ * file on the card. Written and removed only by the server's "Mostrar o que a permissão aprova" switch
+ * (agent `hooks.hint`); absent, the prompt is reduced to the tool's name as always.
+ */
+export const HOOK_HINT_REL = '.termhub/permission-hint';
+/** The tools whose permission prompt carries a hint: a command, or a file. */
+export const HINT_TOOLS = ['Bash', 'Edit', 'MultiEdit', 'Write', 'NotebookEdit'] as const;
 /** Substring that marks an entry as ours in settings.json / config.toml. */
 export const HOOK_MARK = 'termhub-hook';
 
@@ -224,7 +233,7 @@ case "$KIND" in
     ;;
   PermissionRequest)
     # A permission prompt. Claude's: only the tool's name travels, exactly like a tool call (never its
-    # input, never the suggestions). AskUserQuestion's own prompt is dropped — its PreToolUse already
+    # input, never the suggestions), unless the machine opted in to hints (below). AskUserQuestion's own prompt is dropped — its PreToolUse already
     # carried the question. Same first-"tool_name" rule and character set as above.
     # Codex's travels whole (spec 2026-09-29 D2), once NAME passed the same check: its "description" is
     # the question Codex shows above the approval menu, written to be shown to the person, and the
@@ -248,7 +257,15 @@ case "$KIND" in
       # The tool call after an answered dialog is what closes its card: it must never be deduped
       # against the call before the dialog (same tool, and no spinner verb while the dialog is up).
       rm -f "$MARK"
-      EVENT=$(printf '{"hook_event_name":"PermissionRequest","tool_name":"%s"%s}' "$NAME" "$SUB")
+      # Permission hints (TER-614), only on a machine that opted in (the file below, written by the
+      # server's switch): the prompt of a command or file tool travels whole, like Codex's, and the
+      # server keeps only a filtered excerpt of the command or the file's name. Over 200000 characters,
+      # or for any other tool, the reduced body goes, as without the opt-in.
+      HINT=
+      if [ -f "$HOME/${HOOK_HINT_REL}" ] && [ "\${#EVENT}" -le 200000 ]; then
+        case "$NAME" in ${HINT_TOOLS.join(' | ')}) HINT=1 ;; esac
+      fi
+      [ -n "$HINT" ] || EVENT=$(printf '{"hook_event_name":"PermissionRequest","tool_name":"%s"%s}' "$NAME" "$SUB")
     fi
     ;;
   SubagentStop)

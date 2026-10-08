@@ -6,6 +6,7 @@ import {
   CLAUDE_DEFAULT_DIR,
   CODEX_HOOKS_REL,
   HOOK_ENV_REL,
+  HOOK_HINT_REL,
   HOOK_MARK,
   GUARD_SCRIPT,
   GUARD_SCRIPT_REL,
@@ -389,6 +390,8 @@ export async function uninstall(params: RpcParams<'hooks.uninstall'>, home = os.
     await rm(path.join(home, HOOK_SCRIPT_REL), { force: true });
     current = `~/${HOOK_ENV_REL}`;
     await rm(path.join(home, HOOK_ENV_REL), { force: true });
+    current = `~/${HOOK_HINT_REL}`;
+    await rm(path.join(home, HOOK_HINT_REL), { force: true });
     for (const { target, body } of stripped) {
       current = target.shown;
       await writeAtomic(target.file, body, 0o644);
@@ -413,4 +416,23 @@ export async function uninstall(params: RpcParams<'hooks.uninstall'>, home = os.
     throw fsFailure(err, current);
   }
   return { removed: true };
+}
+
+/**
+ * The machine's opt-in to permission hints (TER-614): the file the hook script looks for before it lets
+ * a Claude permission prompt travel whole. Empty, 0600; removing it is the way back to name-only prompts.
+ */
+export async function hint(params: RpcParams<'hooks.hint'>, home = os.homedir()): Promise<RpcResult<'hooks.hint'>> {
+  const file = path.join(home, HOOK_HINT_REL);
+  try {
+    if (params.enabled) {
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeAtomic(file, '', 0o600);
+    } else {
+      await rm(file, { force: true });
+    }
+  } catch (err) {
+    throw fsFailure(err, `~/${HOOK_HINT_REL}`);
+  }
+  return { enabled: params.enabled };
 }

@@ -8,7 +8,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { HOOK_ENV_REL, HOOK_SCRIPT } from './hooks.js';
+import { HOOK_ENV_REL, HOOK_HINT_REL, HOOK_SCRIPT } from './hooks.js';
 
 let home: string;
 let bin: string;
@@ -290,6 +290,37 @@ describe('termhub-hook script', () => {
       const sent = await bodies(1);
       expect(JSON.parse(sent[0])).toEqual({ tool: 'claude', session: 'th-abc', event: { hook_event_name: 'PermissionRequest', tool_name: 'Bash' } });
       expect(sent[0]).not.toContain('secret');
+    });
+
+    describe('permission hints (TER-614)', () => {
+      const optIn = () => {
+        mkdirSync(join(home, '.termhub'), { recursive: true });
+        writeFileSync(join(home, HOOK_HINT_REL), '');
+      };
+
+      it("sends a command tool's prompt whole when the machine opted in", async () => {
+        optIn();
+        const event = { session_id: 's1', cwd: '/w', hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: "cat <<'EOF' > ação.txt\nolá\nEOF", description: 'Write' } };
+        expect(runAs('claude', event)).toBe('');
+        const [body] = await bodies(1);
+        expect(JSON.parse(body!).event).toEqual(event);
+      });
+
+      it('sends a file tool whole too, and any other tool reduced', async () => {
+        optIn();
+        run({ hook_event_name: 'PermissionRequest', tool_name: 'Edit', tool_input: { file_path: '/w/a.ts' } });
+        run({ hook_event_name: 'PermissionRequest', tool_name: 'WebFetch', tool_input: { url: 'https://x.test/?k=secret' } });
+        const sent = await bodies(2);
+        expect(JSON.parse(sent[0]!).event.tool_input).toEqual({ file_path: '/w/a.ts' });
+        expect(JSON.parse(sent[1]!).event).toEqual({ hook_event_name: 'PermissionRequest', tool_name: 'WebFetch' });
+      });
+
+      it('keeps the reduced body for a prompt past 200000 characters', async () => {
+        optIn();
+        run({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: `echo ${'x'.repeat(200_001)}` } });
+        const [body] = await bodies(1);
+        expect(JSON.parse(body!).event).toEqual({ hook_event_name: 'PermissionRequest', tool_name: 'Bash' });
+      });
     });
 
     it('drops AskUserQuestion\'s own PermissionRequest (its PreToolUse carried the question) and odd names', async () => {

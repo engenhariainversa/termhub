@@ -206,6 +206,10 @@ model Machine {
   claudeAutoSwap  Boolean  @default(true) @map("claude_auto_swap")
   /// R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
   automationAllowed Boolean @default(true) @map("automation_allowed")
+  /// TER-614: the machine's hook script lets a Claude permission prompt of a command or file tool travel
+  /// whole, and the card shows a filtered excerpt of it. Opt-in (off by default); mirrored on the machine
+  /// by ~/.termhub/permission-hint, which only the switch writes.
+  permissionHint Boolean @default(false) @map("permission_hint")
   /// The user's own computer (an agent machine): browsers other than the one that added it hide it
   isLocal             Boolean   @default(false) @map("is_local")
   /// Owner: everything under the machine (projects, tabs, tasks, notes, AI accounts) is visible only to

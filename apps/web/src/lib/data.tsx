@@ -32,6 +32,8 @@ interface DataState {
   checkStatus: (machineId: string) => Promise<void>;
   createMachine: (input: Partial<Machine>) => Promise<Machine>;
   updateMachine: (id: string, input: Partial<Machine>) => Promise<Machine>;
+  /** the machine's "Mostrar o que a permissão aprova" switch (TER-614); rejects when the machine refused */
+  setMachinePermissionHint: (id: string, enabled: boolean) => Promise<void>;
   deleteMachine: (id: string) => Promise<void>;
   createProject: (input: ProjectInput) => Promise<Project>;
   updateProject: (id: string, input: ProjectInput) => Promise<Project>;
@@ -201,6 +203,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setMachines((m) => m.map((x) => (x.id === id ? machine : x)));
         void checkStatus(machine.id);
         return machine;
+      },
+      async setMachinePermissionHint(id, enabled) {
+        await api.machines.setPermissionHint(id, enabled);
+        setMachines((m) => m.map((x) => (x.id === id ? { ...x, permission_hint: enabled } : x)));
       },
       async deleteMachine(id) {
         await api.machines.remove(id);
