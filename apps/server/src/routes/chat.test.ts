@@ -94,6 +94,7 @@ function build(opts: {
     chatActions: { decide, findByIdForUser, listByConversation, failPendingTabGone: vi.fn(async (id: string) => ({ action: { ...pendingAction, id, status: 'failed', error_code: 'TAB_GONE' }, user_id: 'u1' })) },
     tabQuestions: { listByConversation: vi.fn(async () => opts.tabQuestions ?? []) },
     tabLimitNotices: { listByConversation: vi.fn(async () => []) },
+    users: { chatContextLimit: vi.fn(async (): Promise<number | null> => null) },
     tabs: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === fixturesOwner ? tabs.filter((t) => ids.includes(t.id)) : [])) },
     projects: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === fixturesOwner ? projects.filter((p) => ids.includes(p.id)) : [])) },
     // Both the trail's machine names and the host's own machine, owner-scoped exactly like the

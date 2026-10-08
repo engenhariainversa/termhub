@@ -96,7 +96,7 @@ const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
   tab_question_closed: { type: 'tab_question_closed', ...base, question: { ...question, kind: 'permission', payload: { tool_name: 'Bash' }, status: 'answered_in_tab', closed_at: '2026-09-25T12:02:00.000Z', auto_answer: null } },
   tab_suggestion: { type: 'tab_suggestion', ...base, suggestion },
   tab_suggestion_closed: { type: 'tab_suggestion_closed', ...base, suggestion: { ...suggestion, status: 'dismissed', closed_at: '2026-09-25T12:02:00.000Z' } },
-  context: { type: 'context', ...base, tokens: 25258, window: 1_000_000 },
+  context: { type: 'context', ...base, tokens: 25258, window: 1_000_000, compacted_at: '2026-09-25T12:03:00.000Z' },
   compact: { type: 'compact', ...base, state: 'done', tokens_before: 20693, tokens: 1951, error_code: null },
   attachment_status: {
     type: 'attachment_status',

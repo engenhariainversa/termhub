@@ -7,6 +7,7 @@ import { AppText, Banner, Button, EmptyState, Icon, type IconName, KeyboardInset
 import { inboxKey } from '../model/chat-inbox';
 import { activeGrantIndex } from '../model/grant-time';
 import { isReplyable, replyRefOf, replyRefOfCard, type ReplyableCard, type ReplyRef } from '../model/reply';
+import { contextMeter } from '../model/context';
 import { isActive } from '../model/subagents';
 import { chatTimeline, groupPendingActions, groupSettledActions, type ChatEntry } from '../model/timeline';
 import type { ChatAction, ChatMessage, ChatStandingGrant } from '../model/types';
@@ -16,6 +17,7 @@ import { ActionCard } from './action-card';
 import { ActionGroupCard } from './action-group-card';
 import { ActionTrailCard } from './action-trail-card';
 import { Composer } from './composer';
+import { ContextMeter } from './context-meter';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
 import { PendingBar } from './pending-bar';
@@ -381,6 +383,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
 
   const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? t('Conversa')) : t('Chat geral');
   const shownError = error ?? slot?.error ?? null;
+  const meter = useMemo(() => contextMeter(slot?.conversation, slot?.contextLimit), [slot?.conversation, slot?.contextLimit]);
 
   return (
     <Screen padded={false} width="full">
@@ -399,6 +402,8 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
             <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
               {title}
             </AppText>
+            {/* TER-1038: "ctx 150k/200k", against the person's own limit when they set one. */}
+            <ContextMeter meter={meter} />
             {/* Everything else about the conversation — where it runs, subagents, trusted tabs, memory,
                 "Nova conversa" — is one tap away, in its settings (TER-1039). */}
             <Pressable

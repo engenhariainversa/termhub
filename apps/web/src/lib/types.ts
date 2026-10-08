@@ -969,6 +969,8 @@ export interface ChatConversation {
   context_tokens?: number | null;
   /** The model's context window; null when the CLI did not report it. */
   context_window?: number | null;
+  /** When the session was last compacted ("Compactar" or the CLI's auto-compact, TER-1038); null = never. */
+  context_compacted_at?: string | null;
   last_message_at: string | null;
 }
 
@@ -1398,6 +1400,8 @@ export interface ChatMemory {
   autodecide: boolean;
   /** "Responder perguntas do Codex pelo chat": off by default; independent of embeddings. */
   codex_replies: boolean;
+  /** The context meter's limit in tokens (TER-1038); null = the model's window. Absent from an older server. */
+  context_limit?: number | null;
   available: boolean;
   count: number;
   notes: number;
@@ -1519,7 +1523,7 @@ export type ChatEvent =
    * panel §5.4): the row keeps whatever status it already had, this just says the click failed. */
   | { type: 'subagent_cancel_failed'; subagent_id: string; conversation_id?: string }
   /** How full the session is now, after an answer or a compaction (TER-315). */
-  | { type: 'context'; tokens: number; window: number | null; conversation_id?: string }
+  | { type: 'context'; tokens: number; window: number | null; compacted_at?: string | null; conversation_id?: string }
   /** "Compactar": started, done (sizes before and after, when known) or failed (with its code). */
   | { type: 'compact'; state: 'started' | 'done' | 'failed'; tokens_before: number | null; tokens: number | null; error_code: string | null; conversation_id?: string };
 

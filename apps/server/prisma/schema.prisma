@@ -80,6 +80,9 @@ model User {
   chatCodexReplies   Boolean            @default(false) @map("chat_codex_replies")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
   pushTabFinished    Boolean            @default(false) @map("push_tab_finished")
+  /// The chat's context meter measures against this many tokens instead of the model's window
+  /// (TER-1038): opt-in, null = the window.
+  chatContextLimit   Int?               @map("chat_context_limit")
   memoryItems        MemoryItem[]
   verifiedMemoryItems MemoryItem[] @relation("MemoryItemVerifier")
   standingGrants     ChatStandingGrant[]
@@ -912,6 +915,8 @@ model ChatConversation {
   /// model's context window then (TER-315). Null until a turn reports them; cleared with the session.
   contextTokens Int?          @map("context_tokens")
   contextWindow Int?          @map("context_window")
+  /// When that session was last compacted, by "Compactar" or the CLI's own auto-compact (TER-1038).
+  contextCompactedAt DateTime? @map("context_compacted_at") @db.Timestamptz
   lastMessageAt DateTime?     @map("last_message_at")
   /// The last time the person typed a message here (TER-530) — not a decision's re-injection nor a
   /// wake, which are stored as user messages too. A "no" given before it no longer refuses on its own.

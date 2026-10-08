@@ -43,6 +43,8 @@ const readTools = new Set([
   'list_tab_questions',
   // TER-1023: the hooks' state on a machine; nothing on the machine is written.
   'get_machine_hooks',
+  // TER-1038: the chat's own context fill; nothing is changed.
+  'get_chat_context',
 ]);
 
 const writeTools = new Set([

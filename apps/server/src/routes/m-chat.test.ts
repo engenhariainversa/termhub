@@ -134,6 +134,7 @@ function build(opts: {
     },
     tabQuestions: { listByConversation: vi.fn(async () => opts.tabQuestions ?? []) },
     tabLimitNotices: { listByConversation: vi.fn(async () => []) },
+    users: { chatContextLimit: vi.fn(async (): Promise<number | null> => null) },
     // The decision route reads the card's tab (TER-986): by default the fixture card's tab ('t1') is open.
     tabs: { findByIdsForOwner: vi.fn(async (ids: string[]) => (opts.tabs ?? [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }]).filter((t) => ids.includes(t.id))) },
     chatGrants: {
