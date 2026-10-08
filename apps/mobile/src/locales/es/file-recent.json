@@ -1,0 +1,21 @@
+{
+  "Todos": "Todos",
+  "Specs": "Specs",
+  "Planos": "Planes",
+  "Lições": "Lecciones",
+  "Jurídico": "Legal",
+  "Outros": "Otros",
+  "Citados": "Citados",
+  "Atualize o agente de {{name}} para listar os arquivos dela": "Actualiza el agente de {{name}} para listar sus archivos",
+  "{{name}} está desconectada": "{{name}} está desconectada",
+  "{{name}} não usa o agente do termhub": "{{name}} no usa el agente de termhub",
+  "Não foi possível listar os arquivos de {{name}}": "No se pudieron listar los archivos de {{name}}",
+  "Não foi possível listar os arquivos.": "No se pudieron listar los archivos.",
+  "citado": "citado",
+  "muito grande": "demasiado grande",
+  "Voltar": "Volver",
+  "Arquivos": "Archivos",
+  "Nenhum projeto indicado.": "No se indicó ningún proyecto.",
+  "Listando arquivos…": "Listando archivos…",
+  "Nenhum arquivo .md encontrado": "No se encontraron archivos .md"
+}

@@ -235,7 +235,7 @@ const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 /** Why a start failed (TER-987), in the reader's language when the event has it: null for any other block. */
 function startFailureOf(p: Record<string, unknown>, locale: Locale): string | null {
   if (p.stage !== 'start') return null;
-  return (locale === 'en' ? str(p.message_en) : null) ?? str(p.message);
+  return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
 }
 
 /**

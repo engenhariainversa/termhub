@@ -116,7 +116,7 @@ export type CreateHttpMobileApiOptions = {
   /** Called on every `403 ACCOUNT_PENDING_DELETION` (TER-720): the account is deactivated until the
    * person cancels its deletion. The singleton passes `accountPendingDeletion.emit`. */
   onAccountPendingDeletion?: () => void;
-  /** The language the app shows (`'pt-BR'` | `'en'`), sent as `Accept-Language` on every call and
+  /** The language the app shows (`'pt-BR'` | `'en'` | `'es'`), sent as `Accept-Language` on every call and
    * socket upgrade so the server answers its errors in it (i18n spec §2). Read per request: a
    * change in Ajustes applies to the next call. */
   language?: () => string;

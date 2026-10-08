@@ -26,8 +26,8 @@ const patch = (app: ReturnType<typeof buildApp>, payload: unknown) => app.inject
 describe('PATCH /auth/me/locale', () => {
   beforeEach(() => setLocale.mockReset().mockResolvedValue(undefined));
 
-  it('stores en, pt-BR or null (automatic) and answers 204', async () => {
-    for (const locale of ['en', 'pt-BR', null]) {
+  it('stores en, es, pt-BR or null (automatic) and answers 204', async () => {
+    for (const locale of ['en', 'es', 'pt-BR', null]) {
       const res = await patch(buildApp(user), { locale });
       expect(res.statusCode).toBe(204);
       expect(setLocale).toHaveBeenLastCalledWith('u1', locale);
@@ -35,7 +35,7 @@ describe('PATCH /auth/me/locale', () => {
   });
 
   it('refuses any other value', async () => {
-    for (const locale of ['es', 'EN', '', 3]) {
+    for (const locale of ['fr', 'es-AR', 'EN', '', 3]) {
       const res = await patch(buildApp(user), { locale });
       expect(res.statusCode).toBe(400);
       expect(res.json().code).toBe('VALIDATION');

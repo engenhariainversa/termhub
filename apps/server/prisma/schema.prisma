@@ -798,7 +798,7 @@ model WaitlistEntry {
   phone        String
   linkedin     String?
   github       String?
-  /// "pt" | "en": language the form was filled in
+  /// "pt" | "en" | "es": language the form was filled in
   locale       String    @default("pt")
   source       String    @default("landing")
   createdAt    DateTime  @default(now()) @map("created_at")

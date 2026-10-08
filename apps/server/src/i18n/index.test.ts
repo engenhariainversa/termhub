@@ -48,36 +48,48 @@ describe('t', () => {
     expect(t('en', m)).toBe('Machine m1 is disconnected');
   });
 
+  it('looks the Spanish entry up by the pt-BR text, with plurals', () => {
+    expect(t('es', 'Não encontrado')).toBe('No encontrado');
+    expect(t('es', 'A máquina {{machine}} está desconectada', { machine: 'm1' })).toBe('La máquina m1 está desconectada');
+    const key = 'Isso exclui a tarefa "{{title}}" e {{count}} subtarefas; repita com confirm: true para confirmar';
+    expect(t('es', key, { title: 'x', count: 1 })).not.toBe(t('es', key, { title: 'x', count: 3 }));
+    expect(t('es', key, { title: 'x', count: 1_000_000 })).toBe(t('es', key, { title: 'x', count: 3 }).replace('3', '1000000'));
+  });
+
   it('tk returns its argument unchanged', () => {
     expect(tk('Perfil')).toBe('Perfil');
   });
 });
 
 describe('parseLocale', () => {
-  it('accepts only the two locales', () => {
+  it('accepts only the three locales', () => {
     expect(parseLocale('pt-BR')).toBe('pt-BR');
     expect(parseLocale('en')).toBe('en');
-    expect(parseLocale('es')).toBeNull();
+    expect(parseLocale('es')).toBe('es');
+    expect(parseLocale('fr')).toBeNull();
     expect(parseLocale(null)).toBeNull();
     expect(parseLocale(undefined)).toBeNull();
   });
 });
 
 describe('negotiateLocale', () => {
-  it('maps pt* to pt-BR and en* to en', () => {
+  it('maps pt* to pt-BR, en* to en and es* to es', () => {
     expect(negotiateLocale('pt-PT')).toBe('pt-BR');
     expect(negotiateLocale('en-GB')).toBe('en');
     expect(negotiateLocale('pt')).toBe('pt-BR');
+    expect(negotiateLocale('es-AR')).toBe('es');
+    expect(negotiateLocale('es')).toBe('es');
   });
 
   it('honours q order, then header order', () => {
     expect(negotiateLocale('pt-BR;q=0.5, en-US;q=0.9')).toBe('en');
     expect(negotiateLocale('en-US,en;q=0.9,pt-BR;q=0.8')).toBe('en');
-    expect(negotiateLocale('es-ES, pt;q=0.7, en;q=0.7')).toBe('pt-BR');
+    expect(negotiateLocale('es-ES, pt;q=0.7, en;q=0.7')).toBe('es');
+    expect(negotiateLocale('fr-FR, pt;q=0.7, en;q=0.7')).toBe('pt-BR');
   });
 
   it('skips other languages and q=0', () => {
-    expect(negotiateLocale('es-ES, fr')).toBeNull();
+    expect(negotiateLocale('fr-FR, de')).toBeNull();
     expect(negotiateLocale('en;q=0, pt;q=0.1')).toBe('pt-BR');
     expect(negotiateLocale(undefined)).toBeNull();
     expect(negotiateLocale('')).toBeNull();
@@ -88,6 +100,7 @@ describe('requestLocale', () => {
   it('prefers the signed-in user choice over the header', () => {
     expect(requestLocale(req({ user: { locale: 'en' }, acceptLanguage: 'pt-BR' }))).toBe('en');
     expect(requestLocale(req({ user: { locale: 'pt-BR' }, acceptLanguage: 'en' }))).toBe('pt-BR');
+    expect(requestLocale(req({ user: { locale: 'es' }, acceptLanguage: 'en' }))).toBe('es');
   });
 
   it('falls back to Accept-Language when the user chose nothing', () => {
@@ -97,7 +110,7 @@ describe('requestLocale', () => {
 
   it('falls back to pt-BR', () => {
     expect(requestLocale(req())).toBe('pt-BR');
-    expect(requestLocale(req({ acceptLanguage: 'es' }))).toBe('pt-BR');
+    expect(requestLocale(req({ acceptLanguage: 'fr' }))).toBe('pt-BR');
   });
 
   it('reads the phone and /mcp users too', () => {

@@ -1,6 +1,9 @@
 import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { track } from './analytics';
-import { useLang } from './i18n';
+import { useLang, type Lang } from './i18n';
+
+/** The country code the phone field starts with: Brazil for pt, the US for en; Spanish is spoken in too many countries to guess. */
+const DEFAULT_DDI: Record<Lang, string> = { pt: '55', en: '1', es: '' };
 
 /** The failure is stored as a reason, not as a string, so switching language re-renders it. */
 type State =
@@ -33,7 +36,7 @@ export function WaitlistForm() {
   const [emailTouched, setEmailTouched] = useState(false);
   const [tipOpen, setTipOpen] = useState(false);
   const [tipDismissed, setTipDismissed] = useState(false);
-  const [ddi, setDdi] = useState(lang === 'pt' ? '55' : '1');
+  const [ddi, setDdi] = useState(DEFAULT_DDI[lang]);
   const [ddd, setDdd] = useState('');
   const [number, setNumber] = useState('');
   const [linkedin, setLinkedin] = useState('');
