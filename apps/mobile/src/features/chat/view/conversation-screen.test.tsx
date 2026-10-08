@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { DeviceEventEmitter, FlatList, StyleSheet } from 'react-native';
+import { DeviceEventEmitter, Dimensions, FlatList, StyleSheet } from 'react-native';
 import { getAnimatedStyle } from 'react-native-reanimated';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
@@ -480,36 +480,43 @@ describe('Conversa', () => {
     await waitFor(() => expect(getAnimatedStyle(screen.getByTestId('composer-text'))).toMatchObject(BESIDE_BUTTONS), SETTLE);
   });
 
-  it('avoids the keyboard with padding on iOS', async () => {
+  it('leaves no room under the composer while the keyboard is down', async () => {
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
-    // RNTL only sees host views: the `padding` behaviour is the one that pads the bottom by the
-    // keyboard's height (0 while it is down); `height` and no behaviour leave the padding unset.
-    expect(StyleSheet.flatten(screen.getByTestId('conversation-keyboard').props.style).paddingBottom).toBe(0);
+    expect(StyleSheet.flatten(screen.getByTestId('conversation-body').props.style).paddingBottom).toBe(0);
   });
 
-  it('lifts the composer right onto the keyboard, from where the conversation really starts on screen (measured)', async () => {
+  it('keeps the composer on the keyboard through show, a QuickType frame change, a drag-dismiss and a reopen (TER-1022)', async () => {
     // Host views' native methods are jest mocks shared by every view: this one says the conversation
-    // starts 91 pt down the screen — more than the (zero) top inset jest reports.
+    // runs from 91 pt down the screen to 34 pt above its bottom (the home indicator).
+    const SCREEN = Dimensions.get('screen').height;
     const nativeMethods = require('@react-native/jest-preset/jest/MockNativeMethods').default as { measureInWindow: jest.Mock };
-    nativeMethods.measureInWindow.mockImplementation((cb: (x: number, y: number, w: number, h: number) => void) => cb(0, 91, 390, 700));
-    try {
-      await render(<ConversationScreen />);
-      await screen.findByText(SEEDED_USER, undefined, LOAD);
-      const layout = { persist: () => undefined, nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 700 } } };
-      await fireEvent(screen.getByTestId('conversation-body'), 'layout', layout);
-      await fireEvent(screen.getByTestId('conversation-keyboard'), 'layout', layout);
-      // The keyboard's top at 500 on screen; the avoiding view's bottom is at 91 + 700 = 791 on screen.
-      await act(() => {
-        DeviceEventEmitter.emit('keyboardWillShow', {
+    nativeMethods.measureInWindow.mockImplementation((cb: (x: number, y: number, w: number, h: number) => void) => cb(0, 91, 390, SCREEN - 34 - 91));
+    const keyboard = (name: string, height: number, screenY = SCREEN - height) =>
+      act(() => {
+        DeviceEventEmitter.emit(name, {
           duration: 0,
           easing: 'keyboard',
-          startCoordinates: { screenX: 0, screenY: 844, width: 390, height: 0 },
-          endCoordinates: { screenX: 0, screenY: 500, width: 390, height: 344 },
+          startCoordinates: { screenX: 0, screenY: SCREEN, width: 390, height: 0 },
+          endCoordinates: { screenX: 0, screenY, width: 390, height },
           isEventFromThisApp: true,
         });
       });
-      await waitFor(() => expect(StyleSheet.flatten(screen.getByTestId('conversation-keyboard').props.style).paddingBottom).toBe(291));
+    const padding = () => StyleSheet.flatten(screen.getByTestId('conversation-body').props.style).paddingBottom;
+    try {
+      await render(<ConversationScreen />);
+      await screen.findByText(SEEDED_USER, undefined, LOAD);
+      await keyboard('keyboardWillShow', 291);
+      await waitFor(() => expect(padding()).toBe(291 - 34));
+      await keyboard('keyboardWillChangeFrame', 335);
+      await waitFor(() => expect(padding()).toBe(335 - 34));
+      // Dragging the thread takes the keyboard off screen; iOS may say so with a frame change alone.
+      await keyboard('keyboardWillChangeFrame', 335, SCREEN);
+      await waitFor(() => expect(padding()).toBe(0));
+      await keyboard('keyboardWillShow', 335);
+      await waitFor(() => expect(padding()).toBe(335 - 34));
+      await keyboard('keyboardWillHide', 335, SCREEN);
+      await waitFor(() => expect(padding()).toBe(0));
     } finally {
       nativeMethods.measureInWindow.mockReset();
     }
