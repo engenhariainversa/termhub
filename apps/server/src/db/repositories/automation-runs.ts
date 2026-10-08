@@ -199,6 +199,18 @@ export class AutomationRunsRepository {
     return row ? map(row) : null;
   }
 
+  /**
+   * The tabs an active run works in, each with its card's ref ("TER-123"): the tab lists mark them as
+   * automatic (TER-1044). `owner` scopes them to that owner's projects; null = every project (admin "all").
+   */
+  async activeTabRefs(owner: string | null): Promise<Array<{ tab_id: string; ref: string }>> {
+    const rows = await this.db.automationRun.findMany({
+      where: { status: active, tabId: { not: null }, taskId: { not: null }, ...(owner ? { project: { ownerId: owner } } : {}) },
+      select: { tabId: true, task: { select: { number: true, project: { select: { key: true } } } } },
+    });
+    return rows.flatMap((r) => (r.tabId && r.task ? [{ tab_id: r.tabId, ref: `${r.task.project.key}-${r.task.number}` }] : []));
+  }
+
   /** Increments the counter and returns its new value. */
   async bump(id: string, field: 'resume_count' | 'fix_count' | 'restart_count'): Promise<number> {
     const key = field === 'resume_count' ? 'resumeCount' : field === 'fix_count' ? 'fixCount' : 'restartCount';
