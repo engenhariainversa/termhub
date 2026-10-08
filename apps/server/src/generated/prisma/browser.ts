@@ -145,6 +145,12 @@ export type TabUsage = Prisma.TabUsageModel
  */
 export type TabUsageDay = Prisma.TabUsageDayModel
 /**
+ * Model AiMemoryPage
+ * A current rule termhub published as a pinned ai-memory page in one checkout of a machine (TER-1019):
+ * what it wrote, so it knows what to delete and skips a page whose content did not change.
+ */
+export type AiMemoryPage = Prisma.AiMemoryPageModel
+/**
  * Model AiAccountExhaustion
  * An AI account at its usage limit until `until` (agentic board, spec D21): the dispatcher skips it.
  */

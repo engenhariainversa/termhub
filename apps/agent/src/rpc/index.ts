@@ -43,6 +43,7 @@ export const handlers: Handlers = {
   'claude.linkSession': claude.linkSession,
   'docs.scan': docs.scan,
   'docs.read': docs.read,
+  'ai_memory.rules.sync': aiMemory.rulesSync,
   'file.paste': paste.pasteFile,
   'file.read': fileRead.read,
   'file.list': fileList.list,

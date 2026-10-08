@@ -12,6 +12,7 @@ import { MEMORY_STATUSES } from '../memory/status.js';
 import { scoped } from '../auth/scope.js';
 import { indexProjectNote } from '../memory/note.js';
 import { excerpt } from '../memory/text.js';
+import { nudgeAiMemoryRulesForOwner } from '../memory/ai-memory-sync.js';
 import { requestLocale, t, tk } from '../i18n/index.js';
 
 const listQuery = z.object({ q: z.string().trim().max(200).optional(), cursor: z.string().max(500).optional() });
@@ -180,6 +181,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
       const [code, message, errorCode] = STATUS_ERRORS[result];
       throw new HttpError(code, message, errorCode);
     }
+    // A note's mark changes the current rules (TER-1019): republish the ai-memory pages in the background.
+    if (target.kind === 'note' || by?.kind === 'note') nudgeAiMemoryRulesForOwner(repos, ownerId, app.log);
     return statusView(ownerId, target);
   };
 
@@ -271,6 +274,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
   app.delete('/notes/:id', async (request, reply) => {
     const { id } = idParam.parse(request.params);
     await repos.memoryItems.deleteNote(id, request.scope.user.id);
+    // A forgotten note may have been a current rule (TER-1019).
+    nudgeAiMemoryRulesForOwner(repos, request.scope.user.id, app.log);
     return reply.code(204).send();
   });
 

@@ -419,6 +419,7 @@ export const ModelName = {
   AutomationRun: 'AutomationRun',
   TabUsage: 'TabUsage',
   TabUsageDay: 'TabUsageDay',
+  AiMemoryPage: 'AiMemoryPage',
   AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
@@ -468,7 +469,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2097,6 +2098,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.TabUsageDayCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.TabUsageDayCountAggregateOutputType> | number
+        }
+      }
+    }
+    AiMemoryPage: {
+      payload: Prisma.$AiMemoryPagePayload<ExtArgs>
+      fields: Prisma.AiMemoryPageFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.AiMemoryPageFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.AiMemoryPageFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload>
+        }
+        findFirst: {
+          args: Prisma.AiMemoryPageFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.AiMemoryPageFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload>
+        }
+        findMany: {
+          args: Prisma.AiMemoryPageFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload>[]
+        }
+        create: {
+          args: Prisma.AiMemoryPageCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload>
+        }
+        createMany: {
+          args: Prisma.AiMemoryPageCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.AiMemoryPageCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload>[]
+        }
+        delete: {
+          args: Prisma.AiMemoryPageDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload>
+        }
+        update: {
+          args: Prisma.AiMemoryPageUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload>
+        }
+        deleteMany: {
+          args: Prisma.AiMemoryPageDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.AiMemoryPageUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.AiMemoryPageUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload>[]
+        }
+        upsert: {
+          args: Prisma.AiMemoryPageUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AiMemoryPagePayload>
+        }
+        aggregate: {
+          args: Prisma.AiMemoryPageAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAiMemoryPage>
+        }
+        groupBy: {
+          args: Prisma.AiMemoryPageGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AiMemoryPageGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.AiMemoryPageCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AiMemoryPageCountAggregateOutputType> | number
         }
       }
     }
@@ -5034,6 +5109,18 @@ export const TabUsageDayScalarFieldEnum = {
 export type TabUsageDayScalarFieldEnum = (typeof TabUsageDayScalarFieldEnum)[keyof typeof TabUsageDayScalarFieldEnum]
 
 
+export const AiMemoryPageScalarFieldEnum = {
+  projectId: 'projectId',
+  machineId: 'machineId',
+  cwd: 'cwd',
+  path: 'path',
+  hash: 'hash',
+  publishedAt: 'publishedAt'
+} as const
+
+export type AiMemoryPageScalarFieldEnum = (typeof AiMemoryPageScalarFieldEnum)[keyof typeof AiMemoryPageScalarFieldEnum]
+
+
 export const AiAccountExhaustionScalarFieldEnum = {
   accountId: 'accountId',
   until: 'until',
@@ -6066,6 +6153,7 @@ export type GlobalOmitConfig = {
   automationRun?: Prisma.AutomationRunOmit
   tabUsage?: Prisma.TabUsageOmit
   tabUsageDay?: Prisma.TabUsageDayOmit
+  aiMemoryPage?: Prisma.AiMemoryPageOmit
   aiAccountExhaustion?: Prisma.AiAccountExhaustionOmit
   note?: Prisma.NoteOmit
   integration?: Prisma.IntegrationOmit

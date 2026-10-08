@@ -591,6 +591,8 @@ export interface ProjectSetupData {
   approvals: Record<'spec' | 'plan' | 'pr' | 'merge' | 'tool_permissions' | 'questions', DecisionMode>;
   /** absent from an older server; the form sends back what it received */
   automation?: ProjectAutomation;
+  /** TER-1019; absent from an older server */
+  ai_memory?: { publish_rules: boolean };
 }
 
 export interface ProjectSetup {
