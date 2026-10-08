@@ -406,7 +406,7 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   const task = c.primary;
   const used = await fixesUsed(repos, task.id);
   if (used >= c.setup.automation.fix_attempts) return void (await conflictEscalation(c, row, { attempts: used }));
-  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, custom: c.setup.automation.prompts.fixer });
+  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions });
   const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: row.head_sha, branch: row.head_ref, base, prompt });
   if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a conflict');
   if (started !== 'taken') return;
@@ -542,7 +542,7 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
     }
 
     const base = row.base_ref ?? c.baseBranch;
-    const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${jobs}`, custom: c.setup.automation.prompts.fixer });
+    const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${jobs}`, custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions });
     const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: sha, branch: row.head_ref, base, prompt });
     // waiting for a place or halted: the next sync asks again. Taken: a fixer already holds this head's trigger.
     if (started === 'waiting' || started === 'halted') return void (await giveBack());

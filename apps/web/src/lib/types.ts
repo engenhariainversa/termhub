@@ -401,6 +401,8 @@ export interface AutomationFeedEvent {
   paused: boolean | null;
   /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
   tool: string | null;
+  /** TER-1043: the decision a decided_by_recommendation line names; absent from an older server */
+  summary?: string | null;
 }
 export interface ProgressResponse {
   epics: EpicProgress[];
@@ -574,6 +576,8 @@ export interface ProjectAutomation {
   allowed_tools: string[] | null;
   max_parallel: number | null;
   resume_max: number;
+  /** TER-1043: "Parar em decisões de produto"; off (the default) = the agent decides and records it. Absent from an older server */
+  stop_on_decisions?: boolean;
   fix_attempts: number;
   daily_budget_usd: number | null;
   /** a card whose estimate passes this is escalated and not resumed; null = off (spike R8) */

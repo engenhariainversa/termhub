@@ -263,6 +263,8 @@ export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): A
       reason_text: e.kind === 'escalated' ? escalationEventText(p, locale) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : null,
       // the tool a permission_auto_approved / guard_blocked line names (TER-993)
       tool: str(p.tool),
+      // the decision a decided_by_recommendation line names (TER-1043)
+      summary: str(p.summary),
     };
   });
 }

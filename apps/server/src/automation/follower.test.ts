@@ -14,6 +14,7 @@ import { stoppedTabWakeText, type StoppedTabWake } from '../chat/wake.js';
 import { automationBus } from './events.js';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
+import { DECIDE_NUDGES_MAX, DECIDE_TEXT } from './decision.js';
 
 const ME = 'instance-me';
 let seq = 0;
@@ -39,6 +40,8 @@ function world(o: {
   escalatedAt?: string;
   /** the owner's active project conversation; null = none */
   conversation?: { id: string } | null;
+  /** the project's "Parar em decisões de produto" (TER-1043) */
+  stopOnDecisions?: boolean;
 } = {}) {
   const runId = `run${++seq}`;
   const run: AutomationRun = {
@@ -73,7 +76,7 @@ function world(o: {
     tabQuestions: { hasOpenQuestion: vi.fn(async () => o.openQuestion ?? o.question?.status === 'open'), latestQuestionForTab: vi.fn(async () => o.question) },
     taskPullRequests: { listByTasks: vi.fn(async () => o.prs ?? []) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
-    projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true, resume_max: o.resumeMax ?? 3, allowed_tools: null, daily_budget_usd: o.dailyBudget ?? null, card_budget_usd: o.cardBudget ?? null } } })) },
+    projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true, resume_max: o.resumeMax ?? 3, allowed_tools: null, daily_budget_usd: o.dailyBudget ?? null, card_budget_usd: o.cardBudget ?? null, stop_on_decisions: o.stopOnDecisions ?? false } } })) },
     automationPauses: { state: vi.fn(async () => ({ user: o.paused ? new Date() : null, project: null })) },
     users: { findById: vi.fn(async () => ({ id: 'u1' })) },
     tabUsage: {
@@ -93,6 +96,11 @@ function world(o: {
       insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })),
       insertOnce: vi.fn(async (e: AutomationEventInput) => (events.some((x) => x.kind === e.kind && x.payload?.day === e.payload?.day) ? null : (events.push(e), { ...e, id: `e${events.length}`, created_at: '' }))),
       lastForRun: vi.fn(async () => (o.escalatedAt ? { kind: 'escalated', created_at: o.escalatedAt } : null)),
+      payloadsForRun: vi.fn(async (_id: string, kind: string) => events.filter((e) => e.kind === kind).map((e) => e.payload ?? {})),
+    },
+    memoryItems: {
+      countNotesSince: vi.fn(async () => 0),
+      upsertMany: vi.fn(async (items: Array<Record<string, unknown>>) => items.map((i) => ({ ...i, created_at: new Date() }))),
     },
     chat: {
       findLatestActiveForProject: vi.fn(async () => (o.conversation === undefined ? { id: 'cp' } : (o.conversation ?? undefined))),
@@ -580,6 +588,83 @@ describe('the monitor bus subscription', () => {
     const theirs = world({ run: { claimed_by: 'other' } });
     await onTabChange(theirs.deps, { tab: theirs.tab, project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
     expect(theirs.type).not.toHaveBeenCalled();
+  });
+});
+
+describe('a stop on a question: automatic work decides by itself (TER-1043)', () => {
+  const ASKS = 'Implementei a parte do servidor.\n\nDecisão sua: guardo o resumo no evento ou só no PR? Recomendo no evento.';
+  const withAnswer = (w: ReturnType<typeof world>, text: string | null) => Object.assign(w.deps, { lastAnswer: vi.fn(async () => text) });
+
+  it('with no precedent the tab is told to follow its recommendation and record it; the feed gets decided_by_recommendation; not a resume', async () => {
+    const w = world();
+    withAnswer(w, ASKS);
+    await followRun(w.deps, w.run.id);
+    expect(w.type).toHaveBeenCalledTimes(1);
+    expect(w.type.mock.calls[0]![2]).toBe(serverMessage(DECIDE_TEXT));
+    expect(DECIDE_TEXT).toContain('siga a sua recomendação');
+    expect(DECIDE_TEXT).toContain('search_memory');
+    expect(DECIDE_TEXT).toContain('Decisões tomadas');
+    expect(w.run).toMatchObject({ status: 'running', resume_count: 0 });
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'decided_by_recommendation', run_id: w.run.id, payload: { via: 'nudge', tab_id: 'tab1', count: 1 } })]);
+    // the event never carries the tab's words
+    expect(JSON.stringify(w.events)).not.toContain('Recomendo');
+  });
+
+  it('a question that falls in an exception escalates, with nothing typed', async () => {
+    const w = world();
+    withAnswer(w, 'Para seguir preciso da credencial do Stripe no .env de produção. Você coloca?');
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'decision_exception' });
+    expect(w.kinds()).toEqual(['escalated']);
+    expect(SLOT_FREE_REASONS).toContain('decision_exception');
+  });
+
+  it('a project that stops on decisions hands the question to the person', async () => {
+    const w = world({ stopOnDecisions: true });
+    withAnswer(w, ASKS);
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'decision_needed' });
+  });
+
+  it('past DECIDE_NUDGES_MAX nudges the stop takes the ordinary resume', async () => {
+    const w = world();
+    withAnswer(w, ASKS);
+    for (let i = 0; i < DECIDE_NUDGES_MAX; i++) w.events.push({ project_id: 'p1', run_id: w.run.id, kind: 'decided_by_recommendation', payload: { via: 'nudge' } });
+    await followRun(w.deps, w.run.id);
+    expect(w.type.mock.calls[0]![2]).toBe(serverMessage(RESUME_TEXT));
+    expect(w.run.resume_count).toBe(1);
+  });
+
+  it('a stop that asks nothing is resumed as before', async () => {
+    const w = world();
+    withAnswer(w, 'Rodei os testes e abri o PR.');
+    await followRun(w.deps, w.run.id);
+    expect(w.type.mock.calls[0]![2]).toBe(serverMessage(RESUME_TEXT));
+  });
+
+  it('paused: nothing is typed, nobody is told', async () => {
+    const w = world({ paused: true });
+    withAnswer(w, ASKS);
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.events).toEqual([]);
+    expect(w.run.status).toBe('running');
+  });
+
+  it('report_card records each decision for the feed and as a memory note citing the card', async () => {
+    const w = world();
+    await reportCard(tabCtx(w.repos), {
+      status: 'done',
+      pr_url: 'https://github.com/o/r/pull/3',
+      decisions: [{ question: 'Guardar o resumo onde?', options: 'evento | PR', choice: 'No evento', reason: 'O feed lê os eventos' }],
+    });
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened', 'decided_by_recommendation']);
+    expect(w.events[2]!.payload).toEqual({ via: 'agent', tab_id: 'tab1', summary: 'Guardar o resumo onde? → No evento' });
+    const notes = (w.repos.memoryItems.upsertMany as ReturnType<typeof vi.fn>).mock.calls.flatMap((c) => c[0] as Array<Record<string, unknown>>);
+    expect(notes).toEqual([expect.objectContaining({ owner_id: 'u1', project_id: 'p1', kind: 'note', trust: 'derived', title: 'TER-1: Guardar o resumo onde?' })]);
+    expect(String(notes[0]!.text)).toContain('Fontes: task:t1');
   });
 });
 

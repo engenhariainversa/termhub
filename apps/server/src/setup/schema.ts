@@ -124,6 +124,9 @@ export const automationSchema = z.object({
   allowed_tools: z.array(z.string().trim().min(1).max(200)).max(100).nullable().default(null),
   max_parallel: z.number().int().min(1).max(100).nullable().default(null),
   resume_max: z.number().int().min(0).max(10).default(3),
+  // TER-1043: off = the agent decides by itself (its recommendation, or the person's precedent) and records
+  // it; on = a run that stops on a decision waits for the person ("Parar em decisões de produto")
+  stop_on_decisions: z.boolean().default(false),
   fix_attempts: z.number().int().min(0).max(10).default(3),
   daily_budget_usd: z.number().positive().max(100000).nullable().default(null),
   // spike R8 (TER-971): a card whose estimate passes this is escalated and not resumed; null = off

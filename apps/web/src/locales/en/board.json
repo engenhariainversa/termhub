@@ -70,6 +70,8 @@
   "Enviar {{n}} para o backlog": "Send {{n}} to the backlog",
   "Enviar ⏎": "Send ⏎",
   "Envio às lojas nunca é automático.": "Store submissions are never automatic.",
+  "Parar em decisões de produto": "Stop on product decisions",
+  "Desligado, o agente segue a própria recomendação (ou uma decisão sua anterior) e registra a escolha no PR; credenciais, deploy, lojas, dados de produção e mudança de escopo sempre param.": "Off, the agent follows its own recommendation (or an earlier decision of yours) and records the choice in the PR; credentials, deploys, stores, production data and scope changes always stop.",
   "Erro ao abrir o card": "Could not open the card",
   "Erro ao abrir terminal": "Could not open the terminal",
   "Erro ao atualizar no provedor": "Could not update at the provider",
@@ -431,6 +433,8 @@
   "A conta \"{{account}}\" volta a poder rodar em qualquer projeto.": "The account \"{{account}}\" can run in any project again.",
   "A conta \"{{account}}\" passa a rodar só no projeto {{project}}: nenhum outro projeto, troca automática ou chat poderá usá-la.": "The account \"{{account}}\" will run only in project {{project}}: no other project, automatic swap or chat will be able to use it.",
   "{{ref}}: {{tool}} liberado sozinho": "{{ref}}: {{tool}} allowed automatically",
+  "{{ref}} decidiu sozinho: {{summary}}": "{{ref}} decided alone: {{summary}}",
+  "{{ref}}: seguiu a própria recomendação (registrada no PR)": "{{ref}}: followed its own recommendation (recorded in the PR)",
   "{{ref}}: permissão liberada sozinha": "{{ref}}: permission allowed automatically",
   "{{ref}}: {{tool}} bloqueado pela trava": "{{ref}}: {{tool}} blocked by the guard",
   "{{ref}}: ação bloqueada pela trava": "{{ref}}: action blocked by the guard"
