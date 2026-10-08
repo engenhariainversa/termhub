@@ -44,7 +44,13 @@ export async function suggestFor(repos: Pick<Repositories, 'users' | 'chatDecisi
       // other empty question and match them at similarity 1.0 — never a real match, so it never even
       // asks `nearest`.
       if (texts[i] === '') continue;
-      const near = await repos.chatDecisions.nearest(row.user_id, vectors[i]!, { multiSelect: item.multi_select, k: SUGGEST_K, embedModel: embedTag(model) });
+      const near = await repos.chatDecisions.nearest(row.user_id, vectors[i]!, {
+        multiSelect: item.multi_select,
+        k: SUGGEST_K,
+        embedModel: embedTag(model),
+        // TER-1014: only decisions that hold on this card — not expired, in scope for its project and conversation.
+        place: { projectId: row.project_id, conversationId: row.conversation_id },
+      });
       // Newest first among the ones close enough: a fresher decision beats a stronger but stale match.
       const candidates = near.filter((n) => n.similarity >= deps.threshold).sort((a, b) => b.created_at.localeCompare(a.created_at));
       for (const c of candidates) {

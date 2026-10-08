@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { config } from '../config.js';
 import { controlContextFor, type ControlContext } from '../control/context.js';
 import type { ChatDecision } from '../db/repositories/chat-decisions.js';
+import { holdsAt } from '../db/repositories/decision-scope.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutoAnswer, AutoAnswerBy, TabQuestion } from '../db/repositories/tab-questions.js';
 import { toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
@@ -172,6 +173,9 @@ export async function maybeScheduleRepeat(repos: Repositories, row: TabQuestion,
   // descriptions included. A decision a newer one replaced (TER-1015) is history, never a precedent:
   // drop it before the check.
   const decisions = (await repos.chatDecisions.findManyForUser(ids, row.user_id)).filter((d) => !d.superseded_at && d.trust === 'person');
+  // TER-1014: a decision that expired or does not hold on this card's project/conversation is no precedent.
+  const place = { projectId: row.project_id, conversationId: row.conversation_id };
+  if (decisions.some((d) => !holdsAt(d, place, now))) return null;
   if (!precedentBacks(decisions, payload, answer)) return null;
   return storeAutoAnswer(repos, { row, answer, by: 'memory', reason: REPEAT_REASON, sources: ids.map((id) => ({ kind: 'decision' as const, id })) }, now);
 }
@@ -220,6 +224,10 @@ export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { 
       // A decision the countdown made (`derived`, TER-1006) is no precedent: as good as forgotten.
       if (precedents.filter((d) => d.trust === 'person').length < cited.length) throw new HttpError(409, 'A decisão usada foi esquecida', 'PRECEDENT_FORGOTTEN');
       if (precedents.some((d) => d.superseded_at)) throw new HttpError(409, 'A decisão usada foi substituída', 'PRECEDENT_SUPERSEDED');
+      // TER-1014: a precedent that expired during the countdown (or never held here) sends nothing.
+      if (precedents.some((d) => !holdsAt(d, { projectId: claimed.project_id, conversationId: claimed.conversation_id }, now))) {
+        throw new HttpError(409, 'A decisão usada expirou ou não vale aqui', 'PRECEDENT_EXPIRED');
+      }
       await (deps.answer ?? answerTabQuestion)(controlContextFor(repos, user), claimed.id, auto.answer, { log, via: 'auto', embedder: null });
     } catch (err) {
       const code = codeOf(err, 'AUTO_ANSWER_FAILED');

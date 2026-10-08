@@ -1,12 +1,12 @@
 // Dates and numbers in the language the app shows (i18n spec §2): no `'pt-BR'` literal is passed
-// to `toLocale*` / `Intl` anywhere else. Hermes' `Intl` formats both languages.
+// to `toLocale*` / `Intl` anywhere else. Hermes' `Intl` formats all three languages.
 import { currentLocale, type Locale } from './index';
 
 type DateInput = string | number | Date;
 
 /** The BCP 47 tag `Intl` gets for a locale. */
 export function intlLocale(locale: Locale = currentLocale()): string {
-  return locale === 'en' ? 'en-US' : 'pt-BR';
+  return { 'pt-BR': 'pt-BR', en: 'en-US', es: 'es' }[locale];
 }
 
 function toDate(value: DateInput): Date {

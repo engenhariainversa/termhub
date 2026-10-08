@@ -1,12 +1,12 @@
 /** Everything a runner needs to spawn `claude -p` the one way the permission gate allows: the
- * exact argv and the MCP config it points at. Two runners (the server's container today, the
- * user's own machine tomorrow) build the same command line from here, so neither can drift from
- * the other. No spawning, no file I/O, no process handling — that stays with each runner.
+ * exact argv and the MCP config it points at. The runner (the agent, on the user's own machine)
+ * builds its command line from here, and the argv tests pin it. No spawning, no file I/O, no
+ * process handling — that stays with the runner.
  *
  * `ClaudeRunSpec` has no prompt field: the prompt never becomes an argument here, so a prompt
- * beginning with "-" can never be read as a flag. Each runner writes it to the child's stdin
- * instead, and that guarantee is exercised end to end where the runner exists — the concierge's
- * fake-CLI test in apps/concierge/src/run.test.ts, and the agent's equivalent once Task 3 adds it. */
+ * beginning with "-" can never be read as a flag. The runner writes it to the child's stdin
+ * instead, and that guarantee is exercised end to end where the runner exists — the agent's
+ * fake-CLI test in apps/agent/src/claude/run.test.ts. */
 
 export interface ClaudeRunSpec {
   session_id: string;
@@ -118,9 +118,8 @@ export function mcpConfig(url: string, token: string, name = 'termhub'): string 
 /**
  * Why a run failed, in a form the callers are allowed to act on. Derived from the CLI's stderr,
  * which never leaves the machine it ran on: it can carry the prompt and terminal content (spec
- * §7.1), so only this label travels. A label is not text — it names an outcome, and both runners
- * need the same names for the same stderr, which is why the classification lives here beside the
- * argv rather than once in the container and again in the agent.
+ * §7.1), so only this label travels. A label is not text — it names an outcome the server acts on,
+ * which is why the classification lives here beside the argv.
  */
 export type ClaudeFailureReason = 'missing_session' | 'cli_rejected' | 'run_failed';
 

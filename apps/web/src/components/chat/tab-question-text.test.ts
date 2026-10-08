@@ -80,6 +80,7 @@ it('names why an automatic answer failed, one sentence per code, in pt-BR', () =
   expect(autoAnswerFailureText('TAB_PROMPT_CHANGED')).toBe('Não consegui responder sozinho: a pergunta mudou na aba.');
   expect(autoAnswerFailureText('AUTODECIDE_OFF')).toBe('Resposta automática cancelada: você desligou «Responder sozinho».');
   expect(autoAnswerFailureText('PRECEDENT_FORGOTTEN')).toBe('Resposta automática cancelada: o precedente foi esquecido.');
+  expect(autoAnswerFailureText('PRECEDENT_EXPIRED')).toBe('Resposta automática cancelada: o precedente expirou.');
   expect(autoAnswerFailureText('SOME_OTHER_CODE')).toBe('Não consegui responder sozinho.');
   expect(autoAnswerFailureText(undefined)).toBe('Não consegui responder sozinho.');
   expect(autoAnswerFailureText(null)).toBe('Não consegui responder sozinho.');

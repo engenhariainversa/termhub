@@ -5,16 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn(), spawn: vi.fn() }));
 
-import { CLOSE } from '@termhub/agent-protocol';
+import { CLOSE, PAIRING_TTL_MS } from '@termhub/agent-protocol';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, MachineType } from '../db/repositories/types.js';
 import { applyErrorHandler } from '../lib/errors.js';
 import { agents } from '../agent/registry.js';
 import { AgentClosedError, AgentRpcError } from '../agent/connection.js';
-import { setLatestAgentVersion } from '../agent/latest-version.js';
+import { setLatestAgentRelease } from '../agent/latest-version.js';
+
+const INTEGRITY = `sha512-${'A'.repeat(86)}==`;
+const setLatestAgentVersion = (v: string | null) => setLatestAgentRelease(v ? { version: v, integrity: INTEGRITY } : null);
 import { AGENT_TOKEN_RE, hashAgentToken } from '../agent/token.js';
 import { HOOK_TOKEN_PREFIX, hashHookToken } from '../monitor/token.js';
 import { machineRoutes } from './machines.js';
+import { config } from '../config.js';
 
 function makeMachine(overrides: Partial<Machine> & { type: MachineType }): Machine {
   return {
@@ -31,6 +35,7 @@ function makeMachine(overrides: Partial<Machine> & { type: MachineType }): Machi
     agent_last_seen_at: null,
     agent_auto_update: false,
     claude_auto_swap: false,
+    ai_usage_query: true,
     ai_memory_enabled: false,
     ai_memory_url: null,
     is_local: false,
@@ -68,9 +73,10 @@ function buildApp(
     store[m.id] = m;
     return m;
   });
-  const rotateAgentToken = vi.fn(async (id: string, hash: string) => {
-    if (store[id]) store[id] = { ...store[id], agent_version: store[id].agent_version };
+  const startAgentPairing = vi.fn(async (id: string, hash: string, expiresAt: Date) => {
+    void id;
     void hash;
+    void expiresAt;
   });
   const update = vi.fn(async (id: string, patch: Partial<Machine>) => {
     store[id] = { ...store[id], ...patch } as Machine;
@@ -94,7 +100,7 @@ function buildApp(
     machineHooks,
     tabs: {
       countsByMachine: vi.fn(async () => health.counts ?? {}),
-      listByMachine: vi.fn(async (id: string) => (id === 'm1' ? [{ id: 't1', project_id: 'p1', machine_id: 'm1' }, { id: 't2', project_id: 'p2', machine_id: 'm1' }] : [])),
+      listByMachine: vi.fn(async (id: string) => (id === 'm1' ? [{ id: 't1', project_id: 'p1', machine_id: 'm1', tmux_session: 'th-t1' }, { id: 't2', project_id: 'p2', machine_id: 'm1', tmux_session: null }] : [])),
     },
     aiAccounts: { list: vi.fn(async () => aiAccounts) },
     apiTokens: { revokeForTabs },
@@ -102,7 +108,7 @@ function buildApp(
       findById: async (id: string) => store[id],
       list: async () => Object.values(store),
       create,
-      rotateAgentToken,
+      startAgentPairing,
       update,
       delete: del,
     },
@@ -112,7 +118,7 @@ function buildApp(
   } as unknown as Repositories;
 
   app.register((instance) => machineRoutes(instance, repos), { prefix: '/api/machines' });
-  return { app, repos: { create, rotateAgentToken, update, delete: del, machineHooks, revokeForTabs } };
+  return { app, repos: { create, startAgentPairing, update, delete: del, machineHooks, revokeForTabs } };
 }
 
 let app: FastifyInstance;
@@ -125,9 +131,9 @@ beforeEach(() => {
 });
 
 /** A connected agent as the registry sees it: hello + an rpc stub, no socket. */
-function attachAgent(version: string, rpc = vi.fn()) {
+function attachAgent(version: string, rpc = vi.fn(), capabilities: string[] = []) {
   const conn = Object.assign(new EventEmitter(), {
-    hello: { type: 'hello', protocol: 1, agent_version: version, os: 'macos', tools: ['tmux'] },
+    hello: { type: 'hello', protocol: 1, agent_version: version, os: 'macos', tools: ['tmux'], capabilities },
     connectedAt: Date.now(),
     rpc,
     close: vi.fn(),
@@ -170,12 +176,17 @@ describe('POST /api/machines (agent enrollment)', () => {
     expect(body.machine.host).toBeNull();
   });
 
-  it('rotateAgentToken is called with the hash of the returned token', async () => {
+  it('stores the hash of the returned token as a pairing token valid for 15 minutes (TER-1017)', async () => {
     const built = buildApp(store);
     app = built.app;
+    const before = Date.now();
     const res = await app.inject({ method: 'POST', url: '/api/machines', payload: { name: 'agent-box', type: 'agent' } });
     const body = res.json();
-    expect(built.repos.rotateAgentToken).toHaveBeenCalledWith(body.machine.id, hashAgentToken(body.agent_token));
+    expect(built.repos.startAgentPairing).toHaveBeenCalledWith(body.machine.id, hashAgentToken(body.agent_token), expect.any(Date));
+    const expiresAt = new Date(body.agent_token_expires_at).getTime();
+    expect(expiresAt - before).toBeGreaterThanOrEqual(PAIRING_TTL_MS - 1000);
+    expect(expiresAt - before).toBeLessThanOrEqual(PAIRING_TTL_MS + 1000);
+    expect((built.repos.startAgentPairing.mock.calls[0][2] as Date).toISOString()).toBe(body.agent_token_expires_at);
   });
 
   it('rejects an agent machine with a host set (400)', async () => {
@@ -212,7 +223,8 @@ describe('POST /api/machines/:id/agent-token (rotation)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(AGENT_TOKEN_RE.test(body.agent_token)).toBe(true);
-    expect(built.repos.rotateAgentToken).toHaveBeenCalledWith('m1', hashAgentToken(body.agent_token));
+    expect(built.repos.startAgentPairing).toHaveBeenCalledWith('m1', hashAgentToken(body.agent_token), expect.any(Date));
+    expect(typeof body.agent_token_expires_at).toBe('string');
     expect(disconnect).toHaveBeenCalledWith('m1', CLOSE.UNAUTHORIZED, 'rotated');
   });
 
@@ -278,6 +290,24 @@ describe('PATCH /api/machines/:id (claude_auto_swap)', () => {
     store.m1 = makeMachine({ type: 'agent' });
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { claude_auto_swap: 'yes' } });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('PATCH /api/machines/:id (ai_usage_query)', () => {
+  it.each(['agent', 'ssh', 'local'] as const)('reaches the repository with the switch off on a %s machine', async (type) => {
+    store.m1 = makeMachine({ type });
+    const built = buildApp(store);
+    app = built.app;
+    const res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { ai_usage_query: false } });
+    expect(res.statusCode).toBe(200);
+    expect(built.repos.update).toHaveBeenCalledWith('m1', expect.objectContaining({ ai_usage_query: false }));
+  });
+
+  it('rejects a non-boolean value (400)', async () => {
+    store.m1 = makeMachine({ type: 'agent' });
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { ai_usage_query: 'no' } });
     expect(res.statusCode).toBe(400);
   });
 });
@@ -446,6 +476,137 @@ describe('GET /api/machines/:id/simulators', () => {
     expect(res.statusCode).toBe(503);
     expect(res.json().code).toBe('AGENT_OFFLINE');
     expect(execFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/machines/:id/network-check (hooks and MCP addresses from the machine)', () => {
+  it('answers 409 AGENT_OUTDATED for an agent without net_check, without calling it', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const rpc = attachAgent('0.19.0');
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'GET', url: '/api/machines/m1/network-check' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('AGENT_OUTDATED');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('asks the agent to POST to the hooks address and counts only 401 as reachable', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const rpc = attachAgent('0.23.0', vi.fn(async (_m: string, p: { urls: string[] }) => ({ results: p.urls.map((url) => ({ url, status: 403, error: null })) })), ['net_check']);
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'GET', url: '/api/machines/m1/network-check' });
+    expect(res.statusCode).toBe(200);
+    const [method, params] = rpc.mock.calls[0] as [string, { urls: string[] }];
+    expect(method).toBe('net.check');
+    expect(params.urls[0]).toBe(config.hooksUrl);
+    const hooks = res.json().checks[0];
+    expect(hooks).toEqual({ name: 'hooks', url: config.hooksUrl, host: new URL(config.hooksUrl).host, ok: false, status: 403, error: null });
+  });
+
+  it('answers 400 on a machine without the agent', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'local' });
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'GET', url: '/api/machines/m1/network-check' });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('DELETE /api/machines/:id?uninstall=1', () => {
+  /** An agent rpc stub answering each method the uninstall calls. */
+  const uninstallRpc = (over: Record<string, () => Promise<unknown>> = {}) =>
+    vi.fn(async (method: string) => {
+      if (over[method]) return over[method]();
+      if (method === 'hooks.uninstall') return { removed: true };
+      if (method === 'tmux.kill') return { killed: true };
+      if (method === 'agent.uninstall') return { service: 'removed' };
+      throw new Error(`unexpected ${method}`);
+    });
+
+  it('removes the hooks, kills the tabs\' tmux sessions and uninstalls the agent, then deletes', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const rpc = attachAgent('0.22.0', uninstallRpc());
+    const built = buildApp(store);
+    const res = await built.app.inject({ method: 'DELETE', url: '/api/machines/m1?uninstall=1' });
+    expect(res.statusCode).toBe(200);
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(['hooks.uninstall', 'tmux.kill', 'agent.uninstall']);
+    expect(rpc).toHaveBeenCalledWith('tmux.kill', { session: 'th-t1' }, undefined);
+    expect(built.repos.machineHooks.delete).toHaveBeenCalledWith('m1');
+    expect(built.repos.delete).toHaveBeenCalledWith('m1');
+    expect(rpc.mock.invocationCallOrder.at(-1)!).toBeLessThan(built.repos.delete.mock.invocationCallOrder[0]!);
+  });
+
+  it('a failing tmux kill does not stop the uninstall', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    attachAgent('0.22.0', uninstallRpc({ 'tmux.kill': async () => { throw new AgentRpcError({ code: 'failed', message: 'no server' }); } }));
+    const built = buildApp(store);
+    const res = await built.app.inject({ method: 'DELETE', url: '/api/machines/m1?uninstall=1' });
+    expect(res.statusCode).toBe(200);
+    expect(built.repos.delete).toHaveBeenCalledWith('m1');
+  });
+
+  it('treats the agent closing its socket during agent.uninstall as done', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    attachAgent('0.22.0', uninstallRpc({ 'agent.uninstall': async () => { throw new AgentClosedError('closed'); } }));
+    const built = buildApp(store);
+    const res = await built.app.inject({ method: 'DELETE', url: '/api/machines/m1?uninstall=1' });
+    expect(res.statusCode).toBe(200);
+    expect(built.repos.delete).toHaveBeenCalledWith('m1');
+  });
+
+  it('aborts without deleting when agent.uninstall fails', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    attachAgent('0.22.0', uninstallRpc({ 'agent.uninstall': async () => { throw new AgentRpcError({ code: 'failed', message: 'launchctl bootout failed' }); } }));
+    const built = buildApp(store);
+    const res = await built.app.inject({ method: 'DELETE', url: '/api/machines/m1?uninstall=1' });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error).toBe('launchctl bootout failed');
+    expect(built.repos.delete).not.toHaveBeenCalled();
+    expect(store.m1).toBeDefined();
+  });
+
+  it('aborts without deleting or uninstalling when the hooks cannot be removed', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const rpc = attachAgent('0.22.0', uninstallRpc({ 'hooks.uninstall': async () => { throw new AgentRpcError({ code: 'failed', message: 'settings.json is not valid JSON' }); } }));
+    const built = buildApp(store);
+    const res = await built.app.inject({ method: 'DELETE', url: '/api/machines/m1?uninstall=1' });
+    expect(res.statusCode).toBe(502);
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(['hooks.uninstall']);
+    expect(built.repos.machineHooks.delete).not.toHaveBeenCalled();
+    expect(built.repos.delete).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 for an offline agent and 409 AGENT_OUTDATED for an agent before 0.22.0, deleting nothing', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    let built = buildApp(store);
+    const offline = await built.app.inject({ method: 'DELETE', url: '/api/machines/m1?uninstall=1' });
+    expect(offline.statusCode).toBe(503);
+    expect(offline.json().code).toBe('AGENT_OFFLINE');
+    expect(built.repos.delete).not.toHaveBeenCalled();
+
+    const rpc = attachAgent('0.21.0', uninstallRpc());
+    built = buildApp(store);
+    const old = await built.app.inject({ method: 'DELETE', url: '/api/machines/m1?uninstall=1' });
+    expect(old.statusCode).toBe(409);
+    expect(old.json().code).toBe('AGENT_OUTDATED');
+    expect(rpc).not.toHaveBeenCalled();
+    expect(built.repos.delete).not.toHaveBeenCalled();
+  });
+
+  it('rejects uninstall on a non-agent machine (400) and an unknown value', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'ssh' });
+    const built = buildApp(store);
+    const res = await built.app.inject({ method: 'DELETE', url: '/api/machines/m1?uninstall=1' });
+    expect(res.statusCode).toBe(400);
+    expect((await built.app.inject({ method: 'DELETE', url: '/api/machines/m1?uninstall=yes' })).statusCode).toBe(400);
+    expect(built.repos.delete).not.toHaveBeenCalled();
+  });
+
+  it('without the flag, deletes without calling the agent', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const rpc = attachAgent('0.22.0', uninstallRpc());
+    const built = buildApp(store);
+    expect((await built.app.inject({ method: 'DELETE', url: '/api/machines/m1?uninstall=0' })).statusCode).toBe(200);
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
 
@@ -645,7 +806,7 @@ describe('agent update', () => {
     const rpc = attachAgent('0.2.1', vi.fn(async () => ({ installed_version: '0.2.5', restart: 'service' })));
     const res = await app.inject({ method: 'POST', url: '/api/machines/m1/agent/update' });
     expect(res.statusCode).toBe(200);
-    expect(rpc).toHaveBeenCalledWith('agent.update', { version: '0.2.5' }, 180_000);
+    expect(rpc).toHaveBeenCalledWith('agent.update', { version: '0.2.5', integrity: INTEGRITY }, 180_000);
     expect(res.json()).toEqual({ installed_version: '0.2.5', restart: 'service', restarting: true });
   });
 
@@ -719,7 +880,7 @@ describe('ai-memory (TER-1018)', () => {
 
   it('GET on a machine that did not opt in answers disabled without reaching the machine', async () => {
     store.m1 = makeMachine({ type: 'agent' });
-    const rpc = attachAgent('0.22.0');
+    const rpc = attachAgent('0.27.0');
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'GET', url: '/api/machines/m1/ai-memory' });
     expect(res.statusCode).toBe(200);
@@ -730,7 +891,7 @@ describe('ai-memory (TER-1018)', () => {
 
   it('GET asks the agent with the machine URL and returns what it detected', async () => {
     store.m1 = makeMachine({ type: 'agent', ai_memory_enabled: true, ai_memory_url: 'http://localhost:5000' });
-    const rpc = attachAgent('0.22.0', vi.fn(async () => ({ installed: true, version: '2.6.0', server_up: true })));
+    const rpc = attachAgent('0.27.0', vi.fn(async () => ({ installed: true, version: '2.6.0', server_up: true })));
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'GET', url: '/api/machines/m1/ai-memory' });
     expect(res.statusCode).toBe(200);
@@ -740,7 +901,7 @@ describe('ai-memory (TER-1018)', () => {
 
   it('GET answers 409 AGENT_OUTDATED for an agent that predates aimemory.status, without calling it', async () => {
     store.m1 = makeMachine({ type: 'agent', ai_memory_enabled: true });
-    const rpc = attachAgent('0.21.0');
+    const rpc = attachAgent('0.26.0');
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'GET', url: '/api/machines/m1/ai-memory' });
     expect(res.statusCode).toBe(409);

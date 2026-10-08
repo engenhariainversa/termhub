@@ -2,7 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketServer, type RawData } from 'ws';
-import { CLOSE, CONTROL_CHANNEL, decodeFrame, helloMessage } from '@termhub/agent-protocol';
+import { CLOSE, CONTROL_CHANNEL, decodeFrame, encodeFrame, helloMessage } from '@termhub/agent-protocol';
 
 const { runForeverMock, stopRestartLoopMock, healMock } = vi.hoisted(() => ({ runForeverMock: vi.fn(), stopRestartLoopMock: vi.fn(async () => {}), healMock: vi.fn(async () => [] as string[]) }));
 vi.mock('./client.js', async (importOriginal) => {
@@ -19,7 +19,8 @@ vi.mock('./service/launchd.js', async (importOriginal) => {
 });
 
 import { ProtocolMismatchError, RevokedError } from './client.js';
-import { capabilitiesFor, checkServerConnection, runAgent } from './run.js';
+import { capabilitiesFor, checkServerConnection, dialCredentials, MISSING_KEY_MESSAGE, runAgent } from './run.js';
+import { generateDeviceKey } from './device-key.js';
 
 const TOKEN = 'thb_ag_' + 'a'.repeat(43);
 
@@ -35,7 +36,7 @@ interface TestServer {
   stop(): Promise<void>;
 }
 
-type Reply = { close: { code: number; reason: string } } | { rejectStatus: number } | { silent: true };
+type Reply = { close: { code: number; reason: string }; before?: object } | { rejectStatus: number } | { silent: true };
 
 /** A fake termhub server: records every hello it gets and answers it as `reply` says. */
 function startServer(reply: Reply): Promise<TestServer> {
@@ -53,7 +54,10 @@ function startServer(reply: Reply): Promise<TestServer> {
       ws.once('message', (data) => {
         const { ch, payload } = decodeFrame(asBuffer(data));
         if (ch === CONTROL_CHANNEL) hellos.push(JSON.parse(payload.toString('utf8')));
-        if ('close' in reply) ws.close(reply.close.code, reply.close.reason);
+        if ('close' in reply) {
+          if (reply.before) ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify(reply.before)));
+          ws.close(reply.close.code, reply.close.reason);
+        }
       });
     });
     server.listen(0, '127.0.0.1', () => {
@@ -76,7 +80,22 @@ describe('capabilitiesFor', () => {
   it('claims sim on macOS only', () => {
     expect(capabilitiesFor('macos')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'sim']));
     expect(capabilitiesFor('linux')).not.toContain('sim');
-    expect(capabilitiesFor('linux')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'transcript', 'file_read', 'file_list', 'worktree']));
+    expect(capabilitiesFor('linux')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'transcript', 'file_read', 'file_list', 'worktree', 'net_check', 'ai_login']));
+  });
+});
+
+describe('dialCredentials (TER-1017)', () => {
+  it('a bearer config dials with its token', () => {
+    expect(dialCredentials({ credential: 'bearer', token: 'thb_ag_x', machine_id: '' })).toEqual({ token: 'thb_ag_x' });
+  });
+
+  it('a key config dials with the machine id and the device key', () => {
+    const key = generateDeviceKey();
+    expect(dialCredentials({ credential: 'key', machine_id: 'm-42' }, () => key)).toEqual({ device: { machineId: 'm-42', key } });
+  });
+
+  it('a key config whose key file is gone cannot dial', () => {
+    expect(dialCredentials({ credential: 'key', machine_id: 'm-42' }, () => null)).toEqual({ error: MISSING_KEY_MESSAGE });
   });
 });
 
@@ -94,6 +113,13 @@ describe('checkServerConnection', () => {
     expect(result).toEqual({ ok: true });
     expect(srv.hellos).toHaveLength(1);
     expect(helloMessage.parse(srv.hellos[0]).probe).toBe(true);
+  });
+
+  it('returns the hooks and MCP addresses the server sends with probe_info before probe-ok', async () => {
+    const before = { type: 'probe_info', hooks_url: 'https://termhub.dev/api/hooks/events', mcp_url: 'https://termhub.dev/mcp' };
+    srv = await startServer({ close: { code: 1000, reason: 'probe-ok' }, before });
+    const result = await checkServerConnection({ url: `http://127.0.0.1:${srv.port}`, token: TOKEN });
+    expect(result).toEqual({ ok: true, endpoints: { hooks_url: before.hooks_url, mcp_url: before.mcp_url } });
   });
 
   it('reports the revoked-token message on an HTTP 401 upgrade rejection', async () => {
@@ -157,7 +183,7 @@ describe('runAgent — terminal errors (exit 78)', () => {
   it('on RevokedError prints the pt-BR message, stops the launchd restart loop, then exits 78', async () => {
     runForeverMock.mockRejectedValue(new RevokedError('revoked'));
     await expect(runAgent(config, { log: () => {} })).rejects.toThrow('__process_exit_78__');
-    expect(errors.join('\n')).toContain('Token revogado');
+    expect(errors.join('\n')).toContain('Acesso revogado');
     expect(stopRestartLoopMock).toHaveBeenCalledTimes(1);
     expect(exitCodes).toEqual([78]);
     // Order matters: the message must be on stderr before the job is booted out (bootout may

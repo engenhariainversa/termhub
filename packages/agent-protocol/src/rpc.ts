@@ -12,11 +12,42 @@ export const pasteName = z.string().min(1).max(255).regex(/^[A-Za-z0-9._-]+$/);
  *  `docs/lessons/README.md` (the format's own doc, not a lesson). */
 export const DOC_PATH_RE = /^docs\/(?:superpowers\/(?:specs|plans)\/[A-Za-z0-9._-]{1,200}\.md|lessons\/(?!README\.md$)[A-Za-z0-9._-]{1,200}\.md)$/;
 export const docPath = z.string().regex(DOC_PATH_RE);
+/** An npm `dist.integrity` in SHA-512 form: `sha512-` plus the base64 of the 64-byte digest. */
+export const SHA512_INTEGRITY_RE = /^sha512-[A-Za-z0-9+/]{86}==$/;
 /** A termhub rule page in ai-memory (TER-1019): `_rules/termhub-<slug>-<note id>.md`. The same regex lives
  *  in `@termhub/machine-ops` (`ai-memory-script.ts`), which cannot depend on this package. */
 export const AI_MEMORY_RULE_PATH_RE = /^_rules\/termhub-[a-z0-9-]{1,40}-[A-Za-z0-9_-]{1,64}\.md$/;
 export const aiMemoryRulePath = z.string().regex(AI_MEMORY_RULE_PATH_RE);
 export const aiProvider = z.enum(['claude', 'chatgpt', 'gemini', 'antigravity']);
+
+/** One usage window of an AI account (`ai.usage`); mirrors @termhub/machine-ops AiUsageWindow. */
+export const aiUsageWindow = z.object({
+  key: z.string().max(200),
+  label: z.string().max(200),
+  utilization: z.number().min(0).max(100),
+  resets_at: z.string().max(64).nullable(),
+  model: z.string().max(64).optional(),
+});
+/** `ai.usage` answer; mirrors @termhub/machine-ops AiUsageResult. Never carries the credential. */
+export const aiUsageResult = z.object({
+  ok: z.boolean(),
+  plan: z.string().max(100).nullable(),
+  windows: z.array(aiUsageWindow).max(50),
+  error: z.string().max(500).nullable(),
+  hint: z.string().max(500).nullable(),
+  rate_limited: z.boolean().optional(),
+  retry_after_ms: z.number().min(0).nullable().optional(),
+});
+
+/** `ai.login.status` answer (TER-1047). */
+export const aiLoginStatusResult = z.object({ supported: z.boolean(), logged_in: z.boolean() });
+export type AiLoginStatusResult = z.infer<typeof aiLoginStatusResult>;
+/** `ai.login.start` answer: the page to open and, for a device flow, the code to type there. */
+export const aiLoginStartResult = z.object({ url: z.string().min(1).max(4000), user_code: z.string().max(64).nullable(), needs_code: z.boolean() });
+export type AiLoginStartResult = z.infer<typeof aiLoginStartResult>;
+/** `ai.login.submit` answer. `message`: why it did not finish, never containing the submitted code. */
+export const aiLoginSubmitResult = z.object({ logged_in: z.boolean(), message: z.string().max(500).nullable() });
+export type AiLoginSubmitResult = z.infer<typeof aiLoginSubmitResult>;
 
 /** A tab id, as minted by the server (see @termhub/machine-ops TAB_ID_RE, which this must match). */
 export const TAB_ID_RE = /^[a-z0-9]{1,64}$/;
@@ -80,6 +111,9 @@ export const rpcErrorSchema = z.object({
 });
 export type RpcError = z.infer<typeof rpcErrorSchema>;
 
+/** Our hook entries in one config file (`HookEntriesState` in @termhub/machine-ops). */
+const hookEntriesState = z.enum(['missing', 'outdated', 'current', 'unreadable']);
+
 const DEFAULT_TIMEOUT = 8_000;
 const def = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(params: P, result: R, timeoutMs = DEFAULT_TIMEOUT) => ({ params, result, timeoutMs });
 
@@ -136,7 +170,39 @@ export const RPC = {
     }),
     z.object({ stdout: z.string() }),
   ),
-  'ai.credential': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), z.object({ stdout: z.string() }), 10_000),
+  /**
+   * Usage of the AI account whose CLI login lives in `config_dir` (spec 2026-10-07 ai-usage-on-machine,
+   * D2; since agent 0.20.0, replacing `ai.credential`). The credential is read and used on the machine,
+   * which asks the provider itself: only the numbers travel. Code Assist makes up to four sequential
+   * 12 s calls, hence the timeout.
+   */
+  'ai.usage': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), aiUsageResult, 60_000),
+  /**
+   * Whether the CLI login of the account whose config dir is `config_dir` (null: the machine's default
+   * login) is valid (TER-1047, since agent 0.26.0): `claude auth status` / `codex login status`.
+   * `supported: false` for a provider without a CLI login the agent can drive (Gemini, Antigravity).
+   */
+  'ai.login.status': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), aiLoginStatusResult, 20_000),
+  /**
+   * Starts the CLI's login in the hidden tmux session `session` (any session of that name is killed
+   * first) and answers what the person needs to finish it in a browser: the login `url`, and for
+   * Codex's device flow the one-time `user_code`. `needs_code`: the CLI waits for a code pasted back
+   * (Claude); false when it polls on its own (Codex). Since agent 0.26.0.
+   */
+  'ai.login.start': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable(), session: sessionName }), aiLoginStartResult, 45_000),
+  /**
+   * Types `code` into the login session (null: nothing to type, Codex) and waits up to 45 s for the
+   * login to finish. The code is never logged nor echoed back: `message` drops any line containing it.
+   * The session is killed once the login is done or failed; a Codex session that only timed out is kept
+   * so a later submit can wait again. Since agent 0.26.0.
+   */
+  'ai.login.submit': def(
+    z.object({ provider: aiProvider, config_dir: machinePath.nullable(), session: sessionName, code: z.string().min(1).max(2000).nullable() }),
+    aiLoginSubmitResult,
+    60_000,
+  ),
+  /** Kills the hidden login session (since agent 0.26.0). */
+  'ai.login.cancel': def(z.object({ session: sessionName }), z.object({ cancelled: z.boolean() })),
   /**
    * A secret the machine already holds, read for the server to store encrypted (spec 2026-09-28 MCP
    * integrations D1/D2). One source only: `gh_auth_token` (`gh auth token`); new sources are added one
@@ -280,12 +346,36 @@ export const RPC = {
     15_000,
   ),
   'hooks.uninstall': def(z.object({ claude_dirs: z.array(machinePath).max(16).optional() }), z.object({ removed: z.boolean() }), 15_000),
-  /** Installs `version` of @termhub/agent with npm; when the agent runs as a service it then exits so the service relaunches the new code (since agent 0.2.1). */
+  /**
+   * What the monitor hooks look like here (`hooksStatus` in @termhub/machine-ops, TER-1023): states only,
+   * never a file's content or the token. `claude_dirs` as in `hooks.install`. Since agent 0.21.0.
+   */
+  'hooks.status': def(
+    z.object({ claude_dirs: z.array(machinePath).max(16).optional() }),
+    z.object({
+      script: z.object({ installed: z.boolean(), version: z.string().max(64).nullable(), expected_version: z.string().max(64), outdated: z.boolean() }),
+      claude: z.object({ present: z.boolean(), state: hookEntriesState, dirs: z.array(z.object({ dir: z.string().max(4096), state: hookEntriesState })).max(64) }),
+      codex: z.object({ present: z.boolean(), state: hookEntriesState, notify: z.boolean(), trusted: z.enum(['all', 'some', 'none']).nullable() }),
+      cursor: z.object({ present: z.boolean(), state: hookEntriesState }),
+    }),
+    15_000,
+  ),
+  /**
+   * Installs `version` of @termhub/agent with npm; when the agent runs as a service it then exits so the service relaunches the new code (since agent 0.2.1).
+   * `integrity`: the `sha512-…` the server verified against the release's provenance (spec 2026-10-07 agent release trust). Since agent 0.22.0
+   * the agent downloads the tarball, checks it against this and installs that file; older agents strip the field and install by version.
+   */
   'agent.update': def(
-    z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/) }),
+    z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/), integrity: z.string().regex(SHA512_INTEGRITY_RE).optional() }),
     z.object({ installed_version: z.string(), restart: z.enum(['service', 'manual']) }),
     180_000,
   ),
+  /**
+   * "Uninstall from the machine" before the machine is deleted (since agent 0.22.0): removes the service definition, deletes the agent's
+   * config (its token), replies, then stops. `service`: whether a launchd/systemd service was there to remove. Hooks and tmux sessions
+   * are removed by the server through `hooks.uninstall` / `tmux.kill` first.
+   */
+  'agent.uninstall': def(z.object({}), z.object({ service: z.enum(['removed', 'none']) }), 30_000),
   /** iOS simulator over the agent (spec 2026-09-24): raw `xcrun simctl list devices -j`; the server parses it. */
   'sim.list': def(z.object({}), z.object({ stdout: z.string() }), 15_000),
   /** `xcrun simctl boot`; combined output, "already booted" included — the server decides what is a failure. */
@@ -313,7 +403,7 @@ export const RPC = {
    * Current rules as pinned ai-memory pages (TER-1019): runs `@termhub/machine-ops`'s
    * `buildAiMemoryRulesScript` in `cwd` (the checkout) against the ai-memory server at `server_url`.
    * Raw tagged stdout (`skip …`, `ok|fail write|delete <path>`, `ok|fail briefing`); `parseAiMemorySync`
-   * on the server reads it back (since agent 0.20.0).
+   * on the server reads it back (since agent 0.27.0).
    */
   'ai_memory.rules.sync': def(
     z.object({
@@ -333,9 +423,20 @@ export const RPC = {
   /** Deletes a tab's whole MCP config dir on close (spec D12); best effort (since agent 0.10.0). */
   'tab.mcp.remove': def(z.object({ tab_id: tabId }), z.object({ ok: z.literal(true) }), 10_000),
   /**
+   * From the machine, an empty POST without a token to each of `urls` (the monitor hooks and MCP
+   * addresses, TER-586), redirects not followed. `status` is the HTTP answer (401 means the address
+   * reaches termhub) or null with `error` when nothing answered: DNS, TLS, a refused or timed-out
+   * connection — what a firewall that only lets `/agent/ws` through looks like (since agent 0.23.0).
+   */
+  'net.check': def(
+    z.object({ urls: z.array(z.string().url().max(2048).regex(/^https?:\/\//)).min(1).max(4) }),
+    z.object({ results: z.array(z.object({ url: z.string().max(2048), status: z.number().int().nullable(), error: z.string().max(500).nullable() })).max(4) }),
+    15_000,
+  ),
+  /**
    * Is `ai-memory` on the machine, which version, and does its server answer at `url` (loopback or a
    * private network only, TER-1018)? Only these three facts travel back: nothing ai-memory stores
-   * (observations, sessions, pages) ever reaches the server (since agent 0.22.0).
+   * (observations, sessions, pages) ever reaches the server (since agent 0.27.0).
    */
   'aimemory.status': def(
     z.object({ url: aiMemoryUrl }),

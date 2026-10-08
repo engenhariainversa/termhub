@@ -1,8 +1,9 @@
-# Translating the web (pt-BR → en)
+# Translating the web (pt-BR → en, es)
 
 Spec: `docs/superpowers/specs/2026-10-04-i18n-english-design.md` (its §6 glossary is binding for
-English wording). pt-BR is the source language: **the pt-BR text is the key**. A missing English
-entry shows the pt-BR text, never a key.
+English wording, §8 for Spanish). pt-BR is the source language: **the pt-BR text is the key**. Every
+key has an English entry (`src/locales/en/`) and a Spanish one (`src/locales/es/`), added in the same
+PR. A missing entry shows the pt-BR text, never a key.
 
 ## Wrap a string
 
@@ -48,8 +49,8 @@ shown as is, never through `t()`.
 
 ## Plurals
 
-Use `count` and give the key in its plural form. The entry goes into **both** catalogs, with
-i18next suffixes:
+Use `count` and give the key in its plural form. The entry goes into **every** catalog (en, es and
+pt-BR), with i18next suffixes:
 
 ```ts
 t('{{count}} usuários', { count: n })
@@ -59,6 +60,9 @@ t('{{count}} usuários', { count: n })
 // src/locales/en/<area>.json
 "{{count}} usuários_one": "{{count}} user",
 "{{count}} usuários_other": "{{count}} users"
+// src/locales/es/<area>.json
+"{{count}} usuários_one": "{{count}} usuario",
+"{{count}} usuários_other": "{{count}} usuarios"
 // src/locales/pt-BR/<area>.json (pt-BR catalogs hold only plural forms)
 "{{count}} usuários_zero": "{{count}} usuários",
 "{{count}} usuários_one": "{{count}} usuário",
@@ -66,17 +70,19 @@ t('{{count}} usuários', { count: n })
 ```
 
 Portuguese counts 0 as "one" (`0 usuário`); add `_zero` when the zero form should read as plural.
+Spanish has a `many` form (a million and up); it reads the `_other` entry, so `_one`/`_other` are enough.
 
 ## One pt-BR word, two English meanings: `context`
 
 When the same pt-BR text means two things in English ("Atualizar" is *Update* for the agent and
 *Refresh* for a list), keep the key and add a literal `context`: `t('Atualizar', { context: 'refresh' })`.
-pt-BR shows the key; English reads the entry `"Atualizar_refresh": "Refresh"`. The checker
+pt-BR shows the key; English reads the entry `"Atualizar_refresh": "Refresh"` (and Spanish
+`"Atualizar_refresh": "Actualizar"` in its catalog). The checker
 requires that entry, and it refuses one key translated two ways in two catalogs.
 
 ## Catalogs
 
-`src/locales/en/<area>.json`, one area per folder of the source tree (`shell.json` for the
+`src/locales/en/<area>.json` and `src/locales/es/<area>.json` (same files, same keys), one area per folder of the source tree (`shell.json` for the
 chrome, `common.json` for words every screen uses: Salvar, Cancelar, Excluir, Carregando…). Areas
 are merged at load, so parallel PRs do not touch the same file; the same key in two files must
 have the same translation. Keep each file sorted by key.
@@ -94,9 +100,9 @@ Never pass `'pt-BR'` to `toLocale*` or `Intl`. Use `lib/format.ts`: `formatDate`
 
 `npm run i18n:check -w @termhub/web` (also a vitest test, so CI runs it) fails on:
 
-- a used key with no English entry, or with different `{{placeholders}}`;
+- a used key with no English or Spanish entry, or with different `{{placeholders}}`;
 - a catalog entry nothing uses any more (delete it with the string);
-- a plural without `_one`/`_other` in both catalogs;
+- a plural without `_one`/`_other` in every catalog;
 - JSX text, or a `title`, `placeholder`, `aria-label`, `alt`, `label`, `confirmLabel`,
   `message`, `subtitle` attribute, holding letters outside `t()`;
 - a source file outside `GUARDED`.

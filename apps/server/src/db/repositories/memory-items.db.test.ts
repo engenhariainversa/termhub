@@ -2,7 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
-import { MemoryItemsRepository, type LessonMeta, type NewMemoryItem } from './memory-items.js';
+import { MemoryItemsRepository, type LessonMeta, type MemoryFilter, type NewMemoryItem } from './memory-items.js';
 
 const DIM = 384;
 /** A unit vector with a 1 at index `i`: cosine similarity to itself is exactly 1, and to another such
@@ -504,6 +504,40 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     // Same source_hash, different chunk text: a doc comes back on its content hash.
     await repo.upsertMany([item({ kind: 'doc', source_id: sourceId, text: `v2 ${marker}`, source_hash: 'd'.repeat(64) })]);
     expect((await repo.textSearch({ ownerId: userId }, marker, 10)).map((r) => r.id)).toEqual([doc!.id]);
+  });
+  it('note scope and expiry (TER-1014): old notes infer their scope; search keeps only notes that hold at the place and skips expired ones', async () => {
+    const userProjectId = newId();
+    await db.project.create({ data: { id: userProjectId, key: `P${userProjectId.slice(-5).toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`, name: 'proj4', ownerId: userId } });
+    try {
+      const text = 'Decisão: Nebula999';
+      const rows = await repo.upsertMany([
+        item({ title: 'legacy-project', text }),
+        item({ title: 'legacy-user', text, project_id: null }),
+        item({ title: 'conversation', text, scope: 'conversation', conversation_id: 'conv-a' }),
+        item({ title: 'expired', text, project_id: null, scope: 'user', expires_at: new Date(Date.now() - 60_000) }),
+        item({ title: 'later', text, project_id: null, scope: 'user', expires_at: new Date(Date.now() + 3_600_000) }),
+      ]);
+      const byTitle = new Map(rows.map((r) => [r.title, r]));
+      expect(byTitle.get('legacy-project')).toMatchObject({ scope: 'project', conversation_id: null, expires_at: null });
+      expect(byTitle.get('legacy-user')).toMatchObject({ scope: 'user' });
+      expect(byTitle.get('conversation')).toMatchObject({ scope: 'conversation', conversation_id: 'conv-a' });
+      for (const r of rows) await repo.setEmbedding(r.id, vec(13), 'm');
+
+      const titles = async (filter: Partial<MemoryFilter>) => (await repo.textSearch({ ownerId: userId, kinds: ['note'], ...filter }, 'Nebula999', 50)).map((r) => r.title).sort();
+      expect(await titles({})).toEqual(['later', 'legacy-project', 'legacy-user']);
+      expect(await titles({ place: { projectId, conversationId: 'conv-a' } })).toEqual(['conversation', 'later', 'legacy-project', 'legacy-user']);
+      expect(await titles({ place: { projectId: userProjectId, conversationId: 'conv-b' } })).toEqual(['later', 'legacy-user']);
+      expect(await titles({ includeExpired: true })).toEqual(['expired', 'later', 'legacy-project', 'legacy-user']);
+      // nearest ranks every embedded note of the owner, so keep only this test's rows (other tests leave user-scope notes behind).
+      const ours = new Set(rows.map((r) => r.id));
+      const near = (await repo.nearest({ ownerId: userId, kinds: ['note'], place: { projectId: userProjectId } }, vec(13), 50, 'm'))
+        .filter((r) => ours.has(r.id))
+        .map((r) => r.title)
+        .sort();
+      expect(near).toEqual(['later', 'legacy-user']);
+    } finally {
+      await db.project.deleteMany({ where: { id: userProjectId } });
+    }
   });
 
   it('currentNotes (TER-1011): this project and account-wide notes, newest first; never wrong, superseded, expired or conversation-only ones', async () => {

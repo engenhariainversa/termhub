@@ -3,6 +3,10 @@
 // real (or mocked) server through a `Transport`.
 import type {
   AccountDeletionBody,
+  AiLoginResumeResponse,
+  AiLoginStartResponse,
+  AiLoginStatusResponse,
+  AiLoginSubmitResponse,
   PushSettings,
   PushTestBody,
   PushTestResponse,
@@ -178,11 +182,27 @@ export interface MobileApi {
   /** Lifts a pause. No PIN: the app confirms before calling it. */
   resumeAutomation(auth: Auth, scope: string): Promise<void>;
 
+  // "Refazer login" of an AI CLI account (TER-1047, spec 2026-10-08). Only the machine's owner may start or
+  // continue a flow (403 otherwise); every error carries the server's own sentence.
+  /** The login state of every account in scope; `refresh` asks the machines again. */
+  aiLoginStatus(auth: Auth, refresh?: boolean): Promise<AiLoginStatusResponse>;
+  /** Runs the CLI's login in a hidden session on the machine and answers the page to open (and Codex's
+   * device code). 400 `UNSUPPORTED_*`, 409 `AGENT_OUTDATED`, 503 when the machine cannot be reached. */
+  startAiLogin(auth: Auth, accountId: string): Promise<AiLoginStartResponse>;
+  /** Claude: the code the page showed; Codex: `null` ("Já autorizei"). `ok: false` names why. */
+  submitAiLogin(auth: Auth, accountId: string, loginId: string, code: string | null): Promise<AiLoginSubmitResponse>;
+  /** Leaving before the end: the server kills the hidden session. */
+  cancelAiLogin(auth: Auth, accountId: string, loginId: string): Promise<void>;
+  /** Types `continue` into each tab still stuck on this account's login error; answers the ones it did. */
+  resumeAiLoginTabs(auth: Auth, accountId: string, tabIds: string[]): Promise<AiLoginResumeResponse>;
+
   // attachments (spec 2026-09-26 §5.3, §5.6)
   /** Streams the file as the raw body; `onProgress` is 0..1. 415 ATTACHMENT_TYPE, 413 ATTACHMENT_TOO_LARGE / ATTACHMENT_QUOTA. */
   uploadAttachment(auth: Auth, file: UploadFile, projectId: string | null, onProgress?: (fraction: number) => void): Promise<TChatAttachment>;
   /** Only while unsent: 404 unknown, 409 once it was sent with a message. */
   deleteAttachment(auth: Auth, id: string): Promise<void>;
+  /** A transcription whisper could not do goes back to the queue (TER-1035): answers the row pending; 409 when a retry cannot help. */
+  retryAttachment(auth: Auth, id: string): Promise<TChatAttachment>;
   /** The download url plus the headers a `<Image source>` needs to fetch it (bearer and a fresh DPoP proof). */
   attachmentSource(auth: Auth, id: string): Promise<{ uri: string; headers: Record<string, string> }>;
 
@@ -207,7 +227,7 @@ export interface MobileApi {
   /** A plain boolean is the same as `{ enabled: boolean }` (the pre-D8 shape every caller still
    *  uses); `{ enabled?, autodecide? }` is the D8 shape for "Responder sozinho quando houver
    *  precedente" — the server refuses a body with neither key. */
-  setChatMemory(auth: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean }): Promise<TChatMemory>;
+  setChatMemory(auth: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }): Promise<TChatMemory>;
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, `cursor` is `next_cursor`. */
   chatNotes(auth: Auth, cursor?: string | null): Promise<TNotesResponse>;
   /** Idempotent and silent about whether `id` ever existed, was someone else's, or was some other

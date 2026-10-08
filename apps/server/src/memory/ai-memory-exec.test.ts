@@ -25,9 +25,9 @@ describe('machineAiMemoryExec', () => {
   it('reach: ssh/local always; an agent only online and at or above the minimum version', () => {
     expect(machineAiMemoryExec.reach(machine('ssh'))).toBe('ok');
     isOnline.mockReturnValue(false);
-    expect(machineAiMemoryExec.reach(machine('agent', '0.23.0'))).toBe('AGENT_OFFLINE');
+    expect(machineAiMemoryExec.reach(machine('agent', '0.27.0'))).toBe('AGENT_OFFLINE');
     isOnline.mockReturnValue(true);
-    info.mockReturnValue({ agent_version: '0.22.0' });
+    info.mockReturnValue({ agent_version: '0.26.0' });
     expect(machineAiMemoryExec.reach(machine('agent'))).toBe('AGENT_OUTDATED');
     info.mockReturnValue({ agent_version: AI_MEMORY_MIN_AGENT_VERSION });
     expect(machineAiMemoryExec.reach(machine('agent'))).toBe('ok');

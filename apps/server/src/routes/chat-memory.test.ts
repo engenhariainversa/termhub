@@ -48,6 +48,8 @@ function fakeRepos() {
       setChatAutodecide: vi.fn(async () => undefined),
       chatCodexReplies: vi.fn(async () => false),
       setChatCodexReplies: vi.fn(async () => undefined),
+      chatContextLimit: vi.fn(async (): Promise<number | null> => null),
+      setChatContextLimit: vi.fn(async () => undefined),
     },
     tabQuestions: {
       cancelScheduledForUser: vi.fn(async (_userId: string) => [] as { id: string }[]),
@@ -183,7 +185,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     repos.memoryItems.countNotesSince.mockResolvedValueOnce(2);
     const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, available: false, count: 7, notes: 2 });
+    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, context_limit: null, available: false, count: 7, notes: 2 });
     expect(repos.memoryItems.countNotesSince).toHaveBeenCalledWith('u1', new Date(0));
   });
 
@@ -195,7 +197,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(res.statusCode).toBe(200);
     expect(repos.users.setChatSuggestions).toHaveBeenCalledWith('u1', false);
     expect(repos.users.setChatAutodecide).not.toHaveBeenCalled();
-    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, available: false, count: 3, notes: 0 });
+    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, context_limit: null, available: false, count: 3, notes: 0 });
   });
 
   it('PATCH /memory sets autodecide and leaves the suggestion switch alone', async () => {
@@ -217,6 +219,24 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(repos.users.setChatSuggestions).not.toHaveBeenCalled();
     expect(repos.users.setChatAutodecide).not.toHaveBeenCalled();
     expect(res.json()).toMatchObject({ codex_replies: true });
+  });
+
+  it('PATCH /memory sets the context meter limit, clears it with null, and refuses one out of bounds (TER-1038)', async () => {
+    const repos = fakeRepos();
+    repos.users.chatContextLimit.mockResolvedValueOnce(200_000);
+    const res = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { context_limit: 200_000 } });
+    expect(res.statusCode).toBe(200);
+    expect(repos.users.setChatContextLimit).toHaveBeenCalledWith('u1', 200_000);
+    expect(repos.users.setChatCodexReplies).not.toHaveBeenCalled();
+    expect(res.json()).toMatchObject({ context_limit: 200_000 });
+    const cleared = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { context_limit: null } });
+    expect(cleared.statusCode).toBe(200);
+    expect(repos.users.setChatContextLimit).toHaveBeenLastCalledWith('u1', null);
+    for (const bad of [500, 20_000_000, 150_000.5]) {
+      const r = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { context_limit: bad } });
+      expect(r.statusCode).toBe(400);
+    }
+    expect(repos.users.setChatContextLimit).toHaveBeenCalledTimes(2);
   });
 
   it('PATCH /memory with autodecide: false cancels the user\'s running countdowns and republishes those cards', async () => {

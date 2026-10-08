@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { chatContextLimit } from '@termhub/mobile-api';
 import type { ChatDecision } from '../db/repositories/chat-decisions.js';
 import type { MemoryItem } from '../db/repositories/memory-items.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -45,8 +46,8 @@ const STATUS_ERRORS = {
 /** `PATCH /memory` (spec D8/§8): at least one of the switches, never none — an empty body is a
  *  400, not a silent no-op. */
 const memoryBody = z
-  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional() })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined, { message: 'Informe enabled, autodecide ou codex_replies' });
+  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional(), context_limit: chatContextLimit.nullable().optional() })
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.context_limit !== undefined, { message: 'Informe enabled, autodecide, codex_replies ou context_limit' });
 
 /** 50 decisions per page (spec 2026-09-26 §4.6). */
 export const DECISIONS_PAGE = 50;
@@ -234,6 +235,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     autodecide: await repos.users.chatAutodecide(userId),
     // "Responder perguntas do Codex pelo chat": off by default, opt-in per user.
     codex_replies: await repos.users.chatCodexReplies(userId),
+    // The chat's context meter limit (TER-1038): null = the model's window, the default.
+    context_limit: await repos.users.chatContextLimit(userId),
     // `false` when embeddings are not configured on this server at all: the switch has nothing to do.
     available: config.embeddings !== null,
     count: await repos.chatDecisions.countForUser(userId),
@@ -248,6 +251,7 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     if (body.enabled !== undefined) await repos.users.setChatSuggestions(userId, body.enabled);
     if (body.autodecide !== undefined) await repos.users.setChatAutodecide(userId, body.autodecide);
     if (body.codex_replies !== undefined) await repos.users.setChatCodexReplies(userId, body.codex_replies);
+    if (body.context_limit !== undefined) await repos.users.setChatContextLimit(userId, body.context_limit);
     if (body.autodecide === false) {
       // Turning "Responder sozinho" off also stops what it already started: every countdown still
       // `scheduled` becomes `cancelled` (the card keeps its proposed answer as a pre-selection), and

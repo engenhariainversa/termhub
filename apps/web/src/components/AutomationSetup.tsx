@@ -120,6 +120,12 @@ export function AutomationSetup({ value, onChange }: Props) {
           <Field label={t('Tentativas de correção do CI')}>
             <NumberInput value={value.fix_attempts} min={0} max={10} onChange={(v) => set('fix_attempts', v ?? 0)} />
           </Field>
+          <Field label={t('Novas tentativas do deploy')} hint={t('quando o deploy falha por problema do GitHub; 0 = pausa na hora')}>
+            <NumberInput value={value.deploy_retries} min={0} max={10} onChange={(v) => set('deploy_retries', v ?? 0)} />
+          </Field>
+          <Field label={t('Retomadas após erro do GitHub')} hint={t('push ou PR com erro do GitHub; depois disso, chama você')}>
+            <NumberInput value={value.github_retries} min={0} max={10} onChange={(v) => set('github_retries', v ?? 0)} />
+          </Field>
           <Field label={t('Hora do resumo diário')} hint={t('0 a 23; vazio = sem resumo')}>
             <NumberInput value={value.summary_hour} min={0} max={23} placeholder={t('Sem resumo')} onChange={(v) => set('summary_hour', v)} />
           </Field>

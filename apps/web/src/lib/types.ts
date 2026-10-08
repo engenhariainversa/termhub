@@ -28,8 +28,8 @@ export interface User {
   last_login_at: string | null;
   /** the address of this user's public city (`/city/@<nickname>`); null until claimed */
   nickname: string | null;
-  /** the language the person picked ('pt-BR' | 'en'); null = automatic; absent on servers older than the i18n release */
-  locale?: 'pt-BR' | 'en' | null;
+  /** the language the person picked ('pt-BR' | 'en' | 'es'); null = automatic; absent on servers older than the i18n release */
+  locale?: 'pt-BR' | 'en' | 'es' | null;
   /** store-review mode: while in the future, this account's mobile device requests auto-approve */
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until; only the user-admin routes (/api/users) send it */
@@ -38,6 +38,30 @@ export interface User {
   deletion_requested_at: string | null;
   /** when the account is deleted for good; non-null = deletion pending, the account is deactivated */
   deletion_scheduled_at: string | null;
+  /** feature flags resolved for this person (TER-1040); absent on older servers = everything off */
+  features?: Partial<Record<FeatureFlagKey, boolean>>;
+}
+
+/** Feature flags the server knows (apps/server/src/features/flags.ts, docs/feature-flags.md). */
+export type FeatureFlagKey = 'subscriptions';
+
+/** One person's own value for a flag (Configurações → Recursos em teste). */
+export interface FeatureFlagOverride {
+  flag: string;
+  user_id: string;
+  email: string;
+  name: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+/** GET /api/feature-flags: a flag, its instance value and who has their own. */
+export interface FeatureFlagInfo {
+  key: FeatureFlagKey;
+  default: boolean;
+  enabled: boolean;
+  updated_at: string | null;
+  overrides: FeatureFlagOverride[];
 }
 
 /** GET/POST/DELETE /api/account/deletion. */
@@ -45,6 +69,23 @@ export interface AccountDeletionStatus {
   pending: boolean;
   requested_at: string | null;
   scheduled_at: string | null;
+}
+
+/** "Exportar meus dados" (TER-741): an archive request and where it stands. */
+export interface DataExport {
+  id: string;
+  status: 'pending' | 'running' | 'ready' | 'failed' | 'expired';
+  bytes: number | null;
+  created_at: string;
+  completed_at: string | null;
+  /** The download works until then (7 days after it is ready). */
+  expires_at: string | null;
+}
+
+export interface DataExportStatus {
+  export: DataExport | null;
+  /** When another request may be made; null = now. */
+  next_allowed_at: string | null;
 }
 
 /** Side effects of an invite (the user row is created regardless). */
@@ -100,7 +141,15 @@ export interface Machine {
   agent_auto_update: boolean;
   /** a tab whose Claude hits a usage limit resumes on another Claude account of this machine, on its own */
   claude_auto_swap: boolean;
+  /** TER-735: the AI accounts' usage is queried on this machine (the credential never leaves it); off = no bars */
+  ai_usage_query: boolean;
   automation_allowed: boolean;
+  /**
+   * TER-1017: how the agent proves itself. `key` = device key paired through a single-use token; `bearer` =
+   * the permanent token of agents paired before (valid until the machine is paired again); null = not paired.
+   * Absent from servers before it.
+   */
+  agent_credential?: 'key' | 'bearer' | null;
   /** TER-1018: "Usar ai-memory nesta máquina" (opt-in, off by default) */
   ai_memory_enabled?: boolean;
   /** its local server; null = the default `http://127.0.0.1:49374` */
@@ -559,6 +608,10 @@ export interface ProjectAutomation {
   max_parallel: number | null;
   resume_max: number;
   fix_attempts: number;
+  /** TER-1025: re-runs of a deploy that failed on GitHub's side before the project is paused (0 = pause at once) */
+  deploy_retries: number;
+  /** TER-1025: automatic resumes of a run stuck on a GitHub error before the person is told */
+  github_retries: number;
   daily_budget_usd: number | null;
   /** a card whose estimate passes this is escalated and not resumed; null = off (spike R8) */
   card_budget_usd: number | null;
@@ -701,6 +754,16 @@ export type AiMemoryState =
 export interface MachineHooks {
   installed_at: string | null;
   hooks_url: string;
+}
+
+/** One address the machine must reach besides /agent/ws (TER-586): `ok` only on the 401 termhub answers without a token. */
+export interface NetworkCheck {
+  name: 'hooks' | 'mcp';
+  url: string;
+  host: string;
+  ok: boolean;
+  status: number | null;
+  error: string | null;
 }
 
 export interface MonitorItem {
@@ -901,6 +964,53 @@ export interface AiAccountUsage {
   hint: string | null;
   /** last good reading, shown because the provider is rate-limiting the usage query */
   stale?: boolean;
+  /**
+   * TER-735: why there is no reading when it is not an error — 'disabled' = the machine's usage query is
+   * turned off (Máquinas › the machine); 'agent_outdated' = the machine's agent predates the `ai.usage` RPC.
+   */
+  reason?: 'disabled' | 'agent_outdated';
+}
+
+/** TER-1047: whether an account's CLI is logged in on its machine (GET /ai-accounts/login-status). */
+export type AiLoginState = 'ok' | 'login_required' | 'unknown';
+
+export interface AiLoginStatusRow {
+  account_id: string;
+  label: string;
+  provider: AiProvider;
+  machine_id: string;
+  machine_name: string | null;
+  state: AiLoginState;
+  checked_at: string | null;
+  /** the login can be redone from the modal (Claude/Codex on an agent machine with the `ai_login` capability) */
+  supported: boolean;
+}
+
+/** POST /ai-accounts/:id/login */
+export interface AiLoginStart {
+  login_id: string;
+  /** the page to open in a browser */
+  url: string;
+  /** Codex's one-time device code to type on that page; null for Claude */
+  user_code: string | null;
+  /** true (Claude): paste the code the page shows back; false (Codex): just confirm once authorized */
+  needs_code: boolean;
+  expires_at: string;
+}
+
+export interface AiLoginStuckTab {
+  id: string;
+  name: string;
+  project_id: string;
+}
+
+/** POST /ai-accounts/:id/login/:loginId/submit */
+export interface AiLoginSubmitResult {
+  ok: boolean;
+  /** why it did not finish; never the code */
+  message: string | null;
+  /** after a successful login: the account's tabs still showing the login error */
+  stuck_tabs: AiLoginStuckTab[];
 }
 
 /** Brand names: shown as is in every language. */
@@ -945,6 +1055,8 @@ export interface ChatConversation {
   context_tokens?: number | null;
   /** The model's context window; null when the CLI did not report it. */
   context_window?: number | null;
+  /** When the session was last compacted ("Compactar" or the CLI's auto-compact, TER-1038); null = never. */
+  context_compacted_at?: string | null;
   last_message_at: string | null;
 }
 
@@ -1002,6 +1114,8 @@ export interface ChatAttachment {
   error_code: string | null;
   /** pages, duration_s, sheets, width, height, truncated */
   meta: Record<string, unknown> | null;
+  /** What the server heard in an audio file, once `ready` (TER-1036); absent for other kinds and older servers. */
+  transcript?: string | null;
   created_at: string;
 }
 
@@ -1393,6 +1507,8 @@ export interface ChatMemory {
   autodecide: boolean;
   /** "Responder perguntas do Codex pelo chat": off by default; independent of embeddings. */
   codex_replies: boolean;
+  /** The context meter's limit in tokens (TER-1038); null = the model's window. Absent from an older server. */
+  context_limit?: number | null;
   available: boolean;
   count: number;
   notes: number;
@@ -1517,7 +1633,7 @@ export type ChatEvent =
    * panel §5.4): the row keeps whatever status it already had, this just says the click failed. */
   | { type: 'subagent_cancel_failed'; subagent_id: string; conversation_id?: string }
   /** How full the session is now, after an answer or a compaction (TER-315). */
-  | { type: 'context'; tokens: number; window: number | null; conversation_id?: string }
+  | { type: 'context'; tokens: number; window: number | null; compacted_at?: string | null; conversation_id?: string }
   /** "Compactar": started, done (sizes before and after, when known) or failed (with its code). */
   | { type: 'compact'; state: 'started' | 'done' | 'failed'; tokens_before: number | null; tokens: number | null; error_code: string | null; conversation_id?: string };
 
@@ -1625,6 +1741,54 @@ export interface ApiToken {
   last_used_at: string | null;
   revoked_at: string | null;
   created_at: string;
+}
+
+/** One MCP call made with a token (TER-577): metadata only. Names are null once the row is gone. */
+export interface ApiTokenEvent {
+  id: string;
+  tool: string;
+  ok: boolean;
+  error_code: string | null;
+  duration_ms: number;
+  machine_id: string | null;
+  machine_name: string | null;
+  project_id: string | null;
+  project_name: string | null;
+  tab_id: string | null;
+  tab_name: string | null;
+  attachment_id: string | null;
+  created_at: string;
+}
+
+/** One row of the security trail (TER-577). `action` stays a plain string: one a newer server adds shows as is. */
+export interface SecurityEvent {
+  id: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  view_as_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  target_label: string | null;
+  ip: string | null;
+  meta: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SecurityEventFilter {
+  /** an action (`auth.login`) or a group (`auth`) */
+  action?: string;
+  q?: string;
+  /** ISO dates */
+  from?: string;
+  to?: string;
+}
+
+export interface SecurityEventsPage {
+  events: SecurityEvent[];
+  next: string | null;
+  actions: string[];
+  retention_days: number;
 }
 
 /** Create response: the only time the plain token is ever returned. */

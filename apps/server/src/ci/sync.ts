@@ -3,6 +3,7 @@ import { deliveryPending, deliveryRow, followMerged } from '../automation/releas
 import type { Repositories } from '../db/repositories/index.js';
 import type { PullRequestInfo } from '../db/repositories/task-pull-requests.js';
 import { GithubCiError, type GithubCiClient, type GithubPull } from '../integrations/github-ci.js';
+import type { GithubHealthReader } from '../integrations/github-status.js';
 import { ciOf, refsIn } from './rules.js';
 import { setCiError } from './status.js';
 
@@ -14,6 +15,9 @@ export interface CiSyncDeps {
   now?: () => Date;
   /** The merge executor (agentic board §10.1), run after the sync's writes — only for a project with automation on. */
   merge?: (projectId: string) => Promise<void>;
+  /** githubstatus.com, so a deploy that failed during an Actions incident is run again (TER-1025). */
+  githubHealth?: GithubHealthReader;
+  log?: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
 }
 export type CiSyncResult = { skipped: 'no_repo' | 'not_allowed' } | { pulls: number | null; checked: number };
 
@@ -114,7 +118,7 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
         const { state, summary } = ciOf(await deps.github.listRuns(token, w.repo, w.head_sha));
         await repos.taskPullRequests.updateCi(projectId, w.repo, w.number, { ci_state: state, ci_summary: summary });
       } else if (w.merge_commit_sha && deliveryPending(setup, w)) {
-        await followMerged({ repos, github: deps.github }, { projectId, ownerId: project.owner_id, token, repo: w.repo, setup }, w);
+        await followMerged({ repos, github: deps.github, githubHealth: deps.githubHealth, now: deps.now, log: deps.log }, { projectId, ownerId: project.owner_id, token, repo: w.repo, setup }, w);
       }
     }
     setCiError(projectId, null);

@@ -126,7 +126,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
     ]);
     await repo.setEmbedding(otherUserRow!.id, vec(1), 'm#q1');
 
-    const neighbours = await repo.nearest(userId, vec(1), { multiSelect: false, k: 5, embedModel: 'm#q1' });
+    const neighbours = await repo.nearest(userId, vec(1), { multiSelect: false, k: 5, embedModel: 'm#q1', place: { projectId, conversationId } });
     expect(neighbours[0]).toMatchObject({ id: decisionAId, project_name: 'proj' });
     expect(neighbours[0]!.similarity).toBeCloseTo(1, 5);
     expect(neighbours[1]!.id).toBe(b!.id);
@@ -166,7 +166,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
     const [tagged] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'ComTag', question: 'Vetor novo?' })]);
     await repo.setEmbedding(tagged!.id, vec(7), 'm#q1');
 
-    const ids = (await repo.nearest(userId, vec(7), { multiSelect: false, k: 50, embedModel: 'm#q1' })).map((n) => n.id);
+    const ids = (await repo.nearest(userId, vec(7), { multiSelect: false, k: 50, embedModel: 'm#q1', place: { projectId, conversationId } })).map((n) => n.id);
     expect(ids).toContain(tagged!.id);
     expect(ids).not.toContain(untagged!.id);
     expect(ids).not.toContain(longer!.id);
@@ -371,7 +371,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
     expect(derived!.trust).toBe('derived');
     for (const row of [person, derived]) await repo.setEmbedding(row!.id, vec(11), 'm#q1');
 
-    const near = (await repo.nearest(userId, vec(11), { multiSelect: false, k: 50, embedModel: 'm#q1' })).map((n) => n.id);
+    const near = (await repo.nearest(userId, vec(11), { multiSelect: false, k: 50, embedModel: 'm#q1', place: {} })).map((n) => n.id);
     expect(near).toContain(person!.id);
     expect(near).not.toContain(derived!.id);
     const sims = await repo.similarityTo([person!.id, derived!.id], userId, vec(11), 'm#q1');
@@ -436,6 +436,54 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
       expect(near).not.toContain(noProject!.id);
     } finally {
       await db.chatDecision.deleteMany({ where: { projectId: otherProjectId } });
+      await db.project.deleteMany({ where: { id: otherProjectId } });
+    }
+  });
+  it('scope and expiry (TER-1014): card answers default to user scope; nearest/nearestAny/textSearch keep only what holds at the place', async () => {
+    const otherProjectId = newId();
+    await db.project.create({ data: { id: otherProjectId, key: `F${otherProjectId.slice(-5).toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`, name: 'proj3', ownerId: userId } });
+    const otherConversationId = (await chat.getOrCreateForProject(userId, otherProjectId)).id;
+    try {
+      const insert = async (over: Partial<NewDecision>) => {
+        const [row] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'Validade', question: 'Pode Zephyr777?', ...over })]);
+        await repo.setEmbedding(row!.id, vec(11), 'm#q1');
+        return row!;
+      };
+      const user = await insert({});
+      expect(user).toMatchObject({ scope: 'user', expires_at: null });
+      const project = await insert({});
+      await db.chatDecision.update({ where: { id: project.id }, data: { scope: 'project' } });
+      const conversation = await insert({});
+      await db.chatDecision.update({ where: { id: conversation.id }, data: { scope: 'conversation' } });
+      const expired = await insert({});
+      await db.chatDecision.update({ where: { id: expired.id }, data: { expiresAt: new Date(Date.now() - 60_000) } });
+      const later = await insert({});
+      await db.chatDecision.update({ where: { id: later.id }, data: { expiresAt: new Date(Date.now() + 3_600_000) } });
+
+      const here = { projectId, conversationId };
+      const near = async (place: { projectId?: string | null; conversationId?: string | null }) =>
+        (await repo.nearest(userId, vec(11), { multiSelect: false, k: 50, embedModel: 'm#q1', place })).map((d) => d.id);
+
+      const atHome = await near(here);
+      expect(atHome).toEqual(expect.arrayContaining([user.id, project.id, conversation.id, later.id]));
+      expect(atHome).not.toContain(expired.id);
+
+      const elsewhere = await near({ projectId: otherProjectId, conversationId: otherConversationId });
+      expect(elsewhere).toEqual(expect.arrayContaining([user.id, later.id]));
+      expect(elsewhere).not.toContain(project.id);
+      expect(elsewhere).not.toContain(conversation.id);
+      expect(elsewhere).not.toContain(expired.id);
+
+      // A search with no project and no conversation: project ones of any project, never a conversation one.
+      const search = (await repo.textSearch(userId, 'Zephyr777', 50)).map((d) => d.id);
+      expect(search).toEqual(expect.arrayContaining([user.id, project.id, later.id]));
+      expect(search).not.toContain(conversation.id);
+      expect(search).not.toContain(expired.id);
+      const withExpired = (await repo.nearestAny(userId, vec(11), 50, 'm#q1', undefined, { includeExpired: true })).map((d) => d.id);
+      expect(withExpired).toContain(expired.id);
+      const read = (await repo.findManyForUser([expired.id], userId))[0]!;
+      expect(read.expires_at).not.toBeNull();
+    } finally {
       await db.project.deleteMany({ where: { id: otherProjectId } });
     }
   });

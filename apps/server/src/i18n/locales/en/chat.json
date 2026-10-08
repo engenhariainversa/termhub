@@ -39,7 +39,6 @@
   "A máquina {{name}} está offline. Ligue-a ou escolha outra máquina para o chat.": "Machine {{name}} is offline. Turn it on or choose another machine for the chat.",
   "O agente da máquina {{name}} (versão {{version}}) ainda não sabe rodar o chat. Atualize o agente e tente de novo.": "The agent on machine {{name}} (version {{version}}) cannot run the chat yet. Update the agent and try again.",
   "O agente da máquina {{name}} ainda não sabe rodar o chat. Atualize o agente e tente de novo.": "The agent on machine {{name}} cannot run the chat yet. Update the agent and try again.",
-  "O concierge não respondeu": "The concierge did not respond",
   "O servidor está reiniciando; tente de novo em instantes": "The server is restarting; try again in a moment",
   "A mensagem citada não está mais disponível. Cancele a citação e envie de novo.": "The quoted message is no longer available. Remove the quote and send again.",
   "Um dos anexos não está disponível: envie de novo": "One of the attachments is not available: send it again",
@@ -69,5 +68,6 @@
   "Enviar para a aba precisa da permissão terminals:write na sua role": "Sending to the tab needs the terminals:write permission in your role",
   "Não foi possível enviar para a aba": "Could not send to the tab",
   "Trabalho automático pausado ou desligado": "Automatic work is paused or turned off",
+  "A decisão usada expirou ou não vale aqui": "The decision used expired or does not apply here",
   "A decisão usada foi substituída": "The decision used was replaced"
 }

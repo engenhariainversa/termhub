@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHURN_ID, churned, HARNESS_STATES, harnessCity, jiggled } from './harness-data';
+import { CHURN_ID, churned, HARNESS_STATES, harnessAutoRef, harnessCity, jiggled } from './harness-data';
 import { buildCityModel } from './model';
 
 const opts = { projects: 6, desks: 8, offline: -1, silent: -1, activity: null, verb: null, at: '2026-09-24T10:00:00.000Z' };
@@ -39,5 +39,9 @@ describe('harnessCity', () => {
     const next = jiggled(city, 'x', () => 0);
     expect(next.projects.map((b) => b.tabs.length)).toEqual(city.projects.map((b) => b.tabs.length));
     expect(next.projects[0].tabs[0].state_at).toBe('x');
+  });
+
+  it('makes every third desk an automatic run with ?auto=1', () => {
+    expect(['p2-t0', 'p2-t1', 'p2-t4', 'p0-t2', 'churn'].map(harnessAutoRef)).toEqual([undefined, 'TER-101', 'TER-104', undefined, undefined]);
   });
 });

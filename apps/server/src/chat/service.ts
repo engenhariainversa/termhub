@@ -16,12 +16,13 @@ import { fallbackShortfall, pickFallback, type FallbackPick } from './account-fa
 import { attachmentContext } from './attachments/context.js';
 import { chatBus } from './bus.js';
 import { replyContext, type ReplyTarget } from './reply-context.js';
+import { withMessageRef } from './message-ref.js';
 import { saveContext } from './context.js';
 import { streamedSystemPrompt } from './concierge-prompt.js';
 import { defaultEmbedder } from './embeddings.js';
 import { exclusiveConflict, hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
 import { auditBlocked, exclusiveError } from '../ai/exclusive.js';
-import { DEFAULT_ALLOW_KINDS, GRANTABLE_TOOL, STANDING_GRANT_BUDGETS, TAB_TERMINAL_GRANT, type StandingGrantKind } from './gate.js';
+import { DEFAULT_ALLOW_KINDS, GRANTABLE_TOOL, redactSecretArgs, SECRET_ARGS, STANDING_GRANT_BUDGETS, TAB_TERMINAL_GRANT, type StandingGrantKind } from './gate.js';
 import { LiveRun, type LiveTurn } from './live-run.js';
 import { accountSystemPrompt, CONCIERGE_RULES_MAX, projectSystemPrompt } from './project-prompt.js';
 import { RESUME_WINDOW_MS, STALE_MS, resumeNote } from './resume.js';
@@ -145,6 +146,8 @@ interface StartOptions {
   attachmentIds?: string[];
   replyToId?: string;
   replyToCard?: ReplyCardRef;
+  /** The person typed this message (`start`): its run text carries the message's ref (TER-1037). */
+  typed?: boolean;
 }
 /** The attachment rows a message checked before storing anything (`attachableRows`): the ids to bind and the rows themselves. */
 interface Attachable {
@@ -196,7 +199,30 @@ export const CANCEL_TIMEOUT_MS = 30_000;
  * use for, and it can be unit-tested the same way.
  */
 export async function purgeExpiredActions(repos: Repositories, now = new Date()): Promise<number> {
-  return repos.chatActions.expireOlderThan(new Date(now.getTime() - ACTION_TTL_MS));
+  const count = await repos.chatActions.expireOlderThan(new Date(now.getTime() - ACTION_TTL_MS));
+  // Denied and just-expired rows close here, not in the gate's execute(): their secrets go now.
+  await scrubSecretArgs(repos);
+  return count;
+}
+
+/**
+ * Redacts the secret arguments (`SECRET_ARGS`) of closed rows (TER-1047). Given `rows`, only those; else
+ * every closed row of a tool that has secrets. Never throws: a failed scrub is retried by the next sweep.
+ */
+export async function scrubSecretArgs(repos: Repositories, rows?: ChatAction[]): Promise<number> {
+  try {
+    const closed = rows ?? (await repos.chatActions.listClosedByTools(Object.keys(SECRET_ARGS)));
+    let scrubbed = 0;
+    for (const row of closed) {
+      const redacted = redactSecretArgs(row.tool, row.args);
+      if (redacted === row.args) continue;
+      await repos.chatActions.replaceClosedArgs(row.id, redacted);
+      scrubbed++;
+    }
+    return scrubbed;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -232,6 +258,8 @@ interface QueuedTurn {
   attachments: AttachmentRow[];
   /** What the message answers, for a run text built later (`runText` unset). */
   reply: ReplyTarget | null;
+  /** The person typed it: a run text built later carries its ref (TER-1037). */
+  typed?: boolean;
   question: ChatMessage;
   answer: ChatMessage;
   settle: LiveTurn['settle'];
@@ -410,6 +438,11 @@ export class ChatService {
   /** Conversations whose lock `reset` holds: a message there is not queued (it would land in the thread
    *  being archived), it is refused as before. */
   private resetting = new Set<string>();
+  /** Conversations "Apagar conversa" archived and still has to delete: the row goes once no process
+   *  holds it and nothing is queued in it, so their last writes never land on a deleted row. */
+  private deleting = new Set<string>();
+  /** Queue launches in flight, by conversation (`launchQueued`): a deletion waits for them. */
+  private draining = new Map<string, number>();
   /** Decisions whose `markInjectedMany` failed in this process — see `drainNextDecision`. In memory on
    * purpose: the row itself is untouched, so a restart tries it again with a healthy database. */
   private unmarkable = new Set<string>();
@@ -545,6 +578,41 @@ export class ChatService {
     return fresh;
   }
 
+  /**
+   * "Apagar conversa" (TER-743): the scope's active conversation ends exactly as in "Nova conversa"
+   * (`reset`, with the same 409 while it is answering) and is then deleted for good, with its memory
+   * rows. A process that `reset` stopped still holds the lock until it exits, and messages queued
+   * behind it are closed by the release: the row goes after both (`deleteIfFree`). Answers the fresh,
+   * empty conversation.
+   */
+  async deleteConversation(user: User, projectId: string | null): Promise<ChatConversation> {
+    const current = await this.conversationFor(user, projectId);
+    // Marked before the reset: the queue launch its release may start must find the mark when it ends.
+    this.deleting.add(current.id);
+    let fresh: ChatConversation;
+    try {
+      fresh = await this.reset(user, projectId);
+    } catch (e) {
+      this.deleting.delete(current.id);
+      throw e;
+    }
+    await this.deleteIfFree(user, current.id);
+    return fresh;
+  }
+
+  /** Deletes a conversation `deleteConversation` archived, unless a process, a queued message or a
+   *  queue launch closing them still needs it; `releaseLock` and `launchQueued` call it again when they let go. */
+  private async deleteIfFree(user: User, conversationId: string): Promise<void> {
+    if (!this.deleting.has(conversationId) || this.running.has(conversationId) || this.draining.has(conversationId) || this.queued.get(conversationId)?.length) return;
+    this.deleting.delete(conversationId);
+    this.queued.delete(conversationId);
+    try {
+      await this.deps.repos.chat.deleteConversation(conversationId, user.id);
+    } catch {
+      // The archived row stays (out of sight, as after "Nova conversa"); the next try is the person's.
+    }
+  }
+
   /** Whether "Compactar" is running in this conversation — what `GET /api/chat` tells a screen that
    *  opens in the middle of one. */
   isCompacting(conversationId: string): boolean {
@@ -649,7 +717,7 @@ export class ChatService {
     } finally {
       this.compacting.delete(conversation.id);
       try {
-        if (compacted && after !== null) await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: after });
+        if (compacted && after !== null) await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: after, compacted: true });
         const ok = compacted && errorCode === null;
         chatBus.publish({ type: 'compact', user_id: user.id, conversation_id: conversation.id, state: ok ? 'done' : 'failed', tokens_before: before, tokens: after, error_code: ok ? null : errorCode });
       } finally {
@@ -957,7 +1025,7 @@ export class ChatService {
     // on its own (TER-530) — the person may be asking for that very action again. Best effort: a
     // failure keeps the old denial window, never the message.
     await this.deps.repos.chat.markTyped(conversation.id).catch((err) => console.error('chat: last_typed_at not recorded', { conversation_id: conversation.id, error: failureLabel(err) }));
-    const started = await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId, replyToCard: opts.replyToCard });
+    const started = await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId, replyToCard: opts.replyToCard, typed: true });
     // Only a message the person typed is memory (spec D3/D4): re-injections and wakes go through
     // `startIn` directly and never reach here. Best effort, fire-and-forget: `indexMessage` never throws.
     void this.deps.indexMessage({ id: started.user_message_id, owner_id: user.id, project_id: conversation.project_id, text, created_at: new Date().toISOString() });
@@ -1106,8 +1174,10 @@ export class ChatService {
     const attachable = await this.attachableRows(user, conversation.id, opts?.attachmentIds ?? []);
     const reply = await this.replyTargetFor(user, conversation.id, opts);
     if (live?.accepting && opts?.beforeRun) await opts.beforeRun();
-    let runText = live?.accepting ? await this.runTextFor(user, conversation.id, text, attachable.rows, reply) : undefined;
+    const baseText = live?.accepting ? await this.runTextFor(user, conversation.id, text, attachable.rows, reply) : undefined;
     const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply);
+    const withRef = (t: string) => withMessageRef(t, question.id, text, opts?.typed);
+    let runText = baseText === undefined ? undefined : withRef(baseText);
     const d = deferred();
     const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id, done: d.promise };
     // Re-read after the awaits above: the process may have ended its input in between, and a newer one
@@ -1115,10 +1185,10 @@ export class ChatService {
     // would leave the message waiting until it ends.
     const now = this.live.get(conversation.id);
     if (now?.accepting) {
-      runText ??= await this.runTextFor(user, conversation.id, text, attachable.rows, reply);
+      runText ??= withRef(await this.runTextFor(user, conversation.id, text, attachable.rows, reply));
       if (this.live.get(conversation.id) === now && now.add({ uuid: randomUUID(), text: runText, question, answer, settle: d.settle })) return started;
     }
-    this.enqueue(conversation.id, { userId: user.id, text, runText, attachments: attachable.rows, reply, question, answer, settle: d.settle });
+    this.enqueue(conversation.id, { userId: user.id, text, runText, attachments: attachable.rows, reply, typed: opts?.typed, question, answer, settle: d.settle });
     // Announced here, before the queue may run: `launchQueued` can close this turn at once.
     chatBus.publish({ type: 'run_started', user_id: user.id, conversation_id: conversation.id, message_id: answer.id });
     this.live.get(conversation.id)?.giveWay();
@@ -1289,8 +1359,9 @@ export class ChatService {
       // mark a decision injected that it never actually sent (fix round 2).
       if (opts?.beforeRun) await opts.beforeRun();
 
-      const runText = await this.runTextFor(user, conversation.id, text, attachable.rows, reply);
+      const baseText = await this.runTextFor(user, conversation.id, text, attachable.rows, reply);
       const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply);
+      const runText = withMessageRef(baseText, question.id, text, opts?.typed);
       const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id };
 
       // Not awaited: this call resolves now, and the lock passes to the run, whose own `finally`
@@ -1375,6 +1446,10 @@ export class ChatService {
             usage = frame.usage ?? null;
             if (frame.session_id && frame.session_id !== conversation.cli_session_id) await this.deps.repos.chat.setCliSession(conversation.id, frame.session_id);
             if (frame.context) await saveContext(this.deps.repos.chat, user.id, conversation.id, frame.context);
+          } else if (frame.type === 'compacted') {
+            // The CLI compacted on its own mid-turn (auto-compact, TER-1038): the meter drops now and
+            // remembers when; the turn's own `done` writes the fill it ends with.
+            if (frame.tokens !== undefined) await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: frame.tokens, compacted: true });
           } else if (frame.type === 'api_error') {
             turnReason = frame.reason;
           } else if (frame.type === 'usage_limit') {
@@ -1714,7 +1789,7 @@ export class ChatService {
         const stored = queue.map((q) => ({
           question_id: q.question.id,
           answer_id: q.answer.id,
-          text: q.runText ?? [attachmentContext(q.attachments), replyContext(q.reply), q.text].filter(Boolean).join('\n\n'),
+          text: q.runText ?? withMessageRef([attachmentContext(q.attachments), replyContext(q.reply), q.text].filter(Boolean).join('\n\n'), q.question.id, q.text, q.typed),
         }));
         const held = rows.get(conversationId);
         rows.set(conversationId, { userId: held?.userId ?? queue[0].userId, turns: [...(held?.turns ?? []), ...stored] });
@@ -1908,7 +1983,16 @@ export class ChatService {
   private launchQueued(user: User, conversationId: string): Promise<void> {
     // Shutting down: the queue was released with the row, for the instance that takes over.
     if (this.suspending) return Promise.resolve();
-    return this.track(this.launchQueuedNow(user, conversationId));
+    // Counted per call: two launches may overlap, and only the last one to end may let a deletion through.
+    this.draining.set(conversationId, (this.draining.get(conversationId) ?? 0) + 1);
+    return this.track(
+      this.launchQueuedNow(user, conversationId).finally(() => {
+        const left = (this.draining.get(conversationId) ?? 1) - 1;
+        if (left > 0) this.draining.set(conversationId, left);
+        else this.draining.delete(conversationId);
+        return this.deleteIfFree(user, conversationId);
+      }),
+    );
   }
 
   private async launchQueuedNow(user: User, conversationId: string): Promise<void> {
@@ -1939,7 +2023,7 @@ export class ChatService {
       if (streamed) carried = await this.takeOver(user, conversation);
       taken = streamed ? queue.splice(0) : queue.splice(0, 1);
       const turns: LiveTurn[] = [];
-      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? (await this.runTextFor(user, conversationId, q.text, q.attachments, q.reply)), question: q.question, answer: q.answer, settle: q.settle });
+      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? withMessageRef(await this.runTextFor(user, conversationId, q.text, q.attachments, q.reply), q.question.id, q.text, q.typed), question: q.question, answer: q.answer, settle: q.settle });
       // A one-shot run takes a single queued turn, whose question row always exists.
       const oneShot = taken[0];
       // From here the run owns the lock and releases it itself, and settles the turns.
@@ -1985,6 +2069,11 @@ export class ChatService {
   /** Frees a conversation's run lock and hands the conversation to its queue, or else the decision drain. */
   private releaseLock(user: User, conversationId: string): void {
     this.running.delete(conversationId);
+    // "Apagar conversa" waited for this process to let go (with a queue, `launchQueued` closes it first).
+    if (this.deleting.has(conversationId) && !this.queued.get(conversationId)?.length) {
+      void this.deleteIfFree(user, conversationId);
+      return;
+    }
     // Shutting down: what is queued was released with the row, for the instance that takes over.
     if (this.suspending) return;
     // Messages typed while the process could not take them come first: the person is waiting on

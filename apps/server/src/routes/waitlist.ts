@@ -30,7 +30,7 @@ export const signupBody = z.object({
   phone_number: digits(12).refine((s) => s.length >= 6, 'too short'),
   linkedin: z.string().trim().max(200).optional().nullable(),
   github: z.string().trim().max(200).optional().nullable(),
-  locale: z.enum(['pt', 'en']).default('pt'),
+  locale: z.enum(['pt', 'en', 'es']).default('pt'),
   /** honeypot: real users never fill it */
   website: z.string().max(0).optional(),
 });

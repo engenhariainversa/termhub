@@ -20,7 +20,7 @@ import { RULES_LIMIT, ruleOf } from './current-rules.js';
  */
 
 /** First agent release that answers `ai_memory.rules.sync`. An older agent is skipped. */
-export const AI_MEMORY_MIN_AGENT_VERSION = '0.23.0';
+export const AI_MEMORY_MIN_AGENT_VERSION = '0.27.0';
 /** How often the sweeper syncs every project (catches expired rules and machines that came back). */
 export const AI_MEMORY_SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 /** A checkout that answered "no ai-memory here" (no marker, no binary, no cwd) is not asked again for this long,

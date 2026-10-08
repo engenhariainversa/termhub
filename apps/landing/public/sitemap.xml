@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Each page has three URLs: the bare one (x-default, follows the browser language) and the
-     ?lang=pt / ?lang=en versions. Every <url> lists all three alternates, itself included. -->
+<!-- Each page has four URLs: the bare one (x-default, follows the browser language) and the
+     ?lang=pt / ?lang=en / ?lang=es versions. Every <url> lists all four alternates, itself included. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://termhub.dev/</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/" />
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -14,6 +15,7 @@
     <loc>https://termhub.dev/?lang=pt</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/" />
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -22,6 +24,16 @@
     <loc>https://termhub.dev/?lang=en</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/?lang=es" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/" />
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://termhub.dev/?lang=es</loc>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/?lang=pt" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/" />
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -30,6 +42,7 @@
     <loc>https://termhub.dev/brand/</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/brand/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/brand/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/brand/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/brand/" />
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
@@ -38,6 +51,7 @@
     <loc>https://termhub.dev/brand/?lang=pt</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/brand/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/brand/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/brand/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/brand/" />
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
@@ -46,6 +60,16 @@
     <loc>https://termhub.dev/brand/?lang=en</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/brand/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/brand/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/brand/?lang=es" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/brand/" />
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://termhub.dev/brand/?lang=es</loc>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/brand/?lang=pt" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/brand/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/brand/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/brand/" />
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
@@ -54,6 +78,7 @@
     <loc>https://termhub.dev/security/</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/security/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/security/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/security/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/security/" />
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -62,6 +87,7 @@
     <loc>https://termhub.dev/security/?lang=pt</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/security/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/security/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/security/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/security/" />
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -70,6 +96,16 @@
     <loc>https://termhub.dev/security/?lang=en</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/security/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/security/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/security/?lang=es" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/security/" />
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://termhub.dev/security/?lang=es</loc>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/security/?lang=pt" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/security/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/security/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/security/" />
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -78,6 +114,7 @@
     <loc>https://termhub.dev/excluir-conta/</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/excluir-conta/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/excluir-conta/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/excluir-conta/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/excluir-conta/" />
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
@@ -86,6 +123,7 @@
     <loc>https://termhub.dev/excluir-conta/?lang=pt</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/excluir-conta/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/excluir-conta/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/excluir-conta/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/excluir-conta/" />
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
@@ -94,6 +132,16 @@
     <loc>https://termhub.dev/excluir-conta/?lang=en</loc>
     <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/excluir-conta/?lang=pt" />
     <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/excluir-conta/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/excluir-conta/?lang=es" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/excluir-conta/" />
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://termhub.dev/excluir-conta/?lang=es</loc>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://termhub.dev/excluir-conta/?lang=pt" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://termhub.dev/excluir-conta/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://termhub.dev/excluir-conta/?lang=es" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://termhub.dev/excluir-conta/" />
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>

@@ -177,6 +177,17 @@ describe('automatic tabs and the feed', () => {
     expect(plain).toMatchObject({ why_text: null, rule_ref: null, score: null });
   });
 
+  it('names the PR head a conflict escalation is about, and why it was sent (TER-1016)', () => {
+    const sha = 'a058efd2f842aecb5ba60bcf8f56ff51eb80ae6f';
+    const text = (payload: Record<string, unknown>, locale: 'pt-BR' | 'en' = 'pt-BR') => feedOf([row('1', 'escalated', { reason: 'conflict_cap', pr: 397, ...payload })], locale)[0].reason_text;
+    expect(text({ sha, attempts: 3 })).toBe('O PR continua com conflito em a058efd depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.');
+    expect(text({ sha, cause: 'fixer_no_push' })).toContain('A correção do conflito em a058efd terminou sem push');
+    expect(text({ sha, cause: 'run_done_no_push' })).toContain('A execução terminou, mas o PR continua com conflito em a058efd');
+    expect(text({ sha, cause: 'run_done_no_push' }, 'en')).toContain('still in conflict at a058efd');
+    // an older event without a head keeps the reason's own text
+    expect(text({})).toBe('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.');
+  });
+
   it('gives a failed start its reason in the reader language, and no reason to any other block (TER-987)', () => {
     const start = { code: 'LAUNCH_FAILED', stage: 'start', message: 'A máquina não respondeu', message_en: 'The machine did not answer' };
     expect(feedOf([row('1', 'run_blocked', start)], 'pt-BR')[0].reason_text).toBe('A máquina não respondeu');

@@ -5,16 +5,21 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketServer, type RawData } from 'ws';
-import { CONTROL_CHANNEL, decodeFrame } from '@termhub/agent-protocol';
+import { CONTROL_CHANNEL, decodeFrame, encodeFrame } from '@termhub/agent-protocol';
 import { readConfig } from '../config.js';
+import { deviceKeyPath, readDeviceKey } from '../device-key.js';
 import { connectCommand } from './connect.js';
 
 const TOKEN = `thb_ag_${'a'.repeat(43)}`;
 const asBuffer = (d: RawData) => (Buffer.isBuffer(d) ? d : Array.isArray(d) ? Buffer.concat(d) : Buffer.from(d));
 const log = () => {};
 
-/** A server that answers a probe hello with 1000 probe-ok, or rejects the upgrade with 401. */
-function startServer(accept: boolean): Promise<{ port: number; hellos: Record<string, unknown>[]; connections: () => number; stop: () => Promise<void> }> {
+/**
+ * A server that answers a probe hello with 1000 probe-ok (`true`, an older server that takes the token as
+ * a bearer), rejects the upgrade with 401 (`false`), pairs (`'pair'`: `paired`, then 1000 paired) or finds
+ * the pairing token spent (`'spent'`: 4401 pairing).
+ */
+function startServer(accept: boolean | 'pair' | 'spent'): Promise<{ port: number; hellos: Record<string, unknown>[]; connections: () => number; stop: () => Promise<void> }> {
   return new Promise((resolve) => {
     const server = http.createServer();
     const hellos: Record<string, unknown>[] = [];
@@ -28,7 +33,11 @@ function startServer(accept: boolean): Promise<{ port: number; hellos: Record<st
       ws.once('message', (data) => {
         const { ch, payload } = decodeFrame(asBuffer(data));
         if (ch === CONTROL_CHANNEL) hellos.push(JSON.parse(payload.toString('utf8')) as Record<string, unknown>);
-        ws.close(1000, 'probe-ok');
+        if (accept === 'pair') {
+          ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify({ type: 'paired', machine_id: 'm-42', machine_name: 'mini' })));
+          ws.close(1000, 'paired');
+        } else if (accept === 'spent') ws.close(4401, 'pairing');
+        else ws.close(1000, 'probe-ok');
       });
     });
     server.listen(0, '127.0.0.1', () => {
@@ -80,7 +89,8 @@ describe('connectCommand', () => {
     // no second (long-lived) connection was opened
     await new Promise((r) => setTimeout(r, 150));
     expect(srv.connections()).toBe(1);
-    expect(readConfig()).toMatchObject({ url: `http://127.0.0.1:${srv.port}`, token: TOKEN });
+    expect(readConfig()).toMatchObject({ url: `http://127.0.0.1:${srv.port}`, credential: 'bearer', token: TOKEN });
+    expect(readDeviceKey()).toBeNull();
     expect(logs.join('\n')).toContain('Conectado. Configuração salva.');
     expect(logs.join('\n')).toContain('termhub-agent service install');
   });
@@ -97,5 +107,31 @@ describe('connectCommand', () => {
     await connectCommand({ url: 'http://127.0.0.1:1', token: 'nope' }, log);
     expect(process.exitCode).toBe(2);
     expect(readConfig()).toBeNull();
+  });
+
+  it('trades the pairing token for a device key: saves the key 0600 and a key config without the token (TER-1017)', async () => {
+    const srv = await startServer('pair');
+    stop = srv.stop;
+    await connectCommand({ url: `http://127.0.0.1:${srv.port}`, token: TOKEN }, log);
+    expect(process.exitCode).toBeUndefined();
+    const hello = srv.hellos[0] as { probe?: boolean; pair?: { public_key: string } };
+    expect(hello.probe).toBe(true);
+    const key = readDeviceKey();
+    expect(key?.publicKey).toBe(hello.pair?.public_key);
+    expect(fs.statSync(deviceKeyPath()).mode & 0o777).toBe(0o600);
+    const config = readConfig();
+    expect(config).toMatchObject({ credential: 'key', machine_id: 'm-42', machine_name: 'mini' });
+    expect(config?.token).toBeUndefined();
+    expect(fs.readFileSync(path.join(home, 'config.json'), 'utf8')).not.toContain(TOKEN);
+    expect(logs.join('\n')).toContain('Pareado com a máquina mini');
+  });
+
+  it('a spent or expired pairing token saves nothing', async () => {
+    const srv = await startServer('spent');
+    stop = srv.stop;
+    await connectCommand({ url: `http://127.0.0.1:${srv.port}`, token: TOKEN }, log);
+    expect(process.exitCode).toBe(1);
+    expect(readConfig()).toBeNull();
+    expect(readDeviceKey()).toBeNull();
   });
 });

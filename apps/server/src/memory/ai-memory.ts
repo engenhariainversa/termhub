@@ -6,7 +6,7 @@ import { HttpError } from '../lib/errors.js';
 import { runOnMachine, shellQuote } from '../terminal/machine-exec.js';
 
 /** First agent release that answers `aimemory.status` (TER-1018). */
-export const AI_MEMORY_MIN_AGENT_VERSION = '0.22.0';
+export const AI_MEMORY_MIN_AGENT_VERSION = '0.27.0';
 
 export type AiMemoryState =
   | { enabled: false; url: string }

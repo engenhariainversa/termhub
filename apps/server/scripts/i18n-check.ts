@@ -5,7 +5,7 @@
  * error helpers (`badRequest('…')`, `notFound`, `unauthorized`, `forbidden`, `conflict`), and the
  * error classes (`new HttpError(status, '…')`, `new ControlError(code, '…')`, the repository rule
  * errors) — and fails when:
- *  - a key has no English entry (plural keys: `_one`/`_other` in both catalogs);
+ *  - a key has no English or Spanish entry (plural keys: `_one`/`_other` in every catalog, pt-BR included);
  *  - an entry's `{{placeholders}}` differ from its key's;
  *  - a catalog entry is no longer used;
  *  - a message is a template literal with `${…}` (use `msg('… {{x}} …', { x })`) or a concatenation;
@@ -143,6 +143,9 @@ export function scanSource(src: string, file: string): { usages: Usage[]; proble
 }
 
 const PLURAL = /_(zero|one|two|few|many|other)$/;
+/** The languages translated from pt-BR; each has a full catalog under locales/<lang>/. */
+const TARGET_LOCALES = ['en', 'es'] as const;
+const LANGUAGE_NAMES: Record<string, string> = { en: 'English', es: 'Spanish' };
 const placeholders = (s: string) => new Set([...s.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]));
 const sameSet = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x));
 
@@ -176,14 +179,15 @@ export function checkI18n(loaded?: Record<string, Record<string, string>>): { pr
   }
   const files = readCatalogFiles();
   problems.push(...files.problems);
-  const en = files.catalogs.en ?? {};
   const pt = files.catalogs['pt-BR'] ?? {};
+  // Every language but pt-BR (the keys' own language) must translate every key.
+  const targets = TARGET_LOCALES.map((lang) => [lang, files.catalogs[lang] ?? {}] as const);
+  const isPlural = (key: string) => targets.some(([, cat]) => Object.keys(cat).some((k) => PLURAL.test(k) && k.replace(PLURAL, '') === key));
 
   for (const [key, u] of used) {
     const keyVars = placeholders(key);
-    const forms = Object.keys(en).filter((k) => k.replace(PLURAL, '') === key && PLURAL.test(k));
-    if (forms.length > 0) {
-      for (const [lang, cat] of [['en', en], ['pt-BR', pt]] as const) {
+    if (isPlural(key)) {
+      for (const [lang, cat] of [...targets, ['pt-BR', pt] as const]) {
         for (const suffix of ['_one', '_other']) {
           const v = cat[key + suffix];
           if (v === undefined) problems.push(`${u.file}: plural key "${key}" has no ${lang} entry "${key}${suffix}"`);
@@ -193,9 +197,11 @@ export function checkI18n(loaded?: Record<string, Record<string, string>>): { pr
       }
       continue;
     }
-    const v = en[key];
-    if (v === undefined) problems.push(`${u.file}: no English entry for "${key}"`);
-    else if (!sameSet(placeholders(v), keyVars)) problems.push(`${u.file}: placeholders of the English entry differ from the key "${key}"`);
+    for (const [lang, cat] of targets) {
+      const v = cat[key];
+      if (v === undefined) problems.push(`${u.file}: no ${LANGUAGE_NAMES[lang]} (${lang}) entry for "${key}"`);
+      else if (!sameSet(placeholders(v), keyVars)) problems.push(`${u.file}: placeholders of the ${lang} entry differ from the key "${key}"`);
+    }
   }
   for (const [lang, cat] of Object.entries(files.catalogs)) {
     for (const k of Object.keys(cat)) {

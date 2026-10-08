@@ -20,10 +20,11 @@ import type { ProjectSetupData } from '../setup/schema.js';
 import { automationBus, recordEvent } from './events.js';
 import { isPaused } from './pause.js';
 import { runPermission } from './permission.js';
-import { RESUME_TEXT, serverMessage } from './prompts.js';
+import { GITHUB_RETRY_TEXT, RESUME_TEXT, serverMessage } from './prompts.js';
+import { writesDegraded, type GithubHealthReader } from '../integrations/github-status.js';
 import { MAX_RESTARTS } from './restart.js';
 import { escalationWhy } from './why.js';
-import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT } from './escalation-text.js';
+import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, GITHUB_TRANSIENT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
 export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
@@ -49,11 +50,20 @@ export const RETYPE_AFTER_MS = 10 * 60_000;
  * parked for them instead of being typed into.
  */
 export const TRUST_WAIT_MS = 3 * 60_000;
+/** How long a start with no hook waits before the screen is read for the trust question (TER-1025). */
+export const TRUST_LOOK_MS = 30_000;
+/** Trust answers the server sends in one run: a question that keeps coming back goes to the person. */
+export const TRUST_ANSWERS_MAX = 3;
 /**
  * How long an open question card of an automatic tab may wait with no countdown before the person is
  * called: the woken chat had this long to answer it (spec D18 step 3 → 4).
  */
 export const QUESTION_WAIT_MS = 10 * 60_000;
+/**
+ * How long a run parked on a GitHub error (`report_card` with `github_transient`, TER-1025) waits before
+ * each resume: the 1st, the 2nd, the 3rd and on — about half an hour over the default `github_retries`.
+ */
+export const GITHUB_RETRY_DELAYS_MS = [5 * 60_000, 10 * 60_000, 15 * 60_000];
 
 /**
  * The reasons a run goes back to `running` by itself once the person answered the card or acted in the
@@ -88,6 +98,13 @@ export interface FollowerDeps {
   wakeStopped?: (i: StoppedTabWake) => Promise<boolean>;
   /** What the tab's pane runs in front (`paneForeground`); null when it could not be read. Default: the real one. */
   foreground?: (tab: Tab) => Promise<PaneForeground | null>;
+  /** githubstatus.com: a run parked on a GitHub error is not resumed while GitHub reports trouble with
+   *  pushes, the API or pull requests (TER-1025). Left out, only the delay counts. */
+  githubHealth?: GithubHealthReader;
+  /** Answers Claude's trust question in the run's tab when the screen shows it (TER-1025): true when the
+   *  answer was sent. `acceptTrustQuestion` (trust.ts), wired in app.ts; left out, it is never answered
+   *  and the run is parked for the person after TRUST_WAIT_MS, as before. */
+  acceptTrust?: (run: AutomationRun, tab: Tab) => Promise<boolean>;
   /** The clock (tests). */
   now?: () => Date;
   /** How long a change settles before the tab is read (default SETTLE_MS). */
@@ -279,6 +296,30 @@ async function parkForTrust(repos: Repositories, run: AutomationRun, log: Log): 
 }
 
 /**
+ * Claude's trust question in a run's own worktree (TER-1025): answered by the server, since termhub made the
+ * folder — never while the project is paused (D24), at most TRUST_ANSWERS_MAX times a run. Recorded as
+ * `trust_auto_accepted`. True when the answer was sent; the run is then left alone until its first hook.
+ */
+async function tryAcceptTrust(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
+  const { repos } = deps;
+  if (!deps.acceptTrust) return false;
+  const project = await repos.projects.findById(run.project_id);
+  if (!project || (await isPaused(repos, project.owner_id, run.project_id))) return false;
+  if ((await repos.automationEvents.countForRun(run.id, 'trust_auto_accepted', run.created_at)) >= TRUST_ANSWERS_MAX) return false;
+  const sent = await deps.acceptTrust(run, tab).catch((e: unknown) => {
+    log.warn({ runId: run.id, tabId: tab.id, code: errorCode(e) }, 'automation: trust question not answered');
+    return false;
+  });
+  if (!sent) return false;
+  await repos.automationRuns.noteTyped(run.id, deps.now?.() ?? new Date());
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'trust_auto_accepted', payload: { tab_id: tab.id } }).catch((e: unknown) =>
+    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: trust_auto_accepted not recorded'),
+  );
+  log.info({ runId: run.id, tabId: tab.id }, 'automation: trust question answered');
+  return true;
+}
+
+/**
  * The card of a run that ends done (spec D17): it stays where the agent put it. A card whose link failed at
  * the start (`TASK_LINK_FAILED`: the agent ran, the card never moved) is linked to the run's tab now and
  * leaves `todo` for the agent column, as a start would have done — otherwise the dispatcher would take it
@@ -411,6 +452,51 @@ const sinceMs = (deps: FollowerDeps, at: string | Date | null | undefined) => (d
 const inGrace = (deps: FollowerDeps, tab: Tab) => sinceMs(deps, tab.state_at) < PR_GRACE_MS;
 
 /**
+ * The agent reported a GitHub error (`report_card` blocked with `github_transient`, TER-1025): instead of
+ * ending and calling the person, the run waits (`waiting`, GITHUB_TRANSIENT; its card and tab stay) and the
+ * follower resumes it later (`resumeAfterGithub`). Past `github_retries` waits it ends blocked and the
+ * person is told, as any other block. False when another instance wrote the run first.
+ */
+async function waitForGithub(repos: Repositories, run: AutomationRun, reason: string | null, log: Log): Promise<boolean> {
+  const setup = await repos.projectSetup.get(run.project_id);
+  const used = await repos.automationEvents.countForRun(run.id, 'github_wait', run.created_at);
+  if (used >= (setup.data.automation.github_retries ?? 0)) return finishBlocked(repos, run, GITHUB_TRANSIENT, reason, log);
+  if (!(await writeRun(repos, run, { status: 'waiting', waiting_reason: GITHUB_TRANSIENT }))) return false;
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'github_wait', payload: { reason: GITHUB_TRANSIENT, attempt: used + 1, tab_id: run.tab_id } }).catch((e: unknown) =>
+    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: github_wait not recorded'),
+  );
+  log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, attempt: used + 1 }, 'automation: run waits for GitHub');
+  return true;
+}
+
+/**
+ * A run waiting for GitHub (TER-1025): once its wait's delay passed (GITHUB_RETRY_DELAYS_MS) and GitHub
+ * reports no trouble with pushes, the API or pull requests, it goes back to `running` and the agent is
+ * asked to try again (GITHUB_RETRY_TEXT). Only into a tab at its prompt, with no question open, no limit
+ * and no pause (D24). True when the line was typed.
+ */
+async function resumeAfterGithub(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
+  const { repos } = deps;
+  if (tab.state !== 'waiting_input' || rateLimited(tab) || isAccountSwapState(tab.state_text)) return false;
+  const last = await repos.automationEvents.lastForRun(run.id, 'github_wait');
+  const attempt = typeof last?.payload.attempt === 'number' ? last.payload.attempt : 1;
+  const delay = GITHUB_RETRY_DELAYS_MS[Math.min(attempt - 1, GITHUB_RETRY_DELAYS_MS.length - 1)]!;
+  if (last && sinceMs(deps, last.created_at) < delay) return false;
+  const health = await deps.githubHealth?.().catch(() => null);
+  if (health && writesDegraded(health)) return false;
+  if (await repos.tabQuestions.hasOpenQuestion(tab.id)) return false;
+  const ready = await mayType(deps, run, log);
+  if (!ready) return false;
+  if (!(await writeRun(repos, run, { status: 'running', waiting_reason: null }))) return false;
+  await (deps.type ?? defaultType)(ready.ctx, tab.id, serverMessage(GITHUB_RETRY_TEXT));
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_resumed', payload: { tab_id: tab.id, by: 'github', reason: GITHUB_TRANSIENT, count: attempt } }).catch((e: unknown) =>
+    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_resumed not recorded'),
+  );
+  log.info({ runId: run.id, tabId: tab.id, attempt }, 'automation: run resumed after GitHub came back');
+  return true;
+}
+
+/**
  * `waiting_input` after a Stop (preflight F-13): end on an open PR, resume, or hand over past the cap.
  * Returns true when something was typed into the tab; every other outcome is looked at again later.
  */
@@ -424,6 +510,8 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
   // after an account swap the resumed session may wait on the trust question: never typed into (an Enter
   // would answer it for the person); past TRUST_WAIT_MS the run is parked for them
   if (isAccountSwapState(tab.state_text)) {
+    // TER-1025: the question in the run's own worktree is answered by the server; anything else waits
+    if (await tryAcceptTrust(deps, run, tab, log)) return false;
     if (sinceMs(deps, tab.state_at) >= TRUST_WAIT_MS) await parkForTrust(repos, run, log);
     return false;
   }
@@ -617,9 +705,15 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
       }
       if (!tab.state_at) {
         // start watchdog: no hook at all since the start — Claude waits on the trust question of a new
-        // worktree (it comes before any hook). Parked for the person, never typed into. A pane back at its
+        // worktree (it comes before any hook). The server answers it in the run's own worktree (TER-1025),
+        // also for a run already parked on it; otherwise it is parked for the person. A pane back at its
         // shell is not that: the agent never came up (its launch line failed, TER-1005).
-        if (run.status === 'running' && sinceMs(deps, run.started_at ?? run.created_at) >= TRUST_WAIT_MS) {
+        const quiet = sinceMs(deps, run.started_at ?? run.created_at);
+        const onTrust = run.status === 'running' || run.waiting_reason === NEEDS_PERSON;
+        // an answer sent a moment ago is given time to take before the screen is read again
+        const answeredNow = run.last_typed_at !== null && sinceMs(deps, run.last_typed_at) < TRUST_LOOK_MS;
+        if (onTrust && quiet >= TRUST_LOOK_MS && !answeredNow && (await tryAcceptTrust(deps, run, tab, log))) return;
+        if (run.status === 'running' && quiet >= TRUST_WAIT_MS) {
           const pane = await (deps.foreground ?? ((t: Tab) => defaultForeground(deps.repos, t)))(tab);
           if (pane === 'shell' || pane === 'dead') await parkAndEscalate(deps.repos, run, AGENT_NOT_STARTED, log);
           else await parkForTrust(deps.repos, run, log);
@@ -652,6 +746,8 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
         // D17 in the other order: the PR was linked after the run was parked
         const pr = await openPrOfRun(deps.repos, run);
         if (pr) await finishDone(deps.repos, run, 'pull_request', pr, log);
+        // TER-1025: a run that waits for GitHub is resumed by itself once GitHub works again
+        else if (run.waiting_reason === GITHUB_TRANSIENT && (await resumeAfterGithub(deps, run, tab, log))) await deps.repos.automationRuns.noteTyped(run.id, deps.now?.() ?? new Date());
         return;
       }
       const stopped = tab.state === 'waiting_input';
@@ -727,9 +823,10 @@ export async function tabHasActiveRun(ctx: ControlContext): Promise<boolean> {
 
 /**
  * The tab tool `report_card` (spec D17): the agent ends its own run. `done` (with the PR URL) leaves the
- * card where the agent put it; `blocked` (with the reason) ends the run and escalates it.
+ * card where the agent put it; `blocked` (with the reason) ends the run and escalates it — except with
+ * `code: github_transient` (TER-1025): the run waits for GitHub and is resumed by itself (`waitForGithub`).
  */
-export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string }): Promise<{ ok: true }> {
+export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient' }): Promise<{ ok: true }> {
   const run = await runOfTabToken(ctx);
   if (!run) throw new ControlError('NO_RUN', msg('Esta aba não tem trabalho automático em andamento'));
   if (i.status === 'blocked' && !i.reason?.trim()) throw new ControlError('REASON_REQUIRED', msg('Diga em reason por que o trabalho travou'));
@@ -737,7 +834,9 @@ export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blo
   const ended =
     i.status === 'done'
       ? await finishDone(ctx.repos, run, 'report_card', i.pr_url ? { url: i.pr_url } : null, log)
-      : await finishBlocked(ctx.repos, run, REPORTED_BLOCKED, i.reason ?? null, log);
+      : i.code === GITHUB_TRANSIENT
+        ? await waitForGithub(ctx.repos, run, i.reason ?? null, log)
+        : await finishBlocked(ctx.repos, run, REPORTED_BLOCKED, i.reason ?? null, log);
   // another instance took the run over between the read and the write: the agent may simply call again
   if (!ended) throw new ControlError('RUN_MOVED', msg('O trabalho automático desta aba mudou de instância; chame report_card de novo'));
   return { ok: true };
@@ -774,7 +873,7 @@ export async function resumeAutomationRun(ctx: ControlContext, i: { run_id: stri
   if (run.status === 'running') return { ok: true, resumed: false };
   // only a run parked for the person: one waiting on its account's limit goes on by itself (typing into a
   // limited tab would only hit the limit again)
-  if (!SLOT_FREE_REASONS.includes(run.waiting_reason ?? '')) return { ok: true, resumed: false };
+  if (!SLOT_FREE_REASONS.includes(run.waiting_reason ?? '') && run.waiting_reason !== GITHUB_TRANSIENT) return { ok: true, resumed: false };
   if (!(await ctx.repos.automationRuns.resumeWaiting(run.id, { fresh: true }))) return { ok: true, resumed: false };
   await recordEvent(ctx.repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_resumed', payload: { tab_id: run.tab_id, by: 'person', reason: run.waiting_reason } }).catch(
     (e: unknown) => (ctx.log ?? noopLog).warn({ runId: run.id, code: errorCode(e) }, 'automation: run_resumed not recorded'),

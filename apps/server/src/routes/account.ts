@@ -1,12 +1,16 @@
+import { createReadStream } from 'node:fs';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { AuthService } from '../auth/service.js';
 import { CSRF_COOKIE, SESSION_COOKIE } from '../auth/tokens.js';
 import { VIEW_AS_COOKIE } from '../auth/scope.js';
 import { AccountDeletionService, deletionStatus } from '../account/deletion.js';
+import type { DataExportService } from '../account/data-export.js';
 import { HttpError, unauthorized } from '../lib/errors.js';
 import { config } from '../config.js';
 import { msg, requestLocale, tk } from '../i18n/index.js';
+import type { Repositories } from '../db/repositories/index.js';
+import { audit } from '../auth/audit.js';
 
 /** Re-authentication for the request: the account's password, or a code e-mailed to it. */
 const requestBody = z.union([
@@ -20,6 +24,7 @@ const linkBody = z.object({
   website: z.string().max(0).optional(),
 });
 const confirmBody = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{20,128}$/) });
+const exportParams = z.object({ id: z.string().regex(/^[a-z0-9]{1,64}$/) });
 
 /**
  * Per-IP budget for the two public routes, in memory like the waitlist form's: a bot cannot hammer
@@ -48,6 +53,9 @@ function clearSession(reply: FastifyReply) {
 export interface AccountRouteDeps {
   auth: AuthService;
   deletion: AccountDeletionService;
+  exports: DataExportService;
+  /** Where the security trail goes (TER-577); without it nothing is recorded (route tests). */
+  repos?: Pick<Repositories, 'securityEvents'>;
 }
 
 /**
@@ -97,6 +105,7 @@ export async function accountRoutes(app: FastifyInstance, deps: AccountRouteDeps
     }
     if (check.user.id !== user.id) throw unauthorized();
     const updated = await deps.deletion.request(user, 'web');
+    if (deps.repos) await audit(deps.repos, request, 'user.deletion_requested', { target: { type: 'user', id: user.id, label: user.email }, meta: { via: 'web' } });
     // The request ended every session, this one included.
     clearSession(reply);
     return deletionStatus(updated);
@@ -106,7 +115,33 @@ export async function accountRoutes(app: FastifyInstance, deps: AccountRouteDeps
     const user = request.user;
     if (!user) throw unauthorized();
     await deps.deletion.cancel(user);
+    if (deps.repos) await audit(deps.repos, request, 'user.deletion_canceled', { target: { type: 'user', id: user.id, label: user.email } });
     return deletionStatus({ deletion_requested_at: null, deletion_scheduled_at: null });
+  });
+
+  // ---------- "Exportar meus dados" (TER-741) ----------
+
+  app.get('/export', async (request) => {
+    if (!request.user) throw unauthorized();
+    return deps.exports.status(request.user);
+  });
+
+  /** Asks for an archive of the account's data: built in the background, announced by e-mail. */
+  app.post('/export', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    return reply.code(202).send(await deps.exports.request(request.user));
+  });
+
+  /** The archive itself: only its own account, signed in, within its 7 days. */
+  app.get('/export/:id/download', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    const { id } = exportParams.parse(request.params);
+    const found = await deps.exports.openDownload(request.user, id);
+    reply.header('content-type', 'application/zip');
+    reply.header('content-length', found.bytes);
+    reply.header('content-disposition', `attachment; filename="${found.filename}"`);
+    reply.header('cache-control', 'private, no-store');
+    return reply.send(createReadStream(found.file));
   });
 
   // ---------- public page (TER-728) ----------
@@ -124,6 +159,7 @@ export async function accountRoutes(app: FastifyInstance, deps: AccountRouteDeps
     const { token } = confirmBody.parse(request.body);
     const user = await deps.deletion.confirmLink(token);
     if (!user) throw new HttpError(400, 'Este link é inválido, já foi usado ou expirou. Peça outro na página.', 'LINK_INVALID');
+    if (deps.repos) await audit(deps.repos, request, 'user.deletion_requested', { actor: user, target: { type: 'user', id: user.id, label: user.email }, meta: { via: 'link' } });
     return deletionStatus(user);
   });
 }

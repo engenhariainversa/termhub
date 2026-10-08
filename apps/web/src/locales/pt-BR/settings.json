@@ -1,4 +1,9 @@
 {
+  "Retomar {{count}} abas?_one": "Retomar {{count}} aba?",
+  "Retomar {{count}} abas?_other": "Retomar {{count}} abas?",
+  "{{count}} abas retomadas_one": "{{count}} aba retomada",
+  "{{count}} abas retomadas_other": "{{count}} abas retomadas",
+  "{{count}} abas retomadas_zero": "{{count}} abas retomadas",
   "{{count}} arquivos_one": "{{count}} arquivo",
   "{{count}} arquivos_other": "{{count}} arquivos",
   "{{count}} arquivos_zero": "{{count}} arquivos",

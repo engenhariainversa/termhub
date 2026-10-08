@@ -13,7 +13,7 @@ export const ENTER_PAUSE_MS = 300;
  * (e.g. an enormous `capture-pane`) — a real (if unusual) failure, but not "tmux missing", so
  * it gets `internal` instead of being folded into `no_tmux` alongside ENOENT.
  */
-function processFailure(r: Pick<RunResult, 'error' | 'timedOut'>): RpcFailure | null {
+export function processFailure(r: Pick<RunResult, 'error' | 'timedOut'>): RpcFailure | null {
   if (r.timedOut) return new RpcFailure('timeout', 'tmux timed out');
   if (r.error === 'enoent') return new RpcFailure('no_tmux', 'tmux not found');
   if (r.error === 'maxbuffer') return new RpcFailure('internal', 'output too large');
