@@ -19,7 +19,7 @@ import { RULES_LIMIT, ruleOf } from './current-rules.js';
  */
 
 /** First agent release that answers `ai_memory.rules.sync`. An older agent is skipped. */
-export const AI_MEMORY_MIN_AGENT_VERSION = '0.20.0';
+export const AI_MEMORY_MIN_AGENT_VERSION = '0.23.0';
 /** ai-memory's default local server. */
 export const AI_MEMORY_DEFAULT_SERVER_URL = 'http://127.0.0.1:49374';
 /** How often the sweeper syncs every project (catches expired rules and machines that came back). */
