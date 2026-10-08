@@ -22,10 +22,12 @@ import { isPaused } from './pause.js';
 import { runPermission } from './permission.js';
 import { GITHUB_RETRY_TEXT, RESUME_TEXT, serverMessage } from './prompts.js';
 import { writesDegraded, type GithubHealthReader } from '../integrations/github-status.js';
+import { recordTakenDecisions, type TakenDecision } from './decisions-taken.js';
+import { DECIDE_NUDGES_MAX, DECIDE_TEXT, decisionException, questionOf } from './decision.js';
 import { MAX_RESTARTS } from './restart.js';
-import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, GITHUB_TRANSIENT } from './escalation-text.js';
+import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, DECISION_EXCEPTION, DECISION_NEEDED, GITHUB_TRANSIENT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
-export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
+export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, DECISION_EXCEPTION, DECISION_NEEDED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
@@ -69,7 +71,7 @@ export const GITHUB_RETRY_DELAYS_MS = [5 * 60_000, 10 * 60_000, 15 * 60_000];
  * tab (spec §9.3). A resume cap waits for an explicit `resume_automation_run`: acting in the tab would
  * only hand it straight back.
  */
-const RESUMES_ON_ANSWER = new Set([QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED]);
+const RESUMES_ON_ANSWER = new Set([QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, DECISION_EXCEPTION, DECISION_NEEDED]);
 
 /** The reasons about a question card: the chat line answers that card instead of standing alone. */
 const CARD_REASONS = new Set([QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED]);
@@ -97,6 +99,8 @@ export interface FollowerDeps {
   wakeStopped?: (i: StoppedTabWake) => Promise<boolean>;
   /** What the tab's pane runs in front (`paneForeground`); null when it could not be read. Default: the real one. */
   foreground?: (tab: Tab) => Promise<PaneForeground | null>;
+  /** The tab's last answer, when still current (TER-1043: a stop on a question). Default: `readLastAnswer`. */
+  lastAnswer?: (tab: Tab) => Promise<string | null>;
   /** githubstatus.com: a run parked on a GitHub error is not resumed while GitHub reports trouble with
    *  pushes, the API or pull requests (TER-1025). Left out, only the delay counts. */
   githubHealth?: GithubHealthReader;
@@ -512,6 +516,9 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
   if (!ready) return false;
   // R8: past a budget nothing is resumed (a card over its own is escalated, even while paused: D24)
   if (await holdForBudget(deps, run, ready.setup.automation, log)) return false;
+  // TER-1043: a stop on a question is a decision automatic work takes by itself
+  const decided = await onQuestionStop(deps, run, tab, ready, log);
+  if (decided !== null) return decided;
   if (run.resume_count >= ready.setup.automation.resume_max) {
     // paused: the chat is not woken (it could type), but the person still learns (D24, §9.3)
     if (ready.paused) {
@@ -532,6 +539,56 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
     log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_resumed not recorded'),
   );
   log.info({ runId: run.id, tabId: tab.id, count }, 'automation: run resumed');
+  return true;
+}
+
+/** The tab's last answer when it is still the current one (`readLastAnswer`); null when there is none or it cannot be read. */
+async function defaultLastAnswer(repos: Repositories, tab: Tab): Promise<string | null> {
+  try {
+    const answer = await repos.tabs.readLastAnswer(tab.id);
+    return answer && !answer.stale ? answer.text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * TER-1043's safety net: the tab stopped and its last answer asks the person something ("Decisão sua: A ou
+ * B? Recomendo A"). Automatic work does not wait on it:
+ *
+ * - the project chose "Parar em decisões de produto" (`stop_on_decisions`) → the run waits for the person
+ *   (DECISION_NEEDED);
+ * - the question falls in an exception (`decisionException`: credentials, deploy, stores, production data,
+ *   scope) → the run waits for the person (DECISION_EXCEPTION), also while paused (D24);
+ * - otherwise DECIDE_TEXT is typed — look for the person's precedent in search_memory, else follow the
+ *   recommendation, record it in the PR and in report_card — and `decided_by_recommendation` (`via: 'nudge'`)
+ *   goes to the feed. Not a resume: `resume_count` stays. Past DECIDE_NUDGES_MAX nudges the stop takes the
+ *   ordinary path (resumes, then the chat's wake).
+ *
+ * True when something was typed, false when the run was held or parked, null when this is not a question
+ * stop (or the nudges ran out). The answer is terminal content: never logged, never put in the event.
+ */
+async function onQuestionStop(deps: FollowerDeps, run: AutomationRun, tab: Tab, ready: { ctx: ControlContext; setup: ProjectSetupData; paused: boolean }, log: Log): Promise<boolean | null> {
+  const { repos } = deps;
+  const question = questionOf(await (deps.lastAnswer ?? ((t: Tab) => defaultLastAnswer(repos, t)))(tab));
+  if (question === null) return null;
+  if (ready.setup.automation.stop_on_decisions) {
+    await parkAndEscalate(repos, run, DECISION_NEEDED, log);
+    return false;
+  }
+  if (decisionException(question)) {
+    await parkAndEscalate(repos, run, DECISION_EXCEPTION, log);
+    return false;
+  }
+  const nudges = (await repos.automationEvents.payloadsForRun(run.id, 'decided_by_recommendation', new Date(0))).filter((p) => p.via === 'nudge').length;
+  if (nudges >= DECIDE_NUDGES_MAX) return null;
+  // D24: nothing is typed while paused; the stop is looked at again once the pause is lifted
+  if (ready.paused || (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id))) return false;
+  await (deps.type ?? defaultType)(ready.ctx, tab.id, serverMessage(DECIDE_TEXT));
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'decided_by_recommendation', payload: { via: 'nudge', tab_id: tab.id, count: nudges + 1 } }).catch((e: unknown) =>
+    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: decided_by_recommendation not recorded'),
+  );
+  log.info({ runId: run.id, tabId: tab.id, count: nudges + 1 }, 'automation: told to follow its recommendation');
   return true;
 }
 
@@ -811,7 +868,7 @@ export async function tabHasActiveRun(ctx: ControlContext): Promise<boolean> {
  * card where the agent put it; `blocked` (with the reason) ends the run and escalates it — except with
  * `code: github_transient` (TER-1025): the run waits for GitHub and is resumed by itself (`waitForGithub`).
  */
-export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient' }): Promise<{ ok: true }> {
+export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient'; decisions?: TakenDecision[] }): Promise<{ ok: true }> {
   const run = await runOfTabToken(ctx);
   if (!run) throw new ControlError('NO_RUN', msg('Esta aba não tem trabalho automático em andamento'));
   if (i.status === 'blocked' && !i.reason?.trim()) throw new ControlError('REASON_REQUIRED', msg('Diga em reason por que o trabalho travou'));
@@ -824,6 +881,8 @@ export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blo
         : await finishBlocked(ctx.repos, run, REPORTED_BLOCKED, i.reason ?? null, log);
   // another instance took the run over between the read and the write: the agent may simply call again
   if (!ended) throw new ControlError('RUN_MOVED', msg('O trabalho automático desta aba mudou de instância; chame report_card de novo'));
+  // TER-1043: the decisions it took alone, for the person to review later (feed, daily summary, memory)
+  if (i.decisions?.length) await recordTakenDecisions(ctx.repos, run, i.decisions, { log });
   return { ok: true };
 }
 
