@@ -233,7 +233,9 @@ export function SettingsScreen() {
           <AppText variant="muted">
             {Application.nativeApplicationVersion} ({Application.nativeBuildVersion})
           </AppText>
-          <AppText variant="muted">{updateLabel(runningUpdate().updateId, runningUpdate().isEmbeddedLaunch)}</AppText>
+          <AppText variant="muted" selectable>
+            {updateLabel(runningUpdate())}
+          </AppText>
           <AppText variant="muted">{server}</AppText>
         </Section>
 

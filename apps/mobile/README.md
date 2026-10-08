@@ -132,6 +132,7 @@ JS-only changes reach installed builds over the air, through the self-hosted [xp
 
 - **JS-only change** for the version testers already have: publish, and the next cold start downloads it in the background; it runs from the launch after that.
 - **Native change** (a new native module, a config plugin, an `app.json` field that prebuild reads, an Expo SDK bump): bump `expo.version` and ship a new binary (TestFlight / App Distribution). Its updates then go out under the new version, and older binaries keep their own line.
+- **Older builds that take the same JS.** When a bump only changed native metadata (a privacy manifest, a permission string) and no native module, list the previous versions in `ota-runtimes.js`: every publish then also goes out under their runtime, so a phone still on the older build keeps getting updates. The list is pinned to the `expo.version` it was checked against (`for`) and stops applying when the version moves, until someone checks the new native diff. Without it, a phone on the older build silently stays on that line's last update.
 
 **Publishing is automated.** The "Publish mobile OTA" workflow (`.github/workflows/publish-mobile-ota.yml`, on the jarvis runner) publishes on every push to `main` that touches `apps/mobile/**` or `packages/mobile-api/**`. It skips a push that changes `app.json`, `app.config.js` or this `package.json` without bumping `expo.version` (the run summary says so): for a JS-only change it was too cautious about, run it by hand with `gh workflow run "Publish mobile OTA" --ref main -f message="what changed"`.
 
@@ -146,6 +147,8 @@ npm run release:ota -w @termhub/mobile -- --rollout-percentage 20
 The token is a publishing API key of the termhub app on xprem: `EOO_TOKEN` when set, otherwise the macOS Keychain item `xprem-token-termhub`; CI uses the `XPREM_TOKEN` repository secret. Keys are listed, created and revoked with the xprem MCP (`get_api_keys`, `create_api_key`, `revoke_api_key`) or in the dashboard.
 
 The script bakes in the same `EXPO_PUBLIC_*` values as the store builds and runs `eoas publish --branch production --platform all`. A rollout is then widened, ended or reverted in the dashboard; a bad update is reverted by republishing an earlier one or with a rollback to the embedded bundle (dashboard, or `republish_update` / `rollback_branch` in the MCP).
+
+Ajustes → Versão shows the binary (`0.5.0 (build)`) and the running bundle: `OTA: binário`, or the update's full id and publish time, to match against the server (`get_updates` in the xprem MCP).
 
 Manifests are code-signed: the server holds the app's private key, and `certs/certificate.pem` (public, committed) goes into every build. `expo start` cannot sign development manifests without the private key, so `npm start`, `npm run ios` and `npm run android` set `DISABLE_CODE_SIGNING=1`; the release scripts leave it unset. A development build loads its JS from Metro, not from the OTA server.
 

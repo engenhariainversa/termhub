@@ -9,6 +9,7 @@
 # only binaries of that exact version take it: publish from the commit the store build was cut
 # from, plus JS-only changes. Anything that touches native code (a new native module, a config
 # plugin, app.json fields prebuild reads) needs a new binary with a bumped `expo.version` instead.
+# Older builds listed in ota-runtimes.js get the same bundle under their own runtime version.
 #
 # The token is a publishing API key of the termhub app on xprem: EOO_TOKEN when set (CI passes the
 # XPREM_TOKEN secret), otherwise the macOS Keychain item `xprem-token-termhub`. eoas refuses to
@@ -33,3 +34,9 @@ export EXPO_PUBLIC_TERMHUB_URL=https://termhub.dev
 
 npm run build:contract
 npx -y eoas@3 publish --branch production --platform all --nonInteractive "$@"
+
+# The same bundle for older builds listed as compatible with this version (ota-runtimes.js).
+for runtime in $(node ota-runtimes.js); do
+  echo "Also publishing for compatible runtime $runtime"
+  OTA_RUNTIME_VERSION="$runtime" npx -y eoas@3 publish --branch production --platform all --nonInteractive "$@"
+done
