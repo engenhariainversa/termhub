@@ -35,6 +35,7 @@
   "Instalação falhou": "Installation failed",
   "Remoção falhou": "Removal failed",
   "Só máquinas com agente são atualizadas por aqui": "Only machines with the agent are updated here",
+  "Só máquinas com agente são desinstaladas por aqui": "Only machines with the agent are uninstalled here",
   "Versão mais nova do agente ainda desconhecida (npm)": "The newest agent version is not known yet (npm)",
   "O agente já está na versão {{version}}": "The agent is already on version {{version}}",
   "A anotação passou do limite de 200 000 caracteres": "The note is over the limit of 200,000 characters",
