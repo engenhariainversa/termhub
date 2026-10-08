@@ -9,7 +9,7 @@ import type { Tab, Task } from '../db/repositories/types.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { monitorBus } from '../monitor/bus.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
-import { ADOPT_WINDOW_MS, ADOPTED_VIA, adoptBlockedRuns, cancelRun, endRunsOfMergedCard, TAB_CLOSED, UNTAGGED, escalateAutomationRun, escalationReasonText, escalationText, resumeAutomationRun, SLOT_FREE_REASONS, ANSWER_CAP, followRun, getRunCard, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
+import { ADOPT_WINDOW_MS, ADOPTED_VIA, adoptBlockedRuns, tabMayReport, cancelRun, endRunsOfMergedCard, TAB_CLOSED, UNTAGGED, escalateAutomationRun, escalationReasonText, escalationText, resumeAutomationRun, SLOT_FREE_REASONS, ANSWER_CAP, followRun, getRunCard, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
 import { stoppedTabWakeText, type StoppedTabWake } from '../chat/wake.js';
 import { automationBus } from './events.js';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
@@ -58,6 +58,7 @@ function world(o: {
   const repos = {
     automationRuns: {
       activeByTab: vi.fn(async (id: string) => (id === run.tab_id && isActive() ? { ...run } : null)),
+      latestByTab: vi.fn(async (id: string) => (id === run.tab_id ? { ...run } : null)),
       findById: vi.fn(async () => ({ ...run })),
       followedBy: vi.fn(async (instance: string) => (instance === run.claimed_by && ['running', 'waiting'].includes(run.status) ? [{ ...run }] : [])),
       updateActive: vi.fn(async (_id: string, instance: string, patch: Partial<AutomationRun>, opts?: { unlessWaitingFor?: string }) => {
@@ -726,6 +727,68 @@ describe('report_card (spec D17, F-8)', () => {
     await followRun(w.deps, w.run.id);
     await expect(reportCard(tabCtx(w.repos), { status: 'done' })).rejects.toMatchObject({ code: 'NO_RUN' });
     expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
+  });
+});
+
+describe('report_card done after the run ended blocked (spike TER-1031 §5.4)', () => {
+  const ended = new Date(Date.now() - 60 * 60_000);
+  const blocked = (o: Parameters<typeof world>[0] = {}) => world({ ...o, run: { status: 'blocked', waiting_reason: 'reported_blocked', ended_at: ended, trigger_sha: null, ...o.run } });
+  const ctxOf = (repos: Repositories, tabId = 'tab1') => ({ ...tabCtx(repos, tabId), scope: { user: { locale: 'pt-BR' } } }) as unknown as ControlContext;
+  const PR = { state: 'open', head_ref: 'TER-1-card', url: 'https://github.com/o/r/pull/9', number: 9 };
+
+  it('with the PR already linked from the run\'s branch, adopts the run at once', async () => {
+    const w = blocked({ prs: [PR] });
+    expect(await tabMayReport(ctxOf(w.repos))).toBe(true);
+    expect(await reportCard(ctxOf(w.repos), { status: 'done', pr_url: 'https://github.com/o/r/pull/9' })).toEqual({ ok: true });
+    expect(w.run).toMatchObject({ status: 'done', waiting_reason: 'reported_blocked', ended_at: ended });
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
+    expect(w.events[0]!.payload).toMatchObject({ via: ADOPTED_VIA, pr_url: PR.url });
+    expect(w.repos.chat.addMessage).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('PR #9 do TER-1 aberto depois do bloqueio') }));
+  });
+
+  it('the URL given is never enough: a PR not linked yet (or from another branch) leaves the run pending', async () => {
+    const w = blocked({ prs: [{ ...PR, head_ref: 'other-branch' }] });
+    const res = await reportCard(ctxOf(w.repos), { status: 'done', pr_url: PR.url });
+    expect(res).toMatchObject({ ok: true, pending: true });
+    expect(res.message).toContain('TER-1-card');
+    expect(w.run.status).toBe('blocked');
+    expect(w.kinds()).toEqual([]);
+    // the CI sync links it later and adopts the run, once
+    w.setPrs([PR]);
+    expect(await adoptBlockedRuns(w.repos, 'p1')).toBe(1);
+    expect(w.run.status).toBe('done');
+    expect(await adoptBlockedRuns(w.repos, 'p1')).toBe(0);
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
+  });
+
+  it('blocked from that tab is refused with a message that says the run is already blocked', async () => {
+    const w = blocked({ prs: [PR] });
+    await expect(reportCard(ctxOf(w.repos), { status: 'blocked', reason: 'Travou' })).rejects.toMatchObject({ code: 'RUN_BLOCKED' });
+    await expect(reportCard(ctxOf(w.repos), { status: 'done' })).rejects.toMatchObject({ code: 'PR_URL_REQUIRED' });
+    expect(w.run.status).toBe('blocked');
+  });
+
+  it('another run\'s tab, a run past the window, a newer run of the card or a fixer get today\'s refusal', async () => {
+    const cases = [
+      { tabId: 'other-tab', w: blocked({ prs: [PR] }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], run: { ended_at: new Date(Date.now() - ADOPT_WINDOW_MS - 60_000) } }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], newerRun: { id: 'run-newer', status: 'done' } }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], run: { role: 'fixer' } }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], task: { auto: false } }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], enabled: false }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], run: { status: 'failed' } }) },
+    ];
+    for (const { tabId, w } of cases) {
+      expect(await tabMayReport(ctxOf(w.repos, tabId))).toBe(false);
+      await expect(reportCard(ctxOf(w.repos, tabId), { status: 'done', pr_url: PR.url })).rejects.toMatchObject({ code: 'NO_RUN' });
+      expect(w.kinds()).toEqual([]);
+    }
+  });
+
+  it('get_card stays run-only', async () => {
+    const w = blocked({ prs: [PR] });
+    expect(await tabHasActiveRun(ctxOf(w.repos))).toBe(false);
+    await expect(getRunCard(ctxOf(w.repos))).rejects.toMatchObject({ code: 'NO_RUN' });
   });
 });
 
