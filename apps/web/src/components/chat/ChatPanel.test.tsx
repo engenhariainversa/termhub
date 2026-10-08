@@ -172,6 +172,17 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+/**
+ * "Configurações da conversa" (TER-1039): the one cog that replaced the row of controls above the
+ * thread. Opens the dialog and returns queries scoped to it — the context meter, the host line, the
+ * subagents, the grants link and "Nova conversa"/"Apagar conversa" all live there now. It stays open
+ * across live events until closed by hand, so a test can open it once and keep reading it.
+ */
+async function openSettings() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Configurações da conversa' }));
+  return within(await screen.findByRole('dialog', { name: 'Configurações da conversa' }));
+}
+
 it('loads the project conversation and sends into it', async () => {
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY });
   sendMock.mockResolvedValue({ message: { id: 'm2' } });
@@ -274,7 +285,9 @@ it('Nova conversa asks first, resets, and swaps in the empty conversation', asyn
     </MemoryRouter>,
   );
   await screen.findByText('antigo');
-  fireEvent.click(screen.getByRole('button', { name: 'Nova conversa' }));
+  fireEvent.click((await openSettings()).getByRole('button', { name: 'Nova conversa' }));
+  // The settings step aside for the confirmation: one dialog at a time.
+  expect(screen.queryByRole('dialog', { name: 'Configurações da conversa' })).toBeNull();
   expect(resetMock).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Começar de novo' }));
   await waitFor(() => expect(resetMock).toHaveBeenCalledWith('p1'));
@@ -297,7 +310,8 @@ it('Apagar conversa asks first, deletes, and swaps in the empty conversation (TE
     </MemoryRouter>,
   );
   await screen.findByText('antigo');
-  fireEvent.click(screen.getByRole('button', { name: 'Apagar conversa' }));
+  fireEvent.click((await openSettings()).getByRole('button', { name: 'Apagar conversa' }));
+  expect(screen.queryByRole('dialog', { name: 'Configurações da conversa' })).toBeNull();
   expect(deleteChatMock).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Apagar' }));
   await waitFor(() => expect(deleteChatMock).toHaveBeenCalledWith('p1'));
@@ -339,7 +353,8 @@ it('shows how many tabs are trusted as a link to Configurações, and no strip',
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  expect(await screen.findByRole('link', { name: '2 permissões ativas' })).toHaveAttribute('href', '/settings/chat-grants');
+  await waitFor(() => expect(chatMock).toHaveBeenCalled());
+  expect((await openSettings()).getByRole('link', { name: '2 permissões ativas' })).toHaveAttribute('href', '/settings/chat-grants');
   expect(screen.queryByText(/Enviando direto para/)).toBeNull();
 });
 
@@ -350,7 +365,8 @@ it('counts tab and project grants in the indicator', async () => {
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  expect(await screen.findByRole('link', { name: '2 permissões ativas' })).toHaveAttribute('href', '/settings/chat-grants');
+  const settings = await openSettings();
+  expect(await settings.findByRole('link', { name: '2 permissões ativas' })).toHaveAttribute('href', '/settings/chat-grants');
 });
 
 it('project_grant_revoked removes it from the indicator', async () => {
@@ -365,9 +381,10 @@ it('project_grant_revoked removes it from the indicator', async () => {
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  expect(await screen.findByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
+  const settings = await openSettings();
+  expect(await settings.findByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
   onEvent({ type: 'project_grant_revoked', conversation_id: 'c_p1', grant_id: 'pg1' });
-  expect(await screen.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
+  expect(await settings.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
 });
 
 it('no link without an active grant', async () => {
@@ -378,7 +395,10 @@ it('no link without an active grant', async () => {
     </MemoryRouter>,
   );
   await waitFor(() => expect(chatMock).toHaveBeenCalled());
-  expect(screen.queryByRole('link', { name: /aba(s)? confiáve/ })).toBeNull();
+  const settings = await openSettings();
+  expect(settings.queryByRole('link', { name: /permiss(ão|ões) ativas?/ })).toBeNull();
+  // "Memória" is always there, so the shortcuts are not simply missing.
+  expect(settings.getByRole('link', { name: 'Memória' })).toHaveAttribute('href', '/chat/memoria');
 });
 
 it('a message event merges by id without a refetch, and the streamed text stays until the stored one lands', async () => {
@@ -484,8 +504,8 @@ it('"Permitir sempre nesta aba" on a pending card records the grant, shows it on
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Permitir sempre nesta aba' }));
   await waitFor(() => expect(decideMock).toHaveBeenCalledWith('a1', 'approve_tab'));
-  expect(await screen.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
-  expect(screen.getByText(/^Permitido nesta aba até/)).toBeInTheDocument();
+  expect(await screen.findByText(/^Permitido nesta aba até/)).toBeInTheDocument();
+  expect((await openSettings()).getByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
 });
 
 it('"Liberar teclas e shell nesta aba" passes approve_tab_terminal through', async () => {
@@ -573,18 +593,19 @@ it('a grant event adds to the header count, a grant_revoked removes it, a grante
     </MemoryRouter>,
   );
   await waitFor(() => expect(chatMock).toHaveBeenCalled());
+  const settings = await openSettings();
 
   onEvent({ type: 'grant', conversation_id: 'c_other', grant: grant({ id: 'g_other' }) });
-  expect(screen.queryByRole('link', { name: '1 permissão ativa' })).toBeNull();
+  expect(settings.queryByRole('link', { name: '1 permissão ativa' })).toBeNull();
 
   onEvent({ type: 'grant', conversation_id: 'c_p1', grant: grant({ id: 'g1' }) });
-  expect(await screen.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
+  expect(await settings.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
 
   onEvent({ type: 'granted_action', conversation_id: 'c_p1', action: action({ id: 'a2', status: 'executed', grant_id: 'g1' }) });
   expect(await screen.findByText('Executado · aba confiada')).toBeInTheDocument();
 
   onEvent({ type: 'grant_revoked', conversation_id: 'c_p1', grant_id: 'g1' });
-  await waitFor(() => expect(screen.queryByRole('link', { name: '1 permissão ativa' })).toBeNull());
+  await waitFor(() => expect(settings.queryByRole('link', { name: '1 permissão ativa' })).toBeNull());
 });
 
 it('a narrow grant event for a tab keeps its active terminal grant; a same-tool grant event replaces', async () => {
@@ -599,14 +620,15 @@ it('a narrow grant event for a tab keeps its active terminal grant; a same-tool 
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  expect(await screen.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
+  const settings = await openSettings();
+  expect(await settings.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
 
   onEvent({ type: 'grant', conversation_id: 'c_p1', grant: grant({ id: 'gn', tool: 'send_key' }) });
-  expect(await screen.findByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
+  expect(await settings.findByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
 
   onEvent({ type: 'grant', conversation_id: 'c_p1', grant: grant({ id: 'gt2', tool: 'terminal' }) });
-  await waitFor(() => expect(screen.queryByRole('link', { name: '3 permissões ativas' })).toBeNull());
-  expect(screen.getByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
+  await waitFor(() => expect(settings.queryByRole('link', { name: '3 permissões ativas' })).toBeNull());
+  expect(settings.getByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
 });
 
 it('a narrow grant from a decision keeps the active terminal grant of the same tab', async () => {
@@ -619,7 +641,8 @@ it('a narrow grant from a decision keeps the active terminal grant of the same t
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Permitir sempre nesta aba' }));
   await waitFor(() => expect(decideMock).toHaveBeenCalledWith('a1', 'approve_tab'));
-  expect(await screen.findByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
+  expect(await screen.findByText(/^Permitido nesta aba até/)).toBeInTheDocument();
+  expect((await openSettings()).getByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
 });
 
 const question = (over: Partial<TabQuestion> & { id: string }): TabQuestion =>
@@ -930,19 +953,34 @@ it('feeds an attachment status to the chip still in the box, and only for its ow
   expect(screen.getByText('relatorio.pdf')).toBeTruthy();
 });
 
-it('shows the subagents toolbar button while one is active, and clicking it lists it', async () => {
+it('lists a running subagent in the settings, and lights the cog while it runs', async () => {
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, subagents: [sub({ id: 's1' })] });
   render(
     <MemoryRouter>
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  const button = await screen.findByRole('button', { name: 'Subagentes (1)' });
-  fireEvent.click(button);
-  expect(await screen.findByText('Buscar CI')).toBeInTheDocument();
+  // No "Subagentes (n)" toggle any more: the cog's dot says something is running.
+  expect(await screen.findByTestId('chat-settings-attention')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Subagentes/ })).toBeNull();
+  const settings = await openSettings();
+  expect(settings.getByRole('region', { name: 'Subagentes' })).toHaveTextContent('Buscar CI');
 });
 
-it('the subagents panel shows the elapsed time as of when it opens, not as of when the chat mounted', async () => {
+it('the settings say when no subagent is running', async () => {
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, subagents: [] });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(chatMock).toHaveBeenCalled());
+  const settings = await openSettings();
+  expect(settings.getByText('Nenhum subagente rodando agora.')).toBeInTheDocument();
+  expect(screen.queryByTestId('chat-settings-attention')).toBeNull();
+});
+
+it('the subagents list shows the elapsed time as of when the settings open, not as of when the chat mounted', async () => {
   const realNow = Date.now.bind(Date);
   let offset = 0;
   const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
@@ -953,16 +991,16 @@ it('the subagents panel shows the elapsed time as of when it opens, not as of wh
         <ChatPanel projectId="p1" />
       </MemoryRouter>,
     );
-    const button = await screen.findByRole('button', { name: 'Subagentes (1)' });
-    offset = 10 * 60_000; // ten minutes later, the panel is opened for the first time
-    fireEvent.click(button);
-    expect(await screen.findByText(/há 10 min/)).toBeInTheDocument();
+    await screen.findByTestId('chat-settings-attention');
+    offset = 10 * 60_000; // ten minutes later, the settings are opened for the first time
+    const settings = await openSettings();
+    expect(await settings.findByText(/há 10 min/)).toBeInTheDocument();
   } finally {
     nowSpy.mockRestore();
   }
 });
 
-it('a subagent event turning it completed drops the toolbar button once nothing is active', async () => {
+it('a subagent event turning it completed puts the cog out once nothing is active', async () => {
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
@@ -974,9 +1012,11 @@ it('a subagent event turning it completed drops the toolbar button once nothing 
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  await screen.findByRole('button', { name: 'Subagentes (1)' });
+  await screen.findByTestId('chat-settings-attention');
   act(() => onEvent({ type: 'subagent', conversation_id: 'c_p1', subagent: sub({ id: 's1', status: 'completed', ended_at: '2026-09-21T00:01:00.000Z' }) }));
-  await waitFor(() => expect(screen.queryByRole('button', { name: /Subagentes/ })).toBeNull());
+  await waitFor(() => expect(screen.queryByTestId('chat-settings-attention')).toBeNull());
+  // The cog itself stays: it is the conversation's settings, not a subagents counter.
+  expect(screen.getByRole('button', { name: 'Configurações da conversa' })).toBeInTheDocument();
 });
 
 it('Cancelar on a subagent row calls api.cancelSubagent with its id', async () => {
@@ -987,8 +1027,9 @@ it('Cancelar on a subagent row calls api.cancelSubagent with its id', async () =
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Subagentes (1)' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Cancelar Buscar CI' }));
+  await screen.findByTestId('chat-settings-attention');
+  const settings = await openSettings();
+  fireEvent.click(await settings.findByRole('button', { name: 'Cancelar Buscar CI' }));
   await waitFor(() => expect(cancelSubagentMock).toHaveBeenCalledWith('s1'));
 });
 
@@ -1004,9 +1045,10 @@ it('a subagent_cancel_failed event shows "Não foi possível cancelar" on that r
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Subagentes (1)' }));
+  await screen.findByTestId('chat-settings-attention');
+  const settings = await openSettings();
   act(() => onEvent({ type: 'subagent_cancel_failed', conversation_id: 'c_p1', subagent_id: 's1' }));
-  expect(await screen.findByText('Não foi possível cancelar')).toBeInTheDocument();
+  expect(await settings.findByText('Não foi possível cancelar')).toBeInTheDocument();
 });
 
 it('a repeated confirmation event merges a later subagent into the existing card', async () => {
@@ -1047,7 +1089,7 @@ it('a repeated confirmation event merges a later subagent into the existing card
   expect(await screen.findByText('Pedido pelo subagente «Buscar CI»')).toBeInTheDocument();
 });
 
-it('the toggle stays after the last active subagent completes, so the panel it opened can still be closed', async () => {
+it('the settings stay open after the last active subagent completes, and the row reads "concluído"', async () => {
   let onEvent!: (e: unknown) => void;
   streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
     onEvent = cb;
@@ -1059,63 +1101,37 @@ it('the toggle stays after the last active subagent completes, so the panel it o
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Subagentes (1)' }));
-  await screen.findByText('Buscar CI');
+  await screen.findByTestId('chat-settings-attention');
+  const settings = await openSettings();
+  await settings.findByText('Buscar CI');
   act(() => onEvent({ type: 'subagent', conversation_id: 'c_p1', subagent: sub({ id: 's1', status: 'completed', ended_at: '2026-09-21T00:01:00.000Z' }) }));
-  // Still open, still there, at n = 0 — and the row itself is still visible, now reading "concluído".
-  expect(await screen.findByRole('button', { name: 'Subagentes (0)' })).toBeInTheDocument();
-  expect(screen.getByText('Buscar CI')).toBeInTheDocument();
-  expect(screen.getByText(/concluído/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByTestId('chat-settings-attention')).toBeNull());
+  expect(screen.getByRole('dialog', { name: 'Configurações da conversa' })).toBeInTheDocument();
+  expect(settings.getByText('Buscar CI')).toBeInTheDocument();
+  expect(settings.getByText(/concluído/)).toBeInTheDocument();
 });
 
-it('Escape closes the subagents panel and returns focus to the toggle', async () => {
+it('Escape closes the settings and returns focus to the cog', async () => {
   chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, subagents: [sub({ id: 's1' })] });
   render(
     <MemoryRouter>
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  const toggle = await screen.findByRole('button', { name: 'Subagentes (1)' });
-  fireEvent.click(toggle);
-  await screen.findByText('Buscar CI');
+  await screen.findByTestId('chat-settings-attention');
+  const cog = screen.getByRole('button', { name: 'Configurações da conversa' });
+  cog.focus();
+  const settings = await openSettings();
+  await settings.findByText('Buscar CI');
+  expect(cog).toHaveAttribute('aria-expanded', 'true');
   fireEvent.keyDown(window, { key: 'Escape' });
-  await waitFor(() => expect(screen.queryByText('Buscar CI')).toBeNull());
-  expect(toggle).toHaveFocus();
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Configurações da conversa' })).toBeNull());
+  expect(screen.queryByText('Buscar CI')).toBeNull();
+  expect(cog).toHaveAttribute('aria-expanded', 'false');
+  expect(cog).toHaveFocus();
 });
 
-it('a click outside the popover closes it', async () => {
-  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, subagents: [sub({ id: 's1' })] });
-  render(
-    <MemoryRouter>
-      <ChatPanel projectId="p1" />
-    </MemoryRouter>,
-  );
-  fireEvent.click(await screen.findByRole('button', { name: 'Subagentes (1)' }));
-  await screen.findByText('Buscar CI');
-  fireEvent.mouseDown(document.body);
-  await waitFor(() => expect(screen.queryByText('Buscar CI')).toBeNull());
-});
-
-it('once the panel is closed with nothing active, the toggle disappears', async () => {
-  let onEvent!: (e: unknown) => void;
-  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
-    onEvent = cb;
-    return { connected: true };
-  });
-  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, subagents: [sub({ id: 's1' })] });
-  render(
-    <MemoryRouter>
-      <ChatPanel projectId="p1" />
-    </MemoryRouter>,
-  );
-  fireEvent.click(await screen.findByRole('button', { name: 'Subagentes (1)' }));
-  act(() => onEvent({ type: 'subagent', conversation_id: 'c_p1', subagent: sub({ id: 's1', status: 'completed', ended_at: '2026-09-21T00:01:00.000Z' }) }));
-  await screen.findByRole('button', { name: 'Subagentes (0)' });
-  fireEvent.keyDown(window, { key: 'Escape' });
-  await waitFor(() => expect(screen.queryByRole('button', { name: /Subagentes/ })).toBeNull());
-});
-
-it('Nova conversa closes the subagents panel too', async () => {
+it('Nova conversa from the settings drops the old subagents too', async () => {
   chatMock
     .mockResolvedValueOnce({
       conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null },
@@ -1131,13 +1147,15 @@ it('Nova conversa closes the subagents panel too', async () => {
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Subagentes (1)' }));
-  await screen.findByText('Buscar CI');
-  fireEvent.click(screen.getByRole('button', { name: 'Nova conversa' }));
+  await screen.findByText('antigo');
+  const settings = await openSettings();
+  await settings.findByText('Buscar CI');
+  fireEvent.click(settings.getByRole('button', { name: 'Nova conversa' }));
   fireEvent.click(screen.getByRole('button', { name: 'Começar de novo' }));
   await waitFor(() => expect(resetMock).toHaveBeenCalled());
+  await waitFor(() => expect(screen.queryByTestId('chat-settings-attention')).toBeNull());
   expect(screen.queryByText('Buscar CI')).toBeNull();
-  expect(screen.queryByRole('button', { name: /Subagentes/ })).toBeNull();
+  expect((await openSettings()).getByText('Nenhum subagente rodando agora.')).toBeInTheDocument();
 });
 
 it('a non-409 failure on cancel shows "Não foi possível cancelar" on that row', async () => {
@@ -1149,27 +1167,28 @@ it('a non-409 failure on cancel shows "Não foi possível cancelar" on that row'
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Subagentes (1)' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Cancelar Buscar CI' }));
-  expect(await screen.findByText('Não foi possível cancelar')).toBeInTheDocument();
+  await screen.findByTestId('chat-settings-attention');
+  const settings = await openSettings();
+  fireEvent.click(await settings.findByRole('button', { name: 'Cancelar Buscar CI' }));
+  expect(await settings.findByText('Não foi possível cancelar')).toBeInTheDocument();
 });
 
-it('the subagents popover is a labelled dialog the toggle points at', async () => {
-  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, subagents: [sub({ id: 's1' })] });
+it('the cog is a labelled button that says it opens a dialog, and says when it is open', async () => {
   render(
     <MemoryRouter>
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  const toggle = await screen.findByRole('button', { name: 'Subagentes (1)' });
-  fireEvent.click(toggle);
-  const dialog = await screen.findByRole('dialog', { name: 'Subagentes' });
-  expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  expect(toggle.getAttribute('aria-controls')).toBe(dialog.id);
+  const cog = await screen.findByRole('button', { name: 'Configurações da conversa' });
+  expect(cog).toHaveAttribute('aria-haspopup', 'dialog');
+  expect(cog).toHaveAttribute('aria-expanded', 'false');
+  await openSettings();
+  expect(cog).toHaveAttribute('aria-expanded', 'true');
 });
 
 describe('context meter and "Compactar" (TER-315)', () => {
-  /** The account-wide chat with a fill of 170k in a 200k window, and the socket's `onEvent`. */
+  /** The account-wide chat with a fill of 170k in a 200k window, the socket's `onEvent`, and the
+   *  settings dialog (TER-1039), opened: the meter and "Compactar" live there now. */
   const renderFull = async (over: Record<string, unknown> = {}) => {
     let onEvent!: (e: unknown) => void;
     streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
@@ -1188,61 +1207,65 @@ describe('context meter and "Compactar" (TER-315)', () => {
         <ChatPanel projectId={null} />
       </MemoryRouter>,
     );
-    await screen.findByRole('meter');
-    return { emit: (e: unknown) => act(() => onEvent(e)) };
+    const settings = await openSettings();
+    await settings.findByRole('meter');
+    return { emit: (e: unknown) => act(() => onEvent(e)), settings };
   };
 
   it('shows the fill from GET /chat, highlighted above 80%, and follows the context event', async () => {
-    const { emit } = await renderFull();
-    expect(screen.getByRole('meter')).toHaveTextContent('170 mil / 200 mil · 85%');
-    expect(screen.getByRole('meter').className).toContain('text-warn');
+    const { emit, settings } = await renderFull();
+    expect(settings.getByRole('meter')).toHaveTextContent('170 mil / 200 mil · 85%');
+    expect(settings.getByRole('meter').className).toContain('text-warn');
     emit({ type: 'context', conversation_id: 'c1', tokens: 40_000, window: 200_000 });
-    expect(screen.getByRole('meter')).toHaveTextContent('40 mil / 200 mil · 20%');
+    expect(settings.getByRole('meter')).toHaveTextContent('40 mil / 200 mil · 20%');
     emit({ type: 'context', conversation_id: 'c_other', tokens: 1, window: 200_000 });
-    expect(screen.getByRole('meter')).toHaveTextContent('40 mil');
+    expect(settings.getByRole('meter')).toHaveTextContent('40 mil');
   });
 
   it('Compactar asks the server, says it is compacting, then shows the new fill and what it did', async () => {
-    const { emit } = await renderFull();
-    fireEvent.click(screen.getByRole('button', { name: 'Compactar' }));
+    const { emit, settings } = await renderFull();
+    fireEvent.click(settings.getByRole('button', { name: 'Compactar' }));
     await waitFor(() => expect(compactMock).toHaveBeenCalledWith(null));
-    expect(screen.getByRole('button', { name: 'Compactando…' })).toBeDisabled();
+    expect(settings.getByRole('button', { name: 'Compactando…' })).toBeDisabled();
     expect(screen.getByText('Compactando a conversa…')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeDisabled();
+    expect(settings.getByRole('button', { name: 'Nova conversa' })).toBeDisabled();
     emit({ type: 'compact', conversation_id: 'c1', state: 'started', tokens_before: null, tokens: null, error_code: null });
     emit({ type: 'context', conversation_id: 'c1', tokens: 12_000, window: 200_000 });
     emit({ type: 'compact', conversation_id: 'c1', state: 'done', tokens_before: 170_000, tokens: 12_000, error_code: null });
-    expect(screen.getByRole('meter')).toHaveTextContent('12 mil / 200 mil · 6%');
+    expect(settings.getByRole('meter')).toHaveTextContent('12 mil / 200 mil · 6%');
     expect(screen.getByText('Conversa compactada: 170 mil → 12 mil tokens')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Compactar' })).toBeEnabled();
+    expect(settings.getByRole('button', { name: 'Compactar' })).toBeEnabled();
   });
 
   it('a compaction that failed says why in the status line', async () => {
-    const { emit } = await renderFull();
-    fireEvent.click(screen.getByRole('button', { name: 'Compactar' }));
+    const { emit, settings } = await renderFull();
+    fireEvent.click(settings.getByRole('button', { name: 'Compactar' }));
     await waitFor(() => expect(compactMock).toHaveBeenCalled());
     emit({ type: 'compact', conversation_id: 'c1', state: 'failed', tokens_before: null, tokens: null, error_code: 'HOST_GONE' });
     expect(screen.getByText('A máquina do chat saiu do ar durante a compactação')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Compactar' })).toBeEnabled();
+    expect(settings.getByRole('button', { name: 'Compactar' })).toBeEnabled();
   });
 
   it('a refused compaction shows the server sentence and lets go of the button', async () => {
-    await renderFull();
+    const { settings } = await renderFull();
     const { ApiError } = await import('../../lib/api');
     compactMock.mockRejectedValueOnce(new ApiError(409, 'O concierge ainda está respondendo: compacte quando ele terminar', 'CHAT_BUSY'));
-    fireEvent.click(screen.getByRole('button', { name: 'Compactar' }));
+    fireEvent.click(settings.getByRole('button', { name: 'Compactar' }));
     expect(await screen.findByText('O concierge ainda está respondendo: compacte quando ele terminar')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Compactar' })).toBeEnabled();
+    expect(settings.getByRole('button', { name: 'Compactar' })).toBeEnabled();
   });
 
   it('Alt+Shift+C in the panel compacts', async () => {
-    await renderFull();
+    const { settings } = await renderFull();
+    // The shortcut works from the box, with the settings closed.
+    fireEvent.click(settings.getByRole('button', { name: 'Fechar' }));
     fireEvent.keyDown(screen.getByRole('textbox'), { code: 'KeyC', key: 'Ç', altKey: true, shiftKey: true });
     await waitFor(() => expect(compactMock).toHaveBeenCalledWith(null));
   });
 
   it('/compact typed in the box compacts, and nothing is sent', async () => {
-    await renderFull();
+    const { settings } = await renderFull();
+    fireEvent.click(settings.getByRole('button', { name: 'Fechar' }));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '/compact' } });
     fireEvent.click(screen.getByRole('button', { name: /enviar/i }));
     await waitFor(() => expect(compactMock).toHaveBeenCalledWith(null));
@@ -1251,13 +1274,23 @@ describe('context meter and "Compactar" (TER-315)', () => {
   });
 
   it('a screen opened during a compaction shows it under way', async () => {
-    await renderFull({ compacting: true });
-    expect(screen.getByRole('button', { name: 'Compactando…' })).toBeDisabled();
+    const { settings } = await renderFull({ compacting: true });
+    expect(settings.getByRole('button', { name: 'Compactando…' })).toBeDisabled();
   });
 
   it('no Compactar before the first message', async () => {
-    await renderFull({ messages: [], conversation: { id: 'c1', project_id: null, ai_account_id: null, context_tokens: 5, context_window: null } });
-    expect(screen.getByRole('button', { name: 'Compactar' })).toBeDisabled();
+    const { settings } = await renderFull({ messages: [], conversation: { id: 'c1', project_id: null, ai_account_id: null, context_tokens: 5, context_window: null } });
+    expect(settings.getByRole('button', { name: 'Compactar' })).toBeDisabled();
+  });
+
+  it('lights the cog while the context is 80% full or more, and puts it out once it drops', async () => {
+    const { emit, settings } = await renderFull();
+    expect(screen.getByTestId('chat-settings-attention')).toBeInTheDocument();
+    fireEvent.click(settings.getByRole('button', { name: 'Fechar' }));
+    emit({ type: 'context', conversation_id: 'c1', tokens: 40_000, window: 200_000 });
+    expect(screen.queryByTestId('chat-settings-attention')).toBeNull();
+    emit({ type: 'context', conversation_id: 'c1', tokens: 160_000, window: 200_000 });
+    expect(screen.getByTestId('chat-settings-attention')).toBeInTheDocument();
   });
 });
 
@@ -1280,7 +1313,7 @@ describe('standing grants (TER-386)', () => {
   it('counts the standing grants from GET /chat in the indicator', async () => {
     chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [grant({ id: 'g1' })], standing_grants: [standingGrant({ id: 'sg1' }), standingGrant({ id: 'sg2', kind: 'board' })] });
     renderPanel();
-    expect(await screen.findByRole('link', { name: '3 permissões ativas' })).toBeInTheDocument();
+    expect(await (await openSettings()).findByRole('link', { name: '3 permissões ativas' })).toBeInTheDocument();
   });
 
   it('"Liberar sem prazo" sends approve_project_always and shows the grant on the card', async () => {
@@ -1290,35 +1323,36 @@ describe('standing grants (TER-386)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Liberar sem prazo: fechar abas paradas neste projeto' }));
     await waitFor(() => expect(decideMock).toHaveBeenCalledWith('a1', 'approve_project_always'));
     expect(await screen.findByText('Fechar abas paradas liberado neste projeto, sem prazo')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
+    expect((await openSettings()).getByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
   });
 
   it('a standing_grant event adds (replacing the same project and kind), and a revoke from any conversation removes it', async () => {
     const emit = listen();
     chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, grants: [], standing_grants: [standingGrant({ id: 'sg1' })] });
     renderPanel();
-    expect(await screen.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
+    const settings = await openSettings();
+    expect(await settings.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
 
     emit({ type: 'standing_grant', conversation_id: 'c_p1', grant: standingGrant({ id: 'sg2', kind: 'board' }) });
-    expect(await screen.findByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
+    expect(await settings.findByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
 
     // Same project and kind: a renewal, not a third grant.
     emit({ type: 'standing_grant', conversation_id: 'c_p1', grant: standingGrant({ id: 'sg3' }) });
-    expect(screen.getByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
+    expect(settings.getByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
 
     // Another project's grant, granted from another conversation, is not this panel's.
     emit({ type: 'standing_grant', conversation_id: 'c_other', grant: standingGrant({ id: 'sg_p2', project_id: 'p2' }) });
-    expect(screen.getByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
+    expect(settings.getByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
 
     // This project's, granted from the account-wide chat, is.
     emit({ type: 'standing_grant', conversation_id: 'c_general', grant: standingGrant({ id: 'sg4', kind: 'open_tab' }) });
-    expect(await screen.findByRole('link', { name: '3 permissões ativas' })).toBeInTheDocument();
+    expect(await settings.findByRole('link', { name: '3 permissões ativas' })).toBeInTheDocument();
     emit({ type: 'standing_grant_revoked', conversation_id: 'c_general', grant_id: 'sg4' });
-    expect(await screen.findByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
+    expect(await settings.findByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
 
     // A standing grant is not bound to the conversation that created it: its revoke applies here too.
     emit({ type: 'standing_grant_revoked', conversation_id: 'c_other', grant_id: 'sg3' });
-    expect(await screen.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
+    expect(await settings.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
   });
 });
 
@@ -1388,14 +1422,15 @@ describe('which answers are being written (spec 2026-09-29 §5)', () => {
     chatMock.mockResolvedValue(thread([q('q1', 'um', 0), a('a1', 1), q('q2', 'dois', 2), a('a2', 3)], ['a1', 'a2']));
     mount();
     await waitFor(() => expect(screen.getAllByText(/pensando/i)).toHaveLength(2));
-    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeDisabled();
+    const settings = await openSettings();
+    expect(settings.getByRole('button', { name: 'Nova conversa' })).toBeDisabled();
     act(() => onEvent({ type: 'message_removed', message_id: 'a1', conversation_id: 'c1' }));
     act(() => onEvent(final('a2', 3)));
     expect(await screen.findByText('pronto')).toBeInTheDocument();
     expect(screen.queryByText(/pensando/i)).toBeNull();
     // The removed row is gone, not left behind as a failed one.
     expect(screen.queryByText(FAILED)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeEnabled();
+    expect(settings.getByRole('button', { name: 'Nova conversa' })).toBeEnabled();
   });
 
   it('"Nova conversa" is disabled while an older row is still open', async () => {
@@ -1403,7 +1438,7 @@ describe('which answers are being written (spec 2026-09-29 §5)', () => {
     mount();
     await screen.findByText('já respondida');
     expect(screen.getByText(/pensando/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeDisabled();
+    expect((await openSettings()).getByRole('button', { name: 'Nova conversa' })).toBeDisabled();
   });
 
   it('a run that could not start re-reads the conversation and says so', async () => {
@@ -1431,7 +1466,8 @@ describe('which answers are being written (spec 2026-09-29 §5)', () => {
     chatMock.mockResolvedValueOnce(thread([q('q1', 'pergunta', 0), a('a1', 1)], ['a1']));
     mount();
     await screen.findByText(/pensando/i);
-    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeDisabled();
+    const settings = await openSettings();
+    expect(settings.getByRole('button', { name: 'Nova conversa' })).toBeDisabled();
     // The server deleted a1 (a missed message_removed, or a server that predates it) and re-read shows q1 alone.
     chatMock.mockResolvedValue(thread([q('q1', 'pergunta', 0)], []));
     await act(async () => {
@@ -1439,10 +1475,10 @@ describe('which answers are being written (spec 2026-09-29 §5)', () => {
     });
     expect(screen.queryByText(/pensando/i)).toBeNull();
     expect(screen.queryByText(FAILED)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeEnabled();
+    expect(settings.getByRole('button', { name: 'Nova conversa' })).toBeEnabled();
     // Closed for good: a late start of that row does not bring a started mark back.
     act(() => onEvent({ type: 'run_started', message_id: 'a1', conversation_id: 'c1' }));
-    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeEnabled();
+    expect(settings.getByRole('button', { name: 'Nova conversa' })).toBeEnabled();
   });
 
   it('the first read keeps what an untagged event streamed before it (a server with no conversation tags)', async () => {
@@ -1501,7 +1537,7 @@ describe('which answers are being written (spec 2026-09-29 §5)', () => {
     resetMock.mockResolvedValue({ conversation: { id: 'c2' } });
     mount();
     await screen.findByText('resposta antiga');
-    fireEvent.click(screen.getByRole('button', { name: 'Nova conversa' }));
+    fireEvent.click((await openSettings()).getByRole('button', { name: 'Nova conversa' }));
     fireEvent.click(screen.getByRole('button', { name: 'Começar de novo' }));
     await waitFor(() => expect(resetMock).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByText('resposta antiga')).toBeNull());
@@ -1522,7 +1558,7 @@ describe('which answers are being written (spec 2026-09-29 §5)', () => {
     act(() => {
       stale = onReconnect();
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Nova conversa' }));
+    fireEvent.click((await openSettings()).getByRole('button', { name: 'Nova conversa' }));
     fireEvent.click(screen.getByRole('button', { name: 'Começar de novo' }));
     expect(await screen.findByText('nova')).toBeInTheDocument();
     await act(async () => {

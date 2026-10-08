@@ -189,5 +189,8 @@
   "Arquivos do projeto": "Project files",
   "Ver detalhes": "Show details",
   "↓ {{count}} novas mensagens_one": "↓ {{count}} new message",
-  "↓ {{count}} novas mensagens_other": "↓ {{count}} new messages"
+  "↓ {{count}} novas mensagens_other": "↓ {{count}} new messages",
+  "Configurações da conversa": "Conversation settings",
+  "Abas liberadas": "Trusted tabs",
+  "Memória": "Memory"
 }

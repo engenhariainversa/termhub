@@ -2,12 +2,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { activeGrantsLabel } from '@/features/chat-grants/model/labels';
 import { useTranslation } from '@/i18n';
 import type { TChatAttachment, TTabQuestionAnswerBody } from '@/services/api/contract';
-import { AppText, Banner, Button, EmptyState, MAX_READABLE_WIDTH, readableColumn, Screen, Sheet } from '@/ui';
+import { AppText, Banner, Button, EmptyState, Icon, type IconName, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
 import { inboxKey } from '../model/chat-inbox';
-import { activeGrantIndex, isGrantActive } from '../model/grant-time';
+import { activeGrantIndex } from '../model/grant-time';
 import { isReplyable, replyRefOf, replyRefOfCard, type ReplyableCard, type ReplyRef } from '../model/reply';
 import { isActive } from '../model/subagents';
 import { chatTimeline, groupPendingActions, type ChatEntry } from '../model/timeline';
@@ -21,7 +20,6 @@ import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
 import { PendingBar } from './pending-bar';
 import { SwipeToReply } from './swipe-to-reply';
-import { SubagentsSheet } from './subagents-sheet';
 import { TabLimitCard } from './tab-limit-card';
 import { TabQuestionCard } from './tab-question-card';
 import { TabSuggestionCard } from './tab-suggestion-card';
@@ -36,8 +34,8 @@ const NEAR_END = 80;
 const KEEP_READING_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: NEAR_END };
 /** How often the grant index re-checks expiry (spec §4.2 "Stable rows"): never during render. */
 const GRANT_TICK_MS = 30_000;
-/** How often the subagents sheet's elapsed labels refresh while it is open (spec 2026-09-26 panel §4). */
-const SUBAGENTS_TICK_MS = 30_000;
+/** The header's way to the conversation's settings (TER-1039). */
+const SETTINGS_ICON: IconName = { ios: 'gearshape', android: 'settings' };
 
 const entryKey = (entry: ChatEntry) =>
   entry.kind === 'message'
@@ -101,7 +99,7 @@ const MessageRow = memo(function MessageRow({
 });
 
 /** The conversation (spec §11.2): thread, action cards, the host line when the host needs attention,
- * the trusted tabs and composer. `routeId` is a conversation id (a deep link), a project id or
+ * the pending bar and composer; the header's cog opens its settings (TER-1039). `routeId` is a conversation id (a deep link), a project id or
  * `general` — the store resolves which. `embedded` is the iPad split's right pane (spec 2026-09-28
  * §2.3): no "Voltar", the list next to it is the way out. */
 export function ConversationView({ routeId, embedded = false }: { routeId: string; embedded?: boolean }) {
@@ -135,9 +133,6 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   const busyLimitIds = useChatStore((s) => s.busyLimitIds);
   const limitErrors = useChatStore((s) => s.limitErrors);
   const answerTabLimit = useChatStore((s) => s.answerTabLimit);
-  const reset = useChatStore((s) => s.reset);
-  const cancelSubagent = useChatStore((s) => s.cancelSubagent);
-  const [confirmingReset, setConfirmingReset] = useState(false);
   /** "Ver separadas" holds only for the cards it was clicked on: a new or decided card groups again. */
   const [separate, setSeparate] = useState(false);
   const insets = useSafeAreaInsets();
@@ -146,22 +141,9 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   const [bodyTop, setBodyTop] = useState<number | null>(null);
   const measureBody = useCallback(() => bodyRef.current?.measureInWindow((_x, y) => setBodyTop(y)), []);
 
-  // The subagents panel (spec 2026-09-26 panel §4): always closable — the header button stays up
-  // while it is open (even once every subagent has ended), the sheet has its own close control
-  // (`Sheet`'s backdrop), and "Nova conversa" closes it too, below.
-  const [subagentsOpen, setSubagentsOpen] = useState(false);
-  const subagents = useMemo(() => slot?.subagents ?? [], [slot?.subagents]);
-  const cancelFailed = useMemo(() => slot?.cancelFailed ?? [], [slot?.cancelFailed]);
-  const activeSubagents = useMemo(() => subagents.filter(isActive), [subagents]);
-  const [subagentsNow, setSubagentsNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!subagentsOpen) return;
-    // Fresh on open too: otherwise the sheet shows the time of its last open (or of the mount).
-    setSubagentsNow(Date.now());
-    const timer = setInterval(() => setSubagentsNow(Date.now()), SUBAGENTS_TICK_MS);
-    return () => clearInterval(timer);
-  }, [subagentsOpen]);
-  const onCancelSubagent = useCallback((id: string) => void cancelSubagent(id), [cancelSubagent]);
+  // The subagents panel lives in the conversation's settings (TER-1039); a dot on the cog keeps a
+  // running subagent noticeable from here.
+  const subagentsRunning = useMemo(() => (slot?.subagents ?? []).some(isActive), [slot?.subagents]);
 
   useEffect(() => {
     if (routeId) void openByRoute(routeId);
@@ -186,12 +168,8 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   const actions = slot?.actions;
   const grants = useMemo(() => slot?.grants ?? [], [slot?.grants]);
   const projectGrants = useMemo(() => slot?.projectGrants ?? [], [slot?.projectGrants]);
-  // Standing grants ("Liberar sem prazo") never expire: all of them count, and no tick re-checks them.
+  // Standing grants ("Liberar sem prazo") never expire: no tick re-checks them.
   const standingGrants = useMemo(() => slot?.standingGrants ?? [], [slot?.standingGrants]);
-  const activeGrantCount = useMemo(
-    () => grants.filter((g) => isGrantActive(g)).length + projectGrants.filter((g) => isGrantActive(g)).length + standingGrants.length,
-    [grants, projectGrants, standingGrants],
-  );
   const tabQuestions = slot?.tabQuestions;
   const tabSuggestions = slot?.tabSuggestions;
   const tabLimits = slot?.tabLimits;
@@ -396,12 +374,6 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? t('Conversa')) : t('Chat geral');
   const shownError = error ?? slot?.error ?? null;
 
-  const confirmReset = () => {
-    setConfirmingReset(false);
-    setSubagentsOpen(false);
-    void reset();
-  };
-
   return (
     <Screen padded={false} width="full">
       {/* `padding` on iOS, `height` on Android (spec §4.2 "Keyboard"): stock behaviour on both, no
@@ -412,7 +384,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
           difference. */}
       <View ref={bodyRef} testID="conversation-body" className="flex-1" onLayout={measureBody}>
       <KeyboardAvoidingView testID="conversation-keyboard" className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={bodyTop ?? insets.top}>
-        {/* The header block — title, host line, error — and the footer block below — grants, composer —
+        {/* The header block — title, host line, error — and the footer block below — pending bar, composer —
             are siblings of the list, never rows inside it: a line appearing there changes the list's
             frame, not its content, and the inverted list keeps its end pinned through that. */}
         <View>
@@ -421,18 +393,24 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
             <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
               {title}
             </AppText>
-            {/* The subagents panel (spec 2026-09-26 panel §4): the button appears once something is
-                running or being cancelled, and — while the sheet is open — stays even after every one
-                of them ended, so the sheet it opened always has a way to close it again. */}
-            {activeSubagents.length > 0 || subagentsOpen ? <Button label={t('Subagentes ({{n}})', { n: activeSubagents.length })} variant="ghost" onPress={() => setSubagentsOpen((o) => !o)} /> : null}
-            {activeGrantCount > 0 ? <Button label={activeGrantsLabel(activeGrantCount)} variant="ghost" onPress={() => router.push('/chat-grants')} /> : null}
-            <Button label={t('Nova conversa')} variant="ghost" onPress={() => setConfirmingReset(true)} />
+            {/* Everything else about the conversation — where it runs, subagents, trusted tabs, memory,
+                "Nova conversa" — is one tap away, in its settings (TER-1039). */}
+            <Pressable
+              testID="conversation-settings"
+              accessibilityRole="button"
+              accessibilityLabel={t('Configurações da conversa')}
+              hitSlop={8}
+              onPress={() => router.push('/chat-settings')}
+              className="h-10 w-10 items-center justify-center rounded-full"
+            >
+              <Icon name={SETTINGS_ICON} size={22} tone="muted" />
+              {subagentsRunning ? <View testID="conversation-settings-dot" className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-app-accent" /> : null}
+            </Pressable>
           </View>
-          {/* The account-wide chat shows it only when something stands in the way (offline, no machine, none
-              chosen, an old agent): where a ready chat runs, and switching it, live in Ajustes. A project
-              chat always shows it: it is the way to the project's accounts and model (spec 2026-09-30
-              project AI accounts §8). */}
-          {slot?.host && (slot.host.kind !== 'ready' || activeProject) ? <HostLine host={slot.host} canChange={activeProject === null} projectId={activeProject ?? null} /> : null}
+          {/* Inline only when something stands in the way (offline, no machine, none chosen, an old
+              agent): a ready host — account-wide or a project's, with its accounts, model and files
+              (spec 2026-09-30 project AI accounts §8) — is shown in the conversation's settings. */}
+          {slot?.host && slot.host.kind !== 'ready' ? <HostLine host={slot.host} canChange={activeProject === null} projectId={activeProject ?? null} /> : null}
           {shownError ? (
             <View className="px-4 pt-3">
               <Banner tone="danger" text={shownError} />
@@ -487,14 +465,6 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
         </View>
       </KeyboardAvoidingView>
       </View>
-      <Sheet open={confirmingReset} onClose={() => setConfirmingReset(false)} title={t('Começar uma nova conversa?')}>
-        <View className="gap-3">
-          <AppText variant="muted">{t('A conversa atual fica arquivada e o chat começa do zero.')}</AppText>
-          <Button label={t('Começar nova conversa')} variant="danger" onPress={confirmReset} />
-          <Button label={t('Cancelar')} variant="ghost" onPress={() => setConfirmingReset(false)} />
-        </View>
-      </Sheet>
-      <SubagentsSheet open={subagentsOpen} onClose={() => setSubagentsOpen(false)} subagents={subagents} cancelFailed={cancelFailed} onCancel={onCancelSubagent} now={subagentsNow} />
     </Screen>
   );
 }

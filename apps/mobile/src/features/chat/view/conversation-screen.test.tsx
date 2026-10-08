@@ -146,17 +146,16 @@ afterEach(() => {
 });
 
 describe('Conversa', () => {
-  it('renders the thread: the person in plain text, the assistant as markdown and the title; a ready project chat names its host but offers no machine picker', async () => {
+  it('renders the thread: the person in plain text, the assistant as markdown and the title; a ready project chat keeps its host line in the settings', async () => {
     await render(<ConversationScreen />);
     expect(await screen.findByText(SEEDED_USER, undefined, LOAD)).toBeTruthy();
     const markdown = screen.getAllByTestId('markdown').map((node) => node.props.children);
     expect(markdown).toContain(SEEDED_ASSISTANT);
     expect(markdown).not.toContain(SEEDED_USER);
     expect(screen.getByText('termhub')).toBeTruthy();
-    // A project chat's host line is the way to the project's accounts and model (TER-589); its machine is not picked here.
-    expect(screen.getByText('Esta conversa roda na máquina jarvis, na conta padrão do Claude dela.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Conta e modelo' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Trocar máquina ou conta' })).toBeNull();
+    // A ready host, a project's too, is shown in the conversation's settings (TER-1039), not inline.
+    expect(screen.queryByText(/Esta conversa roda na máquina/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Conta e modelo' })).toBeNull();
   });
 
   it('shows a streaming bubble with the folded deltas, "pensando…" for a started empty row, and a failure sentence', async () => {
@@ -260,32 +259,25 @@ describe('Conversa', () => {
     expect(decide).toHaveBeenCalledWith('a-termhub-2', 'approve_project');
   });
 
-  it("counts the active grant in the header, opens Permissões do chat, and keeps the card's Revogar", async () => {
+  it("keeps the card's Revogar for an active grant; the count lives in the settings (TER-1039)", async () => {
     serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT] }));
     const revokeGrant = stubAction('revokeGrant');
     await render(<ConversationScreen />);
-    const link = await screen.findByRole('button', { name: '1 permissão ativa' }, LOAD);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Revogar' })).toHaveLength(1), LOAD);
+    expect(screen.queryByRole('button', { name: /permiss(ão|ões) ativa/ })).toBeNull();
     expect(screen.queryByText(/^Enviando direto para/)).toBeNull();
-    await fireEvent.press(link);
-    expect(mockRouter.push).toHaveBeenCalledWith('/chat-grants');
     const revoke = screen.getAllByRole('button', { name: 'Revogar' });
     expect(revoke).toHaveLength(1);
     await fireEvent.press(revoke[0]!);
     expect(revokeGrant).toHaveBeenCalledWith('g1');
   });
 
-  it('counts a tab grant and a project grant together: "2 permissões ativas"', async () => {
-    serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT], project_grants: [PROJECT_GRANT] }));
-    await render(<ConversationScreen />);
-    expect(await screen.findByRole('button', { name: '2 permissões ativas' }, LOAD)).toBeTruthy();
-  });
-
-  it('counts a standing grant with the others, and shows it on the card that created it (TER-386)', async () => {
+  it('shows a standing grant on the card that created it (TER-386)', async () => {
     serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT], project_grants: [], standing_grants: [STANDING_GRANT] }));
     const revokeGrant = stubAction('revokeGrant');
     await render(<ConversationScreen />);
-    expect(await screen.findByRole('button', { name: '2 permissões ativas' }, LOAD)).toBeTruthy();
-    expect(screen.getByText('Teclas e texto nas abas liberado neste projeto, sem prazo')).toBeTruthy();
+    expect(await screen.findByText('Teclas e texto nas abas liberado neste projeto, sem prazo', undefined, LOAD)).toBeTruthy();
     const revoke = screen.getAllByRole('button', { name: 'Revogar' });
     expect(revoke).toHaveLength(2);
     await fireEvent.press(revoke[1]!);
@@ -301,48 +293,22 @@ describe('Conversa', () => {
     expect(revokeGrant).toHaveBeenCalledWith('pg1');
   });
 
-  it('shows no header button without an active grant', async () => {
-    serveChat((res) => ({ actions: res.actions, grants: [] }));
+  it('the header holds only Voltar, the title and the cog, which opens the conversation settings (TER-1039)', async () => {
+    serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT], subagents: [] }));
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
     expect(screen.queryByRole('button', { name: /permiss(ão|ões) ativa/ })).toBeNull();
-  });
-
-  it('with one running subagent, the header shows Subagentes (1); pressing it opens the sheet, whose Cancelar calls the store', async () => {
-    serveChat(() => ({ subagents: [SUBAGENT] }));
-    const cancelSubagent = stubAction('cancelSubagent');
-    await render(<ConversationScreen />);
-    const button = await screen.findByRole('button', { name: 'Subagentes (1)' }, LOAD);
-    expect(screen.queryByText('Buscar CI')).toBeNull(); // the sheet is not open yet
-
-    await fireEvent.press(button);
-    expect(screen.getByText('Buscar CI')).toBeTruthy();
-    expect(screen.getByText(/rodando/)).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Cancelar Buscar CI' }));
-    expect(cancelSubagent).toHaveBeenCalledWith('sub1');
-  });
-
-  it('the sheet shows the elapsed time as of when it opens, not as of when the screen mounted', async () => {
-    const realNow = Date.now.bind(Date);
-    let offset = 0;
-    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
-    try {
-      serveChat(() => ({ subagents: [{ ...SUBAGENT, started_at: new Date(realNow()).toISOString() }] }));
-      await render(<ConversationScreen />);
-      const button = await screen.findByRole('button', { name: 'Subagentes (1)' }, LOAD);
-      offset = 10 * 60_000; // ten minutes later, the sheet is opened for the first time
-      await fireEvent.press(button);
-      expect(screen.getByText(/há 10 min/)).toBeTruthy();
-    } finally {
-      nowSpy.mockRestore();
-    }
-  });
-
-  it('shows no Subagentes button with nothing running', async () => {
-    serveChat(() => ({ subagents: [] }));
-    await render(<ConversationScreen />);
-    await screen.findByText(SEEDED_USER, undefined, LOAD);
     expect(screen.queryByRole('button', { name: /^Subagentes/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Nova conversa' })).toBeNull();
+    expect(screen.queryByTestId('conversation-settings-dot')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Configurações da conversa' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/chat-settings');
+  });
+
+  it('a running subagent puts a dot on the cog', async () => {
+    serveChat(() => ({ subagents: [SUBAGENT] }));
+    await render(<ConversationScreen />);
+    expect(await screen.findByTestId('conversation-settings-dot', undefined, LOAD)).toBeTruthy();
   });
 
   it('a card whose action carries a subagent shows "Pedido pelo subagente «X»"', async () => {
@@ -534,15 +500,6 @@ describe('Conversa', () => {
     mockVoice.notice = 'Nenhuma fala reconhecida';
     await act(() => useChatStore.setState({ sending: true }));
     expect(screen.getByText('Nenhuma fala reconhecida')).toBeTruthy();
-  });
-
-  it('Nova conversa asks first, then resets', async () => {
-    const reset = stubAction('reset');
-    await render(<ConversationScreen />);
-    await fireEvent.press(await screen.findByRole('button', { name: 'Nova conversa' }, LOAD));
-    expect(reset).not.toHaveBeenCalled();
-    await fireEvent.press(screen.getByRole('button', { name: 'Começar nova conversa' }));
-    expect(reset).toHaveBeenCalledTimes(1);
   });
 
   it('the account-wide chat, with no machine chosen, says so and offers the host sheet, which sets the machine and account', async () => {
@@ -741,32 +698,6 @@ describe('Conversa', () => {
     expect(screen.queryByRole('button', { name: 'Esperar' })).toBeNull();
   });
 
-  it("the project chat's host sheet names the project's account and leads to its accounts and model (TER-589)", async () => {
-    const real = stores.api.chat.bind(stores.api);
-    jest.spyOn(stores.api, 'chat').mockImplementation(async (auth, projectId) => {
-      const res = await real(auth, projectId);
-      if (projectId !== 'p-termhub' || res.host.kind !== 'ready') return res;
-      return { ...res, host: { ...res.host, account: { kind: 'chosen', id: 'acc-2', label: 'Claude Trabalho', via: 'project' } } };
-    });
-    await render(<ConversationScreen />);
-    expect(await screen.findByText('Esta conversa roda na máquina jarvis, na conta Claude Trabalho, definida pelo projeto.', undefined, LOAD)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Trocar máquina ou conta' })).toBeNull();
-    await fireEvent.press(screen.getByRole('button', { name: 'Conta e modelo' }));
-    expect(await screen.findByText('Conta definida pelo projeto: Claude Trabalho', undefined, LOAD)).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Contas e modelo do projeto' }));
-    expect(mockRouter.push).toHaveBeenCalledWith('/project-ai/p-termhub');
-  });
-
-  it("a project chat leads to the project's recent Markdown files, from its host line and its sheet (TER-953)", async () => {
-    await render(<ConversationScreen />);
-    await fireEvent.press(await screen.findByRole('button', { name: 'Arquivos' }, LOAD));
-    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/file-recent', params: { project_id: 'p-termhub' } });
-    mockRouter.push.mockClear();
-    await fireEvent.press(screen.getByRole('button', { name: 'Conta e modelo' }));
-    await fireEvent.press(await screen.findByRole('button', { name: 'Arquivos do projeto' }, LOAD));
-    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/file-recent', params: { project_id: 'p-termhub' } });
-  });
-
   it('the account-wide chat keeps its host line hidden while ready, and never offers the project row', async () => {
     mockId = 'general';
     await render(<ConversationScreen />);
@@ -923,7 +854,7 @@ describe('ConversationView (iPad, spec 2026-09-28 §2.3/§2.4)', () => {
     await render(<ConversationView routeId="p-termhub" embedded />);
     expect(await screen.findByText(SEEDED_USER, undefined, { timeout: 15_000 })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Voltar' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Configurações da conversa' })).toBeTruthy();
   });
 
   it('as the route: keeps "Voltar"', async () => {

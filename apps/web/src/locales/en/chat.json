@@ -257,7 +257,6 @@
   "Sair da tela cheia": "Exit full screen",
   "Sua resposta": "Your answer",
   "Subagentes": "Subagents",
-  "Subagentes ({{n}})": "Subagents ({{n}})",
   "Sugerir respostas com base nas minhas decisões": "Suggest answers based on my decisions",
   "Sugestão da memória: {{source}}": "Suggestion from memory: {{source}}",
   "Sugestão do Claude Code (opcional — edite ou dispense)": "Claude Code suggestion (optional — edit or dismiss)",
@@ -410,5 +409,10 @@
   "Pausar áudio": "Pause audio",
   "Ver transcrição": "Show transcript",
   "Ocultar transcrição": "Hide transcript",
-  "Baixar {{name}}": "Download {{name}}"
+  "Baixar {{name}}": "Download {{name}}",
+  "Configurações da conversa": "Conversation settings",
+  "Contexto": "Context",
+  "Nenhum subagente rodando agora.": "No subagent running right now.",
+  "Atalhos": "Shortcuts",
+  "Memória": "Memory"
 }
