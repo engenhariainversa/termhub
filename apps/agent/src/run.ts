@@ -1,7 +1,8 @@
 import os from 'node:os';
 import type { HelloMessage } from '@termhub/agent-protocol';
 import { CAPABILITY_CLAUDE, CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_CLAUDE_SYSTEM_PROMPT, CAPABILITY_SIM, CAPABILITY_FILE_LIST, CAPABILITY_FILE_READ, CAPABILITY_TRANSCRIPT, CAPABILITY_WORKTREE, CLOSE } from '@termhub/agent-protocol';
-import { connectOnce, runForever, RevokedError, ProtocolMismatchError, UpgradeRejectedError } from './client.js';
+import { connectOnce, runForever, RevokedError, ProtocolMismatchError, UpgradeRejectedError, type ClientOptions } from './client.js';
+import { readDeviceKey } from './device-key.js';
 import { heal } from './rpc/hooks.js';
 import type { AgentConfig } from './config.js';
 import { createClaudeManager } from './claude/run.js';
@@ -59,6 +60,20 @@ export async function buildHello(osName: SupportedOs): Promise<HelloFields> {
 
 export const REVOKED_MESSAGE = 'Token inválido ou revogado';
 export const UPGRADE_MESSAGE = 'Atualize o agente: npm i -g @termhub/agent';
+export const MISSING_KEY_MESSAGE = 'Chave do dispositivo não encontrada. Pareie de novo no app e rode: termhub-agent connect --url <url>';
+
+/**
+ * What a dial authenticates with, from the config (TER-1017): the device key for a `key` config, the
+ * legacy token for a `bearer` one. A `key` config whose key file is gone cannot dial at all.
+ */
+export function dialCredentials(
+  config: Pick<AgentConfig, 'credential' | 'token' | 'machine_id'>,
+  readKey: typeof readDeviceKey = readDeviceKey,
+): Pick<ClientOptions, 'token' | 'device'> | { error: string } {
+  if (config.credential !== 'key') return { token: config.token };
+  const key = readKey();
+  return key ? { device: { machineId: config.machine_id, key } } : { error: MISSING_KEY_MESSAGE };
+}
 
 /**
  * Reachability check used by `status`/`doctor`: a `hello` with `probe: true`, which the server
@@ -67,9 +82,11 @@ export const UPGRADE_MESSAGE = 'Atualize o agente: npm i -g @termhub/agent';
  * (401 upgrade, 4401/4409 close, no answer within `timeoutMs`) is "not connected".
  */
 export async function checkServerConnection(
-  config: Pick<AgentConfig, 'url' | 'token'>,
+  config: Pick<AgentConfig, 'url' | 'credential' | 'token' | 'machine_id'>,
   timeoutMs = 5_000,
 ): Promise<{ ok: boolean; error?: string }> {
+  const credentials = dialCredentials(config);
+  if ('error' in credentials) return { ok: false, error: credentials.error };
   const osName = detectOs() ?? 'linux';
   const controller = new AbortController();
   let timedOut = false;
@@ -81,7 +98,7 @@ export async function checkServerConnection(
     const { closed } = await connectOnce(
       {
         url: config.url,
-        token: config.token,
+        ...credentials,
         hello: { agent_version: AGENT_VERSION, os: osName, arch: process.arch, hostname: os.hostname(), tmux: false, tools: [], capabilities: capabilitiesFor(osName), probe: true },
         onServerMessage: () => {},
         onStream: () => {},
@@ -138,6 +155,9 @@ export async function runAgent(config: AgentConfig, opts: RunAgentOptions): Prom
     process.exit(1);
   }
 
+  const credentials = dialCredentials(config);
+  if ('error' in credentials) return exitWithoutRestart(credentials.error);
+
   const hello = await buildHello(osName);
   // Repair node-pty's spawn-helper before the first tab opens (see pty-health.ts).
   const helper = ensureSpawnHelperExecutable();
@@ -176,7 +196,7 @@ export async function runAgent(config: AgentConfig, opts: RunAgentOptions): Prom
     await runForever(
       {
         url: config.url,
-        token: config.token,
+        ...credentials,
         hello,
         onServerMessage: dispatch,
         // A frame belongs to whichever manager holds that channel: the claude one says so, and
@@ -196,7 +216,7 @@ export async function runAgent(config: AgentConfig, opts: RunAgentOptions): Prom
     );
   } catch (err) {
     if (err instanceof RevokedError) {
-      await exitWithoutRestart('Token revogado. Rode: termhub-agent connect --url <url>');
+      await exitWithoutRestart('Acesso revogado. Pareie de novo no app e rode: termhub-agent connect --url <url>');
     }
     if (err instanceof ProtocolMismatchError) {
       await exitWithoutRestart(UPGRADE_MESSAGE);

@@ -34,7 +34,7 @@ Short version for the firewall ticket:
 
 | Connection | Direction | Keep-alive | Reconnect |
 |---|---|---|---|
-| Agent ⇄ server (`/agent/ws`) | machine → server | Both sides ping every 20 s; a missed pong drops the socket. The opening handshake times out after 15 s. | Exponential backoff from 1 s to 30 s with jitter. It stops only when the token is revoked (4401) or the protocol is too old. |
+| Agent ⇄ server (`/agent/ws`) | machine → server | Both sides ping every 20 s; a missed pong drops the socket. The opening handshake times out after 15 s. | Exponential backoff from 1 s to 30 s with jitter. It stops only when the machine's access is revoked (4401) or the protocol is too old. |
 | Browser ⇄ server (`/ws/tabs`, `/ws/monitor`, `/ws/chat`, `/ws/sim`) | browser → server | Server pings every 30 s. | Terminal: exponential backoff up to 15 s, 8 attempts. Chat and monitor: every 5 s. |
 | Phone ⇄ server (`/ws/m/chat`) | phone → server | Server pings every 30 s. | Backoff from 1 s to 30 s; reconnects immediately when the app returns to the foreground. |
 | Hook events | machine → server | One POST per event, 5 s timeout, fire-and-forget. | None needed. |
@@ -84,7 +84,7 @@ A self-hosted server behind an **explicit proxy** reaches them through it: the s
 **Installation**
 
 - **The npm package** `@termhub/agent`, installed globally. It is published from GitHub Actions with **npm provenance**, so `npm view @termhub/agent` and `npm audit signatures` can tie each release to the public workflow that built it.
-- **The config file** `~/.termhub/config.json`, created with mode `0600` in a `0700` directory. It holds the server URL and the machine's token.
+- **The config file** `~/.termhub/config.json`, created with mode `0600` in a `0700` directory. It holds the server URL and the machine id; next to it, `device-key.pem` (also `0600`) holds the machine's Ed25519 private key. An agent paired before 0.22.0 keeps its permanent token in `config.json` instead, until the machine is paired again.
 - **The service** (`termhub-agent service install`):
   - Linux: a systemd **user** unit, `systemctl --user`. Keeping it running after logout requires `loginctl enable-linger`.
   - macOS: a **LaunchAgent** in `~/Library/LaunchAgents`.
@@ -143,8 +143,11 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
   - CSRF double-submit on every state-changing request;
   - an Origin check on WebSockets.
 - **Machines:**
-  - each machine gets a 256-bit token (`thb_ag_…`) that is shown once; the server stores only its SHA-256;
-  - **rotating the token or deleting the machine drops the live connection immediately** (close 4401), and the agent stops retrying.
+  - the app shows a 256-bit pairing token (`thb_ag_…`) once; it works **once**, for **15 minutes**, and the server stores only its SHA-256;
+  - `termhub-agent connect` generates an Ed25519 key pair on the machine and trades the pairing token plus the public key for the machine; the token is burnt and the private key never leaves the machine;
+  - every connection then proves possession: the server sends a fresh nonce in the handshake and the agent signs `nonce ‖ machine id ‖ timestamp`. A token leaked from a terminal, a screenshot or a shell history is useless once used; a stolen `~/.termhub` directory is still a risk;
+  - machines paired before (agent < 0.22.0) keep their permanent bearer token until someone uses "Parear de novo"; the app marks them and asks to update;
+  - **"Parear de novo" or deleting the machine drops the live connection immediately** (close 4401), revokes the key (or the old token), and the agent stops retrying.
 - **Phones:**
   - enrolment is approved by the owner on the web, and the same code is shown on both screens;
   - the phone holds a P-256 key in the platform keystore and signs every request with it (DPoP, ES256);
@@ -192,7 +195,7 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 
 | To cut off… | Do this | Effect |
 |---|---|---|
-| A machine | Máquinas › the machine › rotate the token, or delete the machine | The live connection closes at once with 4401; the agent exits and its service stops retrying. |
+| A machine | Máquinas › the machine › Agente › Parear de novo, or delete the machine | The live connection closes at once with 4401; the agent exits and its service stops retrying. |
 | An API token | Settings › API tokens › revoke | The next call is refused. |
 | A phone | Settings › Devices › revoke | Its WebSocket closes with 4401 and its tokens are refused. |
 | A chat grant | the grant's "revoke" button (web or phone) | The next action asks again. |
@@ -215,12 +218,12 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 7. **Test from the machine:**
    ```bash
    npm i -g @termhub/agent                # reaches registry.npmjs.org
-   termhub-agent connect --url https://app.termhub.dev --token <token from the app>
-   termhub-agent doctor                   # "✓ Servidor" = token, TLS and WebSocket all got through
+   termhub-agent connect --url https://app.termhub.dev --token <pairing token from the app>
+   termhub-agent doctor                   # "✓ Servidor" = credential, TLS and WebSocket all got through
    termhub-agent status                   # "conectado ✓"
    curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://termhub.dev/api/hooks/events   # 401 = hooks host reachable
    ```
-   `doctor` and `status` open a real WebSocket to `/agent/ws` with `probe: true`. The server validates the token and answers "probe-ok" without taking over the live session.
+   `doctor` and `status` open a real WebSocket to `/agent/ws` with `probe: true`. The server checks the credential (the signed nonce, or the old token) and answers "probe-ok" without taking over the live session. Pairing rides the same `/agent/ws` path, so a firewall or Access rule that lets the agent through needs nothing else.
 
 ## Known limitations
 
@@ -232,7 +235,7 @@ These are open gaps, each tracked on the termhub board:
 - Sessions last 30 days with no idle timeout, and there is no "sign out everywhere" (TER-580).
 - Chat messages, proposed commands, the agent's last answers and chat attachments are stored unencrypted in the database or on disk, with no retention limit; they are deleted with the conversation, project or user (TER-582).
 - The app sends `nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy`, but no HSTS or CSP of its own (TER-579).
-- The agent token does not expire until it is rotated, and deleting a machine in the app does not uninstall the agent on the machine (TER-584).
+- Deleting a machine in the app does not uninstall the agent on the machine (TER-584). Machines paired before agent 0.22.0 keep a permanent token until they are paired again (TER-1017).
 - `termhub-agent doctor` checks the agent connection only, not the hooks and MCP host (TER-586).
 
 ## Evidence
@@ -241,7 +244,7 @@ Paths are relative to the repository root.
 
 | Claim | Where |
 |---|---|
-| Agent dials `wss://<url>/agent/ws` with a bearer token; 20 s ping; 15 s handshake timeout; 1–30 s backoff; no proxy agent | `apps/agent/src/client.ts` |
+| Agent dials `wss://<url>/agent/ws` with a signed nonce (device key) or, before 0.22.0, a bearer token; 20 s ping; 15 s handshake timeout; 1–30 s backoff; no proxy agent | `apps/agent/src/client.ts` |
 | Agent has no listening socket; loopback-only TCP to WDA port ranges | `apps/agent/src/tcp.ts`, `packages/agent-protocol/src/rpc.ts` (`isWdaPort`), `packages/agent-protocol/src/messages.ts` (`tcpOpenParams`) |
 | Closed list of agent operations | `apps/agent/src/rpc/index.ts`, `packages/agent-protocol/src/rpc.ts` |
 | Config file `0600`/`0700` | `apps/agent/src/config.ts` |
@@ -254,7 +257,7 @@ Paths are relative to the repository root.
 | Web uses same-origin API and WebSockets only; no third-party scripts in `index.html` | `apps/web/src/lib/api.ts`, `apps/web/src/lib/terminal-connection.ts`, `apps/web/index.html` |
 | Google Analytics (Firebase SDK) loads only after cookie consent, and not at all without `VITE_FIREBASE_*` | `apps/web/src/lib/analytics.ts`, `apps/web/src/lib/consent.ts` |
 | Mobile base URL `termhub.dev`; DPoP ES256; hardware key; PIN proof | `apps/mobile/src/services/api/config.ts`, `apps/mobile/src/services/api/dpop.ts`, `apps/mobile/src/services/key/`, `apps/server/src/mobile/` |
-| Agent token: 256 bits, SHA-256 stored; rotate/delete closes with 4401 | `apps/server/src/agent/token.ts`, `apps/server/src/routes/machines.ts` |
+| Pairing token: 256 bits, SHA-256 stored, single use, 15 min; Ed25519 device key and nonce proof; pair again/delete closes with 4401 | `packages/agent-protocol/src/auth.ts`, `apps/server/src/agent/token.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/routes/machines.ts`, `apps/agent/src/device-key.ts`, `apps/agent/src/commands/connect.ts` |
 | Sessions, cookies, CSRF | `apps/server/src/auth/tokens.ts`, `apps/server/src/auth/routes.ts`, `apps/server/src/auth/middleware.ts` |
 | argon2id parameters | `apps/server/src/auth/password.ts` |
 | Login codes and lockout | `apps/server/src/auth/service.ts`, `apps/server/src/db/repositories/login-attempts.ts` |

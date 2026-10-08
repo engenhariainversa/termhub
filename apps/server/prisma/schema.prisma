@@ -195,9 +195,17 @@ model Machine {
   os           String?
   capabilities Json      @default("[]")
   checkedAt    DateTime? @map("checked_at")
-  /// agent transport: sha256 of the enrollment token (null for local/ssh); the token itself is never stored
+  /// agent transport, legacy bearer: sha256 of the permanent token agents paired before TER-1017 dial with
+  /// (null once the machine is paired again); the token itself is never stored
   agentTokenHash      String?   @unique @map("agent_token_hash")
+  /// when the app last minted a token for this machine (legacy bearer or pairing)
   agentTokenCreatedAt DateTime? @map("agent_token_created_at")
+  /// TER-1017: sha256 of the single-use pairing token the app showed, and when it stops being accepted
+  agentPairingHash      String?   @unique @map("agent_pairing_hash")
+  agentPairingExpiresAt DateTime? @map("agent_pairing_expires_at")
+  /// TER-1017: the agent's Ed25519 device key (base64 SPKI DER); every dial signs the server's nonce with its pair
+  agentPublicKey      String?   @map("agent_public_key")
+  agentPairedAt       DateTime? @map("agent_paired_at")
   agentVersion        String?   @map("agent_version")
   agentLastSeenAt     DateTime? @map("agent_last_seen_at")
   /// Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts)

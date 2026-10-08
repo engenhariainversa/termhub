@@ -8,15 +8,24 @@ import {
   PROTOCOL_VERSION,
   decodeFrame,
   encodeFrame,
+  handshakeMessage,
   serverMessage,
+  DEVICE_AUTH_SCHEME,
   type AgentMessage,
+  type HandshakeMessage,
   type HelloMessage,
   type ServerMessage,
 } from '@termhub/agent-protocol';
+import { signChallenge, type DeviceKey } from './device-key.js';
 
 export interface ClientOptions {
   url: string;
-  token: string;
+  /** Bearer dial: the legacy permanent token, or a pairing token on `connect`. Ignored when `device` is set. */
+  token?: string;
+  /** Device-key dial (TER-1017): wait for the server's `challenge` and answer it in the hello's `proof`. */
+  device?: { machineId: string; key: DeviceKey };
+  /** Handshake messages after the hello (`paired`, on a pairing dial). */
+  onHandshake?(msg: HandshakeMessage): void;
   hello: Omit<HelloMessage, 'type' | 'protocol'>;
   onServerMessage(msg: ServerMessage, conn: AgentSocket): void;
   onStream(ch: number, data: Buffer): void;
@@ -126,11 +135,14 @@ export function connectOnce(
     const wsUrl = deriveWsUrl(opts.url);
     // `handshakeTimeout` makes `ws` abort with the error "Opening handshake has timed out", which the
     // 'error' handler below turns into a rejection, so runForever() backs off and tries again.
+    const authorization = opts.device ? `${DEVICE_AUTH_SCHEME} ${opts.device.machineId}` : `Bearer ${opts.token ?? ''}`;
     const ws = new WebSocket(wsUrl, {
-      headers: { Authorization: `Bearer ${opts.token}` },
+      headers: { Authorization: authorization },
       handshakeTimeout: opts.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS,
     });
     let opened = false;
+    /** The hello went out and the promise resolved; a device dial only gets there after the challenge. */
+    let helloSent = false;
     let socket: AgentSocket | undefined;
 
     const onAbort = () => {
@@ -162,6 +174,7 @@ export function connectOnce(
       const info = { code, reason: reasonBuf.toString() };
       resolveClosed(info);
       if (!opened) reject(new Error(`connection closed before open (code ${code})`));
+      else if (!helloSent) reject(new Error(`connection closed before hello (code ${code})`));
     });
 
     ws.on('unexpected-response', (_req, res) => {
@@ -203,11 +216,18 @@ export function connectOnce(
         },
         bufferedAmount: () => ws.bufferedAmount,
       };
-      const hello: HelloMessage = { type: 'hello', protocol: PROTOCOL_VERSION, ...opts.hello };
+      // A device dial answers the server's challenge first (see the control handler below).
+      if (!opts.device) sendHello();
+    });
+
+    const sendHello = (proof?: HelloMessage['proof']) => {
+      if (!socket || helloSent) return;
+      const hello: HelloMessage = { type: 'hello', protocol: PROTOCOL_VERSION, ...opts.hello, ...(proof ? { proof } : {}) };
       socket.sendControl(hello);
+      helloSent = true;
       opts.onConnect?.();
       resolve({ socket, closed });
-    });
+    };
 
     ws.on('message', (data: RawData) => {
       if (!socket) return; // messages cannot arrive before 'open', but keep TS and defense-in-depth happy
@@ -227,6 +247,17 @@ export function connectOnce(
           opts.log('dropped non-JSON control message');
           return;
         }
+        const handshake = handshakeMessage.safeParse(parsed);
+        if (handshake.success) {
+          if (handshake.data.type === 'challenge') {
+            if (opts.device) sendHello(signChallenge(opts.device.key, handshake.data.nonce, opts.device.machineId));
+          } else {
+            opts.onHandshake?.(handshake.data);
+          }
+          return;
+        }
+        // Nothing but the challenge may come before the hello.
+        if (!helloSent) return;
         const result = serverMessage.safeParse(parsed);
         if (!result.success) {
           opts.log('dropped invalid server message', { issues: result.error.issues.length });

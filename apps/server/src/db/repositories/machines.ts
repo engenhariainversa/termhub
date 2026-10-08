@@ -54,8 +54,46 @@ export class MachinesRepository {
     return m && m.type === 'agent' ? mapMachine(m) : undefined;
   }
 
-  async rotateAgentToken(id: string, hash: string): Promise<void> {
-    await this.db.machine.updateMany({ where: { id, type: 'agent' }, data: { agentTokenHash: hash, agentTokenCreatedAt: new Date() } });
+  /**
+   * "Pair again" (TER-1017): stores a fresh single-use pairing token and revokes whatever the agent proved
+   * itself with until now — the device key and the legacy bearer token alike.
+   */
+  async startAgentPairing(id: string, hash: string, expiresAt: Date): Promise<void> {
+    await this.db.machine.updateMany({
+      where: { id, type: 'agent' },
+      data: {
+        agentPairingHash: hash,
+        agentPairingExpiresAt: expiresAt,
+        agentTokenCreatedAt: new Date(),
+        agentTokenHash: null,
+        agentPublicKey: null,
+        agentPairedAt: null,
+      },
+    });
+  }
+
+  /** The agent machine a pairing token still opens: unused and not expired. */
+  async findByPairingHash(hash: string, now = new Date()): Promise<Machine | undefined> {
+    const m = await this.db.machine.findUnique({ where: { agentPairingHash: hash }, include: withOwner });
+    return m && m.type === 'agent' && m.agentPairingExpiresAt && m.agentPairingExpiresAt > now ? mapMachine(m) : undefined;
+  }
+
+  /**
+   * Burns the pairing token and stores the device key, in one conditional write: of two dials racing with
+   * the same token, only one finds it still there. False when the token was used, expired or rotated.
+   */
+  async completeAgentPairing(id: string, hash: string, publicKey: string, now = new Date()): Promise<boolean> {
+    const { count } = await this.db.machine.updateMany({
+      where: { id, type: 'agent', agentPairingHash: hash, agentPairingExpiresAt: { gt: now } },
+      data: { agentPairingHash: null, agentPairingExpiresAt: null, agentPublicKey: publicKey, agentPairedAt: now, agentTokenHash: null },
+    });
+    return count === 1;
+  }
+
+  /** The machine and its device key, for a `TermhubDevice` dial; undefined when it has none. */
+  async findDeviceKey(id: string): Promise<{ machine: Machine; publicKey: string } | undefined> {
+    const m = await this.db.machine.findUnique({ where: { id }, include: withOwner });
+    return m && m.type === 'agent' && m.agentPublicKey ? { machine: mapMachine(m), publicKey: m.agentPublicKey } : undefined;
   }
 
   /** Written on hello and once a minute while connected. */

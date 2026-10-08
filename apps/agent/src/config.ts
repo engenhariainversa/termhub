@@ -5,18 +5,29 @@ import { z } from 'zod';
 
 const CONFIG_FILE = 'config.json';
 
-export const agentConfigSchema = z.object({
-  url: z.string().min(1),
-  token: z.string().min(1),
-  // The server does not hand the agent its machine id/name in v1 (see task-13); `connect`
-  // stores '' for both until a later protocol version fills them in, so these can't require
-  // min(1) like the other fields.
-  machine_id: z.string(),
-  machine_name: z.string(),
-  created_at: z.string().min(1),
-});
+export const agentConfigSchema = z
+  .object({
+    url: z.string().min(1),
+    /**
+     * How this agent proves itself (TER-1017). `key`: the device key in `device-key.pem`, paired with a
+     * single-use token; `bearer`: the permanent `thb_ag_` token in `token`, what every config written
+     * before 0.22.0 holds (hence the default) and what `connect` still saves against an older server.
+     */
+    credential: z.enum(['bearer', 'key']).default('bearer'),
+    token: z.string().min(1).optional(),
+    // A bearer pairing never learns its machine (the server does not say), so these stay '' there;
+    // a key pairing gets both from the server's `paired` answer, and needs the id to dial.
+    machine_id: z.string(),
+    machine_name: z.string(),
+    created_at: z.string().min(1),
+  })
+  .refine((c) => (c.credential === 'key' ? c.machine_id.length > 0 : c.token !== undefined), {
+    message: 'a bearer config needs its token, a key config its machine id',
+  });
 
 export type AgentConfig = z.infer<typeof agentConfigSchema>;
+/** What `writeConfig` takes: `credential` may be left out for a bearer config. */
+export type AgentConfigInput = z.input<typeof agentConfigSchema>;
 
 /** `$TERMHUB_AGENT_HOME`, or `~/.termhub` — where the agent keeps its config file. */
 export function agentHome(): string {
@@ -50,7 +61,7 @@ export function readConfig(): AgentConfig | null {
 }
 
 /** Writes the config atomically (temp file + rename) with restrictive permissions (dir 0700, file 0600). */
-export function writeConfig(config: AgentConfig): void {
+export function writeConfig(config: AgentConfigInput): void {
   const home = agentHome();
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
   // mkdirSync's mode is masked by the process umask, so force it explicitly.

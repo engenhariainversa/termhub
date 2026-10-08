@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { rpcErrorSchema, rpcMethod, sessionName, machinePath, wdaPort } from './rpc.js';
+import { helloPair, helloProof } from './auth.js';
 
 export const PROTOCOL_VERSION = 1;
 export const CLOSE = { UNAUTHORIZED: 4401, CONFLICT: 4409, VIOLATION: 1008 } as const;
@@ -101,6 +102,10 @@ export const helloMessage = z.object({
   // rather than failing validation or coming back `undefined`. The server decides whether it
   // may open a `claude` channel from this list, before it ever tries.
   capabilities: z.array(z.string().max(64)).max(32).default([]),
+  /** Pairing dial (`connect`, TER-1017): the device key to store in exchange for the pairing token. See `auth.ts`. */
+  pair: helloPair.optional(),
+  /** Device-key dial: the signed answer to the server's `challenge`. See `auth.ts`. */
+  proof: helloProof.optional(),
 });
 
 // zod's discriminatedUnion rejects two members with the same 'type' literal, so the

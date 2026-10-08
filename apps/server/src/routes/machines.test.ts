@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn(), spawn: vi.fn() }));
 
-import { CLOSE } from '@termhub/agent-protocol';
+import { CLOSE, PAIRING_TTL_MS } from '@termhub/agent-protocol';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, MachineType } from '../db/repositories/types.js';
 import { applyErrorHandler } from '../lib/errors.js';
@@ -67,9 +67,10 @@ function buildApp(
     store[m.id] = m;
     return m;
   });
-  const rotateAgentToken = vi.fn(async (id: string, hash: string) => {
-    if (store[id]) store[id] = { ...store[id], agent_version: store[id].agent_version };
+  const startAgentPairing = vi.fn(async (id: string, hash: string, expiresAt: Date) => {
+    void id;
     void hash;
+    void expiresAt;
   });
   const update = vi.fn(async (id: string, patch: Partial<Machine>) => {
     store[id] = { ...store[id], ...patch } as Machine;
@@ -101,7 +102,7 @@ function buildApp(
       findById: async (id: string) => store[id],
       list: async () => Object.values(store),
       create,
-      rotateAgentToken,
+      startAgentPairing,
       update,
       delete: del,
     },
@@ -111,7 +112,7 @@ function buildApp(
   } as unknown as Repositories;
 
   app.register((instance) => machineRoutes(instance, repos), { prefix: '/api/machines' });
-  return { app, repos: { create, rotateAgentToken, update, delete: del, machineHooks, revokeForTabs } };
+  return { app, repos: { create, startAgentPairing, update, delete: del, machineHooks, revokeForTabs } };
 }
 
 let app: FastifyInstance;
@@ -169,12 +170,17 @@ describe('POST /api/machines (agent enrollment)', () => {
     expect(body.machine.host).toBeNull();
   });
 
-  it('rotateAgentToken is called with the hash of the returned token', async () => {
+  it('stores the hash of the returned token as a pairing token valid for 15 minutes (TER-1017)', async () => {
     const built = buildApp(store);
     app = built.app;
+    const before = Date.now();
     const res = await app.inject({ method: 'POST', url: '/api/machines', payload: { name: 'agent-box', type: 'agent' } });
     const body = res.json();
-    expect(built.repos.rotateAgentToken).toHaveBeenCalledWith(body.machine.id, hashAgentToken(body.agent_token));
+    expect(built.repos.startAgentPairing).toHaveBeenCalledWith(body.machine.id, hashAgentToken(body.agent_token), expect.any(Date));
+    const expiresAt = new Date(body.agent_token_expires_at).getTime();
+    expect(expiresAt - before).toBeGreaterThanOrEqual(PAIRING_TTL_MS - 1000);
+    expect(expiresAt - before).toBeLessThanOrEqual(PAIRING_TTL_MS + 1000);
+    expect((built.repos.startAgentPairing.mock.calls[0][2] as Date).toISOString()).toBe(body.agent_token_expires_at);
   });
 
   it('rejects an agent machine with a host set (400)', async () => {
@@ -211,7 +217,8 @@ describe('POST /api/machines/:id/agent-token (rotation)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(AGENT_TOKEN_RE.test(body.agent_token)).toBe(true);
-    expect(built.repos.rotateAgentToken).toHaveBeenCalledWith('m1', hashAgentToken(body.agent_token));
+    expect(built.repos.startAgentPairing).toHaveBeenCalledWith('m1', hashAgentToken(body.agent_token), expect.any(Date));
+    expect(typeof body.agent_token_expires_at).toBe('string');
     expect(disconnect).toHaveBeenCalledWith('m1', CLOSE.UNAUTHORIZED, 'rotated');
   });
 

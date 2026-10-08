@@ -103,6 +103,12 @@ export interface Machine {
   /** TER-735: the AI accounts' usage is queried on this machine (the credential never leaves it); off = no bars */
   ai_usage_query: boolean;
   automation_allowed: boolean;
+  /**
+   * TER-1017: how the agent proves itself. `key` = device key paired through a single-use token; `bearer` =
+   * the permanent token of agents paired before (valid until the machine is paired again); null = not paired.
+   * Absent from servers before it.
+   */
+  agent_credential?: 'key' | 'bearer' | null;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */

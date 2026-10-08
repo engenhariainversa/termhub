@@ -19,7 +19,8 @@ vi.mock('./service/launchd.js', async (importOriginal) => {
 });
 
 import { ProtocolMismatchError, RevokedError } from './client.js';
-import { capabilitiesFor, checkServerConnection, runAgent } from './run.js';
+import { capabilitiesFor, checkServerConnection, dialCredentials, MISSING_KEY_MESSAGE, runAgent } from './run.js';
+import { generateDeviceKey } from './device-key.js';
 
 const TOKEN = 'thb_ag_' + 'a'.repeat(43);
 
@@ -77,6 +78,21 @@ describe('capabilitiesFor', () => {
     expect(capabilitiesFor('macos')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'sim']));
     expect(capabilitiesFor('linux')).not.toContain('sim');
     expect(capabilitiesFor('linux')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'transcript', 'file_read', 'file_list', 'worktree']));
+  });
+});
+
+describe('dialCredentials (TER-1017)', () => {
+  it('a bearer config dials with its token', () => {
+    expect(dialCredentials({ credential: 'bearer', token: 'thb_ag_x', machine_id: '' })).toEqual({ token: 'thb_ag_x' });
+  });
+
+  it('a key config dials with the machine id and the device key', () => {
+    const key = generateDeviceKey();
+    expect(dialCredentials({ credential: 'key', machine_id: 'm-42' }, () => key)).toEqual({ device: { machineId: 'm-42', key } });
+  });
+
+  it('a key config whose key file is gone cannot dial', () => {
+    expect(dialCredentials({ credential: 'key', machine_id: 'm-42' }, () => null)).toEqual({ error: MISSING_KEY_MESSAGE });
   });
 });
 
@@ -157,7 +173,7 @@ describe('runAgent — terminal errors (exit 78)', () => {
   it('on RevokedError prints the pt-BR message, stops the launchd restart loop, then exits 78', async () => {
     runForeverMock.mockRejectedValue(new RevokedError('revoked'));
     await expect(runAgent(config, { log: () => {} })).rejects.toThrow('__process_exit_78__');
-    expect(errors.join('\n')).toContain('Token revogado');
+    expect(errors.join('\n')).toContain('Acesso revogado');
     expect(stopRestartLoopMock).toHaveBeenCalledTimes(1);
     expect(exitCodes).toEqual([78]);
     // Order matters: the message must be on stderr before the job is booted out (bootout may
