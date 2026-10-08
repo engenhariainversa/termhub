@@ -14,6 +14,8 @@
   "enviando anexo…": "uploading attachment…",
   "Remova o anexo inválido para enviar": "Remove the invalid attachment to send",
   "Permissão da galeria negada": "Gallery permission denied",
+  "Permissão da câmera negada": "Camera permission denied",
+  "Não foi possível abrir a câmera": "Could not open the camera",
   "Não foi possível esquecer a decisão": "Could not forget the decision",
   "A resposta automática já foi enviada.": "The automatic answer has already been sent.",
   "O concierge não conseguiu começar a resposta. Tente de novo.": "The concierge could not start the answer. Try again.",

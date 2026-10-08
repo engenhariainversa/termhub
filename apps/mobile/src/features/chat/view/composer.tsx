@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
+import { Keyboard, Pressable, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { MAX_ATTACHMENTS_PER_MESSAGE, type TChatAttachment } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
@@ -11,7 +11,7 @@ import { useVoice, type RecordedClip } from '../viewmodel/use-voice';
 import { useVoiceNote, type VoiceNote } from '../viewmodel/use-voice-note';
 import type { ReplyRef } from '../model/reply';
 import { AttachmentChip } from './attachment-chip';
-import { AttachmentMenu, type MenuAnchor } from './attachment-menu';
+import { AttachmentMenu } from './attachment-menu';
 import { RecordingWave } from './recording-wave';
 import { ReplyPreview } from './reply-preview';
 
@@ -198,7 +198,7 @@ function HoldMic({ note, disabled }: { note: VoiceNote; disabled: boolean }) {
  * goes into the box as an audio chip and leaves on its own, without text, once it has uploaded; the
  * server transcribes it like any audio attachment. A failed upload leaves the chip, to retry or send.
  *
- * + opens the attachment menu above it, which also holds dictation ("Ditar"; the phone's keyboard has
+ * + opens the attachment sheet from the bottom of the screen (the keyboard goes down first), which also holds dictation ("Ditar"; the phone's keyboard has
  * its own). While dictating, the whole pill is the recording row (ChatGPT's):
  * ✕ drops the clip, the wave follows the microphone, ■ stops and puts the transcription in the box to
  * be read first (what dictation always did), and ↑ stops and sends the box with the transcription once
@@ -216,8 +216,9 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   // the text fit on one line again would flap, since the text gets wider when the buttons move out.
   const [wrapped, setWrapped] = useState(false);
   const [picking, setPicking] = useState(false);
-  const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
-  const attachRef = useRef<View>(null);
+  /** The box had the focus when + was tapped: closing the sheet without a choice gives it back. */
+  const focusedBeforeMenu = useRef(false);
+  const refocusAfterMenu = useRef(false);
   const inputRef = useRef<TextInput>(null);
   /** The box as last rendered, for the transcription callback (it runs outside React's render cycle). */
   const textRef = useRef(text);
@@ -353,11 +354,24 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   // No + while dictation holds the microphone or its clip: the menu's recorder would release the
   // audio session under it (one recorder at a time), and five chips is the message's limit.
   const attachOff = disabled || attachments.drafts.length >= MAX_CHIPS || voice.state === 'starting' || recording || busy || note.state !== 'idle';
+  // The sheet stands on the bottom edge of the screen, so the keyboard goes down first, on purpose,
+  // and nothing depends on where it was (TER-1041).
   const openMenu = () => {
-    // Where the button is now (the pill moves with the keyboard); unmeasured, the menu uses a default place.
-    attachRef.current?.measureInWindow((x, y) => setAnchor({ x, y }));
+    focusedBeforeMenu.current = inputRef.current?.isFocused() ?? false;
+    refocusAfterMenu.current = false;
+    Keyboard.dismiss();
     setPicking(true);
   };
+  const closeMenu = (chose: boolean) => {
+    refocusAfterMenu.current = !chose && focusedBeforeMenu.current;
+    focusedBeforeMenu.current = false;
+    setPicking(false);
+  };
+  const menuHidden = useCallback(() => {
+    if (!refocusAfterMenu.current) return;
+    refocusAfterMenu.current = false;
+    inputRef.current?.focus();
+  }, []);
 
   // The status line needs the row's middle, which the text covers while it shares the row.
   const stacked = wrapped || statusText !== '';
@@ -441,7 +455,6 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
               ) : (
                 <>
                   <Pressable
-                    ref={attachRef}
                     accessibilityRole="button"
                     accessibilityLabel={t('Anexar')}
                     accessibilityState={{ disabled: attachOff }}
@@ -511,9 +524,9 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
       ) : null}
       <AttachmentMenu
         open={picking}
-        anchor={anchor}
         room={Math.max(0, MAX_CHIPS - attachments.drafts.length)}
-        onClose={() => setPicking(false)}
+        onClose={closeMenu}
+        onHidden={menuHidden}
         onPicked={attachments.add}
         onDictate={voice.state === 'idle' ? voice.start : undefined}
       />
