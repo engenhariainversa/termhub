@@ -18,7 +18,6 @@ const TEST_COMMANDS = [
   'termhub-agent connect --url https://app.termhub.dev --token <token>',
   'termhub-agent doctor',
   'termhub-agent status',
-  "curl -sS -o /dev/null -w '%{http_code}\\n' -X POST https://termhub.dev/api/hooks/events",
 ];
 
 const HIGHLIGHT_ICONS = ['↗', '⊘', '≡', '✓', '⏻', '#', '◉', '▯', '⌁'];

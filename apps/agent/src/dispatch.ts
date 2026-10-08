@@ -127,6 +127,9 @@ export function createDispatcher(deps: DispatcherDeps): (msg: ServerMessage, soc
         deps.claude.close(msg.ch);
         deps.tcp.close(msg.ch);
         break;
+      case 'probe_info':
+        // Only a `probe` hello gets it (read by `checkServerConnection`); a live session never does.
+        break;
     }
   };
 }

@@ -5,7 +5,7 @@ describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
       'agent.uninstall', 'agent.update', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
-      'hooks.status', 'hooks.uninstall', 'hw.probe', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
+      'hooks.status', 'hooks.uninstall', 'hw.probe', 'net.check', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
     ]);
@@ -300,5 +300,17 @@ describe('file.list', () => {
     expect(RPC['file.list'].result.safeParse({ entries: Array(FILE_LIST_MAX_ENTRIES + 1).fill(entry) }).success).toBe(false);
     expect(RPC['file.list'].result.safeParse({ entries: [{ ...entry, too_large: undefined }] }).success).toBe(false);
     expect(RPC['file.list'].result.safeParse({ entries: [{ ...entry, size: -1 }] }).success).toBe(false);
+  });
+});
+
+describe('net.check', () => {
+  it('takes one to four http(s) urls', () => {
+    expect(RPC['net.check'].params.safeParse({ urls: ['https://termhub.dev/api/hooks/events', 'http://localhost:3000/mcp'] }).success).toBe(true);
+    expect(RPC['net.check'].params.safeParse({ urls: [] }).success).toBe(false);
+    expect(RPC['net.check'].params.safeParse({ urls: Array(5).fill('https://termhub.dev/mcp') }).success).toBe(false);
+    expect(RPC['net.check'].params.safeParse({ urls: ['file:///etc/passwd'] }).success).toBe(false);
+  });
+  it('answers a status or an error per url', () => {
+    expect(RPC['net.check'].result.safeParse({ results: [{ url: 'https://termhub.dev/mcp', status: 401, error: null }, { url: 'https://x', status: null, error: 'ENOTFOUND' }] }).success).toBe(true);
   });
 });
