@@ -88,9 +88,9 @@ describe('Composer attachments', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
     await fireEvent.press(screen.getByRole('button', { name: 'Remover relatorio.pdf' }));
     await waitFor(() => expect(props.deleteAttachment).toHaveBeenCalledWith('att1'));
-    // Nothing typed and no chips: the one round button is the microphone again (A9's rule).
+    // Nothing typed and no chips: the one round button is the microphone again (TER-1036).
     expect(screen.queryByRole('button', { name: 'Enviar' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Ditar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Gravar áudio' })).toBeTruthy();
   });
 
   it('picks photos and videos from the gallery at quality 0.8 and shows an image chip with its thumbnail', async () => {
@@ -104,17 +104,19 @@ describe('Composer attachments', () => {
     expect(props.uploadAttachment).toHaveBeenCalledWith(expect.objectContaining({ name: 'foto.jpg', mime: 'image/jpeg' }), expect.any(Function));
   });
 
-  it('offers audio recording in the sheet', async () => {
+  it('offers dictation in the sheet: Ditar closes it and starts dictating into the box (TER-1036)', async () => {
     await renderComposer();
     await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
-    expect(screen.getByRole('button', { name: 'Gravar áudio' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ditar' }));
+    expect(mockVoice.start).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Arquivo' })).toBeNull();
   });
 
-  it('closing the sheet cancels a recording that may still be opening the microphone', async () => {
+  it('has no Ditar in the sheet when the server does not transcribe', async () => {
+    mockVoice.state = 'off';
     await renderComposer();
     await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Fechar' }));
-    expect(mockRecorder.cancel).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Ditar' })).toBeNull();
   });
 
   it.each(['starting', 'uploading', 'transcribing'] as const)('+ is disabled while dictation is %s (one recorder at a time)', async (state) => {
@@ -133,7 +135,7 @@ describe('Composer attachments', () => {
   it('+ opens the menu with the three ways in, each a labelled button, and a tap outside closes it', async () => {
     await renderComposer();
     await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
-    for (const name of ['Foto ou vídeo', 'Arquivo', 'Gravar áudio']) expect(screen.getByRole('button', { name })).toBeTruthy();
+    for (const name of ['Foto ou vídeo', 'Arquivo', 'Ditar']) expect(screen.getByRole('button', { name })).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Fechar' }));
     expect(screen.queryByRole('button', { name: 'Arquivo' })).toBeNull();
   });

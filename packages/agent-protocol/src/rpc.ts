@@ -11,6 +11,8 @@ export const pasteName = z.string().min(1).max(255).regex(/^[A-Za-z0-9._-]+$/);
  *  `docs/lessons/README.md` (the format's own doc, not a lesson). */
 export const DOC_PATH_RE = /^docs\/(?:superpowers\/(?:specs|plans)\/[A-Za-z0-9._-]{1,200}\.md|lessons\/(?!README\.md$)[A-Za-z0-9._-]{1,200}\.md)$/;
 export const docPath = z.string().regex(DOC_PATH_RE);
+/** An npm `dist.integrity` in SHA-512 form: `sha512-` plus the base64 of the 64-byte digest. */
+export const SHA512_INTEGRITY_RE = /^sha512-[A-Za-z0-9+/]{86}==$/;
 export const aiProvider = z.enum(['claude', 'chatgpt', 'gemini', 'antigravity']);
 
 /** One usage window of an AI account (`ai.usage`); mirrors @termhub/machine-ops AiUsageWindow. */
@@ -93,6 +95,9 @@ export const rpcErrorSchema = z.object({
   path: z.string().max(4096).optional(),
 });
 export type RpcError = z.infer<typeof rpcErrorSchema>;
+
+/** Our hook entries in one config file (`HookEntriesState` in @termhub/machine-ops). */
+const hookEntriesState = z.enum(['missing', 'outdated', 'current', 'unreadable']);
 
 const DEFAULT_TIMEOUT = 8_000;
 const def = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(params: P, result: R, timeoutMs = DEFAULT_TIMEOUT) => ({ params, result, timeoutMs });
@@ -300,12 +305,36 @@ export const RPC = {
     15_000,
   ),
   'hooks.uninstall': def(z.object({ claude_dirs: z.array(machinePath).max(16).optional() }), z.object({ removed: z.boolean() }), 15_000),
-  /** Installs `version` of @termhub/agent with npm; when the agent runs as a service it then exits so the service relaunches the new code (since agent 0.2.1). */
+  /**
+   * What the monitor hooks look like here (`hooksStatus` in @termhub/machine-ops, TER-1023): states only,
+   * never a file's content or the token. `claude_dirs` as in `hooks.install`. Since agent 0.21.0.
+   */
+  'hooks.status': def(
+    z.object({ claude_dirs: z.array(machinePath).max(16).optional() }),
+    z.object({
+      script: z.object({ installed: z.boolean(), version: z.string().max(64).nullable(), expected_version: z.string().max(64), outdated: z.boolean() }),
+      claude: z.object({ present: z.boolean(), state: hookEntriesState, dirs: z.array(z.object({ dir: z.string().max(4096), state: hookEntriesState })).max(64) }),
+      codex: z.object({ present: z.boolean(), state: hookEntriesState, notify: z.boolean(), trusted: z.enum(['all', 'some', 'none']).nullable() }),
+      cursor: z.object({ present: z.boolean(), state: hookEntriesState }),
+    }),
+    15_000,
+  ),
+  /**
+   * Installs `version` of @termhub/agent with npm; when the agent runs as a service it then exits so the service relaunches the new code (since agent 0.2.1).
+   * `integrity`: the `sha512-…` the server verified against the release's provenance (spec 2026-10-07 agent release trust). Since agent 0.22.0
+   * the agent downloads the tarball, checks it against this and installs that file; older agents strip the field and install by version.
+   */
   'agent.update': def(
-    z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/) }),
+    z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/), integrity: z.string().regex(SHA512_INTEGRITY_RE).optional() }),
     z.object({ installed_version: z.string(), restart: z.enum(['service', 'manual']) }),
     180_000,
   ),
+  /**
+   * "Uninstall from the machine" before the machine is deleted (since agent 0.22.0): removes the service definition, deletes the agent's
+   * config (its token), replies, then stops. `service`: whether a launchd/systemd service was there to remove. Hooks and tmux sessions
+   * are removed by the server through `hooks.uninstall` / `tmux.kill` first.
+   */
+  'agent.uninstall': def(z.object({}), z.object({ service: z.enum(['removed', 'none']) }), 30_000),
   /** iOS simulator over the agent (spec 2026-09-24): raw `xcrun simctl list devices -j`; the server parses it. */
   'sim.list': def(z.object({}), z.object({ stdout: z.string() }), 15_000),
   /** `xcrun simctl boot`; combined output, "already booted" included — the server decides what is a failure. */
@@ -340,7 +369,7 @@ export const RPC = {
    * From the machine, an empty POST without a token to each of `urls` (the monitor hooks and MCP
    * addresses, TER-586), redirects not followed. `status` is the HTTP answer (401 means the address
    * reaches termhub) or null with `error` when nothing answered: DNS, TLS, a refused or timed-out
-   * connection — what a firewall that only lets `/agent/ws` through looks like (since agent 0.21.0).
+   * connection — what a firewall that only lets `/agent/ws` through looks like (since agent 0.23.0).
    */
   'net.check': def(
     z.object({ urls: z.array(z.string().url().max(2048).regex(/^https?:\/\//)).min(1).max(4) }),

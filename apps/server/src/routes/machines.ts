@@ -1,23 +1,24 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { CLOSE } from '@termhub/agent-protocol';
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError, badRequest, conflict, forbidden, localizedOf } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
 import { isAdmin } from '../auth/permissions.js';
-import { machineStatus } from '../terminal/machine-exec.js';
+import { killTmuxSession, machineStatus } from '../terminal/machine-exec.js';
 import { listSimulators } from '../simulator/machine.js';
 import { startWdaSetup, wdaSetupState } from '../simulator/setup.js';
 import { browseMachine, makeDirectory } from '../terminal/machine-fs.js';
 import { collectHardware } from '../system/hardware.js';
 import { newAgentToken } from '../agent/token.js';
 import { agents } from '../agent/registry.js';
-import { isOutdated, latestAgentVersion, MIN_SELF_UPDATE_VERSION, runAgentUpdate } from '../agent/latest-version.js';
-import { agentRpc, requireAgentVersion, requireNetCheckCapable, requireSimCapable } from '../agent/errors.js';
+import { AGENT_UNINSTALL_MIN_VERSION, isOutdated, latestAgentRelease, latestAgentVersion, MIN_SELF_UPDATE_VERSION, runAgentUpdate } from '../agent/latest-version.js';
+import { AgentClosedError } from '../agent/connection.js';
+import { agentRpc, requireAgentVersion, requireNetCheckCapable, requireSimCapable, toHttpError } from '../agent/errors.js';
 import { config } from '../config.js';
-import { installHooks, uninstallHooks } from '../monitor/install.js';
-import { newHookToken } from '../monitor/token.js';
-import type { Machine } from '../db/repositories/types.js';
+import { uninstallHooks } from '../monitor/install.js';
+import { claudeAccountDirs, installMachineHooksOn } from '../monitor/machine-hooks.js';
+import type { Machine, Tab } from '../db/repositories/types.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved, publishTabsRemoved } from '../monitor/tab-events.js';
 import { msg, tk } from '../i18n/index.js';
@@ -25,6 +26,8 @@ import { recordMachineSwitch } from '../automation/setup-tools.js';
 import { audit } from '../auth/audit.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
+/** `?uninstall=1`: also remove the agent from the machine before deleting it (spec 2026-10-07 §3). */
+const deleteQuery = z.object({ uninstall: z.enum(['1', 'true', '0', 'false']).optional() });
 const fsQuery = z.object({ path: z.string().max(4096).optional() });
 const mkdirBody = z.object({ parent: z.string().min(1).max(4096), name: z.string().trim().min(1).max(255) });
 
@@ -63,13 +66,6 @@ const machineBody = z
       ctx.addIssue({ code: 'custom', path: ['agent_auto_update'], message: 'só máquinas com agente atualizam sozinhas' });
     }
   });
-
-/** Config dirs of the Claude accounts registered on the machine (CLAUDE_CONFIG_DIR): the hooks go there too. */
-async function claudeAccountDirs(repos: Repositories, machineId: string): Promise<string[]> {
-  return (await repos.aiAccounts.list())
-    .filter((a) => a.machine_id === machineId && a.provider === 'claude' && a.config_dir)
-    .map((a) => a.config_dir as string);
-}
 
 const ownerPatch = z.object({ owner_id: z.string().min(1).max(64).nullable().optional() });
 
@@ -175,11 +171,19 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     return { machine };
   });
 
+  /**
+   * Deletes the machine. With `?uninstall=1` (an online agent on 0.22.0+) it first removes what the agent
+   * left on the machine: the monitor hooks, the tmux sessions of its tabs (best effort) and, through
+   * `agent.uninstall`, the service definition and the agent's config (its token). A failure removing the
+   * hooks or the agent aborts before anything is deleted here, so the person can retry or skip the uninstall.
+   */
   app.delete('/:id', async (request) => {
     const { id } = idParam.parse(request.params);
+    const { uninstall } = deleteQuery.parse(request.query);
     const machine = await scoped(repos, request).machine(id);
     // The DB cascade removes this machine's project links and its own tabs; the projects survive.
     const tabs = await repos.tabs.listByMachine(id);
+    if (uninstall === '1' || uninstall === 'true') await uninstallFromMachine(machine, tabs, request.log);
     // the cascade bypasses TabsRepository.delete: the tabs' tokens are revoked here, before it
     await repos.apiTokens.revokeForTabs(tabs.map((t) => t.id));
     await repos.machines.delete(id);
@@ -289,18 +293,17 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
   app.post('/:id/hooks', { config: { action: 'update' } }, async (request) => {
     const { id } = idParam.parse(request.params);
     const machine = await scoped(repos, request).machine(id);
-    const { token, hash } = newHookToken();
-    let report;
+    let done;
     try {
-      report = await installHooks(machine, token, config.hooksUrl, await claudeAccountDirs(repos, machine.id));
+      done = await installMachineHooksOn(repos, machine);
     } catch (err) {
       // Agent failures (offline, outdated, what the machine reported) already carry their own status.
       if (err instanceof HttpError) throw err;
       throw conflict(err instanceof Error ? localizedOf(err) : tk('Instalação falhou'));
     }
-    const hook = await repos.machineHooks.upsert(machine.id, hash);
+    const { report, installed_at } = done;
     request.log.info({ machineId: machine.id, claude: report.claude, claudeDirs: report.claude_dirs.length, codex: report.codex, cursor: report.cursor }, 'monitor: hooks installed');
-    return { installed_at: hook.installed_at, hooks_url: report.hooks_url, claude: report.claude, codex: report.codex, cursor: report.cursor, claude_dirs: report.claude_dirs };
+    return { installed_at, hooks_url: report.hooks_url, claude: report.claude, codex: report.codex, cursor: report.cursor, claude_dirs: report.claude_dirs };
   });
 
   /** Removes the hooks from the machine and revokes its token. */
@@ -323,14 +326,43 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     const { id } = idParam.parse(request.params);
     const machine = await scoped(repos, request).machine(id);
     if (machine.type !== 'agent') throw badRequest('Só máquinas com agente são atualizadas por aqui');
-    const latest = latestAgentVersion();
+    // only a release whose provenance the server verified (agent/release-verify.ts)
+    const latest = latestAgentRelease();
     if (!latest) throw new HttpError(503, 'Versão mais nova do agente ainda desconhecida (npm)', 'AGENT_LATEST_UNKNOWN');
     const info = agents.info(machine.id);
     if (!info) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
-    if (!isOutdated(info.agent_version, latest)) throw conflict(msg('O agente já está na versão {{version}}', { version: info.agent_version }));
+    if (!isOutdated(info.agent_version, latest.version)) throw conflict(msg('O agente já está na versão {{version}}', { version: info.agent_version }));
     requireAgentVersion(machine, MIN_SELF_UPDATE_VERSION);
     return runAgentUpdate(machine.id, latest, request.log);
   });
+
+  /** The `?uninstall=1` part of DELETE /:id; throws (nothing deleted yet) when the hooks or the agent could not be removed. */
+  async function uninstallFromMachine(machine: Machine, tabs: Tab[], log: FastifyBaseLogger): Promise<void> {
+    if (machine.type !== 'agent') throw badRequest('Só máquinas com agente são desinstaladas por aqui');
+    if (!agents.info(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
+    requireAgentVersion(machine, AGENT_UNINSTALL_MIN_VERSION);
+    try {
+      await uninstallHooks(machine, await claudeAccountDirs(repos, machine.id));
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      throw conflict(err instanceof Error ? localizedOf(err) : tk('Remoção falhou'));
+    }
+    await repos.machineHooks.delete(machine.id);
+    const sessions = tabs.filter((t) => t.tmux_session);
+    const killed = await Promise.allSettled(sessions.map((t) => killTmuxSession(machine, t.tmux_session!)));
+    const sessionsKilled = killed.filter((r) => r.status === 'fulfilled' && r.value).length;
+    let service: 'removed' | 'none' | 'unknown';
+    try {
+      // agents.rpc rather than agentRpc: AgentClosedError must stay recognisable (agentRpc maps it to 503)
+      service = (await agents.rpc(machine.id, 'agent.uninstall', {})).service;
+    } catch (err) {
+      // The agent stops right after answering; a socket that closes first still means it went away.
+      if (!(err instanceof AgentClosedError)) throw toHttpError(err);
+      service = 'unknown';
+      log.info({ machineId: machine.id }, 'agent connection closed during uninstall (agent left)');
+    }
+    log.info({ machineId: machine.id, service, sessions: sessions.length, sessionsKilled }, 'agent uninstalled from the machine');
+  }
 
   /** Navegador de diretórios: subpastas de ?path (padrão $HOME) + discos/mounts da máquina. */
   app.get('/:id/fs', async (request) => {

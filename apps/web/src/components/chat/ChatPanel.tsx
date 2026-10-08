@@ -252,13 +252,25 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   useLayoutEffect(() => {
     thread.current = messages;
   }, [messages]);
+  /**
+   * Reads are numbered in the order they start. A snapshot is applied only when no later read has
+   * been applied, and "Nova conversa" passes over every read in flight: a read of the old conversation
+   * that answers after the reset must not bring the archived thread back (TER-468). A later read is
+   * always at least as fresh, so the dropped one loses nothing.
+   */
+  const readSeq = useRef(0);
+  const appliedSeq = useRef(0);
 
   const load = useCallback(async () => {
     // No project = the account-wide chat: called with no argument, because the response must be
     // `request<...>('GET', '/chat')` exactly — a server that predates project chats knows nothing else.
     const arrived = new Set<string>();
     reads.current.add(arrived);
-    const { conversation, messages, open_answer_ids, actions, host, grants, project_grants, standing_grants, tab_questions, tab_suggestions, tab_limits, subagents, compacting } = await (projectId ? api.chat(projectId) : api.chat()).finally(() => reads.current.delete(arrived));
+    const seq = ++readSeq.current;
+    const snapshot = await (projectId ? api.chat(projectId) : api.chat()).finally(() => reads.current.delete(arrived));
+    if (seq <= appliedSeq.current) return;
+    appliedSeq.current = seq;
+    const { conversation, messages, open_answer_ids, actions, host, grants, project_grants, standing_grants, tab_questions, tab_suggestions, tab_limits, subagents, compacting } = snapshot;
     // The same conversation: the snapshot merges into the thread, so a row that ended or was removed
     // while this read was in flight is not brought back, and a row the server deleted leaves and is
     // closed (its started mark must not outlive it). Another one (a reset, another project) replaces
@@ -854,6 +866,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     try {
       if (mode === 'delete') await api.deleteChat(projectId);
       else await api.resetChat(projectId);
+      // Every read started before this point may answer with the archived conversation.
+      appliedSeq.current = readSeq.current;
       setConfirmReset(null);
       setActions([]);
       setQueuedNotes({});

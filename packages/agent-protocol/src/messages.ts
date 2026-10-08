@@ -76,7 +76,7 @@ export const CAPABILITY_FILE_LIST = 'file_list';
  *  and MCP addresses, so the machine screen says whether the firewall lets them through. The server
  *  requires it before the call; an older agent drops an unknown RPC, which would read as a timeout. */
 export const CAPABILITY_NET_CHECK = 'net_check';
-export const NET_CHECK_MIN_AGENT_VERSION = '0.21.0';
+export const NET_CHECK_MIN_AGENT_VERSION = '0.23.0';
 
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
@@ -153,7 +153,7 @@ export const tcpOpenParams = z.object({ port: wdaPort }).strict();
  * Sent on a `probe` hello right before the 1000 `probe-ok` close (TER-586): the other addresses the
  * machine must reach besides `/agent/ws` — where the monitor hooks post (`hooks_url`) and the tabs' MCP
  * (`mcp_url`, null when the server has none). `doctor` POSTs to each without a token. An agent older
- * than 0.21.0 drops it as an invalid server message, and still reads the close as before.
+ * than 0.23.0 drops it as an invalid server message, and still reads the close as before.
  */
 export const probeInfoMessage = z.object({ type: z.literal('probe_info'), hooks_url: z.string().url().max(2048), mcp_url: z.string().url().max(2048).nullable() });
 

@@ -72,6 +72,11 @@ export class AgentRegistry extends EventEmitter {
     };
   }
 
+  /** How many agents are connected to this process (the npm version poll is skipped at 0). */
+  connectedCount(): number {
+    return this.conns.size;
+  }
+
   openChannels(machineId: string): number {
     return this.conns.get(machineId)?.openChannels ?? 0;
   }

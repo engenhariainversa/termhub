@@ -1002,6 +1002,8 @@ export interface ChatAttachment {
   error_code: string | null;
   /** pages, duration_s, sheets, width, height, truncated */
   meta: Record<string, unknown> | null;
+  /** What the server heard in an audio file, once `ready` (TER-1036); absent for other kinds and older servers. */
+  transcript?: string | null;
   created_at: string;
 }
 

@@ -65,7 +65,7 @@ export function createExtractionQueue(deps: QueueDeps): ExtractionQueue {
       let outcome: AttachmentRow | null;
       if (attempt > maxAttempts(row.kind)) {
         // Already tried its share: a parser that never came back, or whisper down for a day.
-        outcome = await deps.repo.setFailed(row.id, exhaustedCode(row.kind));
+        outcome = isTranscription(row.kind) ? await deps.repo.setFailed(row.id, exhaustedCode(row.kind), 'unreachable') : await deps.repo.setFailed(row.id, exhaustedCode(row.kind));
       } else {
         try {
           const file = await deps.store.read(row.user_id, row.id);
@@ -79,10 +79,11 @@ export function createExtractionQueue(deps: QueueDeps): ExtractionQueue {
           }
           const code = err instanceof ExtractError ? err.code : 'ATTACHMENT_INVALID';
           if (!(err instanceof ExtractError)) deps.log.warn({ attachmentId: row.id, kind: row.kind, err: label(err) }, 'attachment extraction threw');
-          outcome = await deps.repo.setFailed(row.id, code);
+          const reason = err instanceof ExtractError ? err.reason : null;
+          outcome = reason ? await deps.repo.setFailed(row.id, code, reason) : await deps.repo.setFailed(row.id, code);
         }
       }
-      deps.log.info({ attachmentId: row.id, kind: row.kind, bytes: row.bytes, attempt, ms: Date.now() - started, status: outcome?.status ?? 'gone', code: outcome?.error_code ?? null }, 'attachment extraction finished');
+      deps.log.info({ attachmentId: row.id, kind: row.kind, bytes: row.bytes, attempt, ms: Date.now() - started, status: outcome?.status ?? 'gone', code: outcome?.error_code ?? null, reason: outcome?.meta?.reason ?? null }, 'attachment extraction finished');
       if (outcome) deps.onDone(outcome);
     } finally {
       running = null;
