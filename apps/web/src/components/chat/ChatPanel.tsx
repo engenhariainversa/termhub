@@ -8,6 +8,7 @@ import { ChatComposer } from './ChatComposer';
 import { ChatContextMeter } from './ChatContextMeter';
 import { ChatHost } from './ChatHost';
 import { ChatPendingBar } from './ChatPendingBar';
+import { ChatSettingsButton, ChatSettingsDialog } from './ChatSettings';
 import { ChatSubagents } from './ChatSubagents';
 import { ChatThread } from './ChatThread';
 import { ChatTurn } from './ChatTurn';
@@ -18,7 +19,7 @@ import { ConfirmDialog } from '../Modal';
 import { api, ApiError } from '../../lib/api';
 import { patchMessageAttachment } from '../../lib/attachments';
 import { useChatStream } from '../../lib/chat';
-import { compactDoneText, compactFailedText, isCompactCommand, isCompactShortcut } from '../../lib/chat-context';
+import { compactDoneText, compactFailedText, contextLevel, contextMax, contextShare, isCompactCommand, isCompactShortcut } from '../../lib/chat-context';
 import { useChatLive } from '../../lib/chat-live';
 import { droppedRows, mergeMessage, mergeThread } from '../../lib/chat-merge';
 import { replyTargetOf, replyTargetOfAction, replyTargetOfQuestion, type ReplyTarget } from '../../lib/chat-reply';
@@ -155,9 +156,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const [subagents, setSubagents] = useState<SubagentView[]>([]);
   /** Ids whose "Cancelar" came back with `subagent_cancel_failed`; cleared once a fresh `subagent` event for that id arrives. */
   const [cancelFailed, setCancelFailed] = useState<Set<string>>(new Set());
-  /** The panel opens from the toolbar button and stays open across events until closed by hand. */
-  const [subagentsOpen, setSubagentsOpen] = useState(false);
-  /** Refreshed every 30s while the panel is open, so "há N min" keeps moving without a re-render source of its own. */
+  /** "Configurações da conversa" (TER-1039), opened from the header's cog; it holds the subagents list,
+   *  and stays open across events until closed by hand. */
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Refreshed every 30s while the settings are open, so "há N min" keeps moving without a re-render source of its own. */
   const [subagentsNow, setSubagentsNow] = useState(() => Date.now());
   /** Sends whose POST is still open (it answers once the message is stored). Several can be in flight:
    *  the box never waits for an answer (spec 2026-09-26). */
@@ -611,41 +613,17 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     },
     [load],
   );
-  /** Only running/stopping rows count for the toolbar button: an ended one may still sit in the list
-   *  (the server keeps it a while for "levou N min"), but it is not what the button is counting. */
+  /** Only running/stopping rows light the cog: an ended one may still sit in the list (the server keeps
+   *  it a while for "levou N min"), but nothing is running for it. */
   const activeSubagents = useMemo(() => subagents.filter(isActive), [subagents]);
-  /** "há N min" keeps moving while the panel is open; closed, there is nobody to refresh it for. It is
-   *  refreshed the moment the panel opens too, or it would show the time of the last open (or mount). */
+  /** "há N min" keeps moving while the settings are open; closed, there is nobody to refresh it for. It
+   *  is refreshed the moment they open too, or it would show the time of the last open (or mount). */
   useEffect(() => {
-    if (!subagentsOpen) return;
+    if (!settingsOpen) return;
     setSubagentsNow(Date.now());
     const id = setInterval(() => setSubagentsNow(Date.now()), SUBAGENTS_REFRESH_MS);
     return () => clearInterval(id);
-  }, [subagentsOpen]);
-  /** The toggle button and the popover it opens, so Escape/outside-click can tell "inside" from "outside"
-   *  and hand focus back — same pattern as `ProjectGroupsMenu`. */
-  const subagentsToggleRef = useRef<HTMLButtonElement>(null);
-  const subagentsPanelRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!subagentsOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      setSubagentsOpen(false);
-      subagentsToggleRef.current?.focus();
-    };
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (subagentsPanelRef.current?.contains(target) || subagentsToggleRef.current?.contains(target)) return;
-      setSubagentsOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('mousedown', onDown);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('mousedown', onDown);
-    };
-  }, [subagentsOpen]);
-
+  }, [settingsOpen]);
   /**
    * Opens the change picker and reads the two halves of the pair, once, on demand: they are only needed
    * by someone who asked to change the host. Only agent machines can host a conversation (the server
@@ -907,7 +885,6 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setSuggestionErrors({});
       setSubagents([]);
       setCancelFailed(new Set());
-      setSubagentsOpen(false);
       setCompactNote(null);
       await load();
     } catch (e) {
@@ -944,6 +921,33 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     if (canCompact) void compact();
   };
 
+  /** A host that needs something done (or that moved on its own, `sessionAtStake`) is said above the
+   *  thread; a ready one is only a line of information, and goes to the settings dialog (TER-1039). */
+  const hostInline = host !== null && (host.kind !== 'ready' || host.sessionAtStake === true);
+  // Presentational: every decision it renders is decided here.
+  const hostCard = host && (
+    <ChatHost
+      host={host}
+      machines={host.kind === 'not_chosen' ? host.machines : hostMachines}
+      // Only the host machine's own logins: an account of another machine names a config dir that
+      // does not exist there, which is exactly what the server refuses (404) and what `lost` means.
+      accounts={hostMachineId === null || hostAccounts === null || hostAccounts === 'error' ? null : hostAccounts.filter((a) => a.machine_id === hostMachineId)}
+      accountsError={hostAccounts === 'error'}
+      accountId={hostAccountId}
+      // An admin reading someone else's data: the lists would be that person's, while the
+      // conversation is this admin's own, so the picker says so instead of offering nothing.
+      viewingAs={viewAs !== null && viewAs !== undefined}
+      picking={picking}
+      changing={changingHost}
+      error={hostError}
+      onPick={() => void openPicker()}
+      onCancelPick={() => setPicking(false)}
+      onChoose={(machineId) => void chooseHost(machineId)}
+      // The machine does not move: the account is set on the one already hosting the conversation.
+      onChooseAccount={(aiAccountId) => hostMachineId !== null && void chooseHost(hostMachineId, aiAccountId)}
+    />
+  );
+
   const activeGrantCount = grants.filter((g) => isGrantActive(g)).length + projectGrants.filter((g) => isGrantActive(g)).length + standingGrants.length;
 
   return (
@@ -960,53 +964,29 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     // `waiting_permission` in backticks, a long path — widened this column past the viewport and
     // took the composer's send button off screen with it.
     <div ref={rootRef} className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-4" onKeyDown={onPanelKeyDown}>
-      {/* "Começar do zero" without losing the transcript: it stays server-side, just off this screen.
-       *  Disabled while an answer is being written (the server would 409) or with nothing yet to reset. */}
-      {/* The conversation's trusted tabs used to be a strip above the box; now one link, only while any is
-       *  in force (a tab grant or a project grant), to the list in Configurações (spec 2026-09-26 §4.1, §6). */}
-      <div className="relative flex items-center justify-end gap-1 pt-2">
-        {/* How full the session is, and "Compactar" (TER-315): on the left, apart from the links. */}
-        <div className="mr-auto min-w-0">
-          <ChatContextMeter tokens={context?.tokens ?? null} window={context?.window ?? null} limit={contextLimit} compactedAt={context?.compacted_at ?? null} compacting={compacting} canCompact={canCompact} onCompact={() => void compact()} />
-        </div>
-        {/* The subagents panel (spec 2026-09-26 §4): the toggle appears once something is running or
-         *  being cancelled, and — while it is open — stays even after every one of them ended, so the
-         *  panel it opened always has a way to close it again. */}
-        {(activeSubagents.length > 0 || subagentsOpen) && (
-          <button
-            type="button"
-            ref={subagentsToggleRef}
-            className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg"
-            aria-expanded={subagentsOpen}
-            aria-controls="chat-subagents-panel"
-            onClick={() => setSubagentsOpen((open) => !open)}
-          >
-            {t('Subagentes ({{n}})', { n: activeSubagents.length })}
-          </button>
-        )}
-        {activeGrantCount > 0 && (
-          <Link to="/settings/chat-grants" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg">
-            {activeGrantsLabel(activeGrantCount)}
-          </Link>
-        )}
-        <button type="button" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50" disabled={answering || resetting || compacting || messages.length === 0} onClick={() => setConfirmReset('reset')}>
-          {t('Nova conversa')}
-        </button>
-        <button type="button" className="rounded px-2 py-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50" disabled={answering || resetting || compacting || messages.length === 0} onClick={() => setConfirmReset('delete')}>
-          {t('Apagar conversa')}
-        </button>
-        {subagentsOpen && (
-          <div
-            id="chat-subagents-panel"
-            ref={subagentsPanelRef}
-            role="dialog"
-            aria-label={t('Subagentes')}
-            className="absolute right-0 top-full z-10 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-bg-1 p-2 shadow-lg"
-          >
-            <ChatSubagents subagents={subagents} failed={cancelFailed} onCancel={cancelSubagent} now={subagentsNow} />
-          </div>
-        )}
-      </div>
+      {/* The header shows one cog (TER-1039); the context, the host, the subagents, the trusted tabs and
+       *  starting over live in the dialog it opens. The dot keeps what mattered at a glance in sight. */}
+      <ChatSettingsButton open={settingsOpen} attention={activeSubagents.length > 0 || contextLevel(context?.tokens == null ? null : contextShare(context.tokens, contextMax(context.window ?? null, contextLimit))) !== 'ok'} onOpen={() => setSettingsOpen(true)} />
+      <ChatSettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        context={<ChatContextMeter tokens={context?.tokens ?? null} window={context?.window ?? null} limit={contextLimit} compactedAt={context?.compacted_at ?? null} compacting={compacting} canCompact={canCompact} onCompact={() => void compact()} />}
+        host={host && projectId === null && !hostInline ? hostCard : null}
+        subagents={subagents.length > 0 ? <ChatSubagents subagents={subagents} failed={cancelFailed} onCancel={cancelSubagent} now={subagentsNow} /> : null}
+        activeGrantCount={activeGrantCount}
+        activeGrantsText={activeGrantsLabel(activeGrantCount)}
+        // "Começar do zero" without losing the transcript: it stays server-side, just off this screen.
+        // Refused while an answer is being written (the server would 409) or with nothing yet to reset.
+        canReset={!answering && !resetting && !compacting && messages.length > 0}
+        onReset={() => {
+          setSettingsOpen(false);
+          setConfirmReset('reset');
+        }}
+        onDelete={() => {
+          setSettingsOpen(false);
+          setConfirmReset('delete');
+        }}
+      />
       <ConfirmDialog
         open={confirmReset === 'reset'}
         title={t('Nova conversa')}
@@ -1024,32 +1004,11 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         onCancel={() => setConfirmReset(null)}
         onConfirm={() => void reset('delete')}
       />
-      {/* Where this conversation runs, above the thread, before anything is typed — and, when it cannot
-          run, the one thing to do about it. Presentational: every decision it renders is decided here.
-          Only the account-wide chat offers the picker: a project's chat always runs on that same host,
-          chosen from `/chat`, and never gets a picker of its own. */}
-      {host && projectId === null && (
-        <ChatHost
-          host={host}
-          machines={host.kind === 'not_chosen' ? host.machines : hostMachines}
-          // Only the host machine's own logins: an account of another machine names a config dir that
-          // does not exist there, which is exactly what the server refuses (404) and what `lost` means.
-          accounts={hostMachineId === null || hostAccounts === null || hostAccounts === 'error' ? null : hostAccounts.filter((a) => a.machine_id === hostMachineId)}
-          accountsError={hostAccounts === 'error'}
-          accountId={hostAccountId}
-          // An admin reading someone else's data: the lists would be that person's, while the
-          // conversation is this admin's own, so the picker says so instead of offering nothing.
-          viewingAs={viewAs !== null && viewAs !== undefined}
-          picking={picking}
-          changing={changingHost}
-          error={hostError}
-          onPick={() => void openPicker()}
-          onCancelPick={() => setPicking(false)}
-          onChoose={(machineId) => void chooseHost(machineId)}
-          // The machine does not move: the account is set on the one already hosting the conversation.
-          onChooseAccount={(aiAccountId) => hostMachineId !== null && void chooseHost(hostMachineId, aiAccountId)}
-        />
-      )}
+      {/* Where this conversation runs, when it cannot run as it is: the one thing to do about it, above
+          the thread. A host that is fine lives in the settings dialog (TER-1039). Only the account-wide
+          chat offers the picker: a project's chat always runs on that same host, chosen from `/chat`,
+          and never gets a picker of its own. */}
+      {host && projectId === null && hostInline && hostCard}
       {/* A project's own notice, in place of the picker: it names why the chat cannot run right now and
        *  points at `/chat`, the only place the host is ever chosen. */}
       {host && projectId !== null && host.kind !== 'ready' && (
