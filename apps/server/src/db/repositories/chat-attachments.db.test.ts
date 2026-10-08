@@ -76,6 +76,20 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatAttachmentsRepository
     expect(await repo.setFailed('nope00000000', 'ATTACHMENT_INVALID')).toBeNull();
   });
 
+  it('setFailed with a reason keeps the meta and adds meta.reason; retryTranscription only brings back an unavailable clip of its owner (TER-1035)', async () => {
+    const clip = await repo.create({ ...input(), kind: 'audio', mime: 'audio/mp4', name: 'a.m4a' });
+    await repo.markAttempt(clip.id);
+    const failed = await repo.setFailed(clip.id, 'TRANSCRIPTION_UNAVAILABLE', 'refused');
+    expect(failed).toMatchObject({ status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE', meta: { attempts: 1, reason: 'refused' } });
+    expect(await repo.retryTranscription(clip.id, 'someone-else')).toBeNull();
+    const again = await repo.retryTranscription(clip.id, userId);
+    expect(again).toMatchObject({ status: 'pending', error_code: null, meta: null });
+    expect(await repo.retryTranscription(clip.id, userId)).toBeNull();
+    const undecodable = await repo.create({ ...input(), kind: 'audio', mime: 'audio/mp4', name: 'b.m4a' });
+    await repo.setFailed(undecodable.id, 'TRANSCRIPTION_FAILED');
+    expect(await repo.retryTranscription(undecodable.id, userId)).toBeNull();
+  });
+
   it('deleteUnsent removes an unsent row of the owner and refuses a sent one or a stranger', async () => {
     const unsent = await repo.create(input());
     const sent = await repo.create(input());

@@ -403,26 +403,27 @@ describe('Conversa', () => {
     expect(screen.queryByRole('button', { name: 'Permitir sempre nesta aba' })).toBeNull();
   });
 
-  it('an empty box offers Ditar; typing adds Enviar beside it, which sends and empties the box at once', async () => {
+  it('an empty box offers the microphone; typing turns it into Enviar, which sends and empties the box at once', async () => {
     const sent = jest.spyOn(stores.api, 'sendMessage').mockResolvedValue({ conversation_id: 'c-termhub', user_message_id: 'u', assistant_message_id: 'a' });
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
 
-    const dictate = screen.getByRole('button', { name: 'Ditar' });
-    expect(dictate.props.accessibilityState.disabled).toBe(false);
+    const mic = screen.getByRole('button', { name: 'Gravar áudio' });
+    expect(mic.props.accessibilityState.disabled).toBe(false);
     expect(screen.queryByRole('button', { name: 'Enviar' })).toBeNull();
 
     await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'como está o deploy?');
-    // The microphone stays: dictating adds to what is typed.
-    expect(screen.getByRole('button', { name: 'Ditar' }).props.accessibilityState.disabled).toBe(false);
+    // WhatsApp's single button: with text it is ↑ (TER-1036).
+    expect(screen.queryByRole('button', { name: 'Gravar áudio' })).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     expect(sent).toHaveBeenCalledWith(expect.anything(), { text: 'como está o deploy?', project_id: 'p-termhub' });
     expect(screen.getByLabelText('Mensagem').props.value).toBe('');
   });
 
-  it('Ditar starts a recording; while recording the button reads Parar, and the transcription lands in the box', async () => {
+  it('Ditar (in the + menu) starts a recording; while recording the button reads Parar, and the transcription lands in the box', async () => {
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Ditar' }));
     expect(mockVoice.start).toHaveBeenCalledTimes(1);
 
@@ -448,7 +449,7 @@ describe('Conversa', () => {
     // (a transcription of '' would leave the text as it is, and React would skip the render).
     await act(() => useChatStore.setState({ sending: true }));
     expect(screen.getByText('transcrevendo…')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Ditar' }).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Gravar áudio' }).props.accessibilityState.disabled).toBe(true);
     expect(screen.getByText('Falha ao transcrever o áudio')).toBeTruthy();
   });
 
@@ -509,7 +510,7 @@ describe('Conversa', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     expect(screen.getByLabelText('Mensagem').props.value).toBe('');
     expect(screen.getByLabelText('Mensagem').props.scrollEnabled).toBe(false);
-    expect(screen.getByRole('button', { name: 'Ditar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Gravar áudio' })).toBeTruthy();
     await waitFor(() => expect(getAnimatedStyle(screen.getByTestId('composer-text'))).toMatchObject(BESIDE_BUTTONS), SETTLE);
   });
 

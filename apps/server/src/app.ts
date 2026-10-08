@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, ROOT_DIR } from './config.js';
 import { getPrisma, closePrisma } from './db/prisma.js';
-import { ACCESS_LOG_RETENTION_MS, AUTOMATION_EVENT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
+import { ACCESS_LOG_RETENTION_MS, AUTOMATION_EVENT_RETENTION_MS, VIEW_AS_AUDIT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
 import { createMailer } from './email/mailer.js';
 import { createAccessAllowlist } from './cloudflare/access.js';
 import { AuthService, authRoutes, buildAuthHook, type AuthContext } from './auth/index.js';
@@ -50,7 +50,7 @@ import { diskStore } from './chat/attachments/store.js';
 import { sweepAttachments } from './chat/attachments/sweep.js';
 import { extract } from './chat/attachments/extract.js';
 import { REQUEUE_MIN_AGE_MS, createExtractionQueue, requeuePending } from './chat/attachments/queue.js';
-import { toPublicAttachment } from './db/repositories/chat-attachments.js';
+import { toPublicAttachment, type AttachmentRow } from './db/repositories/chat-attachments.js';
 import { ChatService, failureLabel, purgeExpiredActions } from './chat/service.js';
 import { HEARTBEAT_MS, SWEEP_MS } from './chat/resume.js';
 import { startDecisionSweeper } from './chat/decision-memory.js';
@@ -224,6 +224,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // Attachments (spec 2026-09-26 §5): the files on the chat-files volume, and the in-process queue
   // that reads them. A finished job tells every open screen through the bus, metadata only.
   const attachmentStore = diskStore(config.chatFiles.dir);
+  const publishAttachment = (row: AttachmentRow) => chatBus.publish({ type: 'attachment_status', user_id: row.user_id, conversation_id: row.conversation_id, attachment: toPublicAttachment(row) });
   const extraction = createExtractionQueue({
     repo: repos.chatAttachments,
     store: attachmentStore,
@@ -233,10 +234,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       language: config.transcription?.language ?? null,
       whisperSecret: config.transcription?.secret ?? null,
     },
-    onDone: (row) => chatBus.publish({ type: 'attachment_status', user_id: row.user_id, conversation_id: row.conversation_id, attachment: toPublicAttachment(row) }),
+    onDone: (row) => publishAttachment(row),
     log: fastify.log,
   });
-  const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes };
+  const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes, onRetry: (row) => publishAttachment(row) };
   // Account deletion (TER-720, TER-728): the 30-day window, the cascade and the public page's links.
   const deletion = new AccountDeletionService({
     repos,
@@ -365,6 +366,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
+    // The admin "view as" trail is kept a year after each period ends (TER-746).
+    void repos.viewAsAudit.purgeBefore(new Date(Date.now() - VIEW_AS_AUDIT_RETENTION_MS)).catch(() => {});
     // Privacy Policy section 8 (TER-743): tab state history after 90 days, the waitlist after 12 months.
     void purgeRetention(repos).catch(() => {});
     // Access records past their 6 months (TER-744): the hourly tick is the rotation.
