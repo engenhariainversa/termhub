@@ -117,5 +117,8 @@
   "Nenhuma máquina com agente 0.19 ligada ao projeto; atualize o agente": "No machine with agent 0.19 linked to the project; update the agent",
   "agente sem a trava; atualize o agente (0.19)": "agent without the hard lock; update the agent (0.19)",
   "O agente não chegou a iniciar: a aba voltou ao terminal. Confira o erro na tela e retome.": "The agent never started: the tab went back to the shell. Check the error on screen and resume.",
-  "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "The agent exited and this machine has no automatic-work hard lock; update the agent (0.19.0 or newer) and resume."
+  "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "The agent exited and this machine has no automatic-work hard lock; update the agent (0.19.0 or newer) and resume.",
+  "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub kept failing on the push or the PR after the automatic retries; check the tab and resume.",
+  "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub is unstable; the CI fix is asked again once it is back",
+  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "The deploy failed because of a GitHub problem; running it again ({{attempt}} of {{max}}): {{url}}"
 }

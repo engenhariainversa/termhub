@@ -117,5 +117,8 @@
   "Nenhuma máquina com agente 0.19 ligada ao projeto; atualize o agente": "Ninguna máquina con el agente 0.19 vinculada al proyecto; actualiza el agente",
   "agente sem a trava; atualize o agente (0.19)": "agente sin el bloqueo; actualiza el agente (0.19)",
   "O agente não chegou a iniciar: a aba voltou ao terminal. Confira o erro na tela e retome.": "El agente no llegó a iniciarse: la pestaña volvió a la terminal. Revisa el error en pantalla y reanuda.",
-  "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "El agente salió y esta máquina no tiene el bloqueo del trabajo automático; actualiza el agente (0.19.0 o más reciente) y reanuda."
+  "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "El agente salió y esta máquina no tiene el bloqueo del trabajo automático; actualiza el agente (0.19.0 o más reciente) y reanuda.",
+  "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub siguió fallando en el push o en el PR después de los reintentos automáticos; revisa la pestaña y reanuda.",
+  "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub inestable; la corrección del CI se pide de nuevo cuando vuelva",
+  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "El deploy falló por un problema de GitHub; ejecutándolo de nuevo ({{attempt}} de {{max}}): {{url}}"
 }

@@ -381,6 +381,8 @@ export const api = {
     tabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/tabs'),
     /** every open terminal tab of the scope, reported a state or not (the sidebar's agents) */
     openTabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/open-tabs'),
+    /** the tabs an automatic run works in, with the card's ref (TER-1044) */
+    autoRuns: () => request<{ items: Array<{ tab_id: string; ref: string }> }>('GET', '/monitor/auto-runs'),
   },
   tasks: {
     list: (projectId: string) => request<BoardData>('GET', `/projects/${projectId}/tasks`),

@@ -59,6 +59,8 @@
   "Erro ao encerrar o terminal": "No se pudo terminar la terminal",
   "Erro ao reenviar o convite": "No se pudo reenviar la invitación",
   "esperando você": "esperándote",
+  "{{state}} (automático, {{ref}})": "{{state}} (automático, {{ref}})",
+  "automático, {{ref}}": "automático, {{ref}}",
   "Este e-mail do Google não está cadastrado no termhub.": "Este correo de Google no está registrado en termhub.",
   "Este servidor não usa login próprio. Acesse pelo endereço protegido pelo Cloudflare Access.": "Este servidor no tiene inicio de sesión propio. Ábrelo desde la dirección protegida por Cloudflare Access.",
   "Eu ({{name}})": "Yo ({{name}})",

@@ -433,5 +433,12 @@
   "{{ref}}: {{tool}} liberado sozinho": "{{ref}}: {{tool}} permitido automáticamente",
   "{{ref}}: permissão liberada sozinha": "{{ref}}: permiso concedido automáticamente",
   "{{ref}}: {{tool}} bloqueado pela trava": "{{ref}}: {{tool}} bloqueado por la protección",
-  "{{ref}}: ação bloqueada pela trava": "{{ref}}: acción bloqueada por la protección"
+  "{{ref}}: ação bloqueada pela trava": "{{ref}}: acción bloqueada por la protección",
+  "Novas tentativas do deploy": "Reintentos del deploy",
+  "quando o deploy falha por problema do GitHub; 0 = pausa na hora": "cuando el deploy falla por un problema de GitHub; 0 = pausa de inmediato",
+  "Retomadas após erro do GitHub": "Reanudaciones tras un error de GitHub",
+  "push ou PR com erro do GitHub; depois disso, chama você": "push o PR con error de GitHub; después de eso, te llama",
+  "Deploy falhou por problema do GitHub; rodando de novo": "El deploy falló por un problema de GitHub; ejecutándolo de nuevo",
+  "{{ref}}: erro do GitHub; o termhub tenta de novo quando ele voltar": "{{ref}}: error de GitHub; termhub lo intenta de nuevo cuando vuelva",
+  "{{ref}}: confiança da pasta confirmada sozinha": "{{ref}}: confianza de la carpeta confirmada automáticamente"
 }

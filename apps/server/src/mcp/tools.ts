@@ -334,7 +334,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'report_card',
     description:
-      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. Call it once, at the end.",
+      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. Call it once, at the end.",
     // Preflight F-8: scope `read` and no grant check — a documented exception, not a widening: `allowedIf`
     // admits only a tab token whose own tab has an active run, and the tool writes that run's status only.
     scope: 'read', resource: 'tasks', action: 'read',
@@ -345,8 +345,9 @@ export const TOOLS: ToolDef[] = [
       status: z.enum(['done', 'blocked']),
       pr_url: z.string().trim().url().max(500).optional(),
       reason: z.string().trim().min(1).max(500).optional(),
+      code: z.enum(['github_transient']).optional(),
     },
-    run: (ctx, a) => reportCard(ctx, a as { status: 'done' | 'blocked'; pr_url?: string; reason?: string }),
+    run: (ctx, a) => reportCard(ctx, a as { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient' }),
   },
   {
     name: 'escalate_automation_run',
