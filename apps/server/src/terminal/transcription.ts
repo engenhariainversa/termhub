@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { config } from '../config.js';
 import { HttpError, conflict, notFound } from '../lib/errors.js';
 import { msg, tk } from '../i18n/index.js';
+import { whisperHeaders } from '../lib/whisper.js';
 
 /** Recorded clips are capped at 5 minutes client-side; opus at 48 kbps is ~2 MB, mp4/aac a few more. */
 export const TRANSCRIPTION_MAX_BYTES = 32 * 1024 * 1024;
@@ -166,7 +167,7 @@ async function transcribeWithWhisper(audio: Buffer, mime: string): Promise<Whisp
   try {
     res = await fetch(`${t.url}/transcribe?language=${encodeURIComponent(t.language)}`, {
       method: 'POST',
-      headers: { 'content-type': mime },
+      headers: whisperHeaders(mime, t.secret),
       body: new Uint8Array(audio),
       signal: AbortSignal.timeout(WHISPER_TIMEOUT_MS),
     });

@@ -29,9 +29,9 @@ export interface SubagentsSheetProps {
 
 /**
  * The subagents panel (spec 2026-09-26 panel §4): one row per subagent of the conversation, newest
- * first — `conversation-screen.tsx` owns the list and the header button that opens it, and reuses
- * `Sheet`, the same container `HostSheet` uses for its own list. Always closable: the header button
- * stays up while this is open (`conversation-screen.tsx`), and `Sheet`'s own backdrop closes it too.
+ * first — `conversation-settings-screen.tsx` owns the list and the button that opens it (TER-1039), and
+ * reuses `Sheet`, the same container `HostSheet` uses for its own list. Always closable: that button is
+ * always there, and `Sheet`'s own backdrop closes it too.
  */
 export function SubagentsSheet({ open, onClose, subagents, cancelFailed, onCancel, now }: SubagentsSheetProps) {
   const { t } = useTranslation();

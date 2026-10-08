@@ -449,6 +449,18 @@ export class MemoryItemsRepository {
     }
   }
 
+  /** The `message` items of `ownerId` that index the chat messages `sourceIds` (TER-1037: the ref the
+   *  chat hands the concierge with each typed message names the chat message, not the item). */
+  async findMessagesBySource(sourceIds: string[], ownerId: string): Promise<MemoryItem[]> {
+    if (sourceIds.length === 0) return [];
+    const rows = await this.db.$queryRaw<RawItem[]>`
+      SELECT ${ITEM_COLUMNS}, p.name AS project_name
+      FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
+      WHERE m.owner_id = ${ownerId} AND m.kind = 'message' AND m.source_id IN (${Prisma.join(sourceIds)})
+        AND ${NOT_HIDDEN}`;
+    return rows.map(mapRaw);
+  }
+
   countNotesSince(ownerId: string, since: Date): Promise<number> {
     return this.db.memoryItem.count({ where: { ownerId, kind: 'note', createdAt: { gte: since } } });
   }

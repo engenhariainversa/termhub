@@ -2,7 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketServer, type RawData } from 'ws';
-import { CLOSE, CONTROL_CHANNEL, decodeFrame, helloMessage } from '@termhub/agent-protocol';
+import { CLOSE, CONTROL_CHANNEL, decodeFrame, encodeFrame, helloMessage } from '@termhub/agent-protocol';
 
 const { runForeverMock, stopRestartLoopMock, healMock } = vi.hoisted(() => ({ runForeverMock: vi.fn(), stopRestartLoopMock: vi.fn(async () => {}), healMock: vi.fn(async () => [] as string[]) }));
 vi.mock('./client.js', async (importOriginal) => {
@@ -35,7 +35,7 @@ interface TestServer {
   stop(): Promise<void>;
 }
 
-type Reply = { close: { code: number; reason: string } } | { rejectStatus: number } | { silent: true };
+type Reply = { close: { code: number; reason: string }; before?: object } | { rejectStatus: number } | { silent: true };
 
 /** A fake termhub server: records every hello it gets and answers it as `reply` says. */
 function startServer(reply: Reply): Promise<TestServer> {
@@ -53,7 +53,10 @@ function startServer(reply: Reply): Promise<TestServer> {
       ws.once('message', (data) => {
         const { ch, payload } = decodeFrame(asBuffer(data));
         if (ch === CONTROL_CHANNEL) hellos.push(JSON.parse(payload.toString('utf8')));
-        if ('close' in reply) ws.close(reply.close.code, reply.close.reason);
+        if ('close' in reply) {
+          if (reply.before) ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify(reply.before)));
+          ws.close(reply.close.code, reply.close.reason);
+        }
       });
     });
     server.listen(0, '127.0.0.1', () => {
@@ -76,7 +79,7 @@ describe('capabilitiesFor', () => {
   it('claims sim on macOS only', () => {
     expect(capabilitiesFor('macos')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'sim']));
     expect(capabilitiesFor('linux')).not.toContain('sim');
-    expect(capabilitiesFor('linux')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'transcript', 'file_read', 'file_list', 'worktree']));
+    expect(capabilitiesFor('linux')).toEqual(expect.arrayContaining(['claude', 'claude.system_prompt', 'transcript', 'file_read', 'file_list', 'worktree', 'net_check']));
   });
 });
 
@@ -94,6 +97,13 @@ describe('checkServerConnection', () => {
     expect(result).toEqual({ ok: true });
     expect(srv.hellos).toHaveLength(1);
     expect(helloMessage.parse(srv.hellos[0]).probe).toBe(true);
+  });
+
+  it('returns the hooks and MCP addresses the server sends with probe_info before probe-ok', async () => {
+    const before = { type: 'probe_info', hooks_url: 'https://termhub.dev/api/hooks/events', mcp_url: 'https://termhub.dev/mcp' };
+    srv = await startServer({ close: { code: 1000, reason: 'probe-ok' }, before });
+    const result = await checkServerConnection({ url: `http://127.0.0.1:${srv.port}`, token: TOKEN });
+    expect(result).toEqual({ ok: true, endpoints: { hooks_url: before.hooks_url, mcp_url: before.mcp_url } });
   });
 
   it('reports the revoked-token message on an HTTP 401 upgrade rejection', async () => {

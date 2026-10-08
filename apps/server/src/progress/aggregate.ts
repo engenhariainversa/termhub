@@ -1,9 +1,9 @@
 import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, ProgressEstimate, ProgressScope, ProgressUsage, PullRequestBadge } from '@termhub/mobile-api';
 import type { TabState } from '../db/repositories/types.js';
 import type { AutomationEvent } from '../db/repositories/index.js';
-import { ESCALATION_FALLBACK, ESCALATION_TEXT } from '../automation/escalation-text.js';
+import { escalationEventText } from '../automation/escalation-text.js';
+import type { Locale } from '../i18n/index.js';
 import { whyText } from '../automation/why.js';
-import { t, type Locale } from '../i18n/index.js';
 import { NEEDS_YOU } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
 
@@ -243,7 +243,6 @@ function startFailureOf(p: Record<string, unknown>, locale: Locale): string | nu
 export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): AutomationFeedEvent[] {
   return rows.map(({ event: e, ref, epic, machine, account, tab_id, branch }) => {
     const p = e.payload;
-    const reason = str(p.reason);
     return {
       id: e.id,
       kind: e.kind,
@@ -264,7 +263,7 @@ export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): A
       url: str(p.url) ?? str(p.pr_url),
       until: str(p.until),
       paused: typeof p.paused === 'boolean' ? p.paused : null,
-      reason_text: e.kind === 'escalated' ? t(locale, (reason && ESCALATION_TEXT[reason]) || ESCALATION_FALLBACK) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : null,
+      reason_text: e.kind === 'escalated' ? escalationEventText(p, locale) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : null,
       // the tool a permission_auto_approved / guard_blocked line names (TER-993)
       tool: str(p.tool),
       // TER-1011: why an automatic answer or an escalation happened, the rule or precedent, its similarity

@@ -12,7 +12,7 @@ import { DEFAULT_LOCALE, type Locale } from '../i18n/index.js';
 export type LoginResult =
   | { ok: true; user: User }
   | { ok: false; reason: 'invalid' }
-  | { ok: false; reason: 'locked'; retryAfterMs: number };
+  | { ok: false; reason: 'locked'; retryAfterMs: number; /** this very failure set the lock (the trail records it once) */ justLocked?: boolean };
 
 export type SendCodeResult = { ok: true } | { ok: false; reason: 'rate_limited'; retryAfterMs: number } | { ok: false; reason: 'send_failed' };
 
@@ -58,7 +58,7 @@ export class AuthService {
     const valid = await verifyPassword(user?.password_hash ?? null, password);
     if (!user || !valid) {
       const lock = await this.recordFailure(email, ip);
-      if (lock > 0) return { ok: false, reason: 'locked', retryAfterMs: lock };
+      if (lock > 0) return { ok: false, reason: 'locked', retryAfterMs: lock, justLocked: true };
       return { ok: false, reason: 'invalid' };
     }
     await this.clearFailures(email, ip);
@@ -111,7 +111,7 @@ export class AuthService {
     const record = await this.repos.loginCodes.findLatestUnused(email);
     const fail = async (): Promise<LoginResult> => {
       const lock = await this.recordFailure(email, ip);
-      return lock > 0 ? { ok: false, reason: 'locked', retryAfterMs: lock } : { ok: false, reason: 'invalid' };
+      return lock > 0 ? { ok: false, reason: 'locked', retryAfterMs: lock, justLocked: true } : { ok: false, reason: 'invalid' };
     };
 
     if (!record || record.expires_at.getTime() < Date.now()) return fail();

@@ -80,6 +80,9 @@ model User {
   chatCodexReplies   Boolean            @default(false) @map("chat_codex_replies")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
   pushTabFinished    Boolean            @default(false) @map("push_tab_finished")
+  /// The chat's context meter measures against this many tokens instead of the model's window
+  /// (TER-1038): opt-in, null = the window.
+  chatContextLimit   Int?               @map("chat_context_limit")
   memoryItems        MemoryItem[]
   verifiedMemoryItems MemoryItem[] @relation("MemoryItemVerifier")
   standingGrants     ChatStandingGrant[]
@@ -95,6 +98,7 @@ model User {
   /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
   locale              String?
   automationSummaries AutomationSummary[]
+  featureFlagOverrides FeatureFlagOverride[]
 
   @@index([roleId])
   @@index([deletionScheduledAt])
@@ -204,6 +208,8 @@ model Machine {
   agentAutoUpdate     Boolean   @default(false) @map("agent_auto_update")
   /// Swap a tab's Claude to another account of this machine by itself when it hits a usage limit (on by default, TER-587).
   claudeAutoSwap  Boolean  @default(true) @map("claude_auto_swap")
+  /// TER-735: show the AI accounts' usage of this machine; when false, termhub never reads the AI CLI credential on it.
+  aiUsageQuery    Boolean  @default(true) @map("ai_usage_query")
   /// R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
   automationAllowed Boolean @default(true) @map("automation_allowed")
   /// The user's own computer (an agent machine): browsers other than the one that added it hide it
@@ -909,6 +915,8 @@ model ChatConversation {
   /// model's context window then (TER-315). Null until a turn reports them; cleared with the session.
   contextTokens Int?          @map("context_tokens")
   contextWindow Int?          @map("context_window")
+  /// When that session was last compacted, by "Compactar" or the CLI's own auto-compact (TER-1038).
+  contextCompactedAt DateTime? @map("context_compacted_at") @db.Timestamptz
   lastMessageAt DateTime?     @map("last_message_at")
   /// The last time the person typed a message here (TER-530) — not a decision's re-injection nor a
   /// wake, which are stored as user messages too. A "no" given before it no longer refuses on its own.
@@ -1016,6 +1024,8 @@ model ChatAction {
   machineId      String?          @map("machine_id")
   projectId      String?          @map("project_id")
   tabId          String?          @map("tab_id")
+  /// The tab's name when the action was asked (TER-1024): a closed tab's card still names it.
+  tabName        String?          @map("tab_name")
   /// The grant this action ran under (`chat_grants`), when it was not asked but allowed by one.
   grantId        String?          @map("grant_id")
   errorCode      String?          @map("error_code")
@@ -1481,6 +1491,28 @@ model DeviceChallenge {
   @@map("device_challenges")
 }
 
+/// Access records the Marco Civil (art. 15) asks an application provider to keep for 6 months (TER-744):
+/// when, from which IP, who (when known) and which route. Never a query string, a body or anything a
+/// terminal or a chat carried. `user_id` has no foreign key on purpose: the record outlives an account
+/// deletion until its 6 months are over. Purged hourly past `ACCESS_LOG_RETENTION_MS`.
+model AccessLog {
+  id        BigInt   @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  ip        String?
+  userId    String?  @map("user_id")
+  /// http | ws
+  kind      String
+  method    String
+  /// The route pattern (`/api/tabs/:id`) for HTTP, the path for a WebSocket; never the query string.
+  route     String
+  /// The HTTP status; for a WebSocket, 101 once handed to its route or the refusal's status.
+  status    Int?
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("access_logs")
+}
+
 /// The device trail (spec §8). `meta` holds ids and names, never secrets. Kept 90 days.
 model DeviceEvent {
   id        String   @id
@@ -1546,4 +1578,80 @@ model AutomationSummary {
 
   @@id([userId, day])
   @@map("automation_summaries")
+}
+
+/// Audit trail of the admin "view as" switch (TER-746, P-9/L-10 of docs/legal/duvidas-advogado.md): one row
+/// per period an admin spent in another scope — a user's data or "all". `ended_at` is set when the admin
+/// switches again or signs out; null means the period has not ended, or ended without an explicit switch
+/// (the browser dropped the session cookie). No foreign keys on purpose: the record outlives the deletion of
+/// either account until its retention is over (VIEW_AS_AUDIT_RETENTION_MS).
+model ViewAsAudit {
+  id           String    @id
+  adminId      String    @map("admin_id")
+  /// user | all
+  scope        String
+  /// the user whose data the admin saw; null when scope = all
+  targetUserId String?   @map("target_user_id")
+  ip           String?
+  startedAt    DateTime  @default(now()) @map("started_at")
+  endedAt      DateTime? @map("ended_at")
+
+  @@index([adminId, endedAt])
+  @@index([targetUserId, startedAt])
+  @@index([startedAt])
+  @@map("view_as_audit")
+}
+
+/// The security audit trail (TER-577): who signed in or failed to, changed a role or a permission, viewed
+/// as another person, minted or revoked a token, added or removed a machine or an integration, typed into
+/// a tab over the API. Append-only: a trigger refuses UPDATE (see the migration); rows only leave through
+/// the retention purge (SECURITY_EVENT_RETENTION_DAYS). No foreign keys, so the trail outlives the people
+/// and rows it names: `actor_email` and `target_label` are snapshots taken at the time. Metadata only,
+/// never typed text, passwords, codes or tokens.
+model SecurityEvent {
+  id          String   @id
+  actorId     String?  @map("actor_id")
+  actorEmail  String?  @map("actor_email")
+  /// The person an admin was viewing as when acting, or "*" for "all"; null when acting as themselves.
+  viewAsId    String?  @map("view_as_id")
+  action      String
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id")
+  targetLabel String?  @map("target_label")
+  ip          String?
+  meta        Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([action, createdAt])
+  @@index([actorId, createdAt])
+  @@map("security_events")
+}
+
+/// An instance-wide feature flag (TER-1040, docs/feature-flags.md): a feature that ships dark and an
+/// admin turns on in Configurações → Recursos em teste, without a deploy. No row = the flag's default
+/// in code (`FEATURE_FLAGS`, apps/server/src/features/flags.ts), which is off.
+model FeatureFlag {
+  key       String   @id
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  /// the admin who last changed it; null = never changed by hand
+  updatedBy String?  @map("updated_by")
+
+  @@map("feature_flags")
+}
+
+/// One person's own value for a flag (testing a feature before it is released): wins over the
+/// instance-wide value for that person only.
+model FeatureFlagOverride {
+  flag      String
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled   Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by")
+
+  @@id([flag, userId])
+  @@index([userId])
+  @@map("feature_flag_overrides")
 }

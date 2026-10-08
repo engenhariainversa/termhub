@@ -1,4 +1,7 @@
 /** The city in PixiJS: one block per project (a building), its desks on one floor. Knows nothing about tabs, the API or React. */
+// Pixi compiles shaders and uniform uploads with `new Function` unless this polyfill is loaded first;
+// the server's Content-Security-Policy has no 'unsafe-eval' (TER-579).
+import 'pixi.js/unsafe-eval';
 import { Application, CanvasSource, Container, ImageSource, Rectangle, Texture, UPDATE_PRIORITY, type Graphics } from 'pixi.js';
 import { BLOCK_MARGIN, blockBounds, cityBounds, floorOnCity, layoutCity, type CityLayout, type PlacedBlock } from '../layout/city';
 import { depthOf, toScreen } from '../layout/iso';

@@ -24,6 +24,8 @@ import {
   stripCodexConfig,
   stripCodexHooks,
   stripCursorHooks,
+  hooksStatus,
+  type HookFile,
 } from '@termhub/machine-ops';
 import { discoverClaudeDirs } from '../claude-dirs.js';
 import { RpcFailure } from '../exec.js';
@@ -351,6 +353,40 @@ async function healCodex(home: string, scriptPath: string): Promise<string[]> {
     logHealSkip(shown, err, configFile);
   }
   return healed ? [shown] : [];
+}
+
+/** A file for `hooksStatus`: absent, present with its content, or unreadable — a dangling link included, as the ssh probe reads it. */
+async function probe(file: string): Promise<HookFile> {
+  try {
+    return { status: 'present', content: await readFile(file, 'utf8') };
+  } catch (err) {
+    return isEnoent(err) && !(await isDanglingLink(file)) ? { status: 'absent', content: '' } : { status: 'unreadable', content: '' };
+  }
+}
+
+/**
+ * What the hooks look like here (TER-1023): the same Claude dirs `install` would hook, Codex and the Cursor
+ * CLI when their dirs exist. Reads only; answers states, never a file's content.
+ */
+export async function status(params: RpcParams<'hooks.status'>, home = os.homedir()): Promise<RpcResult<'hooks.status'>> {
+  const claude: { dir: string; settings: HookFile }[] = [];
+  for (const target of await claudeTargets(params.claude_dirs, home)) {
+    // `claudeTargets` keeps ~/.claude even when it is not there (install creates it): here it is "no Claude"
+    if (!(await isDir(target.dir))) continue;
+    claude.push({ dir: target.shown.replace(/\/settings\.json$/, ''), settings: await probe(target.file) });
+  }
+  const hasCodex = await isDir(path.join(home, CODEX_DIR_REL));
+  const hasCursor = await isDir(path.join(home, CURSOR_DIR_REL));
+  return hooksStatus({
+    scriptPath: path.join(home, HOOK_SCRIPT_REL),
+    script: await probe(path.join(home, HOOK_SCRIPT_REL)),
+    env: await probe(path.join(home, HOOK_ENV_REL)),
+    claude,
+    codex: hasCodex
+      ? { config: await probe(path.join(home, CODEX_CONFIG_REL)), hooks: await probe(path.join(home, CODEX_HOOKS_REL)), hooksPath: path.join(home, CODEX_HOOKS_REL) }
+      : null,
+    cursor: hasCursor ? { hooks: await probe(path.join(home, CURSOR_HOOKS_REL)) } : null,
+  });
 }
 
 export async function uninstall(params: RpcParams<'hooks.uninstall'>, home = os.homedir()): Promise<RpcResult<'hooks.uninstall'>> {

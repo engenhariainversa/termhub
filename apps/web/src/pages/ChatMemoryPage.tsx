@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import type { ChatDecision, ChatMemory, ConciergeNote, LessonItem } from '../lib/types';
+import { ContextLimitField } from '../components/chat/ContextLimitField';
 import { formatDate } from '../lib/format';
 
 const fmtDate = (iso: string) => formatDate(iso);
@@ -412,6 +413,9 @@ export function ChatMemoryPage() {
           <p className="mt-1 text-xs text-fg-dim">{t('Quando o Codex termina o turno com uma pergunta, abre um card no chat para você responder sem ir até a aba.')}</p>
         </div>
       )}
+
+      {/* TER-1038: the chat's context meter limit; not tied to embeddings either. */}
+      {memory && <ContextLimitField memory={memory} onSaved={setMemory} />}
 
       <div className="mt-4">
         <label className="label" htmlFor="chat-memory-search">
