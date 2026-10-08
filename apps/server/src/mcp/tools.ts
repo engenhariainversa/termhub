@@ -17,7 +17,7 @@ import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, T
 import { automationQueue } from '../automation/queue.js';
 import { policyText } from '../automation/policy.js';
 import { listAutomationEvents } from '../automation/events.js';
-import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun } from '../automation/follower.js';
+import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun, tabMayReport } from '../automation/follower.js';
 import { DECISIONS_MAX } from '../automation/decisions-taken.js';
 import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { setAutomationPolicy, setMachineAutomation } from '../automation/setup-tools.js';
@@ -361,11 +361,12 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'report_card',
     description:
-      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. decisions: every product or technical decision you took alone (question, options, choice, reason; pt-BR, short) — they go to the feed, the daily summary and the memory for the person to review. Call it once, at the end.",
+      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. decisions: every product or technical decision you took alone (question, options, choice, reason; pt-BR, short) — they go to the feed, the daily summary and the memory for the person to review. Call it once, at the end. If your run already ended blocked and you then finished the work by hand in this tab, status done with pr_url still hands the PR over: termhub follows it once it is linked to the card.",
     // Preflight F-8: scope `read` and no grant check — a documented exception, not a widening: `allowedIf`
-    // admits only a tab token whose own tab has an active run, and the tool writes that run's status only.
+    // admits only a tab token whose own tab has an active run, or whose latest run ended blocked and may still
+    // be adopted (spike TER-1031 §5.4), and the tool writes that run's status only.
     scope: 'read', resource: 'tasks', action: 'read',
-    allowedIf: tabHasActiveRun,
+    allowedIf: tabMayReport,
     grantText: 'de uma aba com trabalho automático em andamento',
     strict: true,
     input: {
