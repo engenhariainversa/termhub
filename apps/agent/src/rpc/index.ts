@@ -1,5 +1,6 @@
 import type { RpcMethod, RpcParams, RpcResult } from '@termhub/agent-protocol';
 import * as ai from './ai.js';
+import * as aiMemory from './ai-memory.js';
 import * as claude from './claude.js';
 import * as docs from './docs.js';
 import * as fileList from './file-list.js';
@@ -57,6 +58,7 @@ export const handlers: Handlers = {
   'wda.setup.state': wda.setupState,
   'tab.mcp.write': tabMcp.write,
   'tab.mcp.remove': tabMcp.remove,
+  'aimemory.status': aiMemory.status,
   'transcript.read': transcript.read,
   'git.worktree.ensure': worktree.ensure,
   'git.worktree.remove': worktree.remove,

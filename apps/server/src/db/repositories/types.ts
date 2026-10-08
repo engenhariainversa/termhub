@@ -96,6 +96,10 @@ export interface Machine {
   claude_auto_swap: boolean;
   /** R6: false = the dispatcher never places automatic runs here */
   automation_allowed: boolean;
+  /** TER-1018: "Usar ai-memory nesta máquina" (opt-in, off by default) */
+  ai_memory_enabled: boolean;
+  /** its local server (loopback/private origin); null = AI_MEMORY_DEFAULT_URL */
+  ai_memory_url: string | null;
   /** the user's own computer: the web app shows it only in the browser that added it */
   is_local: boolean;
   /** null = orphan (only visible to admins viewing "all") */
@@ -331,6 +335,8 @@ export const mapMachine = (m: PrismaMachine & { owner?: { name: string } | null 
   agent_auto_update: m.agentAutoUpdate,
   claude_auto_swap: m.claudeAutoSwap,
   automation_allowed: m.automationAllowed,
+  ai_memory_enabled: m.aiMemoryEnabled,
+  ai_memory_url: m.aiMemoryUrl ?? null,
   is_local: m.isLocal,
   owner_id: m.ownerId,
   owner_name: m.owner?.name ?? null,

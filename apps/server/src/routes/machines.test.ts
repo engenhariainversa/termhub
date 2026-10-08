@@ -31,6 +31,8 @@ function makeMachine(overrides: Partial<Machine> & { type: MachineType }): Machi
     agent_last_seen_at: null,
     agent_auto_update: false,
     claude_auto_swap: false,
+    ai_memory_enabled: false,
+    ai_memory_url: null,
     is_local: false,
     owner_id: 'u1',
     owner_name: null,
@@ -686,5 +688,76 @@ describe('agent update', () => {
     const res = await app.inject({ method: 'POST', url: '/api/machines/m1/agent/update' });
     expect(res.statusCode).toBe(502);
     expect(res.json().code).toBe('AGENT_UPDATE_NPM_MISSING');
+  });
+});
+
+describe('ai-memory (TER-1018)', () => {
+  it('PATCH stores the switch, keeps the default URL as null and normalizes a private one', async () => {
+    store.m1 = makeMachine({ type: 'agent' });
+    const built = buildApp(store);
+    app = built.app;
+    let res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { ai_memory_enabled: true, ai_memory_url: 'http://127.0.0.1:49374/' } });
+    expect(res.statusCode).toBe(200);
+    expect(built.repos.update).toHaveBeenLastCalledWith('m1', expect.objectContaining({ ai_memory_enabled: true, ai_memory_url: null }));
+    res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { ai_memory_url: 'http://192.168.1.20:5000' } });
+    expect(res.statusCode).toBe(200);
+    expect(built.repos.update).toHaveBeenLastCalledWith('m1', expect.objectContaining({ ai_memory_enabled: true, ai_memory_url: 'http://192.168.1.20:5000' }));
+    res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { ai_memory_url: '' } });
+    expect(built.repos.update).toHaveBeenLastCalledWith('m1', expect.objectContaining({ ai_memory_url: null }));
+  });
+
+  it('PATCH refuses a URL off loopback / private networks, and saves nothing', async () => {
+    store.m1 = makeMachine({ type: 'agent' });
+    const built = buildApp(store);
+    app = built.app;
+    for (const url of ['https://memory.example.com', 'http://8.8.8.8:49374', 'http://127.0.0.1:49374/x', 'ftp://127.0.0.1']) {
+      const res = await app.inject({ method: 'PATCH', url: '/api/machines/m1', payload: { ai_memory_enabled: true, ai_memory_url: url } });
+      expect(res.statusCode, url).toBe(400);
+    }
+    expect(built.repos.update).not.toHaveBeenCalled();
+  });
+
+  it('GET on a machine that did not opt in answers disabled without reaching the machine', async () => {
+    store.m1 = makeMachine({ type: 'agent' });
+    const rpc = attachAgent('0.22.0');
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'GET', url: '/api/machines/m1/ai-memory' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ enabled: false, url: 'http://127.0.0.1:49374' });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(execFile).not.toHaveBeenCalled();
+  });
+
+  it('GET asks the agent with the machine URL and returns what it detected', async () => {
+    store.m1 = makeMachine({ type: 'agent', ai_memory_enabled: true, ai_memory_url: 'http://localhost:5000' });
+    const rpc = attachAgent('0.22.0', vi.fn(async () => ({ installed: true, version: '2.6.0', server_up: true })));
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'GET', url: '/api/machines/m1/ai-memory' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ enabled: true, url: 'http://localhost:5000', installed: true, version: '2.6.0', server_up: true });
+    expect(rpc.mock.calls[0]!.slice(0, 2)).toEqual(['aimemory.status', { url: 'http://localhost:5000' }]);
+  });
+
+  it('GET answers 409 AGENT_OUTDATED for an agent that predates aimemory.status, without calling it', async () => {
+    store.m1 = makeMachine({ type: 'agent', ai_memory_enabled: true });
+    const rpc = attachAgent('0.21.0');
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'GET', url: '/api/machines/m1/ai-memory' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('AGENT_OUTDATED');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('GET runs the same probe over ssh on a legacy machine', async () => {
+    store.m1 = makeMachine({ type: 'ssh', ai_memory_enabled: true });
+    vi.mocked(execFile).mockImplementation(((_file: string, _args: string[], _opts: unknown, cb: (e: null, out: string, err: string) => void) => {
+      cb(null, 'BIN:yes\nVERSION:ai-memory 2.6.0\nSTATUS:fail\nSERVER:down\n', '');
+    }) as never);
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'GET', url: '/api/machines/m1/ai-memory' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ enabled: true, installed: true, version: '2.6.0', server_up: false });
+    const args = vi.mocked(execFile).mock.calls[0]![1] as string[];
+    expect(args.at(-1)).toContain("'http://127.0.0.1:49374'");
   });
 });

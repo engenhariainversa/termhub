@@ -244,6 +244,8 @@ export const MachineScalarFieldEnum = {
   agentAutoUpdate: 'agentAutoUpdate',
   claudeAutoSwap: 'claudeAutoSwap',
   automationAllowed: 'automationAllowed',
+  aiMemoryEnabled: 'aiMemoryEnabled',
+  aiMemoryUrl: 'aiMemoryUrl',
   isLocal: 'isLocal',
   ownerId: 'ownerId',
   createdAt: 'createdAt'
