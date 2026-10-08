@@ -62,6 +62,18 @@ describe('TabDot (TER-1044)', () => {
     expect(screen.getByTitle('automático, TER-9')).toBeInTheDocument();
   });
 
+  it('keeps the ring and the pulse inside its own box, the same size with or without a ring (TER-1045)', () => {
+    // 12px (h-3 w-3): the ring's diameter, and more than the pulsing 6px dot at scale 1.4 (8.4px)
+    const ringed = render(<TabDot alive tab={st('working')} autoRef="TER-1" />).container.firstElementChild!;
+    expect(ringed).toHaveClass('h-3', 'w-3', 'shrink-0', 'items-center', 'justify-center');
+    const ring = ringed.querySelector('[data-auto-ring]')!;
+    expect(ring).toHaveClass('inset-0');
+    expect(ring.className).not.toMatch(/-inset-/);
+    cleanup();
+    const plain = render(<TabDot alive tab={st('working')} />).container.firstElementChild!;
+    expect(plain).toHaveClass('h-3', 'w-3', 'shrink-0');
+  });
+
   it('says it in English too', async () => {
     await i18n.changeLanguage('en');
     try {

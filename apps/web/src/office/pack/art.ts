@@ -1,9 +1,9 @@
 /** Pixel-art desks, agents and displays that live beside the generated pack (PNG files in `./art`). */
 import agentVUrl from './art/agent-v.png';
 import chairEmptyHUrl from './art/chair-empty-h.png';
+import chairEmptyVUrl from './art/chair-empty-v.png';
 import deskNotebookHOffUrl from './art/desk-notebook-h-off.png';
 import deskVOff2Url from './art/desk-v-off-2.png';
-import displayVOn2Url from './art/display-v-on-2.png';
 import rackH2Url from './art/hack-h-2.png';
 import rackHUrl from './art/hack-h.png';
 import rackV2Url from './art/hack-v-2.png';
@@ -14,9 +14,9 @@ import { TILE_W } from '../layout/iso';
 export const ART_URLS: Record<string, string> = {
   'desk/side-v-2': deskVOff2Url,
   'desk/side-h': deskNotebookHOffUrl,
-  'display/v-2': displayVOn2Url,
   'agent/side-v': agentVUrl,
   'chair/h': chairEmptyHUrl,
+  'chair/side-v': chairEmptyVUrl,
   'rack/h': rackHUrl,
   'rack/h-2': rackH2Url,
   'rack/v': rackVUrl,
@@ -67,12 +67,12 @@ export type DeskArtKeys = {
   agent: string | null;
   /** empty chair when no agent; drawn above the empty desk */
   chair: string | null;
-  /** lit monitors under the agent; null when the seat is empty */
-  display: string | null;
+  /** the empty chair of the occupied desk, which the robot of an automatic run sits in (TER-1048) */
+  robotChair: string | null;
 };
 
 /**
- * Occupied: desk-v-2 → display → agent (same place).
+ * Occupied: desk-v-2 → its monitors' animation (DeskScreens) → agent, or robot → chair-v (same place).
  * Empty: desk-h → chair-h on top (same place).
  */
 export function deskArtKeys(showAgent: boolean): DeskArtKeys {
@@ -81,13 +81,13 @@ export function deskArtKeys(showAgent: boolean): DeskArtKeys {
       desk: 'desk/side-v-2',
       agent: 'agent/side-v',
       chair: null,
-      display: 'display/v-2',
+      robotChair: 'chair/side-v',
     };
   }
   return {
     desk: 'desk/side-h',
     agent: null,
     chair: 'chair/h',
-    display: null,
+    robotChair: null,
   };
 }

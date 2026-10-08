@@ -6,6 +6,7 @@
 import { Container, Graphics, Text, type TextStyleOptions } from 'pixi.js';
 import { deskMachineLine, truncateLabel, workingLabel, type BuildingModel, type DeskModel, type Marker } from '../model';
 import type { View } from './camera';
+import { deskStatusText } from './deskLook';
 import { buildingSignText, SIGN_SCALE } from './detail';
 
 /** Hover is where a name cut to 18 characters and a task title become readable: room for both. */
@@ -41,6 +42,8 @@ export class DeskOverlay {
   private readonly machine: Text;
   /** the bound task's title, hover only: a task without subtasks has no bar, so this is all it gets */
   private readonly title: Text;
+  /** hover only: the state, and for an automatic run its card — "Automático — trabalhando — TER-123" (TER-1048) */
+  private readonly status: Text;
   private readonly marker = new Container();
   private readonly bar = new Graphics();
   private readonly barText: Text;
@@ -62,9 +65,11 @@ export class DeskOverlay {
     this.machine.anchor.set(0.5, 0);
     this.title = new Text({ text: '', style: text(10, MUTED) });
     this.title.anchor.set(0.5, 0);
+    this.status = new Text({ text: '', style: text(10, MUTED) });
+    this.status.anchor.set(0.5, 0);
     this.barText = new Text({ text: '', style: text(10, 0xe6e8ee) });
     this.barText.anchor.set(0, 0.5);
-    this.root.addChild(this.bar, this.barText, this.label, this.machine, this.title, this.marker);
+    this.root.addChild(this.bar, this.barText, this.label, this.machine, this.status, this.title, this.marker);
     this.apply(model);
   }
 
@@ -75,6 +80,7 @@ export class DeskOverlay {
     this.full = truncateLabel(model.name, HOVER_MAX);
     this.machine.text = deskMachineLine(model.machine);
     this.title.text = model.progress ? truncateLabel(model.progress.title, HOVER_MAX) : '';
+    this.status.text = deskStatusText(model);
     this.label.text = this.hovered ? this.full : this.short;
     if (model.marker !== this.markerKind) {
       const entering = model.marker && model.marker !== 'error' && !this.markerKind;
@@ -116,13 +122,19 @@ export class DeskOverlay {
     this.label.style.fill = !this.hovered && this.showingActivity ? MUTED : 0xe6e8ee;
     this.label.position.set(0, below);
     this.label.alpha = this.hovered ? 1 : 0.75;
-    // one line per piece under the name: the machine, then (hovered) the task's title, then the bar
+    // one line per piece under the name: the machine, then (hovered) the state and the task's title, then the bar
     let line = below;
     const machineShown = shown && this.machine.text !== '';
     this.machine.visible = machineShown;
     if (machineShown) {
       line += 13;
       this.machine.position.set(0, line);
+    }
+    const statusShown = this.hovered && this.status.text !== '';
+    this.status.visible = statusShown;
+    if (statusShown) {
+      line += 14;
+      this.status.position.set(0, line);
     }
     const titled = this.hovered && this.title.text !== '';
     this.title.visible = titled;
