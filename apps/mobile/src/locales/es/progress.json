@@ -37,6 +37,7 @@
   "{{ref}} iniciado em {{machine}}": "{{ref}} iniciado en {{machine}}",
   "{{ref}}: retomado": "{{ref}}: reanudado",
   "{{ref}}: agente terminou": "{{ref}}: el agente terminó",
+  "{{ref}}: {{reason}}": "{{ref}}: {{reason}}",
   "{{ref}}: parou e espera você": "{{ref}}: se detuvo y te espera",
   "{{ref}} não começou: {{reason}}": "{{ref}} no empezó: {{reason}}",
   "{{ref}}: pergunta do agente respondida": "{{ref}}: pregunta del agente respondida",
