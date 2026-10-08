@@ -343,6 +343,8 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     uploadAttachment: (a: Auth, file, projectId, onProgress) =>
       uploadCall(`/api/m/v1/chat/attachments?name=${encodeURIComponent(file.name)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ''}`, file.uri, file.mime, chatAttachmentResponse, a.accessToken, onProgress).then((r) => r.attachment),
     deleteAttachment: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/attachments/${encodeURIComponent(id)}`, { token: a.accessToken }),
+    retryAttachment: (a: Auth, id: string) =>
+      call('POST', `/api/m/v1/chat/attachments/${encodeURIComponent(id)}/retry`, chatAttachmentResponse, { token: a.accessToken }).then((r) => r.attachment),
     attachmentSource: async (a: Auth, id: string) => {
       const path = `/api/m/v1/chat/attachments/${encodeURIComponent(id)}`;
       return {

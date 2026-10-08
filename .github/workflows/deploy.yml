@@ -32,6 +32,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Conferir .env do servidor
         run: test -f "$ENV_FILE" || { echo "faltando $ENV_FILE (copie de .env.example)"; exit 1; }
+      # whisper refuses every request without a shared secret (TER-585); an .env nobody edited turned
+      # voice off in production (TER-1035). Generated once, before whisper and the app read it.
+      - name: Shared secrets (generate the missing ones)
+        run: bash deploy/ensure-secrets.sh "$ENV_FILE" WHISPER_SECRET
       - name: Landing (build + recreate the static container)
         run: docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.proxy.yml --profile prod up -d --build --no-deps landing
       - name: Whisper (speech-to-text service; recreated only when its image or config changes)

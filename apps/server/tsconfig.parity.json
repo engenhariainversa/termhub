@@ -1,0 +1,9 @@
+{
+  // The bus/contract parity test guards itself through its types: its `samples` record makes the
+  // type checker refuse a ChatEvent variant without a sample. Tests are left out of tsconfig.json, so
+  // the server's typecheck runs this one on its own (TER-474).
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["src/mobile/events-parity.test.ts"],
+  "exclude": []
+}

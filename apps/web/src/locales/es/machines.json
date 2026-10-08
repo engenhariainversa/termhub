@@ -414,5 +414,8 @@
   "Aceita trabalho automático": "Acepta trabajo automático",
   "Desmarcada, o termhub nunca inicia sozinho um card do quadro nesta máquina. Abas abertas por você continuam como sempre.": "Si está desmarcada, termhub nunca inicia por sí solo una tarjeta del tablero en esta máquina. Las pestañas que abras siguen funcionando como siempre.",
   "Consultar o uso das contas de IA": "Consultar el uso de las cuentas de IA",
-  "A credencial de login das ferramentas é lida e usada só nesta máquina; o termhub recebe apenas os números de uso. Desligado, o termhub não lê a credencial e as contas desta máquina ficam sem as barras de uso.": "La credencial de inicio de sesión de las herramientas se lee y se usa solo en esta máquina; termhub recibe únicamente los números de uso. Si está desactivado, termhub no lee la credencial y las cuentas de esta máquina se quedan sin las barras de uso."
+  "A credencial de login das ferramentas é lida e usada só nesta máquina; o termhub recebe apenas os números de uso. Desligado, o termhub não lê a credencial e as contas desta máquina ficam sem as barras de uso.": "La credencial de inicio de sesión de las herramientas se lee y se usa solo en esta máquina; termhub recibe únicamente los números de uso. Si está desactivado, termhub no lee la credencial y las cuentas de esta máquina se quedan sin las barras de uso.",
+  "Também desinstalar da máquina": "Desinstalar también de la máquina",
+  "Remove os hooks, encerra as sessões de terminal das tabs desta máquina e remove o serviço e o token do agente. O pacote npm continua instalado (npm rm -g @termhub/agent).": "Quita los hooks, cierra las sesiones de terminal de las pestañas de esta máquina y quita el servicio y el token del agente. El paquete npm sigue instalado (npm rm -g @termhub/agent).",
+  "O agente continua instalado na máquina. Para removê-lo, rode nela:": "El agente sigue instalado en la máquina. Para quitarlo, ejecuta en ella:"
 }

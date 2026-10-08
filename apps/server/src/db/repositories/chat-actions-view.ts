@@ -170,6 +170,10 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       return automationPolicyPhrase(args);
     case 'set_machine_automation':
       return args.accept === true ? 'fazer a máquina aceitar trabalho automático' : 'fazer a máquina recusar trabalho automático';
+    case 'install_machine_hooks': {
+      const tools = Array.isArray(args.tools) ? args.tools.filter((x): x is string => typeof x === 'string') : [];
+      return `instalar ou atualizar os hooks do termhub (${tools.length ? tools.join(', ') : 'Claude Code, Codex e Cursor que estiverem lá'}), mexendo nos arquivos de configuração deles`;
+    }
     case 'resume_automation_run':
       return 'retomar o trabalho automático de um card';
     case 'automation_merge': {

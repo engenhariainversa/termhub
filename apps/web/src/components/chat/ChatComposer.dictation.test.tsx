@@ -73,11 +73,12 @@ beforeEach(() => {
 });
 
 describe('ChatComposer dictation', () => {
-  it('offers the microphone, and only the microphone, when the box is empty', () => {
+  it('dictates from its own button, beside the voice note microphone, when the box is empty', () => {
     renderComposer({ state: 'idle', value: '' });
 
-    // One button with one role: an empty box dictates, so there is no send affordance to find.
+    // An empty box records voice notes on the round button (TER-1036): no send affordance to find.
     expect(screen.queryByRole('button', { name: /enviar/i })).toBeNull();
+    expect(primary(/gravar áudio/i)).toBeTruthy();
     fireEvent.click(primary(/ditar/i));
 
     expect(start).toHaveBeenCalledTimes(1);
@@ -87,7 +88,7 @@ describe('ChatComposer dictation', () => {
   it('turns into the send button as soon as there is text', () => {
     renderComposer({ state: 'idle', value: 'olha' });
 
-    expect(screen.queryByRole('button', { name: /ditar/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /gravar áudio/i })).toBeNull();
     fireEvent.click(primary(/enviar/i));
 
     expect(onSend).toHaveBeenCalledTimes(1);
@@ -99,7 +100,7 @@ describe('ChatComposer dictation', () => {
 
     // 65 raw seconds on screen would be a stopwatch nobody can read: the assertion is the format.
     expect(screen.getByText('1:05')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /ditar/i })).toBeNull();
+    expect(primary(/ditar/i).disabled).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
     expect(cancel).toHaveBeenCalledTimes(1);
@@ -195,6 +196,7 @@ describe('ChatComposer dictation', () => {
       [{ state: 'checking', value: '' }, /ditar/i],
       [{ state: 'starting', value: '' }, /ditar/i],
       [{ state: 'idle', value: '' }, /ditar/i],
+      [{ state: 'idle', value: '' }, /gravar áudio/i],
       [{ state: 'idle', value: 'olha' }, /enviar/i],
       [{ state: 'recording', value: '' }, /parar/i],
     ];
@@ -203,10 +205,11 @@ describe('ChatComposer dictation', () => {
       const { container } = renderComposer(opts);
       const button = primary(name);
 
-      // One glyph on the primary button, one on the paperclip, and both decorative.
+      // One glyph on the button, one each on the paperclip, the dictation button and the round
+      // button, and all of them decorative.
       expect(button.querySelectorAll('svg')).toHaveLength(1);
       const glyphs = Array.from(container.querySelectorAll('svg'));
-      expect(glyphs).toHaveLength(2);
+      expect(glyphs).toHaveLength(3);
       for (const glyph of glyphs) {
         expect(glyph.getAttribute('aria-hidden')).toBe('true');
         expect(glyph.getAttribute('aria-label')).toBeNull();

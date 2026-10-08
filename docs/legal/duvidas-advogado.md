@@ -69,7 +69,7 @@ O legítimo interesse precisa de um relatório (LIA) documentado?
 - O art. 33, V e IX (execução de contrato e pedido do titular) basta?
 - Ou é preciso assinar as cláusulas-padrão da Resolução CD/ANPD nº 19/2024 com cada operador?
 
-**L-5. Analytics do app móvel sem consentimento.** No app, o Google Analytics for Firebase registra telas e eventos de sessão desde a primeira abertura, com identificador de instalação e IP. Na web e no site, o analytics só começa depois do "Aceitar". Pode ser legítimo interesse no app, ou é preciso pedir consentimento também para analytics? (Ver D-5 e o card TER-583.)
+**L-5. Analytics do app móvel sem consentimento.** No app, o Google Analytics for Firebase registra telas e eventos de sessão desde a primeira abertura, com identificador de instalação e IP. Na web e no site, o analytics só começa depois do "Aceitar". Pode ser legítimo interesse no app, ou é preciso pedir consentimento também para analytics? (Ver D-5 e o card TER-583.) Desde o TER-583 o app pede consentimento: o mesmo cartão da medição de anúncios cobre as métricas de uso, e a coleta fica desligada até o aceite.
 
 **L-6. Encarregado (DPO).** O termhub pode se enquadrar como agente de tratamento de pequeno porte (Resolução CD/ANPD nº 2/2022) e ficar dispensado de indicar encarregado? Mesmo dispensado, deve indicar um canal? A Política já prevê um e-mail.
 
@@ -150,7 +150,7 @@ O legítimo interesse precisa de um relatório (LIA) documentado?
 | D-3 | País e estado onde o servidor fica, e se haverá mudança de hospedagem antes do lançamento | Política 6 e 7 | declarar "Brasil, [estado]" |
 | D-4 | Provedor de SMTP de produção | Política 6 | — |
 | D-5 | Analytics no app móvel: pedir consentimento, como na web, ou ficar com legítimo interesse? | Política 9.2; L-5 | pedir consentimento: alinha com a web e com o TER-583, e simplifica as declarações das lojas |
-| D-6 | Prazos de retenção que faltam: dados após a exclusão (30 dias?), backups, histórico das abas, lista de espera | Política 8 | 30 dias; histórico das abas 90 dias; lista de espera 12 meses |
+| D-6 | Prazos de retenção que faltam: dados após a exclusão (30 dias?), backups, histórico das abas, lista de espera | Política 8 | 30 dias; **decidido no TER-743**: histórico das abas 90 dias, lista de espera 12 meses (da inscrição ou do último convite); chat, respostas e memória enquanto a conta existir. Backups seguem em aberto (D-7) |
 | D-7 | Backup do banco: hoje não há. Haverá? Onde e por quanto tempo? | Política 6 e 8 | — |
 | D-8 | URLs públicas: `/termos`, `/privacidade` e `/excluir-conta` em `termhub.dev`. O card usa `/termos` e `/privacidade`, e o código da landing menciona "terms and privacy" | Termos; Política 12; E-1 | `termhub.dev/termos`, `/privacidade` e `/excluir-conta` |
 | D-9 | Recursos que agem sozinhos (troca automática de conta, respostas automáticas): manter ligados por padrão? | A-3, A-4 | aguardar o parecer de A-3 |
@@ -170,16 +170,16 @@ A Política foi escrita como **deve ficar**. Ela só pode ser publicada quando e
 | P-3 | ~~**Página web para pedir a exclusão sem o app**~~ | **entregue no PR #285 (TER-720)**: `termhub.dev/excluir-conta` | `apps/landing/src/delete-account/DeleteAccountPage.tsx` | — |
 | P-4 | Provedor de SMTP de produção documentado, e **e-mail fora do log**: sem `SMTP_HOST`, o e-mail inteiro, com o código de login, vai para o log | `apps/server/src/email/mailer.ts:32-42` | — | segurança |
 | P-5 | País da hospedagem declarado | não está escrito em lugar nenhum | — | Política |
-| P-6 | **Retenção dos logs** (6 meses, Marco Civil) e rotação | padrão do Docker; o log do Fastify registra IP e URL | `apps/server/src/app.ts:110` | Marco Civil |
+| P-6 | ~~**Retenção dos logs** (6 meses, Marco Civil) e rotação~~ | **entregue no TER-744**: registros de acesso (data e hora, IP, usuário, rota e status; sem query, corpo nem conteúdo) na tabela `access_logs`, apagados após 190 dias | `apps/server/src/access-log/recorder.ts`; `docs/security-and-network.md` | — |
 | P-7 | Backup do banco | não há backup automatizado | `README.md:237` (só um `pg_dump` manual) | continuidade |
 | P-8 | **Consulta de uso das contas de IA sem a credencial sair da máquina**, e uma opção para desligar a leitura | **em andamento no TER-735**: a consulta passa a ser feita na própria máquina (agente 0.20.0+, script via SSH, ou o próprio servidor quando a máquina é ele mesmo) e o servidor recebe só os números; chave por máquina para desligar | `packages/machine-ops/src/ai-usage*.ts`; `apps/agent/src/rpc/ai.ts`; `apps/server/src/ai/` | A-1 |
-| P-9 | Registro de auditoria do "ver como" do administrador | não existe | `apps/server/src/auth/scope.ts:11-39` | L-10 |
+| P-9 | ~~Registro de auditoria do "ver como" do administrador~~ | **entregue no TER-746**: tabela `view_as_audit` (admin, usuário alvo ou "todos", início, fim, IP), guardada 1 ano após o fim. Aviso ao usuário e motivo obrigatório dependem da resposta a L-10 | `apps/server/src/db/repositories/view-as-audit.ts`; `apps/server/src/auth/routes.ts` (`POST /view-as`) | L-10 |
 | P-10 | **Exportação dos dados** (portabilidade) | não existe | — | LGPD, art. 18, V |
-| P-11 | Prazos de retenção automáticos para chat, `tab_last_answers`, `tab_events`, memória e lista de espera | sem expurgo | `apps/server/prisma/schema.prisma:323-348, 586-609, 750-775, 1094-1134` | Política 8 |
+| P-11 | ~~Prazos de retenção automáticos para chat, `tab_last_answers`, `tab_events`, memória e lista de espera~~ | **entregue no TER-743**: histórico das abas 90 dias, lista de espera 12 meses (da inscrição ou do último convite), expurgo de hora em hora; chat, últimas respostas e memória ficam enquanto a conta existir, e o usuário apaga uma conversa inteira em "Apagar conversa" | `apps/server/src/retention/purge.ts`; `apps/server/src/chat/service.ts` (`deleteConversation`) | — |
 | P-12 | **Aceite dos Termos e da Política**: versão e data por usuário, no cadastro e no checkout, e novo aceite quando houver mudança relevante | não existe | — | lançamento (TER-717) |
 | P-13 | **Links para os Termos e a Política** no rodapé do site, no login do app web, em Ajustes e na tela inicial do app móvel | não existem; as páginas `/termos` e `/privacidade` também não | `apps/landing/vite.config.ts:13-17`; `apps/landing/src/Site.tsx:10`; `apps/landing/src/i18n.ts:190` | lojas |
-| P-14 | Google Fonts carregado antes do consentimento | fontes do Google na landing | `apps/landing/index.html:11-13` | TER-583 |
-| P-15 | Analytics do app móvel com consentimento (se D-5 = consentimento) | `analytics_storage` liberado por padrão | `apps/mobile/firebase.json`; `apps/mobile/src/services/analytics.ts` | D-5 |
+| P-14 | ~~Google Fonts carregado antes do consentimento~~ | **resolvido no TER-583**: Inter e JetBrains Mono servidas pelo próprio site (`@fontsource`) | `apps/landing/src/index.css` | — |
+| P-15 | ~~Analytics do app móvel com consentimento~~ | **resolvido no TER-583**: `analytics_storage` e a coleta seguem o consentimento de "Métricas de uso e anúncios"; falta só o padrão nativo (`apps/mobile/firebase.json`) no próximo build de loja, para a primeira abertura de uma instalação nova | `apps/mobile/src/services/analytics.ts` | — |
 | P-16 | `docs/security-and-network.md:28` diz que o app web não tem scripts de terceiros, mas ele carrega o Google Analytics depois do consentimento | doc desatualizado | `apps/web/src/lib/analytics.ts` | coerência |
 | P-17 | Serviço `concierge` no `docker-compose.yml` monta o diretório de conta Claude do mantenedor, mas não é mais usado | configuração morta | `docker-compose.yml:146-165`; `apps/server/src/config.ts:135-141` | A-1 (evitar a aparência de conta compartilhada) |
 | P-18 | Histórico do que mudou nos Termos e na Política (versões anteriores publicadas) | — | — | Termos 13.3 |

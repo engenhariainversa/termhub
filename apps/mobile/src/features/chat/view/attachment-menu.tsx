@@ -6,10 +6,6 @@ import { useTranslation } from '@/i18n';
 import { Icon, type IconName } from '@/ui';
 import { CHAT_MSG } from '../model/messages';
 import type { PickedFile } from '../viewmodel/attachments';
-import { useRecorder } from '../viewmodel/use-voice';
-
-/** Whole seconds as `m:ss`. */
-const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 /** Where the + button sits on screen (window coordinates of its top-left corner): the menu opens above it. */
 export type MenuAnchor = { x: number; y: number };
@@ -31,11 +27,12 @@ function MenuItem({ icon, label, onPress, tone = 'text' }: { icon: IconName; lab
 }
 
 /**
- * The + button's menu, floating just above it with rounded corners — the three ways in of spec
- * 2026-09-26 §5.6: the gallery (photos and videos, `quality: 0.8` so a phone
- * photo is not 8 MB), the file picker, and a recording that goes up as an audio attachment — the same
- * recorder as dictation, but the clip is kept, not transcribed into the box. `room` is how many more
- * files the message can take. A tap outside closes it (and drops a recording under way).
+ * The + button's menu, floating just above it with rounded corners — the ways in of spec 2026-09-26
+ * §5.6: the gallery (photos and videos, `quality: 0.8` so a phone photo is not 8 MB) and the file
+ * picker. A voice note is the microphone's (hold it, TER-1036), so the menu no longer records; it
+ * offers dictation instead (`onDictate`, when the server transcribes), the microphone that used to sit
+ * next to the box: what is said lands in the box as text, to be read before it is sent. `room` is how
+ * many more files the message can take. A tap outside closes it.
  */
 export function AttachmentMenu({
   open,
@@ -43,22 +40,21 @@ export function AttachmentMenu({
   room,
   onClose,
   onPicked,
+  onDictate,
 }: {
   open: boolean;
   anchor: MenuAnchor | null;
   room: number;
   onClose(): void;
   onPicked(files: PickedFile[]): void;
+  /** Starts dictation into the box; without it the menu has no "Ditar". */
+  onDictate?(): void;
 }) {
   const { t } = useTranslation();
-  const recorder = useRecorder();
   const window = useWindowDimensions();
   const [error, setError] = useState<string | null>(null);
 
-  // `cancel()` is a no-op when idle, and while the microphone is still being asked for it stops the
-  // recording from ever starting: a Cancelar or backdrop tap during that wait must not leave one running.
   const close = () => {
-    recorder.cancel();
     setError(null);
     onClose();
   };
@@ -89,15 +85,10 @@ export function AttachmentMenu({
     close();
   };
 
-  const stopRecording = async () => {
-    const clip = await recorder.stop();
-    if (!clip) return;
-    onPicked([{ uri: clip.uri, name: `audio-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.m4a`, mime: clip.mime, bytes: null }]);
+  const dictate = () => {
     close();
+    onDictate?.();
   };
-
-  // `start()` rejects with the same message it puts in `recorder.error`, shown below.
-  const startRecording = () => recorder.start().catch(() => undefined);
 
   const place = anchor ? { left: Math.max(8, anchor.x - 4), bottom: window.height - anchor.y + ANCHOR_GAP } : FALLBACK;
 
@@ -105,23 +96,10 @@ export function AttachmentMenu({
     <Modal transparent animationType="fade" visible={open} onRequestClose={close}>
       <Pressable className="absolute inset-0" onPress={close} accessibilityRole="button" accessibilityLabel={t('Fechar')} />
       <View style={{ position: 'absolute', ...place }} className="min-w-56 rounded-3xl border border-app-border bg-app-surface p-2 shadow-lg">
-        {recorder.state === 'recording' ? (
-          <>
-            <View className="flex-row items-center gap-2 px-3 py-2">
-              <View className="h-2 w-2 rounded-full bg-app-danger" />
-              <Text className="text-sm text-app-muted">{t('Gravando… {{time}}', { time: clock(recorder.seconds) })}</Text>
-            </View>
-            <MenuItem icon={{ ios: 'stop.fill', android: 'stop' }} label={t('Parar e anexar')} onPress={() => void stopRecording()} />
-            <MenuItem icon={{ ios: 'xmark', android: 'close' }} label={t('Cancelar gravação')} onPress={close} tone="danger" />
-          </>
-        ) : (
-          <>
-            <MenuItem icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }} label={t('Foto ou vídeo')} onPress={() => void pickMedia()} />
-            <MenuItem icon={{ ios: 'doc', android: 'description' }} label={t('Arquivo')} onPress={() => void pickFile()} />
-            <MenuItem icon={{ ios: 'waveform', android: 'graphic_eq' }} label={t('Gravar áudio')} onPress={() => void startRecording()} />
-          </>
-        )}
-        {(error ?? recorder.error) ? <Text className="max-w-64 px-3 py-2 text-sm text-app-danger">{error ?? recorder.error}</Text> : null}
+        <MenuItem icon={{ ios: 'photo.on.rectangle', android: 'photo_library' }} label={t('Foto ou vídeo')} onPress={() => void pickMedia()} />
+        <MenuItem icon={{ ios: 'doc', android: 'description' }} label={t('Arquivo')} onPress={() => void pickFile()} />
+        {onDictate ? <MenuItem icon={{ ios: 'text.bubble', android: 'record_voice_over' }} label={t('Ditar')} onPress={dictate} /> : null}
+        {error ? <Text className="max-w-64 px-3 py-2 text-sm text-app-danger">{error}</Text> : null}
       </View>
     </Modal>
   );

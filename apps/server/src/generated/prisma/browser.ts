@@ -347,6 +347,14 @@ export type DeviceToken = Prisma.DeviceTokenModel
  */
 export type DeviceChallenge = Prisma.DeviceChallengeModel
 /**
+ * Model AccessLog
+ * Access records the Marco Civil (art. 15) asks an application provider to keep for 6 months (TER-744):
+ * when, from which IP, who (when known) and which route. Never a query string, a body or anything a
+ * terminal or a chat carried. `user_id` has no foreign key on purpose: the record outlives an account
+ * deletion until its 6 months are over. Purged hourly past `ACCESS_LOG_RETENTION_MS`.
+ */
+export type AccessLog = Prisma.AccessLogModel
+/**
  * Model DeviceEvent
  * The device trail (spec §8). `meta` holds ids and names, never secrets. Kept 90 days.
  */
@@ -370,6 +378,15 @@ export type UserNotification = Prisma.UserNotificationModel
  * timer's claim, inserted with ON CONFLICT DO NOTHING so two colours send it once. `day` is the user's local date.
  */
 export type AutomationSummary = Prisma.AutomationSummaryModel
+/**
+ * Model ViewAsAudit
+ * Audit trail of the admin "view as" switch (TER-746, P-9/L-10 of docs/legal/duvidas-advogado.md): one row
+ * per period an admin spent in another scope — a user's data or "all". `ended_at` is set when the admin
+ * switches again or signs out; null means the period has not ended, or ended without an explicit switch
+ * (the browser dropped the session cookie). No foreign keys on purpose: the record outlives the deletion of
+ * either account until its retention is over (VIEW_AS_AUDIT_RETENTION_MS).
+ */
+export type ViewAsAudit = Prisma.ViewAsAuditModel
 /**
  * Model SecurityEvent
  * The security audit trail (TER-577): who signed in or failed to, changed a role or a permission, viewed

@@ -150,7 +150,8 @@ export const api = {
     /** for `type: 'agent'`, the response also carries `agent_token` (the plaintext token, shown only once) */
     create: (input: Partial<Machine>) => request<{ machine: Machine; agent_token?: string }>('POST', '/machines', input),
     update: (id: string, input: Partial<Machine>) => request<{ machine: Machine }>('PATCH', `/machines/${id}`, input),
-    remove: (id: string) => request<{ ok: true }>('DELETE', `/machines/${id}`),
+    /** `uninstall`: also remove the hooks, the tabs' tmux sessions and the agent's service + token from the machine (agent 0.20.0+, online). */
+    remove: (id: string, opts?: { uninstall?: boolean }) => request<{ ok: true }>('DELETE', `/machines/${id}${opts?.uninstall ? '?uninstall=1' : ''}`),
     status: (id: string) =>
       request<{
         id: string;
@@ -236,6 +237,8 @@ export const api = {
         /** Only while the attachment is not yet sent (409 once it belongs to a message, 404 for another user's). */
         remove: (id: string) => request<{ ok: true }>('DELETE', `/chat/attachments/${encodeURIComponent(id)}`),
         status: (id: string) => request<{ attachment: ChatAttachment }>('GET', `/chat/attachments/${encodeURIComponent(id)}/status`),
+        /** A transcription whisper could not do goes back to the queue; the row answers pending (409 when a retry cannot help). */
+        retry: (id: string) => request<{ attachment: ChatAttachment }>('POST', `/chat/attachments/${encodeURIComponent(id)}/retry`),
         /** The download (images are served inline, everything else as an attachment). */
         url: (id: string) => `/api/chat/attachments/${encodeURIComponent(id)}`,
       },
@@ -295,6 +298,8 @@ export const api = {
    *  fresh one. 409 CHAT_BUSY while an answer is being written, 409 CHAT_ARCHIVED if the send that lost
    *  the race already ran against the conversation this call just archived. */
   resetChat: (projectId?: string | null) => request<{ conversation: ChatConversation }>('POST', '/chat/reset', projectId ? { project_id: projectId } : {}),
+  /** "Apagar conversa" (TER-743): like `resetChat`, but the old conversation is deleted for good. Same 409s. */
+  deleteChat: (projectId?: string | null) => request<{ conversation: ChatConversation }>('POST', '/chat/delete', projectId ? { project_id: projectId } : {}),
   /** "Compactar" (TER-315): runs `/compact` on the scope's session. 202 once it started; the end comes
    *  over /ws/chat (`compact`, `context`). 409 CHAT_BUSY while an answer is being written,
    *  CHAT_NOTHING_TO_COMPACT before the first answer, and the host 409s (each with its pt-BR sentence). */
