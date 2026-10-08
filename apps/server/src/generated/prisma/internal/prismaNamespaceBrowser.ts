@@ -881,6 +881,7 @@ export const ChatDecisionScalarFieldEnum = {
   wrongAt: 'wrongAt',
   supersededAt: 'supersededAt',
   supersedes: 'supersedes',
+  trust: 'trust',
   createdAt: 'createdAt'
 } as const
 

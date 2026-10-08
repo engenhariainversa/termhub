@@ -95,7 +95,7 @@ function decisionResult(d: ChatDecision, similarity: number | null, match: Memor
   return withStatus({
     ref: decisionKey(d.id),
     kind: 'decision',
-    trust: 'person',
+    trust: d.trust,
     project: projectOf(d.project_id, d.project_name),
     date: d.created_at,
     title: decisionTitle(d),
@@ -195,18 +195,20 @@ export async function searchMemory(
   const itemFilter: MemoryFilter = { ownerId, projectId: a.project_id, kinds: itemKinds, includeInactive, includeSuperseded };
 
   let vector: number[] | null = null;
+  let model = '';
   if (embedder) {
     try {
-      const { vectors } = await withTimeout(embedder.embed([a.query]), EMBED_TIMEOUT_MS, () => {});
-      vector = vectors[0] ?? null;
+      const out = await withTimeout(embedder.embed([a.query]), EMBED_TIMEOUT_MS, () => {});
+      vector = out.vectors[0] ?? null;
+      model = out.model;
     } catch {
       vector = null; // best effort: an unreachable or slow embed service falls back to full-text alone
     }
   }
 
   const [vecDecisions, vecItems, textDecisions, textItems] = await Promise.all([
-    vector && wantDecision ? ctx.repos.chatDecisions.nearestAny(ownerId, vector, CANDIDATE_K, decisionProject, { includeInactive, includeSuperseded }) : Promise.resolve([] as DecisionNeighbour[]),
-    vector && !skipItems ? ctx.repos.memoryItems.nearest(itemFilter, vector, CANDIDATE_K) : Promise.resolve([] as MemoryHit[]),
+    vector && wantDecision ? ctx.repos.chatDecisions.nearestAny(ownerId, vector, CANDIDATE_K, embedTag(model), decisionProject, { includeInactive, includeSuperseded }) : Promise.resolve([] as DecisionNeighbour[]),
+    vector && !skipItems ? ctx.repos.memoryItems.nearest(itemFilter, vector, CANDIDATE_K, model) : Promise.resolve([] as MemoryHit[]),
     wantDecision ? ctx.repos.chatDecisions.textSearch(ownerId, a.query, CANDIDATE_K, decisionProject, { includeInactive, includeSuperseded }) : Promise.resolve([] as (ChatDecision & { rank: number })[]),
     skipItems ? Promise.resolve([] as MemoryHit[]) : ctx.repos.memoryItems.textSearch(itemFilter, a.query, CANDIDATE_K),
   ]);
@@ -586,6 +588,15 @@ async function similarEnough(ctx: ControlContext, payload: ChoicePayload, backer
   return score;
 }
 
+/** `answer_tab_question`'s result. `other_project_sources`: the cited decisions answered in another
+ *  project than the card's (TER-1006), only when there is one. */
+export interface AnswerToolResult {
+  mode: 'auto' | 'suggest';
+  due_at?: string;
+  downgraded_because?: Downgrade;
+  other_project_sources?: string[];
+}
+
 /**
  * `answer_tab_question` (spec 2026-09-26 concierge memory D6, D7, D8, D11, §5.4): answers one of the
  * person's open `choice` cards from memory, never by typing — either a cancellable countdown
@@ -602,7 +613,7 @@ async function similarEnough(ctx: ControlContext, payload: ChoicePayload, backer
  * documents), when the person's "Responder sozinho" switch is off; when the person already cancelled a
  * countdown on this card; when any question's header, text or chosen answer (label, description or
  * free text) hits the blocklist; when
- * not every question has a cited `decision` (a person's own past answer) that maps to exactly the
+ * not every question has a cited `decision` (a person's own past answer, trust `person`) that maps to exactly the
  * proposed answer, option descriptions included (`decisionBacks`); or when those decisions are not about a similar enough question
  * (`similarEnough`, fail closed). A doc, card, message or note can never back `auto`: text an agent
  * wrote may carry an injection (D2).
@@ -616,7 +627,7 @@ export async function answerTabQuestionTool(
   ctx: ControlContext,
   a: { question_id: string; answers: ProposedAnswer[]; reason: string; sources: string[]; mode?: 'auto' | 'suggest' },
   deps: { embedder?: Embedder | null } = {},
-): Promise<{ mode: 'auto' | 'suggest'; due_at?: string; downgraded_because?: Downgrade }> {
+): Promise<AnswerToolResult> {
   const userId = ctx.scope.user.id;
   const row = await ctx.repos.tabQuestions.findByIdForUser(a.question_id, userId);
   if (!row) throw new ControlError('QUESTION_NOT_FOUND', 'Pergunta não encontrada');
@@ -628,12 +639,17 @@ export async function answerTabQuestionTool(
   const answer = toChoiceAnswer(payload, a.answers);
   const sources = await verifySources(ctx, a.sources);
   if (sources.length === 0) throw new ControlError('UNKNOWN_SOURCE', 'Cite ao menos uma fonte de search_memory');
+  // The search stays account-wide (a decision from another project can be the right one), but the model
+  // is told which cited decisions were answered in another project, so it can weigh them (TER-1006).
+  const otherProject = sources.flatMap((s) => (s.kind === 'decision' && s.decision.project_id !== row.project_id ? [s.ref] : []));
+  const result = (r: AnswerToolResult): AnswerToolResult => (otherProject.length > 0 ? { ...r, other_project_sources: otherProject } : r);
 
   let downgrade: Downgrade | undefined;
   let score: number | null = null;
   if ((a.mode ?? 'auto') === 'auto') {
     // A replaced decision (TER-1015) never backs `auto`: citing only that one is `no_person_precedent`.
-    const decisions = sources.flatMap((s) => (s.kind === 'decision' && !s.decision.superseded_at ? [s.decision] : []));
+    // Nor does one the countdown made: only the person's own click is a precedent (`derived`, TER-1006, D2/D11).
+    const decisions = sources.flatMap((s) => (s.kind === 'decision' && !s.decision.superseded_at && s.decision.trust === 'person' ? [s.decision] : []));
     const backers = payload.questions.map((item, i) => decisions.filter((d) => decisionBacks(d, item, answer.answers[i]!)));
     const backed = backers.filter((ds) => ds.length > 0).length;
     const parts = blocklistParts(payload, answer);
@@ -650,7 +666,7 @@ export async function answerTabQuestionTool(
       const scheduled = await scheduleAutoAnswer(ctx.repos, { row, answer, by: 'concierge', reason: a.reason, sources: sources.map((s) => ({ kind: s.kind, id: s.id })), score: roundScore(score) });
       if (scheduled?.auto_answer) {
         await noteAutomaticAnswer(ctx, scheduled);
-        return { mode: 'auto', due_at: scheduled.auto_answer.due_at };
+        return result({ mode: 'auto', due_at: scheduled.auto_answer.due_at });
       }
       // The write lost. If the person cancelled a countdown meanwhile (an overlapping call scheduled
       // one during the embed above, and the person stopped it), that is the same `cancelled_by_person`
@@ -679,5 +695,5 @@ export async function answerTabQuestionTool(
   const updated = await ctx.repos.tabQuestions.setSuggestion(row.id, { items });
   if (!updated) throw new ControlError('QUESTION_CLOSED', QUESTION_CLOSED);
   await publishTabQuestions(ctx.repos, 'tab_question', [updated], { update: true });
-  return downgrade ? { mode: 'suggest', downgraded_because: downgrade } : { mode: 'suggest' };
+  return result(downgrade ? { mode: 'suggest', downgraded_because: downgrade } : { mode: 'suggest' });
 }

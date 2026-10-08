@@ -336,15 +336,16 @@ export class MemoryItemsRepository {
   /**
    * The `k` nearest items of this owner, best (highest cosine similarity) first: an exact scan, no ANN
    * index (spec D5) — never another owner's rows, never an unembedded row, `projectId`/`kinds` narrow
-   * further when given. `rank` is the 1-based position in this result.
+   * further when given. Only rows embedded with exactly `embedModel`, the query vector's own model
+   * (TER-1006): a vector of another model is not comparable. `rank` is the 1-based position in this result.
    */
-  async nearest(filter: MemoryFilter, vector: number[], k: number): Promise<MemoryHit[]> {
+  async nearest(filter: MemoryFilter, vector: number[], k: number, embedModel: string): Promise<MemoryHit[]> {
     const v = toVector(vector);
     const rows = await this.db.$queryRaw<(RawItem & { similarity: number | string })[]>`
       SELECT ${ITEM_COLUMNS}, p.name AS project_name,
              1 - (m.embedding <=> ${v}::vector) AS similarity
       FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
-      WHERE m.owner_id = ${filter.ownerId} AND m.embedding IS NOT NULL
+      WHERE m.owner_id = ${filter.ownerId} AND m.embedding IS NOT NULL AND m.embed_model = ${embedModel}
         AND ${NOT_HIDDEN} AND ${statusFilter(filter)}
         AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))

@@ -40,6 +40,7 @@ const decision = (over: Partial<ChatDecision> & { id: string }): ChatDecision =>
   status: 'current',
   expires_at: null,
   supersedes: null,
+  trust: 'person',
   created_at: '2026-09-24T10:00:00.000Z',
   ...over,
 });
@@ -172,6 +173,12 @@ describe('maybeScheduleRepeat', () => {
     expect(r?.auto_answer?.status).toBe('scheduled');
     // `openTabQuestion` publishes the card once, carrying the countdown.
     expect(publishTabQuestions).not.toHaveBeenCalled();
+  });
+
+  it('a suggested decision the countdown made (trust derived) is no precedent: null (TER-1006)', async () => {
+    const { repos, setAutoAnswer } = reposFor(true, [decision({ id: 'd1', trust: 'derived' })]);
+    expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now)).toBeNull();
+    expect(setAutoAnswer).not.toHaveBeenCalled();
   });
 
   it('carries a free-text past answer as text', async () => {
@@ -429,6 +436,15 @@ describe('sendDueAutoAnswers', () => {
     expect(await sendDueAutoAnswers(repos as unknown as Repositories, log(), { now, answer })).toBe(0);
     expect(answer).not.toHaveBeenCalled();
     expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_SUPERSEDED');
+  });
+
+  it('a cited decision downgraded to derived meanwhile is no precedent: PRECEDENT_FORGOTTEN (TER-1006)', async () => {
+    const { repos, tabQuestions } = fake();
+    repos.chatDecisions.findManyForUser.mockImplementation(async (ids: string[]) => ids.map((id) => decision({ id, trust: 'derived' })));
+    const answer = vi.fn();
+    expect(await sendDueAutoAnswers(repos as unknown as Repositories, log(), { now, answer })).toBe(0);
+    expect(answer).not.toHaveBeenCalled();
+    expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_FORGOTTEN');
   });
 
   it("the same check applies to a concierge countdown's decision sources; its memory items are not decisions", async () => {

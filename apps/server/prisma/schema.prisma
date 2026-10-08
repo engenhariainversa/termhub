@@ -1311,6 +1311,9 @@ model ChatDecision {
   supersededAt   DateTime?         @map("superseded_at")
   /// The ref (`decision:<id>` / `note:<id>`) of the row this one replaces.
   supersedes     String?
+  /// `person` (the person clicked the card) | `derived` (the countdown answered it, TER-1006): only a
+  /// `person` decision is ever a precedent for a suggestion or an automatic answer (spec D2/D11).
+  trust          String            @default("person")
   createdAt      DateTime          @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
