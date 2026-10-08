@@ -45,6 +45,10 @@ export const AI_LOGIN_MSG = {
   get retry() { return t('Tentar de novo'); },
   get refresh() { return t('Atualizar'); },
   get failed() { return t('O login não terminou. Tente de novo.'); },
+  get notConfirmed() { return t('O login não foi confirmado.'); },
+  get couldNotOpen() { return t('Não deu para abrir o login na máquina.'); },
+  get cliOutput() { return t('Saída da CLI'); },
+  get finishedOnMachine() { return t('Já entrei pelo navegador da máquina'); },
   get notSupported() { return t('Este login não pode ser refeito pelo app agora: a máquina precisa estar online, com o agente do termhub atualizado.'); },
 };
 

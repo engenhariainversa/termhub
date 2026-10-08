@@ -294,6 +294,8 @@ export interface MockState {
    * the flows started, by login id. */
   aiLoginStates: Map<string, string>;
   aiLoginFlows: Map<string, { accountId: string; needsCode: boolean }>;
+  /** Accounts whose next login the machine's own browser finishes before any link shows (TER-1054). */
+  aiLoginFinishOnMachine: Set<string>;
 }
 
 export function createMockState(): MockState {
@@ -340,6 +342,7 @@ export function createMockState(): MockState {
     features: { subscriptions: false },
     aiLoginStates: new Map(),
     aiLoginFlows: new Map(),
+    aiLoginFinishOnMachine: new Set(),
   };
 }
 
