@@ -17,10 +17,18 @@ that parameter to a `StatusSearch` object (`{ includeInactive?, includeSupersede
 returned nothing. Typecheck passed, and the test failed only in CI, where `TERMHUB_DB_TESTS=1` runs the
 Postgres suites.
 
+It happened again in TER-1006 (2026-10-08): the WIP made `embedModel` a required 4th argument of
+`chatDecisions.nearestAny` and `memoryItems.nearest`, and the merged TER-1015 test still called
+`nearestAny(userId, vec(30), 10, undefined, { includeSuperseded: true })`. The `undefined` became the
+model (`embed_model = NULL` matches nothing), so `expect([]).toContain(id)` failed in CI only. The
+`not.toContain` calls with the old shape passed vacuously.
+
 ## Fix
 
 Pass the object form: `decisions.textSearch(userId, marker, 10, undefined, { includeSuperseded: true })`
-(the same for `nearestAny`).
+(the same for `nearestAny`). For the TER-1006 case, pass the model the test embedded with:
+`nearestAny(userId, vec(30), 10, 'm#q1', undefined, { includeSuperseded: true })`,
+`items.nearest({ ownerId: userId }, vec(10), 10, 'm')`.
 
 ## How to check
 
