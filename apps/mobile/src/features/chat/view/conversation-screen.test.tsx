@@ -358,6 +358,28 @@ describe('Conversa', () => {
     expect(screen.getByText('Pedido pelo subagente «Buscar CI»')).toBeTruthy();
   });
 
+  it('folds a turn\'s settled cards into one closed accordion; a pending card stays out of it (TER-1024)', async () => {
+    serveChat(
+      (res) => ({
+        actions: [
+          ...res.actions.map((a) => ({ ...a, status: 'executed' as const, grant_id: 'g1' })),
+          { ...res.actions[0]!, id: 'a-pending', status: 'pending' as const, grant_id: null, summary: 'digitar `y` na aba api' },
+        ],
+        grants: [],
+      }),
+      true,
+    );
+    await render(<ConversationScreen />);
+    const toggle = await screen.findByRole('button', { name: '2 ações executadas · digitar, mover card' }, LOAD);
+    expect(toggle.props.accessibilityState).toMatchObject({ expanded: false });
+    expect(screen.queryByText('digitar `npm test` na aba api do projeto termhub, no jarvis')).toBeNull();
+    expect(screen.getByText('digitar `y` na aba api')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Autorizar' })).toBeTruthy();
+
+    await fireEvent.press(toggle);
+    expect(screen.getByText('digitar `npm test` na aba api do projeto termhub, no jarvis')).toBeTruthy();
+  });
+
   it('a card run under a grant reads "executada · aba confiada"', async () => {
     serveChat((res) => ({ actions: withAction(res, { status: 'executed', grant_id: 'g1' }), grants: [] }));
     await render(<ConversationScreen />);
