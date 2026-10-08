@@ -101,6 +101,10 @@ export interface Machine {
   /** a tab whose Claude hits a usage limit resumes on another Claude account of this machine, on its own */
   claude_auto_swap: boolean;
   automation_allowed: boolean;
+  /** TER-1018: "Usar ai-memory nesta máquina" (opt-in, off by default) */
+  ai_memory_enabled?: boolean;
+  /** its local server; null = the default `http://127.0.0.1:49374` */
+  ai_memory_url?: string | null;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */
@@ -687,6 +691,11 @@ export interface TabEvent {
 }
 
 /** Monitor hooks on a machine (GET /machines/:id/hooks). */
+/** GET /machines/:id/ai-memory: off → not probed; on → what the machine reported. */
+export type AiMemoryState =
+  | { enabled: false; url: string }
+  | { enabled: true; url: string; checked_at: string; installed: boolean; version: string | null; server_up: boolean };
+
 export interface MachineHooks {
   installed_at: string | null;
   hooks_url: string;
