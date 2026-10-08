@@ -211,6 +211,8 @@ export const FEED_KINDS = [
   'run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed',
   'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup',
   'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out',
+  // TER-1025
+  'deploy_retried', 'github_wait', 'trust_auto_accepted',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** An event with what its sentence names, looked up by the repository. */

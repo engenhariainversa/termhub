@@ -3,12 +3,14 @@ import { startAgent } from '../control/agents.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { createGithubCiClient } from '../integrations/github-ci.js';
 import { createGithubWriteClient } from '../integrations/github-write.js';
+import { githubHealth } from '../integrations/github-status.js';
 import { ensureEpicBranch, ensureWorkspace } from './branches.js';
 import { dispatcherInstanceId, startDispatcher, type Dispatcher, type DispatcherDeps } from './dispatcher.js';
 import { followRun, startFollower, type FollowerDeps } from './follower.js';
 import { mergeApproved, runMergeExecutor, type MergeDeps } from './merge.js';
 import { accountPeak } from './placement.js';
 import { onRateLimit, resumeAfterReset } from './quota.js';
+import { acceptTrustQuestion } from './trust.js';
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
 
@@ -44,7 +46,18 @@ export function startAutomation(o: {
   const { repos, lifecycle, log } = o;
   const instance = o.instance ?? dispatcherInstanceId();
   // D16: a run on a usage limit waits for its account's reset (or follows the automatic swap)
-  const followerDeps: FollowerDeps = { repos, instance, lifecycle, log, onRateLimited: (run, tab) => onRateLimit(followerDeps, run, tab), ...o.follower };
+  // TER-1025: a run parked on a GitHub error waits for githubstatus.com, and the trust question of a run's own
+  // worktree is answered by the server
+  const followerDeps: FollowerDeps = {
+    repos,
+    instance,
+    lifecycle,
+    log,
+    onRateLimited: (run, tab) => onRateLimit(followerDeps, run, tab),
+    githubHealth,
+    acceptTrust: acceptTrustQuestion(repos),
+    ...o.follower,
+  };
   const stopFollower = o.schedule === false ? () => {} : startFollower(followerDeps);
   const machineRoom = createMachineRoom({ log });
   const dispatcher = startDispatcher(
@@ -76,6 +89,7 @@ export function startAutomation(o: {
     gh,
     ci: createGithubCiClient(),
     startFixer: (i) => dispatcher.startTriggered(i),
+    githubHealth,
     log,
     ...o.merge,
   };

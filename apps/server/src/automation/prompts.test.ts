@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ORIGIN_REMINDER, PROMPT_MAX_CHARS } from '../control/agents.js';
-import { fixerPrompt, implementerPrompt, integratorPrompt, RESUME_TEXT, SERVER_MARKER, serverMessage, SHELL_LINE } from './prompts.js';
+import { fixerPrompt, GITHUB_LINE, implementerPrompt, integratorPrompt, RESUME_TEXT, SERVER_MARKER, serverMessage, SHELL_LINE } from './prompts.js';
 
 const policy = 'Autonomia do projeto: pr. Você abre o PR e para.\nO merge é feito pelo termhub quando o CI fica verde e a política permite.';
 const title = 'T'.repeat(300);
@@ -50,5 +50,11 @@ describe('prompts', () => {
   it('marks server messages', () => {
     expect(serverMessage('oi')).toBe('[termhub automático] oi');
     expect(RESUME_TEXT).toContain('report_card');
+  });
+  it('tell every role to hand a GitHub error to termhub (github_transient) when there is room (TER-1025)', () => {
+    for (const p of all(null)) expect(p).toContain(GITHUB_LINE);
+    expect(GITHUB_LINE).toContain('github_transient');
+    // at the maximum of everything the line gives way: report_card's description carries the same rule
+    for (const p of all(custom)) expect(p.length + ORIGIN_REMINDER.length + 2).toBeLessThanOrEqual(PROMPT_MAX_CHARS);
   });
 });
