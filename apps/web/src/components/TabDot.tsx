@@ -28,9 +28,11 @@ export function TabDot({ alive, tab, autoRef, title }: Props) {
   const { t } = useTranslation();
   const needsYou = !!tab && tabNeedsYou(tab);
   const label = title ? withAutoRef(title, autoRef, t) : autoRef ? t('automático, {{ref}}', { ref: autoRef }) : undefined;
+  // the box is the ring's size, ring or not (TER-1045): the ring and the pulse (6px dot at 1.4×) stay inside
+  // it, so nothing around it clips them and a ringed row's text lines up with the others
   return (
     <span
-      className="relative inline-flex h-1.5 w-1.5 shrink-0"
+      className="relative inline-flex h-3 w-3 shrink-0 items-center justify-center"
       title={label}
       role={label || needsYou ? 'img' : undefined}
       aria-label={needsYou ? t('esperando você') : label}
@@ -39,7 +41,7 @@ export function TabDot({ alive, tab, autoRef, title }: Props) {
         <span
           data-auto-ring
           aria-hidden
-          className={`absolute -inset-[3px] rounded-full border border-accent border-r-transparent ${tabDotWorking(alive, tab) ? 'tab-dot-ring' : ''}`}
+          className={`absolute inset-0 rounded-full border border-accent border-r-transparent ${tabDotWorking(alive, tab) ? 'tab-dot-ring' : ''}`}
         />
       )}
       <span data-dot aria-hidden className={`h-1.5 w-1.5 rounded-full ${tabDotClass(alive, tab)}`} />
