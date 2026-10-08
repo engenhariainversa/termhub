@@ -16,6 +16,9 @@ interface Deps {
   log: FastifyBaseLogger;
   registry?: AgentRegistry;
   helloTimeoutMs?: number;
+  /** Sent to a `probe` hello before `probe-ok`, so `termhub-agent doctor` tests the other addresses the
+   *  machine must reach: the monitor hooks and the tabs' MCP (TER-586). Absent: nothing is sent. */
+  probeInfo?: { hooks_url: string; mcp_url: string | null };
 }
 
 /** Upgrades `/agent/ws`: agents authenticate with `Authorization: Bearer thb_ag_…`, not a cookie. */
@@ -49,6 +52,8 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
             // and hang up without attaching — attaching would replace (4409) the live session
             // the service is running on the same machine.
             log.info({ machineId: machine.id, agentVersion: hello.agent_version }, 'agent probe ok');
+            // An agent older than 0.23.0 drops `probe_info` as an unknown message and reads the close as before.
+            if (deps.probeInfo) conn.sendProbeInfo(deps.probeInfo);
             return conn.close(1000, 'probe-ok');
           }
           registry.attach(machine.id, conn);
