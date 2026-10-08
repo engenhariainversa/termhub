@@ -74,6 +74,11 @@ const envSchema = z.object({
    * Public MCP endpoint (https://termhub.dev/mcp in production), shown in the "claude mcp add"
    * command when a token is created. Unset = the command is not shown, and the chat concierge
    * counts as not configured: it has no endpoint to reach the machines through.
+   *
+   * No fallback on purpose: PUBLIC_URL is the app host (app.termhub.dev), which sits behind
+   * Cloudflare Access, so `${PUBLIC_URL}/mcp` answers an Access redirect instead of MCP and the
+   * concierge would talk about the user's machines with no data at all. `/mcp` is exposed outside
+   * Access only on the landing host (deploy/nginx/termhub.dev.conf.tmpl).
    */
   MCP_URL: z.string().url().optional(),
 
@@ -154,14 +159,6 @@ const envSchema = z.object({
   // automatic wakes of the chat for questions in tabs with an automatic run (agentic board spec D18):
   // their own budget per conversation, so automatic work never spends the person's
   AUTOMATION_WAKE_MAX_PER_HOUR: z.coerce.number().int().min(0).max(120).default(30),
-
-  // Chat concierge (docker/concierge): the container runner. Since the chat moved onto the user's own
-  // machine (spec §6, `chat/agent-runner.ts`) these two reach that container alone, and nothing calls
-  // it — `httpRunner` has had no caller since `app.ts` switched to `agentRunner`. The chat's only
-  // requirement now is MCP_URL: with that unset every message answers 503 CONCIERGE_DISABLED, and
-  // setting these two enables nothing.
-  CONCIERGE_URL: z.string().url().optional(),
-  CONCIERGE_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -289,21 +286,6 @@ export const config = {
   autoWakeMaxPerHour: env.AUTO_WAKE_MAX_PER_HOUR,
   securityEventRetentionDays: env.SECURITY_EVENT_RETENTION_DAYS,
   automationWakeMaxPerHour: env.AUTOMATION_WAKE_MAX_PER_HOUR,
-  /**
-   * Settings for the container runner (`httpRunner`) and nothing else: the chat itself no longer reads
-   * this, and no code path builds that runner any more (spec §6). What the chat needs is `mcpUrl`
-   * above — `agentRunner` throws 503 CONCIERGE_DISABLED without it — so all three being set does not
-   * make a chat work, and these two being empty does not stop one.
-   *
-   * MCP_URL has no fallback on purpose — PUBLIC_URL is the app host (app.termhub.dev), which sits
-   * behind Cloudflare Access, so `${PUBLIC_URL}/mcp` answers an Access redirect instead of MCP and the
-   * concierge would talk about the user's machines with no data at all. `/mcp` is exposed outside
-   * Access only on the landing host (deploy/nginx/termhub.dev.conf.tmpl).
-   */
-  concierge:
-    env.CONCIERGE_URL && env.CONCIERGE_SECRET && env.MCP_URL
-      ? { url: env.CONCIERGE_URL, secret: env.CONCIERGE_SECRET, mcpUrl: env.MCP_URL }
-      : undefined,
   /**
    * The mobile app's API (/api/m/v1), or null when MOBILE_PUBLIC_URL is unset (the prefix is off).
    *

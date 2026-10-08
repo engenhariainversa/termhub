@@ -43,6 +43,30 @@ describe('runDoctor', () => {
     expect(report.server).toEqual({ ok: true });
   });
 
+  it('POSTs to the hooks and MCP addresses the probe returned, ok only on 401', async () => {
+    const { writeConfig } = await import('./config.js');
+    writeConfig({ url: 'https://app.termhub.dev', token: 'thb_ag_' + 'a'.repeat(43), machine_id: '', machine_name: '', created_at: new Date().toISOString() });
+    const connect = vi.fn().mockResolvedValue({ ok: true, endpoints: { hooks_url: 'https://termhub.dev/api/hooks/events', mcp_url: 'https://termhub.dev/mcp' } });
+    const check = vi.fn(async (url: string) => (url.endsWith('/mcp') ? { url, status: null, error: 'ECONNREFUSED' } : { url, status: 401, error: null }));
+    const report = await runDoctor([], { connect, check });
+    expect(check).toHaveBeenCalledTimes(2);
+    expect(report.server).toEqual({ ok: true });
+    expect(report.endpoints).toEqual([
+      { name: 'hooks', url: 'https://termhub.dev/api/hooks/events', host: 'termhub.dev', ok: true, status: 401, error: null },
+      { name: 'mcp', url: 'https://termhub.dev/mcp', host: 'termhub.dev', ok: false, status: null, error: 'ECONNREFUSED' },
+    ]);
+  });
+
+  it('skips the MCP check when the server has no MCP address, and both when the server sent none', async () => {
+    const { writeConfig } = await import('./config.js');
+    writeConfig({ url: 'https://app.termhub.dev', token: 'thb_ag_' + 'a'.repeat(43), machine_id: '', machine_name: '', created_at: new Date().toISOString() });
+    const check = vi.fn(async (url: string) => ({ url, status: 401, error: null }));
+    const one = await runDoctor([], { connect: vi.fn().mockResolvedValue({ ok: true, endpoints: { hooks_url: 'https://h.example/api/hooks/events', mcp_url: null } }), check });
+    expect(one.endpoints.map((e) => e.name)).toEqual(['hooks']);
+    const none = await runDoctor([], { connect: vi.fn().mockResolvedValue({ ok: true }), check });
+    expect(none.endpoints).toEqual([]);
+  });
+
   it('reports ok:false with error "eperm" for a path that throws EPERM, ok:true for one that succeeds', async () => {
     const eperm = Object.assign(new Error('permission denied'), { code: 'EPERM' });
     const fakeFs = {
@@ -82,6 +106,7 @@ describe('formatDoctor', () => {
   const baseReport: DoctorReport = {
     config: { ok: true, path: '/home/x/.termhub/config.json' },
     server: { ok: true },
+    endpoints: [],
     tmux: { ok: true, path: '/usr/bin/tmux' },
     nodePty: { ok: true },
     spawnHelper: { ok: true, path: '/g/node-pty/prebuilds/darwin-arm64/spawn-helper', repaired: false },
@@ -97,6 +122,19 @@ describe('formatDoctor', () => {
   it('mentions when the spawn-helper was just repaired', () => {
     const text = formatDoctor({ ...baseReport, spawnHelper: { ok: true, path: '/g/spawn-helper', repaired: true } }, { platform: 'darwin' });
     expect(text).toContain('permissão de execução corrigida agora');
+  });
+
+  it('shows each address with its host, and what to open in the firewall when it fails', () => {
+    const text = formatDoctor({
+      ...baseReport,
+      endpoints: [
+        { name: 'hooks', url: 'https://termhub.dev/api/hooks/events', host: 'termhub.dev', ok: true, status: 401, error: null },
+        { name: 'mcp', url: 'https://termhub.dev/mcp', host: 'termhub.dev', ok: false, status: 403, error: null },
+      ],
+    }, { platform: 'linux' });
+    expect(text).toContain('✓ Hooks do monitor (termhub.dev)');
+    expect(text).toContain('✗ MCP das abas (termhub.dev): respondeu HTTP 403 (esperado 401)');
+    expect(text).toContain('libere https://termhub.dev/mcp no firewall/proxy');
   });
 
   it('marks every ok check with ✓ and includes the config path', () => {

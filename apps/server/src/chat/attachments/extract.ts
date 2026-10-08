@@ -4,7 +4,7 @@ import { ExtractError } from './errors.js';
 import { type Extracted, ZIP_EXPANDED_MAX_BYTES, capText } from './parsers.js';
 import { EXTRACT_WORKER_HEAP_MB, defaultWorkerUrl, runInWorker } from './worker-runner.js';
 
-export { ExtractError, type ExtractErrorCode } from './errors.js';
+export { ExtractError, type ExtractErrorCode, type TranscriptionReason } from './errors.js';
 export { type Extracted, TEXT_CAP, XLSX_MAX_COLS, XLSX_MAX_ROWS, ZIP_EXPANDED_MAX_BYTES } from './parsers.js';
 
 /** A document parse's budget, counted from the worker's spawn; the worker is terminated when it runs out. */
@@ -68,19 +68,22 @@ export function imageDimensions(b: Uint8Array, mime: string): { width: number; h
 }
 
 async function transcribe(file: Buffer, mime: string, deps: ExtractDeps): Promise<Extracted> {
-  if (!deps.whisperUrl) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper is not configured');
+  if (!deps.whisperUrl) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper is not configured', { reason: 'not_configured' });
   const doFetch = deps.fetch ?? fetch;
   const url = `${deps.whisperUrl}/transcribe${deps.language ? `?language=${encodeURIComponent(deps.language)}` : ''}`;
   let res: Response;
   try {
     res = await doFetch(url, { method: 'POST', headers: whisperHeaders(mime, deps.whisperSecret), body: new Uint8Array(file), signal: AbortSignal.timeout(deps.timeoutMs ?? WHISPER_TIMEOUT_MS) });
   } catch {
-    throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper unreachable or too slow');
+    // Out of reach is the moment's too: a deploy recreating the whisper container (TER-1035).
+    throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper unreachable or too slow', { retryable: true, reason: 'unreachable' });
   }
   if (res.status === 422) throw new ExtractError('TRANSCRIPTION_FAILED', 'audio could not be decoded');
   // 503 is whisper still loading its model (`terminal/transcription.ts` says the same): not this file's fault.
-  if (res.status === 503) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper is loading', { retryable: true });
-  if (!res.ok) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', `whisper answered ${res.status}`);
+  if (res.status === 503) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper is loading', { retryable: true, reason: 'unreachable' });
+  // A secret the service does not share (WHISPER_SECRET differs, or is empty on its side): retrying will not help.
+  if (res.status === 401 || res.status === 403) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', `whisper refused the secret (${res.status})`, { reason: 'refused' });
+  if (!res.ok) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', `whisper answered ${res.status}`, { reason: 'error' });
   const body = (await res.json().catch(() => null)) as { text?: unknown; duration?: unknown; language?: unknown } | null;
   if (!body || typeof body.text !== 'string') throw new ExtractError('TRANSCRIPTION_FAILED', 'invalid whisper answer');
   const c = capText(body.text.trim());

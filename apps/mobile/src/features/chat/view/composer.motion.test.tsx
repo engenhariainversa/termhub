@@ -85,27 +85,24 @@ describe('Composer motion', () => {
     expect(frame()).toMatchObject({ marginLeft: 40, marginBottom: 0, height: 36 });
   });
 
-  it('with a line typed, ↑ joins the microphone on the right and the text makes room for it', async () => {
+  it('with a line typed, ↑ takes the microphone\'s place on the right and the text keeps its room (TER-1036)', async () => {
     const input = await renderComposer();
-    expect(screen.getByRole('button', { name: 'Ditar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Gravar áudio' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Enviar' })).toBeNull();
     expect(frame().marginRight).toBe(40);
 
     await fireEvent.changeText(input, 'oi');
-    expect(screen.getByRole('button', { name: 'Ditar' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Gravar áudio' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled();
-    await elapse(80);
-    expect(frame().marginRight).toBeGreaterThan(40);
-    expect(frame().marginRight).toBeLessThan(84);
     await elapse(300);
-    // Still one line, beside the buttons: 📎 on the left, the microphone and ↑ on the right.
-    expect(frame()).toMatchObject({ marginLeft: 40, marginRight: 84, marginBottom: 0, height: 36 });
+    // Still one line, beside the buttons: + on the left, ↑ alone on the right.
+    expect(frame()).toMatchObject({ marginLeft: 40, marginRight: 40, marginBottom: 0, height: 36 });
   });
 
   it('with dictation off there is no microphone, and the empty box keeps a disabled ↑', async () => {
     mockVoice.state = 'off';
     await renderComposer();
-    expect(screen.queryByRole('button', { name: 'Ditar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Gravar áudio' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled();
     expect(frame().marginRight).toBe(40);
   });

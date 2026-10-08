@@ -21,6 +21,8 @@ export const CHAT_MSG = {
   get attachmentUploading() { return t('enviando anexo…'); },
   get attachmentInvalid() { return t('Remova o anexo inválido para enviar'); },
   get attachmentGalleryDenied() { return t('Permissão da galeria negada'); },
+  get attachmentCameraDenied() { return t('Permissão da câmera negada'); },
+  get attachmentCameraFailed() { return t('Não foi possível abrir a câmera'); },
   get forgetDecisionFailed() { return t('Não foi possível esquecer a decisão'); },
   get autoAnswerAlreadySent() { return t('A resposta automática já foi enviada.'); },
   /** A run that could not even be attempted (`run_finished` with no message id, spec 2026-09-29 §5). */

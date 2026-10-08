@@ -15,7 +15,7 @@ function buildApp(user: Record<string, unknown> | null) {
     request.user = user as never;
     if (user) request.scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id } as never;
   });
-  const repos = { users: { setLocale, setTimeZone }, roles: { findById } } as unknown as Repositories;
+  const repos = { users: { setLocale, setTimeZone }, roles: { findById }, featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async () => null) } } as unknown as Repositories;
   app.register((a) => authRoutes(a, { repos } as never), { prefix: '/auth' });
   return app;
 }
@@ -56,6 +56,11 @@ describe('GET /auth/me', () => {
     const res = await buildApp({ ...user, locale: 'en' }).inject({ url: '/auth/me' });
     expect(res.statusCode).toBe(200);
     expect(res.json().user.locale).toBe('en');
+  });
+
+  it('carries the feature flags resolved for this person, off by default (TER-1040)', async () => {
+    const res = await buildApp(user).inject({ url: '/auth/me' });
+    expect(res.json().user.features).toEqual({ subscriptions: false });
   });
 });
 

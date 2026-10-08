@@ -99,7 +99,7 @@ describe('Home (TER-541)', () => {
     stores.permissionDeps.trackingStatus.mockClear();
     await render(<HomeScreen />);
     expect(stores.permissionDeps.trackingStatus).toHaveBeenCalled();
-    expect(await screen.findByText('Ajude a medir nossos anúncios', undefined, LOAD)).toBeTruthy();
+    expect(await screen.findByText('Ajude a melhorar o termhub', undefined, LOAD)).toBeTruthy();
   });
 
   it('does not claim nothing is pinned while the first load is running', async () => {

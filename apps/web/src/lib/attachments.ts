@@ -83,11 +83,29 @@ const FAILURE_REASON: Record<string, string> = {
   TRANSCRIPTION_FAILED: tk('transcrição falhou'),
 };
 
+/** TRANSCRIPTION_UNAVAILABLE by the server's `meta.reason` (TER-1035): what went wrong with whisper. */
+const TRANSCRIPTION_REASON: Record<string, string> = {
+  not_configured: tk('transcrição desligada neste servidor'),
+  refused: tk('o serviço de transcrição recusou o acesso'),
+  unreachable: tk('serviço de transcrição fora do ar'),
+  error: tk('o serviço de transcrição deu erro'),
+};
+
+function failureReason(a: ChatAttachment): string {
+  const reason = a.error_code === 'TRANSCRIPTION_UNAVAILABLE' && typeof a.meta?.reason === 'string' ? TRANSCRIPTION_REASON[a.meta.reason] : undefined;
+  return reason ?? ((a.error_code && FAILURE_REASON[a.error_code]) || tk('erro'));
+}
+
 /** The line under a chip or a bubble's attachment while the server is still working on it, or after it gave up. */
 export function attachmentStatusText(a: ChatAttachment): string | null {
   if (a.status === 'pending') return a.kind === 'audio' || a.kind === 'video' ? i18n.t('transcrevendo…') : i18n.t('processando…');
-  if (a.status === 'failed') return i18n.t('falhou: {{reason}}', { reason: i18n.t((a.error_code && FAILURE_REASON[a.error_code]) || tk('erro')) });
+  if (a.status === 'failed') return i18n.t('falhou: {{reason}}', { reason: i18n.t(failureReason(a)) });
   return null;
+}
+
+/** A transcription whisper could not do can be asked again (`POST …/retry`); a file it could not decode cannot. */
+export function canRetryAttachment(a: Pick<ChatAttachment, 'kind' | 'status' | 'error_code'>): boolean {
+  return a.status === 'failed' && a.error_code === 'TRANSCRIPTION_UNAVAILABLE' && (a.kind === 'audio' || a.kind === 'video');
 }
 
 const isDimension = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0;

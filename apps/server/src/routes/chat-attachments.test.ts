@@ -47,6 +47,12 @@ function build(opts: { rows?: AttachmentRow[]; quotaBytes?: number; createFails?
       return r && r.user_id === userId ? r : null;
     }),
     usageBytes: vi.fn(async (userId: string) => [...rows.values()].filter((r) => r.user_id === userId).reduce((s, r) => s + r.bytes, 0)),
+    retryTranscription: vi.fn(async (id: string, userId: string) => {
+      const r = rows.get(id);
+      if (!r || r.user_id !== userId || r.status !== 'failed' || r.error_code !== 'TRANSCRIPTION_UNAVAILABLE') return null;
+      Object.assign(r, { status: 'pending', error_code: null, meta: null });
+      return { ...r };
+    }),
     deleteUnsent: vi.fn(async (id: string, userId: string) => {
       const r = rows.get(id);
       if (!r || r.user_id !== userId || r.message_id !== null) return false;
@@ -246,5 +252,27 @@ describe('DELETE /chat/attachments/:id', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json()).toEqual({ error: 'Este anexo já foi enviado', code: 'CONFLICT' });
     expect(files.has('u1/at1')).toBe(true);
+  });
+});
+
+describe('POST /chat/attachments/:id/retry (TER-1035)', () => {
+  const clip = (over: Partial<AttachmentRow> = {}) => row({ name: 'audio.m4a', mime: 'audio/mp4', kind: 'audio', status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE', extracted_text: null, meta: { reason: 'refused' }, message_id: 'm1', ...over });
+
+  it('puts a sent clip whose transcription was unavailable back in the queue and answers it pending', async () => {
+    const { app, queue } = build({ rows: [clip()] });
+    const res = await app.inject({ method: 'POST', url: '/chat/attachments/at1/retry' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().attachment).toMatchObject({ id: 'at1', status: 'pending', error_code: null, meta: null });
+    expect(queue.enqueue).toHaveBeenCalledWith('at1');
+  });
+
+  it('refuses a file a retry cannot change (409) and a stranger\'s or unknown id (404), queueing nothing', async () => {
+    const { app, queue } = build({ rows: [clip({ id: 'bad', error_code: 'TRANSCRIPTION_FAILED' }), clip({ id: 'other', user_id: 'u2' })] });
+    const conflict = await app.inject({ method: 'POST', url: '/chat/attachments/bad/retry' });
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json()).toEqual({ error: 'Este anexo não pode ser processado de novo', code: 'CONFLICT' });
+    expect((await app.inject({ method: 'POST', url: '/chat/attachments/other/retry' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: '/chat/attachments/nope/retry' })).statusCode).toBe(404);
+    expect(queue.enqueue).not.toHaveBeenCalled();
   });
 });

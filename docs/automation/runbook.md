@@ -82,7 +82,7 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
    Claude Code ask "Is this a project you created or one you trust?". Checked in Claude Code 2.1.292: trust
    lives in `projects[<folder>].hasTrustDialogAccepted` of the account's `.claude.json` (`~/.claude.json`,
    or `$CLAUDE_CONFIG_DIR/.claude.json`), and inside a git repository Claude only looks at the repository's
-   root, so a trusted parent folder does not cover a worktree. Agent `>= 0.21.0` therefore marks each new
+   root, so a trusted parent folder does not cover a worktree. Agent `>= 0.24.0` therefore marks each new
    worktree trusted in every Claude account of the machine when it creates it. When the question still shows
    (an older agent, an account added later), the server reads the tab after 30 s and, if the screen shows
    the question with "1. Yes, I trust this folder" selected, presses Enter (event `trust_auto_accepted`, at
