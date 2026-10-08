@@ -43,5 +43,7 @@
   "Aba terminou": "La pestaña terminó",
   "{{tab}} terminou e espera você.": "{{tab}} terminó y te está esperando.",
   "{{ref}} parou: {{reason}}": "{{ref}} se detuvo: {{reason}}",
-  "Um card": "Una tarjeta"
+  "Um card": "Una tarjeta",
+  "Login do {{provider}} expirou": "El login de {{provider}} expiró",
+  "{{machine}}: toque para refazer o login": "{{machine}}: toca para rehacer el login"
 }

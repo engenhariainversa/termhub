@@ -80,5 +80,8 @@
   "Too many sign-ups from this address; try again later": "Demasiados registros desde esta dirección; vuelve a intentarlo más tarde",
   "Entry not found": "Entrada no encontrada",
   "Confirme com o PIN para ligar ou ampliar o trabalho automático.": "Confirma con tu PIN para activar o ampliar el trabajo automático.",
-  "Flag não encontrada": "Flag no encontrada"
+  "Flag não encontrada": "Flag no encontrada",
+  "Login não encontrado ou expirado": "Login no encontrado o expirado",
+  "Refazer login pela tela só funciona com Claude e Codex. Faça o login na própria máquina: {{hint}}": "Rehacer el login desde la pantalla solo funciona con Claude y Codex. Haz el login en la propia máquina: {{hint}}",
+  "Cole o código mostrado na página de login": "Pega el código que muestra la página de login"
 }

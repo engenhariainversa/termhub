@@ -46,6 +46,10 @@ export type MachineMinAggregateOutputType = {
   checkedAt: Date | null
   agentTokenHash: string | null
   agentTokenCreatedAt: Date | null
+  agentPairingHash: string | null
+  agentPairingExpiresAt: Date | null
+  agentPublicKey: string | null
+  agentPairedAt: Date | null
   agentVersion: string | null
   agentLastSeenAt: Date | null
   agentAutoUpdate: boolean | null
@@ -69,6 +73,10 @@ export type MachineMaxAggregateOutputType = {
   checkedAt: Date | null
   agentTokenHash: string | null
   agentTokenCreatedAt: Date | null
+  agentPairingHash: string | null
+  agentPairingExpiresAt: Date | null
+  agentPublicKey: string | null
+  agentPairedAt: Date | null
   agentVersion: string | null
   agentLastSeenAt: Date | null
   agentAutoUpdate: boolean | null
@@ -93,6 +101,10 @@ export type MachineCountAggregateOutputType = {
   checkedAt: number
   agentTokenHash: number
   agentTokenCreatedAt: number
+  agentPairingHash: number
+  agentPairingExpiresAt: number
+  agentPublicKey: number
+  agentPairedAt: number
   agentVersion: number
   agentLastSeenAt: number
   agentAutoUpdate: number
@@ -126,6 +138,10 @@ export type MachineMinAggregateInputType = {
   checkedAt?: true
   agentTokenHash?: true
   agentTokenCreatedAt?: true
+  agentPairingHash?: true
+  agentPairingExpiresAt?: true
+  agentPublicKey?: true
+  agentPairedAt?: true
   agentVersion?: true
   agentLastSeenAt?: true
   agentAutoUpdate?: true
@@ -149,6 +165,10 @@ export type MachineMaxAggregateInputType = {
   checkedAt?: true
   agentTokenHash?: true
   agentTokenCreatedAt?: true
+  agentPairingHash?: true
+  agentPairingExpiresAt?: true
+  agentPublicKey?: true
+  agentPairedAt?: true
   agentVersion?: true
   agentLastSeenAt?: true
   agentAutoUpdate?: true
@@ -173,6 +193,10 @@ export type MachineCountAggregateInputType = {
   checkedAt?: true
   agentTokenHash?: true
   agentTokenCreatedAt?: true
+  agentPairingHash?: true
+  agentPairingExpiresAt?: true
+  agentPublicKey?: true
+  agentPairedAt?: true
   agentVersion?: true
   agentLastSeenAt?: true
   agentAutoUpdate?: true
@@ -284,6 +308,10 @@ export type MachineGroupByOutputType = {
   checkedAt: Date | null
   agentTokenHash: string | null
   agentTokenCreatedAt: Date | null
+  agentPairingHash: string | null
+  agentPairingExpiresAt: Date | null
+  agentPublicKey: string | null
+  agentPairedAt: Date | null
   agentVersion: string | null
   agentLastSeenAt: Date | null
   agentAutoUpdate: boolean
@@ -331,6 +359,10 @@ export type MachineWhereInput = {
   checkedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentTokenHash?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentTokenCreatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPairingHash?: Prisma.StringNullableFilter<"Machine"> | string | null
+  agentPairingExpiresAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPublicKey?: Prisma.StringNullableFilter<"Machine"> | string | null
+  agentPairedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolFilter<"Machine"> | boolean
@@ -362,6 +394,10 @@ export type MachineOrderByWithRelationInput = {
   checkedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentTokenHash?: Prisma.SortOrderInput | Prisma.SortOrder
   agentTokenCreatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairingHash?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairingExpiresAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPublicKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentVersion?: Prisma.SortOrderInput | Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
@@ -383,6 +419,7 @@ export type MachineOrderByWithRelationInput = {
 export type MachineWhereUniqueInput = Prisma.AtLeast<{
   id?: string
   agentTokenHash?: string
+  agentPairingHash?: string
   AND?: Prisma.MachineWhereInput | Prisma.MachineWhereInput[]
   OR?: Prisma.MachineWhereInput[]
   NOT?: Prisma.MachineWhereInput | Prisma.MachineWhereInput[]
@@ -396,6 +433,9 @@ export type MachineWhereUniqueInput = Prisma.AtLeast<{
   capabilities?: Prisma.JsonFilter<"Machine">
   checkedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentTokenCreatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPairingExpiresAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPublicKey?: Prisma.StringNullableFilter<"Machine"> | string | null
+  agentPairedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolFilter<"Machine"> | boolean
@@ -412,7 +452,7 @@ export type MachineWhereUniqueInput = Prisma.AtLeast<{
   hook?: Prisma.XOR<Prisma.MachineHookNullableScalarRelationFilter, Prisma.MachineHookWhereInput> | null
   uploads?: Prisma.UploadListRelationFilter
   chatConversations?: Prisma.ChatConversationListRelationFilter
-}, "id" | "agentTokenHash">
+}, "id" | "agentTokenHash" | "agentPairingHash">
 
 export type MachineOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -427,6 +467,10 @@ export type MachineOrderByWithAggregationInput = {
   checkedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentTokenHash?: Prisma.SortOrderInput | Prisma.SortOrder
   agentTokenCreatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairingHash?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairingExpiresAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPublicKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentVersion?: Prisma.SortOrderInput | Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
@@ -459,6 +503,10 @@ export type MachineScalarWhereWithAggregatesInput = {
   checkedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
   agentTokenHash?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
   agentTokenCreatedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
+  agentPairingHash?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
+  agentPairingExpiresAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
+  agentPublicKey?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
+  agentPairedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
@@ -483,6 +531,10 @@ export type MachineCreateInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -513,6 +565,10 @@ export type MachineUncheckedCreateInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -543,6 +599,10 @@ export type MachineUpdateInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -573,6 +633,10 @@ export type MachineUncheckedUpdateInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -603,6 +667,10 @@ export type MachineCreateManyInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -627,6 +695,10 @@ export type MachineUpdateManyMutationInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -650,6 +722,10 @@ export type MachineUncheckedUpdateManyInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -684,6 +760,10 @@ export type MachineCountOrderByAggregateInput = {
   checkedAt?: Prisma.SortOrder
   agentTokenHash?: Prisma.SortOrder
   agentTokenCreatedAt?: Prisma.SortOrder
+  agentPairingHash?: Prisma.SortOrder
+  agentPairingExpiresAt?: Prisma.SortOrder
+  agentPublicKey?: Prisma.SortOrder
+  agentPairedAt?: Prisma.SortOrder
   agentVersion?: Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
@@ -711,6 +791,10 @@ export type MachineMaxOrderByAggregateInput = {
   checkedAt?: Prisma.SortOrder
   agentTokenHash?: Prisma.SortOrder
   agentTokenCreatedAt?: Prisma.SortOrder
+  agentPairingHash?: Prisma.SortOrder
+  agentPairingExpiresAt?: Prisma.SortOrder
+  agentPublicKey?: Prisma.SortOrder
+  agentPairedAt?: Prisma.SortOrder
   agentVersion?: Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
@@ -734,6 +818,10 @@ export type MachineMinOrderByAggregateInput = {
   checkedAt?: Prisma.SortOrder
   agentTokenHash?: Prisma.SortOrder
   agentTokenCreatedAt?: Prisma.SortOrder
+  agentPairingHash?: Prisma.SortOrder
+  agentPairingExpiresAt?: Prisma.SortOrder
+  agentPublicKey?: Prisma.SortOrder
+  agentPairedAt?: Prisma.SortOrder
   agentVersion?: Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
@@ -904,6 +992,10 @@ export type MachineCreateWithoutOwnerInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -933,6 +1025,10 @@ export type MachineUncheckedCreateWithoutOwnerInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -991,6 +1087,10 @@ export type MachineScalarWhereInput = {
   checkedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentTokenHash?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentTokenCreatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPairingHash?: Prisma.StringNullableFilter<"Machine"> | string | null
+  agentPairingExpiresAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPublicKey?: Prisma.StringNullableFilter<"Machine"> | string | null
+  agentPairedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolFilter<"Machine"> | boolean
@@ -1015,6 +1115,10 @@ export type MachineCreateWithoutProjectLinksInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1044,6 +1148,10 @@ export type MachineUncheckedCreateWithoutProjectLinksInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1089,6 +1197,10 @@ export type MachineUpdateWithoutProjectLinksInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1118,6 +1230,10 @@ export type MachineUncheckedUpdateWithoutProjectLinksInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1147,6 +1263,10 @@ export type MachineCreateWithoutTabsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1176,6 +1296,10 @@ export type MachineUncheckedCreateWithoutTabsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1221,6 +1345,10 @@ export type MachineUpdateWithoutTabsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1250,6 +1378,10 @@ export type MachineUncheckedUpdateWithoutTabsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1279,6 +1411,10 @@ export type MachineCreateWithoutHookInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1308,6 +1444,10 @@ export type MachineUncheckedCreateWithoutHookInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1353,6 +1493,10 @@ export type MachineUpdateWithoutHookInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1382,6 +1526,10 @@ export type MachineUncheckedUpdateWithoutHookInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1411,6 +1559,10 @@ export type MachineCreateWithoutAiAccountsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1440,6 +1592,10 @@ export type MachineUncheckedCreateWithoutAiAccountsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1485,6 +1641,10 @@ export type MachineUpdateWithoutAiAccountsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1514,6 +1674,10 @@ export type MachineUncheckedUpdateWithoutAiAccountsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1543,6 +1707,10 @@ export type MachineCreateWithoutUploadsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1572,6 +1740,10 @@ export type MachineUncheckedCreateWithoutUploadsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1617,6 +1789,10 @@ export type MachineUpdateWithoutUploadsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1646,6 +1822,10 @@ export type MachineUncheckedUpdateWithoutUploadsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1675,6 +1855,10 @@ export type MachineCreateWithoutChatConversationsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1704,6 +1888,10 @@ export type MachineUncheckedCreateWithoutChatConversationsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1749,6 +1937,10 @@ export type MachineUpdateWithoutChatConversationsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1778,6 +1970,10 @@ export type MachineUncheckedUpdateWithoutChatConversationsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1807,6 +2003,10 @@ export type MachineCreateManyOwnerInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
   agentAutoUpdate?: boolean
@@ -1830,6 +2030,10 @@ export type MachineUpdateWithoutOwnerInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1859,6 +2063,10 @@ export type MachineUncheckedUpdateWithoutOwnerInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1888,6 +2096,10 @@ export type MachineUncheckedUpdateManyWithoutOwnerInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1978,6 +2190,10 @@ export type MachineSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   checkedAt?: boolean
   agentTokenHash?: boolean
   agentTokenCreatedAt?: boolean
+  agentPairingHash?: boolean
+  agentPairingExpiresAt?: boolean
+  agentPublicKey?: boolean
+  agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
   agentAutoUpdate?: boolean
@@ -2010,6 +2226,10 @@ export type MachineSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   checkedAt?: boolean
   agentTokenHash?: boolean
   agentTokenCreatedAt?: boolean
+  agentPairingHash?: boolean
+  agentPairingExpiresAt?: boolean
+  agentPublicKey?: boolean
+  agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
   agentAutoUpdate?: boolean
@@ -2035,6 +2255,10 @@ export type MachineSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   checkedAt?: boolean
   agentTokenHash?: boolean
   agentTokenCreatedAt?: boolean
+  agentPairingHash?: boolean
+  agentPairingExpiresAt?: boolean
+  agentPublicKey?: boolean
+  agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
   agentAutoUpdate?: boolean
@@ -2060,6 +2284,10 @@ export type MachineSelectScalar = {
   checkedAt?: boolean
   agentTokenHash?: boolean
   agentTokenCreatedAt?: boolean
+  agentPairingHash?: boolean
+  agentPairingExpiresAt?: boolean
+  agentPublicKey?: boolean
+  agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
   agentAutoUpdate?: boolean
@@ -2071,7 +2299,7 @@ export type MachineSelectScalar = {
   createdAt?: boolean
 }
 
-export type MachineOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "subtitle" | "host" | "sshUser" | "sshPort" | "type" | "os" | "capabilities" | "checkedAt" | "agentTokenHash" | "agentTokenCreatedAt" | "agentVersion" | "agentLastSeenAt" | "agentAutoUpdate" | "claudeAutoSwap" | "aiUsageQuery" | "automationAllowed" | "isLocal" | "ownerId" | "createdAt", ExtArgs["result"]["machine"]>
+export type MachineOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "subtitle" | "host" | "sshUser" | "sshPort" | "type" | "os" | "capabilities" | "checkedAt" | "agentTokenHash" | "agentTokenCreatedAt" | "agentPairingHash" | "agentPairingExpiresAt" | "agentPublicKey" | "agentPairedAt" | "agentVersion" | "agentLastSeenAt" | "agentAutoUpdate" | "claudeAutoSwap" | "aiUsageQuery" | "automationAllowed" | "isLocal" | "ownerId" | "createdAt", ExtArgs["result"]["machine"]>
 export type MachineInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   owner?: boolean | Prisma.Machine$ownerArgs<ExtArgs>
   projectLinks?: boolean | Prisma.Machine$projectLinksArgs<ExtArgs>
@@ -2121,10 +2349,24 @@ export type $MachinePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     capabilities: runtime.JsonValue
     checkedAt: Date | null
     /**
-     * agent transport: sha256 of the enrollment token (null for local/ssh); the token itself is never stored
+     * agent transport, legacy bearer: sha256 of the permanent token agents paired before TER-1017 dial with
+     * (null once the machine is paired again); the token itself is never stored
      */
     agentTokenHash: string | null
+    /**
+     * when the app last minted a token for this machine (legacy bearer or pairing)
+     */
     agentTokenCreatedAt: Date | null
+    /**
+     * TER-1017: sha256 of the single-use pairing token the app showed, and when it stops being accepted
+     */
+    agentPairingHash: string | null
+    agentPairingExpiresAt: Date | null
+    /**
+     * TER-1017: the agent's Ed25519 device key (base64 SPKI DER); every dial signs the server's nonce with its pair
+     */
+    agentPublicKey: string | null
+    agentPairedAt: Date | null
     agentVersion: string | null
     agentLastSeenAt: Date | null
     /**
@@ -2595,6 +2837,10 @@ export interface MachineFieldRefs {
   readonly checkedAt: Prisma.FieldRef<"Machine", 'DateTime'>
   readonly agentTokenHash: Prisma.FieldRef<"Machine", 'String'>
   readonly agentTokenCreatedAt: Prisma.FieldRef<"Machine", 'DateTime'>
+  readonly agentPairingHash: Prisma.FieldRef<"Machine", 'String'>
+  readonly agentPairingExpiresAt: Prisma.FieldRef<"Machine", 'DateTime'>
+  readonly agentPublicKey: Prisma.FieldRef<"Machine", 'String'>
+  readonly agentPairedAt: Prisma.FieldRef<"Machine", 'DateTime'>
   readonly agentVersion: Prisma.FieldRef<"Machine", 'String'>
   readonly agentLastSeenAt: Prisma.FieldRef<"Machine", 'DateTime'>
   readonly agentAutoUpdate: Prisma.FieldRef<"Machine", 'Boolean'>

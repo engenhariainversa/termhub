@@ -41,10 +41,18 @@ Each step only runs when the previous one succeeded, so a failed package install
 termhub-agent connect --url https://app.termhub.dev
 ```
 
-You'll be prompted to paste an agent token generated from the termhub web app (Machines → Add
-machine). `--token <token>` and the `TERMHUB_URL`/`TERMHUB_TOKEN` environment variables work too,
-for non-interactive setups. On success the pairing is saved and the command exits; start the agent
-with `termhub-agent service install` (background) or `termhub-agent run` (foreground).
+You'll be prompted to paste the pairing token generated from the termhub web app (Machines → Add
+machine, or "Parear de novo" on an existing one). `--token <token>` and the `TERMHUB_URL`/`TERMHUB_TOKEN`
+environment variables work too, for non-interactive setups. On success the pairing is saved and the
+command exits; start the agent with `termhub-agent service install` (background) or
+`termhub-agent run` (foreground).
+
+The pairing token is single use and valid for 15 minutes (since 0.25.0). `connect` generates an
+Ed25519 key pair, keeps the private key in `~/.termhub/device-key.pem` (`0600`, never sent) and trades
+the token plus the public key for the machine; the token is burnt. Every later connection proves it
+holds the key by signing a nonce the server sends, so a token seen in a terminal, a screenshot or a
+shell history is worthless once used. Agents paired before 0.25.0 keep their permanent token until the
+machine is paired again; `termhub-agent status` says which credential is in use.
 
 ## Run as a background service
 
@@ -95,8 +103,8 @@ Then revoke or delete the machine in the termhub web app (Máquinas), so its tok
 
 - `termhub-agent status` — shows the paired server, machine name and whether the agent can reach
   it right now.
-- `termhub-agent disconnect` — removes the local config (`~/.termhub/config.json`); revoke the
-  token from the termhub web app too.
+- `termhub-agent disconnect` — removes the local config (`~/.termhub/config.json`) and the device
+  key; revoke the machine's access from the termhub web app too ("Parear de novo", or delete it).
 - `termhub-agent doctor` — checks the local config, server reachability, the monitor hooks and
   MCP addresses the server names (an empty POST without a token to each, expecting termhub's 401,
   so a firewall that only lets `/agent/ws` through shows up as ✗ with the host), `tmux`, `node-pty`

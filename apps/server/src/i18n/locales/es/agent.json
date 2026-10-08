@@ -16,5 +16,7 @@
   "Falha ao atualizar o agente: {{reason}}. Se persistir, rode na máquina: npm i -g @termhub/agent@latest": "No se pudo actualizar el agente: {{reason}}. Si sigue fallando, ejecuta en la máquina: npm i -g @termhub/agent@latest",
   "A instalação do agente demorou demais; verifique na máquina": "La instalación del agente tardó demasiado; revisa en la máquina",
   "npm não encontrado na máquina; rode: npm i -g @termhub/agent@latest": "No se encontró npm en la máquina; ejecuta: npm i -g @termhub/agent@latest",
-  "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para testar os endereços": "Actualiza el agente de esta máquina (npm i -g @termhub/agent, versión {{version}} o más reciente) para probar las direcciones"
+  "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para testar os endereços": "Actualiza el agente de esta máquina (npm i -g @termhub/agent, versión {{version}} o más reciente) para probar las direcciones",
+  "Refazer login pela tela só funciona em máquinas com o agente do termhub": "Rehacer el login desde la pantalla solo funciona en máquinas con el agente de termhub",
+  "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para refazer o login pela tela": "Actualiza el agente de esta máquina (npm i -g @termhub/agent, versión {{version}} o más reciente) para rehacer el login desde la pantalla"
 }

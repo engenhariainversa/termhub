@@ -144,6 +144,12 @@ export interface Machine {
   /** TER-735: the AI accounts' usage is queried on this machine (the credential never leaves it); off = no bars */
   ai_usage_query: boolean;
   automation_allowed: boolean;
+  /**
+   * TER-1017: how the agent proves itself. `key` = device key paired through a single-use token; `bearer` =
+   * the permanent token of agents paired before (valid until the machine is paired again); null = not paired.
+   * Absent from servers before it.
+   */
+  agent_credential?: 'key' | 'bearer' | null;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */
@@ -946,6 +952,48 @@ export interface AiAccountUsage {
    * turned off (Máquinas › the machine); 'agent_outdated' = the machine's agent predates the `ai.usage` RPC.
    */
   reason?: 'disabled' | 'agent_outdated';
+}
+
+/** TER-1047: whether an account's CLI is logged in on its machine (GET /ai-accounts/login-status). */
+export type AiLoginState = 'ok' | 'login_required' | 'unknown';
+
+export interface AiLoginStatusRow {
+  account_id: string;
+  label: string;
+  provider: AiProvider;
+  machine_id: string;
+  machine_name: string | null;
+  state: AiLoginState;
+  checked_at: string | null;
+  /** the login can be redone from the modal (Claude/Codex on an agent machine with the `ai_login` capability) */
+  supported: boolean;
+}
+
+/** POST /ai-accounts/:id/login */
+export interface AiLoginStart {
+  login_id: string;
+  /** the page to open in a browser */
+  url: string;
+  /** Codex's one-time device code to type on that page; null for Claude */
+  user_code: string | null;
+  /** true (Claude): paste the code the page shows back; false (Codex): just confirm once authorized */
+  needs_code: boolean;
+  expires_at: string;
+}
+
+export interface AiLoginStuckTab {
+  id: string;
+  name: string;
+  project_id: string;
+}
+
+/** POST /ai-accounts/:id/login/:loginId/submit */
+export interface AiLoginSubmitResult {
+  ok: boolean;
+  /** why it did not finish; never the code */
+  message: string | null;
+  /** after a successful login: the account's tabs still showing the login error */
+  stuck_tabs: AiLoginStuckTab[];
 }
 
 /** Brand names: shown as is in every language. */

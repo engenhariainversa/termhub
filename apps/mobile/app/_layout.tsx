@@ -126,6 +126,8 @@ function Navigator() {
             screen on a right drag from anywhere in it, so a drag that missed a row's own recognizer
             left the chat (TER-849). Back stays on the screen's edge, as before iOS 26. */}
         <Stack.Screen name="chat/[id]" options={{ fullScreenGestureEnabled: false }} />
+        {/* "Refazer login" of an AI account (TER-1047): over whatever screen opened it. */}
+        <Stack.Screen name="ai-login/[accountId]" options={{ presentation: 'modal' }} />
       </Stack>
       <PinPromptSheet />
       <PushPrimerSheet />
