@@ -327,7 +327,7 @@ describe('startDispatcher (fakes)', () => {
       users: { findById: async () => ({ id: 'u1' }) },
       projectSetup: { get: async () => ({ data: { automation: { enabled: over.enabled ?? true, max_parallel: null }, ai: { accounts: [], models: {} } } }) },
       tasks: { findById: async () => ({ id: 'c1', project_id: 'p1' }) },
-      automationRuns: { claim: async () => over.claim ?? null, release: async () => true },
+      automationRuns: { claim: async () => over.claim ?? null, release: async () => true, endedInTabs: async () => [] },
       projectMachines: { listByProject: async () => [] },
     });
 
@@ -351,9 +351,95 @@ describe('startDispatcher (fakes)', () => {
 
     it('no machine for it now: the claim is let go (the trigger stays free) and it waits', async () => {
       const release = vi.fn(async () => true);
-      const { repos } = recordingRepos({ ...base(), automationRuns: { claim: async () => ({ id: 'r1', task_id: 'c1' }), release } });
+      const { repos } = recordingRepos({ ...base(), automationRuns: { claim: async () => ({ id: 'r1', task_id: 'c1' }), release, endedInTabs: async () => [] } });
       expect(await startDispatcher(deps(repos), { schedule: false }).startTriggered(fixer)).toBe('waiting');
       expect(release).toHaveBeenCalledWith('r1', 'test');
+    });
+
+    // TER-1051: the worktree is per card, so a fixer never opens a second tab next to one the card left open
+    describe('the card left a tab open', () => {
+      const ended = new Date('2026-10-08T10:00:00Z');
+      const prev = { id: 'r0', task_id: 'c1', status: 'done', tab_id: 'tab1', account_id: 'a0', worktree_path: '/wt/TER-5', allowed_tools: ['Bash(npm test:*)'], ended_at: ended };
+      const tab = (over: object = {}) => ({ id: 'tab1', machine_id: 'm1', ai_account_id: 'a1', state: 'waiting_input', state_text: null, rate_limited_at: null, ...over });
+      const world = (o: { tab?: object | null; prompted?: boolean; question?: boolean } = {}) => {
+        const update = vi.fn(async () => true);
+        const release = vi.fn(async () => true);
+        const insert = vi.fn(async (e: object) => ({ id: 'e1', created_at: '', ...e }));
+        const promptedSince = vi.fn(async () => o.prompted ?? false);
+        const { repos, calls } = recordingRepos({
+          ...base(),
+          automationRuns: { claim: async () => ({ id: 'r1', task_id: 'c1' }), release, endedInTabs: async () => [prev], update, noteTyped: async () => {} },
+          tabs: { findById: async () => (o.tab === null ? undefined : tab(o.tab)), promptedSince },
+          tabQuestions: { hasOpenQuestion: async () => o.question ?? false },
+          automationEvents: { insert },
+        });
+        const type = vi.fn(async () => {});
+        const startAgent = vi.fn();
+        const d = startDispatcher(deps(repos, { type, startAgent: startAgent as unknown as DispatcherDeps['startAgent'] }), { schedule: false });
+        return { d, calls, update, release, insert, type, startAgent, promptedSince };
+      };
+
+      for (const state of ['waiting_input', 'finished'] as const) {
+        it(`at its prompt (${state}) and untouched since the run ended: the fixer takes it over`, async () => {
+          const w = world({ tab: { state } });
+          expect(await w.d.startTriggered(fixer)).toBe('started');
+          expect(w.promptedSince).toHaveBeenCalledWith('tab1', ended);
+          expect(w.update).toHaveBeenNthCalledWith(1, 'r1', 'test', {
+            status: 'starting',
+            tab_id: 'tab1',
+            machine_id: 'm1',
+            account_id: 'a1',
+            branch: 'TER-5-x',
+            worktree_path: '/wt/TER-5',
+            allowed_tools: ['Bash(npm test:*)'],
+          });
+          expect(w.type).toHaveBeenCalledWith(expect.anything(), 'tab1', '[termhub automático] p');
+          expect(w.update).toHaveBeenNthCalledWith(2, 'r1', 'test', expect.objectContaining({ status: 'running' }));
+          expect(w.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'run_started', payload: expect.objectContaining({ tab_id: 'tab1', reused_tab: true }) }));
+          expect(w.startAgent).not.toHaveBeenCalled();
+          expect(w.calls).not.toContain('projectMachines.listByProject'); // no placement, no new tab
+          expect(w.release).not.toHaveBeenCalled();
+        });
+      }
+
+      const busy: Array<[string, Parameters<typeof world>[0]]> = [
+        ['working', { tab: { state: 'working' } }],
+        ['waiting for a permission', { tab: { state: 'waiting_permission' } }],
+        ['on a usage limit', { tab: { rate_limited_at: new Date() } }],
+        ['with an open question card', { question: true }],
+        ['typed into by a person since the run ended', { prompted: true }],
+      ];
+      for (const [why, over] of busy) {
+        it(`busy or in use (${why}): the claim is let go and the fix waits for the tab`, async () => {
+          const w = world(over);
+          expect(await w.d.startTriggered(fixer)).toBe('tab_busy');
+          expect(w.release).toHaveBeenCalledWith('r1', 'test');
+          expect(w.type).not.toHaveBeenCalled();
+          expect(w.update).not.toHaveBeenCalled();
+          expect(w.startAgent).not.toHaveBeenCalled();
+        });
+      }
+
+      it('a tab that cannot be typed into now lets the claim go: asked again at the next sync', async () => {
+        const w = world();
+        w.type.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'MACHINE_OFFLINE' }));
+        expect(await w.d.startTriggered(fixer)).toBe('waiting');
+        expect(w.release).toHaveBeenCalledWith('r1', 'test');
+        expect(w.insert).not.toHaveBeenCalled();
+      });
+
+      it('the tab was closed: a new tab as before', async () => {
+        const w = world({ tab: null });
+        expect(await w.d.startTriggered(fixer)).toBe('waiting'); // no machine in these fakes
+        expect(w.calls).toContain('projectMachines.listByProject');
+        expect(w.type).not.toHaveBeenCalled();
+      });
+
+      it('an integrator never looks for the card tab', async () => {
+        const w = world();
+        expect(await w.d.startTriggered({ ...fixer, role: 'integrator' })).toBe('waiting');
+        expect(w.calls).not.toContain('automationRuns.endedInTabs');
+      });
     });
   });
 });

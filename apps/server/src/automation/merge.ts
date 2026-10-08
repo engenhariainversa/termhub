@@ -413,6 +413,8 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, custom: c.setup.automation.prompts.fixer });
   const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: row.head_sha, branch: row.head_ref, base, prompt });
   if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a conflict');
+  // TER-1051: the card's open tab is busy or in use; the next sync asks again
+  if (started === 'tab_busy') return waitOn(c, 'merge_fix_waits_for_tab');
   if (started !== 'taken') return;
   // taken: a run of the card is still on (it may be the fixer itself), or this head's fixer already ended
   if ((await repos.automationRuns.activeByProject(c.project.id)).some((r) => r.task_id === task.id)) return;
@@ -546,8 +548,10 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
     }
 
     const started = await startCiFixer(c, row, sha);
-    // waiting for a place or halted: the next sync asks again. Taken: a fixer already holds this head's trigger.
-    if (started === 'waiting' || started === 'halted') return void (await giveBack());
+    // waiting for a place or for the card's open tab (TER-1051), or halted: the next sync asks again. Taken: a
+    // fixer already holds this head's trigger.
+    if (started === 'tab_busy') waitOn(c, 'merge_fix_waits_for_tab');
+    if (started === 'waiting' || started === 'halted' || started === 'tab_busy') return void (await giveBack());
     acted = true;
     await settle('fixer');
     if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a red CI');
@@ -614,10 +618,10 @@ async function retryAfterGithub(c: PullCtx, row: TaskPullRequest, claim: Automat
   const won = await repos.automationEvents.replacePayloadIf(claim.id, { via }, { ...claim.payload, via: 'fixer', github_retry: true });
   if (!won) return true;
   const started = await startCiFixer(c, row, `${row.head_sha}:github`);
-  // no place for it now: the hold stays, the next sync asks again
-  if (started === 'waiting' || started === 'halted') await repos.automationEvents.replacePayloadIf(claim.id, { via: 'fixer' }, { ...claim.payload, github_hold: true });
+  // no place for it now (or the card's open tab is busy): the hold stays, the next sync asks again
+  if (started === 'waiting' || started === 'halted' || started === 'tab_busy') await repos.automationEvents.replacePayloadIf(claim.id, { via: 'fixer' }, { ...claim.payload, github_hold: true });
   else (c.deps.log ?? noopLog).info({ projectId: c.project.id, taskId: c.primary.id, pr: row.number, started }, 'automation: red CI asked again after GitHub came back');
-  waitOn(c, 'merge_github_down');
+  waitOn(c, started === 'tab_busy' ? 'merge_fix_waits_for_tab' : 'merge_github_down');
   return true;
 }
 

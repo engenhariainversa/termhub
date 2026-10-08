@@ -252,6 +252,14 @@ move after its fixer, or after the fix typed into the card's own run): the escal
 that ended without a push while githubstatus.com reports trouble with Git, the API or pull requests is not
 escalated: the card waits (`merge_github_down`) and gets one more fixer once GitHub works again (TER-1025).
 
+A fixer never opens a second tab next to one the card left open (TER-1051): the worktree is per card, so
+both would share it. When the tab of the card's last `done` or `blocked` run is still open, at its prompt
+(`waiting_input` or `finished`), with no open question and no prompt submitted in it since that run
+ended, the fixer takes it over: the run points at that tab and the fixer's prompt is typed there
+(`run_started` with `reused_tab: true`). A tab that is busy, or that someone typed into, makes the fix
+wait (`merge_fix_waits_for_tab`, "A correção do PR espera a aba do card ficar livre"); the next CI sync
+asks again. Closing that tab lets the next sync start the fixer in a new tab, as before.
+
 GitHub errors do not reach you on the first failure (TER-1025). An agent whose `git push` or `gh pr create`
 fails on GitHub's side (5xx, "commit_refs", "Something went wrong") calls `report_card` blocked with
 `code: github_transient`: the run waits (event `github_wait`, card and tab kept) and is resumed with a
