@@ -220,10 +220,12 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
    npm i -g @termhub/agent                # reaches registry.npmjs.org
    termhub-agent connect --url https://app.termhub.dev --token <token from the app>
    termhub-agent doctor                   # "✓ Servidor" = token, TLS and WebSocket all got through
+                                          # "✓ Hooks do monitor (termhub.dev)", "✓ MCP das abas (termhub.dev)" = hooks/MCP host reachable
    termhub-agent status                   # "conectado ✓"
-   curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://termhub.dev/api/hooks/events   # 401 = hooks host reachable
    ```
-   `doctor` and `status` open a real WebSocket to `/agent/ws` with `probe: true`. The server validates the token and answers "probe-ok" without taking over the live session.
+   `doctor` and `status` open a real WebSocket to `/agent/ws` with `probe: true`. The server validates the token, sends back the addresses the hooks and the tabs' MCP use (`HOOKS_URL`, `MCP_URL`) and answers "probe-ok" without taking over the live session. `doctor` (agent 0.23.0 or newer) then sends an empty POST without a token to each of those addresses and expects termhub's 401: any other answer (a proxy page, a Cloudflare Access redirect) or no answer is a ✗ with the URL to allow. Otherwise the agent connects while the monitor stays silent, with no warning.
+
+   The machine's page in the app (Agente tab, "Endereços dos hooks e do MCP") runs the same check from the machine through the agent. With an older agent, test the hooks host by hand: `curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://termhub.dev/api/hooks/events` (401 = reachable).
 
 ## Known limitations
 
@@ -236,7 +238,6 @@ These are open gaps, each tracked on the termhub board:
 - Chat messages, proposed commands, the agent's last answers and chat attachments are stored unencrypted in the database or on disk, with no retention limit; they are deleted with the conversation, project or user (TER-582).
 - The app sends `nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy`, but no HSTS or CSP of its own (TER-579).
 - The agent token does not expire until it is rotated (TER-584). Replacing it with a single-use pairing token and a per-device key is proposed in `docs/superpowers/specs/2026-10-07-agent-release-trust-and-uninstall-design.md` §1, not built yet. Deleting a machine uninstalls the agent only when the machine is online on agent 0.22.0 or newer; otherwise the manual steps in section 4 apply.
-- `termhub-agent doctor` checks the agent connection only, not the hooks and MCP host (TER-586).
 
 ## Evidence
 
@@ -250,7 +251,7 @@ Paths are relative to the repository root.
 | Config file `0600`/`0700` | `apps/agent/src/config.ts` |
 | User-level service | `apps/agent/src/service/systemd.ts`, `apps/agent/src/service/launchd.ts` |
 | `connect` command uses the app's origin | `apps/web/src/components/AgentEnrollment.tsx` |
-| Probe used by `doctor`/`status` | `apps/agent/src/run.ts` (`checkServerConnection`), `apps/agent/src/doctor.ts` |
+| Probe used by `doctor`/`status`; hooks/MCP addresses in `probe_info`, checked with a POST expecting 401 | `apps/agent/src/run.ts` (`checkServerConnection`), `apps/agent/src/doctor.ts`, `apps/agent/src/rpc/net.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/routes/machines.ts` (`/network-check`) |
 | Hook script posts with curl to `HOOKS_URL` | `packages/machine-ops/src/hooks.ts`, `apps/server/src/config.ts` |
 | Hosts routed on `termhub.dev` (hooks, MCP, mobile) | `deploy/nginx/termhub.dev.conf.tmpl` |
 | Server WebSocket endpoints, Origin check, pings, drain with 1012 | `apps/server/src/ws/router.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/terminal/ws.ts`, `apps/server/src/ws/drain.ts` |

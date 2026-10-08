@@ -365,6 +365,17 @@ export const RPC = {
   'tab.mcp.write': def(z.object({ tab_id: tabId, file: tabMcpFile, body: z.string().min(1).max(8192) }), z.object({ ok: z.literal(true) }), 10_000),
   /** Deletes a tab's whole MCP config dir on close (spec D12); best effort (since agent 0.10.0). */
   'tab.mcp.remove': def(z.object({ tab_id: tabId }), z.object({ ok: z.literal(true) }), 10_000),
+  /**
+   * From the machine, an empty POST without a token to each of `urls` (the monitor hooks and MCP
+   * addresses, TER-586), redirects not followed. `status` is the HTTP answer (401 means the address
+   * reaches termhub) or null with `error` when nothing answered: DNS, TLS, a refused or timed-out
+   * connection — what a firewall that only lets `/agent/ws` through looks like (since agent 0.23.0).
+   */
+  'net.check': def(
+    z.object({ urls: z.array(z.string().url().max(2048).regex(/^https?:\/\//)).min(1).max(4) }),
+    z.object({ results: z.array(z.object({ url: z.string().max(2048), status: z.number().int().nullable(), error: z.string().max(500).nullable() })).max(4) }),
+    15_000,
+  ),
 } as const;
 
 export type RpcMethod = keyof typeof RPC;
