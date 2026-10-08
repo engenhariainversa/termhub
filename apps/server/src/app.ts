@@ -231,6 +231,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     },
     appUrl: config.publicUrl,
     pageUrl: config.accountDeletionUrl,
+    backupRetentionDays: config.backupRetentionDays,
     log: fastify.log.child({ mod: 'account-deletion' }),
   });
   const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments, tabChat, deletion };

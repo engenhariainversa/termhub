@@ -193,9 +193,9 @@ Compartilhamos dados só com quem nos ajuda a prestar o Serviço (operadores) ou
 
 - **Autoridades.** Também podemos compartilhar dados com autoridades públicas, quando a lei ou uma ordem judicial exigir.
 - **Reorganização da empresa.** Em caso de reorganização societária, os dados podem ser transferidos ao sucessor, que continuará vinculado a esta Política.
-- **Infraestrutura.** O Serviço roda em [infraestrutura própria em PAÍS/ESTADO]. Banco de dados, transcrição de voz e cálculo de embeddings rodam nessa mesma infraestrutura.
+- **Infraestrutura.** O Serviço roda em [infraestrutura própria em PAÍS/ESTADO]. Banco de dados, transcrição de voz e cálculo de embeddings rodam nessa mesma infraestrutura. As cópias de segurança do banco de dados são cifradas, guardadas nessa mesma infraestrutura e apagadas depois de [30] dias.
 
-> Nota: confirmar o provedor de SMTP de produção, o país do servidor, se haverá backup externo e onde ele ficará. Itens P-4, P-5 e P-7.
+> Nota: confirmar o provedor de SMTP de produção e o país do servidor. Itens P-4 e P-5. O backup (P-7) foi decidido no TER-745: diário, cifrado, no próprio servidor, 30 dias (`deploy/README.md`, "Database backups"); uma cópia fora do servidor, se um dia existir e ficar fora do Brasil, entra na seção 7 antes.
 
 ## 7. Transferência internacional
 
@@ -209,7 +209,7 @@ Essas transferências são feitas para executar o contrato com você ou a seu pe
 
 | Dado | Prazo |
 |---|---|
-| Conta, projetos, cards, notas, chat, memória, últimas respostas dos agentes, anexos enviados | enquanto a conta existir, ou até você apagá-los. Depois da exclusão da conta: até **[30] dias** para apagar dos sistemas ativos e até **[N] dias** dos backups |
+| Conta, projetos, cards, notas, chat, memória, últimas respostas dos agentes, anexos enviados | enquanto a conta existir, ou até você apagá-los. Depois da exclusão da conta: até **[30] dias** para apagar dos sistemas ativos e até **[30] dias** dos backups |
 | Sessões web | até 30 dias, ou até você sair |
 | Códigos de login por e-mail | 10 minutos |
 | Pedidos de acesso de aparelhos | 1 dia |
@@ -298,7 +298,7 @@ Pela LGPD (art. 18), você pode pedir:
 - máquinas e aparelhos;
 - últimas respostas e histórico das abas.
 
-O prazo é de até [30] dias, mais [N] dias para os backups. Mantemos só o que a lei obriga, como os registros de acesso (6 meses) e os dados fiscais. Avisamos você por e-mail quando a exclusão terminar.
+O prazo é de até [30] dias, mais [30] dias para os backups. Mantemos só o que a lei obriga, como os registros de acesso (6 meses) e os dados fiscais. Avisamos você por e-mail quando a exclusão terminar.
 
 12.3. A exclusão da conta não apaga nada nas suas máquinas, como o código, os arquivos e as transcrições locais das ferramentas de IA. Também não apaga os dados que você enviou aos fornecedores de IA e às integrações. Para remover o agente, siga [instruções de desinstalação].
 

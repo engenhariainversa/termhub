@@ -76,3 +76,73 @@ gh variable delete DEPLOY_AUTO_ROLLBACK           # back on (default)
 `bash deploy/post-deploy.test.sh` exercises the decision and the smoke test with fake `docker`,
 `curl`, smoke and `blue-green.sh`; it touches neither Docker nor the network. The CI `check` job runs
 it.
+
+## Database backups
+
+`deploy/db-backup.sh`, run every day by the **Backup do banco** workflow
+(`.github/workflows/db-backup.yml`, self-hosted runner on jarvis), takes an encrypted `pg_dump` of
+the production database and deletes the backups past their retention. On Sundays the same workflow
+restores the newest backup into a throwaway container (`deploy/db-restore-test.sh`) and checks what
+came back. Before this (TER-745) the only backup was a manual `pg_dump` before risky migrations.
+
+### Decisions (TER-745, items P-7 and D-7 of `docs/legal/duvidas-advogado.md`)
+
+| Question | Decided | Why |
+| --- | --- | --- |
+| Frequency | daily, 06:30 UTC (03:30 in Brasília) | at most one day of data lost; outside the hours when merges deploy |
+| Where | on jarvis, `/mnt/hd2tb/projetos/termhub/backups/db` (`BACKUP_DIR`) | no new provider and no data leaving Brazil, so the Privacy Policy's international transfer section does not change. The run summary says when the folder shares a disk with the Docker volumes: then a backup protects against mistakes and a corrupted database, not against losing that disk. A copy outside the house is a later step and, if it leaves Brazil, goes into the Policy first |
+| Encryption | `gpg --symmetric`, AES256, passphrase in `/mnt/hd2tb/projetos/termhub/backup-passphrase` (chmod 600) | nothing unencrypted reaches the disk (the dump is piped into gpg), and a copied file is useless without the passphrase |
+| Retention | 30 days (`BACKUP_RETENTION_DAYS`) | the Privacy Policy's "até N dias dos backups": a deleted account leaves the backups at most 30 days after it leaves the database (30 days of deletion window + 30 days of backups) |
+| Restore test | weekly, automatic, into `th-restore-test` (no network) | a backup that was never restored is a hope, not a backup |
+
+### Setting it up on jarvis (once)
+
+1. `gpg` must be installed (`gpg --version`; else `sudo apt install gnupg`).
+2. Add `BACKUP_RETENTION_DAYS=30` to the server's `.env` (`/mnt/hd2tb/projetos/termhub/.env`). The
+   backup script reads that line, and the app uses it in the "account deleted" e-mail, which then
+   says when the copies in backups go. Without the line the script keeps 30 days and the e-mail says
+   nothing about backups.
+3. Run the workflow once by hand (`gh workflow run "Backup do banco" --ref main -f restore_test=true`).
+   The first run creates the passphrase file and says so in the run summary: **copy the passphrase to
+   a password manager**, outside jarvis. Without it no backup can be restored. Never paste it in a
+   card, a lesson or a log.
+4. Check the space: `df -h /mnt/hd2tb` and the size of the first backup (`ls -lh
+   /mnt/hd2tb/projetos/termhub/backups/db`). 30 backups take about 30 times that. The script refuses to
+   start with less than `BACKUP_MIN_FREE_MB` (2 GB) free or less than twice the latest backup, so a
+   full disk (it happened before, with build cache) fails the run instead of the database.
+
+### Restoring
+
+**Check a backup** (safe, never touches production):
+
+```bash
+bash deploy/db-restore-test.sh                                        # the newest
+bash deploy/db-restore-test.sh /mnt/hd2tb/projetos/termhub/backups/db/termhub-db-<UTC>.dump.gpg
+```
+
+**Restore production** (a person does this, never an automatic run: it replaces the live database):
+
+1. Take a backup of the current state first, even a broken one: `ENV_FILE=/mnt/hd2tb/projetos/termhub/.env bash deploy/db-backup.sh`.
+2. Check the backup you will restore with `deploy/db-restore-test.sh <file>`.
+3. Note which accounts exist now, when the database still answers:
+   `docker exec termhub-db-1 psql -U termhub -d termhub -tAc 'SELECT id FROM users' > /tmp/users-now.txt`.
+4. Stop the active colour, then recreate the database and restore into it:
+   ```bash
+   docker exec termhub-db-1 dropdb -U termhub --force termhub
+   docker exec termhub-db-1 createdb -U termhub termhub
+   gpg --batch --pinentry-mode loopback --passphrase-file /mnt/hd2tb/projetos/termhub/backup-passphrase \
+     --decrypt <file> | docker exec -i termhub-db-1 pg_restore -U termhub -d termhub --no-owner --exit-on-error
+   ```
+5. Start the colour again; on boot it applies the migrations newer than the backup.
+6. **Deletions done after the backup must not come back.** Accounts whose 30-day window is over are
+   deleted again by the app's job by itself. Accounts deleted after the backup was taken are back,
+   though: compare `SELECT id FROM users` with `/tmp/users-now.txt` (or, when step 3 was not possible,
+   with the `account deletion: account deleted` log lines and the "Sua conta do termhub foi excluída"
+   e-mails sent since the backup) and delete each one again in Configurações → Usuários. Then delete
+   `/tmp/users-now.txt`.
+
+### Tests
+
+`bash deploy/db-backup.test.sh` runs both scripts with fake `docker` and `gpg` (no Docker, no
+database). `bash deploy/db-backup.e2e.sh` runs them for real against throwaway `th-*` containers with
+the real migrations; the CI `check` job runs both.

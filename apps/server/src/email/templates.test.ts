@@ -111,6 +111,8 @@ describe('account deletion e-mails (TER-720, TER-728)', () => {
     const done = accountDeletedMail('a@x.dev');
     expect(done.subject).toBe('Sua conta do termhub foi excluída');
     expect(done.html).not.toContain('href=');
+    expect(done.text).not.toContain('cópias de segurança');
+    expect(accountDeletedMail('a@x.dev', { backupRetentionDays: 30 }).text).toContain('cópias de segurança do banco de dados que ainda têm esses dados são apagadas em até 30 dias');
   });
 });
 
@@ -187,9 +189,10 @@ describe('every template in English (TER-405)', () => {
     const cancelled = deletionCancelledMail('a@b.c', { appUrl }, 'en');
     expect(cancelled.subject).toBe('Your account deletion was cancelled');
     expect(cancelled.text).toContain('Open termhub: https://app.termhub.dev');
-    const done = accountDeletedMail('a@b.c', 'en');
+    const done = accountDeletedMail('a@b.c', { backupRetentionDays: 30 }, 'en');
     expect(done.subject).toBe('Your termhub account was deleted');
     expect(done.text).toContain('This is the last e-mail you get from termhub.');
+    expect(done.text).toContain('The database backups that still hold this data are deleted within 30 days.');
     const link = deletionLinkMail('a@b.c', { link: 'https://termhub.dev/excluir-conta/?token=abc', ttlMinutes: 30 }, 'en');
     expect(link.subject).toBe('Confirm the deletion of your termhub account');
     expect(link.text).toContain('within the next 30 minutes');

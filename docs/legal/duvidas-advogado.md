@@ -151,7 +151,7 @@ O legítimo interesse precisa de um relatório (LIA) documentado?
 | D-4 | Provedor de SMTP de produção | Política 6 | — |
 | D-5 | Analytics no app móvel: pedir consentimento, como na web, ou ficar com legítimo interesse? | Política 9.2; L-5 | pedir consentimento: alinha com a web e com o TER-583, e simplifica as declarações das lojas |
 | D-6 | Prazos de retenção que faltam: dados após a exclusão (30 dias?), backups, histórico das abas, lista de espera | Política 8 | 30 dias; histórico das abas 90 dias; lista de espera 12 meses |
-| D-7 | Backup do banco: hoje não há. Haverá? Onde e por quanto tempo? | Política 6 e 8 | — |
+| D-7 | Backup do banco: hoje não há. Haverá? Onde e por quanto tempo? | Política 6 e 8 | decidido no TER-745: diário, cifrado (gpg, AES256), no próprio servidor (sem transferência internacional), 30 dias de retenção, teste de restauração semanal |
 | D-8 | URLs públicas: `/termos`, `/privacidade` e `/excluir-conta` em `termhub.dev`. O card usa `/termos` e `/privacidade`, e o código da landing menciona "terms and privacy" | Termos; Política 12; E-1 | `termhub.dev/termos`, `/privacidade` e `/excluir-conta` |
 | D-9 | Recursos que agem sozinhos (troca automática de conta, respostas automáticas): manter ligados por padrão? | A-3, A-4 | aguardar o parecer de A-3 |
 | D-10 | Foro para não consumidores | Termos 15.2 | Goiânia/GO |
@@ -171,7 +171,7 @@ A Política foi escrita como **deve ficar**. Ela só pode ser publicada quando e
 | P-4 | Provedor de SMTP de produção documentado, e **e-mail fora do log**: sem `SMTP_HOST`, o e-mail inteiro, com o código de login, vai para o log | `apps/server/src/email/mailer.ts:32-42` | — | segurança |
 | P-5 | País da hospedagem declarado | não está escrito em lugar nenhum | — | Política |
 | P-6 | **Retenção dos logs** (6 meses, Marco Civil) e rotação | padrão do Docker; o log do Fastify registra IP e URL | `apps/server/src/app.ts:110` | Marco Civil |
-| P-7 | Backup do banco | não há backup automatizado | `README.md:237` (só um `pg_dump` manual) | continuidade |
+| P-7 | Backup do banco | **feito (TER-745)**: backup diário cifrado com 30 dias de retenção e teste de restauração semanal; o e-mail de conta excluída diz quando as cópias saem dos backups | `deploy/db-backup.sh`; `deploy/db-restore-test.sh`; `.github/workflows/db-backup.yml`; `deploy/README.md` | continuidade |
 | P-8 | **Consulta de uso das contas de IA sem a credencial sair da máquina**, e uma opção para desligar a leitura | o agente envia a credencial ao servidor | `packages/machine-ops/src/ai-credentials.ts:22-38`; `apps/server/src/ai/credentials.ts:18-40`; `apps/server/src/ai/claude.ts:14` | A-1 |
 | P-9 | Registro de auditoria do "ver como" do administrador | não existe | `apps/server/src/auth/scope.ts:11-39` | L-10 |
 | P-10 | **Exportação dos dados** (portabilidade) | não existe | — | LGPD, art. 18, V |

@@ -153,6 +153,17 @@ describe('AccountDeletionService.purge and the job', () => {
     expect(t.gone).toEqual([{ userId: 'u1', machineIds: ['m1', 'm2'] }]);
     expect(t.accessRemoved).toEqual(['ana@gmail.com']);
     expect(t.sent.map((m) => m.subject)).toEqual(['Sua conta do termhub foi excluída']);
+    expect(t.sent[0]!.text).not.toContain('cópias de segurança');
+  });
+
+  it('the final e-mail tells when the copies in backups go, when the instance keeps backups (TER-745)', async () => {
+    const t = setup();
+    const svc = new AccountDeletionService({
+      ...(t.service as unknown as { deps: ConstructorParameters<typeof AccountDeletionService>[0] }).deps,
+      backupRetentionDays: 30,
+    });
+    await svc.purge('u1', { actor: 'job' });
+    expect(t.sent[0]!.text).toContain('apagadas em até 30 dias');
   });
 
   it('notify: false sends no e-mail (an admin deletion)', async () => {

@@ -327,10 +327,16 @@ export function deletionCancelledMail(to: string, opts: { appUrl: string }, loca
   });
 }
 
-/** Sent after the deletion job ran: nothing is left to sign in to. */
-export function accountDeletedMail(to: string, locale: Locale = DEFAULT_LOCALE): Mail {
+/**
+ * Sent after the deletion job ran: nothing is left to sign in to. `backupRetentionDays` (the
+ * instance's database backup retention, TER-745) adds when the copies still in backups go.
+ */
+export function accountDeletedMail(to: string, opts: { backupRetentionDays?: number | null } = {}, locale: Locale = DEFAULT_LOCALE): Mail {
   return noticeMail(locale, to, t(locale, 'Sua conta do termhub foi excluída'), [
     t(locale, 'Concluímos a exclusão da sua conta e de todos os dados ligados a ela.'),
+    ...(opts.backupRetentionDays
+      ? [t(locale, 'As cópias de segurança do banco de dados que ainda têm esses dados são apagadas em até {{days}} dias.', { days: opts.backupRetentionDays })]
+      : []),
     t(locale, 'Guardamos só o que a lei exige, como os registros de acesso (6 meses). Este é o último e-mail que você recebe do termhub.'),
   ]);
 }

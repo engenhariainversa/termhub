@@ -62,6 +62,12 @@ const envSchema = z.object({
    * Default: /excluir-conta/ on the public city's origin (termhub.dev in production).
    */
   ACCOUNT_DELETION_URL: z.string().url().optional(),
+  /**
+   * Days a database backup is kept (TER-745). deploy/db-backup.sh prunes by it, and the
+   * account-deleted e-mail tells when the copies in backups go. Unset = the e-mail says nothing about
+   * backups (an instance without backups).
+   */
+  BACKUP_RETENTION_DAYS: z.coerce.number().int().min(1).optional(),
 
   /**
    * Public MCP endpoint (https://termhub.dev/mcp in production), shown in the "claude mcp add"
@@ -201,6 +207,7 @@ export const config = {
   mcpUrl: env.MCP_URL ?? null,
   publicCityUrl: resolvePublicCityUrl(env),
   accountDeletionUrl: env.ACCOUNT_DELETION_URL ?? `${new URL(resolvePublicCityUrl(env)).origin}/excluir-conta/`,
+  backupRetentionDays: env.BACKUP_RETENTION_DAYS ?? null,
   alphaCommunityUrl: env.ALPHA_COMMUNITY_URL,
   typeToAccess: env.TYPETOACCESS_API_KEY ? { apiKey: env.TYPETOACCESS_API_KEY } : null,
   auth: {
