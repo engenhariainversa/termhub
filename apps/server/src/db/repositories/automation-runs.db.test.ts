@@ -87,6 +87,27 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await claim('blue')).not.toBeNull();
   });
 
+  it('a blocked run\'s adoption (spike TER-1031): blockedSince, hasSuccessor and one blocked → done', async () => {
+    const run = (await claim('blue'))!;
+    await runs.update(run.id, 'blue', { branch: 'TER-1-card', status: 'blocked', waiting_reason: 'reported_blocked', ended_at: new Date() });
+    const since = new Date(Date.now() - 60_000);
+    expect((await runs.blockedSince(projectId, since)).map((r) => r.id)).toEqual([run.id]);
+    expect(await runs.blockedSince(projectId, new Date(Date.now() + 60_000))).toEqual([]);
+    const blocked = (await runs.findById(run.id))!;
+    expect(await runs.hasSuccessor(blocked)).toBe(false);
+    // a marker after it does not take over; a new dispatch of the card does
+    await runs.insertMarker({ project_id: projectId, task_id: taskId, role: 'fixer', instance: 'blue', trigger_sha: 'conflict_cap:h1', waiting_reason: 'conflict_cap' });
+    expect(await runs.hasSuccessor(blocked)).toBe(false);
+    const again = (await claim('green'))!;
+    expect(await runs.hasSuccessor(blocked)).toBe(true);
+    await runs.update(again.id, 'green', { status: 'cancelled', ended_at: new Date() });
+    expect(await runs.hasSuccessor(blocked)).toBe(true);
+    // only one caller wins the move, and it keeps ended_at and the reason
+    expect(await Promise.all([runs.finishBlockedAsDone(run.id), runs.finishBlockedAsDone(run.id)])).toEqual(expect.arrayContaining([true, false]));
+    expect(await runs.findById(run.id)).toMatchObject({ status: 'done', waiting_reason: 'reported_blocked', ended_at: blocked.ended_at });
+    expect(await runs.blockedSince(projectId, since)).toEqual([]);
+  });
+
   it('sums the fixes typed into the card\'s runs (red CI, D21)', async () => {
     expect(await runs.sumFixCount(taskId)).toBe(0);
     const first = (await claim('blue'))!;

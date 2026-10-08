@@ -1,4 +1,5 @@
 import { epicBranchName } from '../automation/branches.js';
+import { adoptBlockedRuns } from '../automation/follower.js';
 import { deliveryPending, deliveryRow, followMerged } from '../automation/release.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { PullRequestInfo } from '../db/repositories/task-pull-requests.js';
@@ -127,7 +128,9 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
     if (e instanceof GithubCiError) setCiError(projectId, MESSAGES[e.kind](e.status));
     throw e;
   }
-  // A project that never turned automation on gets nothing more than the sync (spec D3).
+  // A project that never turned automation on gets nothing more than the sync (spec D3). A PR linked from the
+  // branch of a run that ended blocked is adopted before the merge executor looks at it (spike TER-1031 §5.3).
+  if (setup.automation?.enabled) await adoptBlockedRuns(repos, projectId, deps.log, deps.now?.() ?? new Date());
   if (setup.automation?.enabled && deps.merge) await deps.merge(projectId);
   return result;
 }

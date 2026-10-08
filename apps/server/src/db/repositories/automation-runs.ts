@@ -319,6 +319,45 @@ export class AutomationRunsRepository {
     return row ? map(row) : null;
   }
 
+  /**
+   * The project's implementer runs that ended `blocked` since `since`, with a branch and not a marker: the
+   * runs a PR from their branch may still be adopted for (spike TER-1031 §5.1). Covered by `(project_id, status)`.
+   */
+  async blockedSince(projectId: string, since: Date): Promise<AutomationRun[]> {
+    const rows = await this.db.automationRun.findMany({
+      where: { projectId, status: 'blocked', role: 'implementer', branch: { not: null }, triggerSha: null, endedAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map(map);
+  }
+
+  /**
+   * Whether the card has a run that takes over from `run`: an active one, or one created after it (the card
+   * was dispatched again, or a fixer answered its PR). Markers (no branch, a trigger) do not count.
+   */
+  async hasSuccessor(run: Pick<AutomationRun, 'id' | 'task_id' | 'created_at'>): Promise<boolean> {
+    if (!run.task_id) return false;
+    const row = await this.db.automationRun.findFirst({
+      where: {
+        taskId: run.task_id,
+        id: { not: run.id },
+        OR: [{ status: active }, { createdAt: { gt: run.created_at }, NOT: { branch: null, triggerSha: { not: null } } }],
+      },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
+  /**
+   * The one move between terminal states (spike TER-1031 §5.2): a `blocked` run whose PR showed up later ends
+   * `done`. `ended_at` and `waiting_reason` stay (the run did end then, and why it was blocked stays readable).
+   * Conditional on `blocked`, so only one caller (or colour) wins it. False when nothing was written.
+   */
+  async finishBlockedAsDone(id: string): Promise<boolean> {
+    const { count } = await this.db.automationRun.updateMany({ where: { id, status: 'blocked' }, data: { status: 'done' } });
+    return count === 1;
+  }
+
   /** The `running` and `waiting` runs this instance drives: what its follower looks at again on each sweep. */
   async followedBy(instance: string): Promise<AutomationRun[]> {
     return (await this.db.automationRun.findMany({ where: { claimedBy: instance, status: { in: ['running', 'waiting'] } }, orderBy: { createdAt: 'asc' } })).map(map);

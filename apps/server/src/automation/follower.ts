@@ -25,6 +25,7 @@ import { writesDegraded, type GithubHealthReader } from '../integrations/github-
 import { MAX_RESTARTS } from './restart.js';
 import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, GITHUB_TRANSIENT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
+import { postAutomationLine } from './chat-line.js';
 export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
 
@@ -326,6 +327,12 @@ async function placeDoneCard(repos: Repositories, run: AutomationRun, log: Log):
  *  after a merge: the merge already moved it to done). False when another instance wrote it first. */
 async function finishDone(repos: Repositories, run: AutomationRun, via: 'report_card' | 'pull_request' | 'merged', pr: { url: string; number?: number } | null, log: Log): Promise<boolean> {
   if (!(await writeRun(repos, run, { status: 'done', waiting_reason: null, ended_at: new Date() }))) return false;
+  await recordDone(repos, run, via, pr, log);
+  return true;
+}
+
+/** What follows a run's `done` write: its card placed (not after a merge: the merge already moved it), `run_done`, and `pr_opened`. */
+async function recordDone(repos: Repositories, run: AutomationRun, via: 'report_card' | 'pull_request' | 'merged' | 'pull_request_after_blocked', pr: { url: string; number?: number } | null, log: Log): Promise<void> {
   if (via !== 'merged') await placeDoneCard(repos, run, log);
   const base = { project_id: run.project_id, task_id: run.task_id, run_id: run.id };
   await recordEvent(repos, { ...base, kind: 'run_done', payload: { via, tab_id: run.tab_id, pr_url: pr?.url ?? null } }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_done not recorded'));
@@ -335,7 +342,6 @@ async function finishDone(repos: Repositories, run: AutomationRun, via: 'report_
     );
   }
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, via }, 'automation: run done');
-  return true;
 }
 
 /** Ends the run `blocked` and escalates it (spec D15, D17). */
@@ -358,6 +364,60 @@ async function openPrOfRun(repos: Repositories, run: AutomationRun): Promise<{ u
   const ofRun = (p: { state: string; merged_at: Date | null }) => p.state === 'open' || (p.state === 'merged' && p.merged_at !== null && p.merged_at.getTime() >= run.created_at.getTime());
   const pr = (await repos.taskPullRequests.listByTasks([run.task_id])).find((p) => p.head_ref === run.branch && ofRun(p));
   return pr ? { url: pr.url, number: pr.number } : null;
+}
+
+/** How long after a run ended `blocked` a PR from its branch may still be adopted (spike TER-1031, decided):
+ *  an old blocked card picked up later is the person's, and its PR a manual one. */
+export const ADOPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a run may be adopted once a PR from its branch is linked (spike TER-1031 §5.1, the linked PR
+ * aside): an implementer run that ended `blocked` within ADOPT_WINDOW_MS, with a branch and not a marker,
+ * whose card still exists, is tagged `auto` in a project with automation on, and has no run taking over
+ * from it (an active one, or a later dispatch). Fails closed.
+ */
+export async function isAdoptable(repos: Repositories, run: AutomationRun, now: Date = new Date()): Promise<boolean> {
+  try {
+    if (run.status !== 'blocked' || run.role !== 'implementer' || !run.branch || run.trigger_sha !== null || !run.task_id || !run.ended_at) return false;
+    if (now.getTime() - run.ended_at.getTime() > ADOPT_WINDOW_MS) return false;
+    const [task, setup] = await Promise.all([repos.tasks.findById(run.task_id), repos.projectSetup.get(run.project_id)]);
+    if (!task?.auto || !setup.data.automation.enabled) return false;
+    return !(await repos.automationRuns.hasSuccessor(run));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Adopts the PR of a blocked run (spike TER-1031 §5.2): when the CI sync linked a PR from the run's branch,
+ * the run moves `blocked → done` once (`finishBlockedAsDone`, which only one caller wins), its card is placed,
+ * `run_done` (`via: pull_request_after_blocked`) and `pr_opened` are recorded, and the chat the block was
+ * escalated to hears the PR is followed (no push). The caller checks `isAdoptable` first. Null when no PR
+ * from the branch is linked yet, or another caller adopted it first. The URL an agent gives is never used:
+ * only the linked row whose head is the run's branch counts.
+ */
+export async function adoptBlockedRun(repos: Repositories, run: AutomationRun, log: Log = noopLog): Promise<{ url: string; number: number } | null> {
+  const pr = await openPrOfRun(repos, run);
+  if (!pr || !(await repos.automationRuns.finishBlockedAsDone(run.id))) return null;
+  await recordDone(repos, run, 'pull_request_after_blocked', pr, log);
+  const task = run.task_id ? await repos.tasks.findById(run.task_id).catch(() => undefined) : undefined;
+  const ref = task?.ref ?? '';
+  await postAutomationLine(repos, run.project_id, (locale) => t(locale, 'PR #{{number}} do {{ref}} aberto depois do bloqueio; o automático acompanha até o merge', { number: pr.number, ref }), log);
+  return pr;
+}
+
+/** Adopts every adoptable blocked run of the project whose PR is linked now (spike TER-1031 §5.3): run by the
+ *  CI sync right after it links PRs, for a project with automation on. Never throws; the count of adoptions. */
+export async function adoptBlockedRuns(repos: Repositories, projectId: string, log: Log = noopLog, now: Date = new Date()): Promise<number> {
+  let adopted = 0;
+  try {
+    for (const run of await repos.automationRuns.blockedSince(projectId, new Date(now.getTime() - ADOPT_WINDOW_MS))) {
+      if ((await isAdoptable(repos, run, now)) && (await adoptBlockedRun(repos, run, log))) adopted++;
+    }
+  } catch (e) {
+    log.warn({ projectId, code: errorCode(e) }, 'automation: blocked runs not adopted');
+  }
+  return adopted;
 }
 
 /** `automation_runs.waiting_reason` of a run cancelled because its card lost its tag. */
@@ -806,14 +866,38 @@ export async function tabHasActiveRun(ctx: ControlContext): Promise<boolean> {
   return (await runOfTabToken(ctx).catch(() => null)) !== null;
 }
 
+/** The tab's latest run when it ended `blocked` and may still be adopted (spike TER-1031 §5.4), or null. */
+async function adoptableRunOfTabToken(ctx: ControlContext): Promise<AutomationRun | null> {
+  const tab = ctx.token?.tab;
+  if (!tab) return null;
+  const run = await ctx.repos.automationRuns.latestByTab(tab.id);
+  return run && run.project_id === tab.project_id && (await isAdoptable(ctx.repos, run)) ? run : null;
+}
+
+/**
+ * The condition of the tab tool `report_card`: an active run in the tab (preflight F-8), or a tab whose latest
+ * run ended `blocked` and may still be adopted, where the agent finished the work by hand (spike TER-1031 §5.4).
+ * Fails closed. `get_card` stays on `tabHasActiveRun`.
+ */
+export async function tabMayReport(ctx: ControlContext): Promise<boolean> {
+  if (await tabHasActiveRun(ctx)) return true;
+  return (await adoptableRunOfTabToken(ctx).catch(() => null)) !== null;
+}
+
 /**
  * The tab tool `report_card` (spec D17): the agent ends its own run. `done` (with the PR URL) leaves the
  * card where the agent put it; `blocked` (with the reason) ends the run and escalates it — except with
  * `code: github_transient` (TER-1025): the run waits for GitHub and is resumed by itself (`waitForGithub`).
+ * In a tab whose run already ended `blocked` (spike TER-1031 §5.4), only `done` with a `pr_url` is taken: the
+ * run is adopted at once when the CI sync already linked a PR from its branch, else the answer is
+ * `pending` and the sync adopts it once it links the PR. The URL given is never trusted on its own.
  */
-export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient' }): Promise<{ ok: true }> {
+export async function reportCard(
+  ctx: ControlContext,
+  i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient' },
+): Promise<{ ok: true; pending?: true; message?: string }> {
   const run = await runOfTabToken(ctx);
-  if (!run) throw new ControlError('NO_RUN', msg('Esta aba não tem trabalho automático em andamento'));
+  if (!run) return reportAfterBlocked(ctx, i);
   if (i.status === 'blocked' && !i.reason?.trim()) throw new ControlError('REASON_REQUIRED', msg('Diga em reason por que o trabalho travou'));
   const log = ctx.log ?? noopLog;
   const ended =
@@ -825,6 +909,26 @@ export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blo
   // another instance took the run over between the read and the write: the agent may simply call again
   if (!ended) throw new ControlError('RUN_MOVED', msg('O trabalho automático desta aba mudou de instância; chame report_card de novo'));
   return { ok: true };
+}
+
+/** `report_card` from a tab whose latest run ended `blocked` (spike TER-1031 §5.4). */
+async function reportAfterBlocked(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string }): Promise<{ ok: true; pending?: true; message?: string }> {
+  const run = await adoptableRunOfTabToken(ctx).catch(() => null);
+  if (!run) throw new ControlError('NO_RUN', msg('Esta aba não tem trabalho automático em andamento'));
+  if (i.status === 'blocked') throw new ControlError('RUN_BLOCKED', msg('O trabalho automático desta aba já está bloqueado e a pessoa já foi avisada; não há o que reportar'));
+  if (!i.pr_url) throw new ControlError('PR_URL_REQUIRED', msg('O trabalho automático desta aba terminou bloqueado; mande status done com o pr_url do PR aberto do branch dele'));
+  if (await adoptBlockedRun(ctx.repos, run, ctx.log ?? noopLog)) return { ok: true };
+  // adopted by the CI sync (or another colour) between the read and the write: nothing left to do
+  if ((await ctx.repos.automationRuns.findById(run.id))?.status === 'done') return { ok: true };
+  const minutes = Math.ceil(PR_GRACE_MS / 60_000);
+  return {
+    ok: true,
+    pending: true,
+    message: t(localeOf(ctx.scope.user.locale), 'O PR ainda não está ligado ao card; a sincronização de CI liga o PR do branch {{branch}} em até {{minutes}} minutos e o automático passa a acompanhá-lo', {
+      branch: run.branch ?? '',
+      minutes,
+    }),
+  };
 }
 
 /**

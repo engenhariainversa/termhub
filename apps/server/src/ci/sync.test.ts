@@ -138,7 +138,7 @@ describe('syncProjectCi', () => {
     const branches: Record<string, string[]> = { cited: ['TER-9-other'], owner: ['TER-8-own'] };
     Object.assign(deps.repos, {
       tasks: { findById: vi.fn(async (id: string) => ({ id, ref: id, auto: true })) },
-      automationRuns: { branchesOfTask: vi.fn(async (id: string) => branches[id] ?? []) },
+      automationRuns: { branchesOfTask: vi.fn(async (id: string) => branches[id] ?? []), blockedSince: vi.fn(async () => []) },
       automationEvents: { insert: vi.fn(async (e: { kind: string; task_id: string | null }) => (events.push(e), { id: 'e', created_at: '', ...e })) },
       chat: { findLatestActiveForProject: vi.fn(async () => undefined), getOrCreateForProject: vi.fn(async () => undefined) },
       users: { findById: vi.fn(async () => ({ id: 'u1', locale: null })) },
