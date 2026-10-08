@@ -151,6 +151,7 @@ export const UserScalarFieldEnum = {
   chatAutodecide: 'chatAutodecide',
   chatCodexReplies: 'chatCodexReplies',
   pushTabFinished: 'pushTabFinished',
+  chatContextLimit: 'chatContextLimit',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
   automationPausedAt: 'automationPausedAt',
@@ -650,6 +651,7 @@ export const ChatConversationScalarFieldEnum = {
   reviewMode: 'reviewMode',
   contextTokens: 'contextTokens',
   contextWindow: 'contextWindow',
+  contextCompactedAt: 'contextCompactedAt',
   lastMessageAt: 'lastMessageAt',
   lastTypedAt: 'lastTypedAt',
   createdAt: 'createdAt'

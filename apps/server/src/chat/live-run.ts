@@ -282,6 +282,9 @@ export class LiveRun {
           // unfinished writes a `result` that ended no turn before its first replay (Claude Code 2.1.285).
           if (answered && !this.replayed && (this.waiting.length > 0 || this.notes.size > 0)) await this.failWaiting('RUN_FAILED');
           this.endInputIfIdle();
+        } else if (frame.type === 'compacted') {
+          // Auto-compact (TER-1038): the meter drops now and remembers when; `done` writes the turn's fill.
+          if (frame.tokens !== undefined) await saveContext(this.deps.chat, this.deps.userId, this.deps.conversationId, { tokens: frame.tokens, compacted: true });
         } else if (frame.type === 'api_error') {
           this.turnReason = frame.reason;
         } else if (frame.type === 'usage_limit') {
