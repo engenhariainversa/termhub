@@ -2,6 +2,7 @@ import { currentLocale, i18n } from '../i18n';
 import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
 import type { AutomationFeedEvent, FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
+import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -504,6 +505,14 @@ export const api = {
       request<SecurityEventsPage>('GET', `/security-events?${securityEventQuery({ ...filter, before: before ?? undefined })}`),
     /** A plain link (the browser downloads it with the session cookie); the export goes on the trail. */
     exportUrl: (filter: SecurityEventFilter, format: 'csv' | 'json') => `/api/security-events/export?${securityEventQuery({ ...filter, format })}`,
+  },
+  /** Settings → Recursos em teste (TER-1040): feature flags, for admins. */
+  featureFlags: {
+    list: () => request<{ flags: FeatureFlagInfo[] }>('GET', '/feature-flags'),
+    set: (key: FeatureFlagKey, enabled: boolean) => request<{ key: FeatureFlagKey; enabled: boolean }>('PUT', `/feature-flags/${key}`, { enabled }),
+    /** 404 when no account has this e-mail */
+    setOverride: (key: FeatureFlagKey, email: string, enabled: boolean) => request<{ overrides: FeatureFlagOverride[] }>('PUT', `/feature-flags/${key}/overrides`, { email, enabled }),
+    removeOverride: (key: FeatureFlagKey, userId: string) => request<null>('DELETE', `/feature-flags/${key}/overrides/${userId}`),
   },
   waitlist: {
     list: () => request<{ entries: WaitlistEntry[] }>('GET', '/waitlist'),

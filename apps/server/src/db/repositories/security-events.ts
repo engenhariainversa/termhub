@@ -32,6 +32,8 @@ export const SECURITY_EVENT_ACTIONS = [
   'terminal.input',
   'terminal.view_as_open',
   'audit.export',
+  'feature_flag.update',
+  'feature_flag.override',
 ] as const;
 
 export type SecurityEventAction = (typeof SECURITY_EVENT_ACTIONS)[number];

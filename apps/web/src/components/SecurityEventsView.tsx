@@ -31,6 +31,8 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   'terminal.input': tk('Digitou num terminal pela API'),
   'terminal.view_as_open': tk('Abriu o terminal de outra pessoa'),
   'audit.export': tk('Exportou a auditoria'),
+  'feature_flag.update': tk('Ligou ou desligou um recurso em teste'),
+  'feature_flag.override': tk('Mudou um recurso em teste para uma pessoa'),
 };
 
 const GROUP_LABELS: Record<string, string> = {
@@ -42,6 +44,7 @@ const GROUP_LABELS: Record<string, string> = {
   integration: tk('Integrações'),
   terminal: tk('Terminais'),
   audit: tk('Auditoria'),
+  feature_flag: tk('Recursos em teste'),
 };
 
 /** A local calendar day (`2026-10-07`) as the instant it starts; `plusDays` 1 gives the exclusive end of the day. */

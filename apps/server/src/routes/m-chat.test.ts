@@ -41,6 +41,8 @@ function deferred<T>() {
 }
 
 function build(opts: {
+  /** users with the subscriptions flag on for themselves (TER-1040) */
+  testers?: string[];
   start?: ReturnType<typeof vi.fn>;
   reset?: ReturnType<typeof vi.fn>;
   startAfterDecision?: ReturnType<typeof vi.fn>;
@@ -211,6 +213,7 @@ function build(opts: {
       setFavorite: opts.setFavorite ?? vi.fn(async () => undefined),
     },
     roles: { findById: vi.fn(async () => undefined), permissionsOf: vi.fn(async () => []) },
+    featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async (_flag: string, userId: string) => (opts.testers?.includes(userId) ? true : null)) },
   };
   const app = Fastify();
   applyErrorHandler(app);
@@ -1514,12 +1517,18 @@ describe('GET /me', () => {
     expect(res.json()).toEqual({
       user: { id: 'u1', email: 'ana@example.com', name: 'Ana', nickname: 'ana' },
       permissions: [],
+      features: { subscriptions: false },
       device: { id: 'd1', name: 'iPhone de Ana', platform: 'ios', model: 'iPhone 15', created_at: '2026-09-19T00:00:00.000Z', last_seen_at: '2026-09-20T00:00:00.000Z' },
       unread_notifications: 3,
     });
     expect(res.body).not.toContain('public_key');
     expect(res.body).not.toContain('pin_secret_enc');
     expect(res.body).not.toContain('secret-hash');
+  });
+
+  it('carries the subscriptions flag on for a tester (TER-1040)', async () => {
+    const { app } = build({ testers: ['u1'] });
+    expect((await app.inject({ method: 'GET', url: '/me' })).json().features).toEqual({ subscriptions: true });
   });
 });
 

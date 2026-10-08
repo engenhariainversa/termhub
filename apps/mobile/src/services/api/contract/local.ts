@@ -157,6 +157,9 @@ export const cancelSubagentResponse = z.object({ subagent: subagentViewSchema })
 export const meResponse = z.object({
   user: z.object({ id: z.string(), email: z.string(), name: z.string() }),
   permissions: z.array(z.string()),
+  /** Feature flags resolved for this person (TER-1040, docs/feature-flags.md). Defaulted: an older
+   * server never sends them, and a flag it does not send is off. */
+  features: z.object({ subscriptions: z.boolean().default(false) }).default({}),
   device: deviceSelf,
 });
 

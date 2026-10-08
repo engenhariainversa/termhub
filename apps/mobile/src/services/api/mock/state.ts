@@ -288,6 +288,8 @@ export interface MockState {
   accountDeletion: { requestedAt: number; scheduledAt: number } | null;
   /** "Avisar quando uma aba terminar" (TER-925). */
   pushTabFinished: boolean;
+  /** Feature flags `GET me` sends for the mock user (TER-1040): all off, like a fresh server. */
+  features: { subscriptions: boolean };
 }
 
 export function createMockState(): MockState {
@@ -331,6 +333,7 @@ export function createMockState(): MockState {
     lessons: [],
     accountDeletion: null,
     pushTabFinished: false,
+    features: { subscriptions: false },
   };
 }
 
