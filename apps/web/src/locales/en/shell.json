@@ -59,6 +59,8 @@
   "Erro ao encerrar o terminal": "Could not end the terminal",
   "Erro ao reenviar o convite": "Could not resend the invite",
   "esperando você": "waiting for you",
+  "{{state}} (automático, {{ref}})": "{{state}} (automatic, {{ref}})",
+  "automático, {{ref}}": "automatic, {{ref}}",
   "Este e-mail do Google não está cadastrado no termhub.": "This Google email is not registered in termhub.",
   "Este servidor não usa login próprio. Acesse pelo endereço protegido pelo Cloudflare Access.": "This server has no sign-in of its own. Open it through the address protected by Cloudflare Access.",
   "Eu ({{name}})": "Me ({{name}})",

@@ -99,14 +99,20 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
   /** The Sessões list: every terminal tab of the scope, with why it can or cannot be opened. */
   app.get('/', async (request): Promise<TTabsResponse> => {
     const owner = request.scope.ownerId;
-    const [tabs, projects, machines] = await Promise.all([repos.tabs.listOpenTerminals(owner), repos.projects.list({ owner }), repos.machines.list(owner)]);
+    const [tabs, projects, machines, autoRuns] = await Promise.all([
+      repos.tabs.listOpenTerminals(owner),
+      repos.projects.list({ owner }),
+      repos.machines.list(owner),
+      repos.automationRuns.activeTabRefs(owner),
+    ]);
     const projectById = new Map(projects.map((p) => [p.id, p]));
     const machineById = new Map(machines.map((m) => [m.id, m]));
+    const autoRef = new Map(autoRuns.map((r) => [r.tab_id, r.ref]));
     return {
       tabs: tabs.flatMap((tab) => {
         const project = projectById.get(tab.project_id);
         const machine = machineById.get(tab.machine_id);
-        return project && machine ? [tabSummaryOf(tab, project, machine, availability(tab, machine))] : [];
+        return project && machine ? [tabSummaryOf(tab, project, machine, availability(tab, machine), autoRef.get(tab.id) ?? null)] : [];
       }),
     };
   });
