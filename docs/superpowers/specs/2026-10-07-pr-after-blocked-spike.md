@@ -1,14 +1,15 @@
 # Spike: a PR opened by hand after a `blocked` run (TER-1031)
 
 Written on 2026-10-07 against the code at `243b7d0b` (main), with PR #446 (TER-1025, still open) read
-as the next state of `follower.ts`. A research document: no code changes. It complements TER-1025
+as the next state of `follower.ts`, and finished on 2026-10-08 with the decisions in section 8 and the
+outcome of PR #432 (section 4). A research document: no code changes. It complements TER-1025
 (retry GitHub failures instead of escalating) with the case TER-586 / PR #432 showed: what happens to a
 run that already ended `blocked` when the work is finished by hand afterwards.
 
 Source note: the tab that wrote this has no card reader (`get_card` only answers inside a running
 automatic run), so the card text comes from `search_memory`, which returns its first paragraphs only.
-The question below is taken from that excerpt and the card title. Check it against the full card
-before turning section 7 into cards.
+The question below is taken from that excerpt and the card title. PR #432 was checked through GitHub
+(its commits, committers and merge), not the board.
 
 ## 1. The case
 
@@ -20,8 +21,7 @@ before turning section 7 into cards.
 3. From that tab, `report_card` answered "só está disponível numa aba com trabalho automático em
    andamento", and `resume_automation_run` refused with "Esta execução automática já terminou".
 4. There is no `run_done` and no `pr_opened` for the card. The feed and the progress panel still end on
-   "bloqueado". At the time of writing, PR #432 is open, its `check` is green and GitHub reports it as
-   `CONFLICTING`, and no fixer has run for it.
+   "bloqueado", although the merge executor did follow the PR to its merge on 2026-10-08 (section 4).
 
 ## 2. Summary
 
@@ -34,10 +34,10 @@ before turning section 7 into cards.
   (`branchesOfTask`, any status). So a PR from a blocked run's branch is, in principle, merged, fixed on
   a red CI or a conflict, and deployed like any other. What is missing is the bookkeeping and the
   signal, not the pipeline.
-- **PR #432 shows the pipeline does not always pick such a PR up either.** It should have started a
-  conflict fixer. Section 4 lists the likely reasons; the most likely one (the body cites TER-543) has
-  nothing to do with `blocked`, but nobody noticed because nothing told the person the PR was being
-  watched or held.
+- **PR #432 confirms it.** After the blocked run, termhub kept the PR up to date with `main` and merged
+  it once it was green (section 4). It took about 19 hours because `main` published three agent
+  versions meanwhile, and each one conflicted with the PR's own version bump. None of that reached the
+  card's run, so from the board the card looked blocked the whole time.
 - **TER-1025 removes the most common way into this case**, not the case itself. With PR #446 a GitHub
   error is reported as `blocked` + `code: github_transient`, the run stays `waiting`, and the existing
   fallback ends it `done` once the PR is linked. A run blocked for any other reason (the agent gave up,
@@ -75,22 +75,34 @@ Two consequences follow from that table:
   today for any blocked card with an open tab; adoption (section 5) does not make it worse, and
   section 5.4 proposes a way to use the open tab instead.
 
-## 4. Why PR #432 was not picked up (to confirm on the board)
+## 4. What happened to PR #432 (checked 2026-10-08)
 
-`onConflict` should have started a fixer for PR #432. Candidates, most likely first. The tab that wrote
-this cannot read the board or the database, so none is confirmed:
+The first draft of this spike guessed that #432 had been held for a person because its body cites
+TER-543 (TER-1004's rule). GitHub's history of the PR shows that was wrong:
 
-1. **The PR is held for a person (TER-1004).** Its body says "from the IT checklist, TER-543". The CI
-   sync links every ref in the body, so TER-543 is one of its rows. If TER-543 is a manual card that is
-   not done, `candidateOf` returns `held` and the PR waits for a person (`merge_person_card`), with one
-   escalation per head once the CI is green. Check: the card TER-586 should show "O PR cita um card
-   manual que não está em Feito; uma pessoa mescla", and the feed an `escalated` with
-   `merge_person_card`.
-2. The card lost its `auto` tag, or the project was paused, when the person took over.
-3. The run's `branch` differs from the PR head (the branch was renamed by hand before pushing).
+- **The merge executor followed the PR.** Eleven of its 18 commits are "Merge branch 'main' into
+  TER-586-…" with GitHub as the committer, which is what the update-branch call makes
+  (`merge_updating`). They run from 2026-10-07 17:39 to 2026-10-08 11:14 UTC. A PR held for a person
+  never gets an update-branch, so the PR was a candidate the whole time.
+- **The conflicts were the agent version.** The PR bumps `apps/agent/package.json`. While it was open,
+  `main` shipped three other changes to that file (#435 at 17:13, #441 at 19:06, #421 at 00:51 UTC),
+  and each of them conflicts with the PR's own bump. Four local merges of `main` into the PR resolve those conflicts,
+  and two of them say so in their message: "Merge origin/main; agent 0.21.0 (0.20.0 shipped in #435)"
+  and "main already published agent 0.21.0 … and 0.22.0". The `CONFLICTING` state seen while this
+  spike was being written was one of those windows.
+- **It was squash-merged** as `c41c69b5` at 2026-10-08 11:21:56 UTC, with the PR's own title as the
+  subject ("… (TER-586) (#432)"). That is how the merge executor merges (`<PR title> (#n)`, F-14).
+  GitHub records the owner's account either way, so this does not rule out a click in the GitHub UI.
+  It matches the executor, which had been updating the branch until seven minutes earlier.
+- **TER-543 holds nothing.** Four sibling PRs whose bodies also cite TER-543 (#415, #416, #418, #423)
+  were squash-merged the same way on 2026-10-07. Whatever kind of card TER-543 is (an epic is skipped
+  by `cardsNamed`; a done card does not hold), it did not stop a merge.
 
-If (1) holds, it is a separate problem worth a card of its own: a PR body that mentions where the work
-came from should not hold the merge. Section 7, card 4.
+What the board cannot show from GitHub's side is whether those local merges came from fixer runs or
+from a person in the TER-586 tab. Either way, the TER-586 run stayed `blocked` with
+`reported_blocked` throughout. The pipeline worked, but the person was never told it was working,
+which is the gap this spike is about. The repeated version conflict is a separate problem (section 7,
+card 4).
 
 ## 5. Design sketch: adopting the PR
 
@@ -100,7 +112,7 @@ A run is adoptable when all of these hold:
 
 - `status = 'blocked'`, `role` is the implementer (not `integrator` nor `fixer`: their PR existed
   before the run, the same exclusion `openPrOfRun` already makes), `branch` is set, and it ended less
-  than `ADOPT_WINDOW` ago (proposal: 7 days, so an old blocked run never comes back to life by surprise).
+  than `ADOPT_WINDOW` ago: **7 days** (decided), so an old blocked run never comes back to life by surprise.
 - No other run of the card is active, and no later run of the card exists (the card was dispatched
   again: that run owns the PR).
 - The card still exists and is tagged `auto`, and the project's automation is on.
@@ -117,6 +129,13 @@ blocked stays readable). Only one colour wins the write, so `run_done` is still 
 Then the existing steps of `finishDone`: `placeDoneCard`, `run_done` with
 `via: 'pull_request_after_blocked'`, `pr_opened`. The feed shows "PR aberto depois do bloqueio; o
 automático acompanha" (pt-BR key, English in the catalog).
+
+**A chat line too (decided).** The block went to the project chat as an escalation, so the all-clear
+goes there as well: `postAutomationLine` writes "PR #<n> do <ref> aberto depois do bloqueio; o
+automático acompanha até o merge" (pt-BR key, English entry in the server catalog) in the same
+conversation the escalation went to (or the project's most recent one), right after the write wins.
+No push: the person was already pushed about the block, and this is good news that can wait for the
+next look at the chat. Only the colour whose write won posts it, so it appears once.
 
 The alternative, leaving the run `blocked` and recording only `pr_opened` for the card, keeps "a run ends
 once" literally, but leaves the run's status wrong wherever it is read later (the run's own row, any
@@ -148,10 +167,9 @@ Today the agent in that tab, asked to "tell termhub", gets an error it cannot ac
 ### 5.5 Red CI and conflicts after adoption
 
 Once adopted, the run is `done`, so `onRedCi` and `onConflict` behave as for any done card: a fixer run
-per head. The open tab of the adopted run is not used. Typing the fix into it (the
-"owner run" path of `onRedCi`) would need a `done` run to accept input again, which the follower does not
-support; a fixer is the safer default. The shared-worktree risk of section 3 is left to a card of its own
-(section 7, card 3).
+per head. The open tab of the adopted run is not used: typing the fix into it (the "owner run" path
+of `onRedCi`) would need a `done` run to accept input again, which the follower does not support. The
+shared-worktree risk of section 3 is handled by section 7, card 3.
 
 ### 5.6 What stays as it is
 
@@ -172,26 +190,39 @@ support; a fixer is the safer default. The shared-worktree risk of section 3 is 
 - Projects without automation, and cards without the `auto` tag, see nothing new.
 - `report_card` answers in one more case (a tab whose run was blocked); every other tab gets the same
   refusal as today.
+- The adoption also posts one chat line, with no push, in projects with automation on.
+- Card 3 changes where a fixer runs for every project with automation on: it uses the card's open,
+  idle tab instead of a second tab in the same worktree, or waits while a person is using it.
+- Card 4 is a setting of the termhub project only (its custom fixer prompt). Other projects see
+  nothing.
 
 ## 7. Proposed cards
 
-1. **Server: adopt a PR from a blocked run's branch** (5.1–5.3). `finishBlockedAsDone`,
-   `adoptBlockedRuns` after the CI sync, feed text (pt-BR + en). Tests: adopted once across two
-   colours; not adopted for an integrator, a fixer, a marker run, an untagged card, a run outside the
-   window, or when a later run of the card exists.
-2. **MCP: `report_card done` from a tab whose run was blocked** (5.4). Clear message when the PR is not
-   linked yet, and a precise refusal for `blocked`.
-3. **Fixer vs the open tab of the card** (section 3, 5.5): decide whether a fixer may start while the
-   card's previous tab is still open in the same worktree, or whether it waits / types into that tab.
-   Applies to blocked and done runs alike.
-4. **Only if section 4 (1) is confirmed:** a PR body that cites a card as its origin holds the merge
-   (TER-1004). Options: link only refs in the head and title for the merge decision, or ignore cards
-   cited in the body when deciding `held`. Needs its own short design; it changes TER-1004's rule.
+1. **Server: adopt a PR from a blocked run's branch** (5.1–5.3, plus the chat line of 5.2).
+2. **MCP: `report_card done` from a tab whose run was blocked** (5.4).
+3. **Fixer and the card's open tab** (sections 3 and 5.5). Decision: a fixer never starts in a worktree
+   that another open tab of the card is using. When that tab sits at the agent's prompt
+   (`waiting_input`) and nobody has typed in it since the run ended, the fixer run takes the tab over:
+   the run row points at it, and the fixer prompt is typed there. When the tab is busy or a person is
+   using it, the fix waits (`merge_fix_waits_for_tab`, shown on the card) and is asked again at the next
+   sync. A new tab only opens when the card has no open tab.
+4. **Agent version conflicts between parallel PRs** (section 4). Decision: the fixer prompt carries the
+   rule for `apps/agent/package.json` (and `apps/agent/src/version.ts`). Take `main`'s version, bump
+   the patch above it in both files, and say so in the commit message. This is a project-specific rule,
+   so it goes into the termhub project's custom fixer prompt (`automation.prompts.fixer` in Setup), not
+   into the default prompt every project gets. With `fix_attempts` at its default of 3, a PR open
+   through more than three agent releases on `main` still reaches the person. That cap stays as it is.
 
-## 8. Open questions for the maintainer
+The texts ready to create are at the end of the PR description (#449).
 
-- Is 7 days the right adoption window, or should it be "until the card leaves Fazendo"?
-- Should adoption also post a chat line ("PR #n do TER-x aberto depois do bloqueio; o automático
-  acompanha"), or is the feed enough? The escalation went to the chat, so the all-clear probably should
-  too.
-- For PR #432 itself: confirm the cause in section 4 on the board before deciding on card 4.
+## 8. Decisions
+
+Taken on 2026-10-08, following this spike's recommendations:
+
+- Adoption window: **7 days** from the end of the blocked run.
+- Adoption **also posts a chat line**, with no push (5.2).
+- The run moves **`blocked → done` once**, through one conditional write that only one colour wins.
+  No other move between terminal states is allowed, and `resume_automation_run` still refuses
+  blocked runs.
+- PR #432: no hold for a person. The executor followed it, and the slow part was the agent version
+  conflict (section 4). The TER-1004 card from the first draft is dropped.
