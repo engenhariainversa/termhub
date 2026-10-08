@@ -28,17 +28,22 @@ type Phase =
   | { kind: 'ready'; flow: AiLoginStart; notice: string | null }
   | { kind: 'verifying'; flow: AiLoginStart }
   | { kind: 'success'; stuck: AiLoginStuckTab[] }
-  | { kind: 'error'; message: string };
+  /** `message`: what went wrong, in the person's words; `detail`: the CLI's own output, behind a toggle */
+  | { kind: 'error'; message: string; detail: string | null };
 
 type Resume = { kind: 'idle' } | { kind: 'busy' } | { kind: 'done'; count: number } | { kind: 'error'; message: string };
 
 const errorText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
+/** A MACHINE_FAILED answer carries what the CLI printed: shown as a detail, never as the error itself. */
+const cliOutput = (err: unknown): string | null => (err instanceof ApiError && err.code === 'MACHINE_FAILED' ? err.message : null);
 
 /**
  * "Refazer login" of an AI account (TER-1047): the server runs the CLI's login in a hidden session on the
  * machine; here the person opens the provider's page and, for Claude, pastes the code it shows (Codex
  * only needs "Já autorizei"). The pasted code lives only in the input's state and is cleared on submit.
- * Closing before the end cancels the flow on the machine.
+ * The CLI may also finish on its own, through the machine's own browser (TER-1054): the start then answers
+ * logged in, or, after the link showed, "Já entrei pelo navegador da máquina" checks without a code.
+ * Closing before the end cancels the flow on the machine and re-reads the login state.
  */
 export function AiLoginDialog({ account, onClose, onLoggedIn }: { account: AiLoginTarget; onClose: () => void; onLoggedIn?: () => void }) {
   const { t } = useTranslation();
@@ -56,8 +61,19 @@ export function AiLoginDialog({ account, onClose, onLoggedIn }: { account: AiLog
   const cancelActive = useCallback(() => {
     const loginId = active.current;
     active.current = null;
-    if (loginId) void api.aiAccounts.cancelLogin(id, loginId).catch(() => undefined);
+    // The server asks the machine again once the flow is cancelled: a login finished elsewhere clears the warning.
+    if (loginId) void api.aiAccounts.cancelLogin(id, loginId).then(refreshAiLoginStatus, () => undefined);
   }, [id]);
+
+  const loggedIn = useCallback(
+    (stuck: AiLoginStuckTab[]) => {
+      active.current = null;
+      setPhase({ kind: 'success', stuck });
+      void refreshAiLoginStatus();
+      onLoggedIn?.();
+    },
+    [onLoggedIn],
+  );
 
   const start = useCallback(async () => {
     cancelActive();
@@ -71,12 +87,19 @@ export function AiLoginDialog({ account, onClose, onLoggedIn }: { account: AiLog
         void api.aiAccounts.cancelLogin(id, flow.login_id).catch(() => undefined);
         return;
       }
+      if (flow.logged_in) {
+        // the CLI finished on its own, in the machine's browser: nothing left to open
+        loggedIn(flow.stuck_tabs);
+        return;
+      }
       active.current = flow.login_id;
       setPhase({ kind: 'ready', flow, notice: null });
     } catch (err) {
-      if (mine === generation.current) setPhase({ kind: 'error', message: errorText(err, t('Erro ao abrir o login')) });
+      if (mine !== generation.current) return;
+      const detail = cliOutput(err);
+      setPhase({ kind: 'error', message: detail ? t('Não deu para abrir o login na máquina') : errorText(err, t('Erro ao abrir o login')), detail });
     }
-  }, [cancelActive, id, t]);
+  }, [cancelActive, id, loggedIn, t]);
 
   useEffect(() => {
     mounted.current = true;
@@ -94,32 +117,31 @@ export function AiLoginDialog({ account, onClose, onLoggedIn }: { account: AiLog
     onClose();
   };
 
-  const submit = async (flow: AiLoginStart, e?: FormEvent) => {
+  /** `withoutCode`: a Claude login the person finished in the machine's own browser, so there is no code to send. */
+  const submit = async (flow: AiLoginStart, e?: FormEvent, withoutCode = false) => {
     e?.preventDefault();
-    const sent = flow.needs_code ? code.trim() : null;
-    if (flow.needs_code && !sent) return;
+    const sent = flow.needs_code && !withoutCode ? code.trim() : null;
+    if (flow.needs_code && !withoutCode && !sent) return;
     setCode('');
     setPhase({ kind: 'verifying', flow });
     try {
       const r = await api.aiAccounts.submitLogin(id, flow.login_id, sent);
       if (!mounted.current) return;
       if (r.ok) {
-        active.current = null;
-        setPhase({ kind: 'success', stuck: r.stuck_tabs });
-        void refreshAiLoginStatus();
-        onLoggedIn?.();
+        loggedIn(r.stuck_tabs);
       } else if (!flow.needs_code) {
         // Codex keeps polling on the machine: the person may just not have finished on the page yet
         setPhase({ kind: 'ready', flow, notice: r.message ?? t('O login ainda não foi confirmado') });
       } else {
         // Claude's flow ends with a wrong or expired code
         active.current = null;
-        setPhase({ kind: 'error', message: r.message ?? t('O login não foi confirmado') });
+        setPhase({ kind: 'error', message: t('O login não foi confirmado'), detail: r.message });
       }
     } catch (err) {
       if (!mounted.current) return;
       if (err instanceof ApiError && err.status === 404) active.current = null;
-      setPhase({ kind: 'error', message: errorText(err, t('Erro ao confirmar o login')) });
+      const detail = cliOutput(err);
+      setPhase({ kind: 'error', message: detail ? t('O login não foi confirmado') : errorText(err, t('Erro ao confirmar o login')), detail });
     }
   };
 
@@ -168,7 +190,7 @@ export function AiLoginDialog({ account, onClose, onLoggedIn }: { account: AiLog
       {phase.kind === 'ready' && (
         <div className="space-y-4 text-sm">
           <div>
-            <a href={phase.flow.url} target="_blank" rel="noopener noreferrer" className="btn-primary inline-block">
+            <a href={phase.flow.url ?? undefined} target="_blank" rel="noopener noreferrer" className="btn-primary inline-block">
               {t('Abrir página de login')}
             </a>
             <p className="mt-1.5 text-xs text-fg-dim">{t('O link expira às {{time}}', { time: formatTime(phase.flow.expires_at) })}</p>
@@ -212,6 +234,12 @@ export function AiLoginDialog({ account, onClose, onLoggedIn }: { account: AiLog
                   {t('Enviar código')}
                 </button>
               </div>
+              <p className="text-xs text-fg-dim">
+                {t('A página abriu na própria máquina e o login terminou lá?')}{' '}
+                <button type="button" className="underline hover:text-fg" onClick={() => void submit(phase.flow, undefined, true)}>
+                  {t('Já entrei pelo navegador da máquina')}
+                </button>
+              </p>
             </form>
           ) : (
             <div className="flex justify-end gap-2">
@@ -264,6 +292,12 @@ export function AiLoginDialog({ account, onClose, onLoggedIn }: { account: AiLog
           <p role="alert" className="text-danger">
             {phase.message}
           </p>
+          {phase.detail && (
+            <details className="text-xs text-fg-muted">
+              <summary className="cursor-pointer select-none">{t('Saída da CLI')}</summary>
+              <pre className="mt-1 whitespace-pre-wrap break-words rounded border border-line bg-bg px-2 py-1.5 font-mono">{phase.detail}</pre>
+            </details>
+          )}
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-ghost" onClick={close}>
               {t('Fechar')}

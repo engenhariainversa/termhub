@@ -26,6 +26,8 @@ export interface MockControls {
   dropTabSockets(): void;
   /** "Refazer login" (TER-1047): an AI account's login state (`ok`, `login_required`, `unknown`). */
   setAiLoginState(accountId: string, loginState: string): void;
+  /** The next login of this account finishes on the machine itself (its own browser), before any link. */
+  finishAiLoginOnMachine(accountId: string): void;
 }
 
 export function createMockControls(state: MockState, now: () => number): MockControls {
@@ -96,6 +98,10 @@ export function createMockControls(state: MockState, now: () => number): MockCon
 
     setAiLoginState(accountId, loginState) {
       state.aiLoginStates.set(accountId, loginState);
+    },
+
+    finishAiLoginOnMachine(accountId) {
+      state.aiLoginFinishOnMachine.add(accountId);
     },
   };
 }

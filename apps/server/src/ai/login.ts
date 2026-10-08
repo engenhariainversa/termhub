@@ -52,10 +52,17 @@ export interface LoginFlow {
 
 export interface StartedLogin {
   login_id: string;
-  url: string;
+  /** null when `logged_in`: there is no page left to open */
+  url: string | null;
   user_code: string | null;
   needs_code: boolean;
   expires_at: string;
+  /**
+   * The CLI finished the login on its own (the machine's browser took it, TER-1054) and its status
+   * confirms it: no flow is left open, the account is `ok` and `stuck_tabs` lists the tabs to resume.
+   */
+  logged_in: boolean;
+  stuck_tabs: StuckTab[];
 }
 
 export interface StuckTab {
@@ -118,13 +125,14 @@ export class AiLoginService {
 
   /**
    * Asks the machine whether the account's CLI is logged in (`ai.login.status`), cached LOGIN_STATE_TTL_MS
-   * (`refresh`: MIN_REFRESH_MS). A machine that cannot answer (no agent, offline, outdated, a provider
+   * (`refresh`: MIN_REFRESH_MS; `'force'`: asked now, after a flow the person closed — they may have
+   * finished the login in the machine's own browser). A machine that cannot answer (no agent, offline, outdated, a provider
    * without a CLI login) is never asked: the known state stays. A failed call keeps it too.
    */
-  async checkAccountLogin(account: AiAccount, machine: Machine | undefined, refresh = false): Promise<AiLoginState> {
+  async checkAccountLogin(account: AiAccount, machine: Machine | undefined, refresh: boolean | 'force' = false): Promise<AiLoginState> {
     const known = this.states.get(account.id);
     if (!machine || !aiLoginSupported(account, machine)) return known?.state ?? 'unknown';
-    if (known && this.now() - known.checked_at < (refresh ? MIN_REFRESH_MS : LOGIN_STATE_TTL_MS)) return known.state;
+    if (known && refresh !== 'force' && this.now() - known.checked_at < (refresh ? MIN_REFRESH_MS : LOGIN_STATE_TTL_MS)) return known.state;
     try {
       const r = await agents.rpc(machine.id, 'ai.login.status', { provider: account.provider, config_dir: account.config_dir });
       if (!r.supported) return known?.state ?? 'unknown';
@@ -140,7 +148,7 @@ export class AiLoginService {
    * Starts the CLI's login in a hidden tmux session on the account's machine and answers what the person
    * needs to finish it in a browser. One flow per account: a new one cancels the previous.
    */
-  async startLogin(account: AiAccount, machine: Machine, userId: string): Promise<StartedLogin> {
+  async startLogin(repos: Repositories, account: AiAccount, machine: Machine, userId: string): Promise<StartedLogin> {
     if (machine.type !== 'agent') requireAiLoginCapable(machine); // 400 UNSUPPORTED_MACHINE
     if (!AI_LOGIN_PROVIDERS.includes(account.provider)) {
       throw new HttpError(
@@ -158,6 +166,13 @@ export class AiLoginService {
     const loginId = randomBytes(12).toString('hex');
     const session = `${AI_LOGIN_SESSION_PREFIX}${loginId}`;
     const r = await agentRpc(machine, 'ai.login.start', { provider: account.provider, config_dir: account.config_dir, session });
+    if (r.logged_in) {
+      // Nothing to open: the agent already killed the session.
+      this.loggedIn(account);
+      const stuck = await this.findStuckTabs(repos, account, machine);
+      return { login_id: loginId, url: null, user_code: null, needs_code: false, expires_at: new Date(this.now()).toISOString(), logged_in: true, stuck_tabs: stuck };
+    }
+    if (!r.url) throw new HttpError(502, msg('A máquina não mostrou a página de login'), 'MACHINE_FAILED');
     const flow: LoginFlow = {
       loginId,
       accountId: account.id,
@@ -170,7 +185,7 @@ export class AiLoginService {
       expiresAt: this.now() + LOGIN_FLOW_TTL_MS,
     };
     this.flows.set(loginId, flow);
-    return { login_id: loginId, url: r.url, user_code: r.user_code, needs_code: r.needs_code, expires_at: new Date(flow.expiresAt).toISOString() };
+    return { login_id: loginId, url: r.url, user_code: r.user_code, needs_code: r.needs_code, expires_at: new Date(flow.expiresAt).toISOString(), logged_in: false, stuck_tabs: [] };
   }
 
   /** The live flow `loginId` of this user (and, when given, of this account); 404 otherwise, expired included. */
@@ -185,14 +200,14 @@ export class AiLoginService {
   }
 
   /**
-   * Sends the pasted code (Claude) or just waits for the browser authorization (Codex, `code` null) and
+   * Sends the pasted code (Claude) or just waits for the browser authorization (Codex, or a Claude login
+   * the person finished in the machine's own browser: `code` null) and
    * answers whether the CLI is logged in now. On success the account's state becomes `ok`, its usage cache
    * is dropped and the answer lists the tabs still stuck on the login error. A Claude failure ends the flow
    * (the agent killed the session); a Codex timeout keeps it, so the person can try again.
    */
   async submitLogin(repos: Repositories, loginId: string, userId: string, code: string | null, accountId?: string): Promise<SubmittedLogin> {
     const flow = this.flowOf(loginId, userId, accountId);
-    if (flow.needsCode && !code) throw new HttpError(400, msg('Cole o código mostrado na página de login'), 'CODE_REQUIRED');
     const [account, machine] = await Promise.all([repos.aiAccounts.findById(flow.accountId), repos.machines.findById(flow.machineId)]);
     if (!account || !machine) {
       this.drop(flow, false);
@@ -204,9 +219,14 @@ export class AiLoginService {
       return { ok: false, message: r.message, stuck_tabs: [] };
     }
     this.flows.delete(flow.loginId);
+    this.loggedIn(account);
+    return { ok: true, message: null, stuck_tabs: await this.findStuckTabs(repos, account, machine) };
+  }
+
+  /** The login is back: the warning goes now, not at the next check, and the usage is read again. */
+  private loggedIn(account: AiAccount): void {
     this.states.set(account.id, { state: 'ok', checked_at: this.now() });
     forgetAccountUsage(account.id);
-    return { ok: true, message: null, stuck_tabs: await this.findStuckTabs(repos, account, machine) };
   }
 
   /** Ends the flow and kills its hidden session. */
