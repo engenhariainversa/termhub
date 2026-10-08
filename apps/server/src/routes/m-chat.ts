@@ -359,8 +359,10 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
         request.log.warn({ code: failureLabel(err), actionId }, 'chat standing grant failed after approval');
       }
     }
+    // Only the start is awaited here: `startAfterDecision` already logs a run that fails after it
+    // started, so this catch sees a failure to start and nothing else (one line per failure).
     void Promise.resolve()
-      .then(() => deps.chat.resumeAfterDecision(user, action))
+      .then(() => deps.chat.startAfterDecision(user, action))
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId }, 'mobile decision resume failed'));
     return { action, queued: true, note: DECISION_NOTE, grant, project_grant, standing_grant };
   });
@@ -418,7 +420,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     const skipped = [...firstSkipped, ...result.skipped.filter((s) => !skippedIds.has(s.id))];
     const first = decided[0]!;
     void Promise.resolve()
-      .then(() => deps.chat.resumeAfterDecision(user, first))
+      .then(() => deps.chat.startAfterDecision(user, first))
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId: first.id }, 'mobile batch resume failed'));
     return { actions: decided, skipped, queued: true, note: DECISION_NOTE };
   });

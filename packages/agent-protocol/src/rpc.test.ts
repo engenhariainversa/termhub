@@ -5,7 +5,7 @@ describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
       'agent.update', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
-      'hooks.uninstall', 'hw.probe', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
+      'hooks.status', 'hooks.uninstall', 'hw.probe', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
     ]);
@@ -128,6 +128,8 @@ describe('rpc catalog', () => {
     expect(RPC['hooks.install'].params.safeParse({ hooks_url: 'https://x', token: "a'b" }).success).toBe(false);
     expect(RPC['hooks.install'].timeoutMs).toBe(15_000);
     expect(RPC['hooks.uninstall'].params.safeParse({}).success).toBe(true);
+    expect(RPC['hooks.status'].params.safeParse({ claude_dirs: ['~/.claude-work'] }).success).toBe(true);
+    expect(RPC['hooks.status'].params.safeParse({ claude_dirs: ['~/x\n'] }).success).toBe(false);
   });
   it('docs.scan takes an absolute/~ cwd and has a 15 s budget', () => {
     expect(RPC['docs.scan'].params.safeParse({ cwd: '/home/u/proj' }).success).toBe(true);

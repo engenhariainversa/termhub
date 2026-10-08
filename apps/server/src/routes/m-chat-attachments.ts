@@ -27,5 +27,5 @@ export async function mobileChatAttachmentRoutes(app: FastifyInstance, repos: Re
     return reply.code(201).send({ attachment });
   });
 
-  registerAttachmentReadRoutes(app, repos, deps.store);
+  registerAttachmentReadRoutes(app, repos, deps);
 }

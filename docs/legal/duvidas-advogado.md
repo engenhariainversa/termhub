@@ -69,7 +69,7 @@ O legítimo interesse precisa de um relatório (LIA) documentado?
 - O art. 33, V e IX (execução de contrato e pedido do titular) basta?
 - Ou é preciso assinar as cláusulas-padrão da Resolução CD/ANPD nº 19/2024 com cada operador?
 
-**L-5. Analytics do app móvel sem consentimento.** No app, o Google Analytics for Firebase registra telas e eventos de sessão desde a primeira abertura, com identificador de instalação e IP. Na web e no site, o analytics só começa depois do "Aceitar". Pode ser legítimo interesse no app, ou é preciso pedir consentimento também para analytics? (Ver D-5 e o card TER-583.)
+**L-5. Analytics do app móvel sem consentimento.** No app, o Google Analytics for Firebase registra telas e eventos de sessão desde a primeira abertura, com identificador de instalação e IP. Na web e no site, o analytics só começa depois do "Aceitar". Pode ser legítimo interesse no app, ou é preciso pedir consentimento também para analytics? (Ver D-5 e o card TER-583.) Desde o TER-583 o app pede consentimento: o mesmo cartão da medição de anúncios cobre as métricas de uso, e a coleta fica desligada até o aceite.
 
 **L-6. Encarregado (DPO).** O termhub pode se enquadrar como agente de tratamento de pequeno porte (Resolução CD/ANPD nº 2/2022) e ficar dispensado de indicar encarregado? Mesmo dispensado, deve indicar um canal? A Política já prevê um e-mail.
 
@@ -178,8 +178,8 @@ A Política foi escrita como **deve ficar**. Ela só pode ser publicada quando e
 | P-11 | ~~Prazos de retenção automáticos para chat, `tab_last_answers`, `tab_events`, memória e lista de espera~~ | **entregue no TER-743**: histórico das abas 90 dias, lista de espera 12 meses (da inscrição ou do último convite), expurgo de hora em hora; chat, últimas respostas e memória ficam enquanto a conta existir, e o usuário apaga uma conversa inteira em "Apagar conversa" | `apps/server/src/retention/purge.ts`; `apps/server/src/chat/service.ts` (`deleteConversation`) | — |
 | P-12 | **Aceite dos Termos e da Política**: versão e data por usuário, no cadastro e no checkout, e novo aceite quando houver mudança relevante | não existe | — | lançamento (TER-717) |
 | P-13 | **Links para os Termos e a Política** no rodapé do site, no login do app web, em Ajustes e na tela inicial do app móvel | não existem; as páginas `/termos` e `/privacidade` também não | `apps/landing/vite.config.ts:13-17`; `apps/landing/src/Site.tsx:10`; `apps/landing/src/i18n.ts:190` | lojas |
-| P-14 | Google Fonts carregado antes do consentimento | fontes do Google na landing | `apps/landing/index.html:11-13` | TER-583 |
-| P-15 | Analytics do app móvel com consentimento (se D-5 = consentimento) | `analytics_storage` liberado por padrão | `apps/mobile/firebase.json`; `apps/mobile/src/services/analytics.ts` | D-5 |
+| P-14 | ~~Google Fonts carregado antes do consentimento~~ | **resolvido no TER-583**: Inter e JetBrains Mono servidas pelo próprio site (`@fontsource`) | `apps/landing/src/index.css` | — |
+| P-15 | ~~Analytics do app móvel com consentimento~~ | **resolvido no TER-583**: `analytics_storage` e a coleta seguem o consentimento de "Métricas de uso e anúncios"; falta só o padrão nativo (`apps/mobile/firebase.json`) no próximo build de loja, para a primeira abertura de uma instalação nova | `apps/mobile/src/services/analytics.ts` | — |
 | P-16 | `docs/security-and-network.md:28` diz que o app web não tem scripts de terceiros, mas ele carrega o Google Analytics depois do consentimento | doc desatualizado | `apps/web/src/lib/analytics.ts` | coerência |
 | P-17 | Serviço `concierge` no `docker-compose.yml` monta o diretório de conta Claude do mantenedor, mas não é mais usado | configuração morta | `docker-compose.yml:146-165`; `apps/server/src/config.ts:135-141` | A-1 (evitar a aparência de conta compartilhada) |
 | P-18 | Histórico do que mudou nos Termos e na Política (versões anteriores publicadas) | — | — | Termos 13.3 |

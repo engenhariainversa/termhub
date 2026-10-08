@@ -105,7 +105,7 @@ describe('POST /mcp tools', () => {
 
     const list = await rpc(app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
     const names = list.json().result.tools.map((t: { name: string }) => t.name).sort();
-    expect(names).toEqual(['find', 'get_project_setup', 'list_automation_events', 'list_machines', 'list_project_groups', 'list_projects', 'list_tab_questions', 'list_tabs', 'read_last_answer', 'read_screen', 'recap_pending_cards', 'wait_for_state']);
+    expect(names).toEqual(['find', 'get_machine_hooks', 'get_project_setup', 'list_automation_events', 'list_machines', 'list_project_groups', 'list_projects', 'list_tab_questions', 'list_tabs', 'read_last_answer', 'read_screen', 'recap_pending_cards', 'wait_for_state']);
     await flush();
     expect(apiTokens.touchLastUsed).toHaveBeenCalledWith('tok1');
   });

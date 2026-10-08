@@ -179,6 +179,8 @@ export interface MobileApi {
   uploadAttachment(auth: Auth, file: UploadFile, projectId: string | null, onProgress?: (fraction: number) => void): Promise<TChatAttachment>;
   /** Only while unsent: 404 unknown, 409 once it was sent with a message. */
   deleteAttachment(auth: Auth, id: string): Promise<void>;
+  /** A transcription whisper could not do goes back to the queue (TER-1035): answers the row pending; 409 when a retry cannot help. */
+  retryAttachment(auth: Auth, id: string): Promise<TChatAttachment>;
   /** The download url plus the headers a `<Image source>` needs to fetch it (bearer and a fresh DPoP proof). */
   attachmentSource(auth: Auth, id: string): Promise<{ uri: string; headers: Record<string, string> }>;
 

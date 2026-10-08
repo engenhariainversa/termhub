@@ -236,6 +236,8 @@ export const api = {
         /** Only while the attachment is not yet sent (409 once it belongs to a message, 404 for another user's). */
         remove: (id: string) => request<{ ok: true }>('DELETE', `/chat/attachments/${encodeURIComponent(id)}`),
         status: (id: string) => request<{ attachment: ChatAttachment }>('GET', `/chat/attachments/${encodeURIComponent(id)}/status`),
+        /** A transcription whisper could not do goes back to the queue; the row answers pending (409 when a retry cannot help). */
+        retry: (id: string) => request<{ attachment: ChatAttachment }>('POST', `/chat/attachments/${encodeURIComponent(id)}/retry`),
         /** The download (images are served inline, everything else as an attachment). */
         url: (id: string) => `/api/chat/attachments/${encodeURIComponent(id)}`,
       },
