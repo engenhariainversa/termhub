@@ -3,7 +3,7 @@ import { Keyboard, Pressable, Text, TextInput, View, type LayoutChangeEvent } fr
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { MAX_ATTACHMENTS_PER_MESSAGE, type TChatAttachment } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
-import { Icon, useAfterKeyboardMoves, type IconName } from '@/ui';
+import { Icon, type IconName } from '@/ui';
 import { onChatFiles, takeChatFiles } from '../model/chat-inbox';
 import { CHAT_MSG } from '../model/messages';
 import { useAttachmentDrafts, type PickedFile } from '../viewmodel/attachments';
@@ -11,7 +11,7 @@ import { useVoice, type RecordedClip } from '../viewmodel/use-voice';
 import { useVoiceNote, type VoiceNote } from '../viewmodel/use-voice-note';
 import type { ReplyRef } from '../model/reply';
 import { AttachmentChip } from './attachment-chip';
-import { AttachmentMenu, type MenuAnchor } from './attachment-menu';
+import { AttachmentMenu } from './attachment-menu';
 import { RecordingWave } from './recording-wave';
 import { ReplyPreview } from './reply-preview';
 
@@ -66,8 +66,6 @@ function useGlide(target: number, still: boolean): SharedValue<number> {
   return value;
 }
 
-/** How long the + waits for the keyboard to finish going down before it opens its menu anyway. */
-const KEYBOARD_SETTLE_MS = 700;
 /** The number of chips the + menu stops at. */
 const MAX_CHIPS = MAX_ATTACHMENTS_PER_MESSAGE;
 
@@ -200,7 +198,7 @@ function HoldMic({ note, disabled }: { note: VoiceNote; disabled: boolean }) {
  * goes into the box as an audio chip and leaves on its own, without text, once it has uploaded; the
  * server transcribes it like any audio attachment. A failed upload leaves the chip, to retry or send.
  *
- * + opens the attachment menu above it, which also holds dictation ("Ditar"; the phone's keyboard has
+ * + opens the attachment sheet from the bottom of the screen (the keyboard goes down first), which also holds dictation ("Ditar"; the phone's keyboard has
  * its own). While dictating, the whole pill is the recording row (ChatGPT's):
  * ✕ drops the clip, the wave follows the microphone, ■ stops and puts the transcription in the box to
  * be read first (what dictation always did), and ↑ stops and sends the box with the transcription once
@@ -218,8 +216,9 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   // the text fit on one line again would flap, since the text gets wider when the buttons move out.
   const [wrapped, setWrapped] = useState(false);
   const [picking, setPicking] = useState(false);
-  const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
-  const attachRef = useRef<View>(null);
+  /** The box had the focus when + was tapped: closing the sheet without a choice gives it back. */
+  const focusedBeforeMenu = useRef(false);
+  const refocusAfterMenu = useRef(false);
   const inputRef = useRef<TextInput>(null);
   /** The box as last rendered, for the transcription callback (it runs outside React's render cycle). */
   const textRef = useRef(text);
@@ -355,35 +354,24 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   // No + while dictation holds the microphone or its clip: the menu's recorder would release the
   // audio session under it (one recorder at a time), and five chips is the message's limit.
   const attachOff = disabled || attachments.drafts.length >= MAX_CHIPS || voice.state === 'starting' || recording || busy || note.state !== 'idle';
-  // The menu hangs off the + (TER-1022), and the + moves with the keyboard: with the keyboard up, it
-  // goes down first and the menu opens once the pill has landed; open, the menu follows the button
-  // whenever the keyboard moves again. Unmeasured, the menu uses a default place.
-  const [opening, setOpening] = useState(false);
-  const openingRef = useRef(false);
-  const placeMenu = useCallback(() => {
-    attachRef.current?.measureInWindow((x, y) => setAnchor({ x, y }));
-    if (!openingRef.current) return;
-    openingRef.current = false;
-    setOpening(false);
-    setPicking(true);
-  }, []);
-  useAfterKeyboardMoves(placeMenu, picking || opening);
-  useEffect(() => {
-    if (!opening) return;
-    // No "did hide" (the keyboard went down another way meanwhile): open where the button is anyway.
-    const timer = setTimeout(placeMenu, KEYBOARD_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [opening, placeMenu]);
+  // The sheet stands on the bottom edge of the screen, so the keyboard goes down first, on purpose,
+  // and nothing depends on where it was (TER-1041).
   const openMenu = () => {
-    if (Keyboard.isVisible()) {
-      openingRef.current = true;
-      setOpening(true);
-      Keyboard.dismiss();
-      return;
-    }
-    attachRef.current?.measureInWindow((x, y) => setAnchor({ x, y }));
+    focusedBeforeMenu.current = inputRef.current?.isFocused() ?? false;
+    refocusAfterMenu.current = false;
+    Keyboard.dismiss();
     setPicking(true);
   };
+  const closeMenu = (chose: boolean) => {
+    refocusAfterMenu.current = !chose && focusedBeforeMenu.current;
+    focusedBeforeMenu.current = false;
+    setPicking(false);
+  };
+  const menuHidden = useCallback(() => {
+    if (!refocusAfterMenu.current) return;
+    refocusAfterMenu.current = false;
+    inputRef.current?.focus();
+  }, []);
 
   // The status line needs the row's middle, which the text covers while it shares the row.
   const stacked = wrapped || statusText !== '';
@@ -467,7 +455,6 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
               ) : (
                 <>
                   <Pressable
-                    ref={attachRef}
                     accessibilityRole="button"
                     accessibilityLabel={t('Anexar')}
                     accessibilityState={{ disabled: attachOff }}
@@ -537,9 +524,9 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
       ) : null}
       <AttachmentMenu
         open={picking}
-        anchor={anchor}
         room={Math.max(0, MAX_CHIPS - attachments.drafts.length)}
-        onClose={() => setPicking(false)}
+        onClose={closeMenu}
+        onHidden={menuHidden}
         onPicked={attachments.add}
         onDictate={voice.state === 'idle' ? voice.start : undefined}
       />
