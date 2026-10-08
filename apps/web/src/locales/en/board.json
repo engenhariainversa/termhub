@@ -374,6 +374,7 @@
   "{{ref}} iniciado em {{machine}}": "{{ref}} started on {{machine}}",
   "{{ref}}: retomado": "{{ref}}: resumed",
   "{{ref}}: agente terminou": "{{ref}}: agent finished",
+  "{{ref}}: {{reason}}": "{{ref}}: {{reason}}",
   "{{ref}}: parou e espera você": "{{ref}}: stopped and waiting for you",
   "{{ref}} não começou: {{reason}}": "{{ref}} did not start: {{reason}}",
   "{{ref}}: pergunta do agente respondida": "{{ref}}: agent question answered",
