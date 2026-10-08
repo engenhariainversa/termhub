@@ -1,0 +1,13 @@
+{
+  "A máquina {{machine}} não está conectada pelo agente do termhub; só dá para ler o login do gh de uma máquina com o agente": "La máquina {{machine}} no está conectada mediante el agente de termhub; el inicio de sesión de gh solo se puede leer desde una máquina con el agente",
+  "A máquina {{machine}} está desconectada": "La máquina {{machine}} está desconectada",
+  "`gh auth token` falhou na máquina {{machine}}: rode `gh auth login` nela": "`gh auth token` falló en la máquina {{machine}}: ejecuta `gh auth login` en ella",
+  "A máquina {{machine}} não respondeu a tempo": "La máquina {{machine}} no respondió a tiempo",
+  "Falha ao ler o login do gh na máquina {{machine}}": "No se pudo leer el inicio de sesión de gh en la máquina {{machine}}",
+  "Endereço inválido (ex.: https://empresa.atlassian.net)": "Dirección no válida (p. ej.: https://empresa.atlassian.net)",
+  "O endereço precisa usar https": "La dirección debe usar https",
+  "O endereço não pode ter usuário, senha, query ou fragmento": "La dirección no puede tener usuario, contraseña, query ni fragmento",
+  "O endereço precisa ter um domínio completo (ex.: empresa.atlassian.net)": "La dirección necesita un dominio completo (p. ej.: empresa.atlassian.net)",
+  "O endereço aponta para a rede interna (loopback, link-local ou faixa privada)": "La dirección apunta a la red interna (loopback, link-local o rango privado)",
+  "Não consegui resolver o domínio do endereço": "No pude resolver el dominio de la dirección"
+}

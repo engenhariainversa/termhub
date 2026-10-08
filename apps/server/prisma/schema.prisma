@@ -79,13 +79,13 @@ model User {
   /// "Responder perguntas do Codex pelo chat": off by default, the Codex reply card opens only for users who opt in.
   chatCodexReplies        Boolean                  @default(false) @map("chat_codex_replies")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
-  pushTabFinished    Boolean            @default(false) @map("push_tab_finished")
+  pushTabFinished         Boolean                  @default(false) @map("push_tab_finished")
   /// The chat's context meter measures against this many tokens instead of the model's window
   /// (TER-1038): opt-in, null = the window.
-  chatContextLimit   Int?               @map("chat_context_limit")
-  memoryItems        MemoryItem[]
-  verifiedMemoryItems MemoryItem[] @relation("MemoryItemVerifier")
-  standingGrants     ChatStandingGrant[]
+  chatContextLimit        Int?                     @map("chat_context_limit")
+  memoryItems             MemoryItem[]
+  verifiedMemoryItems     MemoryItem[]             @relation("MemoryItemVerifier")
+  standingGrants          ChatStandingGrant[]
   chatDefaultRestrictions ChatDefaultRestriction[]
   /// Self-service deletion (TER-720): when the person asked; the account is deactivated from then on.
   deletionRequestedAt     DateTime?                @map("deletion_requested_at")
@@ -96,10 +96,10 @@ model User {
   /// IANA time zone (e.g. America/Sao_Paulo) for the automation's daily summary hour. Null = the server's.
   timeZone                String?                  @map("time_zone")
   /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
-  locale              String?
-  automationSummaries AutomationSummary[]
-  featureFlagOverrides FeatureFlagOverride[]
-  dataExports         DataExport[]
+  locale                  String?
+  automationSummaries     AutomationSummary[]
+  featureFlagOverrides    FeatureFlagOverride[]
+  dataExports             DataExport[]
 
   @@index([roleId])
   @@index([deletionScheduledAt])
@@ -798,7 +798,7 @@ model WaitlistEntry {
   phone        String
   linkedin     String?
   github       String?
-  /// "pt" | "en": language the form was filled in
+  /// "pt" | "en" | "es": language the form was filled in
   locale       String    @default("pt")
   source       String    @default("landing")
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -900,49 +900,49 @@ model ApiTokenEvent {
 /// machineId is *not* part of that index: since the user-hosted concierge it is the host the
 /// conversation runs on (one per user, spec §3), not a second conversation scope.
 model ChatConversation {
-  id              String              @id
-  userId          String              @map("user_id")
-  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title           String?
+  id                 String              @id
+  userId             String              @map("user_id")
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title              String?
   /// uuid passed to claude -p as --session-id / --resume
-  cliSessionId    String?             @map("cli_session_id")
-  model           String?
+  cliSessionId       String?             @map("cli_session_id")
+  model              String?
   /// The host: the user's own machine this conversation runs on. Null = not chosen yet.
-  machineId       String?             @map("machine_id")
-  machine         Machine?            @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  machineId          String?             @map("machine_id")
+  machine            Machine?            @relation(fields: [machineId], references: [id], onDelete: SetNull)
   /// The Claude account on that host. Null = the machine's default config dir.
-  aiAccountId     String?             @map("ai_account_id")
-  aiAccount       AiAccount?          @relation(fields: [aiAccountId], references: [id], onDelete: SetNull)
+  aiAccountId        String?             @map("ai_account_id")
+  aiAccount          AiAccount?          @relation(fields: [aiAccountId], references: [id], onDelete: SetNull)
   /// The project this conversation is about. Null = the account-wide chat (spec 2026-09-23 §3).
-  projectId       String?             @map("project_id")
-  project         Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId          String?             @map("project_id")
+  project            Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   /// Set by "Nova conversa": the row is kept, but it is no longer the scope's active conversation.
-  archivedAt      DateTime?           @map("archived_at")
-  apiTokens       ApiToken[]
-  tabId           String?             @map("tab_id")
-  reviewMode      Boolean             @default(false) @map("review_mode")
+  archivedAt         DateTime?           @map("archived_at")
+  apiTokens          ApiToken[]
+  tabId              String?             @map("tab_id")
+  reviewMode         Boolean             @default(false) @map("review_mode")
   /// How many tokens the CLI session's context held after its last turn (or compaction), and the
   /// model's context window then (TER-315). Null until a turn reports them; cleared with the session.
-  contextTokens Int?          @map("context_tokens")
-  contextWindow Int?          @map("context_window")
+  contextTokens      Int?                @map("context_tokens")
+  contextWindow      Int?                @map("context_window")
   /// When that session was last compacted, by "Compactar" or the CLI's own auto-compact (TER-1038).
-  contextCompactedAt DateTime? @map("context_compacted_at") @db.Timestamptz
-  lastMessageAt DateTime?     @map("last_message_at")
+  contextCompactedAt DateTime?           @map("context_compacted_at") @db.Timestamptz
+  lastMessageAt      DateTime?           @map("last_message_at")
   /// The last time the person typed a message here (TER-530) — not a decision's re-injection nor a
   /// wake, which are stored as user messages too. A "no" given before it no longer refuses on its own.
-  lastTypedAt     DateTime?           @map("last_typed_at")
-  createdAt       DateTime            @default(now()) @map("created_at")
-  messages        ChatMessage[]
-  actions         ChatAction[]
-  grants          ChatGrant[]
-  projectGrants   ChatProjectGrant[]
-  tabQuestions    TabQuestion[]
-  tabLimitNotices TabLimitNotice[]
-  attachments     ChatAttachment[]
-  chatDecisions   ChatDecision[]
-  subagents       ChatSubagent[]
-  liveRun         ChatLiveRun?
-  standingGrants  ChatStandingGrant[]
+  lastTypedAt        DateTime?           @map("last_typed_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  messages           ChatMessage[]
+  actions            ChatAction[]
+  grants             ChatGrant[]
+  projectGrants      ChatProjectGrant[]
+  tabQuestions       TabQuestion[]
+  tabLimitNotices    TabLimitNotice[]
+  attachments        ChatAttachment[]
+  chatDecisions      ChatDecision[]
+  subagents          ChatSubagent[]
+  liveRun            ChatLiveRun?
+  standingGrants     ChatStandingGrant[]
 
   @@index([userId, createdAt])
   @@index([machineId])

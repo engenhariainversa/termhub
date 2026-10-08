@@ -35,6 +35,7 @@ const LANGUAGE_OPTIONS: { value: Locale | null; label: string; translated: boole
   { value: null, label: tk('Automático'), translated: true },
   { value: 'pt-BR', label: 'Português (Brasil)', translated: false },
   { value: 'en', label: 'English', translated: false },
+  { value: 'es', label: 'Español', translated: false },
 ];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

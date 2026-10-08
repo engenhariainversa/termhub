@@ -424,7 +424,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_automation_events',
     description:
-      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses, and changes to what it may do (automation_on/off, setup_changed, cards tagged/untagged, machine_opt_in/out, each with via: chat, mcp, web or app). Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons (a run_blocked with stage start also has message, the failure's reason in pt-BR, message_en, attempt of max_attempts, and retry_at or untagged), and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
+      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses, and changes to what it may do (automation_on/off, setup_changed, cards tagged/untagged, machine_opt_in/out, each with via: chat, mcp, web or app). Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons (a run_blocked with stage start also has message, the failure's reason in pt-BR, message_en and message_es, attempt of max_attempts, and retry_at or untagged), and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
     scope: 'read', resource: 'projects', action: 'read',
     input: { project_id: id, before: z.string().datetime({ offset: true }).optional(), limit: z.number().int().min(1).max(AUTOMATION_EVENTS_PAGE_MAX).optional() },
     run: async (ctx, a) => {
