@@ -15,9 +15,11 @@ const fmtDate = (iso: string) => formatDate(iso);
  * binding clarifications; translated where shown) — the mobile twin of `ChatMemoryPage`'s `EVIDENCE_LABEL`. */
 const EVIDENCE_LABEL: Record<TLessonItem['evidence'], string> = { observed: tk('observada'), fixed: tk('corrigida'), confirmed: tk('confirmada') };
 
-/** "arquivo <path>" for a file-origin lesson, "anotação do projeto" for a note-origin one —
- * verbatim, copied from `ChatMemoryPage`'s `originText`. */
+/** "arquivo <path>" for a file-origin lesson, "anotação do projeto" for a note-origin one, "ai-memory
+ * de <máquina>: <path>" for a deliberate ai-memory page (TER-1021) — verbatim, copied from
+ * `ChatMemoryPage`'s `originText`. */
 function originText(l: TLessonItem): string {
+  if (l.ai_memory) return t('ai-memory de {{machine}}: {{path}}', { machine: l.ai_memory.machine_name ?? '?', path: l.path ?? '' });
   return l.origin === 'file' ? t('arquivo {{path}}', { path: l.path ?? '' }) : t('anotação do projeto');
 }
 

@@ -194,5 +194,6 @@
   "Buscar decisões e anotações": "Search decisions and notes",
   "Nenhum item vigente encontrado.": "No current item found.",
   "Decisão": "Decision",
-  "Anotação": "Note"
+  "Anotação": "Note",
+  "ai-memory de {{machine}}: {{path}}": "ai-memory on {{machine}}: {{path}}"
 }

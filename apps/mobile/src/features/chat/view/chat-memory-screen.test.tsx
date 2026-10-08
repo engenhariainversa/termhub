@@ -278,6 +278,16 @@ describe('Memória do chat', () => {
       expect(screen.getByText(/termhub · arquivo docs\/lessons\/migration\.md · corrigida · .+ · verificada/)).toBeTruthy();
     });
 
+    it('shows an ai-memory lesson (TER-1021) with its machine and wiki path', async () => {
+      jest.spyOn(stores.api, 'chatLessons').mockResolvedValueOnce({
+        lessons: [lesson({ id: 'l1', title: 'Sem Redis', project: { id: 'p1', name: 'termhub' }, origin: 'file', path: 'termhub/_rules/no-redis.md', ai_memory: { machine_name: 'hulk', kind: 'rule' } })],
+        next_cursor: null,
+      });
+      await render(<ChatMemoryScreen />);
+      expect(await screen.findByText('Sem Redis', undefined, LOAD)).toBeTruthy();
+      expect(screen.getByText(/termhub · ai-memory de hulk: termhub\/_rules\/no-redis\.md · /)).toBeTruthy();
+    });
+
     it('"Verificar" calls the API and flips the label to "Desfazer verificação"', async () => {
       jest.spyOn(stores.api, 'chatLessons').mockResolvedValueOnce({ lessons: [lesson({ id: 'l1', title: 'Sintoma X' })], next_cursor: null });
       const verify = jest.spyOn(stores.api, 'verifyChatLesson').mockResolvedValue(lesson({ id: 'l1', title: 'Sintoma X', verified: true, verified_at: new Date().toISOString() }));

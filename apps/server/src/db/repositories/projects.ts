@@ -12,9 +12,10 @@ export interface ProjectInput {
   status?: ProjectStatus;
   description?: string | null;
   is_public?: boolean;
+  ai_memory_lessons?: boolean;
 }
 
-export type ProjectPatch = Partial<Pick<ProjectInput, 'name' | 'status' | 'description' | 'is_public'>>;
+export type ProjectPatch = Partial<Pick<ProjectInput, 'name' | 'status' | 'description' | 'is_public' | 'ai_memory_lessons'>>;
 
 export type ProjectRuleCode = 'KEY_INVALID' | 'KEY_TAKEN' | 'MACHINE_ALREADY_LINKED' | 'MACHINE_NOT_LINKED' | 'MACHINE_REQUIRED' | 'NO_MACHINE';
 
@@ -103,7 +104,7 @@ export class ProjectsRepository {
     const next = { ...current, ...patch };
     const p = await this.db.project.update({
       where: { id },
-      data: { name: next.name, status: next.status, description: next.description ?? null, isPublic: next.is_public },
+      data: { name: next.name, status: next.status, description: next.description ?? null, isPublic: next.is_public, aiMemoryLessons: next.ai_memory_lessons },
     });
     return mapProject(p);
   }

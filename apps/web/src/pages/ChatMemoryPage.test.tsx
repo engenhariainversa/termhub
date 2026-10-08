@@ -414,6 +414,16 @@ it('"Lições" shows "anotação do projeto" as the origin of a note-origin less
   expect(await screen.findByText(/anotação do projeto/)).toBeInTheDocument();
 });
 
+it('"Lições" shows the machine and wiki path of an ai-memory lesson (TER-1021), unverified with Verificar', async () => {
+  chatMemoryMock.mockResolvedValue({ enabled: true, available: true, count: 0, autodecide: false, codex_replies: false, notes: 0 });
+  chatDecisionsMock.mockResolvedValue({ decisions: [], next_cursor: null });
+  chatLessonsListMock.mockResolvedValue({ lessons: [lesson({ id: 'l1', path: 'termhub/_rules/no-redis.md', ai_memory: { machine_name: 'hulk', kind: 'rule' } })], next_cursor: null });
+  render(<ChatMemoryPage />, { wrapper: MemoryRouter });
+  expect(await screen.findByText(/ai-memory de hulk: termhub\/_rules\/no-redis\.md/)).toBeInTheDocument();
+  expect(screen.queryByText(/arquivo termhub/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Verificar' })).toBeInTheDocument();
+});
+
 it('"Lições" shows the "verificada" badge and "Desfazer verificação" for an already-verified lesson', async () => {
   chatMemoryMock.mockResolvedValue({ enabled: true, available: true, count: 0, autodecide: false, codex_replies: false, notes: 0 });
   chatDecisionsMock.mockResolvedValue({ decisions: [], next_cursor: null });

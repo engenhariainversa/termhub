@@ -125,6 +125,8 @@ export interface Project {
   public_id: string;
   /** column a card moves to when an agent starts on it; null = automatic (first `doing` column) */
   agent_column_id: string | null;
+  /** TER-1021: deliberate ai-memory pages of its checkouts are imported as unverified lessons */
+  ai_memory_lessons: boolean;
   last_terminal_at: string | null;
   created_at: string;
 }
@@ -348,6 +350,7 @@ export const mapProject = (p: PrismaProject): Project => ({
   is_public: p.isPublic,
   public_id: publicId('project', p.id),
   agent_column_id: p.agentColumnId,
+  ai_memory_lessons: p.aiMemoryLessons,
   last_terminal_at: iso(p.lastTerminalAt),
   created_at: p.createdAt.toISOString(),
 });

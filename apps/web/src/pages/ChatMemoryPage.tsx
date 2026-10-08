@@ -12,6 +12,7 @@ const fmtDate = (iso: string) => formatDate(iso);
  *  binding clarifications, verbatim (pt-BR keys, translated where shown). */
 const EVIDENCE_LABEL: Record<LessonItem['evidence'], string> = { observed: tk('observada'), fixed: tk('corrigida'), confirmed: tk('confirmada') };
 function originText(l: LessonItem): string {
+  if (l.ai_memory) return i18n.t('ai-memory de {{machine}}: {{path}}', { machine: l.ai_memory.machine_name ?? '?', path: l.path ?? '' });
   return l.origin === 'file' ? i18n.t('arquivo {{path}}', { path: l.path ?? '' }) : i18n.t('anotação do projeto');
 }
 

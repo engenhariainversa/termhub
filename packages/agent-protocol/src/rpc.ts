@@ -305,6 +305,13 @@ export const RPC = {
    */
   'docs.read': def(z.object({ cwd: machinePath, paths: z.array(docPath).min(1).max(20) }), z.object({ stdout: z.string() }), 20_000),
   /**
+   * The deliberate ai-memory pages (`_rules/`, `gotchas/`, `decisions/`) of the project checked out at
+   * `cwd`, never `sessions/`, observations or handoffs (TER-1021): `F\t<sha256>\t<size>\t<relpath>` +
+   * base64 body + `E` per page, `@termhub/machine-ops`'s `parseAiMemoryPages` reads it back (since
+   * agent 0.22.0).
+   */
+  'aimemory.pages': def(z.object({ cwd: machinePath }), z.object({ stdout: z.string() }), 20_000),
+  /**
    * Writes a tab's private MCP config file (`~/.termhub/tabs/<tab_id>/<file>`, spec D7): `body`
    * travels only on stdin, never in this params object's serialized form on disk/log (since agent 0.10.0).
    */

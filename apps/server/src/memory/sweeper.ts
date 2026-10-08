@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { defaultEmbedder, memoryCode, type Embedder } from '../chat/embeddings.js';
 import type { Repositories } from '../db/repositories/index.js';
+import { indexAiMemoryForLink, removeAiMemoryLessonsForLink, type AiMemoryExec } from './ai-memory.js';
 import { indexDocsForLink, type DocsExec } from './docs.js';
 import { embedPendingItems, indexTasks } from './index-items.js';
 import { indexProjectNote } from './note.js';
@@ -45,6 +46,11 @@ export const DOCS_EVERY_TICKS = 3;
  * pass shares the tick's `running` guard, so a slow pass (many ssh machines timing out) delays the next
  * tick instead of overlapping it.
  *
+ * In the same docs pass, a link whose project opted in to ai-memory lessons (TER-1021,
+ * `ai_memory_lessons`) also has its deliberate ai-memory pages imported (`indexAiMemoryForLink`, through
+ * `aiMemoryExec`, `machineAiMemoryExec` by default); a link whose project has the option off has any
+ * ai-memory lesson it still holds removed (`removeAiMemoryLessonsForLink`).
+ *
  * On the same turn as the docs pass, a notes pass (spec 2026-09-27 failure lessons §4) covers a crash
  * between a note save and its own `indexProjectNote` call: every project whose note's `updated_at` moved
  * past the newest `project_note` item already stored for it (`latestSourceAt`, grouped one query per
@@ -58,6 +64,7 @@ export function startMemorySweeper(
   embedder?: Embedder | null,
   intervalMs = MEMORY_SWEEP_INTERVAL_MS,
   docsExec?: DocsExec,
+  aiMemoryExec?: AiMemoryExec,
 ): () => void {
   const embed = embedder !== undefined ? embedder : defaultEmbedder();
   let running = false;
@@ -89,6 +96,17 @@ export function startMemorySweeper(
         removed += r.removed;
       } catch (err) {
         log.warn({ linkId: link.id, code: memoryCode(err) }, 'memory docs indexing failed for a link');
+      }
+      try {
+        if (link.ai_memory_lessons) {
+          const r = await indexAiMemoryForLink(repos, link, { embedder: null, log, exec: aiMemoryExec });
+          read += r.read;
+          removed += r.removed;
+        } else {
+          removed += await removeAiMemoryLessonsForLink(repos, link.id);
+        }
+      } catch (err) {
+        log.warn({ linkId: link.id, code: memoryCode(err) }, 'ai-memory lessons failed for a link');
       }
     }
     if (read > 0 || removed > 0 || stale > 0) log.info({ links: links.length, read, removed, stale }, 'memory docs indexed');

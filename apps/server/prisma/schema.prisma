@@ -245,6 +245,9 @@ model Project {
   lastTerminalAt DateTime?     @map("last_terminal_at")
   /// Per-project pause of the automatic work (agentic board). Null = not paused.
   automationPausedAt DateTime? @map("automation_paused_at") @db.Timestamptz
+  /// TER-1021: import the deliberate ai-memory pages (`_rules/`, `gotchas/`, `decisions/`) of the
+  /// project's checkouts as unverified lessons. Off by default.
+  aiMemoryLessons Boolean      @default(false) @map("ai_memory_lessons")
   createdAt      DateTime      @default(now()) @map("created_at")
   owner          User?         @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   /// Machines this project runs on, each with its own working directory.

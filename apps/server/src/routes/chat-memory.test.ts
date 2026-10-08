@@ -471,6 +471,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
           excerpt: 'Causa: ...\nCorreção: ...',
           origin: 'file',
           path: 'docs/lessons/2026-09-27-x.md',
+          ai_memory: null,
           tab_id: null,
           card: 'TER-57',
           pr: 'https://github.com/x/y/pull/169',
@@ -607,6 +608,28 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
       const parsed = lessonForgetSchema.safeParse(res.json());
       expect(parsed.success, JSON.stringify(!parsed.success && parsed.error.issues)).toBe(true);
     }
+  });
+
+  it('GET /lessons shows an ai-memory lesson (TER-1021) as file to older apps, with its machine and kind in ai_memory', async () => {
+    const repos = fakeRepos();
+    const meta = { evidence: 'observed', card: null, pr: null, tags: ['rule'], agent: null, tab_id: null, origin: 'ai-memory', path: 'termhub/_rules/a.md', machine_id: 'm1', machine_name: 'hulk', ai_memory_kind: 'rule' };
+    repos.memoryItems.listLessons.mockResolvedValueOnce({ items: [lessonItem({ meta, source_id: 'L1:ai-memory/termhub/_rules/a.md' })], next_cursor: null });
+    const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/lessons' });
+    expect(res.json().lessons[0]).toMatchObject({ origin: 'file', path: 'termhub/_rules/a.md', ai_memory: { machine_name: 'hulk', kind: 'rule' }, verified: false });
+    if (kind === 'mobile') {
+      const parsed = lessonListSchema.safeParse(res.json());
+      expect(parsed.success, JSON.stringify(!parsed.success && parsed.error.issues)).toBe(true);
+    }
+  });
+
+  it('DELETE /lessons/:id on an ai-memory lesson hides it and says the page stays on the machine', async () => {
+    const repos = fakeRepos();
+    repos.memoryItems.findLessonForOwner.mockResolvedValueOnce(lessonItem({ meta: { evidence: 'observed', card: null, pr: null, tags: [], agent: null, tab_id: null, origin: 'ai-memory', path: 'p/gotchas/a.md' } }));
+    const res = await build(kind, repos).inject({ method: 'DELETE', url: '/chat/lessons/l1' });
+    expect(res.statusCode).toBe(200);
+    expect(repos.memoryItems.hideSource).toHaveBeenCalledWith('l1', 'u1');
+    expect(repos.memoryItems.deleteBySource).not.toHaveBeenCalled();
+    expect(res.json()).toEqual({ ok: true, note: 'A página continua no ai-memory da máquina; se ela mudar, volta como lição não verificada' });
   });
 
   it('DELETE /lessons/:id on someone else\'s id (or a non-lesson) is a 404, never a 403', async () => {

@@ -407,5 +407,6 @@
   "Decisão": "Decision",
   "Anotação": "Note",
   "Não foi possível buscar os itens da memória": "Could not search the memory items",
-  "Não foi possível alterar o estado do item": "Could not change the item's status"
+  "Não foi possível alterar o estado do item": "Could not change the item's status",
+  "ai-memory de {{machine}}: {{path}}": "ai-memory on {{machine}}: {{path}}"
 }

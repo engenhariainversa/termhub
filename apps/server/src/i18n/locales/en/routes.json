@@ -8,6 +8,7 @@
   "O arquivo deste anexo não está mais disponível": "This attachment's file is no longer available",
   "Este anexo já foi enviado": "This attachment was already sent",
   "O arquivo continua no repositório; apague-o por um PR para sumir de vez": "The file is still in the repository; delete it in a PR to remove it for good",
+  "A página continua no ai-memory da máquina; se ela mudar, volta como lição não verificada": "The page is still in the machine's ai-memory; if it changes, it comes back as an unverified lesson",
   "O chat só roda em uma máquina com o agente do termhub instalado": "The chat only runs on a machine with the termhub agent installed",
   "Conta de IA não encontrada nessa máquina": "AI account not found on that machine",
   "O chat roda no Claude: escolha uma conta do Claude nessa máquina": "The chat runs on Claude: choose a Claude account on that machine",

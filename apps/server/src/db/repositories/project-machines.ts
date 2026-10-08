@@ -24,13 +24,14 @@ export class ProjectMachinesRepository {
    * spec 2026-09-26 concierge memory D15: it walks all of them, owner by owner, with no request scope).
    * An orphaned project (owner deleted) is left out — its items would have no one to belong to.
    */
-  async listAllWithOwner(): Promise<(ProjectMachine & { owner_id: string; machine: Machine })[]> {
+  /** `ai_memory_lessons`: the project's TER-1021 opt-in, read by the memory sweeper's docs pass. */
+  async listAllWithOwner(): Promise<(ProjectMachine & { owner_id: string; ai_memory_lessons: boolean; machine: Machine })[]> {
     const rows = await this.db.projectMachine.findMany({
       where: { project: { ownerId: { not: null } } },
-      include: { project: { select: { ownerId: true } }, machine: { include: { owner: { select: { name: true } } } } },
+      include: { project: { select: { ownerId: true, aiMemoryLessons: true } }, machine: { include: { owner: { select: { name: true } } } } },
       orderBy: [{ projectId: 'asc' }, ...ORDER],
     });
-    return rows.map((l) => ({ ...mapProjectMachine(l), owner_id: l.project.ownerId!, machine: mapMachine(l.machine) }));
+    return rows.map((l) => ({ ...mapProjectMachine(l), owner_id: l.project.ownerId!, ai_memory_lessons: l.project.aiMemoryLessons, machine: mapMachine(l.machine) }));
   }
 
   async listByMachine(machineId: string): Promise<ProjectMachine[]> {

@@ -168,6 +168,8 @@ export interface Project {
   public_id: string;
   /** column a card moves to when an agent starts on it; null = automatic (first "Fazendo"). The board reads it from the tasks list. */
   agent_column_id?: string | null;
+  /** TER-1021: deliberate ai-memory pages of its checkouts come in as unverified lessons (opt-in) */
+  ai_memory_lessons?: boolean;
   /** tasks em "todo" + "doing" (vem na listagem) */
   open_tasks?: number;
 }
@@ -191,6 +193,8 @@ export interface ProjectInput {
   create_dir?: boolean;
   /** edit only (a project is born private): publishes it on the owner's public city */
   is_public?: boolean;
+  /** edit only (TER-1021): import deliberate ai-memory pages as unverified lessons */
+  ai_memory_lessons?: boolean;
 }
 
 export type TaskStatus = 'backlog' | 'todo' | 'doing' | 'done';
@@ -1412,8 +1416,11 @@ export interface LessonItem {
   project: { id: string; name: string } | null;
   title: string;
   excerpt: string;
+  /** An ai-memory lesson answers `file` here (for older app builds); `ai_memory` tells it apart. */
   origin: 'file' | 'note';
   path: string | null;
+  /** TER-1021: a deliberate ai-memory page read from a machine (`path` is then relative to its wiki). */
+  ai_memory?: { machine_name: string | null; kind: string | null } | null;
   tab_id: string | null;
   card: string | null;
   pr: string | null;

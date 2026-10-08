@@ -60,7 +60,7 @@ function parseFrontMatter(text: string): Record<string, string | string[]> {
  * Splits `---\n<front matter>\n---\n<body>`. A file without a front matter, or one whose `---` never
  * closes, is treated as having none — the whole file is the body, never thrown on.
  */
-function splitFrontMatter(md: string): { frontMatter: Record<string, string | string[]>; body: string } {
+export function splitFrontMatter(md: string): { frontMatter: Record<string, string | string[]>; body: string } {
   const lines = md.split('\n');
   if (lines[0]?.trim() !== '---') return { frontMatter: {}, body: md };
   const closeIdx = lines.findIndex((l, i) => i > 0 && l.trim() === '---');

@@ -45,8 +45,11 @@ export interface MemoryResult {
    *  other kind. */
   verified?: boolean;
   evidence?: string;
-  origin?: 'file' | 'note';
+  /** `ai-memory` (TER-1021): a deliberate page of a machine's ai-memory, `path` relative to its wiki,
+   *  `machine` the machine's name at import time. */
+  origin?: 'file' | 'note' | 'ai-memory';
   path?: string | null;
+  machine?: string | null;
   tab_id?: string | null;
   card?: string | null;
   pr?: string | null;
@@ -126,6 +129,7 @@ function itemResult(it: MemoryHit, similarity: number | null, match: MemoryResul
     evidence: meta?.evidence ?? 'fixed',
     origin: meta?.origin ?? 'file',
     path: meta?.path ?? null,
+    ...(meta?.origin === 'ai-memory' ? { machine: meta.machine_name ?? null } : {}),
     tab_id: meta?.tab_id ?? null,
     card: meta?.card ?? null,
     pr: meta?.pr ?? null,

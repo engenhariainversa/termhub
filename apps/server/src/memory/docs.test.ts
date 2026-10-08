@@ -319,6 +319,14 @@ describe('indexDocsForLink', () => {
       expect(r).toEqual({ read: 0, removed: 1 });
     });
 
+    it('the link’s ai-memory lessons (TER-1021) are never treated as gone docs/lessons files', async () => {
+      const repos = fakeReposByKind({ [`L1:${spec('kept')}`]: sha('c') }, { 'L1:ai-memory/p/_rules/a.md': sha('a') });
+      const exec = fakeExec({ [spec('kept')]: { sha: sha('c'), text: 'x' } });
+      const r = await indexDocsForLink(repos as never, link(), deps(exec));
+      expect(repos.memoryItems.deleteBySource).not.toHaveBeenCalled();
+      expect(r).toEqual({ read: 0, removed: 0 });
+    });
+
     it('an agent below DOCS_LESSONS_MIN_AGENT_VERSION: its scan cannot list lessons, so none is deleted (downgrade guard)', async () => {
       requireAgentVersion.mockImplementation((_m: Machine, minVersion: string) => {
         if (minVersion === DOCS_LESSONS_MIN_AGENT_VERSION) throw new HttpError(409, 'Atualize', 'AGENT_OUTDATED');

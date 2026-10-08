@@ -20,8 +20,14 @@ export interface LessonMeta {
   tags: string[];
   agent: string | null;
   tab_id: string | null;
-  origin: 'file' | 'note';
+  /** `ai-memory` (TER-1021): a deliberate ai-memory page (`path` relative to that machine's wiki). */
+  origin: 'file' | 'note' | 'ai-memory';
   path: string | null;
+  /** ai-memory only: the machine the page was read from, its name at import time, and the page's
+   *  kind (`rule` | `gotcha` | `decision`). */
+  machine_id?: string | null;
+  machine_name?: string | null;
+  ai_memory_kind?: string | null;
 }
 
 /**
@@ -284,12 +290,13 @@ export class MemoryItemsRepository {
    * never matches a link id in the first place (`split_part` gives the literal string `note`), but the
    * `meta->>'origin' = 'file'` guard is explicit rather than relying on that coincidence. **An empty
    * `linkIds` deletes every doc row and every file lesson row**: the caller must only pass the result
-   * of a link listing that succeeded. Never a `project_note` or a note-origin lesson.
+   * of a link listing that succeeded. Never a `project_note` or a note-origin lesson. An ai-memory
+   * lesson (TER-1021, `source_id` `<linkId>:ai-memory/<path>`) is tied to its link the same way.
    */
   async deleteDocsNotInLinks(linkIds: string[]): Promise<number> {
     return this.db.$executeRaw`
       DELETE FROM "memory_items"
-      WHERE (("kind" = 'doc') OR ("kind" = 'lesson' AND "meta"->>'origin' = 'file'))
+      WHERE (("kind" = 'doc') OR ("kind" = 'lesson' AND "meta"->>'origin' IN ('file', 'ai-memory')))
         AND split_part("source_id", ':', 1) <> ALL(${linkIds}::text[])`;
   }
 

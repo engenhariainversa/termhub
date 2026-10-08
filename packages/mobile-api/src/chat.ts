@@ -308,8 +308,12 @@ export const lessonItemSchema = z.object({
   project: z.object({ id: z.string(), name: z.string() }).nullable(),
   title: z.string(),
   excerpt: z.string(),
+  /** An ai-memory lesson answers `file` here, for older app builds; see `ai_memory`. */
   origin: z.enum(['file', 'note']),
   path: z.string().nullable(),
+  /** TER-1021: a deliberate ai-memory page (rule/gotcha/decision) read from a machine; `path` is then
+   *  relative to that machine's ai-memory wiki. Null otherwise, and absent from an older server. */
+  ai_memory: z.object({ machine_name: z.string().nullable(), kind: z.string().nullable() }).nullable().optional(),
   tab_id: z.string().nullable(),
   card: z.string().nullable(),
   pr: z.string().nullable(),

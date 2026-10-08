@@ -118,8 +118,12 @@ function toLessonView(item: MemoryItem) {
     project: item.project_id ? { id: item.project_id, name: item.project_name ?? '' } : null,
     title: item.title,
     excerpt: excerpt(item.text),
-    origin: meta?.origin ?? 'file',
+    // Older app builds only know `file` | `note` here (their contract is a closed enum), so an
+    // ai-memory lesson keeps answering `file` and carries its real origin in `ai_memory` (TER-1021).
+    origin: meta?.origin === 'note' ? 'note' : 'file',
     path: meta?.path ?? null,
+    /** TER-1021: set only for a deliberate ai-memory page — its machine (name at import time) and kind. */
+    ai_memory: meta?.origin === 'ai-memory' ? { machine_name: meta.machine_name ?? null, kind: meta.ai_memory_kind ?? null } : null,
     tab_id: meta?.tab_id ?? null,
     card: meta?.card ?? null,
     pr: meta?.pr ?? null,
@@ -316,7 +320,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
    *  answering `null` — still lets the item delete and the route succeed), then its memory items are
    *  deleted, then the note is re-indexed (best effort) so its sections reflect the removal. A
    *  file-origin lesson is only ever hidden (`hideSource`) — the file stays in the repository until a
-   *  PR removes it, which the response says in words. 404 for an id that is not this user's own
+   *  PR removes it, which the response says in words; an ai-memory lesson (TER-1021) is hidden the
+   *  same way, the page staying in that machine's ai-memory. 404 for an id that is not this user's own
    *  `lesson` (or not a lesson at all), never another user's data. */
   app.delete('/lessons/:id', async (request) => {
     const { id } = idParam.parse(request.params);
@@ -332,6 +337,9 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
       return { ok: true };
     }
     await repos.memoryItems.hideSource(id, ownerId);
+    if (item.meta?.origin === 'ai-memory') {
+      return { ok: true, note: t(requestLocale(request), 'A página continua no ai-memory da máquina; se ela mudar, volta como lição não verificada') };
+    }
     return { ok: true, note: t(requestLocale(request), 'O arquivo continua no repositório; apague-o por um PR para sumir de vez') };
   });
 }

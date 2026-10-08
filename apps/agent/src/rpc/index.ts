@@ -1,5 +1,6 @@
 import type { RpcMethod, RpcParams, RpcResult } from '@termhub/agent-protocol';
 import * as ai from './ai.js';
+import * as aiMemory from './ai-memory.js';
 import * as claude from './claude.js';
 import * as docs from './docs.js';
 import * as fileList from './file-list.js';
@@ -42,6 +43,7 @@ export const handlers: Handlers = {
   'claude.linkSession': claude.linkSession,
   'docs.scan': docs.scan,
   'docs.read': docs.read,
+  'aimemory.pages': aiMemory.pages,
   'file.paste': paste.pasteFile,
   'file.read': fileRead.read,
   'file.list': fileList.list,
