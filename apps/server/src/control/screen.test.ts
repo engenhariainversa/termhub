@@ -8,20 +8,20 @@ import { toHttpError } from '../agent/errors.js';
 import { AgentTimeoutError } from '../agent/connection.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { LastAnswer } from '../db/repositories/tabs.js';
-import type { Machine, Project, Tab } from '../db/repositories/types.js';
+import type { Machine, Project, Tab, TabEvent } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { Scoped } from '../auth/scope.js';
 import type { ControlContext } from './context.js';
-import { FULL_SCREEN_NOTE, NO_ANSWER_NOTE, readLastAnswer, readScreen, waitForState } from './screen.js';
+import { BACKGROUND_LEFT_NOTE, FULL_SCREEN_NOTE, NO_ANSWER_NOTE, readLastAnswer, readScreen, waitForState } from './screen.js';
 
 const m1 = { id: 'm1', owner_id: 'u1', type: 'agent' } as Machine;
 const p1 = { id: 'p1', owner_id: 'u1' } as Project;
 const baseTab = (over: Partial<Tab> = {}): Tab =>
   ({ id: 't1', project_id: 'p1', machine_id: 'm1', name: 't1', kind: 'terminal', tmux_session: 'th-t1', simulator_udid: null, position: 0, state: 'working', state_text: null, state_tool: 'claude', state_at: '2026-09-19T10:00:00.000Z', state_seen_at: null, created_at: '', ...over }) as Tab;
 
-function ctx(tab: Tab | undefined = baseTab(), answer: LastAnswer | null = null): ControlContext {
+function ctx(tab: Tab | undefined = baseTab(), answer: LastAnswer | null = null, events: TabEvent[] = []): ControlContext {
   const repos = {
-    tabs: { findById: vi.fn(async (id: string) => (tab && id === tab.id ? tab : undefined)), readLastAnswer: vi.fn(async () => answer) },
+    tabs: { findById: vi.fn(async (id: string) => (tab && id === tab.id ? tab : undefined)), readLastAnswer: vi.fn(async () => answer), listEvents: vi.fn(async () => events) },
     projects: { findById: vi.fn(async (id: string) => (id === 'p1' ? p1 : undefined)) },
     projectMachines: { find: vi.fn(async () => ({ id: 'l1', project_id: 'p1', machine_id: 'm1', cwd: '/p1', position: 0, created_at: '' })) },
     machines: { findById: vi.fn(async (id: string) => (id === 'm1' ? m1 : undefined)) },
@@ -198,6 +198,22 @@ describe('readScreen and full-screen agents', () => {
 });
 
 describe('waitForState', () => {
+  const ev = (kind: TabEvent['kind'], meta: Record<string, unknown>): TabEvent => ({ id: 'e', tab_id: 't1', kind, tool: 'claude', text: null, meta, created_at: '' });
+
+  it('notes background work still running when the turn that ended it left some (TER-1053)', async () => {
+    const tab = baseTab({ state: 'finished', state_text: 'PR aberto.' });
+    const withMonitor = await waitForState(ctx(tab, null, [ev('finished', { event: 'Stop', background_tasks: 1 })]), { tab_id: 't1' });
+    expect(withMonitor).toMatchObject({ state: 'finished', timed_out: false, note: BACKGROUND_LEFT_NOTE });
+    // the idle_prompt reminder on top is passed over; a timed-out background wait counts too
+    const reminded = await waitForState(ctx(baseTab({ state: 'waiting_input' }), null, [ev('waiting_input', { event: 'Notification', type: 'idle_prompt' }), ev('waiting_input', { event: 'Stop', background_tasks: 2 })]), { tab_id: 't1' });
+    expect(reminded.note).toBe(BACKGROUND_LEFT_NOTE);
+    const timedOut = await waitForState(ctx(tab, null, [ev('finished', { event: 'BackgroundTimeout', screen: 'prompt' })]), { tab_id: 't1' });
+    expect(timedOut.note).toBe(BACKGROUND_LEFT_NOTE);
+    // nothing left running, or an older turn's Stop under a newer event: no note
+    expect((await waitForState(ctx(tab, null, [ev('finished', { event: 'Stop' })]), { tab_id: 't1' })).note).toBeUndefined();
+    expect((await waitForState(ctx(baseTab({ state: 'waiting_input' }), null, [ev('waiting_input', { event: 'StopFailure', error: 'rate_limit' }), ev('finished', { event: 'Stop', background_tasks: 1 })]), { tab_id: 't1' })).note).toBeUndefined();
+  });
+
   it('returns at once when the tab is not working', async () => {
     const r = await waitForState(ctx(baseTab({ state: 'waiting_input', state_text: 'Posso seguir?' })), { tab_id: 't1' });
     expect(r).toMatchObject({ tab_id: 't1', state: 'waiting_input', state_text: 'Posso seguir?', timed_out: false });
