@@ -112,9 +112,9 @@ describe('tabDotClass', () => {
     expect(tabDotClass(true, tab({ state: 'waiting_permission', state_at: T1 }))).toContain('bg-attention');
   });
 
-  it('is neutral, never orange, while the agent waits on its own background work (TER-644)', () => {
+  it('pulses like a working tab, never orange, while the agent waits on its own background work (TER-644, TER-1044)', () => {
     expect(tabNeedsYou(tab({ state: 'waiting_background', state_at: T1 }))).toBe(false);
-    expect(tabDotClass(true, tab({ state: 'waiting_background', state_at: T1 }))).toBe('bg-fg-muted');
+    expect(tabDotClass(true, tab({ state: 'waiting_background', state_at: T1 }))).toBe('bg-accent tab-dot-working');
     expect(tabDotClass(false, tab({ state: 'waiting_background', state_at: T1 }))).toBe('bg-fg-dim');
   });
 
@@ -128,9 +128,10 @@ describe('tabDotClass', () => {
     expect(tabDotClass(true, tab({ state: 'waiting_input', state_at: T1, state_seen_at: T1 }))).toBe('bg-ok');
   });
 
-  it('is red on error, green when alive, grey otherwise', () => {
+  it('is red on error, pulsing blue while working, green when alive, grey otherwise', () => {
     expect(tabDotClass(true, tab({ state: 'error' }))).toBe('bg-danger');
-    expect(tabDotClass(true, tab({ state: 'working' }))).toBe('bg-ok');
+    expect(tabDotClass(true, tab({ state: 'working' }))).toBe('bg-accent tab-dot-working');
+    expect(tabDotClass(false, tab({ state: 'working' }))).toBe('bg-fg-dim');
     expect(tabDotClass(true, null)).toBe('bg-ok');
     expect(tabDotClass(false, null)).toBe('bg-fg-dim');
     expect(tabDotClass(false, undefined)).toBe('bg-fg-dim');

@@ -49,6 +49,13 @@ export const DECISION_EXCEPTION = 'decision_exception';
 /** TER-1043: the agent stopped on a question and the project chose "Parar em decisões de produto". */
 export const DECISION_NEEDED = 'decision_needed';
 
+/**
+ * TER-1025: the agent said it is stuck on a GitHub error (a 5xx push, `commit_refs`, `gh pr create`'s
+ * "Something went wrong"): the run waits for GitHub and is resumed by itself; past `github_retries` the
+ * person is told with this reason.
+ */
+export const GITHUB_TRANSIENT = 'github_transient';
+
 /** The project's deploy workflow failed on a merge the automation made: automation of the project is paused (spec D22). */
 export const DEPLOY_FAILED = 'deploy_failed';
 /** Same, but the pause could not be applied (owner not found or the write failed): the text must not claim it. */
@@ -80,6 +87,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [REPORTED_BLOCKED]: tk('O agente disse que travou e precisa de você.'),
   [DECISION_EXCEPTION]: tk('O agente parou numa decisão que o automático não toma sozinho (credenciais, deploy, lojas, dados de produção ou escopo maior que o card); responda na aba.'),
   [DECISION_NEEDED]: tk('O agente parou numa decisão e o projeto pede para parar nelas; responda na aba.'),
+  [GITHUB_TRANSIENT]: tk('O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.'),
   [DEPLOY_FAILED]: tk('O deploy falhou depois do merge; o automático do projeto foi pausado. Confira o deploy e retome quando estiver resolvido.'),
   [DEPLOY_FAILED_NOT_PAUSED]: tk('O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.'),
   [RELEASE_FAILED]: tk('Um workflow de publicação falhou depois do merge; confira a execução.'),

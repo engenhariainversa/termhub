@@ -47,6 +47,12 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       const what = e.epic ? t('Deploy falhou ({{epic}})', { epic: e.epic }) : t('Deploy falhou');
       return e.paused === false ? what : t('{{what}} — automático pausado no projeto', { what });
     }
+    case 'deploy_retried':
+      return t('Deploy falhou por problema do GitHub; rodando de novo');
+    case 'github_wait':
+      return t('{{ref}}: erro do GitHub; o termhub tenta de novo quando ele voltar', { ref });
+    case 'trust_auto_accepted':
+      return t('{{ref}}: confiança da pasta confirmada sozinha', { ref });
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });
     case 'release_failed':

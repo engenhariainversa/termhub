@@ -11,15 +11,17 @@ describe('resolveLocale (i18n spec §5)', () => {
     expect(resolveLocale('pt-BR', ['en-US'])).toBe('pt-BR');
   });
 
-  it('maps the first pt* or en* system language, in order', () => {
+  it('maps the first pt*, en* or es* system language, in order', () => {
     expect(resolveLocale(null, ['pt-PT'])).toBe('pt-BR');
     expect(resolveLocale(null, ['en-GB'])).toBe('en');
-    expect(resolveLocale(null, ['es-ES', 'en-US', 'pt-BR'])).toBe('en');
+    expect(resolveLocale(null, ['es-AR'])).toBe('es');
+    expect(resolveLocale(null, ['fr-FR', 'en-US', 'pt-BR'])).toBe('en');
+    expect(resolveLocale(null, ['es-ES', 'en-US', 'pt-BR'])).toBe('es');
     expect(resolveLocale(null, ['fr', 'pt'])).toBe('pt-BR');
   });
 
   it('falls back to pt-BR for any other language, or none', () => {
-    expect(resolveLocale(null, ['es'])).toBe('pt-BR');
+    expect(resolveLocale(null, ['fr'])).toBe('pt-BR');
     expect(resolveLocale(null, [])).toBe('pt-BR');
   });
 });
@@ -59,12 +61,20 @@ describe('the device choice', () => {
     expect(t('há {{n}} min', { n: 5 })).toBe('5 min ago');
     expect(tk('Perfil')).toBe('Perfil');
   });
+
+  it('shows Spanish from the es catalog', () => {
+    setLocale('es');
+    expect(currentLocale()).toBe('es');
+    expect(t('há {{n}} min', { n: 5 })).toBe('hace 5 min');
+    expect(intlLocale()).toBe('es');
+  });
 });
 
 describe('plurals', () => {
   beforeAll(() => {
     i18n.addResourceBundle('pt-BR', 'translation', { 'test {{count}} abas_one': '{{count}} aba', 'test {{count}} abas_other': '{{count}} abas' }, true, true);
     i18n.addResourceBundle('en', 'translation', { 'test {{count}} abas_one': '{{count}} tab', 'test {{count}} abas_other': '{{count}} tabs' }, true, true);
+    i18n.addResourceBundle('es', 'translation', { 'test {{count}} abas_one': '{{count}} pestaña', 'test {{count}} abas_other': '{{count}} pestañas' }, true, true);
   });
 
   it('pick CLDR forms in both languages', () => {
@@ -74,10 +84,13 @@ describe('plurals', () => {
     setLocale('en');
     expect(t('test {{count}} abas', { count: 1 })).toBe('1 tab');
     expect(t('test {{count}} abas', { count: 0 })).toBe('0 tabs');
+    setLocale('es');
+    expect(t('test {{count}} abas', { count: 1 })).toBe('1 pestaña');
+    expect(t('test {{count}} abas', { count: 0 })).toBe('0 pestañas');
   });
 
   it('the fallback rules (for Hermes, which has no Intl.PluralRules) agree with Node', () => {
-    for (const locale of ['pt-BR', 'en']) {
+    for (const locale of ['pt-BR', 'en', 'es']) {
       const real = new Intl.PluralRules(locale);
       for (const n of [0, 1, 1.5, 2, 5, 21, 100, -1]) expect([locale, n, cardinalCategory(locale, n)]).toEqual([locale, n, real.select(n)]);
     }

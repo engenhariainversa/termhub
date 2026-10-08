@@ -3,8 +3,9 @@
  * `npm run i18n:check -w @termhub/web` (spec 2026-10-04 i18n §2). Two jobs:
  *
  * 1. Catalogs. Every literal key in `t('…')`, `t("…")`, `t(`…`)` (no `${}`), `i18n.t('…')`,
- *    `tk('…')` and `<Trans i18nKey="…">` must have an English entry in `src/locales/en/*.json`
- *    (or `_one`/`_other` plural forms, mirrored in `src/locales/pt-BR/*.json`), with the same
+ *    `tk('…')` and `<Trans i18nKey="…">` must have an entry in every translated language
+ *    (`src/locales/en/*.json`, `src/locales/es/*.json`; or `_one`/`_other` plural forms, mirrored
+ *    in `src/locales/pt-BR/*.json`), with the same
  *    `{{placeholders}}` as the key; and every catalog entry must still be used somewhere.
  *
  * 2. Guard. In the files and folders listed in GUARDED (the whole app: a source file outside it is a
@@ -30,6 +31,8 @@ export const GUARDED = ['App.tsx', 'main.tsx', 'test-commit.ts', 'city/', 'compo
 export const COPY_ATTRIBUTES = new Set(['title', 'placeholder', 'aria-label', 'alt', 'label', 'confirmLabel', 'message', 'subtitle']);
 
 const PLURAL_SUFFIXES = ['_zero', '_one', '_two', '_few', '_many', '_other'];
+/** The languages translated from pt-BR (the first is the reference for the summary line). */
+const TARGET_LOCALES = ['en', 'es'];
 const LETTER = /\p{L}/u;
 const IGNORE = 'i18n-ignore';
 
@@ -194,16 +197,19 @@ export function runCheck({ root = DEFAULT_ROOT, guarded = GUARDED } = {}) {
     for (const k of r.keys) if (!used.has(k.key)) used.set(k.key, k.where);
   }
 
-  const en = loadCatalog(join(src, 'locales', 'en'), problems);
+  // Every language but pt-BR (the keys' own language) has a full catalog.
+  const targets = TARGET_LOCALES.map((lang) => [lang, loadCatalog(join(src, 'locales', lang), problems)]);
+  const en = targets[0][1];
   const pt = loadCatalog(join(src, 'locales', 'pt-BR'), problems);
 
   for (const [key, where] of used) {
-    const forms = PLURAL_SUFFIXES.filter((s) => `${key}${s}` in en);
-    if (forms.length > 0) {
-      if (!(`${key}_one` in en && `${key}_other` in en)) problems.push(`${where}: plural "${key}" needs en "_one" and "_other"`);
-      if (!(`${key}_one` in pt && `${key}_other` in pt)) problems.push(`${where}: plural "${key}" needs pt-BR "_one" and "_other"`);
+    const isPlural = targets.some(([, cat]) => PLURAL_SUFFIXES.some((s) => `${key}${s}` in cat));
+    if (isPlural) {
+      for (const [lang, cat] of [...targets, ['pt-BR', pt]]) {
+        if (!(`${key}_one` in cat && `${key}_other` in cat)) problems.push(`${where}: plural "${key}" needs ${lang} "_one" and "_other"`);
+      }
       const allowed = new Set([...placeholders(key), 'count']);
-      for (const cat of [en, pt]) {
+      for (const [, cat] of [...targets, ['pt-BR', pt]]) {
         for (const s of PLURAL_SUFFIXES) {
           const v = cat[`${key}${s}`];
           if (v && ![...placeholders(v)].every((p) => allowed.has(p))) problems.push(`${where}: "${key}${s}" uses a placeholder the key does not have`);
@@ -211,17 +217,19 @@ export function runCheck({ root = DEFAULT_ROOT, guarded = GUARDED } = {}) {
       }
       continue;
     }
-    if (!(key in en)) {
-      problems.push(`${where}: missing en entry for "${key}"`);
-      continue;
+    for (const [lang, cat] of targets) {
+      if (!(key in cat)) {
+        problems.push(`${where}: missing ${lang} entry for "${key}"`);
+        continue;
+      }
+      if (!sameSet(placeholders(key), placeholders(cat[key]))) problems.push(`${where}: placeholders differ between "${key}" and its ${lang} entry "${cat[key]}"`);
     }
-    if (!sameSet(placeholders(key), placeholders(en[key]))) problems.push(`${where}: placeholders differ between "${key}" and its en entry "${en[key]}"`);
   }
 
-  for (const [lang, cat] of [['en', en], ['pt-BR', pt]]) {
+  for (const [lang, cat] of [...targets, ['pt-BR', pt]]) {
     for (const k of Object.keys(cat)) {
       const base = pluralBase(k);
-      if (used.has(k) && lang === 'en') continue;
+      if (used.has(k) && lang !== 'pt-BR') continue;
       if (base !== null && used.has(base)) continue;
       if (lang === 'pt-BR' && base === null) problems.push(`src/locales/pt-BR: "${k}" is not a plural form; pt-BR catalogs only hold plurals (the key is the pt-BR text)`);
       else problems.push(`src/locales/${lang}: "${k}" is not used anywhere`);

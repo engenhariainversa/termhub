@@ -7,7 +7,7 @@ type Choice = Locale | 'auto';
 
 /**
  * Configurações → Perfil → Idioma (spec 2026-10-04 i18n §2). Automático follows the browser's
- * languages; the other two are written in their own language, so someone who cannot read the screen
+ * languages; the others are written in their own language, so someone who cannot read the screen
  * still finds theirs. The choice goes to the account (e-mails and push follow it) and to this browser.
  */
 export function LanguageSetting() {
@@ -47,6 +47,9 @@ export function LanguageSetting() {
         </option>
         <option value="en" lang="en">
           English {/* i18n-ignore */}
+        </option>
+        <option value="es" lang="es">
+          Español {/* i18n-ignore */}
         </option>
       </select>
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}

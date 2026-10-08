@@ -20,7 +20,10 @@ const { authState, analytics, openCookieBanner } = vi.hoisted(() => ({
 }));
 
 vi.mock('../lib/auth', () => ({ useAuth: () => authState.current }));
-vi.mock('../lib/api', () => ({ api: { users: { list: () => new Promise(() => {}) } } }));
+vi.mock('../lib/api', () => ({
+  api: { users: { list: () => new Promise(() => {}) }, account: { dataExport: () => new Promise(() => {}), dataExportUrl: (id: string) => id } },
+  ApiError: class ApiError extends Error {},
+}));
 vi.mock('../lib/analytics', () => ({
   get ANALYTICS_ENABLED() {
     return analytics.enabled;

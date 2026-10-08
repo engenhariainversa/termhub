@@ -119,14 +119,14 @@ const START_FAILURE_TEXT_MAX = 300;
 
 /**
  * Why a start failed, for the person (TER-987): the message of one of our own errors (a ControlError or an
- * HttpError says what to fix), in pt-BR (`message`) and English (`message_en`), the feed picks the reader's.
+ * HttpError says what to fix), in pt-BR (`message`), English (`message_en`) and Spanish (`message_es`); the feed picks the reader's.
  * Anything else (a bug, the database) has no message fit to show: nothing, the code says it.
  */
-function startFailureText(e: unknown): { message: string; message_en: string } | null {
+function startFailureText(e: unknown): { message: string; message_en: string; message_es: string } | null {
   const localized = (e as { localized?: unknown } | null)?.localized;
   if (!(localized instanceof LocalizedText)) return null;
   const clip = (s: string) => (s.length <= START_FAILURE_TEXT_MAX ? s : `${s.slice(0, START_FAILURE_TEXT_MAX - 1)}…`);
-  return { message: clip(t('pt-BR', localized)), message_en: clip(t('en', localized)) };
+  return { message: clip(t('pt-BR', localized)), message_en: clip(t('en', localized)), message_es: clip(t('es', localized)) };
 }
 
 /**

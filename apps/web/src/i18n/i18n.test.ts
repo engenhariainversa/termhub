@@ -19,20 +19,26 @@ describe('resolveLocale', () => {
     expect(resolveLocale(null, ['en'])).toBe('en');
   });
 
+  it('maps any Spanish to es', () => {
+    expect(resolveLocale(null, ['es'])).toBe('es');
+    expect(resolveLocale(null, ['es-AR', 'en'])).toBe('es');
+  });
+
   it('takes the first language termhub speaks, in the browser order', () => {
     expect(resolveLocale(null, ['de-DE', 'en-US', 'pt-BR'])).toBe('en');
     expect(resolveLocale(null, ['fr', 'pt-PT', 'en'])).toBe('pt-BR');
   });
 
   it('falls back to pt-BR for a language it does not speak, or none', () => {
-    expect(resolveLocale(null, ['es'])).toBe('pt-BR');
-    expect(resolveLocale(null, ['es-AR', 'fr'])).toBe('pt-BR');
+    expect(resolveLocale(null, ['fr'])).toBe('pt-BR');
+    expect(resolveLocale(null, ['de-DE', 'it'])).toBe('pt-BR');
     expect(resolveLocale(null, [])).toBe('pt-BR');
   });
 
   it('lets an explicit choice win over the browser', () => {
     expect(resolveLocale('en', ['pt-BR'])).toBe('en');
     expect(resolveLocale('pt-BR', ['en-US'])).toBe('pt-BR');
+    expect(resolveLocale('es', ['pt-BR'])).toBe('es');
   });
 });
 
@@ -58,6 +64,8 @@ describe('t', () => {
     expect(i18n.t('Carregando…')).toBe('Carregando…');
     void i18n.changeLanguage('en');
     expect(i18n.t('Carregando…')).toBe('Loading…');
+    void i18n.changeLanguage('es');
+    expect(i18n.t('Carregando…')).toBe('Cargando…');
   });
 
   it('falls back to the pt-BR text when English has no entry', () => {
@@ -69,13 +77,18 @@ describe('t', () => {
     expect(i18n.t('Vendo como {{name}}', { name: '<Ana & Bia>' })).toBe('Vendo como <Ana & Bia>');
   });
 
-  it('picks plural forms in both languages', () => {
+  it('picks plural forms in every language', () => {
     expect(i18n.t('{{count}} usuários', { count: 1 })).toBe('1 usuário');
     expect(i18n.t('{{count}} usuários', { count: 3 })).toBe('3 usuários');
     expect(i18n.t('{{count}} usuários', { count: 0 })).toBe('0 usuários');
     void i18n.changeLanguage('en');
     expect(i18n.t('{{count}} usuários', { count: 1 })).toBe('1 user');
     expect(i18n.t('{{count}} usuários', { count: 0 })).toBe('0 users');
+    void i18n.changeLanguage('es');
+    expect(i18n.t('{{count}} usuários', { count: 1 })).toBe('1 usuario');
+    expect(i18n.t('{{count}} usuários', { count: 0 })).toBe('0 usuarios');
+    // Spanish's "many" form (a million and up) reads the "other" entry, not the pt-BR text
+    expect(i18n.t('{{count}} usuários', { count: 1_000_000 })).toBe('1000000 usuarios');
   });
 
   it('tk returns its argument unchanged', () => {

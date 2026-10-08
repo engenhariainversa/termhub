@@ -256,4 +256,12 @@ describe('listTmuxSessions', () => {
     execAnswers({ code: 255, stderr: 'ssh: connect timed out' });
     expect(await listTmuxSessions(machine('ssh'))).toEqual(new Set());
   });
+
+  it('leaves out the hidden AI CLI login sessions (TER-1047), over the agent and over ssh', async () => {
+    attachFakeConn('m1', () => ({ sessions: ['th-a', 'termhub-login-0123abcd'] }));
+    expect(await listTmuxSessions(machine('agent'))).toEqual(new Set(['th-a']));
+    expect(await probeTmuxSessions(machine('agent'))).toEqual({ reachable: true, sessions: new Set(['th-a']) });
+    execAnswers({ code: 0, stdout: 'th-b\ntermhub-login-ffff\n' });
+    expect(await listTmuxSessions(machine('ssh'))).toEqual(new Set(['th-b']));
+  });
 });

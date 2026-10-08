@@ -1,4 +1,4 @@
-import { CAPABILITY_FILE_READ, CAPABILITY_NET_CHECK, CAPABILITY_SIM, NET_CHECK_MIN_AGENT_VERSION, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
+import { AI_LOGIN_MIN_AGENT_VERSION, CAPABILITY_AI_LOGIN, CAPABILITY_FILE_READ, CAPABILITY_NET_CHECK, CAPABILITY_SIM, NET_CHECK_MIN_AGENT_VERSION, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { msg } from '../i18n/index.js';
@@ -127,6 +127,16 @@ export function requireNetCheckCapable(machine: Machine): void {
   if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
   if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_NET_CHECK)) {
     throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para testar os endereços', { version: NET_CHECK_MIN_AGENT_VERSION }), 'AGENT_OUTDATED');
+  }
+}
+
+/** Redoing an AI CLI login from the web or the app (TER-1047) needs an agent machine whose connected agent
+ *  claims `ai_login`: an older agent drops the RPC, which would read as a timeout. */
+export function requireAiLoginCapable(machine: Machine): void {
+  if (machine.type !== 'agent') throw new HttpError(400, msg('Refazer login pela tela só funciona em máquinas com o agente do termhub'), 'UNSUPPORTED_MACHINE');
+  if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
+  if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_AI_LOGIN)) {
+    throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para refazer o login pela tela', { version: AI_LOGIN_MIN_AGENT_VERSION }), 'AGENT_OUTDATED');
   }
 }
 

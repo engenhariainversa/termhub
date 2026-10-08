@@ -403,6 +403,13 @@ export type UserNotification = Prisma.UserNotificationModel
  */
 export type AutomationSummary = Prisma.AutomationSummaryModel
 /**
+ * Model DataExport
+ * "Exportar meus dados" (TER-741, LGPD art. 18): one request for a zip of everything the account
+ * holds. The job builds it on the chat-files volume (`<CHAT_FILES_DIR>/.exports/<id>.zip`), e-mails a
+ * link to Perfil, and removes the file once `expiresAt` passes (7 days after it is ready).
+ */
+export type DataExport = Prisma.DataExportModel
+/**
  * Model ViewAsAudit
  * Audit trail of the admin "view as" switch (TER-746, P-9/L-10 of docs/legal/duvidas-advogado.md): one row
  * per period an admin spent in another scope — a user's data or "all". `ended_at` is set when the admin

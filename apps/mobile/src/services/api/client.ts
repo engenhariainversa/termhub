@@ -12,6 +12,11 @@ import {
   type PushSettings,
   type PushTestBody,
   accountDeletionStatus,
+  aiLoginCancelResponse,
+  aiLoginResumeResponse,
+  aiLoginStartResponse,
+  aiLoginStatusResponse,
+  aiLoginSubmitResponse,
   automationSetupResponse,
   cardAutoResponse,
   pauseResponse,
@@ -111,7 +116,7 @@ export type CreateHttpMobileApiOptions = {
   /** Called on every `403 ACCOUNT_PENDING_DELETION` (TER-720): the account is deactivated until the
    * person cancels its deletion. The singleton passes `accountPendingDeletion.emit`. */
   onAccountPendingDeletion?: () => void;
-  /** The language the app shows (`'pt-BR'` | `'en'`), sent as `Accept-Language` on every call and
+  /** The language the app shows (`'pt-BR'` | `'en'` | `'es'`), sent as `Accept-Language` on every call and
    * socket upgrade so the server answers its errors in it (i18n spec §2). Read per request: a
    * change in Ajustes applies to the next call. */
   language?: () => string;
@@ -336,6 +341,16 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     resumeAutomation: (a: Auth, scope: string) => empty('POST', '/api/m/v1/automation/resume', { token: a.accessToken, body: { scope } }),
     setCardAuto: (a: Auth, taskId: string, auto: boolean) =>
       call('PUT', `/api/m/v1/tasks/${encodeURIComponent(taskId)}/auto`, cardAutoResponse, { token: a.accessToken, body: { auto } }).then((r) => r.auto),
+    aiLoginStatus: (a: Auth, refresh = false) =>
+      call('GET', `/api/m/v1/ai-accounts/login-status${refresh ? '?refresh=1' : ''}`, aiLoginStatusResponse, { token: a.accessToken }),
+    startAiLogin: (a: Auth, accountId: string) =>
+      call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login`, aiLoginStartResponse, { token: a.accessToken, body: {} }),
+    submitAiLogin: (a: Auth, accountId: string, loginId: string, code: string | null) =>
+      call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/${encodeURIComponent(loginId)}/submit`, aiLoginSubmitResponse, { token: a.accessToken, body: { code } }),
+    cancelAiLogin: (a: Auth, accountId: string, loginId: string) =>
+      call('DELETE', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/${encodeURIComponent(loginId)}`, aiLoginCancelResponse, { token: a.accessToken }).then(() => undefined),
+    resumeAiLoginTabs: (a: Auth, accountId: string, tabIds: string[]) =>
+      call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/resume`, aiLoginResumeResponse, { token: a.accessToken, body: { tab_ids: tabIds } }),
     cancelSubagent: (a: Auth, id: string) =>
       call('POST', `/api/m/v1/chat/subagents/${encodeURIComponent(id)}/cancel`, cancelSubagentResponse, { token: a.accessToken }).then((r) => r.subagent),
     // The name and project ride in the query (the body is the file itself); `uploadCall` signs the proof

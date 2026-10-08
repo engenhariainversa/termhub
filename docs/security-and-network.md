@@ -34,7 +34,7 @@ Short version for the firewall ticket:
 
 | Connection | Direction | Keep-alive | Reconnect |
 |---|---|---|---|
-| Agent ⇄ server (`/agent/ws`) | machine → server | Both sides ping every 20 s; a missed pong drops the socket. The opening handshake times out after 15 s. | Exponential backoff from 1 s to 30 s with jitter. It stops only when the token is revoked (4401) or the protocol is too old. |
+| Agent ⇄ server (`/agent/ws`) | machine → server | Both sides ping every 20 s; a missed pong drops the socket. The opening handshake times out after 15 s. | Exponential backoff from 1 s to 30 s with jitter. It stops only when the machine's access is revoked (4401) or the protocol is too old. |
 | Browser ⇄ server (`/ws/tabs`, `/ws/monitor`, `/ws/chat`, `/ws/sim`) | browser → server | Server pings every 30 s. | Terminal: exponential backoff up to 15 s, 8 attempts. Chat and monitor: every 5 s. |
 | Phone ⇄ server (`/ws/m/chat`) | phone → server | Server pings every 30 s. | Backoff from 1 s to 30 s; reconnects immediately when the app returns to the foreground. |
 | Hook events | machine → server | One POST per event, 5 s timeout, fire-and-forget. | None needed. |
@@ -85,7 +85,7 @@ A self-hosted server behind an **explicit proxy** reaches them through it: the s
 
 - **The npm package** `@termhub/agent`, installed globally. It is published from GitHub Actions with **npm provenance**, so `npm view @termhub/agent` and `npm audit signatures` can tie each release to the public workflow that built it.
 - **Updates** (the update button and the opt-in auto-update) install only a release the **server verified**. When npm reports a new latest version, the server reads its `dist.integrity` (it must be `sha512-…`), fetches the release's SLSA provenance attestation from the npm registry and verifies it with Sigstore: the certificate chain, the transparency log, and the signer, which must be this repository's `publish-agent.yml` workflow on `main` or an `agent-vX.Y.Z` tag. The signed statement must name `pkg:npm/%40termhub/agent@<version>` with that same SHA-512. A release that fails is logged and not offered; the previous verified release stays. The update carries the verified integrity, and agents from 0.22.0 download the tarball, check its SHA-512 against it and install that file (older agents install by version). Limits: the check covers the `@termhub/agent` tarball, not its dependencies (`ws`, `zod`, `node-pty`), which npm resolves by semver range at install time; and the server needs to reach `tuf-repo-cdn.sigstore.dev` besides `registry.npmjs.org` (the trust root is cached under the OS temp dir). The server asks npm once an hour with an anonymous `GET`, and skips the poll while no agent is connected.
-- **The config file** `~/.termhub/config.json`, created with mode `0600` in a `0700` directory. It holds the server URL and the machine's token.
+- **The config file** `~/.termhub/config.json`, created with mode `0600` in a `0700` directory. It holds the server URL and the machine id; next to it, `device-key.pem` (also `0600`) holds the machine's Ed25519 private key. An agent paired before 0.25.0 keeps its permanent token in `config.json` instead, until the machine is paired again.
 - **The service** (`termhub-agent service install`):
   - Linux: a systemd **user** unit, `systemctl --user`. Keeping it running after logout requires `loginctl enable-linger`.
   - macOS: a **LaunchAgent** in `~/Library/LaunchAgents`.
@@ -95,7 +95,7 @@ A self-hosted server behind an **explicit proxy** reaches them through it: the s
   - its settings file `~/.termhub/hook.env` (mode `0600`);
   - entries merged into `~/.claude*/settings.json`, `~/.codex/config.toml` and `~/.cursor/hooks.json`.
   - Uninstalling from the app removes them.
-- **Removing the agent.** Deleting an online machine whose agent is 0.22.0 or newer can also uninstall it (the "uninstall from the machine" option, on by default): the server removes the monitor hooks, kills the tmux sessions of the machine's tabs, then asks the agent to remove its service definition and its config file (the token) and stop. If removing the hooks or the agent fails, nothing is deleted and the error is shown. The npm package stays installed. For an offline machine or an older agent, run on the machine: `termhub-agent service uninstall`, `termhub-agent disconnect`, `npm rm -g @termhub/agent`.
+- **Removing the agent.** Deleting an online machine whose agent is 0.22.0 or newer can also uninstall it (the "uninstall from the machine" option, on by default): the server removes the monitor hooks, kills the tmux sessions of the machine's tabs, then asks the agent to remove its service definition, its config file and its device key (or its old token) and stop. If removing the hooks or the agent fails, nothing is deleted and the error is shown. The npm package stays installed. For an offline machine or an older agent, run on the machine: `termhub-agent service uninstall`, `termhub-agent disconnect`, `npm rm -g @termhub/agent`.
 - **Per-tab MCP config** for agents started from termhub: `~/.termhub/tabs/<tab>/`, deleted when the tab closes.
 
 **What the server can ask the agent to do**
@@ -146,8 +146,11 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
   - CSRF double-submit on every state-changing request;
   - an Origin check on WebSockets.
 - **Machines:**
-  - each machine gets a 256-bit token (`thb_ag_…`) that is shown once; the server stores only its SHA-256;
-  - **rotating the token or deleting the machine drops the live connection immediately** (close 4401), and the agent stops retrying.
+  - the app shows a 256-bit pairing token (`thb_ag_…`) once; it works **once**, for **15 minutes**, and the server stores only its SHA-256;
+  - `termhub-agent connect` generates an Ed25519 key pair on the machine and trades the pairing token plus the public key for the machine; the token is burnt and the private key never leaves the machine;
+  - every connection then proves possession: the server sends a fresh nonce in the handshake and the agent signs `nonce ‖ machine id ‖ timestamp`. A token leaked from a terminal, a screenshot or a shell history is useless once used; a stolen `~/.termhub` directory is still a risk;
+  - machines paired before (agent < 0.25.0) keep their permanent bearer token until someone uses "Parear de novo"; the app marks them and asks to update;
+  - **"Parear de novo" or deleting the machine drops the live connection immediately** (close 4401), revokes the key (or the old token), and the agent stops retrying.
 - **Phones:**
   - enrolment is approved by the owner on the web, and the same code is shown on both screens;
   - the phone holds a P-256 key in the platform keystore and signs every request with it (DPoP, ES256);
@@ -195,7 +198,7 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 
 | To cut off… | Do this | Effect |
 |---|---|---|
-| A machine | Máquinas › the machine › rotate the token, or delete the machine | The live connection closes at once with 4401; the agent exits and its service stops retrying. |
+| A machine | Máquinas › the machine › Agente › Parear de novo, or delete the machine | The live connection closes at once with 4401; the agent exits and its service stops retrying. |
 | An API token | Settings › API tokens › revoke | The next call is refused. |
 | A phone | Settings › Devices › revoke | Its WebSocket closes with 4401 and its tokens are refused. |
 | A chat grant | the grant's "revoke" button (web or phone) | The next action asks again. |
@@ -218,12 +221,12 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 7. **Test from the machine:**
    ```bash
    npm i -g @termhub/agent                # reaches registry.npmjs.org
-   termhub-agent connect --url https://app.termhub.dev --token <token from the app>
-   termhub-agent doctor                   # "✓ Servidor" = token, TLS and WebSocket all got through
+   termhub-agent connect --url https://app.termhub.dev --token <pairing token from the app>
+   termhub-agent doctor                   # "✓ Servidor" = credential, TLS and WebSocket all got through
                                           # "✓ Hooks do monitor (termhub.dev)", "✓ MCP das abas (termhub.dev)" = hooks/MCP host reachable
    termhub-agent status                   # "conectado ✓"
    ```
-   `doctor` and `status` open a real WebSocket to `/agent/ws` with `probe: true`. The server validates the token, sends back the addresses the hooks and the tabs' MCP use (`HOOKS_URL`, `MCP_URL`) and answers "probe-ok" without taking over the live session. `doctor` (agent 0.23.0 or newer) then sends an empty POST without a token to each of those addresses and expects termhub's 401: any other answer (a proxy page, a Cloudflare Access redirect) or no answer is a ✗ with the URL to allow. Otherwise the agent connects while the monitor stays silent, with no warning.
+   `doctor` and `status` open a real WebSocket to `/agent/ws` with `probe: true`. The server checks the credential (the signed nonce, or the old token), sends back the addresses the hooks and the tabs' MCP use (`HOOKS_URL`, `MCP_URL`) and answers "probe-ok" without taking over the live session. Pairing rides the same `/agent/ws` path, so a firewall or Access rule that lets the agent through needs nothing else. `doctor` (agent 0.23.0 or newer) then sends an empty POST without a token to each of those addresses and expects termhub's 401: any other answer (a proxy page, a Cloudflare Access redirect) or no answer is a ✗ with the URL to allow. Otherwise the agent connects while the monitor stays silent, with no warning.
 
    The machine's page in the app (Agente tab, "Endereços dos hooks e do MCP") runs the same check from the machine through the agent. With an older agent, test the hooks host by hand: `curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://termhub.dev/api/hooks/events` (401 = reachable).
 
@@ -237,7 +240,7 @@ These are open gaps, each tracked on the termhub board:
 - Sessions last 30 days with no idle timeout, and there is no "sign out everywhere" (TER-580).
 - Chat messages, proposed commands, the agent's last answers and chat attachments are stored unencrypted in the database or on disk, with no retention limit; they are deleted with the conversation, project or user (TER-582).
 - The app sends `nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy`, but no HSTS or CSP of its own (TER-579).
-- The agent token does not expire until it is rotated (TER-584). Replacing it with a single-use pairing token and a per-device key is proposed in `docs/superpowers/specs/2026-10-07-agent-release-trust-and-uninstall-design.md` §1, not built yet. Deleting a machine uninstalls the agent only when the machine is online on agent 0.22.0 or newer; otherwise the manual steps in section 4 apply.
+- Machines paired before agent 0.25.0 keep a permanent token until they are paired again ("Parear de novo", TER-1017). Deleting a machine uninstalls the agent only when the machine is online on agent 0.22.0 or newer; otherwise the manual steps in section 4 apply.
 
 ## Evidence
 
@@ -245,7 +248,7 @@ Paths are relative to the repository root.
 
 | Claim | Where |
 |---|---|
-| Agent dials `wss://<url>/agent/ws` with a bearer token; 20 s ping; 15 s handshake timeout; 1–30 s backoff; no proxy agent | `apps/agent/src/client.ts` |
+| Agent dials `wss://<url>/agent/ws` with a signed nonce (device key) or, before 0.25.0, a bearer token; 20 s ping; 15 s handshake timeout; 1–30 s backoff; no proxy agent | `apps/agent/src/client.ts` |
 | Agent has no listening socket; loopback-only TCP to WDA port ranges | `apps/agent/src/tcp.ts`, `packages/agent-protocol/src/rpc.ts` (`isWdaPort`), `packages/agent-protocol/src/messages.ts` (`tcpOpenParams`) |
 | Closed list of agent operations | `apps/agent/src/rpc/index.ts`, `packages/agent-protocol/src/rpc.ts` |
 | Config file `0600`/`0700` | `apps/agent/src/config.ts` |
@@ -258,7 +261,7 @@ Paths are relative to the repository root.
 | Web uses same-origin API and WebSockets only; no third-party scripts in `index.html` | `apps/web/src/lib/api.ts`, `apps/web/src/lib/terminal-connection.ts`, `apps/web/index.html` |
 | Google Analytics (Firebase SDK) loads only after cookie consent, and not at all without `VITE_FIREBASE_*` | `apps/web/src/lib/analytics.ts`, `apps/web/src/lib/consent.ts` |
 | Mobile base URL `termhub.dev`; DPoP ES256; hardware key; PIN proof | `apps/mobile/src/services/api/config.ts`, `apps/mobile/src/services/api/dpop.ts`, `apps/mobile/src/services/key/`, `apps/server/src/mobile/` |
-| Agent token: 256 bits, SHA-256 stored; rotate/delete closes with 4401 | `apps/server/src/agent/token.ts`, `apps/server/src/routes/machines.ts` |
+| Pairing token: 256 bits, SHA-256 stored, single use, 15 min; Ed25519 device key and nonce proof; pair again/delete closes with 4401 | `packages/agent-protocol/src/auth.ts`, `apps/server/src/agent/token.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/routes/machines.ts`, `apps/agent/src/device-key.ts`, `apps/agent/src/commands/connect.ts` |
 | Sessions, cookies, CSRF | `apps/server/src/auth/tokens.ts`, `apps/server/src/auth/routes.ts`, `apps/server/src/auth/middleware.ts` |
 | argon2id parameters | `apps/server/src/auth/password.ts` |
 | Login codes and lockout | `apps/server/src/auth/service.ts`, `apps/server/src/db/repositories/login-attempts.ts` |

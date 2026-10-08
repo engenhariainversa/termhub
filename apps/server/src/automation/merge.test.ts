@@ -1232,6 +1232,31 @@ describe('runs and fixes that must not stall (final review I2, I3)', () => {
     expect(w.startFixer).toHaveBeenCalledTimes(1);
   });
 
+  it('TER-1025: a fix that ended without a push while GitHub is down is held, then asked once more when GitHub works', async () => {
+    const w = world({ prs: [red('h1')] });
+    realisticFixer(w);
+    let degraded = ['Git Operations'];
+    w.deps.githubHealth = async () => ({ degraded });
+    await runMergeExecutor(w.deps, 'p1');
+    Object.assign(w.state.runs[0]!, { status: 'done', ended_at: new Date(NOW.getTime() - 4 * 60_000) });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([]);
+    expect(mergeWaitOf('c1', NOW)).toBe('merge_github_down');
+    expect(w.startFixer).toHaveBeenCalledTimes(1);
+
+    degraded = [];
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([]);
+    expect(w.startFixer).toHaveBeenCalledTimes(2);
+    expect(w.startFixer.mock.calls[1]![0]).toMatchObject({ triggerSha: 'h1:github' });
+
+    // the retry ended without a push too: now the person is told
+    Object.assign(w.state.runs[1]!, { status: 'done', ended_at: new Date(NOW.getTime() - 4 * 60_000) });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'ci_cap', cause: 'fixer_no_push' }) })]);
+    expect(w.startFixer).toHaveBeenCalledTimes(2);
+  });
+
   it('a red head whose fix is still on (a run of the card active) is not escalated', async () => {
     const w = world({ prs: [red('h1')] });
     realisticFixer(w);

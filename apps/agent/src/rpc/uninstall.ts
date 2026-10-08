@@ -1,5 +1,6 @@
 import type { RpcParams, RpcResult } from '@termhub/agent-protocol';
 import { deleteConfig } from '../config.js';
+import { deleteDeviceKey } from '../device-key.js';
 import { RpcFailure } from '../exec.js';
 import * as service from '../service/index.js';
 
@@ -10,7 +11,7 @@ import * as service from '../service/index.js';
  *
  * Order matters, because stopping the service kills this very process:
  *   1. remove the service definition (plist / systemd unit) WITHOUT stopping it;
- *   2. delete the config (`agent.json`, with the token);
+ *   2. delete the config (`config.json`, with the old token if any) and the device key (TER-1017);
  *   3. reply;
  *   4. a moment later — so the rpc_result frame leaves the socket — stop the service, then
  *      `exit(0)` in any case. 0 on purpose: launchd's `KeepAlive.SuccessfulExit=false` and
@@ -31,7 +32,10 @@ export interface UninstallDeps {
 
 const defaultDeps: UninstallDeps = {
   removeServiceDefinition: () => service.removeDefinition(),
-  deleteConfig,
+  deleteConfig: () => {
+    deleteConfig();
+    deleteDeviceKey();
+  },
   stopService: () => service.stop(),
   exit: (code) => process.exit(code),
   log: (msg, meta) => console.error(meta ? `[termhub-agent] ${msg} ${JSON.stringify(meta)}` : `[termhub-agent] ${msg}`),

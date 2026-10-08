@@ -386,6 +386,57 @@ Consequences for the design:
   lives, and the `assistant` note is what labels it.
 - Codex: a follow-up card, outside v1.
 
+### 11.1 Codex end to end (TER-952, still to run)
+
+Not run yet. The test needs a logged-in Codex with a hook only the test session reads, and an agent
+session must not copy `~/.codex/auth.json` (it is a credential). The person runs it by hand, with the
+script below; nothing here touches the real `~/.codex`.
+
+What is known (2026-10-07, on hulk): codex-cli 0.159.2; the termhub hooks in `~/.codex/hooks.json`
+(`UserPromptSubmit` included) are already trusted. Only Claude gets a note today: the server builds one
+only for `tool === 'claude'` (`monitor/ingest.ts`, `originNoteFor`), and `HOOK_SCRIPT` posts in the
+foreground and prints the reply only for `TOOL=claude` (`packages/machine-ops/src/hooks.ts`).
+
+**Setup** (an isolated Codex home, logged in by the person, removed at the end):
+
+```sh
+export CODEX_HOME="$(mktemp -d)"; T="$CODEX_HOME/t"; mkdir -p "$T/work"
+codex login                      # the person's own login into the test home, not a copy
+printf '[projects."%s/work"]\ntrust_level = "trusted"\n' "$T" > "$CODEX_HOME/config.toml"
+printf '{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"%s/hook.sh","timeout":10}]}]}}\n' "$T" > "$CODEX_HOME/hooks.json"
+```
+
+`$T/hook.sh` (`chmod +x`): logs each payload, prints the prepared reply when there is one.
+
+```sh
+#!/bin/sh
+D=$(dirname "$0")
+cat >> "$D/payloads.log"; printf '\n' >> "$D/payloads.log"
+[ -f "$D/reply.json" ] && cat "$D/reply.json"
+exit 0
+```
+
+Run Codex in its own tmux server (`tmux -L th-ter952 new -s t -c "$T/work"`, then `codex`), accept
+"Hooks need review" in the TUI, and type with `tmux -L th-ter952 send-keys -t t -l '<text>'` followed by
+a separate `send-keys -t t Enter`, as `sendTextToSession` does. A note goes in `$T/reply.json`, in the
+shape the server answers: `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"termhub origin note: …"}}`.
+
+**Cases**
+
+| # | Question / case | Look at |
+|---|---|---|
+| P1 | `prompt` for a short typed line, an 801+ character line and a multi-line bracketed paste: is it the exact text, or wrapped like Claude's `<pasted_content>`? | `payloads.log`; `normalizePrompt` must match it |
+| P2 | A message typed while Codex works: its own `UserPromptSubmit`, or merged? | `payloads.log` |
+| P3 | With `reply.json`: does the turn see the note, and as what (separate context or inside the message)? Also try a plain-text stdout instead of JSON | the session's rollout under `$CODEX_HOME/sessions` |
+| (a)–(e) | The five cases of §11 (first prompt "NÃO crie nem edite arquivos aqui", then the ~850-character relay), with the same notes | outcome, as in the §11 table |
+
+**Decision rule.** Codex gets the note only if P3 shows it as context and (b) passes while (a), (c), (d)
+and (e) refuse. Then, in one PR: `HOOK_SCRIPT` takes the foreground path for `TOOL=codex` too (the
+`hook-script.test.ts` invariant gets the second exception), `ingest.ts` answers `originNoteFor` for
+`codex`, `normalizePrompt` learns Codex's paste shape if P1 shows one, and the agent version is bumped.
+Otherwise Codex stays unmarked and this section records why. Clean up with `rm -rf "$CODEX_HOME"` and
+`tmux -L th-ter952 kill-server`.
+
 ## Impact on other users
 
 Everyone who drives tabs through termhub gets the origin notes, by default (decision 10.1): the

@@ -34,71 +34,72 @@ enum TabKind {
 }
 
 model User {
-  id           String    @id
-  email        String    @unique
-  name         String
-  avatarUrl    String?   @map("avatar_url")
+  id                      String                   @id
+  email                   String                   @unique
+  name                    String
+  avatarUrl               String?                  @map("avatar_url")
   /// The address of this person's public city (/city/@nickname). Null = no city. Unique, lowercase.
-  nickname     String?   @unique
+  nickname                String?                  @unique
   /// The short link termhub created for this person's city through TypeToAccess (partner). Written once.
-  cityShortUrlPartner String? @map("city_short_url_partner")
+  cityShortUrlPartner     String?                  @map("city_short_url_partner")
   /// A short link the person pasted to replace the partner one; the effective link is custom ?? partner.
-  cityShortUrlCustom  String? @map("city_short_url_custom")
-  passwordHash String?   @map("password_hash")
-  googleId     String?   @unique @map("google_id")
+  cityShortUrlCustom      String?                  @map("city_short_url_custom")
+  passwordHash            String?                  @map("password_hash")
+  googleId                String?                  @unique @map("google_id")
   /// DEPRECATED: replaced by roleId (kept one release for the blue/green window; drop next)
-  role         UserRole  @default(member)
-  roleId       String?   @map("role_id")
-  roleRef      Role?     @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  role                    UserRole                 @default(member)
+  roleId                  String?                  @map("role_id")
+  roleRef                 Role?                    @relation(fields: [roleId], references: [id], onDelete: SetNull)
   /// set when the user was created by an invite (Settings → Usuários → Convidar)
-  invitedAt    DateTime? @map("invited_at")
+  invitedAt               DateTime?                @map("invited_at")
   /// last successful sign-in; null = never (an invite still pending)
-  lastLoginAt  DateTime? @map("last_login_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  sessions     Session[]
-  machines     Machine[]     @relation("MachineOwner")
-  projects     Project[]     @relation("ProjectOwner")
-  integrations Integration[] @relation("IntegrationOwner")
-  uploads      Upload[]
-  apiTokens    ApiToken[]
-  chatConversations ChatConversation[]
-  projectGroups ProjectGroup[]
+  lastLoginAt             DateTime?                @map("last_login_at")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  sessions                Session[]
+  machines                Machine[]                @relation("MachineOwner")
+  projects                Project[]                @relation("ProjectOwner")
+  integrations            Integration[]            @relation("IntegrationOwner")
+  uploads                 Upload[]
+  apiTokens               ApiToken[]
+  chatConversations       ChatConversation[]
+  projectGroups           ProjectGroup[]
   /// Store-review switch (spec §10.2): a device request for this e-mail auto-approves while this is in the future.
-  reviewEnabledUntil DateTime? @map("review_enabled_until")
-  reviewEnabledBy    String?   @map("review_enabled_by")
-  deviceRequests     DeviceRequest[]
-  devices            Device[]
-  notifications      UserNotification[]
-  chatAttachments    ChatAttachment[]
-  chatDecisions      ChatDecision[]
+  reviewEnabledUntil      DateTime?                @map("review_enabled_until")
+  reviewEnabledBy         String?                  @map("review_enabled_by")
+  deviceRequests          DeviceRequest[]
+  devices                 Device[]
+  notifications           UserNotification[]
+  chatAttachments         ChatAttachment[]
+  chatDecisions           ChatDecision[]
   /// "Memória do chat" switch (Settings): off skips recording and suggesting from this user's answers.
-  chatSuggestions    Boolean            @default(true) @map("chat_suggestions")
+  chatSuggestions         Boolean                  @default(true) @map("chat_suggestions")
   /// "Responder sozinho quando houver precedente" (spec 2026-09-26 concierge memory D8): off, the
   /// concierge can only suggest, never schedule an automatic answer.
-  chatAutodecide     Boolean            @default(false) @map("chat_autodecide")
+  chatAutodecide          Boolean                  @default(false) @map("chat_autodecide")
   /// "Responder perguntas do Codex pelo chat": off by default, the Codex reply card opens only for users who opt in.
-  chatCodexReplies   Boolean            @default(false) @map("chat_codex_replies")
+  chatCodexReplies        Boolean                  @default(false) @map("chat_codex_replies")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
-  pushTabFinished    Boolean            @default(false) @map("push_tab_finished")
+  pushTabFinished         Boolean                  @default(false) @map("push_tab_finished")
   /// The chat's context meter measures against this many tokens instead of the model's window
   /// (TER-1038): opt-in, null = the window.
-  chatContextLimit   Int?               @map("chat_context_limit")
-  memoryItems        MemoryItem[]
-  verifiedMemoryItems MemoryItem[] @relation("MemoryItemVerifier")
-  standingGrants     ChatStandingGrant[]
+  chatContextLimit        Int?                     @map("chat_context_limit")
+  memoryItems             MemoryItem[]
+  verifiedMemoryItems     MemoryItem[]             @relation("MemoryItemVerifier")
+  standingGrants          ChatStandingGrant[]
   chatDefaultRestrictions ChatDefaultRestriction[]
   /// Self-service deletion (TER-720): when the person asked; the account is deactivated from then on.
-  deletionRequestedAt DateTime? @map("deletion_requested_at")
+  deletionRequestedAt     DateTime?                @map("deletion_requested_at")
   /// When the deletion job removes the account for good (30 days after the request). Null = not pending.
-  deletionScheduledAt DateTime? @map("deletion_scheduled_at")
+  deletionScheduledAt     DateTime?                @map("deletion_scheduled_at")
   /// "Pausar tudo" (agentic board): while set, no automatic work starts, types or merges on any of this user's projects.
-  automationPausedAt  DateTime? @map("automation_paused_at") @db.Timestamptz
+  automationPausedAt      DateTime?                @map("automation_paused_at") @db.Timestamptz
   /// IANA time zone (e.g. America/Sao_Paulo) for the automation's daily summary hour. Null = the server's.
-  timeZone            String?   @map("time_zone")
+  timeZone                String?                  @map("time_zone")
   /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
-  locale              String?
-  automationSummaries AutomationSummary[]
-  featureFlagOverrides FeatureFlagOverride[]
+  locale                  String?
+  automationSummaries     AutomationSummary[]
+  featureFlagOverrides    FeatureFlagOverride[]
+  dataExports             DataExport[]
 
   @@index([roleId])
   @@index([deletionScheduledAt])
@@ -187,93 +188,101 @@ model LoginAttempt {
 }
 
 model Machine {
-  id        String      @id
-  name      String
+  id                    String             @id
+  name                  String
   /// Optional line under the name ("MacBook do escritório"); private: the public city never carries it
-  subtitle  String?
-  host      String?
-  sshUser   String?     @map("ssh_user")
-  sshPort   Int         @default(22) @map("ssh_port")
-  type      MachineType
+  subtitle              String?
+  host                  String?
+  sshUser               String?            @map("ssh_user")
+  sshPort               Int                @default(22) @map("ssh_port")
+  type                  MachineType
   /// Detectado no status: "macos" | "linux" | ... e ferramentas disponíveis (claude, gh, xcode, ...)
-  os           String?
-  capabilities Json      @default("[]")
-  checkedAt    DateTime? @map("checked_at")
-  /// agent transport: sha256 of the enrollment token (null for local/ssh); the token itself is never stored
-  agentTokenHash      String?   @unique @map("agent_token_hash")
-  agentTokenCreatedAt DateTime? @map("agent_token_created_at")
-  agentVersion        String?   @map("agent_version")
-  agentLastSeenAt     DateTime? @map("agent_last_seen_at")
+  os                    String?
+  capabilities          Json               @default("[]")
+  checkedAt             DateTime?          @map("checked_at")
+  /// agent transport, legacy bearer: sha256 of the permanent token agents paired before TER-1017 dial with
+  /// (null once the machine is paired again); the token itself is never stored
+  agentTokenHash        String?            @unique @map("agent_token_hash")
+  /// when the app last minted a token for this machine (legacy bearer or pairing)
+  agentTokenCreatedAt   DateTime?          @map("agent_token_created_at")
+  /// TER-1017: sha256 of the single-use pairing token the app showed, and when it stops being accepted
+  agentPairingHash      String?            @unique @map("agent_pairing_hash")
+  agentPairingExpiresAt DateTime?          @map("agent_pairing_expires_at")
+  /// TER-1017: the agent's Ed25519 device key (base64 SPKI DER); every dial signs the server's nonce with its pair
+  agentPublicKey        String?            @map("agent_public_key")
+  agentPairedAt         DateTime?          @map("agent_paired_at")
+  agentVersion          String?            @map("agent_version")
+  agentLastSeenAt       DateTime?          @map("agent_last_seen_at")
   /// Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts)
-  agentAutoUpdate     Boolean   @default(false) @map("agent_auto_update")
+  agentAutoUpdate       Boolean            @default(false) @map("agent_auto_update")
   /// Swap a tab's Claude to another account of this machine by itself when it hits a usage limit (on by default, TER-587).
-  claudeAutoSwap  Boolean  @default(true) @map("claude_auto_swap")
+  claudeAutoSwap        Boolean            @default(true) @map("claude_auto_swap")
   /// TER-735: show the AI accounts' usage of this machine; when false, termhub never reads the AI CLI credential on it.
-  aiUsageQuery    Boolean  @default(true) @map("ai_usage_query")
+  aiUsageQuery          Boolean            @default(true) @map("ai_usage_query")
   /// R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
-  automationAllowed Boolean @default(true) @map("automation_allowed")
+  automationAllowed     Boolean            @default(true) @map("automation_allowed")
   /// The user's own computer (an agent machine): browsers other than the one that added it hide it
-  isLocal             Boolean   @default(false) @map("is_local")
+  isLocal               Boolean            @default(false) @map("is_local")
   /// Owner: everything under the machine (projects, tabs, tasks, notes, AI accounts) is visible only to
   /// them (and to admins viewing as them or as "all"). Null = orphan (previous owner deleted / seeded).
-  ownerId   String?     @map("owner_id")
-  owner     User?       @relation("MachineOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  createdAt DateTime    @default(now()) @map("created_at")
-  projectLinks ProjectMachine[]
-  tabs         Tab[]
-  aiAccounts AiAccount[]
-  hook       MachineHook?
-  uploads    Upload[]
+  ownerId               String?            @map("owner_id")
+  owner                 User?              @relation("MachineOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt             DateTime           @default(now()) @map("created_at")
+  projectLinks          ProjectMachine[]
+  tabs                  Tab[]
+  aiAccounts            AiAccount[]
+  hook                  MachineHook?
+  uploads               Upload[]
   /// Conversations hosted here (the chat's "terminal geral"); deleting the machine nulls the column.
-  chatConversations ChatConversation[]
+  chatConversations     ChatConversation[]
 
   @@index([ownerId])
   @@map("machines")
 }
 
 model Project {
-  id             String        @id
+  id                  String              @id
   /// Owner: the project and everything under it (tasks, notes, tickets, setup, tabs) is visible
   /// only to them (and to admins viewing as them or as "all"). Null = orphan (owner deleted).
-  ownerId        String?       @map("owner_id")
+  ownerId             String?             @map("owner_id")
   /// Short key shown in URLs and card numbers (TERMHUB-42): 2–10 chars, ^[A-Z][A-Z0-9]{1,9}$,
   /// unique across the instance, never changed after creation.
-  key            String        @unique
+  key                 String              @unique
   /// Next card number for this project; the `tasks_assign_number` trigger takes it on every insert.
-  nextTaskNumber Int           @default(1) @map("next_task_number")
-  name           String
-  status         ProjectStatus @default(active)
-  description    String?
+  nextTaskNumber      Int                 @default(1) @map("next_task_number")
+  name                String
+  status              ProjectStatus       @default(active)
+  description         String?
   /// Published: one room per machine the project's owner owns and links it to — with its tabs and that machine's name — is readable by anyone with the link. A link to somebody else's machine never becomes a room.
-  isPublic       Boolean       @default(false) @map("is_public")
+  isPublic            Boolean             @default(false) @map("is_public")
   /// Column a card moves to when an agent starts on it (start_agent). Null = automatic: the first `doing` column.
-  agentColumnId  String?       @map("agent_column_id")
-  lastTerminalAt DateTime?     @map("last_terminal_at")
+  agentColumnId       String?             @map("agent_column_id")
+  lastTerminalAt      DateTime?           @map("last_terminal_at")
   /// Per-project pause of the automatic work (agentic board). Null = not paused.
-  automationPausedAt DateTime? @map("automation_paused_at") @db.Timestamptz
-  createdAt      DateTime      @default(now()) @map("created_at")
-  owner          User?         @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  automationPausedAt  DateTime?           @map("automation_paused_at") @db.Timestamptz
+  createdAt           DateTime            @default(now()) @map("created_at")
+  owner               User?               @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   /// Machines this project runs on, each with its own working directory.
-  machines       ProjectMachine[]
-  tabs           Tab[]
-  tasks          Task[]
-  note           Note?
-  setup          ProjectSetup?
-  tickets        Ticket[]
-  chatConversations ChatConversation[]
-  tabQuestions   TabQuestion[]
-  tabLimitNotices TabLimitNotice[]
-  chatDecisions  ChatDecision[]
-  groupItems     ProjectGroupItem[]
-  memoryItems    MemoryItem[]
-  agentColumn    TaskColumn?   @relation("ProjectAgentColumn", fields: [agentColumnId], references: [id], onDelete: SetNull)
+  machines            ProjectMachine[]
+  tabs                Tab[]
+  tasks               Task[]
+  note                Note?
+  setup               ProjectSetup?
+  tickets             Ticket[]
+  chatConversations   ChatConversation[]
+  tabQuestions        TabQuestion[]
+  tabLimitNotices     TabLimitNotice[]
+  chatDecisions       ChatDecision[]
+  groupItems          ProjectGroupItem[]
+  memoryItems         MemoryItem[]
+  agentColumn         TaskColumn?         @relation("ProjectAgentColumn", fields: [agentColumnId], references: [id], onDelete: SetNull)
   /// The project's board columns, in `position` order.
-  columns        TaskColumn[]  @relation("ProjectColumns")
-  pullRequests   TaskPullRequest[]
-  standingGrants ChatStandingGrant[]
-  automationEvents AutomationEvent[]
-  automationRuns   AutomationRun[]
-  tabUsageDays     TabUsageDay[]
+  columns             TaskColumn[]        @relation("ProjectColumns")
+  pullRequests        TaskPullRequest[]
+  standingGrants      ChatStandingGrant[]
+  automationEvents    AutomationEvent[]
+  automationRuns      AutomationRun[]
+  tabUsageDays        TabUsageDay[]
   /// AI accounts only this project may run on (TER-990)
   exclusiveAiAccounts AiAccount[]
 
@@ -299,47 +308,47 @@ model ProjectMachine {
 }
 
 model Tab {
-  id            String   @id
-  projectId     String   @map("project_id")
+  id                  String         @id
+  projectId           String         @map("project_id")
   /// The machine this tab's tmux session runs on (one of the project's linked machines).
-  machineId     String   @map("machine_id")
-  name          String
-  kind          TabKind  @default(terminal)
-  tmuxSession   String?  @unique @map("tmux_session")
-  simulatorUdid String?  @map("simulator_udid")
-  position      Int      @default(0)
+  machineId           String         @map("machine_id")
+  name                String
+  kind                TabKind        @default(terminal)
+  tmuxSession         String?        @unique @map("tmux_session")
+  simulatorUdid       String?        @map("simulator_udid")
+  position            Int            @default(0)
   /// Monitor: what the tool in this tab is doing, as reported by its hooks (or the tmux fallback).
   /// null = unknown (never reported). stateText = the pending question/notification, never scrollback.
-  state         TabState?
-  stateText     String?  @map("state_text")
-  stateTool     String?  @map("state_tool")
-  stateAt       DateTime? @map("state_at")
+  state               TabState?
+  stateText           String?        @map("state_text")
+  stateTool           String?        @map("state_tool")
+  stateAt             DateTime?      @map("state_at")
   /// When the tab was last looked at while needing you; null or earlier than stateAt = still needs you.
-  stateSeenAt   DateTime? @map("state_seen_at")
+  stateSeenAt         DateTime?      @map("state_seen_at")
   /// Set while `state` is working; cleared when the tab leaves it. null = not working or never reported.
-  activity      TabActivity?
+  activity            TabActivity?
   /// Claude Code's spinner verb that came with `activity` (one ASCII word); set and cleared with it.
-  activityVerb  String?  @map("activity_verb")
+  activityVerb        String?        @map("activity_verb")
   /// Claude Code session last reported by a hook of this tab (uuid) and its transcript on the machine;
   /// used to resume it under another account (spec 2026-09-26 account swap). Metadata only.
-  agentSessionId      String?   @map("agent_session_id")
-  agentTranscriptPath String?   @map("agent_transcript_path")
+  agentSessionId      String?        @map("agent_session_id")
+  agentTranscriptPath String?        @map("agent_transcript_path")
   /// The AI account termhub started this tab's agent with (start_agent or a swap); null = unknown.
-  aiAccountId         String?   @map("ai_account_id")
+  aiAccountId         String?        @map("ai_account_id")
   /// When the tab's Claude stopped on a usage limit (StopFailure rate_limit); cleared when it runs again.
-  rateLimitedAt       DateTime? @map("rate_limited_at")
+  rateLimitedAt       DateTime?      @map("rate_limited_at")
   /// Where the tab's session runs when it is not the project's folder (an automation card's worktree, an
   /// absolute path on the machine); null = the project–machine link's cwd. Reused when the session is recreated.
   cwd                 String?
-  aiAccount           AiAccount? @relation(fields: [aiAccountId], references: [id], onDelete: SetNull)
+  aiAccount           AiAccount?     @relation(fields: [aiAccountId], references: [id], onDelete: SetNull)
   /// API token that opened this tab through /mcp (null: opened in the browser). Used by close_tab and the per-token open-tab limit.
-  createdByTokenId String?  @map("created_by_token_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  machine       Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
-  tasks         Task[]
-  events        TabEvent[]
-  lastAnswer    TabLastAnswer?
+  createdByTokenId    String?        @map("created_by_token_id")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  project             Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  machine             Machine        @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  tasks               Task[]
+  events              TabEvent[]
+  lastAnswer          TabLastAnswer?
 
   @@index([projectId])
   @@index([machineId])
@@ -477,50 +486,50 @@ model TaskColumn {
 }
 
 model Task {
-  id          String     @id
-  projectId   String     @map("project_id")
-  title       String
-  description String?
+  id            String     @id
+  projectId     String     @map("project_id")
+  title         String
+  description   String?
   /// The card's category: backlog = in the backlog; otherwise the category of `column`. Kept in sync on every write.
-  status      TaskStatus @default(todo)
-  type        TaskType   @default(task)
+  status        TaskStatus @default(todo)
+  type          TaskType   @default(task)
   /// Sequential per project (projects.next_task_number), set by the tasks_assign_number trigger; never reused.
-  number      Int        @default(0)
-  position    Int        @default(0)
+  number        Int        @default(0)
+  position      Int        @default(0)
   /// Reservado para integrações (GitHub/Jira/Linear): { provider, id, url, ... }
-  externalRef Json?      @map("external_ref")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at")
+  externalRef   Json?      @map("external_ref")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @default(now()) @updatedAt @map("updated_at")
   /// First time the row went to doing; set by the tasks_track_progress_times trigger, never cleared.
-  startedAt     DateTime? @map("started_at")
+  startedAt     DateTime?  @map("started_at")
   /// When the row last became done; set by the trigger, cleared when it leaves done.
-  doneAt        DateTime? @map("done_at")
+  doneAt        DateTime?  @map("done_at")
   /// Seconds an agent tab linked to this card (or to one of its subtasks) spent working (monitor/recordEvent).
-  activeSeconds Int       @default(0) @map("active_seconds")
+  activeSeconds Int        @default(0) @map("active_seconds")
   /// Tagged "automático": eligible for automatic work. On an epic, setAuto propagates to its top-level cards. Never on subtasks.
-  auto        Boolean    @default(false)
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  auto          Boolean    @default(false)
+  project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   /// chave estável do ticket externo ("linear:<id>", "jira:<key>") para upsert no sync
-  externalKey String?    @map("external_key")
+  externalKey String? @map("external_key")
   /// tab de terminal onde a task está sendo executada (run ou aberta manualmente)
-  tabId       String?    @map("tab_id")
-  tab         Tab?       @relation(fields: [tabId], references: [id], onDelete: SetNull)
+  tabId       String? @map("tab_id")
+  tab         Tab?    @relation(fields: [tabId], references: [id], onDelete: SetNull)
 
   /// Subtask: the parent story or task (one level only, enforced in TasksRepository). Subtasks have no
   /// board column — `position` orders them among siblings — and are always local (no externalKey).
-  parentId    String?    @map("parent_id")
-  parent      Task?      @relation("TaskSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
-  subtasks    Task[]     @relation("TaskSubtasks")
+  parentId String? @map("parent_id")
+  parent   Task?   @relation("TaskSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks Task[]  @relation("TaskSubtasks")
 
   /// Story/task/bug/spike: the epic it belongs to. Null on epics and subtasks.
-  epicId      String?    @map("epic_id")
-  epic        Task?      @relation("TaskEpic", fields: [epicId], references: [id], onDelete: SetNull)
-  epicCards   Task[]     @relation("TaskEpic")
+  epicId           String?           @map("epic_id")
+  epic             Task?             @relation("TaskEpic", fields: [epicId], references: [id], onDelete: SetNull)
+  epicCards        Task[]            @relation("TaskEpic")
   /// Board column; null in the backlog and on subtasks.
-  columnId    String?    @map("column_id")
-  column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
-  pullRequests TaskPullRequest[]
+  columnId         String?           @map("column_id")
+  column           TaskColumn?       @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  pullRequests     TaskPullRequest[]
   automationEvents AutomationEvent[]
   automationRuns   AutomationRun[]
   tabUsageDays     TabUsageDay[]
@@ -591,7 +600,8 @@ model AutomationEvent {
 
   @@index([projectId, createdAt(sort: Desc)], map: "automation_events_project_created_idx")
   // plus "automation_events_ci_fix_once": unique (task_id, payload->>'pr', payload->>'sha') WHERE kind =
-  // 'ci_fix_requested', in its migration only (partial, on expressions)
+  // 'ci_fix_requested', in its migration only (partial, on expressions); likewise
+  // "automation_events_deploy_retry_once": unique (task_id, payload->>'sha', payload->>'attempt') WHERE kind = 'deploy_retried'
   @@map("automation_events")
 }
 
@@ -603,41 +613,41 @@ model AutomationEvent {
 /// partial-index syntax and `prisma migrate diff` ignores partial indexes (see ChatConversation), so it
 /// is not declared here. Deleting the card nulls `task_id`; the sweep (`cancelOrphaned`) cancels those runs.
 model AutomationRun {
-  id            String    @id
-  projectId     String    @map("project_id")
-  taskId        String?   @map("task_id")
+  id              String    @id
+  projectId       String    @map("project_id")
+  taskId          String?   @map("task_id")
   /// implementer | integrator | fixer
-  role          String
+  role            String
   /// queued | starting | running | waiting | done | blocked | failed | cancelled
-  status        String
-  waitingReason String?   @map("waiting_reason")
-  tabId         String?   @map("tab_id")
-  machineId     String?   @map("machine_id")
-  accountId     String?   @map("account_id")
-  branch        String?
-  worktreePath  String?   @map("worktree_path")
-  resumeCount   Int       @default(0) @map("resume_count")
-  fixCount      Int       @default(0) @map("fix_count")
+  status          String
+  waitingReason   String?   @map("waiting_reason")
+  tabId           String?   @map("tab_id")
+  machineId       String?   @map("machine_id")
+  accountId       String?   @map("account_id")
+  branch          String?
+  worktreePath    String?   @map("worktree_path")
+  resumeCount     Int       @default(0) @map("resume_count")
+  fixCount        Int       @default(0) @map("fix_count")
   /// agent restarts after an exit (spec D15: one, then the run is blocked)
-  restartCount  Int       @default(0) @map("restart_count")
+  restartCount    Int       @default(0) @map("restart_count")
   /// the allow list the agent was started with (preflight F-12); null = started before it was stored
-  allowedTools  Json?     @map("allowed_tools")
+  allowedTools    Json?     @map("allowed_tools")
   /// when the follower last typed into the run's tab: the colour that takes the run over does not type again
-  lastTypedAt   DateTime? @map("last_typed_at") @db.Timestamptz
+  lastTypedAt     DateTime? @map("last_typed_at") @db.Timestamptz
   /// when the chat was woken for a tab that keeps stopping (one wake per run, D15)
-  wokenAt       DateTime? @map("woken_at") @db.Timestamptz
+  wokenAt         DateTime? @map("woken_at") @db.Timestamptz
   /// the PR head a server-started run (conflict fixer) answers: one run per (card, role, trigger_sha), any status (spike R2)
-  triggerSha    String?   @map("trigger_sha")
+  triggerSha      String?   @map("trigger_sha")
   /// null until the card's PR merged (or the card was deleted); then due | done | kept | gave_up (worktree and tab cleanup, spec §7)
   cleanupState    String?   @map("cleanup_state")
   cleanupAttempts Int       @default(0) @map("cleanup_attempts")
-  claimedBy     String    @map("claimed_by")
-  heartbeatAt   DateTime  @default(now()) @map("heartbeat_at") @db.Timestamptz
-  startedAt     DateTime? @map("started_at") @db.Timestamptz
-  endedAt       DateTime? @map("ended_at") @db.Timestamptz
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  task          Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  claimedBy       String    @map("claimed_by")
+  heartbeatAt     DateTime  @default(now()) @map("heartbeat_at") @db.Timestamptz
+  startedAt       DateTime? @map("started_at") @db.Timestamptz
+  endedAt         DateTime? @map("ended_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status], map: "automation_runs_project_status_idx")
   @@index([tabId])
@@ -750,23 +760,23 @@ enum AiProvider {
 /// No token is stored: the CLI credential is read from the machine on demand
 /// (Claude Code, Codex CLI, Gemini CLI or Antigravity CLI login) and never persisted or logged.
 model AiAccount {
-  id        String     @id
-  provider  AiProvider
-  label     String
-  machineId String     @map("machine_id")
+  id                 String               @id
+  provider           AiProvider
+  label              String
+  machineId          String               @map("machine_id")
   /// CLI config dir override (e.g. ~/.claude-work for a second Claude login). null = default.
-  configDir String?    @map("config_dir")
+  configDir          String?              @map("config_dir")
   /// TER-990: the only project this account may run in (a client's or a company's account). null = any
   /// project of the owner. Deleting the project clears it.
-  exclusiveProjectId String? @map("exclusive_project_id")
-  createdAt DateTime   @default(now()) @map("created_at")
-  machine   Machine    @relation(fields: [machineId], references: [id], onDelete: Cascade)
-  exclusiveProject Project? @relation(fields: [exclusiveProjectId], references: [id], onDelete: SetNull)
+  exclusiveProjectId String?              @map("exclusive_project_id")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  machine            Machine              @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  exclusiveProject   Project?             @relation(fields: [exclusiveProjectId], references: [id], onDelete: SetNull)
   /// Conversations running on this account; deleting the account nulls the column.
-  chatConversations ChatConversation[]
-  tabs      Tab[]
+  chatConversations  ChatConversation[]
+  tabs               Tab[]
   /// Set while the account is at its usage limit (automatic work skips it).
-  exhaustion AiAccountExhaustion?
+  exhaustion         AiAccountExhaustion?
 
   @@index([machineId])
   @@index([exclusiveProjectId])
@@ -775,23 +785,23 @@ model AiAccount {
 
 /// Cloud waitlist sign-ups from the landing page (public form). Managed from the app.
 model WaitlistEntry {
-  id           String   @id
-  firstName    String   @map("first_name")
-  lastName     String   @map("last_name")
-  email        String   @unique
+  id           String    @id
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  email        String    @unique
   /// country calling code without "+", e.g. "55"
-  phoneCountry String   @map("phone_country")
+  phoneCountry String    @map("phone_country")
   /// area code, e.g. "62"
-  phoneArea    String   @map("phone_area")
-  phoneNumber  String   @map("phone_number")
+  phoneArea    String    @map("phone_area")
+  phoneNumber  String    @map("phone_number")
   /// normalized E.164, e.g. "+5562999999999"
   phone        String
   linkedin     String?
   github       String?
-  /// "pt" | "en": language the form was filled in
-  locale       String   @default("pt")
-  source       String   @default("landing")
-  createdAt    DateTime @default(now()) @map("created_at")
+  /// "pt" | "en" | "es": language the form was filled in
+  locale       String    @default("pt")
+  source       String    @default("landing")
+  createdAt    DateTime  @default(now()) @map("created_at")
   /// when the alpha invite was (last) sent from the Waitlist tab; null = not invited yet
   invitedAt    DateTime? @map("invited_at")
 
@@ -826,27 +836,27 @@ model Upload {
 /// Personal API token (Settings → Tokens de API) for the MCP endpoint. Only the sha256 of the
 /// token is stored; the plain token is shown once at creation. Revoked rows stay for the audit trail.
 model ApiToken {
-  id         String          @id
-  userId     String          @map("user_id")
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name       String
-  tokenHash  String          @unique @map("token_hash")
+  id                 String            @id
+  userId             String            @map("user_id")
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  tokenHash          String            @unique @map("token_hash")
   /// subset of read | tasks | terminals (see auth/api-tokens.ts)
-  scopes     String[]
-  expiresAt  DateTime?       @map("expires_at")
-  lastUsedAt DateTime?       @map("last_used_at")
-  revokedAt  DateTime?       @map("revoked_at")
-  createdAt  DateTime        @default(now()) @map("created_at")
-  events     ApiTokenEvent[]
+  scopes             String[]
+  expiresAt          DateTime?         @map("expires_at")
+  lastUsedAt         DateTime?         @map("last_used_at")
+  revokedAt          DateTime?         @map("revoked_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  events             ApiTokenEvent[]
   /// A token whose writes pass the chat's confirmation gate — the concierge's, never a person's own.
-  gated      Boolean         @default(false)
+  gated              Boolean           @default(false)
   /// The chat conversation a concierge token runs for. Null on a person's own tokens.
   chatConversationId String?           @map("chat_conversation_id")
   chatConversation   ChatConversation? @relation(fields: [chatConversationId], references: [id], onDelete: Cascade)
   /// The tab a tab token was minted for (spec 2026-09-27 agent-tab-mcp D1). Plain text, no FK: a
   /// cascade would delete the audit rows in api_token_events, and SET NULL would turn a tab token
   /// into an unrestricted one. Revoked in the same transaction that deletes the tab (D6).
-  tabId String? @map("tab_id")
+  tabId              String?           @map("tab_id")
 
   @@index([userId])
   @@index([chatConversationId])
@@ -857,19 +867,19 @@ model ApiToken {
 /// One MCP tool call made with a token. Metadata only — never typed text, screen content or prompts.
 /// Pruned after 30 days.
 model ApiTokenEvent {
-  id         String   @id
-  tokenId    String   @map("token_id")
-  token      ApiToken @relation(fields: [tokenId], references: [id], onDelete: Cascade)
-  tool       String
-  machineId  String?  @map("machine_id")
-  projectId  String?  @map("project_id")
-  tabId      String?  @map("tab_id")
+  id           String   @id
+  tokenId      String   @map("token_id")
+  token        ApiToken @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  tool         String
+  machineId    String?  @map("machine_id")
+  projectId    String?  @map("project_id")
+  tabId        String?  @map("tab_id")
   /// The attachment a read_attachment call read (spec 2026-09-26 attachment follow-ups §4). Only the id.
   attachmentId String?  @map("attachment_id")
-  ok         Boolean
-  errorCode  String?  @map("error_code")
-  durationMs Int      @map("duration_ms")
-  createdAt  DateTime @default(now()) @map("created_at")
+  ok           Boolean
+  errorCode    String?  @map("error_code")
+  durationMs   Int      @map("duration_ms")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([tokenId, createdAt])
   @@index([createdAt])
@@ -890,49 +900,49 @@ model ApiTokenEvent {
 /// machineId is *not* part of that index: since the user-hosted concierge it is the host the
 /// conversation runs on (one per user, spec §3), not a second conversation scope.
 model ChatConversation {
-  id            String        @id
-  userId        String        @map("user_id")
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title         String?
+  id                 String              @id
+  userId             String              @map("user_id")
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title              String?
   /// uuid passed to claude -p as --session-id / --resume
-  cliSessionId  String?       @map("cli_session_id")
-  model         String?
+  cliSessionId       String?             @map("cli_session_id")
+  model              String?
   /// The host: the user's own machine this conversation runs on. Null = not chosen yet.
-  machineId     String?       @map("machine_id")
-  machine       Machine?      @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  machineId          String?             @map("machine_id")
+  machine            Machine?            @relation(fields: [machineId], references: [id], onDelete: SetNull)
   /// The Claude account on that host. Null = the machine's default config dir.
-  aiAccountId   String?       @map("ai_account_id")
-  aiAccount     AiAccount?    @relation(fields: [aiAccountId], references: [id], onDelete: SetNull)
+  aiAccountId        String?             @map("ai_account_id")
+  aiAccount          AiAccount?          @relation(fields: [aiAccountId], references: [id], onDelete: SetNull)
   /// The project this conversation is about. Null = the account-wide chat (spec 2026-09-23 §3).
-  projectId     String?       @map("project_id")
-  project       Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId          String?             @map("project_id")
+  project            Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   /// Set by "Nova conversa": the row is kept, but it is no longer the scope's active conversation.
-  archivedAt    DateTime?     @map("archived_at")
-  apiTokens     ApiToken[]
-  tabId         String?       @map("tab_id")
-  reviewMode    Boolean       @default(false) @map("review_mode")
+  archivedAt         DateTime?           @map("archived_at")
+  apiTokens          ApiToken[]
+  tabId              String?             @map("tab_id")
+  reviewMode         Boolean             @default(false) @map("review_mode")
   /// How many tokens the CLI session's context held after its last turn (or compaction), and the
   /// model's context window then (TER-315). Null until a turn reports them; cleared with the session.
-  contextTokens Int?          @map("context_tokens")
-  contextWindow Int?          @map("context_window")
+  contextTokens      Int?                @map("context_tokens")
+  contextWindow      Int?                @map("context_window")
   /// When that session was last compacted, by "Compactar" or the CLI's own auto-compact (TER-1038).
-  contextCompactedAt DateTime? @map("context_compacted_at") @db.Timestamptz
-  lastMessageAt DateTime?     @map("last_message_at")
+  contextCompactedAt DateTime?           @map("context_compacted_at") @db.Timestamptz
+  lastMessageAt      DateTime?           @map("last_message_at")
   /// The last time the person typed a message here (TER-530) — not a decision's re-injection nor a
   /// wake, which are stored as user messages too. A "no" given before it no longer refuses on its own.
-  lastTypedAt   DateTime?     @map("last_typed_at")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  messages      ChatMessage[]
-  actions       ChatAction[]
-  grants        ChatGrant[]
-  projectGrants ChatProjectGrant[]
-  tabQuestions  TabQuestion[]
-  tabLimitNotices TabLimitNotice[]
-  attachments   ChatAttachment[]
-  chatDecisions ChatDecision[]
-  subagents     ChatSubagent[]
-  liveRun       ChatLiveRun?
-  standingGrants ChatStandingGrant[]
+  lastTypedAt        DateTime?           @map("last_typed_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  messages           ChatMessage[]
+  actions            ChatAction[]
+  grants             ChatGrant[]
+  projectGrants      ChatProjectGrant[]
+  tabQuestions       TabQuestion[]
+  tabLimitNotices    TabLimitNotice[]
+  attachments        ChatAttachment[]
+  chatDecisions      ChatDecision[]
+  subagents          ChatSubagent[]
+  liveRun            ChatLiveRun?
+  standingGrants     ChatStandingGrant[]
 
   @@index([userId, createdAt])
   @@index([machineId])
@@ -944,30 +954,30 @@ model ChatConversation {
 /// A turn of the conversation. The assistant's own prose is stored in full; captured screens and
 /// command output never are (spec §7.1).
 model ChatMessage {
-  id             String           @id
-  conversationId String           @map("conversation_id")
-  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id              String           @id
+  conversationId  String           @map("conversation_id")
+  conversation    ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   /// user | assistant
-  role           String
-  text           String
-  usage          Json?
-  errorCode      String?          @map("error_code")
+  role            String
+  text            String
+  usage           Json?
+  errorCode       String?          @map("error_code")
   /// TER-588: the usage limit the answer hit, or the account that answered instead (ChatNotice).
-  notice         Json?
+  notice          Json?
   /// The message this one answers (TER-447). The database nulls it when that row is deleted; the two
   /// fields below keep what was quoted, and `replyToRole` being set is what says this is a reply.
-  replyToId      String?          @map("reply_to_id")
-  replyTo        ChatMessage?     @relation("ChatMessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies        ChatMessage[]    @relation("ChatMessageReply")
+  replyToId       String?          @map("reply_to_id")
+  replyTo         ChatMessage?     @relation("ChatMessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies         ChatMessage[]    @relation("ChatMessageReply")
   /// user | assistant
-  replyToRole    String?          @map("reply_to_role")
-  replyToExcerpt String?          @map("reply_to_excerpt")
+  replyToRole     String?          @map("reply_to_role")
+  replyToExcerpt  String?          @map("reply_to_excerpt")
   /// TER-849: a reply to a card of the thread instead of a message (`replyToId` is then null).
   /// action | tab_question, with that row's id; no foreign key, the excerpt above is the quote.
-  replyToCardKind String?         @map("reply_to_card_kind")
-  replyToCardId   String?         @map("reply_to_card_id")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  attachments    ChatAttachment[]
+  replyToCardKind String?          @map("reply_to_card_kind")
+  replyToCardId   String?          @map("reply_to_card_id")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  attachments     ChatAttachment[]
 
   @@index([conversationId, createdAt])
   @@index([replyToId])
@@ -1058,20 +1068,20 @@ model ChatAction {
 /// `task_id` per conversation — `start` upserts on that pair, so a repeated `task_started` frame for
 /// the same task never creates a second row.
 model ChatSubagent {
-  id            String           @id
-  conversationId String          @map("conversation_id")
-  conversation  ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id             String           @id
+  conversationId String           @map("conversation_id")
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   /// The CLI's own id for this subagent run, stable across its lifecycle frames.
-  taskId        String           @map("task_id")
+  taskId         String           @map("task_id")
   /// The tool_use_id of the Task call that started it: how a later action inside its turn is tied
   /// back to it (`chat_actions.tool_use_id`).
-  toolUseId     String           @map("tool_use_id")
-  description   String
-  subagentType  String?          @map("subagent_type")
+  toolUseId      String           @map("tool_use_id")
+  description    String
+  subagentType   String?          @map("subagent_type")
   /// running | stopping | completed | failed | stopped | interrupted (chat/stream.ts SubagentStatus)
-  status        String
-  startedAt     DateTime         @default(now()) @map("started_at")
-  endedAt       DateTime?        @map("ended_at")
+  status         String
+  startedAt      DateTime         @default(now()) @map("started_at")
+  endedAt        DateTime?        @map("ended_at")
 
   @@unique([conversationId, taskId])
   @@index([conversationId, startedAt])
@@ -1263,28 +1273,28 @@ model TabQuestion {
 /// A question of a tab's AskUserQuestion answered from the chat, remembered to suggest the answer to
 /// similar questions later (spec 2026-09-26). `embedding` is pgvector, read and written in raw SQL.
 model ChatDecision {
-  id             String            @id
-  userId         String            @map("user_id")
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projectId      String?           @map("project_id")
-  project        Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  conversationId String?           @map("conversation_id")
-  conversation   ChatConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  tabQuestionId  String?           @map("tab_question_id")
-  questionIndex  Int               @map("question_index")
+  id             String                      @id
+  userId         String                      @map("user_id")
+  user           User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String?                     @map("project_id")
+  project        Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  conversationId String?                     @map("conversation_id")
+  conversation   ChatConversation?           @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  tabQuestionId  String?                     @map("tab_question_id")
+  questionIndex  Int                         @map("question_index")
   header         String
   question       String
   options        Json
-  multiSelect    Boolean           @map("multi_select")
+  multiSelect    Boolean                     @map("multi_select")
   answer         Json
   embedding      Unsupported("vector(384)")?
-  embedModel     String?           @map("embed_model")
-  suggestedCount Int               @default(0) @map("suggested_count")
-  acceptedCount  Int               @default(0) @map("accepted_count")
+  embedModel     String?                     @map("embed_model")
+  suggestedCount Int                         @default(0) @map("suggested_count")
+  acceptedCount  Int                         @default(0) @map("accepted_count")
   /// Times this decision backed an automatic answer sent by the countdown (spec §D11); those answers
   /// are never recorded as a new row, so this is the only trace of them on the source decision.
-  autoCount      Int               @default(0) @map("auto_count")
-  createdAt      DateTime          @default(now()) @map("created_at")
+  autoCount      Int                         @default(0) @map("auto_count")
+  createdAt      DateTime                    @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
   @@map("chat_decisions")
@@ -1294,40 +1304,40 @@ model ChatDecision {
 /// message the person typed, a gate decision, a spec/plan section or a note. Decisions answered on a
 /// card live in `chat_decisions`. `embedding` is pgvector, read and written in raw SQL.
 model MemoryItem {
-  id          String   @id
-  ownerId     String   @map("owner_id")
-  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  projectId   String?  @map("project_id")
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id           String                      @id
+  ownerId      String                      @map("owner_id")
+  owner        User                        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  projectId    String?                     @map("project_id")
+  project      Project?                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   /// task | message | action | doc | note | lesson | project_note
-  kind        String
-  sourceId    String   @map("source_id")
-  chunkIndex  Int      @default(0) @map("chunk_index")
-  title       String
-  text        String
+  kind         String
+  sourceId     String                      @map("source_id")
+  chunkIndex   Int                         @default(0) @map("chunk_index")
+  title        String
+  text         String
   /// person | derived
-  trust       String
-  contentHash String   @map("content_hash")
+  trust        String
+  contentHash  String                      @map("content_hash")
   /// A doc file's sha256 (docs sweeper skips unchanged files); null for other kinds.
-  sourceHash  String?  @map("source_hash")
-  embedding   Unsupported("vector(384)")?
-  embedModel  String?  @map("embed_model")
+  sourceHash   String?                     @map("source_hash")
+  embedding    Unsupported("vector(384)")?
+  embedModel   String?                     @map("embed_model")
   /// Set by "Verificar" on a lesson (chunk 0): who and when. `verified` = verifiedAt set and
   /// verifiedHash still matches contentHash (spec 2026-09-27 failure lessons §3, D8).
-  verifiedAt   DateTime? @map("verified_at")
-  verifiedBy   String?   @map("verified_by")
-  verifier     User?     @relation("MemoryItemVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
-  verifiedHash String?   @map("verified_hash")
+  verifiedAt   DateTime?                   @map("verified_at")
+  verifiedBy   String?                     @map("verified_by")
+  verifier     User?                       @relation("MemoryItemVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  verifiedHash String?                     @map("verified_hash")
   /// Set by "Esquecer" on a file lesson to the item's contentHash (spec §3): search and the lessons
   /// list skip a row while hiddenHash still matches contentHash; a re-indexed file with new content
   /// (new hash) comes back as a fresh, unverified lesson.
-  hiddenHash   String?   @map("hidden_hash")
+  hiddenHash   String?                     @map("hidden_hash")
   /// Lesson metadata (spec §3): { evidence, card, pr, tags, agent, tab_id, origin, path }. Null for
   /// every other kind.
-  meta        Json?
-  sourceAt    DateTime @map("source_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  meta         Json?
+  sourceAt     DateTime                    @map("source_at")
+  createdAt    DateTime                    @default(now()) @map("created_at")
+  updatedAt    DateTime                    @updatedAt @map("updated_at")
 
   @@unique([kind, sourceId, chunkIndex])
   @@index([ownerId, kind])
@@ -1349,13 +1359,13 @@ model InstanceSecret {
 /// Favoritos group (one per user: NULLs are distinct in the unique index, so any number of
 /// custom groups with a null key).
 model ProjectGroup {
-  id        String   @id
-  userId    String   @map("user_id")
+  id        String             @id
+  userId    String             @map("user_id")
   name      String
-  systemKey String?  @map("system_key")
-  position  Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  systemKey String?            @map("system_key")
+  position  Int                @default(0)
+  createdAt DateTime           @default(now()) @map("created_at")
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   items     ProjectGroupItem[]
 
   @@unique([userId, systemKey])
@@ -1378,29 +1388,29 @@ model ProjectGroupItem {
 /// A phone asking to join an account (spec §4). `userId` null = a decoy row: unknown e-mail or an
 /// account that cannot enrol devices; never shown, never approvable, expires like the rest.
 model DeviceRequest {
-  id                 String    @id
-  userId             String?   @map("user_id")
-  user               User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  emailHash          String    @map("email_hash")
-  publicKey          String    @map("public_key")
-  keyThumbprint      String    @map("key_thumbprint")
-  platform           String
-  model              String
-  osVersion          String    @map("os_version")
-  deviceName         String    @map("device_name")
-  appVersion         String    @map("app_version")
-  verificationCode   String    @map("verification_code")
-  requestSecretHash  String    @unique @map("request_secret_hash")
+  id                String    @id
+  userId            String?   @map("user_id")
+  user              User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailHash         String    @map("email_hash")
+  publicKey         String    @map("public_key")
+  keyThumbprint     String    @map("key_thumbprint")
+  platform          String
+  model             String
+  osVersion         String    @map("os_version")
+  deviceName        String    @map("device_name")
+  appVersion        String    @map("app_version")
+  verificationCode  String    @map("verification_code")
+  requestSecretHash String    @unique @map("request_secret_hash")
   /// pending | approved | denied | expired | activated
-  status             String    @default("pending")
-  ip                 String
-  country            String?
-  city               String?
-  createdAt          DateTime  @default(now()) @map("created_at")
-  expiresAt          DateTime  @map("expires_at")
-  decidedAt          DateTime? @map("decided_at")
-  activateUntil      DateTime? @map("activate_until")
-  device             Device?
+  status            String    @default("pending")
+  ip                String
+  country           String?
+  city              String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  expiresAt         DateTime  @map("expires_at")
+  decidedAt         DateTime? @map("decided_at")
+  activateUntil     DateTime? @map("activate_until")
+  device            Device?
 
   @@index([userId, status])
   @@index([emailHash, createdAt])
@@ -1410,31 +1420,31 @@ model DeviceRequest {
 
 /// An enrolled phone (spec §8). Revoked rows stay for the list and the trail.
 model Device {
-  id             String    @id
-  userId         String    @map("user_id")
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String            @id
+  userId         String            @map("user_id")
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   name           String
   platform       String
   model          String
-  osVersion      String    @map("os_version")
-  appVersion     String    @map("app_version")
-  publicKey      String    @map("public_key")
-  keyThumbprint  String    @unique @map("key_thumbprint")
+  osVersion      String            @map("os_version")
+  appVersion     String            @map("app_version")
+  publicKey      String            @map("public_key")
+  keyThumbprint  String            @unique @map("key_thumbprint")
   /// encryptSecret() of the 32-byte pin secret; the phone holds it wrapped under the PIN
-  pinSecretEnc   String    @map("pin_secret_enc")
-  pinFailures    Int       @default(0) @map("pin_failures")
-  pinLockedUntil DateTime? @map("pin_locked_until")
+  pinSecretEnc   String            @map("pin_secret_enc")
+  pinFailures    Int               @default(0) @map("pin_failures")
+  pinLockedUntil DateTime?         @map("pin_locked_until")
   /// active | revoked
-  status         String    @default("active")
-  revokedAt      DateTime? @map("revoked_at")
+  status         String            @default("active")
+  revokedAt      DateTime?         @map("revoked_at")
   /// user | admin | pin_bruteforce | review
-  revokedReason  String?   @map("revoked_reason")
-  pushToken      String?   @map("push_token")
-  lastSeenAt     DateTime? @map("last_seen_at")
-  lastIp         String?   @map("last_ip")
-  requestId      String?   @unique @map("request_id")
-  request        DeviceRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
-  createdAt      DateTime  @default(now()) @map("created_at")
+  revokedReason  String?           @map("revoked_reason")
+  pushToken      String?           @map("push_token")
+  lastSeenAt     DateTime?         @map("last_seen_at")
+  lastIp         String?           @map("last_ip")
+  requestId      String?           @unique @map("request_id")
+  request        DeviceRequest?    @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now()) @map("created_at")
   pushTickets    PushTicket[]
   tokens         DeviceToken[]
   challenges     DeviceChallenge[]
@@ -1559,6 +1569,31 @@ model AutomationSummary {
 
   @@id([userId, day])
   @@map("automation_summaries")
+}
+
+/// "Exportar meus dados" (TER-741, LGPD art. 18): one request for a zip of everything the account
+/// holds. The job builds it on the chat-files volume (`<CHAT_FILES_DIR>/.exports/<id>.zip`), e-mails a
+/// link to Perfil, and removes the file once `expiresAt` passes (7 days after it is ready).
+model DataExport {
+  id           String    @id
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// pending | running | ready | failed | expired
+  status       String    @default("pending")
+  /// Builds started for this row: a deploy that kills one mid-way leaves it `running`, and the job
+  /// takes it again after a while, up to a few times.
+  attempts     Int       @default(0)
+  bytes        BigInt?
+  errorCode    String?   @map("error_code")
+  startedAt    DateTime? @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  expiresAt    DateTime? @map("expires_at")
+  downloadedAt DateTime? @map("downloaded_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("data_exports")
 }
 
 /// Audit trail of the admin "view as" switch (TER-746, P-9/L-10 of docs/legal/duvidas-advogado.md): one row

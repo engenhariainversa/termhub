@@ -209,6 +209,16 @@ describe('MobilePushService', () => {
     });
   });
 
+  it('an expired AI CLI login goes to every device, in the owner\'s language, collapsed per account (TER-1047)', async () => {
+    const t = setup({ live: ['d1'], locale: 'en' });
+    await t.service.aiLoginRequired('u1', { accountId: 'a1', machineName: 'jarvis', provider: 'chatgpt' });
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith({ user_id: 'u1', kind: 'confirmation', title: 'Codex login expired', body: 'jarvis: tap to redo the login', data: { kind: 'ai_login', account_id: 'a1' } });
+    expect(t.sent[0]).toEqual([
+      { to: 'ExponentPushToken[a]', title: 'Codex login expired', body: 'jarvis: tap to redo the login', data: { kind: 'ai_login', account_id: 'a1', notification_id: 'n1' }, badge: 3, collapseId: 'ai_login:a1' },
+      { to: 'ExponentPushToken[b]', title: 'Codex login expired', body: 'jarvis: tap to redo the login', data: { kind: 'ai_login', account_id: 'a1', notification_id: 'n1' }, badge: 3, collapseId: 'ai_login:a1' },
+    ]);
+  });
+
   it('clears the token of a device Expo reports as not registered', async () => {
     const t = setup();
     t.sender.send.mockImplementationOnce(async (messages: PushMessage[]) => messages.map((m) => (m.to === 'ExponentPushToken[b]' ? { to: m.to, error: 'DeviceNotRegistered' } : { to: m.to })));

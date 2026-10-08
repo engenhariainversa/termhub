@@ -31,6 +31,8 @@ import { automationPauseRoutes, projectAutomationEventRoutes, projectAutomationR
 import { projectAiRoutes } from './routes/project-ai.js';
 import { projectTicketRoutes, taskTicketRoutes } from './routes/tickets.js';
 import { aiAccountRoutes } from './routes/ai-accounts.js';
+import { aiLoginRoutes } from './routes/ai-login.js';
+import { startAiLoginChecks } from './ai/login-checks.js';
 import { waitlistRoutes } from './routes/waitlist.js';
 import { publicCityRoutes } from './routes/public-city.js';
 import { cityLinkRoutes } from './routes/city-link.js';
@@ -98,6 +100,7 @@ import { createRealBackend } from './simulator/backend.js';
 import { seed } from './seed.js';
 import { AccountDeletionService } from './account/deletion.js';
 import { accountRoutes } from './routes/account.js';
+import { DataExportService } from './account/data-export.js';
 import { publicBus } from './public/bus.js';
 import { CLOSE } from '@termhub/agent-protocol';
 
@@ -254,6 +257,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     pageUrl: config.accountDeletionUrl,
     log: fastify.log.child({ mod: 'account-deletion' }),
   });
+  // "Exportar meus dados" (TER-741): archives on the chat-files volume, so both colors see them.
+  const dataExports = new DataExportService({
+    repos,
+    mailer,
+    dir: path.join(config.chatFiles.dir, '.exports'),
+    readAttachment: (userId, id) => attachmentStore.read(userId, id),
+    appUrl: config.publicUrl,
+    log: fastify.log.child({ mod: 'data-export' }),
+  });
   const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments, tabChat, deletion };
   const mobile = config.mobile ? createMobileServices(mobileDeps) : null;
 
@@ -281,7 +293,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await api.register((a) => authRoutes(a, auth, { onNicknameClaimed: (u) => shortLinks.onNicknameClaimed(u) }), { prefix: '/auth' });
       await api.register((a) => cityLinkRoutes(a, { shortLinks }), { prefix: '/auth' });
       // The person's own account: any signed-in person may delete it, no role grant needed.
-      await api.register((a) => accountRoutes(a, { auth: authService, deletion, repos }), { prefix: '/account' });
+      await api.register((a) => accountRoutes(a, { auth: authService, deletion, exports: dataExports, repos }), { prefix: '/account' });
       await guarded('machines', (a) => machineRoutes(a, repos), '/machines');
       await guarded('projects', (a) => projectRoutes(a, repos, { simulators }), '/projects');
       await guarded('projects', (a) => projectGroupRoutes(a, repos), '/project-groups');
@@ -311,6 +323,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('terminals', (a) => monitorRoutes(a, repos), '/monitor');
       await guarded('terminals', (a) => hooksRoutes(a, repos, { waker, onTabEvent: (tabId) => tabChat.poke(tabId) }), '/hooks');
       await guarded('ai_accounts', (a) => aiAccountRoutes(a, repos), '/ai-accounts');
+      // "Refazer login" of an account (TER-1047); the app registers the same plugin.
+      await guarded('ai_accounts', (a) => aiLoginRoutes(a, repos), '/ai-accounts');
       await guarded('waitlist', (a) => waitlistRoutes(a, repos), '/waitlist');
       await guarded('roles', (a) => roleRoutes(a, repos), '/roles');
       await guarded('users', (a) => userRoutes(a, repos, { mailer, access, deletion, revoke: mobile ? (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer, log: fastify.log }, id, input) : null }), '/users');
@@ -367,6 +381,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void expireOrphanTabActions(repos, fastify.log);
     // Accounts whose 30-day deletion window is over go for good (TER-720); both colors may run it, the row lock picks one.
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
+    // Data exports: build what waits (or a deploy cut short), drop archives past their 7 days (TER-741).
+    void dataExports.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'data export: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
     // The admin "view as" trail is kept a year after each period ends (TER-746).
@@ -428,6 +444,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   chat.onApproved(MERGE_TOOL, (action) => automation.mergeApproved(action.id));
   // The daily summary of the automatic work (spec D26): both colours tick, the claim row sends it once; a draining colour sends nothing.
   const stopSummaries = startSummaryTimer({ repos, lifecycle, log: fastify.log, push: mobile ? (...a) => mobile.push.automationSummary(...a) : undefined });
+  // AI CLI logins (TER-1047): every 10 min the accounts of online agent machines are checked, and an expired
+  // login pushes once to the machine's owner. Also stops the login flows' expiry sweep.
+  const stopAiLoginChecks = startAiLoginChecks({ repos, log: fastify.log, push: mobile ? (...a) => mobile.push.aiLoginRequired(...a) : undefined });
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     clearInterval(liveBeat);
@@ -438,6 +457,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopSync();
     stopCiSync();
     stopSummaries();
+    stopAiLoginChecks();
     stopAgentUpdates();
     stopTabQuestionExpiry();
     stopTabGoneActionExpiry();

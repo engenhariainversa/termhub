@@ -1,6 +1,7 @@
-import { currentLocale, i18n } from '../i18n';
-import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
+import { currentLocale, i18n, type Locale } from '../i18n';
+import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
 import type { AutomationFeedEvent, FileRecentResponse, NetworkCheck, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
 
@@ -126,7 +127,7 @@ export const api = {
      *  when the account already has one (a claimed address is never changed). */
     setNickname: (nickname: string) => request<{ user: User }>('PATCH', '/auth/me/nickname', { nickname }),
     /** The language for this account (e-mails, push and the web on every browser); null = automatic. 204. */
-    setLocale: (locale: 'pt-BR' | 'en' | null) => request<null>('PATCH', '/auth/me/locale', { locale }),
+    setLocale: (locale: Locale | null) => request<null>('PATCH', '/auth/me/locale', { locale }),
     /** The browser's IANA zone, for the automation's daily summary hour. 204. */
     setTimeZone: (time_zone: string) => request<null>('PATCH', '/auth/me/time-zone', { time_zone }),
     /** The city address and its short link. May create the partner link on the way (the server rate-limits that). */
@@ -145,6 +146,12 @@ export const api = {
      *  401 REAUTH_FAILED (wrong password/code), 429 LOCKED, 409 LAST_ADMIN. */
     requestDeletion: (reauth: { password: string } | { code: string }) => request<AccountDeletionStatus>('POST', '/account/deletion', reauth),
     cancelDeletion: () => request<AccountDeletionStatus>('DELETE', '/account/deletion'),
+    /** "Exportar meus dados" (TER-741): the latest request and when another may be asked. */
+    dataExport: () => request<DataExportStatus>('GET', '/account/export'),
+    /** builds the archive in the background and e-mails when it is ready; 409 EXPORT_IN_PROGRESS, 429 RATE_LIMITED (one a day) */
+    requestDataExport: () => request<DataExportStatus>('POST', '/account/export'),
+    /** The zip, for the signed-in account only (404 EXPORT_NOT_FOUND once its 7 days are over). */
+    dataExportUrl: (id: string) => `/api/account/export/${encodeURIComponent(id)}/download`,
   },
   machines: {
     list: () => request<{ machines: Machine[]; latest_agent_version: string | null }>('GET', '/machines'),
@@ -381,6 +388,8 @@ export const api = {
     tabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/tabs'),
     /** every open terminal tab of the scope, reported a state or not (the sidebar's agents) */
     openTabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/open-tabs'),
+    /** the tabs an automatic run works in, with the card's ref (TER-1044) */
+    autoRuns: () => request<{ items: Array<{ tab_id: string; ref: string }> }>('GET', '/monitor/auto-runs'),
   },
   tasks: {
     list: (projectId: string) => request<BoardData>('GET', `/projects/${projectId}/tasks`),
@@ -464,6 +473,14 @@ export const api = {
     remove: (id: string) => request<{ ok: true }>('DELETE', `/ai-accounts/${id}`),
     usage: (refresh = false) => request<{ usage: AiAccountUsage[] }>('GET', `/ai-accounts/usage${refresh ? '?refresh=1' : ''}`),
     usageOf: (id: string, refresh = false) => request<{ usage: AiAccountUsage }>('GET', `/ai-accounts/${id}/usage${refresh ? '?refresh=1' : ''}`),
+    /** TER-1047: the login state of every account in scope; `refresh` asks the machines again. */
+    loginStatus: (refresh = false) => request<{ accounts: AiLoginStatusRow[] }>('GET', `/ai-accounts/login-status${refresh ? '?refresh=1' : ''}`),
+    /** Starts a login flow in a hidden session on the account's machine. 400/403/409/503 carry a message to show. */
+    startLogin: (id: string) => request<AiLoginStart>('POST', `/ai-accounts/${id}/login`),
+    /** Claude: the code the page showed; Codex: null (just "already authorized"). 404 LOGIN_NOT_FOUND once expired. */
+    submitLogin: (id: string, loginId: string, code: string | null) => request<AiLoginSubmitResult>('POST', `/ai-accounts/${id}/login/${loginId}/submit`, { code }),
+    cancelLogin: (id: string, loginId: string) => request<{ cancelled: true }>('DELETE', `/ai-accounts/${id}/login/${loginId}`),
+    resumeAfterLogin: (id: string, tabIds: string[]) => request<{ resumed: string[] }>('POST', `/ai-accounts/${id}/login/resume`, { tab_ids: tabIds }),
   },
   roles: {
     list: () => request<{ roles: Role[] }>('GET', '/roles'),

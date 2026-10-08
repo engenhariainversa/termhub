@@ -211,6 +211,8 @@ export const FEED_KINDS = [
   'run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed',
   'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup',
   'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out',
+  // TER-1025
+  'deploy_retried', 'github_wait', 'trust_auto_accepted',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** An event with what its sentence names, looked up by the repository. */
@@ -230,7 +232,7 @@ const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 /** Why a start failed (TER-987), in the reader's language when the event has it: null for any other block. */
 function startFailureOf(p: Record<string, unknown>, locale: Locale): string | null {
   if (p.stage !== 'start') return null;
-  return (locale === 'en' ? str(p.message_en) : null) ?? str(p.message);
+  return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
 }
 
 /**
