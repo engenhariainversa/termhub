@@ -172,7 +172,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, ChatAttachment>>({});
   /** How full the session is (TER-315), from `GET /api/chat` and the `context` event; null until an
    *  answer reports it. */
-  const [context, setContext] = useState<{ tokens: number; window: number | null } | null>(null);
+  const [context, setContext] = useState<{ tokens: number; window: number | null; compacted_at: string | null } | null>(null);
+  /** The person's own context limit (TER-1038, Memória do chat); null = the model's window. */
+  const [contextLimit, setContextLimit] = useState<number | null>(null);
   /** "Compactar" is under way: from the click (or `GET /api/chat`, for a screen opened meanwhile) until
    *  its `compact` event says done or failed. */
   const [compacting, setCompacting] = useState(false);
@@ -270,7 +272,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     const snapshot = await (projectId ? api.chat(projectId) : api.chat()).finally(() => reads.current.delete(arrived));
     if (seq <= appliedSeq.current) return;
     appliedSeq.current = seq;
-    const { conversation, messages, open_answer_ids, actions, host, grants, project_grants, standing_grants, tab_questions, tab_suggestions, tab_limits, subagents, compacting } = snapshot;
+    const { conversation, messages, open_answer_ids, actions, host, grants, project_grants, standing_grants, tab_questions, tab_suggestions, tab_limits, subagents, compacting, context_limit } = snapshot;
     // The same conversation: the snapshot merges into the thread, so a row that ended or was removed
     // while this read was in flight is not brought back, and a row the server deleted leaves and is
     // closed (its started mark must not outlive it). Another one (a reset, another project) replaces
@@ -297,7 +299,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     setSubagents(subagents ?? []);
     setHost(host ?? null);
     setHostAccountId(conversation.ai_account_id ?? null);
-    setContext(typeof conversation.context_tokens === 'number' ? { tokens: conversation.context_tokens, window: conversation.context_window ?? null } : null);
+    setContext(typeof conversation.context_tokens === 'number' ? { tokens: conversation.context_tokens, window: conversation.context_window ?? null, compacted_at: conversation.context_compacted_at ?? null } : null);
+    setContextLimit(context_limit ?? null);
     setCompacting(compacting === true);
     setConversationId(conversation.id);
     setLoaded(true);
@@ -408,7 +411,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         // Whatever this row is now, a stale "Cancelar" failure from before no longer applies.
         setCancelFailed((prev) => (prev.has(e.subagent.id) ? new Set([...prev].filter((id) => id !== e.subagent.id)) : prev));
       } else if (e.type === 'subagent_cancel_failed') setCancelFailed((prev) => new Set(prev).add(e.subagent_id));
-      else if (e.type === 'context') setContext({ tokens: e.tokens, window: e.window });
+      else if (e.type === 'context') setContext((prev) => ({ tokens: e.tokens, window: e.window, compacted_at: e.compacted_at !== undefined ? e.compacted_at : (prev?.compacted_at ?? null) }));
       else if (e.type === 'compact') {
         // Every open screen of this conversation hears it, not only the one that clicked.
         setCompacting(e.state === 'started');
@@ -939,7 +942,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       <div className="relative flex items-center justify-end gap-1 pt-2">
         {/* How full the session is, and "Compactar" (TER-315): on the left, apart from the links. */}
         <div className="mr-auto min-w-0">
-          <ChatContextMeter tokens={context?.tokens ?? null} window={context?.window ?? null} compacting={compacting} canCompact={canCompact} onCompact={() => void compact()} />
+          <ChatContextMeter tokens={context?.tokens ?? null} window={context?.window ?? null} limit={contextLimit} compactedAt={context?.compacted_at ?? null} compacting={compacting} canCompact={canCompact} onCompact={() => void compact()} />
         </div>
         {/* The subagents panel (spec 2026-09-26 §4): the toggle appears once something is running or
          *  being cancelled, and — while it is open — stays even after every one of them ended, so the

@@ -51,7 +51,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
   // The host pair every case but the host-specific ones takes for granted: one agent machine of this
   // user's own, online, with an agent that knows how to run a chat (see host.test.ts for the choice
   // itself). `configDirs` is gone — the account travels as the chosen `ai_account`'s config dir.
-  const conversation = { id: 'c1', user_id: 'u1', title: null, cli_session_id: null as string | null, model: null, machine_id: 'm1' as string | null, ai_account_id: opts.host?.account?.id ?? null, project_id: null as string | null, archived_at: null as string | null, review_mode: false, context_tokens: null as number | null, context_window: null as number | null, last_message_at: null, created_at: '' };
+  const conversation = { id: 'c1', user_id: 'u1', title: null, cli_session_id: null as string | null, model: null, machine_id: 'm1' as string | null, ai_account_id: opts.host?.account?.id ?? null, project_id: null as string | null, archived_at: null as string | null, review_mode: false, context_tokens: null as number | null, context_window: null as number | null, context_compacted_at: null as string | null, last_message_at: null, created_at: '' };
   // Project p1's active conversation: no host of its own (the host is always the account-wide row's).
   const projectConversation = { ...conversation, id: 'c_p1', project_id: 'p1' as string | null, machine_id: null as string | null, cli_session_id: null as string | null };
   const conversations = [conversation, projectConversation];
@@ -94,11 +94,12 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
       if (row) row.cli_session_id = s;
     }),
     // Like the repository: a turn that did not report the window keeps the stored one.
-    setContext: vi.fn(async (id: string, u: { tokens: number; window?: number | null }) => {
+    setContext: vi.fn(async (id: string, u: { tokens: number; window?: number | null; compacted?: boolean }) => {
       const row = conversations.find((c) => c.id === id)!;
       row.context_tokens = u.tokens;
       if (u.window != null) row.context_window = u.window;
-      return { tokens: row.context_tokens, window: row.context_window };
+      if (u.compacted) row.context_compacted_at = '2026-10-07T12:00:00.000Z';
+      return { tokens: row.context_tokens, window: row.context_window, compacted_at: row.context_compacted_at };
     }),
     // Same guard as the repository's `updateMany ... where machineId: null`: it fills a host that was
     // never chosen and never touches one that was.
@@ -3327,7 +3328,19 @@ describe('context fill and "Compactar" (TER-315)', () => {
     off();
     expect(chat.setContext).toHaveBeenCalledWith('c1', { tokens: 1000, window: 200_000 });
     expect(conversation.context_tokens).toBe(1000);
-    expect(events).toContainEqual({ type: 'context', user_id: 'u1', conversation_id: 'c1', tokens: 1000, window: 200_000 });
+    expect(events).toContainEqual({ type: 'context', user_id: 'u1', conversation_id: 'c1', tokens: 1000, window: 200_000, compacted_at: null });
+  });
+
+  it("stamps the CLI's own auto-compact mid-turn, then stores the turn's fill (TER-1038)", async () => {
+    const auto = JSON.stringify({ type: 'system', subtype: 'compact_boundary', session_id: SESSION, compact_metadata: { trigger: 'auto', pre_tokens: 190_000, post_tokens: 900 } });
+    const { service, chat, conversation } = build([delta('ok'), auto, doneWithContext()]);
+    const { events, off } = listen();
+    await service.send(user, 'oi');
+    off();
+    expect(chat.setContext).toHaveBeenNthCalledWith(1, 'c1', { tokens: 900, compacted: true });
+    expect(chat.setContext).toHaveBeenNthCalledWith(2, 'c1', { tokens: 1000, window: 200_000 });
+    expect(conversation.context_compacted_at).toBe('2026-10-07T12:00:00.000Z');
+    expect(events.filter((e) => e.type === 'context').map((e) => (e as { tokens: number; compacted_at: string | null }).compacted_at)).toEqual(['2026-10-07T12:00:00.000Z', '2026-10-07T12:00:00.000Z']);
   });
 
   it('stores the fill a streamed turn reports', async () => {
@@ -3373,7 +3386,7 @@ describe('context fill and "Compactar" (TER-315)', () => {
     const mine = events.filter((e) => e.type === 'compact' || e.type === 'context');
     expect(mine).toEqual([
       { type: 'compact', user_id: 'u1', conversation_id: 'c1', state: 'started', tokens_before: null, tokens: null, error_code: null },
-      { type: 'context', user_id: 'u1', conversation_id: 'c1', tokens: 12_000, window: 200_000 },
+      { type: 'context', user_id: 'u1', conversation_id: 'c1', tokens: 12_000, window: 200_000, compacted_at: '2026-10-07T12:00:00.000Z' },
       { type: 'compact', user_id: 'u1', conversation_id: 'c1', state: 'done', tokens_before: 150_000, tokens: 12_000, error_code: null },
     ]);
     // Nothing lands in the thread.

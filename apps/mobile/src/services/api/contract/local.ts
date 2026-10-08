@@ -115,6 +115,11 @@ export const chatConversationSchema = z.object({
   ai_account_id: z.string().nullable().optional(),
   archived_at: z.string().nullable(),
   last_message_at: z.string().nullable(),
+  /** How full the CLI session is (TER-315) and when it was last compacted (TER-1038): the header's
+   *  context meter. Optional: an older server never sends them. */
+  context_tokens: z.number().nullable().optional(),
+  context_window: z.number().nullable().optional(),
+  context_compacted_at: z.string().nullable().optional(),
 });
 
 /** `GET chat` and `POST chat/host`'s payload (P§6). `subagents` (spec 2026-09-26 panel §4) defaults
@@ -139,6 +144,9 @@ export const chatResponse = z.object({
   /** The answer rows still to be answered (spec 2026-09-29): what the screen shows as "pensando…"
    * when it opens in the middle of a run. Defaulted: an older server never sends the field. */
   open_answer_ids: z.array(z.string()).default([]),
+  /** The person's own context limit for the meter (TER-1038); null = the model's window, and so does an
+   * older server, which never sends the field. */
+  context_limit: z.number().nullable().optional(),
   host: chatHostStateSchema,
 });
 

@@ -205,7 +205,7 @@ export interface MobileApi {
   /** A plain boolean is the same as `{ enabled: boolean }` (the pre-D8 shape every caller still
    *  uses); `{ enabled?, autodecide? }` is the D8 shape for "Responder sozinho quando houver
    *  precedente" — the server refuses a body with neither key. */
-  setChatMemory(auth: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean }): Promise<TChatMemory>;
+  setChatMemory(auth: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }): Promise<TChatMemory>;
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, `cursor` is `next_cursor`. */
   chatNotes(auth: Auth, cursor?: string | null): Promise<TNotesResponse>;
   /** Idempotent and silent about whether `id` ever existed, was someone else's, or was some other

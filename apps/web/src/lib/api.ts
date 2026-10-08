@@ -217,7 +217,7 @@ export const api = {
    * predates trusted tabs, trusted projects or standing grants has none. */
   chat: Object.assign(
     (projectId?: string | null) =>
-      request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[]; project_grants?: ChatProjectGrant[]; standing_grants?: ChatStandingGrant[]; tab_questions?: TabQuestion[]; tab_suggestions?: TabSuggestion[]; tab_limits?: TabLimit[]; subagents?: SubagentView[]; compacting?: boolean; open_answer_ids?: string[] }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
+      request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[]; project_grants?: ChatProjectGrant[]; standing_grants?: ChatStandingGrant[]; tab_questions?: TabQuestion[]; tab_suggestions?: TabSuggestion[]; tab_limits?: TabLimit[]; subagents?: SubagentView[]; compacting?: boolean; open_answer_ids?: string[]; context_limit?: number | null }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
     {
       /** Files attached to a message before it is sent (spec §5.3). */
       attachments: {
@@ -363,7 +363,7 @@ export const api = {
   /** A plain boolean is the same as `{ enabled: boolean }` (the pre-D8 shape every caller still
    *  uses); `{ enabled?, autodecide? }` is the D8 shape for "Responder sozinho quando houver
    *  precedente" — the server refuses a body with no key. `codex_replies` is the opt-in for the Codex reply card. */
-  setChatMemory: (body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean }) =>
+  setChatMemory: (body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }) =>
     request<ChatMemory>('PATCH', '/chat/memory', typeof body === 'boolean' ? { enabled: body } : body),
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, keyset `cursor` like `chatDecisions`. */
   chatNotes: (cursor?: string | null) => {

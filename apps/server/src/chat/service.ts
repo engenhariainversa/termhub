@@ -688,7 +688,7 @@ export class ChatService {
     } finally {
       this.compacting.delete(conversation.id);
       try {
-        if (compacted && after !== null) await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: after });
+        if (compacted && after !== null) await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: after, compacted: true });
         const ok = compacted && errorCode === null;
         chatBus.publish({ type: 'compact', user_id: user.id, conversation_id: conversation.id, state: ok ? 'done' : 'failed', tokens_before: before, tokens: after, error_code: ok ? null : errorCode });
       } finally {
@@ -1412,6 +1412,10 @@ export class ChatService {
             usage = frame.usage ?? null;
             if (frame.session_id && frame.session_id !== conversation.cli_session_id) await this.deps.repos.chat.setCliSession(conversation.id, frame.session_id);
             if (frame.context) await saveContext(this.deps.repos.chat, user.id, conversation.id, frame.context);
+          } else if (frame.type === 'compacted') {
+            // The CLI compacted on its own mid-turn (auto-compact, TER-1038): the meter drops now and
+            // remembers when; the turn's own `done` writes the fill it ends with.
+            if (frame.tokens !== undefined) await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: frame.tokens, compacted: true });
           } else if (frame.type === 'api_error') {
             turnReason = frame.reason;
           } else if (frame.type === 'usage_limit') {

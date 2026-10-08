@@ -9,6 +9,7 @@ import { AppText, Banner, Button, EmptyState, MAX_READABLE_WIDTH, readableColumn
 import { inboxKey } from '../model/chat-inbox';
 import { activeGrantIndex, isGrantActive } from '../model/grant-time';
 import { isReplyable, replyRefOf, replyRefOfCard, type ReplyableCard, type ReplyRef } from '../model/reply';
+import { contextMeter } from '../model/context';
 import { isActive } from '../model/subagents';
 import { chatTimeline, groupPendingActions, type ChatEntry } from '../model/timeline';
 import type { ChatAction, ChatMessage, ChatStandingGrant } from '../model/types';
@@ -17,6 +18,7 @@ import { useChatStore } from '../viewmodel/useChatStore';
 import { ActionCard } from './action-card';
 import { ActionGroupCard } from './action-group-card';
 import { Composer } from './composer';
+import { ContextMeter } from './context-meter';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
 import { PendingBar } from './pending-bar';
@@ -395,6 +397,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
 
   const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? t('Conversa')) : t('Chat geral');
   const shownError = error ?? slot?.error ?? null;
+  const meter = useMemo(() => contextMeter(slot?.conversation, slot?.contextLimit), [slot?.conversation, slot?.contextLimit]);
 
   const confirmReset = () => {
     setConfirmingReset(false);
@@ -424,6 +427,8 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
             {/* The subagents panel (spec 2026-09-26 panel §4): the button appears once something is
                 running or being cancelled, and — while the sheet is open — stays even after every one
                 of them ended, so the sheet it opened always has a way to close it again. */}
+            {/* TER-1038: "ctx 150k/200k", against the person's own limit when they set one. */}
+            <ContextMeter meter={meter} />
             {activeSubagents.length > 0 || subagentsOpen ? <Button label={t('Subagentes ({{n}})', { n: activeSubagents.length })} variant="ghost" onPress={() => setSubagentsOpen((o) => !o)} /> : null}
             {activeGrantCount > 0 ? <Button label={activeGrantsLabel(activeGrantCount)} variant="ghost" onPress={() => router.push('/chat-grants')} /> : null}
             <Button label={t('Nova conversa')} variant="ghost" onPress={() => setConfirmingReset(true)} />
