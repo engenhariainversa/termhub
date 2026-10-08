@@ -8,7 +8,7 @@ Short version for the firewall ticket:
 
 - The agent only makes **outbound** HTTPS/WebSocket connections on **TCP 443**. It opens **no listening port** on the machine and needs no SSH and no VPN.
 - Allow `app.termhub.dev` and `termhub.dev` on 443, with WebSocket upgrades. Allow `registry.npmjs.org` to install and update the agent.
-- **Explicit HTTP proxies are not supported by the agent yet.** Allow direct egress to the hosts above, or use a transparent proxy that passes WebSocket upgrades. If you inspect TLS, exempt the termhub hosts.
+- Behind an **explicit HTTP proxy**, export `HTTPS_PROXY` (and `NO_PROXY`) before `termhub-agent service install`; the agent tunnels through it with `CONNECT`. If you inspect TLS, exempt the termhub hosts or give the agent your corporate CA with `NODE_EXTRA_CA_CERTS`.
 
 ## 1. How it works
 
@@ -50,8 +50,11 @@ A proxy or firewall that closes idle connections after **60 s or more** does not
 
 **Corporate proxies and TLS inspection**
 
-- **Explicit proxy (`HTTPS_PROXY`):** **not supported by the agent's WebSocket today.** The agent connects directly, and the service definition does not carry proxy variables. Allow direct egress to the hosts in section 3. A transparent proxy works if it passes the WebSocket `Upgrade`. (The hook script uses `curl`, which honours `https_proxy` when it is set in the CLI's environment.)
-- **TLS inspection (MITM):** the agent validates certificates with Node.js's built-in CA list, and the service does not pass an extra CA file. Inspection with a corporate root CA will make the handshake fail, so **exempt the termhub hosts from inspection**.
+- **Explicit proxy (`HTTPS_PROXY`):** the agent reads `https_proxy`/`HTTPS_PROXY` (and `http_proxy`/`HTTP_PROXY` for a plain `http://` server URL), lower case first, as curl does, and opens its WebSocket through an HTTP `CONNECT` tunnel. TLS to the termhub server still runs end to end inside the tunnel. The proxy may be `http://` or `https://`, with Basic credentials in the URL (`http://user:pass@proxy:3128`, percent-encoded). SOCKS proxies are not supported: the agent reports an error instead of connecting directly. `NO_PROXY`/`no_proxy` lists hosts that skip the proxy: `*`, a domain (which also covers its subdomains, with or without a leading `.` or `*.`), or `host:port`. CIDR ranges are not read.
+- **The service needs the variables too.** A systemd unit or LaunchAgent does not inherit your shell. `termhub-agent service install` copies `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY` and `NODE_EXTRA_CA_CERTS` from the shell it runs in into the unit or plist, and prints what it copied. When a value holds a proxy password, the file is made readable only by its owner (`0600`). The Linux unit is refreshed at every agent start, and that refresh keeps the variables that are already in it. To change them, export the new values and run `service install` again. The same variables reach `npm` during the agent's self-update.
+- **TLS inspection (MITM):** the agent validates certificates with Node.js's built-in CA list. With inspection by a corporate root CA, either **exempt the termhub hosts from inspection** or point `NODE_EXTRA_CA_CERTS` at a PEM file with that CA before `service install`. Node adds it to the built-in list; it does not replace it.
+- **Check it:** `termhub-agent doctor` shows the proxy the agent uses for the server (password hidden), says when `NO_PROXY` exempts the server, and checks that the `NODE_EXTRA_CA_CERTS` file can be read and holds a certificate. `doctor` checks the shell it runs in; the service uses what `service install` wrote.
+- The hook script uses `curl`, which honours `https_proxy` when it is set in the CLI's environment.
 - **WebSocket:** make sure the proxy or firewall allows `Connection: Upgrade` / `Upgrade: websocket` to `app.termhub.dev` and `termhub.dev`.
 
 ## 3. Domains to allow
@@ -191,8 +194,8 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
    - `registry.npmjs.org`
    - Cloudflare Access (`*.cloudflareaccess.com`) and `accounts.google.com`, for browsers.
 2. **No inbound rule** on the machines. No SSH, no VPN, no port forwarding.
-3. **Exempt those hosts from TLS inspection.**
-4. **No explicit proxy on the agent's path** (not supported yet): direct egress, or a transparent proxy.
+3. **Exempt those hosts from TLS inspection**, or install your corporate CA for the agent with `NODE_EXTRA_CA_CERTS`.
+4. **Proxy:** direct egress, a transparent proxy, or an explicit HTTP proxy that allows `CONNECT` to port 443, exported as `HTTPS_PROXY` before `termhub-agent service install`.
 5. **Machine prerequisites:** macOS or Linux, Node.js 20+, tmux, and a user account; on Linux, also `make`, a C++ compiler and `python3` (`build-essential python3` on apt, `"Development Tools" python3` on dnf, `base-devel python` on pacman). No root, apart from installing those packages with your package manager.
 6. Optional: the hosts of the AI CLIs your users run, and your package mirrors for tmux and the build tools.
 7. **Test from the machine:**
@@ -209,7 +212,7 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 
 These are open gaps, each tracked on the termhub board:
 
-- The agent does not support an explicit HTTP(S) proxy or an extra CA bundle yet (TER-575).
+- The agent does not support SOCKS proxies, proxy authentication other than Basic (no NTLM or Kerberos), PAC files, or CIDR ranges in `NO_PROXY`.
 - There is no SSO (SAML or generic OIDC), SCIM or multi-factor authentication for web users. The options are e-mail code, password, Google and Cloudflare Access (TER-581).
 - There is no security audit trail for logins, role changes, admin "view as" or token management, and no audit export. Chat actions and phone events are recorded and visible in the app (TER-577).
 - Sessions last 30 days with no idle timeout, and there is no "sign out everywhere" (TER-580).
@@ -224,7 +227,9 @@ Paths are relative to the repository root.
 
 | Claim | Where |
 |---|---|
-| Agent dials `wss://<url>/agent/ws` with a bearer token; 20 s ping; 15 s handshake timeout; 1–30 s backoff; no proxy agent | `apps/agent/src/client.ts` |
+| Agent dials `wss://<url>/agent/ws` with a bearer token; 20 s ping; 15 s handshake timeout; 1–30 s backoff | `apps/agent/src/client.ts` |
+| `HTTPS_PROXY`/`NO_PROXY` handling and the `CONNECT` tunnel | `apps/agent/src/proxy.ts` |
+| Proxy and CA variables written into the unit/plist by `service install` | `apps/agent/src/service/systemd.ts`, `apps/agent/src/service/launchd.ts` |
 | Agent has no listening socket; loopback-only TCP to WDA port ranges | `apps/agent/src/tcp.ts`, `packages/agent-protocol/src/rpc.ts` (`isWdaPort`), `packages/agent-protocol/src/messages.ts` (`tcpOpenParams`) |
 | Closed list of agent operations | `apps/agent/src/rpc/index.ts`, `packages/agent-protocol/src/rpc.ts` |
 | Config file `0600`/`0700` | `apps/agent/src/config.ts` |

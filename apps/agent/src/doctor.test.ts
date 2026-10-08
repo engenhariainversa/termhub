@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defaultDoctorPaths, formatDoctor, runDoctor, type DoctorReport } from './doctor.js';
+import { defaultDoctorPaths, formatDoctor, networkReport, runDoctor, type DoctorReport } from './doctor.js';
 
 describe('runDoctor', () => {
   let home: string;
@@ -86,6 +86,7 @@ describe('formatDoctor', () => {
     nodePty: { ok: true },
     spawnHelper: { ok: true, path: '/g/node-pty/prebuilds/darwin-arm64/spawn-helper', repaired: false },
     paths: [],
+    network: { ok: true },
   };
 
   it('tells the user when the spawn-helper could not be made executable', () => {
@@ -129,3 +130,49 @@ describe('formatDoctor', () => {
     }
   });
 });
+
+describe('networkReport', () => {
+  it('reports a direct connection when no proxy variable is set', () => {
+    expect(networkReport('https://app.termhub.dev', {})).toEqual({ ok: true });
+    expect(formatDoctor({ ...baseFor(), network: { ok: true } }, { platform: 'linux' })).toContain('✓ Proxy: nenhum (conexão direta)');
+  });
+
+  it('shows the proxy for the server with its password hidden', () => {
+    const report = networkReport('https://app.termhub.dev', { HTTPS_PROXY: 'http://me:s3cret@proxy.corp:3128' });
+    expect(report).toEqual({ ok: true, proxy: 'http://me:***@proxy.corp:3128' });
+    expect(formatDoctor({ ...baseFor(), network: report }, { platform: 'linux' })).toContain('✓ Proxy: http://me:***@proxy.corp:3128');
+  });
+
+  it('says when NO_PROXY exempts the server', () => {
+    expect(networkReport('https://app.termhub.dev', { https_proxy: 'proxy.corp:3128', no_proxy: '.termhub.dev' })).toEqual({ ok: true, bypassed: true });
+  });
+
+  it('fails on a proxy the agent cannot use', () => {
+    const report = networkReport('https://app.termhub.dev', { HTTPS_PROXY: 'socks5://proxy.corp:1080' });
+    expect(report.ok).toBe(false);
+    expect(formatDoctor({ ...baseFor(), network: report }, { platform: 'linux' })).toContain('✗ Proxy: unsupported proxy protocol socks5:');
+  });
+
+  it('checks the extra CA file', () => {
+    const fakeFs = { readFileSync: (p: string) => {
+      if (p === '/ca.pem') return '-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----\n';
+      throw Object.assign(new Error('nope'), { code: 'ENOENT' });
+    } } as unknown as typeof fs;
+    expect(networkReport(undefined, { NODE_EXTRA_CA_CERTS: '/ca.pem' }, fakeFs)).toEqual({ ok: true, extraCa: { path: '/ca.pem', ok: true } });
+    const missing = networkReport(undefined, { NODE_EXTRA_CA_CERTS: '/missing.pem' }, fakeFs);
+    expect(missing).toEqual({ ok: false, extraCa: { path: '/missing.pem', ok: false, error: 'ENOENT' } });
+    expect(formatDoctor({ ...baseFor(), network: missing }, { platform: 'linux' })).toContain('✗ CA extra (NODE_EXTRA_CA_CERTS): /missing.pem: ENOENT');
+  });
+});
+
+function baseFor(): DoctorReport {
+  return {
+    config: { ok: true, path: '/c' },
+    server: { ok: true },
+    tmux: { ok: true },
+    nodePty: { ok: true },
+    spawnHelper: { ok: true, path: null, repaired: false },
+    paths: [],
+    network: { ok: true },
+  };
+}

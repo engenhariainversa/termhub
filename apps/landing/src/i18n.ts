@@ -307,7 +307,7 @@ const pt = {
       notes: [
         'Libere o upgrade de WebSocket (Connection: Upgrade) para app.termhub.dev e termhub.dev.',
         'Toda conexão manda ping a cada 30 s ou menos: proxies que fecham conexões ociosas depois de 60 s não atrapalham.',
-        'Com inspeção TLS (MITM), deixe os hosts do termhub de fora: o agente valida certificados com a lista padrão do Node.js.',
+        'Com inspeção TLS (MITM), deixe os hosts do termhub de fora ou entregue ao agente a CA corporativa em NODE_EXTRA_CA_CERTS: ele valida certificados com a lista padrão do Node.js mais esse arquivo.',
       ],
     },
     domains: {
@@ -342,8 +342,8 @@ const pt = {
       items: [
         'Saída TCP 443 com upgrade de WebSocket para app.termhub.dev, termhub.dev e registry.npmjs.org; no navegador, também Cloudflare Access e accounts.google.com.',
         'Nenhuma regra de entrada nas máquinas: sem SSH, VPN ou redirecionamento de porta.',
-        'Hosts do termhub fora da inspeção TLS.',
-        'Saída direta ou proxy transparente: o agente ainda não usa proxy explícito (HTTPS_PROXY).',
+        'Hosts do termhub fora da inspeção TLS, ou a CA corporativa em NODE_EXTRA_CA_CERTS na máquina.',
+        'Saída direta, proxy transparente ou proxy explícito: o agente usa HTTPS_PROXY e NO_PROXY (proxy HTTP com CONNECT). Exporte as variáveis antes de termhub-agent service install, que as grava no serviço.',
         'Na máquina: macOS ou Linux (Windows pelo WSL), Node.js 20+, tmux e uma conta de usuário comum; no Linux, também as ferramentas de compilação (make, g++, python3).',
       ],
       test_label: 'Teste na máquina',
@@ -353,7 +353,6 @@ const pt = {
       title: 'O que ainda não temos',
       lead: 'Para você decidir com a informação completa: estes itens estão no nosso roadmap e não existem hoje.',
       items: [
-        'Suporte a proxy HTTP(S) explícito e a CA corporativa extra no agente.',
         'SSO corporativo (SAML ou OIDC genérico), SCIM e autenticação multifator.',
         'Trilha de auditoria de logins, permissões e tokens, com exportação. Hoje ficam registradas as ações do chat, com quem aprovou, e os eventos dos celulares.',
         'Expiração de sessão por inatividade e "sair de todos os aparelhos".',
@@ -731,7 +730,7 @@ const en: typeof pt = {
       notes: [
         'Allow the WebSocket upgrade (Connection: Upgrade) to app.termhub.dev and termhub.dev.',
         'Every connection pings every 30 s or less: proxies that close idle connections after 60 s do not get in the way.',
-        'With TLS inspection (MITM), leave the termhub hosts out: the agent validates certificates against Node.js’s default list.',
+        'With TLS inspection (MITM), leave the termhub hosts out or hand the agent your corporate CA in NODE_EXTRA_CA_CERTS: it validates certificates against Node.js’s default list plus that file.',
       ],
     },
     domains: {
@@ -766,8 +765,8 @@ const en: typeof pt = {
       items: [
         'Outbound TCP 443 with WebSocket upgrade to app.termhub.dev, termhub.dev and registry.npmjs.org; for browsers, also Cloudflare Access and accounts.google.com.',
         'No inbound rule on the machines: no SSH, VPN or port forwarding.',
-        'termhub hosts excluded from TLS inspection.',
-        'Direct egress or a transparent proxy: the agent does not use an explicit proxy (HTTPS_PROXY) yet.',
+        'termhub hosts excluded from TLS inspection, or the corporate CA in NODE_EXTRA_CA_CERTS on the machine.',
+        'Direct egress, a transparent proxy or an explicit one: the agent honours HTTPS_PROXY and NO_PROXY (an HTTP proxy with CONNECT). Export them before termhub-agent service install, which writes them into the service.',
         'On the machine: macOS or Linux (Windows through WSL), Node.js 20+, tmux and a regular user account; on Linux, also the build tools (make, g++, python3).',
       ],
       test_label: 'Test on the machine',
@@ -777,7 +776,6 @@ const en: typeof pt = {
       title: 'What we don’t have yet',
       lead: 'So you can decide with the full picture: these items are on our roadmap and do not exist today.',
       items: [
-        'Support for an explicit HTTP(S) proxy and an extra corporate CA in the agent.',
         'Corporate SSO (SAML or generic OIDC), SCIM and multi-factor authentication.',
         'An audit trail of logins, permissions and tokens, with export. Today the chat’s actions, with who approved them, and phone events are recorded.',
         'Idle session timeout and "sign out everywhere".',

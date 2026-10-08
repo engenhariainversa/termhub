@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { agentEnv, run } from '../exec.js';
+import { PROXY_ENV_KEYS, proxyEnvFrom, writeServiceFile, type ProxyEnv } from '../proxy.js';
 
 export const LABEL = 'dev.termhub.agent';
 
@@ -10,11 +11,16 @@ export interface PlistOptions {
   node: string;
   script: string;
   logPath: string;
+  /** Proxy/CA variables to carry into the job (`HTTPS_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`, …). */
+  env?: ProxyEnv;
 }
 
 /** XML for a macOS LaunchAgent that runs `<node> <script> run` at load and restarts on any non-zero exit. */
-export function renderPlist({ label, node, script, logPath }: PlistOptions): string {
+export function renderPlist({ label, node, script, logPath, env = {} }: PlistOptions): string {
   const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const extraEnv = PROXY_ENV_KEYS.filter((key) => env[key])
+    .map((key) => `\n    <key>${key}</key>\n    <string>${escape(env[key]!)}</string>`)
+    .join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -41,7 +47,7 @@ export function renderPlist({ label, node, script, logPath }: PlistOptions): str
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>${escape(agentEnv().PATH ?? '')}</string>
+    <string>${escape(agentEnv().PATH ?? '')}</string>${extraEnv}
   </dict>
   <key>WorkingDirectory</key>
   <string>${escape(os.homedir())}</string>
@@ -54,6 +60,8 @@ export interface ServiceFileOptions {
   node: string;
   script: string;
   logPath: string;
+  /** Proxy/CA variables for `install`; defaults to the ones set in this process's environment. */
+  env?: ProxyEnv;
 }
 
 export interface LaunchdDeps {
@@ -73,10 +81,11 @@ function gui(): string {
 export async function install(opts: ServiceFileOptions, deps: LaunchdDeps = {}): Promise<void> {
   const runFn = deps.run ?? run;
   const file = plistPath(deps.home);
-  const plist = renderPlist({ label: LABEL, node: opts.node, script: opts.script, logPath: opts.logPath });
+  const env = opts.env ?? proxyEnvFrom();
+  const plist = renderPlist({ label: LABEL, node: opts.node, script: opts.script, logPath: opts.logPath, env });
 
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, plist, 'utf8');
+  writeServiceFile(file, plist, env);
 
   // bootout can legitimately fail (nothing was loaded yet) — ignore it, only bootstrap matters.
   await runFn('launchctl', ['bootout', gui(), file]);

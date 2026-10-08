@@ -74,6 +74,15 @@ describe('renderPlist', () => {
   });
 });
 
+describe('renderPlist proxy env', () => {
+  it('adds the proxy/CA variables next to PATH', () => {
+    const xml = renderPlist({ label: 'l', node: '/n', script: '/s', logPath: '/l', env: { HTTPS_PROXY: 'http://p:3128', NODE_EXTRA_CA_CERTS: '/a&b.pem' } });
+    expect(xml).toContain('<key>HTTPS_PROXY</key>\n    <string>http://p:3128</string>');
+    expect(xml).toContain('<key>NODE_EXTRA_CA_CERTS</key>\n    <string>/a&amp;b.pem</string>');
+    expect(xml).not.toContain('NO_PROXY');
+  });
+});
+
 describe('renderUnit', () => {
   it('matches the expected systemd unit', () => {
     const unit = renderUnit({ node: '/usr/local/bin/node', script: '/opt/termhub-agent/dist/cli.js', logPath: '/home/pedro/.termhub/agent.log' });
@@ -119,6 +128,18 @@ describe('renderUnit', () => {
     expect(renderUnit({ node: '/n/node', script: '/s/cli.js' })).toContain('KillMode=process');
   });
 
+  it('writes the proxy/CA variables, quoted for systemd (\\, " escaped and % doubled)', () => {
+    const unit = renderUnit({
+      node: '/n/node',
+      script: '/s/cli.js',
+      env: { HTTPS_PROXY: 'http://me:p%40ss@proxy:3128', NO_PROXY: 'localhost, .corp', NODE_EXTRA_CA_CERTS: '/etc/ssl/corp "ca".pem' },
+    });
+    expect(unit).toContain('Environment="HTTPS_PROXY=http://me:p%%40ss@proxy:3128"');
+    expect(unit).toContain('Environment="NO_PROXY=localhost, .corp"');
+    expect(unit).toContain('Environment="NODE_EXTRA_CA_CERTS=/etc/ssl/corp \\"ca\\".pem"');
+    expect(unit).not.toContain('HTTP_PROXY=');
+  });
+
   it('takes PATH from pathEnv when given, instead of the current environment', () => {
     const unit = renderUnit({ node: '/n/node', script: '/s/cli.js', pathEnv: '/only/this' });
     expect(unit).toContain('Environment=PATH=/only/this');
@@ -151,9 +172,10 @@ describe('launchd install/uninstall/status', () => {
       if (args[0] === 'bootout') return fail('nothing loaded');
       return ok();
     });
-    await launchdInstall({ node: '/n/node', script: '/s/cli.js', logPath: '/l/agent.log' }, { run: run as never, home });
+    await launchdInstall({ node: '/n/node', script: '/s/cli.js', logPath: '/l/agent.log', env: {} }, { run: run as never, home });
 
     expect(fs.readFileSync(plist, 'utf8')).toContain('<string>/s/cli.js</string>');
+    expect(fs.readFileSync(plist, 'utf8')).not.toContain('HTTPS_PROXY');
     expect(calls[0][0]).toBe('launchctl');
     expect(calls[0][1]).toBe('bootout');
     expect(calls[1][0]).toBe('launchctl');
@@ -246,6 +268,13 @@ describe('systemd install/uninstall/status', () => {
     expect(calls[1]).toEqual(['systemctl', '--user', 'enable', '--now', UNIT_NAME]);
   });
 
+  it('install() carries the proxy variables and keeps a unit holding a proxy password private', async () => {
+    const run = vi.fn(async () => ok());
+    await systemdInstall({ node: '/n/node', script: '/s/cli.js', logPath: '/l/agent.log', env: { HTTPS_PROXY: 'http://me:pw@proxy:3128' } }, { run: run as never, home });
+    expect(fs.readFileSync(unit, 'utf8')).toContain('Environment="HTTPS_PROXY=http://me:pw@proxy:3128"');
+    expect(fs.statSync(unit).mode & 0o777).toBe(0o600);
+  });
+
   it('install() throws when enable --now fails', async () => {
     const run = vi.fn(async (_file: string, args: string[]) => (args.includes('enable') ? fail('denied') : ok()));
     await expect(systemdInstall({ node: '/n/node', script: '/s/cli.js', logPath: '/l/agent.log' }, { run: run as never, home })).rejects.toThrow(/enable --now failed/);
@@ -302,6 +331,14 @@ describe('systemd refreshUnit', () => {
     const written = fs.readFileSync(unit, 'utf8');
     expect(written).toContain('Environment=PATH=/keep/me:/usr/bin');
     expect(written.match(/Environment=PATH=/g)).toHaveLength(1);
+  });
+
+  it('keeps the proxy/CA variables written by `service install`, whatever this process has', async () => {
+    const env = { HTTPS_PROXY: 'http://me:p%40ss@proxy:3128', NO_PROXY: 'localhost', NODE_EXTRA_CA_CERTS: '/etc/c "x".pem' };
+    fs.writeFileSync(unit, renderUnit({ ...opts, pathEnv: '/keep/me', env }).replace('KillMode=process\n', ''), 'utf8');
+    const run = vi.fn(async () => ok());
+    await expect(refreshUnit(opts, { run: run as never, home })).resolves.toBe(true);
+    expect(fs.readFileSync(unit, 'utf8')).toBe(renderUnit({ ...opts, pathEnv: '/keep/me', env }));
   });
 
   it('does nothing when the service was never installed', async () => {

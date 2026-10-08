@@ -64,6 +64,20 @@ the existing sessions when it comes back (macOS needs nothing: launchd does not 
 it daemonises). A unit installed by an older agent is rewritten to the current template the first
 time the new agent starts.
 
+## Corporate proxy and extra CA
+
+Behind an explicit HTTP proxy, export `HTTPS_PROXY` (and `NO_PROXY` for hosts that skip it); the
+agent opens its WebSocket through a `CONNECT` tunnel. Behind TLS inspection, point
+`NODE_EXTRA_CA_CERTS` at a PEM file with the corporate root CA. The service does not inherit your
+shell, so export them **before** `termhub-agent service install`, which writes them into the
+unit/plist (run it again after changing them):
+
+```bash
+export HTTPS_PROXY=http://proxy.corp:3128 NO_PROXY=localhost,.corp NODE_EXTRA_CA_CERTS=/etc/ssl/corp-ca.pem
+termhub-agent service install
+termhub-agent doctor   # shows the proxy in use and checks the CA file
+```
+
 ## Other commands
 
 - `termhub-agent status` — shows the paired server, machine name and whether the agent can reach
