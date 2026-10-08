@@ -18,6 +18,7 @@ import { automationQueue } from '../automation/queue.js';
 import { policyText } from '../automation/policy.js';
 import { listAutomationEvents } from '../automation/events.js';
 import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun } from '../automation/follower.js';
+import { DECISIONS_MAX } from '../automation/decisions-taken.js';
 import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { setAutomationPolicy, setMachineAutomation } from '../automation/setup-tools.js';
 import { AUTONOMY_LEVELS } from '../setup/schema.js';
@@ -360,7 +361,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'report_card',
     description:
-      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. Call it once, at the end.",
+      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. decisions: every product or technical decision you took alone (question, options, choice, reason; pt-BR, short) — they go to the feed, the daily summary and the memory for the person to review. Call it once, at the end.",
     // Preflight F-8: scope `read` and no grant check — a documented exception, not a widening: `allowedIf`
     // admits only a tab token whose own tab has an active run, and the tool writes that run's status only.
     scope: 'read', resource: 'tasks', action: 'read',
@@ -372,8 +373,19 @@ export const TOOLS: ToolDef[] = [
       pr_url: z.string().trim().url().max(500).optional(),
       reason: z.string().trim().min(1).max(500).optional(),
       code: z.enum(['github_transient']).optional(),
+      decisions: z
+        .array(
+          z.object({
+            question: z.string().trim().min(1).max(300),
+            options: z.string().trim().min(1).max(300).optional(),
+            choice: z.string().trim().min(1).max(300),
+            reason: z.string().trim().min(1).max(500),
+          }).strict(),
+        )
+        .max(DECISIONS_MAX)
+        .optional(),
     },
-    run: (ctx, a) => reportCard(ctx, a as { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient' }),
+    run: (ctx, a) => reportCard(ctx, a as Parameters<typeof reportCard>[1]),
   },
   {
     name: 'escalate_automation_run',

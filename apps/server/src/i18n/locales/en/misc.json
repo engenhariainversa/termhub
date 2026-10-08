@@ -53,6 +53,8 @@
   "O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.": "The card could not start after several attempts and left automatic mode; fix the cause and tag the card again.",
   "O agente saiu de novo depois de reiniciado; confira a aba.": "The agent exited again after it was restarted; check the tab.",
   "O agente disse que travou e precisa de você.": "The agent said it is stuck and needs you.",
+  "O agente parou numa decisão que o automático não toma sozinho (credenciais, deploy, lojas, dados de produção ou escopo maior que o card); responda na aba.": "The agent stopped on a decision automatic work does not take alone (credentials, deploy, stores, production data or a scope bigger than the card); answer in the tab.",
+  "O agente parou numa decisão e o projeto pede para parar nelas; responda na aba.": "The agent stopped on a decision and the project asks to stop on them; answer in the tab.",
   "O trabalho automático parou e espera você.": "Automatic work stopped and is waiting for you.",
   "Automático parou aqui: {{reason}}": "Automatic work stopped here: {{reason}}",
   "Automático parou em {{ref}}: {{reason}}": "Automatic work stopped at {{ref}}: {{reason}}",
@@ -92,6 +94,8 @@
   "Resumo do automático — {{date}}": "Automatic work summary — {{date}}",
   "Feitos: {{cards}} cards, {{merges}} merges, {{deploys}} deploys": "Done: {{cards}} cards, {{merges}} merges, {{deploys}} deploys",
   "Esperando você: {{waiting}}": "Waiting on you: {{waiting}}",
+  "Decidido sozinho: {{decisions}}": "Decided alone: {{decisions}}",
+  "{{ref}}: seguiu a própria recomendação": "{{ref}}: followed its own recommendation",
   "Esperando você: {{total}}": "Waiting on you: {{total}}",
   "nada": "nothing",
   "Custo estimado do dia: {{cost}}": "Estimated cost of the day: {{cost}}",
@@ -120,5 +124,6 @@
   "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "The agent exited and this machine has no automatic-work hard lock; update the agent (0.19.0 or newer) and resume.",
   "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub kept failing on the push or the PR after the automatic retries; check the tab and resume.",
   "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub is unstable; the CI fix is asked again once it is back",
-  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "The deploy failed because of a GitHub problem; running it again ({{attempt}} of {{max}}): {{url}}"
+  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "The deploy failed because of a GitHub problem; running it again ({{attempt}} of {{max}}): {{url}}",
+  "A correção do PR espera a aba do card ficar livre; feche a aba para abrir outra": "The PR fix waits for the card's tab to be free; close the tab to open another"
 }

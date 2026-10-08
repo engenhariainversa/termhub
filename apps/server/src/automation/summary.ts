@@ -28,6 +28,8 @@ export interface SummaryContent {
   merges: number;
   deploys: number;
   waiting: WaitingItem[];
+  /** TER-1043: the decisions taken alone in the period, for the person to review ("REF: question → choice") */
+  decisions?: WaitingItem[];
   /** estimated USD of the day; null = nothing priced */
   cost: number | null;
 }
@@ -50,6 +52,7 @@ export function summaryMessage(s: SummaryContent, locale: Locale): string {
     t(locale, 'Resumo do automático — {{date}}', { date: dateOf(s.day, locale) }),
     t(locale, 'Desde {{since}}', { since: sinceText(s.since, s.zone, locale) }),
     t(locale, 'Feitos: {{cards}} cards, {{merges}} merges, {{deploys}} deploys', { cards: s.cards, merges: s.merges, deploys: s.deploys }),
+    ...(s.decisions?.length ? [t(locale, 'Decidido sozinho: {{decisions}}', { decisions: s.decisions.map((d) => d.label(locale)).join('; ') })] : []),
     t(locale, 'Esperando você: {{waiting}}', { waiting }),
     t(locale, 'Custo estimado do dia: {{cost}}', { cost: s.cost === null ? '—' : t(locale, 'US$ {{value}}', { value: s.cost.toFixed(2) }) }),
   ].join('\n');
@@ -100,13 +103,15 @@ async function dueOwners(repos: Repositories): Promise<Map<string, { hour: numbe
 async function compose(repos: Repositories, ownerId: string, projectIds: string[], zone: string, day: string, now: Date): Promise<SummaryContent> {
   // the period since the previous summary (24 h before for the first); cost is per day, so the days it touches count whole
   const since = (await repos.automationSummaries.previousSentAt(ownerId, day)) ?? new Date(now.getTime() - 86_400_000);
-  const [activity, cost, parked, approvals] = await Promise.all([
+  const [activity, cost, parked, approvals, decided] = await Promise.all([
     repos.automationSummaries.activity(projectIds, since, now),
     repos.automationSummaries.costOfDays(projectIds, dayIn(zone, since), day),
     repos.automationSummaries.parkedRuns(projectIds, SLOT_FREE_REASONS as string[]),
     repos.automationSummaries.pendingCards(ownerId, MERGE_TOOL, projectIds),
+    repos.automationSummaries.decisions(projectIds, since, now),
   ]);
-  const tasks = new Map((await repos.tasks.findByIds(parked.flatMap((p) => (p.task_id ? [p.task_id] : [])))).map((x) => [x.id, x]));
+  const taskIds = [...parked, ...decided].flatMap((p) => (p.task_id ? [p.task_id] : []));
+  const tasks = new Map((await repos.tasks.findByIds([...new Set(taskIds)])).map((x) => [x.id, x]));
   const waiting: WaitingItem[] = [
     ...parked.map((p) => ({
       label: (locale: Locale) => `${(p.task_id ? tasks.get(p.task_id)?.ref : null) ?? t(locale, 'Um card')} (${escalationReasonText(p.reason, locale)})`,
@@ -115,7 +120,13 @@ async function compose(repos: Repositories, ownerId: string, projectIds: string[
       label: (locale: Locale) => `${a.number === null ? t(locale, 'Um PR') : `PR #${a.number}`} (${t(locale, REASON_TEXT.merge_needs_approval)})`,
     })),
   ];
-  return { day, since, zone, ...activity, waiting, cost };
+  const decisions: WaitingItem[] = decided.map((d) => ({
+    label: (locale: Locale) => {
+      const ref = (d.task_id ? tasks.get(d.task_id)?.ref : null) ?? t(locale, 'Um card');
+      return d.summary ? `${ref}: ${d.summary}` : t(locale, '{{ref}}: seguiu a própria recomendação', { ref });
+    },
+  }));
+  return { day, since, zone, ...activity, waiting, decisions, cost };
 }
 
 /**

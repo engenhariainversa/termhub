@@ -53,6 +53,10 @@
   "O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.": "La tarjeta no pudo empezar después de varios intentos y salió del modo automático; corrige la causa y vuelve a marcar la tarjeta.",
   "O agente saiu de novo depois de reiniciado; confira a aba.": "El agente volvió a salir después de reiniciarse; revisa la pestaña.",
   "O agente disse que travou e precisa de você.": "El agente dijo que está bloqueado y te necesita.",
+  "O agente parou numa decisão que o automático não toma sozinho (credenciais, deploy, lojas, dados de produção ou escopo maior que o card); responda na aba.": "El agente se detuvo en una decisión que el trabajo automático no toma solo (credenciales, deploy, tiendas, datos de producción o un alcance mayor que la tarjeta); responde en la pestaña.",
+  "O agente parou numa decisão e o projeto pede para parar nelas; responda na aba.": "El agente se detuvo en una decisión y el proyecto pide detenerse en ellas; responde en la pestaña.",
+  "Decidido sozinho: {{decisions}}": "Decidido solo: {{decisions}}",
+  "{{ref}}: seguiu a própria recomendação": "{{ref}}: siguió su propia recomendación",
   "O trabalho automático parou e espera você.": "El trabajo automático se detuvo y te está esperando.",
   "Automático parou aqui: {{reason}}": "El trabajo automático se detuvo aquí: {{reason}}",
   "Automático parou em {{ref}}: {{reason}}": "El trabajo automático se detuvo en {{ref}}: {{reason}}",
@@ -120,5 +124,6 @@
   "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "El agente salió y esta máquina no tiene el bloqueo del trabajo automático; actualiza el agente (0.19.0 o más reciente) y reanuda.",
   "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub siguió fallando en el push o en el PR después de los reintentos automáticos; revisa la pestaña y reanuda.",
   "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub inestable; la corrección del CI se pide de nuevo cuando vuelva",
-  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "El deploy falló por un problema de GitHub; ejecutándolo de nuevo ({{attempt}} de {{max}}): {{url}}"
+  "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "El deploy falló por un problema de GitHub; ejecutándolo de nuevo ({{attempt}} de {{max}}): {{url}}",
+  "A correção do PR espera a aba do card ficar livre; feche a aba para abrir outra": "La corrección del PR espera a que la pestaña de la tarjeta quede libre; cierra la pestaña para abrir otra"
 }

@@ -30,6 +30,9 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       return e.reason_text ? t('{{ref}} não começou: {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: parou e espera você', { ref });
     case 'question_answered':
       return t('{{ref}}: pergunta do agente respondida', { ref });
+    case 'decided_by_recommendation':
+      // TER-1043: the agent's own summary when it reported the decision; the server's nudge has none
+      return e.summary ? t('{{ref}} decidiu sozinho: {{summary}}', { ref, summary: e.summary }) : t('{{ref}}: seguiu a própria recomendação (registrada no PR)', { ref });
     case 'escalated':
       return t('{{ref}} precisa de você: {{reason}}', { ref, reason: e.reason_text ?? '' });
     case 'pr_opened':
