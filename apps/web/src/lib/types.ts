@@ -318,6 +318,10 @@ export interface AgentOnCard {
   background: boolean;
   /** the agent ended its turn with a report and asks nothing (TER-972); only with `state: 'idle'` */
   finished: boolean;
+  /** TER-1046, absent from an older server: a blocked run (`idle`), an expired login (`error`), the trust dialog (`waiting_input`) */
+  blocked?: boolean;
+  auth_required?: boolean;
+  trust_prompt?: boolean;
   needs_you: boolean;
   activity: string | null;
   activity_verb: string | null;
@@ -681,8 +685,21 @@ export interface Tab {
 /**
  * `waiting_background`: the agent ended its turn while its own subagents, shells or monitors still run (TER-644).
  * `finished`: the agent ended its turn with a plain report and asks nothing (TER-972).
+ * `blocked`: the tab's automatic run reported itself blocked; automation or the chat acts (TER-1046).
+ * `auth_required`: Claude Code's login expired, the person has to run /login (TER-1046).
+ * `trust_prompt`: Claude Code asks whether the folder is trusted, before it starts (TER-1046).
  */
-export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background' | 'finished';
+export type TabState =
+  | 'working'
+  | 'waiting_input'
+  | 'waiting_permission'
+  | 'idle'
+  | 'error'
+  | 'waiting_background'
+  | 'finished'
+  | 'blocked'
+  | 'auth_required'
+  | 'trust_prompt';
 
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 
@@ -695,10 +712,16 @@ export const TAB_STATE_LABEL: Record<TabState, string> = {
   error: tk('erro'),
   waiting_background: tk('aguardando segundo plano'),
   finished: tk('concluído'),
+  blocked: tk('bloqueado'),
+  auth_required: tk('login expirado'),
+  trust_prompt: tk('confiar na pasta?'),
 };
 
-/** States in which the tool is waiting for the person. */
-export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission'];
+/** States in which the tool is waiting for the person: the yellow ones and the expired login (TER-1046). */
+export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission', 'auth_required', 'trust_prompt'];
+
+/** States a quick reply answers: typing text into a login or trust dialog would do nothing good. */
+export const ANSWERABLE: readonly TabState[] = ['waiting_input', 'waiting_permission'];
 
 export interface TabEvent {
   id: string;
@@ -1774,6 +1797,10 @@ export interface TabChatSummary {
   state: 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | null;
   background: boolean;
   finished: boolean;
+  /** TER-1046, absent from an older server: a blocked run (`idle`), an expired login (`error`), the trust dialog (`waiting_input`) */
+  blocked?: boolean;
+  auth_required?: boolean;
+  trust_prompt?: boolean;
   state_at: string | null;
   needs_you: boolean;
   activity: string | null;

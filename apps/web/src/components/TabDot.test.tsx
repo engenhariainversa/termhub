@@ -37,7 +37,9 @@ describe('TabDot (TER-1044)', () => {
   });
 
   it('stands still once the tab finished, stopped or died', () => {
-    expect(dot({ alive: true, tab: st('finished') }).dot.className).not.toMatch(/tab-dot-/);
+    const done = dot({ alive: true, tab: st('finished') }).dot;
+    expect(done.getAttribute('data-icon')).toBe('check');
+    expect(done.getAttribute('class')).not.toMatch(/tab-dot-/);
     cleanup();
     expect(dot({ alive: true, tab: st('idle') }).dot.className).not.toMatch(/tab-dot-/);
     cleanup();

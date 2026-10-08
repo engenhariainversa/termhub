@@ -28,6 +28,12 @@ it('idle or no state is Parado; error is Erro', () => {
   expect(tab({ state: 'error' })).toBe('Erro');
 });
 
+it('an expired login, the trust dialog and a blocked run say what they are (TER-1046)', () => {
+  expect(tab({ state: 'error', auth_required: true, needs_you: true })).toBe('Login expirado: rode /login');
+  expect(tab({ state: 'waiting_input', trust_prompt: true, needs_you: true })).toBe('Pergunta se a pasta é confiável');
+  expect(tab({ state: 'idle', blocked: true })).toBe('Bloqueado');
+});
+
 describe('in English', () => {
   beforeEach(() => setLocale('en'));
   afterEach(() => setLocale(null));

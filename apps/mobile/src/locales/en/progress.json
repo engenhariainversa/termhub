@@ -1,5 +1,8 @@
 {
   "concluído": "done",
+  "bloqueado": "blocked",
+  "login expirado": "login expired",
+  "confiar na pasta?": "trust the folder?",
   "ainda não começou": "not started yet",
   "estimativa após 2 subtarefas": "estimate after 2 subtasks",
   "~{{range}} de trabalho": "~{{range}} of work",

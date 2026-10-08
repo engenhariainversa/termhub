@@ -108,7 +108,7 @@ const BUILDING_LABEL_MAX = 28;
 export const SUBTITLE_CAP = 30;
 
 // `finished` (TER-972) sits at rest: done, asking nothing, so never the raised hand of "esperando você"
-const POSE: Record<TabState, Pose> = { working: 'type', waiting_input: 'raise', waiting_permission: 'raise', idle: 'sleep', error: 'shake', waiting_background: 'sit', finished: 'sit' };
+const POSE: Record<TabState, Pose> = { working: 'type', waiting_input: 'raise', waiting_permission: 'raise', idle: 'sleep', error: 'shake', waiting_background: 'sit', finished: 'sit', blocked: 'sit', auth_required: 'raise', trust_prompt: 'raise' };
 
 const ACTIVITY_LABEL: Record<TabActivity, string> = {
   coding: tk('codando'),

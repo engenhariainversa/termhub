@@ -5,7 +5,7 @@ import { useMonitor } from '../lib/monitor';
 import { useData } from '../lib/data';
 import { ApiError } from '../lib/api';
 import { emptyMonitorHint, tabNeedsYou } from '../lib/needs-you';
-import { NEEDS_YOU, TAB_STATE_LABEL, type MonitorItem, type TabState } from '../lib/types';
+import { ANSWERABLE, NEEDS_YOU, TAB_STATE_LABEL, type MonitorItem, type TabState } from '../lib/types';
 import { i18n, useTranslation } from '../i18n';
 
 function since(iso: string | null, now: number): string {
@@ -27,7 +27,12 @@ function stateStyle(state: TabState | null): string {
     case 'waiting_background':
       return 'bg-bg-4 text-fg-muted';
     case 'error':
+    case 'auth_required':
       return 'bg-danger/15 text-danger';
+    case 'trust_prompt':
+      return 'bg-attention/15 text-attention';
+    case 'blocked':
+      return 'bg-bg-4 text-fg-muted';
     // done, asking nothing (TER-972): falls through to the green of a healthy tab
     case 'finished':
     default:
@@ -47,7 +52,8 @@ function Item({ item, now }: { item: MonitorItem; now: number }) {
   // state — the tool is still actually waiting for an answer either way, seen or not.
   const waiting = tabNeedsYou(tab);
   // Replying types into the terminal: it takes terminals:write (TER-576), like typing in the tab itself.
-  const canReply = !!tab.state && NEEDS_YOU.includes(tab.state) && can('terminals', 'write');
+  // A login or the trust dialog is not answered with text (TER-1046): the person opens the tab.
+  const canReply = !!tab.state && ANSWERABLE.includes(tab.state) && can('terminals', 'write');
 
   const send = async (e: FormEvent, value = text) => {
     e.preventDefault();
@@ -134,7 +140,7 @@ export function groupMachineItems(items: MonitorItem[]): MachineGroup[] {
     const st = item.tab.state;
     if (tabNeedsYou(item.tab)) g.waiting.push(item);
     else if (st && NEEDS_YOU.includes(st)) g.seen.push(item); // waiting_*, already seen
-    else if (st === 'idle' || st === 'finished' || st === 'error') g.finished.push(item);
+    else if (st === 'idle' || st === 'finished' || st === 'blocked' || st === 'error') g.finished.push(item);
     else g.working += 1;
   }
   const oldestWaiting = (g: MachineGroup) => (g.waiting.length ? Math.min(...g.waiting.map((i) => new Date(i.tab.state_at ?? 0).getTime())) : Number.POSITIVE_INFINITY);

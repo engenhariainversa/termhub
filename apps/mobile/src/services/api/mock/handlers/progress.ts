@@ -30,7 +30,7 @@ export function mockProgress(now: number): TProgressResponse {
             id: 'c-183', ref: 'TER-183', title: 'Painel de progresso', type: 'story', status: 'doing', column_name: 'Fazendo',
             units: { done: 3, total: 5 }, percent: 60, started_at: minutesAgo(90), done_at: null, active_seconds: 1800,
             estimate: { kind: 'range', low_s: 1200, high_s: 2700, basis: 'agent_time', samples: 3 },
-            agents: [{ tab_id: 't-api', tab_name: 'api', machine_name: 'jarvis', subtask_ref: null, state: 'waiting_input', state_at: minutesAgo(12), background: false, finished: false, needs_you: true, activity: null, activity_verb: null, rate_limited: false, automatic: false }],
+            agents: [{ tab_id: 't-api', tab_name: 'api', machine_name: 'jarvis', subtask_ref: null, state: 'waiting_input', state_at: minutesAgo(12), background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, needs_you: true, activity: null, activity_verb: null, rate_limited: false, automatic: false }],
             auto: false,
             usage: { tokens: 1_200_000, cost_usd: 2.4 },
             pull_requests: [

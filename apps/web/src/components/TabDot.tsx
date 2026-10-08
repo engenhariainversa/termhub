@@ -1,5 +1,6 @@
+import { Check, Lock } from 'lucide-react';
 import { useTranslation } from '../i18n';
-import { tabDotClass, tabDotWorking, tabNeedsYou } from '../lib/needs-you';
+import { tabDotClass, tabDotIcon, tabDotWorking, tabNeedsYou } from '../lib/needs-you';
 import type { Tab } from '../lib/types';
 
 interface Props {
@@ -28,6 +29,9 @@ export function TabDot({ alive, tab, autoRef, title }: Props) {
   const { t } = useTranslation();
   const needsYou = !!tab && tabNeedsYou(tab);
   const label = title ? withAutoRef(title, autoRef, t) : autoRef ? t('automático, {{ref}}', { ref: autoRef }) : undefined;
+  // a finished tab and a blocked run show a glyph instead of the dot (TER-1046), in the dot's own grey
+  const icon = tabDotIcon(tab);
+  const Icon = icon === 'check' ? Check : icon === 'lock' ? Lock : null;
   return (
     <span
       className="relative inline-flex h-1.5 w-1.5 shrink-0"
@@ -42,7 +46,11 @@ export function TabDot({ alive, tab, autoRef, title }: Props) {
           className={`absolute -inset-[3px] rounded-full border border-accent border-r-transparent ${tabDotWorking(alive, tab) ? 'tab-dot-ring' : ''}`}
         />
       )}
-      <span data-dot aria-hidden className={`h-1.5 w-1.5 rounded-full ${tabDotClass(alive, tab)}`} />
+      {Icon ? (
+        <Icon data-dot data-icon={icon} aria-hidden strokeWidth={3} className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 text-fg-dim" />
+      ) : (
+        <span data-dot aria-hidden className={`h-1.5 w-1.5 rounded-full ${tabDotClass(alive, tab)}`} />
+      )}
     </span>
   );
 }

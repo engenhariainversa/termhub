@@ -44,7 +44,7 @@ function agentsByProject(tabs: Tab[]): Map<string, Tab[]> {
  */
 export function endNeedsConfirm(tab: Tab): boolean {
   if (tab.kind === 'simulator') return false;
-  return tab.state !== 'idle' && tab.state !== 'finished' && tab.state !== 'error';
+  return tab.state !== 'idle' && tab.state !== 'finished' && tab.state !== 'blocked' && tab.state !== 'error';
 }
 
 /** what is being dragged in the sidebar: a project row, or a group header */
