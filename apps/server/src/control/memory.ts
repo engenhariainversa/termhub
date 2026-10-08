@@ -10,6 +10,7 @@ import { autoAnswerBlocked } from '../memory/blocklist.js';
 import { defaultEmbedder, EMBED_TIMEOUT_MS, withTimeout, type Embedder } from '../chat/embeddings.js';
 import { sanitisePromptText } from '../chat/tab-question-context.js';
 import { indexNote, noteItem } from '../memory/index-items.js';
+import { nudgeAiMemoryRules, nudgeAiMemoryRulesForOwner } from '../memory/ai-memory-sync.js';
 import { excerpt, memoryText } from '../memory/text.js';
 import { rrf, type Ranked } from '../memory/fusion.js';
 import { isInactive, rankByAuthority, type AuthorityHit } from '../memory/authority.js';
@@ -345,6 +346,9 @@ export async function recordDecision(
 
   const row = await indexNote(ctx.repos, item, { embedder, log, supersedes: target, embedding: check.embedding });
   if (!row) throw new ControlError('SUPERSEDE_GONE', msg('{{ref}} já foi substituído ou esquecido', { ref: a.supersedes! }));
+  // The project's current rules changed: republish its ai-memory pages (TER-1019), in the background.
+  if (projectId) nudgeAiMemoryRules(ctx.repos, projectId, log);
+  else nudgeAiMemoryRulesForOwner(ctx.repos, ownerId, log);
   return {
     recorded: true,
     ref: `note:${row.id}`,

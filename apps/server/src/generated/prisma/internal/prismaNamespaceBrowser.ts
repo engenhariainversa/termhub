@@ -73,6 +73,7 @@ export const ModelName = {
   AutomationRun: 'AutomationRun',
   TabUsage: 'TabUsage',
   TabUsageDay: 'TabUsageDay',
+  AiMemoryPage: 'AiMemoryPage',
   AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
@@ -500,6 +501,18 @@ export const TabUsageDayScalarFieldEnum = {
 } as const
 
 export type TabUsageDayScalarFieldEnum = (typeof TabUsageDayScalarFieldEnum)[keyof typeof TabUsageDayScalarFieldEnum]
+
+
+export const AiMemoryPageScalarFieldEnum = {
+  projectId: 'projectId',
+  machineId: 'machineId',
+  cwd: 'cwd',
+  path: 'path',
+  hash: 'hash',
+  publishedAt: 'publishedAt'
+} as const
+
+export type AiMemoryPageScalarFieldEnum = (typeof AiMemoryPageScalarFieldEnum)[keyof typeof AiMemoryPageScalarFieldEnum]
 
 
 export const AiAccountExhaustionScalarFieldEnum = {
