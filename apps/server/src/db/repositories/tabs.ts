@@ -314,6 +314,17 @@ export class TabsRepository {
     return out.sort((a, b) => b.at.getTime() - a.at.getTime());
   }
 
+  /**
+   * Whether a prompt was submitted in the tab after `since` (a main-thread `UserPromptSubmit`): someone
+   * typed in it (TER-1051). Also true when the kept history may not reach back that far (the tab has
+   * EVENTS_KEPT_PER_TAB events after `since`): unknown counts as used.
+   */
+  async promptedSince(tabId: string, since: Date): Promise<boolean> {
+    const rows = await this.db.tabEvent.findMany({ where: { tabId, createdAt: { gt: since } }, select: { meta: true } });
+    if (rows.length >= EVENTS_KEPT_PER_TAB) return true;
+    return rows.some((e) => eventName(e.meta) === 'UserPromptSubmit' && !isSubagentEvent(e.meta));
+  }
+
   /** Clears the monitor state (e.g. the tmux session is gone). */
   async clearState(tabId: string): Promise<void> {
     await this.db.tab.updateMany({ where: { id: tabId }, data: { state: null, stateText: null, stateTool: null, stateAt: null, stateSeenAt: null, activity: null, activityVerb: null } });
