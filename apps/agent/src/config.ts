@@ -11,7 +11,7 @@ export const agentConfigSchema = z
     /**
      * How this agent proves itself (TER-1017). `key`: the device key in `device-key.pem`, paired with a
      * single-use token; `bearer`: the permanent `thb_ag_` token in `token`, what every config written
-     * before 0.22.0 holds (hence the default) and what `connect` still saves against an older server.
+     * before 0.25.0 holds (hence the default) and what `connect` still saves against an older server.
      */
     credential: z.enum(['bearer', 'key']).default('bearer'),
     token: z.string().min(1).optional(),

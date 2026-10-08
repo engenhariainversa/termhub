@@ -244,6 +244,11 @@ export class AgentConnection extends EventEmitter {
     });
   }
 
+  /** The hooks and MCP addresses, sent to a `probe` hello right before `probe-ok` (TER-586). */
+  sendProbeInfo(info: { hooks_url: string; mcp_url: string | null }): void {
+    this.sendControl({ type: 'probe_info', ...info });
+  }
+
   close(code: number, reason?: string): void {
     this.closing = true;
     this.socket.close(code, reason);

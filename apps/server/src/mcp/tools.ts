@@ -26,6 +26,7 @@ import { answerTabQuestionTool, listTabQuestions, recordDecision, searchMemory, 
 import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } from '../control/integrations.js';
 import { recordLesson } from '../control/lessons.js';
 import { recapPendingCards } from '../control/pending.js';
+import { getChatContext } from '../control/chat-context.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
@@ -73,7 +74,7 @@ const START_AGENT_RESTRICTIONS_NOTE =
 
 /** TER-851: how the concierge relays the person's order so the tab can tell it is theirs. */
 const ON_BEHALF_NOTE =
-  "The tab's session is told who wrote each text: without on_behalf_of, what you send reads as your own words, not the person's. When you relay something the person asked for, pass on_behalf_of with the search_memory refs (message:…, kinds [\"message\"]) of their chat messages that ask for it, at most 24 h old; the tab sees their exact words next to your text. Never write in the person's name (\"<name> aqui…\", \"<name> autorizou…\"): say what to do and let the quote carry the authority.";
+  "The tab's session is told who wrote each text: without on_behalf_of, what you send reads as your own words, not the person's. When you relay something the person asked for, pass on_behalf_of with the refs of their chat messages that ask for it (message:…, the ref each message they type comes with, or a search_memory ref of kind \"message\"), at most 24 h old; the tab sees their exact words next to your text. Never write in the person's name (\"<name> aqui…\", \"<name> autorizou…\"): say what to do and let the quote carry the authority.";
 
 /** The object schema a tool's arguments are validated against — by `parseArgs` and by the MCP SDK. */
 export function inputSchemaOf(tool: ToolDef) {
@@ -333,7 +334,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'report_card',
     description:
-      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. Call it once, at the end.",
+      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. Call it once, at the end.",
     // Preflight F-8: scope `read` and no grant check — a documented exception, not a widening: `allowedIf`
     // admits only a tab token whose own tab has an active run, and the tool writes that run's status only.
     scope: 'read', resource: 'tasks', action: 'read',
@@ -344,8 +345,9 @@ export const TOOLS: ToolDef[] = [
       status: z.enum(['done', 'blocked']),
       pr_url: z.string().trim().url().max(500).optional(),
       reason: z.string().trim().min(1).max(500).optional(),
+      code: z.enum(['github_transient']).optional(),
     },
-    run: (ctx, a) => reportCard(ctx, a as { status: 'done' | 'blocked'; pr_url?: string; reason?: string }),
+    run: (ctx, a) => reportCard(ctx, a as { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient' }),
   },
   {
     name: 'escalate_automation_run',
@@ -483,6 +485,16 @@ export const TOOLS: ToolDef[] = [
     action: 'read',
     input: {},
     run: (ctx) => recapPendingCards(ctx),
+  },
+  {
+    name: 'get_chat_context',
+    description:
+      "How full this chat's own session is, as the chat's context meter shows it: tokens at the end of the last turn, the model's window, the person's own limit when they set one (measure against it first), the percent, when the conversation was last compacted, and whether to suggest compacting. Call it when the person asks how much context the conversation uses, or before a long task, instead of estimating. Compacting is the person's: suggest the \"Compactar\" button or /compact, never run it. Only works in the termhub chat.",
+    scope: 'read',
+    resource: 'chat',
+    action: 'read',
+    input: {},
+    run: (ctx) => getChatContext(ctx),
   },
   {
     name: 'answer_tab_question',

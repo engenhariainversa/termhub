@@ -347,7 +347,7 @@ const pt = {
         'Na máquina: macOS ou Linux (Windows pelo WSL), Node.js 20+, tmux e uma conta de usuário comum; no Linux, também as ferramentas de compilação (make, g++, python3).',
       ],
       test_label: 'Teste na máquina',
-      test_hint: '"✓ Servidor" no doctor e "conectado ✓" no status provam que token, TLS e WebSocket passaram pela rede. O curl responde 401 quando o host dos hooks está liberado.',
+      test_hint: '"✓ Servidor" no doctor e "conectado ✓" no status provam que token, TLS e WebSocket passaram pela rede. O doctor também faz um POST sem token nos endereços dos hooks e do MCP (termhub.dev) e mostra ✓ com o host quando eles respondem 401, ou seja, quando o host está liberado. A tela da máquina no app mostra o mesmo teste.',
     },
     limits: {
       title: 'O que ainda não temos',
@@ -771,7 +771,7 @@ const en: typeof pt = {
         'On the machine: macOS or Linux (Windows through WSL), Node.js 20+, tmux and a regular user account; on Linux, also the build tools (make, g++, python3).',
       ],
       test_label: 'Test on the machine',
-      test_hint: '"✓ Servidor" from doctor and "conectado ✓" from status prove the token, TLS and WebSocket made it through the network. The curl answers 401 when the hooks host is allowed.',
+      test_hint: '"✓ Servidor" from doctor and "conectado ✓" from status prove the token, TLS and WebSocket made it through the network. doctor also sends a POST without a token to the hooks and MCP addresses (termhub.dev) and shows ✓ with the host when they answer 401, that is, when the host is allowed. The machine’s page in the app runs the same test.',
     },
     limits: {
       title: 'What we don’t have yet',

@@ -68,3 +68,20 @@ export async function status(): Promise<boolean> {
   if (platform === 'darwin') return launchd.status();
   return systemd.status();
 }
+
+/**
+ * `agent.uninstall`, step one: removes the service definition without stopping the service (this
+ * process may be that service and still has to reply). Returns whether a definition was there;
+ * `false` on platforms without a service layer.
+ */
+export async function removeDefinition(platform: NodeJS.Platform = process.platform): Promise<boolean> {
+  if (platform === 'darwin') return launchd.removeDefinition();
+  if (platform === 'linux') return systemd.removeDefinition();
+  return false;
+}
+
+/** `agent.uninstall`, last step: stops the service whose definition `removeDefinition()` removed. */
+export async function stop(platform: NodeJS.Platform = process.platform): Promise<void> {
+  if (platform === 'darwin') await launchd.stop();
+  else if (platform === 'linux') await systemd.stop();
+}

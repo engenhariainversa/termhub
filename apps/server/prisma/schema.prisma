@@ -80,6 +80,9 @@ model User {
   chatCodexReplies   Boolean            @default(false) @map("chat_codex_replies")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
   pushTabFinished    Boolean            @default(false) @map("push_tab_finished")
+  /// The chat's context meter measures against this many tokens instead of the model's window
+  /// (TER-1038): opt-in, null = the window.
+  chatContextLimit   Int?               @map("chat_context_limit")
   memoryItems        MemoryItem[]
   verifiedMemoryItems MemoryItem[] @relation("MemoryItemVerifier")
   standingGrants     ChatStandingGrant[]
@@ -95,6 +98,7 @@ model User {
   /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
   locale              String?
   automationSummaries AutomationSummary[]
+  featureFlagOverrides FeatureFlagOverride[]
 
   @@index([roleId])
   @@index([deletionScheduledAt])
@@ -595,7 +599,8 @@ model AutomationEvent {
 
   @@index([projectId, createdAt(sort: Desc)], map: "automation_events_project_created_idx")
   // plus "automation_events_ci_fix_once": unique (task_id, payload->>'pr', payload->>'sha') WHERE kind =
-  // 'ci_fix_requested', in its migration only (partial, on expressions)
+  // 'ci_fix_requested', in its migration only (partial, on expressions); likewise
+  // "automation_events_deploy_retry_once": unique (task_id, payload->>'sha', payload->>'attempt') WHERE kind = 'deploy_retried'
   @@map("automation_events")
 }
 
@@ -919,6 +924,8 @@ model ChatConversation {
   /// model's context window then (TER-315). Null until a turn reports them; cleared with the session.
   contextTokens Int?          @map("context_tokens")
   contextWindow Int?          @map("context_window")
+  /// When that session was last compacted, by "Compactar" or the CLI's own auto-compact (TER-1038).
+  contextCompactedAt DateTime? @map("context_compacted_at") @db.Timestamptz
   lastMessageAt DateTime?     @map("last_message_at")
   /// The last time the person typed a message here (TER-530) — not a decision's re-injection nor a
   /// wake, which are stored as user messages too. A "no" given before it no longer refuses on its own.
@@ -1026,6 +1033,8 @@ model ChatAction {
   machineId      String?          @map("machine_id")
   projectId      String?          @map("project_id")
   tabId          String?          @map("tab_id")
+  /// The tab's name when the action was asked (TER-1024): a closed tab's card still names it.
+  tabName        String?          @map("tab_name")
   /// The grant this action ran under (`chat_grants`), when it was not asked but allowed by one.
   grantId        String?          @map("grant_id")
   errorCode      String?          @map("error_code")
@@ -1607,4 +1616,32 @@ model SecurityEvent {
   @@index([action, createdAt])
   @@index([actorId, createdAt])
   @@map("security_events")
+}
+
+/// An instance-wide feature flag (TER-1040, docs/feature-flags.md): a feature that ships dark and an
+/// admin turns on in Configurações → Recursos em teste, without a deploy. No row = the flag's default
+/// in code (`FEATURE_FLAGS`, apps/server/src/features/flags.ts), which is off.
+model FeatureFlag {
+  key       String   @id
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  /// the admin who last changed it; null = never changed by hand
+  updatedBy String?  @map("updated_by")
+
+  @@map("feature_flags")
+}
+
+/// One person's own value for a flag (testing a feature before it is released): wins over the
+/// instance-wide value for that person only.
+model FeatureFlagOverride {
+  flag      String
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled   Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by")
+
+  @@id([flag, userId])
+  @@index([userId])
+  @@map("feature_flag_overrides")
 }

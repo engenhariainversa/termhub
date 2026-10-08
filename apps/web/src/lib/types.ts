@@ -38,6 +38,30 @@ export interface User {
   deletion_requested_at: string | null;
   /** when the account is deleted for good; non-null = deletion pending, the account is deactivated */
   deletion_scheduled_at: string | null;
+  /** feature flags resolved for this person (TER-1040); absent on older servers = everything off */
+  features?: Partial<Record<FeatureFlagKey, boolean>>;
+}
+
+/** Feature flags the server knows (apps/server/src/features/flags.ts, docs/feature-flags.md). */
+export type FeatureFlagKey = 'subscriptions';
+
+/** One person's own value for a flag (Configurações → Recursos em teste). */
+export interface FeatureFlagOverride {
+  flag: string;
+  user_id: string;
+  email: string;
+  name: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+/** GET /api/feature-flags: a flag, its instance value and who has their own. */
+export interface FeatureFlagInfo {
+  key: FeatureFlagKey;
+  default: boolean;
+  enabled: boolean;
+  updated_at: string | null;
+  overrides: FeatureFlagOverride[];
 }
 
 /** GET/POST/DELETE /api/account/deletion. */
@@ -557,6 +581,10 @@ export interface ProjectAutomation {
   max_parallel: number | null;
   resume_max: number;
   fix_attempts: number;
+  /** TER-1025: re-runs of a deploy that failed on GitHub's side before the project is paused (0 = pause at once) */
+  deploy_retries: number;
+  /** TER-1025: automatic resumes of a run stuck on a GitHub error before the person is told */
+  github_retries: number;
   daily_budget_usd: number | null;
   /** a card whose estimate passes this is escalated and not resumed; null = off (spike R8) */
   card_budget_usd: number | null;
@@ -692,6 +720,16 @@ export interface TabEvent {
 export interface MachineHooks {
   installed_at: string | null;
   hooks_url: string;
+}
+
+/** One address the machine must reach besides /agent/ws (TER-586): `ok` only on the 401 termhub answers without a token. */
+export interface NetworkCheck {
+  name: 'hooks' | 'mcp';
+  url: string;
+  host: string;
+  ok: boolean;
+  status: number | null;
+  error: string | null;
 }
 
 export interface MonitorItem {
@@ -941,6 +979,8 @@ export interface ChatConversation {
   context_tokens?: number | null;
   /** The model's context window; null when the CLI did not report it. */
   context_window?: number | null;
+  /** When the session was last compacted ("Compactar" or the CLI's auto-compact, TER-1038); null = never. */
+  context_compacted_at?: string | null;
   last_message_at: string | null;
 }
 
@@ -1370,6 +1410,8 @@ export interface ChatMemory {
   autodecide: boolean;
   /** "Responder perguntas do Codex pelo chat": off by default; independent of embeddings. */
   codex_replies: boolean;
+  /** The context meter's limit in tokens (TER-1038); null = the model's window. Absent from an older server. */
+  context_limit?: number | null;
   available: boolean;
   count: number;
   notes: number;
@@ -1491,7 +1533,7 @@ export type ChatEvent =
    * panel §5.4): the row keeps whatever status it already had, this just says the click failed. */
   | { type: 'subagent_cancel_failed'; subagent_id: string; conversation_id?: string }
   /** How full the session is now, after an answer or a compaction (TER-315). */
-  | { type: 'context'; tokens: number; window: number | null; conversation_id?: string }
+  | { type: 'context'; tokens: number; window: number | null; compacted_at?: string | null; conversation_id?: string }
   /** "Compactar": started, done (sizes before and after, when known) or failed (with its code). */
   | { type: 'compact'; state: 'started' | 'done' | 'failed'; tokens_before: number | null; tokens: number | null; error_code: string | null; conversation_id?: string };
 

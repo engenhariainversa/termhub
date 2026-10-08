@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { handshakeMessage, proofMessage } from './auth.js';
 import { helloMessage, serverMessage } from './messages.js';
 
-const hello = { type: 'hello', protocol: 1, agent_version: '0.22.0', os: 'linux', arch: 'x64', hostname: 'box', tmux: true, tools: [] };
+const hello = { type: 'hello', protocol: 1, agent_version: '0.25.0', os: 'linux', arch: 'x64', hostname: 'box', tmux: true, tools: [] };
 
 describe('agent auth messages (TER-1017)', () => {
   it('a hello from before TER-1017 still parses, with neither pair nor proof', () => {

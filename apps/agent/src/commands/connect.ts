@@ -85,7 +85,7 @@ export async function connectCommand(values: ConnectValues, log: Logger): Promis
     writeDeviceKey(key);
     writeConfig({ url, credential: 'key', machine_id: outcome.paired.machine_id, machine_name: outcome.paired.machine_name, created_at: createdAt });
   } else {
-    // An older server took the token as a permanent bearer (probe-ok): keep it, as agents before 0.22.0 did.
+    // An older server took the token as a permanent bearer (probe-ok): keep it, as agents before 0.25.0 did.
     deleteDeviceKey();
     writeConfig({ url, credential: 'bearer', token, machine_id: '', machine_name: '', created_at: createdAt });
   }

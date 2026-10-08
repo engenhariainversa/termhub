@@ -47,11 +47,11 @@ environment variables work too, for non-interactive setups. On success the pairi
 command exits; start the agent with `termhub-agent service install` (background) or
 `termhub-agent run` (foreground).
 
-The pairing token is single use and valid for 15 minutes (since 0.22.0). `connect` generates an
+The pairing token is single use and valid for 15 minutes (since 0.25.0). `connect` generates an
 Ed25519 key pair, keeps the private key in `~/.termhub/device-key.pem` (`0600`, never sent) and trades
 the token plus the public key for the machine; the token is burnt. Every later connection proves it
 holds the key by signing a nonce the server sends, so a token seen in a terminal, a screenshot or a
-shell history is worthless once used. Agents paired before 0.22.0 keep their permanent token until the
+shell history is worthless once used. Agents paired before 0.25.0 keep their permanent token until the
 machine is paired again; `termhub-agent status` says which credential is in use.
 
 ## Run as a background service
@@ -72,14 +72,43 @@ the existing sessions when it comes back (macOS needs nothing: launchd does not 
 it daemonises). A unit installed by an older agent is rewritten to the current template the first
 time the new agent starts.
 
+## Updates
+
+The agent updates itself when the server asks it to (the update button in Máquinas, or hourly on
+machines with auto-update on): it installs the new version with npm and, when it runs as a service,
+restarts into it. The server first verifies each release against its npm provenance (signed by this
+repository's publish workflow) and sends the tarball's SHA-512 with the request; since 0.22.0 the
+agent downloads the tarball into a private temp dir, checks it against that SHA-512 and installs only
+that file, failing the update without installing anything when they differ.
+
+## Remove from a machine
+
+When you delete an online machine running agent 0.22.0 or later, the delete dialog offers
+**Também desinstalar da máquina** (on by default). It removes the monitor hooks, closes the tmux
+sessions of the machine's tabs, removes the background service and deletes the agent's config (its
+token); the agent then stops. The npm package stays installed: remove it with
+`npm rm -g @termhub/agent`.
+
+By hand (an offline machine, or an older agent):
+
+```bash
+termhub-agent service uninstall   # stop and remove the background service
+termhub-agent disconnect          # delete the local config and its token
+npm rm -g @termhub/agent          # remove the package
+```
+
+Then revoke or delete the machine in the termhub web app (Máquinas), so its token stops working.
+
 ## Other commands
 
 - `termhub-agent status` — shows the paired server, machine name and whether the agent can reach
   it right now.
 - `termhub-agent disconnect` — removes the local config (`~/.termhub/config.json`) and the device
   key; revoke the machine's access from the termhub web app too ("Parear de novo", or delete it).
-- `termhub-agent doctor` — checks the local config, server reachability, `tmux`, `node-pty` and
-  filesystem access to `$HOME`/`Documents`/`Desktop` (and every volume under `/Volumes` on
+- `termhub-agent doctor` — checks the local config, server reachability, the monitor hooks and
+  MCP addresses the server names (an empty POST without a token to each, expecting termhub's 401,
+  so a firewall that only lets `/agent/ws` through shows up as ✗ with the host), `tmux`, `node-pty`
+  and filesystem access to `$HOME`/`Documents`/`Desktop` (and every volume under `/Volumes` on
   macOS).
 
 ## File preview

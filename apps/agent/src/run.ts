@@ -1,6 +1,6 @@
 import os from 'node:os';
 import type { HelloMessage } from '@termhub/agent-protocol';
-import { CAPABILITY_CLAUDE, CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_CLAUDE_SYSTEM_PROMPT, CAPABILITY_SIM, CAPABILITY_FILE_LIST, CAPABILITY_FILE_READ, CAPABILITY_TRANSCRIPT, CAPABILITY_WORKTREE, CLOSE } from '@termhub/agent-protocol';
+import { CAPABILITY_CLAUDE, CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_CLAUDE_SYSTEM_PROMPT, CAPABILITY_SIM, CAPABILITY_FILE_LIST, CAPABILITY_FILE_READ, CAPABILITY_TRANSCRIPT, CAPABILITY_WORKTREE, CAPABILITY_NET_CHECK, CLOSE } from '@termhub/agent-protocol';
 import { connectOnce, runForever, RevokedError, ProtocolMismatchError, UpgradeRejectedError, type ClientOptions } from './client.js';
 import { readDeviceKey } from './device-key.js';
 import { heal } from './rpc/hooks.js';
@@ -30,7 +30,7 @@ export type HelloFields = Omit<HelloMessage, 'type' | 'protocol'>;
  * and only opens a `claude` channel on a machine that claims it — an agent too old to know the
  * kind sends no `capabilities` at all, which reads as `[]` (see the protocol's `helloMessage`).
  */
-export const CAPABILITIES = [CAPABILITY_CLAUDE, CAPABILITY_CLAUDE_SYSTEM_PROMPT, CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_TRANSCRIPT, CAPABILITY_FILE_READ, CAPABILITY_FILE_LIST, CAPABILITY_WORKTREE];
+export const CAPABILITIES = [CAPABILITY_CLAUDE, CAPABILITY_CLAUDE_SYSTEM_PROMPT, CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_TRANSCRIPT, CAPABILITY_FILE_READ, CAPABILITY_FILE_LIST, CAPABILITY_WORKTREE, CAPABILITY_NET_CHECK];
 
 /** What this agent understands beyond a terminal. The simulator (`sim`) needs Xcode's simctl and the WDA
  *  runner, which only exist on macOS, so a Linux agent never claims it. */
@@ -81,15 +81,23 @@ export function dialCredentials(
  * probe never replaces the live session the service holds on this machine. Any other outcome
  * (401 upgrade, 4401/4409 close, no answer within `timeoutMs`) is "not connected".
  */
+export interface ServerConnectionCheck {
+  ok: boolean;
+  error?: string;
+  /** What the server sent with `probe_info` (a server older than TER-586 sends nothing). */
+  endpoints?: { hooks_url: string; mcp_url: string | null };
+}
+
 export async function checkServerConnection(
   config: Pick<AgentConfig, 'url' | 'credential' | 'token' | 'machine_id'>,
   timeoutMs = 5_000,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ServerConnectionCheck> {
   const credentials = dialCredentials(config);
   if ('error' in credentials) return { ok: false, error: credentials.error };
   const osName = detectOs() ?? 'linux';
   const controller = new AbortController();
   let timedOut = false;
+  let endpoints: ServerConnectionCheck['endpoints'];
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
@@ -100,14 +108,16 @@ export async function checkServerConnection(
         url: config.url,
         ...credentials,
         hello: { agent_version: AGENT_VERSION, os: osName, arch: process.arch, hostname: os.hostname(), tmux: false, tools: [], capabilities: capabilitiesFor(osName), probe: true },
-        onServerMessage: () => {},
+        onServerMessage: (msg) => {
+          if (msg.type === 'probe_info') endpoints = { hooks_url: msg.hooks_url, mcp_url: msg.mcp_url };
+        },
         onStream: () => {},
         log: () => {},
       },
       controller.signal,
     );
     const info = await closed;
-    if (info.code === 1000 && info.reason === 'probe-ok') return { ok: true };
+    if (info.code === 1000 && info.reason === 'probe-ok') return endpoints ? { ok: true, endpoints } : { ok: true };
     if (info.code === CLOSE.UNAUTHORIZED) return { ok: false, error: REVOKED_MESSAGE };
     if (info.code === CLOSE.CONFLICT && info.reason === 'protocol') return { ok: false, error: UPGRADE_MESSAGE };
     if (timedOut) return { ok: false, error: 'O servidor não respondeu' };

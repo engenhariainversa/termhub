@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * How an agent proves who it is (TER-1017). Two credentials coexist:
  *
- * - **bearer** (agents before 0.22.0, and machines nobody paired again): `Authorization: Bearer thb_ag_…`
+ * - **bearer** (agents before 0.25.0, and machines nobody paired again): `Authorization: Bearer thb_ag_…`
  *   on every dial, the token the app showed. Permanent until rotated.
  * - **device key**: the app shows a *pairing* token instead, single use, valid for 15 minutes. `connect`
  *   dials with it as a bearer and a `hello.pair` carrying a fresh Ed25519 public key; the server burns

@@ -1,7 +1,7 @@
 # Agent: single-use pairing token + device key (TER-1017)
 
 Origin: TER-584, §1 of `2026-10-07-agent-release-trust-and-uninstall-design.md` (the evaluation that
-proposed this). Agent 0.22.0.
+proposed this). Agent 0.25.0.
 
 ## Before
 
@@ -45,7 +45,7 @@ token burnt.
   prints as "Atualize o agente". The token stays unused.
 - **A new agent against an older server**: the older server ignores `pair` and answers the probe with
   `probe-ok`; `connect` then saves the token as a bearer config, exactly as before.
-- **Configs** written before 0.22.0 have no `credential` field and read as `bearer`.
+- **Configs** written before 0.25.0 have no `credential` field and read as `bearer`.
 - **Migration** only adds nullable columns and a unique index; the previous release never reads them.
   During the blue/green window, a pairing token minted by the new color is unknown to the old one.
 
@@ -54,4 +54,4 @@ token burnt.
 Default for everyone, no setting: new machines and "Parear de novo" now give a single-use token valid
 15 minutes, and the machine keeps a device key instead of a permanent token. Machines already paired keep
 working unchanged until someone pairs them again; the app shows them a note asking to update the agent
-and pair again. Anyone who pastes a pairing token into an agent older than 0.22.0 is told to update it.
+and pair again. Anyone who pastes a pairing token into an agent older than 0.25.0 is told to update it.

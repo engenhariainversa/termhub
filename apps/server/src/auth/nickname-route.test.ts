@@ -13,7 +13,7 @@ function buildApp(user: { id: string; nickname: string | null }) {
     request.user = user as never;
     request.scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id } as never;
   });
-  const repos = { users: { setNickname, findByNickname: vi.fn(async () => undefined) } } as unknown as Repositories;
+  const repos = { users: { setNickname, findByNickname: vi.fn(async () => undefined) }, featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async () => null) } } as unknown as Repositories;
   app.register((a) => authRoutes(a, { repos } as never), { prefix: '/auth' });
   return app;
 }
@@ -85,7 +85,7 @@ describe('PATCH /auth/me/nickname and the short link', () => {
       request.user = user as never;
       request.scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id } as never;
     });
-    const repos = { users: { setNickname, findByNickname: vi.fn(async () => undefined) } } as unknown as Repositories;
+    const repos = { users: { setNickname, findByNickname: vi.fn(async () => undefined) }, featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async () => null) } } as unknown as Repositories;
     app.register((a) => authRoutes(a, { repos } as never, { onNicknameClaimed }), { prefix: '/auth' });
     return app;
   }

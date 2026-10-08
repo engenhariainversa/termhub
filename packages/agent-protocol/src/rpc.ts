@@ -11,6 +11,8 @@ export const pasteName = z.string().min(1).max(255).regex(/^[A-Za-z0-9._-]+$/);
  *  `docs/lessons/README.md` (the format's own doc, not a lesson). */
 export const DOC_PATH_RE = /^docs\/(?:superpowers\/(?:specs|plans)\/[A-Za-z0-9._-]{1,200}\.md|lessons\/(?!README\.md$)[A-Za-z0-9._-]{1,200}\.md)$/;
 export const docPath = z.string().regex(DOC_PATH_RE);
+/** An npm `dist.integrity` in SHA-512 form: `sha512-` plus the base64 of the 64-byte digest. */
+export const SHA512_INTEGRITY_RE = /^sha512-[A-Za-z0-9+/]{86}==$/;
 export const aiProvider = z.enum(['claude', 'chatgpt', 'gemini', 'antigravity']);
 
 /** One usage window of an AI account (`ai.usage`); mirrors @termhub/machine-ops AiUsageWindow. */
@@ -317,12 +319,22 @@ export const RPC = {
     }),
     15_000,
   ),
-  /** Installs `version` of @termhub/agent with npm; when the agent runs as a service it then exits so the service relaunches the new code (since agent 0.2.1). */
+  /**
+   * Installs `version` of @termhub/agent with npm; when the agent runs as a service it then exits so the service relaunches the new code (since agent 0.2.1).
+   * `integrity`: the `sha512-…` the server verified against the release's provenance (spec 2026-10-07 agent release trust). Since agent 0.22.0
+   * the agent downloads the tarball, checks it against this and installs that file; older agents strip the field and install by version.
+   */
   'agent.update': def(
-    z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/) }),
+    z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/), integrity: z.string().regex(SHA512_INTEGRITY_RE).optional() }),
     z.object({ installed_version: z.string(), restart: z.enum(['service', 'manual']) }),
     180_000,
   ),
+  /**
+   * "Uninstall from the machine" before the machine is deleted (since agent 0.22.0): removes the service definition, deletes the agent's
+   * config (its token), replies, then stops. `service`: whether a launchd/systemd service was there to remove. Hooks and tmux sessions
+   * are removed by the server through `hooks.uninstall` / `tmux.kill` first.
+   */
+  'agent.uninstall': def(z.object({}), z.object({ service: z.enum(['removed', 'none']) }), 30_000),
   /** iOS simulator over the agent (spec 2026-09-24): raw `xcrun simctl list devices -j`; the server parses it. */
   'sim.list': def(z.object({}), z.object({ stdout: z.string() }), 15_000),
   /** `xcrun simctl boot`; combined output, "already booted" included — the server decides what is a failure. */
@@ -353,6 +365,17 @@ export const RPC = {
   'tab.mcp.write': def(z.object({ tab_id: tabId, file: tabMcpFile, body: z.string().min(1).max(8192) }), z.object({ ok: z.literal(true) }), 10_000),
   /** Deletes a tab's whole MCP config dir on close (spec D12); best effort (since agent 0.10.0). */
   'tab.mcp.remove': def(z.object({ tab_id: tabId }), z.object({ ok: z.literal(true) }), 10_000),
+  /**
+   * From the machine, an empty POST without a token to each of `urls` (the monitor hooks and MCP
+   * addresses, TER-586), redirects not followed. `status` is the HTTP answer (401 means the address
+   * reaches termhub) or null with `error` when nothing answered: DNS, TLS, a refused or timed-out
+   * connection — what a firewall that only lets `/agent/ws` through looks like (since agent 0.23.0).
+   */
+  'net.check': def(
+    z.object({ urls: z.array(z.string().url().max(2048).regex(/^https?:\/\//)).min(1).max(4) }),
+    z.object({ results: z.array(z.object({ url: z.string().max(2048), status: z.number().int().nullable(), error: z.string().max(500).nullable() })).max(4) }),
+    15_000,
+  ),
 } as const;
 
 export type RpcMethod = keyof typeof RPC;
