@@ -45,6 +45,20 @@ describe('AgentUpdateCard', () => {
     expect(screen.queryByRole('button', { name: 'Atualizar' })).toBeNull();
   });
 
+  // TER-1056: an agent below the server's minimum carries a red notice until it updates.
+  it('warns in red while the agent is below the minimum version', async () => {
+    statusMock.mockResolvedValue({ ...status('0.19.0', '0.27.0'), min_agent_version: '0.27.0', below_min_version: true });
+    render(<AgentUpdateCard machine={machine} />);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/abaixo da versão mínima do termhub \(v0\.27\.0\)/);
+  });
+
+  it('shows no minimum notice for an agent at or above it', async () => {
+    statusMock.mockResolvedValue({ ...status('0.27.0', '0.27.0'), min_agent_version: '0.27.0', below_min_version: false });
+    render(<AgentUpdateCard machine={machine} />);
+    await screen.findByText('v0.27.0 · atualizado');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('offers the update, then polls until the new version reports back', async () => {
     vi.useFakeTimers();
     statusMock.mockResolvedValueOnce(status('0.2.1')).mockResolvedValueOnce(status('0.2.1', '0.2.5', false)).mockResolvedValue(status('0.2.5'));

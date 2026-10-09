@@ -85,6 +85,7 @@ import { startCiSyncScheduler } from './ci/scheduler.js';
 import { MERGE_TOOL } from './automation/merge.js';
 import { startSummaryTimer } from './automation/summary.js';
 import { startAgentUpdateScheduler } from './agent/latest-version.js';
+import { followAgentUpdate } from './agent/after-update.js';
 import { registerTerminalWs } from './terminal/ws.js';
 import { registerAgentWs } from './agent/ws.js';
 import { agents } from './agent/registry.js';
@@ -395,7 +396,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void repos.securityEvents.purgeBefore(securityEventCutoff(config.securityEventRetentionDays)).catch(() => {});
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
-  const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);
+  // TER-1056: after an auto-update, refresh the hooks once the agent is back on the new version
+  const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log, (m, target) => void followAgentUpdate(repos, m, target, fastify.log));
   const stopTabQuestionExpiry = startTabQuestionExpiry(repos, fastify.log);
   const stopTabGoneActionExpiry = startTabGoneActionExpiry(repos, fastify.log);
   // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615),

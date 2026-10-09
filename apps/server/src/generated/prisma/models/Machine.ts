@@ -2370,7 +2370,7 @@ export type $MachinePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     agentVersion: string | null
     agentLastSeenAt: Date | null
     /**
-     * Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts)
+     * Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts); on by default (TER-1056)
      */
     agentAutoUpdate: boolean
     /**

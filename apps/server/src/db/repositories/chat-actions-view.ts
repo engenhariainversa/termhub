@@ -174,6 +174,8 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       const tools = Array.isArray(args.tools) ? args.tools.filter((x): x is string => typeof x === 'string') : [];
       return `instalar ou atualizar os hooks do termhub (${tools.length ? tools.join(', ') : 'Claude Code, Codex e Cursor que estiverem lá'}), mexendo nos arquivos de configuração deles`;
     }
+    case 'update_machine_agent':
+      return args.all === true ? 'atualizar o agente do termhub em todas as máquinas (o agente reinicia; as sessões do tmux continuam)' : 'atualizar o agente do termhub na máquina (o agente reinicia; as sessões do tmux continuam)';
     case 'resume_automation_run':
       return 'retomar o trabalho automático de um card';
     case 'automation_merge': {

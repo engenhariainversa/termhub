@@ -12,7 +12,9 @@ import { browseMachine, makeDirectory } from '../terminal/machine-fs.js';
 import { collectHardware } from '../system/hardware.js';
 import { newAgentToken } from '../agent/token.js';
 import { agents } from '../agent/registry.js';
-import { AGENT_UNINSTALL_MIN_VERSION, isOutdated, latestAgentRelease, latestAgentVersion, MIN_SELF_UPDATE_VERSION, runAgentUpdate } from '../agent/latest-version.js';
+import { AGENT_UNINSTALL_MIN_VERSION, belowMinimum, isOutdated, latestAgentRelease, latestAgentVersion, MIN_SELF_UPDATE_VERSION, runAgentUpdate } from '../agent/latest-version.js';
+import { MIN_AGENT_VERSION } from '../agent/min-version.js';
+import { followAgentUpdate } from '../agent/after-update.js';
 import { AgentClosedError } from '../agent/connection.js';
 import { agentRpc, requireAgentVersion, requireNetCheckCapable, requireSimCapable, toHttpError } from '../agent/errors.js';
 import { config } from '../config.js';
@@ -86,6 +88,12 @@ function updateAvailable(m: Machine): boolean {
   return !!info && isOutdated(info.agent_version, latestAgentVersion());
 }
 
+/** TER-1056: the connected agent (or, offline, the last one seen) is older than the server's minimum: the screens show it in red. */
+function belowMinVersion(m: Machine): boolean {
+  if (m.type !== 'agent') return false;
+  return belowMinimum(agents.info(m.id)?.agent_version ?? m.agent_version);
+}
+
 export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
   /**
    * Machines in the caller's scope (own, or the "view as" target / all for admins), each with the
@@ -102,11 +110,13 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
       machines: machines.map((m) => ({
         ...m,
         update_available: updateAvailable(m),
+        below_min_version: belowMinVersion(m),
         hooks_installed_at: hooks[m.id] ?? null,
         tabs: counts[m.id]?.tabs ?? 0,
         tabs_reporting: counts[m.id]?.reporting ?? 0,
       })),
       latest_agent_version: latestAgentVersion(),
+      min_agent_version: MIN_AGENT_VERSION,
     };
   });
 
@@ -218,6 +228,8 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
         checked_at,
         latest_agent_version: latestAgentVersion(),
         update_available: updateAvailable(machine),
+        min_agent_version: MIN_AGENT_VERSION,
+        below_min_version: belowMinVersion(machine),
       };
     }
     if (status.online) await repos.machines.setDetected(id, status.os, status.capabilities);
@@ -341,7 +353,10 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     if (!info) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
     if (!isOutdated(info.agent_version, latest.version)) throw conflict(msg('O agente já está na versão {{version}}', { version: info.agent_version }));
     requireAgentVersion(machine, MIN_SELF_UPDATE_VERSION);
-    return runAgentUpdate(machine.id, latest, request.log);
+    const r = await runAgentUpdate(machine.id, latest, request.log);
+    // TER-1056: once the agent is back on the new version, the hooks are refreshed if they changed
+    if (r.restarting) void followAgentUpdate(repos, machine, latest.version, app.log);
+    return r;
   });
 
   /** The `?uninstall=1` part of DELETE /:id; throws (nothing deleted yet) when the hooks or the agent could not be removed. */

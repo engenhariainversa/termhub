@@ -81,7 +81,7 @@ export function MachinesPage() {
                 {m.os && <span className="text-[11px] text-fg-dim">{m.os === 'macos' ? '' : m.os}</span>}
                 {badge &&
                   (badge.outdated ? (
-                    <button type="button" className="rounded px-1 text-[11px] text-warn hover:bg-bg-3" title={badge.title} onClick={() => setForm({ open: true, machine: m, tab: 'agent' })}>
+                    <button type="button" className={`rounded px-1 text-[11px] hover:bg-bg-3 ${badge.critical ? 'font-medium text-danger' : 'text-warn'}`} title={badge.title} onClick={() => setForm({ open: true, machine: m, tab: 'agent' })}>
                       {badge.text}
                     </button>
                   ) : (

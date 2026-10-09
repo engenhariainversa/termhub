@@ -110,5 +110,11 @@
   "Esta ferramenta só funciona no chat do termhub: ela lê o contexto da própria conversa.": "Esta herramienta solo funciona en el chat de termhub: lee el contexto de la propia conversación.",
   "Só a pessoa refaz o login de uma conta de IA, nunca um agente numa aba": "Solo la persona rehace el login de una cuenta de IA, nunca un agente en una pestaña",
   "Só a dona da máquina pode refazer o login": "Solo la dueña de la máquina puede rehacer el login",
-  "Sem permissão para escrever nas abas": "Sin permiso para escribir en las pestañas"
+  "Sem permissão para escrever nas abas": "Sin permiso para escribir en las pestañas",
+  "Atualizar o agente reinicia o agente na máquina e precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.": "Actualizar el agente lo reinicia en la máquina y requiere la confirmación de la persona en el chat. No se cambió nada: propón la llamada de nuevo.",
+  "Agente desconectado: ele atualiza quando voltar, se estiver abaixo da versão mínima ou com a atualização automática ligada.": "Agente desconectado: se actualiza cuando vuelva, si está por debajo de la versión mínima o tiene la actualización automática activada.",
+  "Este agente é antigo demais para se atualizar sozinho; rode na máquina: npm i -g @termhub/agent@latest": "Este agente es demasiado antiguo para actualizarse solo; ejecuta en la máquina: npm i -g @termhub/agent@latest",
+  "Este chat roda nesta máquina: a atualização fica para quando a resposta terminar e a máquina estiver ociosa (alguns minutos).": "Este chat se ejecuta en esta máquina: la actualización espera a que termine la respuesta y la máquina esté inactiva (unos minutos).",
+  "Instalado; reinicie o agente na máquina (termhub-agent run ou o serviço).": "Instalado; reinicia el agente en la máquina (termhub-agent run o el servicio).",
+  "Passe machine_id ou all: true (um dos dois).": "Pasa machine_id o all: true (uno de los dos)."
 }
