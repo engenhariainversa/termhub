@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText } from './push-text.js';
+import { aiLoginRequiredText, confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText } from './push-text.js';
 
 describe('push texts', () => {
   it('names the project, tab and machine and never anything else', () => {
@@ -40,5 +40,12 @@ describe('tabFinishedText (TER-925)', () => {
     expect(tabFinishedText({ projectName: 'termhub', tabName: 'api', machineName: 'jarvis' })).toEqual({ title: 'termhub: aba terminou', body: 'A aba api (jarvis) terminou e espera você.' });
     expect(tabFinishedText({ projectName: null, tabName: null, machineName: null })).toEqual({ title: 'Aba terminou', body: 'Uma aba terminou e espera você.' });
     expect(tabFinishedText({ projectName: 'termhub', tabName: 'api', machineName: 'jarvis' }, 'en')).toEqual({ title: 'termhub: tab finished', body: 'Tab api (jarvis) finished and is waiting for you.' });
+  });
+});
+
+describe('aiLoginRequiredText (TER-1047)', () => {
+  it('names the CLI and the machine, in pt-BR and in English', () => {
+    expect(aiLoginRequiredText('claude', 'jarvis')).toEqual({ title: 'Login do Claude expirou', body: 'jarvis: toque para refazer o login' });
+    expect(aiLoginRequiredText('chatgpt', 'hulk', 'en')).toEqual({ title: 'Codex login expired', body: 'hulk: tap to redo the login' });
   });
 });

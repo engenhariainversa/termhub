@@ -44,6 +44,9 @@ describe('control messages', () => {
     expect(serverMessage.parse({ type: 'open', ch: 1, kind: 'pty', params: { session: 'th-a', cwd: '/tmp', cols: 80, rows: 24 } }).type).toBe('open');
     expect(serverMessage.parse({ type: 'resize', ch: 1, cols: 100, rows: 30 }).type).toBe('resize');
     expect(serverMessage.parse({ type: 'close', ch: 1 }).type).toBe('close');
+    expect(serverMessage.parse({ type: 'probe_info', hooks_url: 'https://termhub.dev/api/hooks/events', mcp_url: null }).type).toBe('probe_info');
+    expect(serverMessage.parse({ type: 'probe_info', hooks_url: 'https://termhub.dev/api/hooks/events', mcp_url: 'https://termhub.dev/mcp' }).type).toBe('probe_info');
+    expect(serverMessage.safeParse({ type: 'probe_info', hooks_url: 'not a url', mcp_url: null }).success).toBe(false);
     expect(serverMessage.safeParse({ type: 'open', ch: 0, kind: 'pty', params: { session: 'a', cwd: '/', cols: 1, rows: 1 } }).success).toBe(false);
   });
 

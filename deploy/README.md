@@ -2,6 +2,11 @@
 
 The deploy job in `.github/workflows/deploy.yml` runs, on jarvis:
 
+0. `deploy/ensure-secrets.sh "$ENV_FILE" WHISPER_SECRET`: gives each listed shared secret a random
+   value in the server's `.env` when it is missing or empty, before the services that read it are
+   recreated (an existing value is kept; nothing is printed). A PR that makes a new secret mandatory
+   adds its name to that step, or the feature turns off in production on deploy (TER-1035,
+   `docs/lessons/2026-10-07-whisper-secret-missing-after-hardening.md`).
 1. `deploy/blue-green.sh`: builds and healthchecks the inactive colour, switches the proxy nginx
    vhost to it, stops the old colour (kept for rollback).
 2. "Conferir migrations aplicadas": `prisma migrate status` in the new colour.
@@ -75,7 +80,7 @@ gh variable delete DEPLOY_AUTO_ROLLBACK           # back on (default)
 
 `bash deploy/post-deploy.test.sh` exercises the decision and the smoke test with fake `docker`,
 `curl`, smoke and `blue-green.sh`; it touches neither Docker nor the network. The CI `check` job runs
-it.
+it, and `bash deploy/ensure-secrets.test.sh` on throwaway `.env` files.
 
 ## Database backups
 

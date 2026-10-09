@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ORIGIN_REMINDER, PROMPT_MAX_CHARS } from '../control/agents.js';
-import { fixerPrompt, implementerPrompt, integratorPrompt, RESUME_TEXT, SERVER_MARKER, serverMessage, SHELL_LINE } from './prompts.js';
+import { decideLine, fixerPrompt, GITHUB_LINE, implementerPrompt, integratorPrompt, RESUME_TEXT, SERVER_MARKER, serverMessage, SHELL_LINE } from './prompts.js';
 
 const policy = 'Autonomia do projeto: pr. Você abre o PR e para.\nO merge é feito pelo termhub quando o CI fica verde e a política permite.';
 const title = 'T'.repeat(300);
@@ -47,8 +47,32 @@ describe('prompts', () => {
     expect(p).toContain('Faça o X');
     expect(p).toContain('docs/lessons/');
   });
+  it('tell every role to decide by itself and record it, never ending on a question (TER-1043)', () => {
+    const [implementer, integrator, ...fixers] = all(null);
+    expect(implementer).toContain(decideLine('pr'));
+    for (const p of [integrator!, ...fixers]) expect(p).toContain(decideLine('report'));
+    for (const p of [...all(null), ...all(custom)]) {
+      expect(p).toContain('o precedente da pessoa (search_memory) ou a sua recomendação');
+      expect(p).toContain('Nunca termine o turno com uma pergunta');
+      expect(p).not.toContain('Pare e pergunte');
+    }
+    expect(decideLine('pr')).toMatchSnapshot();
+    expect(decideLine('report')).toMatchSnapshot();
+  });
+  it('keep the old "pare e pergunte" line when the project stops on decisions (TER-1043)', () => {
+    const p = implementerPrompt({ card, branch: 'b', base: 'main', policy, custom: null, description: null, stopOnDecisions: true });
+    expect(p).toContain('Pare e pergunte só quando a decisão não estiver no card');
+    expect(p).not.toContain(decideLine('pr'));
+    expect(fixerPrompt({ ref: 'TER-1', branch: 'b', base: 'main', reason: 'ci', detail: 'x', custom: null, stopOnDecisions: true })).not.toContain(decideLine('report'));
+  });
   it('marks server messages', () => {
     expect(serverMessage('oi')).toBe('[termhub automático] oi');
     expect(RESUME_TEXT).toContain('report_card');
+  });
+  it('tell every role to hand a GitHub error to termhub (github_transient) when there is room (TER-1025)', () => {
+    for (const p of all(null)) expect(p).toContain(GITHUB_LINE);
+    expect(GITHUB_LINE).toContain('github_transient');
+    // at the maximum of everything the line gives way: report_card's description carries the same rule
+    for (const p of all(custom)) expect(p.length + ORIGIN_REMINDER.length + 2).toBeLessThanOrEqual(PROMPT_MAX_CHARS);
   });
 });

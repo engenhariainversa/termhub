@@ -209,6 +209,16 @@ describe('MobilePushService', () => {
     });
   });
 
+  it('an expired AI CLI login goes to every device, in the owner\'s language, collapsed per account (TER-1047)', async () => {
+    const t = setup({ live: ['d1'], locale: 'en' });
+    await t.service.aiLoginRequired('u1', { accountId: 'a1', machineName: 'jarvis', provider: 'chatgpt' });
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith({ user_id: 'u1', kind: 'confirmation', title: 'Codex login expired', body: 'jarvis: tap to redo the login', data: { kind: 'ai_login', account_id: 'a1' } });
+    expect(t.sent[0]).toEqual([
+      { to: 'ExponentPushToken[a]', title: 'Codex login expired', body: 'jarvis: tap to redo the login', data: { kind: 'ai_login', account_id: 'a1', notification_id: 'n1' }, badge: 3, collapseId: 'ai_login:a1' },
+      { to: 'ExponentPushToken[b]', title: 'Codex login expired', body: 'jarvis: tap to redo the login', data: { kind: 'ai_login', account_id: 'a1', notification_id: 'n1' }, badge: 3, collapseId: 'ai_login:a1' },
+    ]);
+  });
+
   it('clears the token of a device Expo reports as not registered', async () => {
     const t = setup();
     t.sender.send.mockImplementationOnce(async (messages: PushMessage[]) => messages.map((m) => (m.to === 'ExponentPushToken[b]' ? { to: m.to, error: 'DeviceNotRegistered' } : { to: m.to })));
@@ -841,7 +851,30 @@ describe('MobilePushService — automatic work escalated (agentic board §9.3, D
     expect(t.sent).toHaveLength(3);
   });
 
-  it('only escalations are pushed: other automation events are not', async () => {
+  it('a release that delivered a version is pushed once per workflow and version; one without a version is not (TER-1055)', async () => {
+    const t = setup({ live: ['d2'] });
+    withTask(t);
+    stop = t.service.start();
+    const released = (id: string, payload: PublishedAutomationEvent['payload']) => escalated({ id, run_id: null, kind: 'release_ok', payload: { pr: 7, sha: 'm1', url: 'u', ...payload } });
+    automationBus.publish(released('e1', { workflow: 'Mobile TestFlight (hulk)', version: '0.6.0' }));
+    automationBus.publish(released('e2', { workflow: 'Mobile TestFlight (hulk)', version: '0.6.0' }));
+    automationBus.publish(released('e3', { workflow: 'Publish mobile OTA' }));
+    await flush();
+    const title = 'termhub: versão 0.6.0 publicada';
+    const body = 'Mobile TestFlight (hulk) publicou a versão 0.6.0.';
+    const data = { kind: 'automation_release', project_id: 'p1', conversation_id: 'cp' };
+    expect(t.repos.userNotifications.create).toHaveBeenCalledTimes(1);
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith({ user_id: 'u1', kind: 'reply', title, body, data });
+    expect(t.sent).toHaveLength(1);
+    expect(t.sent[0]).toHaveLength(2);
+    expect(t.sent[0]![0]).toEqual({ to: 'ExponentPushToken[a]', title, body, data: { ...data, notification_id: 'n1' }, badge: 3, collapseId: 'release:p1:Mobile TestFlight (hulk):0.6.0' });
+
+    automationBus.publish(released('e4', { workflow: 'Mobile TestFlight (hulk)', version: '0.6.1' }));
+    await flush();
+    expect(t.sent).toHaveLength(2);
+  });
+
+  it('only escalations and releases are pushed: other automation events are not', async () => {
     const t = setup();
     withTask(t);
     stop = t.service.start();

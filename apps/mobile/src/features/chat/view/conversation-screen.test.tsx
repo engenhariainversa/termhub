@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { DeviceEventEmitter, FlatList, StyleSheet } from 'react-native';
+import { DeviceEventEmitter, Dimensions, FlatList, StyleSheet } from 'react-native';
 import { getAnimatedStyle } from 'react-native-reanimated';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
@@ -146,17 +146,16 @@ afterEach(() => {
 });
 
 describe('Conversa', () => {
-  it('renders the thread: the person in plain text, the assistant as markdown and the title; a ready project chat names its host but offers no machine picker', async () => {
+  it('renders the thread: the person in plain text, the assistant as markdown and the title; a ready project chat keeps its host line in the settings', async () => {
     await render(<ConversationScreen />);
     expect(await screen.findByText(SEEDED_USER, undefined, LOAD)).toBeTruthy();
     const markdown = screen.getAllByTestId('markdown').map((node) => node.props.children);
     expect(markdown).toContain(SEEDED_ASSISTANT);
     expect(markdown).not.toContain(SEEDED_USER);
     expect(screen.getByText('termhub')).toBeTruthy();
-    // A project chat's host line is the way to the project's accounts and model (TER-589); its machine is not picked here.
-    expect(screen.getByText('Esta conversa roda na máquina jarvis, na conta padrão do Claude dela.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Conta e modelo' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Trocar máquina ou conta' })).toBeNull();
+    // A ready host, a project's too, is shown in the conversation's settings (TER-1039), not inline.
+    expect(screen.queryByText(/Esta conversa roda na máquina/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Conta e modelo' })).toBeNull();
   });
 
   it('shows a streaming bubble with the folded deltas, "pensando…" for a started empty row, and a failure sentence', async () => {
@@ -260,32 +259,25 @@ describe('Conversa', () => {
     expect(decide).toHaveBeenCalledWith('a-termhub-2', 'approve_project');
   });
 
-  it("counts the active grant in the header, opens Permissões do chat, and keeps the card's Revogar", async () => {
+  it("keeps the card's Revogar for an active grant; the count lives in the settings (TER-1039)", async () => {
     serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT] }));
     const revokeGrant = stubAction('revokeGrant');
     await render(<ConversationScreen />);
-    const link = await screen.findByRole('button', { name: '1 permissão ativa' }, LOAD);
+    await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Revogar' })).toHaveLength(1), LOAD);
+    expect(screen.queryByRole('button', { name: /permiss(ão|ões) ativa/ })).toBeNull();
     expect(screen.queryByText(/^Enviando direto para/)).toBeNull();
-    await fireEvent.press(link);
-    expect(mockRouter.push).toHaveBeenCalledWith('/chat-grants');
     const revoke = screen.getAllByRole('button', { name: 'Revogar' });
     expect(revoke).toHaveLength(1);
     await fireEvent.press(revoke[0]!);
     expect(revokeGrant).toHaveBeenCalledWith('g1');
   });
 
-  it('counts a tab grant and a project grant together: "2 permissões ativas"', async () => {
-    serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT], project_grants: [PROJECT_GRANT] }));
-    await render(<ConversationScreen />);
-    expect(await screen.findByRole('button', { name: '2 permissões ativas' }, LOAD)).toBeTruthy();
-  });
-
-  it('counts a standing grant with the others, and shows it on the card that created it (TER-386)', async () => {
+  it('shows a standing grant on the card that created it (TER-386)', async () => {
     serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT], project_grants: [], standing_grants: [STANDING_GRANT] }));
     const revokeGrant = stubAction('revokeGrant');
     await render(<ConversationScreen />);
-    expect(await screen.findByRole('button', { name: '2 permissões ativas' }, LOAD)).toBeTruthy();
-    expect(screen.getByText('Teclas e texto nas abas liberado neste projeto, sem prazo')).toBeTruthy();
+    expect(await screen.findByText('Teclas e texto nas abas liberado neste projeto, sem prazo', undefined, LOAD)).toBeTruthy();
     const revoke = screen.getAllByRole('button', { name: 'Revogar' });
     expect(revoke).toHaveLength(2);
     await fireEvent.press(revoke[1]!);
@@ -301,48 +293,22 @@ describe('Conversa', () => {
     expect(revokeGrant).toHaveBeenCalledWith('pg1');
   });
 
-  it('shows no header button without an active grant', async () => {
-    serveChat((res) => ({ actions: res.actions, grants: [] }));
+  it('the header holds only Voltar, the title and the cog, which opens the conversation settings (TER-1039)', async () => {
+    serveChat((res) => ({ actions: withAction(res, { status: 'approved' }), grants: [GRANT], subagents: [] }));
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
     expect(screen.queryByRole('button', { name: /permiss(ão|ões) ativa/ })).toBeNull();
-  });
-
-  it('with one running subagent, the header shows Subagentes (1); pressing it opens the sheet, whose Cancelar calls the store', async () => {
-    serveChat(() => ({ subagents: [SUBAGENT] }));
-    const cancelSubagent = stubAction('cancelSubagent');
-    await render(<ConversationScreen />);
-    const button = await screen.findByRole('button', { name: 'Subagentes (1)' }, LOAD);
-    expect(screen.queryByText('Buscar CI')).toBeNull(); // the sheet is not open yet
-
-    await fireEvent.press(button);
-    expect(screen.getByText('Buscar CI')).toBeTruthy();
-    expect(screen.getByText(/rodando/)).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Cancelar Buscar CI' }));
-    expect(cancelSubagent).toHaveBeenCalledWith('sub1');
-  });
-
-  it('the sheet shows the elapsed time as of when it opens, not as of when the screen mounted', async () => {
-    const realNow = Date.now.bind(Date);
-    let offset = 0;
-    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
-    try {
-      serveChat(() => ({ subagents: [{ ...SUBAGENT, started_at: new Date(realNow()).toISOString() }] }));
-      await render(<ConversationScreen />);
-      const button = await screen.findByRole('button', { name: 'Subagentes (1)' }, LOAD);
-      offset = 10 * 60_000; // ten minutes later, the sheet is opened for the first time
-      await fireEvent.press(button);
-      expect(screen.getByText(/há 10 min/)).toBeTruthy();
-    } finally {
-      nowSpy.mockRestore();
-    }
-  });
-
-  it('shows no Subagentes button with nothing running', async () => {
-    serveChat(() => ({ subagents: [] }));
-    await render(<ConversationScreen />);
-    await screen.findByText(SEEDED_USER, undefined, LOAD);
     expect(screen.queryByRole('button', { name: /^Subagentes/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Nova conversa' })).toBeNull();
+    expect(screen.queryByTestId('conversation-settings-dot')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Configurações da conversa' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/chat-settings');
+  });
+
+  it('a running subagent puts a dot on the cog', async () => {
+    serveChat(() => ({ subagents: [SUBAGENT] }));
+    await render(<ConversationScreen />);
+    expect(await screen.findByTestId('conversation-settings-dot', undefined, LOAD)).toBeTruthy();
   });
 
   it('a card whose action carries a subagent shows "Pedido pelo subagente «X»"', async () => {
@@ -356,6 +322,28 @@ describe('Conversa', () => {
     await render(<ConversationScreen />);
     await screen.findByText('2 ações aguardando sua confirmação', undefined, LOAD);
     expect(screen.getByText('Pedido pelo subagente «Buscar CI»')).toBeTruthy();
+  });
+
+  it('folds a turn\'s settled cards into one closed accordion; a pending card stays out of it (TER-1024)', async () => {
+    serveChat(
+      (res) => ({
+        actions: [
+          ...res.actions.map((a) => ({ ...a, status: 'executed' as const, grant_id: 'g1' })),
+          { ...res.actions[0]!, id: 'a-pending', status: 'pending' as const, grant_id: null, summary: 'digitar `y` na aba api' },
+        ],
+        grants: [],
+      }),
+      true,
+    );
+    await render(<ConversationScreen />);
+    const toggle = await screen.findByRole('button', { name: '2 ações executadas · digitar, mover card' }, LOAD);
+    expect(toggle.props.accessibilityState).toMatchObject({ expanded: false });
+    expect(screen.queryByText('digitar `npm test` na aba api do projeto termhub, no jarvis')).toBeNull();
+    expect(screen.getByText('digitar `y` na aba api')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Autorizar' })).toBeTruthy();
+
+    await fireEvent.press(toggle);
+    expect(screen.getByText('digitar `npm test` na aba api do projeto termhub, no jarvis')).toBeTruthy();
   });
 
   it('a card run under a grant reads "executada · aba confiada"', async () => {
@@ -381,26 +369,27 @@ describe('Conversa', () => {
     expect(screen.queryByRole('button', { name: 'Permitir sempre nesta aba' })).toBeNull();
   });
 
-  it('an empty box offers Ditar; typing adds Enviar beside it, which sends and empties the box at once', async () => {
+  it('an empty box offers the microphone; typing turns it into Enviar, which sends and empties the box at once', async () => {
     const sent = jest.spyOn(stores.api, 'sendMessage').mockResolvedValue({ conversation_id: 'c-termhub', user_message_id: 'u', assistant_message_id: 'a' });
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
 
-    const dictate = screen.getByRole('button', { name: 'Ditar' });
-    expect(dictate.props.accessibilityState.disabled).toBe(false);
+    const mic = screen.getByRole('button', { name: 'Gravar áudio' });
+    expect(mic.props.accessibilityState.disabled).toBe(false);
     expect(screen.queryByRole('button', { name: 'Enviar' })).toBeNull();
 
     await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'como está o deploy?');
-    // The microphone stays: dictating adds to what is typed.
-    expect(screen.getByRole('button', { name: 'Ditar' }).props.accessibilityState.disabled).toBe(false);
+    // WhatsApp's single button: with text it is ↑ (TER-1036).
+    expect(screen.queryByRole('button', { name: 'Gravar áudio' })).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     expect(sent).toHaveBeenCalledWith(expect.anything(), { text: 'como está o deploy?', project_id: 'p-termhub' });
     expect(screen.getByLabelText('Mensagem').props.value).toBe('');
   });
 
-  it('Ditar starts a recording; while recording the button reads Parar, and the transcription lands in the box', async () => {
+  it('Ditar (in the + menu) starts a recording; while recording the button reads Parar, and the transcription lands in the box', async () => {
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
+    await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Ditar' }));
     expect(mockVoice.start).toHaveBeenCalledTimes(1);
 
@@ -426,7 +415,7 @@ describe('Conversa', () => {
     // (a transcription of '' would leave the text as it is, and React would skip the render).
     await act(() => useChatStore.setState({ sending: true }));
     expect(screen.getByText('transcrevendo…')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Ditar' }).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Gravar áudio' }).props.accessibilityState.disabled).toBe(true);
     expect(screen.getByText('Falha ao transcrever o áudio')).toBeTruthy();
   });
 
@@ -487,40 +476,47 @@ describe('Conversa', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     expect(screen.getByLabelText('Mensagem').props.value).toBe('');
     expect(screen.getByLabelText('Mensagem').props.scrollEnabled).toBe(false);
-    expect(screen.getByRole('button', { name: 'Ditar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Gravar áudio' })).toBeTruthy();
     await waitFor(() => expect(getAnimatedStyle(screen.getByTestId('composer-text'))).toMatchObject(BESIDE_BUTTONS), SETTLE);
   });
 
-  it('avoids the keyboard with padding on iOS', async () => {
+  it('leaves no room under the composer while the keyboard is down', async () => {
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
-    // RNTL only sees host views: the `padding` behaviour is the one that pads the bottom by the
-    // keyboard's height (0 while it is down); `height` and no behaviour leave the padding unset.
-    expect(StyleSheet.flatten(screen.getByTestId('conversation-keyboard').props.style).paddingBottom).toBe(0);
+    expect(StyleSheet.flatten(screen.getByTestId('conversation-body').props.style).paddingBottom).toBe(0);
   });
 
-  it('lifts the composer right onto the keyboard, from where the conversation really starts on screen (measured)', async () => {
+  it('keeps the composer on the keyboard through show, a QuickType frame change, a drag-dismiss and a reopen (TER-1022)', async () => {
     // Host views' native methods are jest mocks shared by every view: this one says the conversation
-    // starts 91 pt down the screen — more than the (zero) top inset jest reports.
+    // runs from 91 pt down the screen to 34 pt above its bottom (the home indicator).
+    const SCREEN = Dimensions.get('screen').height;
     const nativeMethods = require('@react-native/jest-preset/jest/MockNativeMethods').default as { measureInWindow: jest.Mock };
-    nativeMethods.measureInWindow.mockImplementation((cb: (x: number, y: number, w: number, h: number) => void) => cb(0, 91, 390, 700));
-    try {
-      await render(<ConversationScreen />);
-      await screen.findByText(SEEDED_USER, undefined, LOAD);
-      const layout = { persist: () => undefined, nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 700 } } };
-      await fireEvent(screen.getByTestId('conversation-body'), 'layout', layout);
-      await fireEvent(screen.getByTestId('conversation-keyboard'), 'layout', layout);
-      // The keyboard's top at 500 on screen; the avoiding view's bottom is at 91 + 700 = 791 on screen.
-      await act(() => {
-        DeviceEventEmitter.emit('keyboardWillShow', {
+    nativeMethods.measureInWindow.mockImplementation((cb: (x: number, y: number, w: number, h: number) => void) => cb(0, 91, 390, SCREEN - 34 - 91));
+    const keyboard = (name: string, height: number, screenY = SCREEN - height) =>
+      act(() => {
+        DeviceEventEmitter.emit(name, {
           duration: 0,
           easing: 'keyboard',
-          startCoordinates: { screenX: 0, screenY: 844, width: 390, height: 0 },
-          endCoordinates: { screenX: 0, screenY: 500, width: 390, height: 344 },
+          startCoordinates: { screenX: 0, screenY: SCREEN, width: 390, height: 0 },
+          endCoordinates: { screenX: 0, screenY, width: 390, height },
           isEventFromThisApp: true,
         });
       });
-      await waitFor(() => expect(StyleSheet.flatten(screen.getByTestId('conversation-keyboard').props.style).paddingBottom).toBe(291));
+    const padding = () => StyleSheet.flatten(screen.getByTestId('conversation-body').props.style).paddingBottom;
+    try {
+      await render(<ConversationScreen />);
+      await screen.findByText(SEEDED_USER, undefined, LOAD);
+      await keyboard('keyboardWillShow', 291);
+      await waitFor(() => expect(padding()).toBe(291 - 34));
+      await keyboard('keyboardWillChangeFrame', 335);
+      await waitFor(() => expect(padding()).toBe(335 - 34));
+      // Dragging the thread takes the keyboard off screen; iOS may say so with a frame change alone.
+      await keyboard('keyboardWillChangeFrame', 335, SCREEN);
+      await waitFor(() => expect(padding()).toBe(0));
+      await keyboard('keyboardWillShow', 335);
+      await waitFor(() => expect(padding()).toBe(335 - 34));
+      await keyboard('keyboardWillHide', 335, SCREEN);
+      await waitFor(() => expect(padding()).toBe(0));
     } finally {
       nativeMethods.measureInWindow.mockReset();
     }
@@ -533,15 +529,6 @@ describe('Conversa', () => {
     mockVoice.notice = 'Nenhuma fala reconhecida';
     await act(() => useChatStore.setState({ sending: true }));
     expect(screen.getByText('Nenhuma fala reconhecida')).toBeTruthy();
-  });
-
-  it('Nova conversa asks first, then resets', async () => {
-    const reset = stubAction('reset');
-    await render(<ConversationScreen />);
-    await fireEvent.press(await screen.findByRole('button', { name: 'Nova conversa' }, LOAD));
-    expect(reset).not.toHaveBeenCalled();
-    await fireEvent.press(screen.getByRole('button', { name: 'Começar nova conversa' }));
-    expect(reset).toHaveBeenCalledTimes(1);
   });
 
   it('the account-wide chat, with no machine chosen, says so and offers the host sheet, which sets the machine and account', async () => {
@@ -740,32 +727,6 @@ describe('Conversa', () => {
     expect(screen.queryByRole('button', { name: 'Esperar' })).toBeNull();
   });
 
-  it("the project chat's host sheet names the project's account and leads to its accounts and model (TER-589)", async () => {
-    const real = stores.api.chat.bind(stores.api);
-    jest.spyOn(stores.api, 'chat').mockImplementation(async (auth, projectId) => {
-      const res = await real(auth, projectId);
-      if (projectId !== 'p-termhub' || res.host.kind !== 'ready') return res;
-      return { ...res, host: { ...res.host, account: { kind: 'chosen', id: 'acc-2', label: 'Claude Trabalho', via: 'project' } } };
-    });
-    await render(<ConversationScreen />);
-    expect(await screen.findByText('Esta conversa roda na máquina jarvis, na conta Claude Trabalho, definida pelo projeto.', undefined, LOAD)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Trocar máquina ou conta' })).toBeNull();
-    await fireEvent.press(screen.getByRole('button', { name: 'Conta e modelo' }));
-    expect(await screen.findByText('Conta definida pelo projeto: Claude Trabalho', undefined, LOAD)).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Contas e modelo do projeto' }));
-    expect(mockRouter.push).toHaveBeenCalledWith('/project-ai/p-termhub');
-  });
-
-  it("a project chat leads to the project's recent Markdown files, from its host line and its sheet (TER-953)", async () => {
-    await render(<ConversationScreen />);
-    await fireEvent.press(await screen.findByRole('button', { name: 'Arquivos' }, LOAD));
-    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/file-recent', params: { project_id: 'p-termhub' } });
-    mockRouter.push.mockClear();
-    await fireEvent.press(screen.getByRole('button', { name: 'Conta e modelo' }));
-    await fireEvent.press(await screen.findByRole('button', { name: 'Arquivos do projeto' }, LOAD));
-    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/file-recent', params: { project_id: 'p-termhub' } });
-  });
-
   it('the account-wide chat keeps its host line hidden while ready, and never offers the project row', async () => {
     mockId = 'general';
     await render(<ConversationScreen />);
@@ -922,7 +883,7 @@ describe('ConversationView (iPad, spec 2026-09-28 §2.3/§2.4)', () => {
     await render(<ConversationView routeId="p-termhub" embedded />);
     expect(await screen.findByText(SEEDED_USER, undefined, { timeout: 15_000 })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Voltar' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Configurações da conversa' })).toBeTruthy();
   });
 
   it('as the route: keeps "Voltar"', async () => {

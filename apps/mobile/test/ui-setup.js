@@ -39,7 +39,7 @@ jest.mock('react-native-mmkv', () => require('./fakes/mmkv'));
 jest.mock('expo-secure-store', () => require('./fakes/secure-store'));
 jest.mock('expo-device', () => require('./fakes/expo-device'));
 jest.mock('expo-application', () => ({ nativeApplicationVersion: '0.1.0', nativeBuildVersion: '1' }));
-jest.mock('expo-updates', () => ({ updateId: null, isEmbeddedLaunch: true }));
+jest.mock('expo-updates', () => ({ updateId: null, isEmbeddedLaunch: true, createdAt: null }));
 jest.mock('expo-local-authentication', () => require('./fakes/local-auth'));
 jest.mock('expo-notifications', () => require('./fakes/expo-notifications'));
 jest.mock('expo-tracking-transparency', () => require('./fakes/expo-tracking-transparency'));
@@ -59,3 +59,6 @@ jest.mock('react-native-markdown-display', () => require('./fakes/markdown'));
 // The pickers open native sheets; under jest they answer what a test tells them to.
 jest.mock('expo-image-picker', () => require('./fakes/image-picker'));
 jest.mock('expo-document-picker', () => require('./fakes/document-picker'));
+
+// The bubble's audio player (TER-1036): no native audio under jest.
+jest.mock('expo-audio', () => require('./fakes/expo-audio'));

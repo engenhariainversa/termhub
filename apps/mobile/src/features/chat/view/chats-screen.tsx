@@ -1,6 +1,8 @@
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { AiLoginBanner } from '@/features/ai-login/view/ai-login-banner';
+import { useAiLoginStore } from '@/features/ai-login/viewmodel/useAiLoginStore';
 import { isFavorite } from '@/features/home/model/favorites';
 import { SessionsList } from '@/features/tab-chat/view/sessions-list';
 import { tk, useTranslation } from '@/i18n';
@@ -54,6 +56,7 @@ export function ChatsScreen() {
   const loading = useChatStore((s) => s.loadingProjects);
   const error = useChatStore((s) => s.error);
   const loadProjects = useChatStore((s) => s.loadProjects);
+  const loadAiLogins = useAiLoginStore((s) => s.load);
   const wide = useWideLayout();
   const openByRoute = useChatStore((s) => s.openByRoute);
   const subscribeEvents = useChatStore((s) => s.subscribeEvents);
@@ -80,9 +83,11 @@ export function ChatsScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadProjects();
+      // An expired AI login shows its red warning here too (TER-1047).
+      void loadAiLogins();
       const { wide, selected } = paneRef.current;
       if (wide && selected) void openByRoute(selected);
-    }, [loadProjects, openByRoute]),
+    }, [loadProjects, loadAiLogins, openByRoute]),
   );
 
   // In the split the tab never loses focus while the person works in the pane, so the focus refresh
@@ -122,6 +127,7 @@ export function ChatsScreen() {
       <View className="gap-3 px-6 pb-2 pt-4">
         <AppText variant="title">{t('Chats')}</AppText>
         <SegmentBar value={segment} onChange={setSegment} />
+        <AiLoginBanner />
         {/* The store has one `error`: with a chat in the pane, the pane's banner already shows it. */}
         {segment === 'conversas' && error && !(wide && selected) ? <Banner tone="danger" text={error} /> : null}
       </View>

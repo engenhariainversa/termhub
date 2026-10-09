@@ -4,8 +4,8 @@ import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, RPC, RPC_METHODS, TMUX_KEYS
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.update', 'ai.credential', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
-      'hooks.uninstall', 'hw.probe', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
+      'agent.uninstall', 'agent.update', 'ai.login.cancel', 'ai.login.start', 'ai.login.status', 'ai.login.submit', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
+      'hooks.status', 'hooks.uninstall', 'hw.probe', 'net.check', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
     ]);
@@ -87,7 +87,42 @@ describe('rpc catalog', () => {
     expect(RPC['file.paste'].timeoutMs).toBe(60_000);
     expect(RPC['hw.probe'].timeoutMs).toBe(15_000);
     expect(RPC['tmux.list'].timeoutMs).toBe(8_000);
-    expect(RPC['ai.credential'].timeoutMs).toBe(10_000); // same as the ssh path's credential read
+  });
+  it('ai.usage answers bounded usage numbers, never a credential', () => {
+    const def = RPC['ai.usage'];
+    expect(def.timeoutMs).toBe(60_000); // up to four sequential 12 s provider calls
+    expect(def.params.safeParse({ provider: 'claude', config_dir: null }).success).toBe(true);
+    expect(def.params.safeParse({ provider: 'claude', config_dir: '~/.claude-work' }).success).toBe(true);
+    expect(def.params.safeParse({ provider: 'claude', config_dir: 'relative' }).success).toBe(false);
+    expect(def.params.safeParse({ provider: 'other', config_dir: null }).success).toBe(false);
+    const ok = { ok: true, plan: 'max', windows: [{ key: 'five_hour', label: '5 horas', utilization: 12.5, resets_at: '2026-10-07T12:00:00.000Z', model: 'opus' }], error: null, hint: null };
+    expect(def.result.safeParse(ok).success).toBe(true);
+    expect(def.result.safeParse({ ok: false, plan: null, windows: [], error: 'x', hint: null, rate_limited: true, retry_after_ms: null }).success).toBe(true);
+    expect(def.result.safeParse({ ...ok, windows: [{ ...ok.windows[0], utilization: 101 }] }).success).toBe(false);
+    expect(def.result.safeParse({ ...ok, windows: Array(51).fill(ok.windows[0]) }).success).toBe(false);
+    expect(def.result.safeParse({ ...ok, error: 'x'.repeat(501) }).success).toBe(false);
+    expect(def.result.safeParse({ ...ok, retry_after_ms: -1 }).success).toBe(false);
+    expect('ai.credential' in RPC).toBe(false);
+  });
+  it('ai.login.* take a provider, a config dir and a tmux session name, and bound the code', () => {
+    expect(RPC['ai.login.status'].timeoutMs).toBe(20_000);
+    expect(RPC['ai.login.start'].timeoutMs).toBe(45_000);
+    expect(RPC['ai.login.submit'].timeoutMs).toBe(60_000);
+    expect(RPC['ai.login.status'].params.safeParse({ provider: 'chatgpt', config_dir: null }).success).toBe(true);
+    expect(RPC['ai.login.start'].params.safeParse({ provider: 'claude', config_dir: '~/.claude-work', session: 'termhub-login-abc' }).success).toBe(true);
+    expect(RPC['ai.login.start'].params.safeParse({ provider: 'claude', config_dir: null, session: 'bad name' }).success).toBe(false);
+    const submit = RPC['ai.login.submit'].params;
+    expect(submit.safeParse({ provider: 'claude', config_dir: null, session: 's', code: 'abc#def' }).success).toBe(true);
+    expect(submit.safeParse({ provider: 'chatgpt', config_dir: null, session: 's', code: null }).success).toBe(true);
+    expect(submit.safeParse({ provider: 'claude', config_dir: null, session: 's', code: '' }).success).toBe(false);
+    expect(submit.safeParse({ provider: 'claude', config_dir: null, session: 's', code: 'x'.repeat(2001) }).success).toBe(false);
+    expect(RPC['ai.login.start'].result.safeParse({ url: 'https://auth.openai.com/codex/device', user_code: 'LCWQ-WSPV8', needs_code: false }).success).toBe(true);
+    expect(RPC['ai.login.start'].result.safeParse({ url: '', user_code: null, needs_code: true }).success).toBe(false);
+    // TER-1054: an older agent leaves `logged_in` out; a newer one says the CLI finished on its own.
+    expect(RPC['ai.login.start'].result.parse({ url: 'https://x/oauth/authorize', user_code: null, needs_code: true })).toMatchObject({ logged_in: false });
+    expect(RPC['ai.login.start'].result.safeParse({ url: null, user_code: null, needs_code: false, logged_in: true }).success).toBe(true);
+    expect(RPC['ai.login.submit'].result.safeParse({ logged_in: false, message: null }).success).toBe(true);
+    expect(RPC['ai.login.cancel'].params.safeParse({ session: 'termhub-login-abc' }).success).toBe(true);
   });
   it('secret.read takes the gh_auth_token source only and bounds the value', () => {
     expect(RPC['secret.read'].params.safeParse({ source: 'gh_auth_token' }).success).toBe(true);
@@ -113,6 +148,8 @@ describe('rpc catalog', () => {
     expect(RPC['hooks.install'].params.safeParse({ hooks_url: 'https://x', token: "a'b" }).success).toBe(false);
     expect(RPC['hooks.install'].timeoutMs).toBe(15_000);
     expect(RPC['hooks.uninstall'].params.safeParse({}).success).toBe(true);
+    expect(RPC['hooks.status'].params.safeParse({ claude_dirs: ['~/.claude-work'] }).success).toBe(true);
+    expect(RPC['hooks.status'].params.safeParse({ claude_dirs: ['~/x\n'] }).success).toBe(false);
   });
   it('docs.scan takes an absolute/~ cwd and has a 15 s budget', () => {
     expect(RPC['docs.scan'].params.safeParse({ cwd: '/home/u/proj' }).success).toBe(true);
@@ -283,5 +320,17 @@ describe('file.list', () => {
     expect(RPC['file.list'].result.safeParse({ entries: Array(FILE_LIST_MAX_ENTRIES + 1).fill(entry) }).success).toBe(false);
     expect(RPC['file.list'].result.safeParse({ entries: [{ ...entry, too_large: undefined }] }).success).toBe(false);
     expect(RPC['file.list'].result.safeParse({ entries: [{ ...entry, size: -1 }] }).success).toBe(false);
+  });
+});
+
+describe('net.check', () => {
+  it('takes one to four http(s) urls', () => {
+    expect(RPC['net.check'].params.safeParse({ urls: ['https://termhub.dev/api/hooks/events', 'http://localhost:3000/mcp'] }).success).toBe(true);
+    expect(RPC['net.check'].params.safeParse({ urls: [] }).success).toBe(false);
+    expect(RPC['net.check'].params.safeParse({ urls: Array(5).fill('https://termhub.dev/mcp') }).success).toBe(false);
+    expect(RPC['net.check'].params.safeParse({ urls: ['file:///etc/passwd'] }).success).toBe(false);
+  });
+  it('answers a status or an error per url', () => {
+    expect(RPC['net.check'].result.safeParse({ results: [{ url: 'https://termhub.dev/mcp', status: 401, error: null }, { url: 'https://x', status: null, error: 'ENOTFOUND' }] }).success).toBe(true);
   });
 });

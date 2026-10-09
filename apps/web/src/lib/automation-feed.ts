@@ -24,12 +24,16 @@ export function feedLine(e: AutomationFeedEvent): string | null {
     case 'run_resumed':
       return t('{{ref}}: retomado', { ref });
     case 'run_done':
-      return t('{{ref}}: agente terminou', { ref });
+      // a blocked run a PR from its branch took over says so (TER-1049)
+      return e.reason_text ? t('{{ref}}: {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: agente terminou', { ref });
     case 'run_blocked':
       // a start that failed says why (TER-987)
       return e.reason_text ? t('{{ref}} não começou: {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: parou e espera você', { ref });
     case 'question_answered':
       return t('{{ref}}: pergunta do agente respondida', { ref });
+    case 'decided_by_recommendation':
+      // TER-1043: the agent's own summary when it reported the decision; the server's nudge has none
+      return e.summary ? t('{{ref}} decidiu sozinho: {{summary}}', { ref, summary: e.summary }) : t('{{ref}}: seguiu a própria recomendação (registrada no PR)', { ref });
     case 'escalated':
       return t('{{ref}} precisa de você: {{reason}}', { ref, reason: e.reason_text ?? '' });
     case 'pr_opened':
@@ -44,6 +48,12 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       const what = e.epic ? t('Deploy falhou ({{epic}})', { epic: e.epic }) : t('Deploy falhou');
       return e.paused === false ? what : t('{{what}} — automático pausado no projeto', { what });
     }
+    case 'deploy_retried':
+      return t('Deploy falhou por problema do GitHub; rodando de novo');
+    case 'github_wait':
+      return t('{{ref}}: erro do GitHub; o termhub tenta de novo quando ele voltar', { ref });
+    case 'trust_auto_accepted':
+      return t('{{ref}}: confiança da pasta confirmada sozinha', { ref });
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });
     case 'release_failed':

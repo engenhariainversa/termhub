@@ -83,7 +83,7 @@
   "não existe": "does not exist",
   "não é uma mensagem do chat": "is not a chat message",
   "on_behalf_of só vale no chat do termhub: só ele tem as mensagens da pessoa": "on_behalf_of only works in the termhub chat: only it has the person's messages",
-  "on_behalf_of: {{ref}} {{why}}. Use a ref message:… que o search_memory devolve para uma mensagem da pessoa das últimas 24 h.": "on_behalf_of: {{ref}} {{why}}. Use a message:… ref that search_memory returns for a message from the person in the last 24 h.",
+  "on_behalf_of: {{ref}} {{why}}. Use a ref message:… que acompanha a mensagem da pessoa, ou a que o search_memory devolve, de uma mensagem das últimas 24 h.": "on_behalf_of: {{ref}} {{why}}. Use the message:… ref that comes with the person's message, or the one search_memory returns, for a message from the last 24 h.",
   "pergunta não registrada": "question not recorded",
   "{{binary}} não foi detectado em {{machine}} (list_machines mostra o que cada máquina tem). Se está instalado: com agente, atualize o termhub-agent (0.2.3 ou mais novo) e deixe-o reconectar; em máquina local/ssh, abra a lista de máquinas no app para refazer a detecção.": "{{binary}} was not detected on {{machine}} (list_machines shows what each machine has). If it is installed: with the agent, update termhub-agent (0.2.3 or newer) and let it reconnect; on a local/ssh machine, open the machine list in the app to run the detection again.",
   "{{key}} é ambíguo: {{names}}. Use a chave completa.": "{{key}} is ambiguous: {{names}}. Use the full key.",
@@ -100,5 +100,15 @@
   "Só a pessoa muda a exclusividade de uma conta de IA, nunca um agente numa aba": "Only the person changes whether an AI account is exclusive, never an agent in a tab",
   "Isso deixa a conta \"{{account}}\" exclusiva do projeto {{project}}: nenhum outro projeto poderá usá-la; repita com confirm: true para confirmar": "This makes the account \"{{account}}\" exclusive to project {{project}}: no other project will be able to use it; repeat with confirm: true to confirm",
   "Isso libera a conta \"{{account}}\", hoje exclusiva do projeto {{project}}, para qualquer projeto; repita com confirm: true para confirmar": "This frees the account \"{{account}}\", now exclusive to project {{project}}, for any project; repeat with confirm: true to confirm",
-  "Atualize o agente de {{machine}} (npm i -g @termhub/agent, versão {{version}} ou mais nova): o trabalho automático só roda com a trava (termhub-guard).": "Update the agent on {{machine}} (npm i -g @termhub/agent, version {{version}} or newer): automatic work only runs with the hard lock (termhub-guard)."
+  "Atualize o agente de {{machine}} (npm i -g @termhub/agent, versão {{version}} ou mais nova): o trabalho automático só roda com a trava (termhub-guard).": "Update the agent on {{machine}} (npm i -g @termhub/agent, version {{version}} or newer): automatic work only runs with the hard lock (termhub-guard).",
+  "Nenhum CLI de agente (Claude Code, Codex, Cursor) foi encontrado nesta máquina.": "No agent CLI (Claude Code, Codex, Cursor) was found on this machine.",
+  "O Codex só roda os hooks depois que a pessoa confia neles: abra o Codex na máquina e escolha \"Trust all\" (ou use /hooks). O termhub não faz isso por ela.": "Codex only runs the hooks once the person trusts them: open Codex on the machine and choose \"Trust all\" (or use /hooks). termhub does not do it for them.",
+  "Algum arquivo de configuração não pôde ser lido ou não é JSON válido; a instalação vai recusá-lo até ele ser corrigido na máquina.": "A config file could not be read or is not valid JSON; the install will refuse it until it is fixed on the machine.",
+  "Não foi possível ler a configuração da máquina": "Could not read the machine's configuration",
+  "Instalar os hooks mexe nos arquivos de configuração da máquina e precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.": "Installing the hooks changes the machine's config files and needs the person's confirmation in the chat. Nothing was changed: propose the call again.",
+  "{{tools}} não está instalado nesta máquina: os hooks só são instalados para os CLIs que já estão lá. Nada foi alterado.": "{{tools}} is not installed on this machine: the hooks are only installed for the CLIs already there. Nothing was changed.",
+  "Esta ferramenta só funciona no chat do termhub: ela lê o contexto da própria conversa.": "This tool only works in the termhub chat: it reads the conversation's own context.",
+  "Só a pessoa refaz o login de uma conta de IA, nunca um agente numa aba": "Only the person redoes an AI account's login, never an agent in a tab",
+  "Só a dona da máquina pode refazer o login": "Only the machine's owner can redo the login",
+  "Sem permissão para escrever nas abas": "No permission to type into tabs"
 }

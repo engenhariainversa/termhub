@@ -608,8 +608,8 @@ describe('the whole answer (spec 2026-09-30 last answer)', () => {
   });
 
   it('keeps the answer of a Claude Stop with background tasks still running', () => {
-    const out = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Pronto.', background_tasks: [{ status: 'running' }] })!;
-    expect(out).toMatchObject({ backgroundTasks: 1, answer: 'Pronto.' });
+    const out = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Aguardando o build.', background_tasks: [{ status: 'running' }] })!;
+    expect(out).toMatchObject({ backgroundTasks: 1, answer: 'Aguardando o build.' });
   });
 
   it.each([
@@ -685,10 +685,37 @@ describe('a claude Stop that ends with a report is finished, not a wait (TER-972
     expect(stop('   ')?.kind).toBe('waiting_input');
   });
 
-  it('background work still running wins, whatever the message says', () => {
-    const running = [{ id: 'b1', type: 'shell', status: 'running' }];
-    expect(stop('Merge e deploy feitos.', running)?.kind).toBe('waiting_background');
-    expect(stop('Quer que eu espere?', running)?.kind).toBe('waiting_background');
+  it('background work still running holds the tab only when the message says it waits on it (TER-1053)', () => {
+    const running = [{ id: 'b1', type: 'monitor', status: 'running' }];
+    for (const waits of ['Aguardando o CI do #940.', 'Disparei 3 agentes em background; consolido quando terminarem.', 'Vou acompanhar o deploy e te aviso.', "Started the build; I'll report once it finishes.", '   ']) {
+      expect(stop(waits, running)).toMatchObject({ kind: 'waiting_background', backgroundTasks: 1 });
+    }
+    // a report or a request ends the work, whatever the background still does (a Monitor never ends)
+    const done = stop('Merge e deploy feitos.', running);
+    expect(done).toMatchObject({ kind: 'finished', meta: { event: 'Stop', background_tasks: 1 } });
+    expect(done?.backgroundTasks).toBeUndefined();
+    expect(stop('Quer que eu espere?', running)?.kind).toBe('waiting_input');
+  });
+
+  it('the case that hung (TER-1053): a final report with a Monitor left running is the end of the turn and reaches the person', () => {
+    const last = [
+      'O PR está aberto, e parei aqui como pedido.',
+      '',
+      '- **PR:** https://github.com/acme/monorepo/pull/940',
+      '  - Um único commit, `f2a0a3a8d`, assinado e sem Co-Authored-By.',
+      '',
+      '**Ficou de fora:**',
+      '- **Link "relates" entre os tickets.** A descrição já cita o #928. Posso criar o link se ele quiser.',
+      '- **Citar o #940 na descrição do #849.** Não editei, e espero a próxima etapa.',
+      '',
+      'O CI do #940, do #849 e do #851 ainda não foi verificado.',
+    ].join('\n');
+    const i = stop(last, [{ id: 'm1', type: 'monitor', status: 'running' }]);
+    // it offers something ("Posso…"), so it waits for the person, which alerts — never "still working"
+    expect(i?.kind).toBe('waiting_input');
+    expect(i?.backgroundTasks).toBeUndefined();
+    // the same report without the offer is finished
+    expect(stop(last.replace(' Posso criar o link se ele quiser.', ''), [{ id: 'm1', type: 'monitor', status: 'running' }])?.kind).toBe('finished');
   });
 
   it('a subagent Stop is classified the same way and keeps no answer', () => {

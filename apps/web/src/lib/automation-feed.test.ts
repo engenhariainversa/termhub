@@ -46,11 +46,27 @@ describe('auto-approved and guard-blocked lines (TER-993)', () => {
   });
 });
 
+describe('decisions taken alone (TER-1043)', () => {
+  it('shows the agent\'s summary, or the nudge line without one, in pt-BR and en', async () => {
+    expect(feedLine(ev({ kind: 'decided_by_recommendation', summary: 'Cor do botão? → Azul' }))).toBe('TER-9 decidiu sozinho: Cor do botão? → Azul');
+    expect(feedLine(ev({ kind: 'decided_by_recommendation' }))).toBe('TER-9: seguiu a própria recomendação (registrada no PR)');
+    await i18n.changeLanguage('en');
+    expect(feedLine(ev({ kind: 'decided_by_recommendation', summary: 'x → y' }))).toBe('TER-9 decided alone: x → y');
+  });
+});
+
 describe('a start that failed (TER-987)', () => {
   it('says why it did not start, and keeps the plain line for any other block', async () => {
     expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'A máquina não respondeu' }))).toBe('TER-9 não começou: A máquina não respondeu');
     expect(feedLine(ev({ kind: 'run_blocked' }))).toBe('TER-9: parou e espera você');
     await i18n.changeLanguage('en');
     expect(feedLine(ev({ kind: 'run_blocked', reason_text: 'The machine did not answer' }))).toBe('TER-9 did not start: The machine did not answer');
+  });
+});
+
+describe('a blocked run a PR took over (TER-1049)', () => {
+  it('says so on its run_done line, and keeps the plain line for any other', () => {
+    expect(feedLine(ev({ kind: 'run_done', reason_text: 'PR aberto depois do bloqueio; o automático acompanha até o merge' }))).toBe('TER-9: PR aberto depois do bloqueio; o automático acompanha até o merge');
+    expect(feedLine(ev({ kind: 'run_done' }))).toBe('TER-9: agente terminou');
   });
 });

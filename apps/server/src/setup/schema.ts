@@ -124,7 +124,16 @@ export const automationSchema = z.object({
   allowed_tools: z.array(z.string().trim().min(1).max(200)).max(100).nullable().default(null),
   max_parallel: z.number().int().min(1).max(100).nullable().default(null),
   resume_max: z.number().int().min(0).max(10).default(3),
+  // TER-1043: off = the agent decides by itself (its recommendation, or the person's precedent) and records
+  // it; on = a run that stops on a decision waits for the person ("Parar em decisões de produto")
+  stop_on_decisions: z.boolean().default(false),
   fix_attempts: z.number().int().min(0).max(10).default(3),
+  // TER-1025: a deploy that failed on GitHub's side (no job, no failed step, an Actions incident) is run again
+  // this many times (5, 15, 30 min apart) before the project is paused; 0 = pause at once, as before
+  deploy_retries: z.number().int().min(0).max(10).default(3),
+  // TER-1025: a run that reported a GitHub error (push or PR) is resumed this many times, once GitHub works
+  // again, before it goes to the person
+  github_retries: z.number().int().min(0).max(10).default(3),
   daily_budget_usd: z.number().positive().max(100000).nullable().default(null),
   // spike R8 (TER-971): a card whose estimate passes this is escalated and not resumed; null = off
   card_budget_usd: z.number().positive().max(100000).nullable().default(null),

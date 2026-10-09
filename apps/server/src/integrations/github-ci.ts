@@ -37,6 +37,18 @@ export interface GithubCiClient {
   prFiles(token: string, repo: string, number: number): Promise<string[]>;
   /** A text file at a commit; null when it does not exist there. */
   fileAt(token: string, repo: string, path: string, ref: string): Promise<string | null>;
+  /** The jobs of a run's latest attempt, with their steps (TER-1025: a deploy that failed with no failed step is GitHub's). */
+  runJobs(token: string, repo: string, runId: number): Promise<RunJob[]>;
+  /** Runs a whole workflow run again, on the same commit (TER-1025: a deploy that failed on GitHub's side). */
+  rerunRun(token: string, repo: string, runId: number): Promise<void>;
+}
+
+/** A job of a workflow run and how its steps ended. */
+export interface RunJob {
+  name: string;
+  status: string;
+  conclusion: string | null;
+  steps: Array<{ name: string; conclusion: string | null }>;
 }
 
 export function failure(res: Response): GithubCiError {
@@ -68,6 +80,12 @@ export function createGithubCiClient(fetchImpl: typeof fetch = fetch): GithubCiC
       },
     });
 
+  const post = (token: string, path: string) =>
+    fetchImpl(`${API}${path}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'user-agent': 'termhub', 'x-github-api-version': '2022-11-28' },
+    });
+
   return {
     async listPulls(token, repo, etag) {
       const res = await get(token, `/repos/${repo}/pulls?state=all&sort=updated&direction=desc&per_page=30`, etag);
@@ -79,7 +97,7 @@ export function createGithubCiClient(fetchImpl: typeof fetch = fetch): GithubCiC
       const res = await get(token, `/repos/${repo}/actions/runs?head_sha=${encodeURIComponent(headSha)}&per_page=50`);
       if (!res.ok) throw failure(res);
       const body = (await res.json()) as { workflow_runs: WorkflowRun[] };
-      return body.workflow_runs.map(({ id, name, path, status, conclusion, html_url, created_at }) => ({ id, name, path, status, conclusion, html_url, created_at }));
+      return body.workflow_runs.map(({ id, name, path, status, conclusion, html_url, created_at, updated_at }) => ({ id, name, path, status, conclusion, html_url, created_at, updated_at }));
     },
     async branchSha(token, repo, branch) {
       const res = await get(token, `/repos/${repo}/git/ref/heads/${branch.split('/').map(encodeURIComponent).join('/')}`);
@@ -105,6 +123,16 @@ export function createGithubCiClient(fetchImpl: typeof fetch = fetch): GithubCiC
       if (!res.ok) throw failure(res);
       const body = (await res.json()) as { content?: string; encoding?: string };
       return body.encoding === 'base64' && typeof body.content === 'string' ? Buffer.from(body.content, 'base64').toString('utf8') : null;
+    },
+    async runJobs(token, repo, runId) {
+      const res = await get(token, `/repos/${repo}/actions/runs/${runId}/jobs?filter=latest&per_page=100`);
+      if (!res.ok) throw failure(res);
+      const body = (await res.json()) as { jobs?: Array<{ name: string; status: string; conclusion: string | null; steps?: Array<{ name: string; conclusion: string | null }> }> };
+      return (body.jobs ?? []).map((j) => ({ name: j.name, status: j.status, conclusion: j.conclusion, steps: (j.steps ?? []).map((s) => ({ name: s.name, conclusion: s.conclusion })) }));
+    },
+    async rerunRun(token, repo, runId) {
+      const res = await post(token, `/repos/${repo}/actions/runs/${runId}/rerun`);
+      if (!res.ok) throw failure(res);
     },
   };
 }

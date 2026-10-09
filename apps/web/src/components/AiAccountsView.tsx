@@ -2,8 +2,12 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { api, ApiError } from '../lib/api';
 import { useData } from '../lib/data';
 import { STATUS_DOT, STATUS_LABEL } from '../lib/machine-status';
-import { AI_PROVIDER_LABEL, type AiAccount, type AiAccountUsage, type AiProvider, type AiUsageWindow, type Machine } from '../lib/types';
+import { KeyRound } from 'lucide-react';
+import { useAiLoginStatus } from '../lib/ai-login-status';
+import { AI_PROVIDER_LABEL, type AiAccount, type AiAccountUsage, type AiLoginStatusRow, type AiProvider, type AiUsageWindow, type Machine } from '../lib/types';
+import { AiLoginDialog, type AiLoginTarget } from './AiLoginDialog';
 import { AutoSwapSettings } from './AutoSwapSettings';
+import { AiUsageQuerySettings } from './AiUsageQueryCard';
 import { ConfirmDialog, Modal } from './Modal';
 import { i18n, tk, Trans, useTranslation } from '../i18n';
 
@@ -88,30 +92,45 @@ export function ExclusiveBadge({ name }: { name: string }) {
 
 function AccountCard({
   account,
+  machineName,
   usage,
+  login,
   now,
   onRefresh,
+  onRelogin,
   onEdit,
   onDelete,
 }: {
   account: AiAccount;
+  /** the account's machine, for the "turn it on in Máquinas" pointer; null when the machine is out of view */
+  machineName: string | null;
   usage: AiAccountUsage | undefined;
+  /** TER-1047: whether its CLI is still logged in; undefined until the first read */
+  login: AiLoginStatusRow | undefined;
   now: number;
   onRefresh: () => void;
+  onRelogin: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const worst = usage?.ok ? Math.max(...usage.windows.map((w) => w.utilization)) : null;
+  const loginRequired = login?.state === 'login_required';
   return (
-    <li className={`flex flex-col rounded-lg border bg-bg-2 p-4 ${worst !== null && worst >= 90 ? 'border-danger/50' : 'border-line'}`}>
+    <li className={`flex flex-col rounded-lg border bg-bg-2 p-4 ${loginRequired || (worst !== null && worst >= 90) ? 'border-danger/50' : 'border-line'}`}>
       <div className="flex items-center gap-2">
         <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${PROVIDER_STYLE[account.provider]}`}>{AI_PROVIDER_LABEL[account.provider]}</span>
         <span className="truncate font-medium">{account.label}</span>
         {account.exclusive_project && <ExclusiveBadge name={account.exclusive_project.name} />}
         {usage?.plan && <span className="rounded bg-bg-4 px-1.5 text-[10px] uppercase tracking-wide text-fg-muted">{usage.plan}</span>}
+        {loginRequired && <span className="shrink-0 rounded bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">{t('Login necessário')}</span>}
         <span className="ml-auto flex shrink-0 items-center gap-0.5">
+          {login?.supported && !loginRequired && (
+            <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg" title={t('Refazer login')} aria-label={t('Refazer login')} onClick={onRelogin}>
+              <KeyRound size={12} aria-hidden="true" />
+            </button>
+          )}
           <button
             className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50"
             title={t('Atualizar agora')}
@@ -135,9 +154,26 @@ function AccountCard({
         {account.config_dir ?? t('login padrão')}
       </div>
 
+      {loginRequired && (
+        <div className="mt-3 flex items-center gap-2 rounded border border-danger/40 bg-danger/10 p-2 text-xs">
+          <p className="flex-1 text-danger">{t('O login do CLI expirou nesta máquina.')}</p>
+          <button type="button" className="btn-danger shrink-0 px-2 py-1 text-xs" onClick={onRelogin}>
+            {t('Refazer login')}
+          </button>
+        </div>
+      )}
+
       <div className="mt-3 flex-1">
         {!usage && <p className="text-xs text-fg-dim">{t('Consultando…')}</p>}
-        {usage && !usage.ok && (
+        {usage && !usage.ok && usage.reason && (
+          <div className="rounded border border-line bg-bg p-2 text-xs text-fg-muted">
+            <p>{usage.reason === 'disabled' ? t('Consulta de uso desligada nesta máquina') : t('Atualize o agente desta máquina para ver o uso')}</p>
+            {usage.reason === 'disabled' && machineName && (
+              <p className="mt-1 text-fg-dim">{t('Ligue em Máquinas › {{machine}}', { machine: machineName })}</p>
+            )}
+          </div>
+        )}
+        {usage && !usage.ok && !usage.reason && (
           <div className="rounded border border-danger/40 bg-danger/10 p-2 text-xs">
             <p className="text-danger">{usage.error}</p>
             {usage.hint && <p className="mt-1 break-all text-fg-muted">{usage.hint}</p>}
@@ -363,6 +399,9 @@ export function AiAccountsView() {
   const [deleting, setDeleting] = useState<AiAccount | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const { accounts: loginRows } = useAiLoginStatus();
+  const loginOf = useMemo(() => new Map((loginRows ?? []).map((r) => [r.account_id, r])), [loginRows]);
+  const [relogin, setRelogin] = useState<AiLoginTarget | null>(null);
 
   const loadUsage = useCallback(async (refresh = false) => {
     try {
@@ -456,9 +495,14 @@ export function AiAccountsView() {
                 <AccountCard
                   key={a.id}
                   account={a}
+                  machineName={m?.name ?? null}
                   usage={usage[a.id]}
+                  login={loginOf.get(a.id)}
                   now={now}
                   onRefresh={() => refreshOne(a.id)}
+                  onRelogin={() =>
+                    setRelogin({ account_id: a.id, label: a.label, provider: a.provider, machine_name: m?.name ?? null, supported: loginOf.get(a.id)?.supported ?? false })
+                  }
                   onEdit={() => setForm({ open: true, account: a })}
                   onDelete={() => setDeleting(a)}
                 />
@@ -470,6 +514,7 @@ export function AiAccountsView() {
       </div>
 
       {accounts && <AutoSwapSettings machines={machines} accounts={accounts} />}
+      {accounts && <AiUsageQuerySettings machines={machines} accounts={accounts} />}
 
       {form.open && (
         <AccountForm
@@ -487,6 +532,7 @@ export function AiAccountsView() {
           }}
         />
       )}
+      {relogin && <AiLoginDialog account={relogin} onClose={() => setRelogin(null)} onLoggedIn={() => void refreshOne(relogin.account_id)} />}
       <ConfirmDialog
         open={!!deleting}
         title={t('Remover conta')}

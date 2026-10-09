@@ -5,11 +5,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, ROOT_DIR } from './config.js';
 import { getPrisma, closePrisma } from './db/prisma.js';
-import { AUTOMATION_EVENT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
+import { ACCESS_LOG_RETENTION_MS, AUTOMATION_EVENT_RETENTION_MS, VIEW_AS_AUDIT_RETENTION_MS, createRepositories, type Repositories } from './db/repositories/index.js';
 import { createMailer } from './email/mailer.js';
 import { createAccessAllowlist } from './cloudflare/access.js';
 import { AuthService, authRoutes, buildAuthHook, type AuthContext } from './auth/index.js';
 import { applyErrorHandler, sendError } from './lib/errors.js';
+import { registerSecurityHeaders } from './lib/security-headers.js';
 import { machineRoutes } from './routes/machines.js';
 import { projectRoutes } from './routes/projects.js';
 import { projectGroupRoutes } from './routes/project-groups.js';
@@ -30,6 +31,8 @@ import { automationPauseRoutes, projectAutomationEventRoutes, projectAutomationR
 import { projectAiRoutes } from './routes/project-ai.js';
 import { projectTicketRoutes, taskTicketRoutes } from './routes/tickets.js';
 import { aiAccountRoutes } from './routes/ai-accounts.js';
+import { aiLoginRoutes } from './routes/ai-login.js';
+import { startAiLoginChecks } from './ai/login-checks.js';
 import { waitlistRoutes } from './routes/waitlist.js';
 import { publicCityRoutes } from './routes/public-city.js';
 import { cityLinkRoutes } from './routes/city-link.js';
@@ -49,14 +52,14 @@ import { diskStore } from './chat/attachments/store.js';
 import { sweepAttachments } from './chat/attachments/sweep.js';
 import { extract } from './chat/attachments/extract.js';
 import { REQUEUE_MIN_AGE_MS, createExtractionQueue, requeuePending } from './chat/attachments/queue.js';
-import { toPublicAttachment } from './db/repositories/chat-attachments.js';
+import { toPublicAttachment, type AttachmentRow } from './db/repositories/chat-attachments.js';
 import { ChatService, failureLabel, purgeExpiredActions } from './chat/service.js';
 import { HEARTBEAT_MS, SWEEP_MS } from './chat/resume.js';
 import { startDecisionSweeper } from './chat/decision-memory.js';
 import { startAutoAnswerSweeper } from './chat/auto-answer.js';
 import { createWaker } from './chat/wake.js';
 import { startMemorySweeper } from './memory/sweeper.js';
-import { agentRunner } from './chat/runner.js';
+import { agentRunner } from './chat/agent-runner.js';
 import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
 import { expireOrphanTabActions, startTabGoneActionExpiry } from './chat/tab-gone-actions.js';
 import { stopTabSuggestions } from './chat/tab-suggestions.js';
@@ -67,11 +70,15 @@ import { userRoutes } from './routes/users.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { apiTokenRoutes } from './routes/api-tokens.js';
 import { deviceRoutes } from './routes/devices.js';
+import { securityEventRoutes } from './routes/security-events.js';
+import { featureFlagRoutes, publicFeatureRoutes } from './routes/feature-flags.js';
+import { securityEventCutoff } from './auth/audit.js';
 import { mcpRoutes } from './mcp/route.js';
 import { createMobileServices, registerMobileApi } from './mobile/app.js';
 import { TabChatHub } from './tab-chat/hub.js';
 import { revokeDevice } from './mobile/revocation.js';
 import { purgeMobile } from './mobile/purge.js';
+import { purgeRetention } from './retention/purge.js';
 import { actionForMethod, type Resource } from './auth/permissions.js';
 import { startTicketSyncScheduler } from './setup/tickets-sync.js';
 import { startCiSyncScheduler } from './ci/scheduler.js';
@@ -84,6 +91,7 @@ import { agents } from './agent/registry.js';
 import { startAutomation } from './automation/start.js';
 import { TranscriptionService } from './terminal/transcription.js';
 import { createUpgradeRouter } from './ws/router.js';
+import { createAccessLogRecorder, registerAccessLog, upgradeClientIp } from './access-log/recorder.js';
 import { createLifecycle, drain, RESTART_CLOSE, within } from './ws/drain.js';
 import { readyRoutes } from './routes/ready.js';
 import { registerSimulatorWs } from './simulator/ws.js';
@@ -92,6 +100,7 @@ import { createRealBackend } from './simulator/backend.js';
 import { seed } from './seed.js';
 import { AccountDeletionService } from './account/deletion.js';
 import { accountRoutes } from './routes/account.js';
+import { DataExportService } from './account/data-export.js';
 import { publicBus } from './public/bus.js';
 import { CLOSE } from '@termhub/agent-protocol';
 
@@ -111,6 +120,11 @@ export interface App {
 export interface BuildAppOptions {
   /** Where the built web bundles are read from (tests); defaults to apps/web/dist and dist-city. */
   frontend?: { webDist?: string; cityDist?: string };
+  /**
+   * Re-queue every pending attachment on boot (default true). Tests that boot the app against the shared CI
+   * database turn it off: the worker would fail the pending rows other test files are still working on.
+   */
+  requeuePendingOnBoot?: boolean;
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
@@ -121,13 +135,18 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       // Nunca logar cookies/authorization.
       redact: ['req.headers.cookie', 'req.headers.authorization', 'req.headers["cf-access-jwt-assertion"]', 'req.headers.dpop'],
     },
-    trustProxy: true, // atrás do Cloudflare Tunnel / cloudflared em 127.0.0.1
+    // Only known proxies may set X-Forwarded-*: TRUST_PROXY, default loopback + private networks (TER-579).
+    trustProxy: config.trustProxy,
     bodyLimit: 1024 * 1024,
   });
 
   const prisma = getPrisma();
   await prisma.$connect();
   const repos = createRepositories(prisma);
+  // Access records kept 6 months (Marco Civil art. 15, TER-744): every API response and WebSocket upgrade,
+  // metadata only, in a table that outlives the blue/green containers.
+  const accessLog = createAccessLogRecorder({ repo: repos.accessLogs, log: fastify.log.child({ mod: 'access-log' }) });
+  registerAccessLog(fastify, accessLog);
   // Before anything maps a machine or a project (the seed does): every public id is an HMAC with
   // this key, and publicId() refuses to answer without it.
   setPublicIdKey(await loadPublicIdKey(repos));
@@ -159,12 +178,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     }
   });
 
-  // Cabeçalhos básicos de segurança
-  fastify.addHook('onSend', async (_req, reply) => {
-    reply.header('x-content-type-options', 'nosniff');
-    reply.header('x-frame-options', 'DENY');
-    reply.header('referrer-policy', 'same-origin');
-  });
+  // Security headers: nosniff, no framing, referrer, HSTS on https, CSP on HTML (TER-579).
+  registerSecurityHeaders(fastify, { publicUrl: config.publicUrl });
 
   applyErrorHandler(fastify);
 
@@ -180,7 +195,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // recebam `simulators` e `simWs.closeTab`. `fastify.server` já existe neste ponto.
   // `lifecycle` flips to draining on SIGTERM: new upgrades get 503 and /api/ready answers 503 (spec 2026-09-27 §5).
   const lifecycle = createLifecycle();
-  const upgrades = createUpgradeRouter(fastify.server, { auth, lifecycle });
+  const upgrades = createUpgradeRouter(fastify.server, {
+    auth,
+    lifecycle,
+    onAccess: (a) => accessLog.record({ at: new Date(), ip: upgradeClientIp(a.req), user_id: a.userId, kind: 'ws', method: 'GET', route: a.path, status: a.status }),
+  });
   const simWs = registerSimulatorWs(upgrades, { repos, manager: simulators, log: fastify.log });
   // The tab chat (spec 2026-10-01; the web's since TER-1003): one follower per watched tab, poked by the
   // hooks route below.
@@ -188,7 +207,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // Every WebSocket server whose clients the drain closes with 1012 (the mobile chat's joins below).
   const sockets: WebSocketServer[] = [
     registerTerminalWs(upgrades, { repos, log: fastify.log }),
-    registerAgentWs(upgrades, { repos, log: fastify.log }),
+    registerAgentWs(upgrades, { repos, log: fastify.log, probeInfo: { hooks_url: config.hooksUrl, mcp_url: config.mcpUrl } }),
     simWs.wss,
     registerMonitorWs(upgrades, { log: fastify.log }),
     registerChatWs(upgrades, { log: fastify.log }),
@@ -209,15 +228,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // Attachments (spec 2026-09-26 §5): the files on the chat-files volume, and the in-process queue
   // that reads them. A finished job tells every open screen through the bus, metadata only.
   const attachmentStore = diskStore(config.chatFiles.dir);
+  const publishAttachment = (row: AttachmentRow) => chatBus.publish({ type: 'attachment_status', user_id: row.user_id, conversation_id: row.conversation_id, attachment: toPublicAttachment(row) });
   const extraction = createExtractionQueue({
     repo: repos.chatAttachments,
     store: attachmentStore,
     extract,
-    whisper: { whisperUrl: config.transcription?.url ?? null, language: config.transcription?.language ?? null },
-    onDone: (row) => chatBus.publish({ type: 'attachment_status', user_id: row.user_id, conversation_id: row.conversation_id, attachment: toPublicAttachment(row) }),
+    whisper: {
+      whisperUrl: config.transcription?.url ?? null,
+      language: config.transcription?.language ?? null,
+      whisperSecret: config.transcription?.secret ?? null,
+    },
+    onDone: (row) => publishAttachment(row),
     log: fastify.log,
   });
-  const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes };
+  const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes, onRetry: (row) => publishAttachment(row) };
   // Account deletion (TER-720, TER-728): the 30-day window, the cascade and the public page's links.
   const deletion = new AccountDeletionService({
     repos,
@@ -233,6 +257,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     pageUrl: config.accountDeletionUrl,
     backupRetentionDays: config.backupRetentionDays,
     log: fastify.log.child({ mod: 'account-deletion' }),
+  });
+  // "Exportar meus dados" (TER-741): archives on the chat-files volume, so both colors see them.
+  const dataExports = new DataExportService({
+    repos,
+    mailer,
+    dir: path.join(config.chatFiles.dir, '.exports'),
+    readAttachment: (userId, id) => attachmentStore.read(userId, id),
+    appUrl: config.publicUrl,
+    log: fastify.log.child({ mod: 'data-export' }),
   });
   const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments, tabChat, deletion };
   const mobile = config.mobile ? createMobileServices(mobileDeps) : null;
@@ -261,7 +294,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await api.register((a) => authRoutes(a, auth, { onNicknameClaimed: (u) => shortLinks.onNicknameClaimed(u) }), { prefix: '/auth' });
       await api.register((a) => cityLinkRoutes(a, { shortLinks }), { prefix: '/auth' });
       // The person's own account: any signed-in person may delete it, no role grant needed.
-      await api.register((a) => accountRoutes(a, { auth: authService, deletion }), { prefix: '/account' });
+      await api.register((a) => accountRoutes(a, { auth: authService, deletion, exports: dataExports, repos }), { prefix: '/account' });
       await guarded('machines', (a) => machineRoutes(a, repos), '/machines');
       await guarded('projects', (a) => projectRoutes(a, repos, { simulators }), '/projects');
       await guarded('projects', (a) => projectGroupRoutes(a, repos), '/project-groups');
@@ -291,11 +324,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('terminals', (a) => monitorRoutes(a, repos), '/monitor');
       await guarded('terminals', (a) => hooksRoutes(a, repos, { waker, onTabEvent: (tabId) => tabChat.poke(tabId) }), '/hooks');
       await guarded('ai_accounts', (a) => aiAccountRoutes(a, repos), '/ai-accounts');
+      // "Refazer login" of an account (TER-1047); the app registers the same plugin.
+      await guarded('ai_accounts', (a) => aiLoginRoutes(a, repos), '/ai-accounts');
       await guarded('waitlist', (a) => waitlistRoutes(a, repos), '/waitlist');
       await guarded('roles', (a) => roleRoutes(a, repos), '/roles');
       await guarded('users', (a) => userRoutes(a, repos, { mailer, access, deletion, revoke: mobile ? (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer, log: fastify.log }, id, input) : null }), '/users');
       await guarded('uploads', (a) => uploadRoutes(a, repos), '/uploads');
       await guarded('api_tokens', (a) => apiTokenRoutes(a, repos, { mcpUrl: config.mcpUrl }), '/api-tokens');
+      await guarded('feature_flags', (a) => featureFlagRoutes(a, repos), '/feature-flags');
+      await guarded('security_events', (a) => securityEventRoutes(a, repos, { retentionDays: config.securityEventRetentionDays }), '/security-events');
       await guarded('chat', (a) => chatRoutes(a, repos, { service: chat }), '/chat');
       await guarded('chat', (a) => chatAttachmentRoutes(a, repos, attachments), '/chat/attachments');
       if (mobile) {
@@ -306,6 +343,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
         );
       }
       await api.register((a) => publicCityRoutes(a, repos), { prefix: '/public' });
+      await api.register((a) => publicFeatureRoutes(a, repos), { prefix: '/public' });
       api.get('/health', { config: { public: true } }, async () => ({ ok: true }));
       await api.register((a) => readyRoutes(a, { ping: () => repos.ping(), lifecycle }));
       api.setNotFoundHandler((request, reply) => sendError(request, reply, 404, 'Rota não encontrada', 'NOT_FOUND'));
@@ -326,7 +364,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   }
 
   // Whatever was still pending when the previous process died goes back in line (spec §5.4).
-  void requeuePending(extraction, repos.chatAttachments).catch((err) => fastify.log.warn({ err: failureLabel(err) }, 'attachments: could not re-queue pending rows'));
+  if (opts.requeuePendingOnBoot !== false) void requeuePending(extraction, repos.chatAttachments).catch((err) => fastify.log.warn({ err: failureLabel(err) }, 'attachments: could not re-queue pending rows'));
 
   // Limpeza periódica de sessões expiradas e de perguntas do chat que ninguém respondeu
   const purge = setInterval(() => {
@@ -344,15 +382,26 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void expireOrphanTabActions(repos, fastify.log);
     // Accounts whose 30-day deletion window is over go for good (TER-720); both colors may run it, the row lock picks one.
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
+    // Data exports: build what waits (or a deploy cut short), drop archives past their 7 days (TER-741).
+    void dataExports.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'data export: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
+    // The admin "view as" trail is kept a year after each period ends (TER-746).
+    void repos.viewAsAudit.purgeBefore(new Date(Date.now() - VIEW_AS_AUDIT_RETENTION_MS)).catch(() => {});
+    // Privacy Policy section 8 (TER-743): tab state history after 90 days, the waitlist after 12 months.
+    void purgeRetention(repos).catch(() => {});
+    // Access records past their 6 months (TER-744): the hourly tick is the rotation.
+    void repos.accessLogs.purgeBefore(new Date(Date.now() - ACCESS_LOG_RETENTION_MS)).catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'access log: purge failed'));
+    // The security trail keeps SECURITY_EVENT_RETENTION_DAYS (TER-577); the purge is the only way a row leaves it.
+    void repos.securityEvents.purgeBefore(securityEventCutoff(config.securityEventRetentionDays)).catch(() => {});
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
   const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);
   const stopTabQuestionExpiry = startTabQuestionExpiry(repos, fastify.log);
   const stopTabGoneActionExpiry = startTabGoneActionExpiry(repos, fastify.log);
-  // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615).
-  const stopStaleWorking = startStaleWorkingSweeper(repos, fastify.log);
+  // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615),
+  // and one left waiting on background work that never reports ends after a timeout (TER-1053).
+  const stopStaleWorking = startStaleWorkingSweeper(repos, fastify.log, config.monitorBackgroundTimeoutMs);
   void expireOrphanTabQuestions(repos, fastify.log);
   void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
@@ -397,6 +446,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   chat.onApproved(MERGE_TOOL, (action) => automation.mergeApproved(action.id));
   // The daily summary of the automatic work (spec D26): both colours tick, the claim row sends it once; a draining colour sends nothing.
   const stopSummaries = startSummaryTimer({ repos, lifecycle, log: fastify.log, push: mobile ? (...a) => mobile.push.automationSummary(...a) : undefined });
+  // AI CLI logins (TER-1047): every 10 min the accounts of online agent machines are checked, and an expired
+  // login pushes once to the machine's owner. Also stops the login flows' expiry sweep.
+  const stopAiLoginChecks = startAiLoginChecks({ repos, log: fastify.log, push: mobile ? (...a) => mobile.push.aiLoginRequired(...a) : undefined });
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     clearInterval(liveBeat);
@@ -407,6 +459,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopSync();
     stopCiSync();
     stopSummaries();
+    stopAiLoginChecks();
     stopAgentUpdates();
     stopTabQuestionExpiry();
     stopTabGoneActionExpiry();
@@ -419,6 +472,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopTabSuggestions();
     tabChat.close();
     await simulators.shutdownAll();
+    // What is still buffered goes in before the database closes.
+    await accessLog.close();
     await closePrisma();
   });
 

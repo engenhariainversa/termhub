@@ -1,7 +1,12 @@
-import { getAnalytics, logScreenView, setConsent } from '@react-native-firebase/analytics';
+import { getAnalytics, logScreenView, setAnalyticsCollectionEnabled, setConsent } from '@react-native-firebase/analytics';
 
-/** Logs a `screen_view` for an expo-router route pattern, e.g. `/chat/[id]`. Never throws. */
+/** The person's measurement consent as last applied; screen views wait for a yes (TER-583). */
+let granted = false;
+
+/** Logs a `screen_view` for an expo-router route pattern, e.g. `/chat/[id]`, once the person
+ * accepted measurement. Never throws. */
 export function logScreen(route: string): void {
+  if (!granted) return;
   try {
     logScreenView(getAnalytics(), { screen_name: route, screen_class: route }).catch(() => undefined);
   } catch {
@@ -9,12 +14,16 @@ export function logScreen(route: string): void {
   }
 }
 
-/** Google's ad consent signals (permission prompts spec §3.3): all three follow the person's
- * choice; analytics storage stays on (screen views are first-party). Never throws. */
-export async function setAdConsent(granted: boolean): Promise<void> {
+/** The one measurement consent (permission prompts spec §3.3, TER-583): Google's three ad signals
+ * and usage analytics all follow the person's choice, and collection stays off until a yes (the
+ * native SDK keeps that switch across launches). Never throws. */
+export async function setAdConsent(next: boolean): Promise<void> {
+  granted = next;
   try {
-    await setConsent(getAnalytics(), { ad_storage: granted, ad_user_data: granted, ad_personalization: granted, analytics_storage: true });
+    const analytics = getAnalytics();
+    await setConsent(analytics, { ad_storage: next, ad_user_data: next, ad_personalization: next, analytics_storage: next });
+    await setAnalyticsCollectionEnabled(analytics, next);
   } catch {
-    // Native module missing: the defaults in firebase.json (denied) stay in force.
+    // Native module missing: the defaults in firebase.json stay in force.
   }
 }

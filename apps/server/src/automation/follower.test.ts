@@ -9,11 +9,12 @@ import type { Tab, Task } from '../db/repositories/types.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { monitorBus } from '../monitor/bus.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
-import { cancelRun, endRunsOfMergedCard, TAB_CLOSED, UNTAGGED, escalateAutomationRun, escalationReasonText, escalationText, resumeAutomationRun, SLOT_FREE_REASONS, ANSWER_CAP, followRun, getRunCard, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
+import { ADOPT_WINDOW_MS, ADOPTED_VIA, adoptBlockedRuns, tabMayReport, cancelRun, endRunsOfMergedCard, TAB_CLOSED, UNTAGGED, escalateAutomationRun, escalationReasonText, escalationText, resumeAutomationRun, SLOT_FREE_REASONS, ANSWER_CAP, followRun, getRunCard, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, QUESTION_WAIT_MS, TRUST_WAIT_MS, onTabChange, PR_GRACE_MS, reportCard, startFollower, sweepRuns, tabHasActiveRun, type FollowerDeps } from './follower.js';
 import { stoppedTabWakeText, type StoppedTabWake } from '../chat/wake.js';
 import { automationBus } from './events.js';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
+import { DECIDE_NUDGES_MAX, DECIDE_TEXT } from './decision.js';
 
 const ME = 'instance-me';
 let seq = 0;
@@ -39,6 +40,10 @@ function world(o: {
   escalatedAt?: string;
   /** the owner's active project conversation; null = none */
   conversation?: { id: string } | null;
+  /** the card's newest run when it is not this one (`latestOfTask`) */
+  newerRun?: Partial<AutomationRun>;
+  /** the project's "Parar em decisões de produto" (TER-1043) */
+  stopOnDecisions?: boolean;
 } = {}) {
   const runId = `run${++seq}`;
   const run: AutomationRun = {
@@ -53,6 +58,7 @@ function world(o: {
   const repos = {
     automationRuns: {
       activeByTab: vi.fn(async (id: string) => (id === run.tab_id && isActive() ? { ...run } : null)),
+      latestByTab: vi.fn(async (id: string) => (id === run.tab_id ? { ...run } : null)),
       findById: vi.fn(async () => ({ ...run })),
       followedBy: vi.fn(async (instance: string) => (instance === run.claimed_by && ['running', 'waiting'].includes(run.status) ? [{ ...run }] : [])),
       updateActive: vi.fn(async (_id: string, instance: string, patch: Partial<AutomationRun>, opts?: { unlessWaitingFor?: string }) => {
@@ -68,12 +74,18 @@ function world(o: {
         return true;
       }),
       noteTyped: vi.fn(async (_id: string, at: Date) => void (run.last_typed_at = at)),
+      // the query of `blockedSince` (TER-1049), on the one run
+      blockedSince: vi.fn(async (_p: string, since: Date) =>
+        run.status === 'blocked' && run.role === 'implementer' && run.branch && !run.trigger_sha && run.ended_at && run.ended_at >= since ? [{ ...run }] : [],
+      ),
+      latestOfTask: vi.fn(async () => o.newerRun ?? { ...run }),
+      finishBlockedAsDone: vi.fn(async () => (run.status === 'blocked' ? ((run.status = 'done'), true) : false)),
     },
     tabs: { findById: vi.fn(async () => tab) },
     tabQuestions: { hasOpenQuestion: vi.fn(async () => o.openQuestion ?? o.question?.status === 'open'), latestQuestionForTab: vi.fn(async () => o.question) },
     taskPullRequests: { listByTasks: vi.fn(async () => o.prs ?? []) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
-    projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true, resume_max: o.resumeMax ?? 3, allowed_tools: null, daily_budget_usd: o.dailyBudget ?? null, card_budget_usd: o.cardBudget ?? null } } })) },
+    projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true, resume_max: o.resumeMax ?? 3, allowed_tools: null, daily_budget_usd: o.dailyBudget ?? null, card_budget_usd: o.cardBudget ?? null, stop_on_decisions: o.stopOnDecisions ?? false } } })) },
     automationPauses: { state: vi.fn(async () => ({ user: o.paused ? new Date() : null, project: null })) },
     users: { findById: vi.fn(async () => ({ id: 'u1' })) },
     tabUsage: {
@@ -93,6 +105,11 @@ function world(o: {
       insert: vi.fn(async (e: AutomationEventInput) => (events.push(e), { ...e, id: `e${events.length}`, created_at: '' })),
       insertOnce: vi.fn(async (e: AutomationEventInput) => (events.some((x) => x.kind === e.kind && x.payload?.day === e.payload?.day) ? null : (events.push(e), { ...e, id: `e${events.length}`, created_at: '' }))),
       lastForRun: vi.fn(async () => (o.escalatedAt ? { kind: 'escalated', created_at: o.escalatedAt } : null)),
+      payloadsForRun: vi.fn(async (_id: string, kind: string) => events.filter((e) => e.kind === kind).map((e) => e.payload ?? {})),
+    },
+    memoryItems: {
+      countNotesSince: vi.fn(async () => 0),
+      upsertMany: vi.fn(async (items: Array<Record<string, unknown>>) => items.map((i) => ({ ...i, created_at: new Date() }))),
     },
     chat: {
       findLatestActiveForProject: vi.fn(async () => (o.conversation === undefined ? { id: 'cp' } : (o.conversation ?? undefined))),
@@ -583,6 +600,83 @@ describe('the monitor bus subscription', () => {
   });
 });
 
+describe('a stop on a question: automatic work decides by itself (TER-1043)', () => {
+  const ASKS = 'Implementei a parte do servidor.\n\nDecisão sua: guardo o resumo no evento ou só no PR? Recomendo no evento.';
+  const withAnswer = (w: ReturnType<typeof world>, text: string | null) => Object.assign(w.deps, { lastAnswer: vi.fn(async () => text) });
+
+  it('with no precedent the tab is told to follow its recommendation and record it; the feed gets decided_by_recommendation; not a resume', async () => {
+    const w = world();
+    withAnswer(w, ASKS);
+    await followRun(w.deps, w.run.id);
+    expect(w.type).toHaveBeenCalledTimes(1);
+    expect(w.type.mock.calls[0]![2]).toBe(serverMessage(DECIDE_TEXT));
+    expect(DECIDE_TEXT).toContain('siga a sua recomendação');
+    expect(DECIDE_TEXT).toContain('search_memory');
+    expect(DECIDE_TEXT).toContain('Decisões tomadas');
+    expect(w.run).toMatchObject({ status: 'running', resume_count: 0 });
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'decided_by_recommendation', run_id: w.run.id, payload: { via: 'nudge', tab_id: 'tab1', count: 1 } })]);
+    // the event never carries the tab's words
+    expect(JSON.stringify(w.events)).not.toContain('Recomendo');
+  });
+
+  it('a question that falls in an exception escalates, with nothing typed', async () => {
+    const w = world();
+    withAnswer(w, 'Para seguir preciso da credencial do Stripe no .env de produção. Você coloca?');
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'decision_exception' });
+    expect(w.kinds()).toEqual(['escalated']);
+    expect(SLOT_FREE_REASONS).toContain('decision_exception');
+  });
+
+  it('a project that stops on decisions hands the question to the person', async () => {
+    const w = world({ stopOnDecisions: true });
+    withAnswer(w, ASKS);
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'decision_needed' });
+  });
+
+  it('past DECIDE_NUDGES_MAX nudges the stop takes the ordinary resume', async () => {
+    const w = world();
+    withAnswer(w, ASKS);
+    for (let i = 0; i < DECIDE_NUDGES_MAX; i++) w.events.push({ project_id: 'p1', run_id: w.run.id, kind: 'decided_by_recommendation', payload: { via: 'nudge' } });
+    await followRun(w.deps, w.run.id);
+    expect(w.type.mock.calls[0]![2]).toBe(serverMessage(RESUME_TEXT));
+    expect(w.run.resume_count).toBe(1);
+  });
+
+  it('a stop that asks nothing is resumed as before', async () => {
+    const w = world();
+    withAnswer(w, 'Rodei os testes e abri o PR.');
+    await followRun(w.deps, w.run.id);
+    expect(w.type.mock.calls[0]![2]).toBe(serverMessage(RESUME_TEXT));
+  });
+
+  it('paused: nothing is typed, nobody is told', async () => {
+    const w = world({ paused: true });
+    withAnswer(w, ASKS);
+    await followRun(w.deps, w.run.id);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.events).toEqual([]);
+    expect(w.run.status).toBe('running');
+  });
+
+  it('report_card records each decision for the feed and as a memory note citing the card', async () => {
+    const w = world();
+    await reportCard(tabCtx(w.repos), {
+      status: 'done',
+      pr_url: 'https://github.com/o/r/pull/3',
+      decisions: [{ question: 'Guardar o resumo onde?', options: 'evento | PR', choice: 'No evento', reason: 'O feed lê os eventos' }],
+    });
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened', 'decided_by_recommendation']);
+    expect(w.events[2]!.payload).toEqual({ via: 'agent', tab_id: 'tab1', summary: 'Guardar o resumo onde? → No evento' });
+    const notes = (w.repos.memoryItems.upsertMany as ReturnType<typeof vi.fn>).mock.calls.flatMap((c) => c[0] as Array<Record<string, unknown>>);
+    expect(notes).toEqual([expect.objectContaining({ owner_id: 'u1', project_id: 'p1', kind: 'note', trust: 'derived', title: 'TER-1: Guardar o resumo onde?' })]);
+    expect(String(notes[0]!.text)).toContain('Fontes: task:t1');
+  });
+});
+
 describe('report_card (spec D17, F-8)', () => {
   it('from a tab without an active run → NO_RUN', async () => {
     const w = world();
@@ -633,6 +727,68 @@ describe('report_card (spec D17, F-8)', () => {
     await followRun(w.deps, w.run.id);
     await expect(reportCard(tabCtx(w.repos), { status: 'done' })).rejects.toMatchObject({ code: 'NO_RUN' });
     expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
+  });
+});
+
+describe('report_card done after the run ended blocked (spike TER-1031 §5.4)', () => {
+  const ended = new Date(Date.now() - 60 * 60_000);
+  const blocked = (o: Parameters<typeof world>[0] = {}) => world({ ...o, run: { status: 'blocked', waiting_reason: 'reported_blocked', ended_at: ended, trigger_sha: null, ...o.run } });
+  const ctxOf = (repos: Repositories, tabId = 'tab1') => ({ ...tabCtx(repos, tabId), scope: { user: { locale: 'pt-BR' } } }) as unknown as ControlContext;
+  const PR = { state: 'open', head_ref: 'TER-1-card', url: 'https://github.com/o/r/pull/9', number: 9 };
+
+  it('with the PR already linked from the run\'s branch, adopts the run at once', async () => {
+    const w = blocked({ prs: [PR] });
+    expect(await tabMayReport(ctxOf(w.repos))).toBe(true);
+    expect(await reportCard(ctxOf(w.repos), { status: 'done', pr_url: 'https://github.com/o/r/pull/9' })).toEqual({ ok: true });
+    expect(w.run).toMatchObject({ status: 'done', waiting_reason: 'reported_blocked', ended_at: ended });
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
+    expect(w.events[0]!.payload).toMatchObject({ via: ADOPTED_VIA, pr_url: PR.url });
+    expect(w.repos.chat.addMessage).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('PR #9 do TER-1 aberto depois do bloqueio') }));
+  });
+
+  it('the URL given is never enough: a PR not linked yet (or from another branch) leaves the run pending', async () => {
+    const w = blocked({ prs: [{ ...PR, head_ref: 'other-branch' }] });
+    const res = await reportCard(ctxOf(w.repos), { status: 'done', pr_url: PR.url });
+    expect(res).toMatchObject({ ok: true, pending: true });
+    expect(res.message).toContain('TER-1-card');
+    expect(w.run.status).toBe('blocked');
+    expect(w.kinds()).toEqual([]);
+    // the CI sync links it later and adopts the run, once
+    w.setPrs([PR]);
+    expect(await adoptBlockedRuns(w.repos, 'p1')).toBe(1);
+    expect(w.run.status).toBe('done');
+    expect(await adoptBlockedRuns(w.repos, 'p1')).toBe(0);
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
+  });
+
+  it('blocked from that tab is refused with a message that says the run is already blocked', async () => {
+    const w = blocked({ prs: [PR] });
+    await expect(reportCard(ctxOf(w.repos), { status: 'blocked', reason: 'Travou' })).rejects.toMatchObject({ code: 'RUN_BLOCKED' });
+    await expect(reportCard(ctxOf(w.repos), { status: 'done' })).rejects.toMatchObject({ code: 'PR_URL_REQUIRED' });
+    expect(w.run.status).toBe('blocked');
+  });
+
+  it('another run\'s tab, a run past the window, a newer run of the card or a fixer get today\'s refusal', async () => {
+    const cases = [
+      { tabId: 'other-tab', w: blocked({ prs: [PR] }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], run: { ended_at: new Date(Date.now() - ADOPT_WINDOW_MS - 60_000) } }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], newerRun: { id: 'run-newer', status: 'done' } }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], run: { role: 'fixer' } }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], task: { auto: false } }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], enabled: false }) },
+      { tabId: 'tab1', w: blocked({ prs: [PR], run: { status: 'failed' } }) },
+    ];
+    for (const { tabId, w } of cases) {
+      expect(await tabMayReport(ctxOf(w.repos, tabId))).toBe(false);
+      await expect(reportCard(ctxOf(w.repos, tabId), { status: 'done', pr_url: PR.url })).rejects.toMatchObject({ code: 'NO_RUN' });
+      expect(w.kinds()).toEqual([]);
+    }
+  });
+
+  it('get_card stays run-only', async () => {
+    const w = blocked({ prs: [PR] });
+    expect(await tabHasActiveRun(ctxOf(w.repos))).toBe(false);
+    await expect(getRunCard(ctxOf(w.repos))).rejects.toMatchObject({ code: 'NO_RUN' });
   });
 });
 
@@ -1105,5 +1261,153 @@ describe('runs that must end (final review I1, I2)', () => {
     expect(w.repos.tasks.startWork).not.toHaveBeenCalled();
     // another card's run is left alone
     expect(await endRunsOfMergedCard(w.repos, 'p1', 't-other', { url: 'u', number: 4 })).toBe(0);
+  });
+});
+
+describe('GitHub errors and the trust question do not stop the run (TER-1025)', () => {
+  /** A world whose setup allows `retries` GitHub waits; `waits` already recorded; the last one `minutesAgo`. */
+  function github(o: { retries?: number; waits?: number; minutesAgo?: number; degraded?: string[]; run?: Partial<AutomationRun>; tab?: Partial<Tab>; paused?: boolean } = {}) {
+    const w = world({ run: o.run, tab: o.tab, paused: o.paused });
+    const now = new Date('2026-10-05T12:00:00.000Z');
+    const events = w.repos.automationEvents as unknown as Record<string, unknown>;
+    events.countForRun = vi.fn(async (_id: string, kind: string) => (kind === 'github_wait' ? (o.waits ?? 0) : 0));
+    events.lastForRun = vi.fn(async (_id: string, kind: string) =>
+      kind === 'github_wait' && o.waits ? { kind, payload: { attempt: o.waits }, created_at: new Date(now.getTime() - (o.minutesAgo ?? 6) * 60_000).toISOString() } : null,
+    );
+    (w.repos.projectSetup as unknown as { get: unknown }).get = vi.fn(async () => ({ data: { automation: { enabled: true, resume_max: 3, allowed_tools: null, daily_budget_usd: null, card_budget_usd: null, github_retries: o.retries ?? 3 } } }));
+    w.deps.githubHealth = async () => ({ degraded: o.degraded ?? [] });
+    return w;
+  }
+  const failure = 'push: HTTP 500 (commit_refs)';
+
+  it('report_card blocked with github_transient parks the run for GitHub: no escalation on the first failure', async () => {
+    const w = github();
+    await reportCard(tabCtx(w.repos), { status: 'blocked', reason: failure, code: 'github_transient' });
+    expect(w.run.status).toBe('waiting');
+    expect(w.run.waiting_reason).toBe('github_transient');
+    expect(w.kinds()).toEqual(['github_wait']);
+    expect(w.events[0]!.payload).toMatchObject({ reason: 'github_transient', attempt: 1 });
+  });
+
+  it('past github_retries it ends blocked and the person is told', async () => {
+    const w = github({ waits: 3 });
+    await reportCard(tabCtx(w.repos), { status: 'blocked', reason: failure, code: 'github_transient' });
+    expect(w.run.status).toBe('blocked');
+    expect(w.kinds()).toEqual(['run_blocked', 'escalated']);
+    expect(w.events[1]!.payload).toMatchObject({ reason: 'github_transient' });
+  });
+
+  it('a parked run is resumed after its delay once GitHub works, with the retry message', async () => {
+    const w = github({ waits: 1, minutesAgo: 6, run: { status: 'waiting', waiting_reason: 'github_transient' } });
+    await followRun(w.deps, w.run.id);
+    expect(w.run.status).toBe('running');
+    expect(w.type).toHaveBeenCalledTimes(1);
+    expect(w.type.mock.calls[0]![2]).toContain('O GitHub voltou a responder');
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'run_resumed', payload: expect.objectContaining({ by: 'github', reason: 'github_transient', count: 1 }) })]);
+  });
+
+  it('waits while the delay runs, while GitHub reports trouble, and while paused', async () => {
+    for (const o of [{ minutesAgo: 2 }, { degraded: ['Git Operations'] }, { paused: true }]) {
+      const w = github({ waits: 1, minutesAgo: 6, ...o, run: { status: 'waiting', waiting_reason: 'github_transient' } });
+      await followRun(w.deps, w.run.id);
+      expect(w.run.status).toBe('waiting');
+      expect(w.type).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a start with no hook whose screen shows the trust question is answered, not escalated', async () => {
+    const w = world({ tab: { state_at: null, state: null }, run: { started_at: new Date('2026-10-05T11:59:00.000Z') } });
+    (w.repos.automationEvents as unknown as Record<string, unknown>).countForRun = vi.fn(async () => 0);
+    const acceptTrust = vi.fn(async () => true);
+    w.deps.acceptTrust = acceptTrust;
+    await followRun(w.deps, w.run.id);
+    expect(acceptTrust).toHaveBeenCalledTimes(1);
+    expect(w.run.status).toBe('running');
+    expect(w.kinds()).toEqual(['trust_auto_accepted']);
+  });
+
+  it('a trust question nothing could answer still goes to the person after TRUST_WAIT_MS', async () => {
+    const w = world({ tab: { state_at: null, state: null }, run: { started_at: new Date(Date.parse('2026-10-05T12:00:00.000Z') - TRUST_WAIT_MS) } });
+    (w.repos.automationEvents as unknown as Record<string, unknown>).countForRun = vi.fn(async () => 0);
+    w.deps.acceptTrust = vi.fn(async () => false);
+    w.deps.foreground = async () => 'other' as never;
+    await followRun(w.deps, w.run.id);
+    expect(w.run.waiting_reason).toBe('needs_person');
+    expect(w.events.at(-1)).toMatchObject({ kind: 'escalated', payload: expect.objectContaining({ reason: 'trust_prompt' }) });
+  });
+});
+
+describe('adopting the PR of a blocked run (TER-1049, spike TER-1031 §5.1–5.3)', () => {
+  const NOW = new Date('2026-10-08T12:00:00.000Z');
+  const PR = { state: 'open', head_ref: 'TER-1-card', url: 'https://github.com/acme/app/pull/9', number: 9 };
+  /** A run that ended blocked a day before NOW, its branch's PR linked to the card. */
+  const blocked = (o: Parameters<typeof world>[0] = {}) =>
+    world({
+      prs: [PR],
+      ...o,
+      run: { status: 'blocked', waiting_reason: 'reported_blocked', ended_at: new Date('2026-10-07T12:00:00.000Z'), created_at: new Date('2026-10-07T10:00:00.000Z'), trigger_sha: null, ...o.run },
+    });
+  const lines = (w: ReturnType<typeof world>) => (w.repos.chat.addMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[0] as { text: string }).text);
+
+  it('ends the run done once, keeps when and why it was blocked, records run_done and pr_opened, and tells the chat once', async () => {
+    const w = blocked();
+    const published: unknown[] = [];
+    const off = automationBus.subscribe((e) => void published.push(e.kind));
+    expect(await adoptBlockedRuns(w.repos, 'p1', undefined, NOW)).toBe(1);
+    off();
+    expect(w.run.status).toBe('done');
+    expect(w.run.ended_at).toEqual(new Date('2026-10-07T12:00:00.000Z'));
+    expect(w.run.waiting_reason).toBe('reported_blocked');
+    expect(w.events).toEqual([
+      expect.objectContaining({ kind: 'run_done', run_id: w.run.id, task_id: 't1', payload: { via: ADOPTED_VIA, tab_id: 'tab1', pr_url: PR.url } }),
+      expect.objectContaining({ kind: 'pr_opened', run_id: w.run.id, payload: { pr_url: PR.url, number: 9, branch: 'TER-1-card' } }),
+    ]);
+    expect(published).toEqual(['run_done', 'pr_opened']);
+    expect(lines(w)).toEqual(['PR #9 do TER-1 aberto depois do bloqueio; o automático acompanha até o merge']);
+    // the next sync finds nothing more to adopt
+    expect(await adoptBlockedRuns(w.repos, 'p1', undefined, NOW)).toBe(0);
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
+    expect(lines(w)).toHaveLength(1);
+  });
+
+  it('two colours syncing at once adopt it once: one run_done, one pr_opened, one chat line', async () => {
+    const w = blocked();
+    const counts = await Promise.all([adoptBlockedRuns(w.repos, 'p1', undefined, NOW), adoptBlockedRuns(w.repos, 'p1', undefined, NOW)]);
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(1);
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
+    expect(lines(w)).toHaveLength(1);
+  });
+
+  it('a PR merged after the run began also adopts it; one merged before, or from another branch, does not', async () => {
+    expect(await adoptBlockedRuns(blocked({ prs: [{ ...PR, state: 'merged', merged_at: new Date('2026-10-08T11:00:00.000Z') }] }).repos, 'p1', undefined, NOW)).toBe(1);
+    expect(await adoptBlockedRuns(blocked({ prs: [{ ...PR, state: 'merged', merged_at: new Date('2026-10-01T00:00:00.000Z') }] }).repos, 'p1', undefined, NOW)).toBe(0);
+    expect(await adoptBlockedRuns(blocked({ prs: [{ ...PR, head_ref: 'other' }] }).repos, 'p1', undefined, NOW)).toBe(0);
+    expect(await adoptBlockedRuns(blocked({ prs: [] }).repos, 'p1', undefined, NOW)).toBe(0);
+  });
+
+  it.each([
+    ['an integrator run', { run: { role: 'integrator' as const } }],
+    ['a fixer run', { run: { role: 'fixer' as const } }],
+    ['a marker run (no branch, a trigger)', { run: { branch: null, tab_id: null, trigger_sha: 'h1' } }],
+    ['a card no longer tagged auto', { task: { auto: false } }],
+    ['a run that ended more than 7 days ago', { run: { ended_at: new Date(NOW.getTime() - ADOPT_WINDOW_MS - 60_000) } }],
+    ['a card with a newer run', { newerRun: { id: 'run-newer', status: 'done' as const } }],
+    ['a card with an active run', { newerRun: { id: 'run-active', status: 'running' as const } }],
+    ['a run that did not end blocked', { run: { status: 'failed' as const } }],
+  ])('leaves %s alone', async (_what, o) => {
+    const w = blocked(o as Parameters<typeof world>[0]);
+    const status = w.run.status;
+    expect(await adoptBlockedRuns(w.repos, 'p1', undefined, NOW)).toBe(0);
+    expect(w.run.status).toBe(status);
+    expect(w.events).toEqual([]);
+    expect(lines(w)).toEqual([]);
+  });
+
+  it('a lookup that fails is logged, never thrown', async () => {
+    const w = blocked();
+    (w.repos.automationRuns.blockedSince as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('db down'));
+    const warn = vi.fn();
+    expect(await adoptBlockedRuns(w.repos, 'p1', { info: () => {}, warn }, NOW)).toBe(0);
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1' }), 'automation: blocked runs not adopted');
   });
 });

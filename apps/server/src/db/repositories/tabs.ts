@@ -280,6 +280,13 @@ export class TabsRepository {
     return { tab: mapTab(t), event: e ? mapTabEvent(e) : null, rearm };
   }
 
+  /** The retention purge (TER-743): every tab's state events older than `cutoff`. The tab row keeps its
+   *  current state, and its last whole answer stays while the tab exists. */
+  async purgeEventsBefore(cutoff: Date): Promise<number> {
+    const r = await this.db.tabEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });
+    return r.count;
+  }
+
   async listEvents(tabId: string, limit = 50): Promise<TabEvent[]> {
     const rows = await this.db.tabEvent.findMany({ where: { tabId }, orderBy: { createdAt: 'desc' }, take: limit });
     return rows.map(mapTabEvent);
@@ -305,6 +312,17 @@ export class TabsRepository {
       for (const e of t.events) if (e.text) out.push({ machineId: t.machineId, text: e.text, at: e.createdAt });
     }
     return out.sort((a, b) => b.at.getTime() - a.at.getTime());
+  }
+
+  /**
+   * Whether a prompt was submitted in the tab after `since` (a main-thread `UserPromptSubmit`): someone
+   * typed in it (TER-1051). Also true when the kept history may not reach back that far (the tab has
+   * EVENTS_KEPT_PER_TAB events after `since`): unknown counts as used.
+   */
+  async promptedSince(tabId: string, since: Date): Promise<boolean> {
+    const rows = await this.db.tabEvent.findMany({ where: { tabId, createdAt: { gt: since } }, select: { meta: true } });
+    if (rows.length >= EVENTS_KEPT_PER_TAB) return true;
+    return rows.some((e) => eventName(e.meta) === 'UserPromptSubmit' && !isSubagentEvent(e.meta));
   }
 
   /** Clears the monitor state (e.g. the tmux session is gone). */

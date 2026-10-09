@@ -46,7 +46,7 @@ src/services/
 src/ui/       Screen, Text, Button, Field, PinInput, Sheet, Card, Banner… (NativeWind v4)
 src/theme/tokens.ts  the termhub palette (CSS variables), both colour schemes
 src/i18n/     i18next setup, the language choice, date/number helpers (see "Languages")
-src/locales/  the English catalogs (and pt-BR plural forms), one JSON file per area
+src/locales/  the English and Spanish catalogs (and pt-BR plural forms), one JSON file per area
 test/         jest setup, fakes for MMKV/SecureStore/expo-device/expo-local-authentication/expo-notifications/the
               hardware key module, and shared test helpers (`test/helpers/enrolled-session.ts`,
               `test/helpers/ui-stores.ts`)
@@ -100,6 +100,14 @@ Copy `.env.example` to `.env` for `expo start`: it points the app at `https://te
 
 Builds are made locally on a Mac, without EAS: iOS goes to TestFlight, Android to Firebase App Distribution (next section). `ios/` and `android/` are generated each time and never committed.
 
+**Automatic, on the Mac hulk.** A merge to `main` that changes the native app (`app.json`, `app.config.js`, the app's `package.json` or `plugins/**`) runs the "Mobile TestFlight (hulk)" workflow (`.github/workflows/mobile-testflight.yml`) on a self-hosted runner on hulk, the Mac that holds the Apple credentials. It runs `scripts/testflight.sh`, which ships `expo.version` once:
+
+- a version already uploaded from hulk (`~/.termhub/testflight/ios-<version>` there) is skipped and the run cancels itself, so a native change without a version bump builds nothing: bump `expo.version` (CLAUDE.md, "Mobile OTA updates");
+- otherwise it runs `scripts/ios-release.sh --upload` with `BUILD_NUMBER` set to the UTC date and time (`YYYYMMDDHHMM`, the same convention as step 2 below), so `app.json`'s `ios.buildNumber` is not rewritten;
+- it stops at TestFlight. Adding the build to the testers' group (step 5) and submitting for App Store review stay manual.
+
+To ship again by hand: Actions → "Mobile TestFlight (hulk)" → Run workflow (with `force` to upload a version that already went, under a new build number), or `bash apps/mobile/scripts/testflight.sh [--force]` from a clean checkout of `main` on the Mac. Runner setup: `docs/automation/runbook.md`, "TestFlight on hulk". The steps below are what the script does, and remain the way to build on any other Mac.
+
 Prerequisites on the Mac: Xcode, CocoaPods, Node 22, and an Apple ID of team **8020 DIGITAL LTDA (`S873WHF2TZ`)** signed in to Xcode → Settings → Accounts with a role that may use cloud-managed distribution certificates (Admin or Account Holder). The distribution certificate is cloud-managed, so its private key is not in the keychain: Xcode signs the export through Apple, and `-allowProvisioningUpdates` creates or refreshes the App Store provisioning profile for `dev.termhub.app`.
 
 1. From an up-to-date `main`: `npm ci`, then `npm run build:contract -w @termhub/mobile`, `npm run typecheck -w @termhub/mobile` and `npm test -w @termhub/mobile`. If the typecheck rejects a route that exists under `app/` (e.g. `"/chat-grants"`), `apps/mobile/.expo/types/router.d.ts` is a stale generated file from an older checkout: delete it and run the typecheck again.
@@ -132,6 +140,7 @@ JS-only changes reach installed builds over the air, through the self-hosted [xp
 
 - **JS-only change** for the version testers already have: publish, and the next cold start downloads it in the background; it runs from the launch after that.
 - **Native change** (a new native module, a config plugin, an `app.json` field that prebuild reads, an Expo SDK bump): bump `expo.version` and ship a new binary (TestFlight / App Distribution). Its updates then go out under the new version, and older binaries keep their own line.
+- **Older builds that take the same JS.** When a bump only changed native metadata (a privacy manifest, a permission string) and no native module, list the previous versions in `ota-runtimes.js`: every publish then also goes out under their runtime, so a phone still on the older build keeps getting updates. The list is pinned to the `expo.version` it was checked against (`for`) and stops applying when the version moves, until someone checks the new native diff. Without it, a phone on the older build silently stays on that line's last update.
 
 **Publishing is automated.** The "Publish mobile OTA" workflow (`.github/workflows/publish-mobile-ota.yml`, on the jarvis runner) publishes on every push to `main` that touches `apps/mobile/**` or `packages/mobile-api/**`. It skips a push that changes `app.json`, `app.config.js` or this `package.json` without bumping `expo.version` (the run summary says so): for a JS-only change it was too cautious about, run it by hand with `gh workflow run "Publish mobile OTA" --ref main -f message="what changed"`.
 
@@ -146,6 +155,8 @@ npm run release:ota -w @termhub/mobile -- --rollout-percentage 20
 The token is a publishing API key of the termhub app on xprem: `EOO_TOKEN` when set, otherwise the macOS Keychain item `xprem-token-termhub`; CI uses the `XPREM_TOKEN` repository secret. Keys are listed, created and revoked with the xprem MCP (`get_api_keys`, `create_api_key`, `revoke_api_key`) or in the dashboard.
 
 The script bakes in the same `EXPO_PUBLIC_*` values as the store builds and runs `eoas publish --branch production --platform all`. A rollout is then widened, ended or reverted in the dashboard; a bad update is reverted by republishing an earlier one or with a rollback to the embedded bundle (dashboard, or `republish_update` / `rollback_branch` in the MCP).
+
+Ajustes → Versão shows the binary (`0.5.0 (build)`) and the running bundle: `OTA: binário`, or the update's full id and publish time, to match against the server (`get_updates` in the xprem MCP).
 
 Manifests are code-signed: the server holds the app's private key, and `certs/certificate.pem` (public, committed) goes into every build. `expo start` cannot sign development manifests without the private key, so `npm start`, `npm run ios` and `npm run android` set `DISABLE_CODE_SIGNING=1`; the release scripts leave it unset. A development build loads its JS from Metro, not from the OTA server.
 
@@ -237,19 +248,19 @@ An `ios/` folder generated before this change stays iPhone-only (prebuild does n
 
 ## Languages (i18n)
 
-The app speaks pt-BR (the source language and the fallback) and English (spec `docs/superpowers/specs/2026-10-04-i18n-english-design.md`). `src/i18n` sets up `i18next` + `react-i18next` (plain JS, so a language change ships over OTA):
+The app speaks pt-BR (the source language and the fallback), English and Spanish (spec `docs/superpowers/specs/2026-10-04-i18n-english-design.md`). `src/i18n` sets up `i18next` + `react-i18next` (plain JS, so a language change ships over OTA):
 
-- **The pt-BR text is the key.** Views call `const { t } = useTranslation()` and write `t('Salvar')`; models, viewmodels and services import `t` from `@/i18n` and call it when the text is built. English lives in `src/locales/en/<area>.json`, one file per area of the source tree, merged in `src/i18n/resources.ts`; `src/locales/pt-BR/` holds only plural forms (`t('{{count}} abas', { count })` needs `_one`/`_other` in both languages). A label kept in a table is marked with `tk('…')` and translated where it is shown.
-- **Which language:** Ajustes → Idioma (Automático / Português (Brasil) / English), kept in MMKV on this device (it survives "Sair e remover este aparelho"); automatic follows the phone's language from `Intl` (no `expo-localization`, which is native): `pt*` → pt-BR, `en*` → English, anything else → pt-BR. Hermes has no `Intl.PluralRules`, so `src/i18n/plural-rules.ts` installs the CLDR rules of both languages.
+- **The pt-BR text is the key.** Views call `const { t } = useTranslation()` and write `t('Salvar')`; models, viewmodels and services import `t` from `@/i18n` and call it when the text is built. English lives in `src/locales/en/<area>.json` and Spanish in `src/locales/es/<area>.json` (same files, same keys), one file per area of the source tree, merged in `src/i18n/resources.ts`; `src/locales/pt-BR/` holds only plural forms (`t('{{count}} abas', { count })` needs `_one`/`_other` in every language). A label kept in a table is marked with `tk('…')` and translated where it is shown.
+- **Which language:** Ajustes → Idioma (Automático / Português (Brasil) / English / Español), kept in MMKV on this device (it survives "Sair e remover este aparelho"); automatic follows the phone's language from `Intl` (no `expo-localization`, which is native): `pt*` → pt-BR, `en*` → English, `es*` → Spanish, anything else → pt-BR. Hermes has no `Intl.PluralRules`, so `src/i18n/plural-rules.ts` installs the CLDR rules of the three languages.
 - **The server answers in the same language:** every HTTP call and socket upgrade sends `Accept-Language`, so API errors arrive translated; the app never re-translates server text.
 - **Dates and numbers** go through `src/i18n/format.ts` (`formatDate`, `formatTime`, …); no locale literal in `toLocale*`/`Intl`.
-- **`npm run i18n:check -w @termhub/mobile`** (also a jest test) fails on a key with no English entry, placeholders that differ, an unused entry, and — in the folders listed in `GUARDED` (all of `app/` and `src/`) — JSX text, text attributes (`title`, `label`, `placeholder`, `accessibilityLabel`…) or `Alert.alert` text outside `t()`. `// i18n-ignore` skips a line.
+- **`npm run i18n:check -w @termhub/mobile`** (also a jest test) fails on a key with no English or Spanish entry, placeholders that differ, an unused entry, and — in the folders listed in `GUARDED` (all of `app/` and `src/`) — JSX text, text attributes (`title`, `label`, `placeholder`, `accessibilityLabel`…) or `Alert.alert` text outside `t()`. `// i18n-ignore` skips a line.
 - **Tests run in pt-BR** (`TERMHUB_TEST_LOCALE` in the jest setup), so they query the Portuguese text; a test that needs English calls `setLocale('en')` and `setLocale(null)` afterwards.
 - The native permission texts in `app.json` (camera, microphone, Face ID…) stay pt-BR: translating them needs native localisation files and a new store build.
 
 ## Conventions
 
-- Code, comments and commits in English; every string a person sees goes through `t()` with the pt-BR text as key, and its English entry is added in the same change.
+- Code, comments and commits in English; every string a person sees goes through `t()` with the pt-BR text as key, and its English and Spanish entries are added in the same change.
 - Bundle / package id `dev.termhub.app`, URL scheme `termhub`.
 - Pure logic (`model/`) and viewmodels must not import React Native or `expo-router`: the `logic` jest project runs them in plain Node and fails otherwise.
 - The monorepo pins a single React version (root `package.json` `overrides`); Expo SDK upgrades bump it for every workspace.

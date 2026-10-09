@@ -40,5 +40,10 @@
   "Alguém pediu, na página de exclusão do termhub, para excluir a conta deste e-mail.": "Someone asked, on termhub's deletion page, to delete the account of this e-mail.",
   "Para confirmar, use o botão abaixo nos próximos {{minutes}} minutos. A conta fica desativada por 30 dias e depois é excluída definitivamente; até lá, entrar no termhub permite cancelar.": "To confirm, use the button below within the next {{minutes}} minutes. The account stays deactivated for 30 days and is then deleted for good; until then, signing in to termhub lets you cancel.",
   "Se não foi você, ignore este e-mail: nada muda na sua conta.": "If it was not you, ignore this e-mail: nothing changes in your account.",
-  "Confirmar exclusão": "Confirm deletion"
+  "Confirmar exclusão": "Confirm deletion",
+  "Seus dados do termhub estão prontos para baixar": "Your termhub data is ready to download",
+  "O arquivo que você pediu, com os dados da sua conta, está pronto.": "The file you asked for, with your account's data, is ready.",
+  "Baixe pelo Perfil, com a sua conta aberta, até {{date}}. Depois disso o arquivo é apagado e você pode pedir outro.": "Download it from Profile, signed in to your account, by {{date}}. After that the file is deleted and you can ask for another one.",
+  "Se não foi você que pediu, troque sua senha e confira os aparelhos e tokens da conta.": "If it was not you who asked, change your password and check the account's devices and tokens.",
+  "Baixar meus dados": "Download my data"
 }

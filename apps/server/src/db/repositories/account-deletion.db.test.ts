@@ -96,6 +96,9 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     });
     await db.automationSummary.create({ data: { userId, day: new Date('2026-10-05') } });
     await db.userNotification.create({ data: { id: newId(), userId, kind: 'answer', title: 't', body: 'b' } });
+    await db.featureFlagOverride.create({ data: { flag: 'subscriptions', userId, enabled: true } });
+    // An export request (TER-741): the row cascades with the user; its file is swept by the export job.
+    await db.dataExport.create({ data: { id: newId(), userId } });
     await db.session.create({ data: { id: newId(), userId, tokenHash: `s-${userId}`, expiresAt: new Date(Date.now() + DAY) } });
     await db.loginCode.create({ data: { id: newId(), email, codeHash: 'c', expiresAt: new Date(Date.now() + DAY) } });
     await db.loginAttempt.create({ data: { key: `email:${email}`, failures: 1 } });
@@ -103,6 +106,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
       data: { id: newId(), firstName: 'A', lastName: 'B', email, phoneCountry: '55', phoneArea: '62', phoneNumber: '999999999', phone: '+5562999999999' },
     });
     await db.accountDeletionLink.create({ data: { id: newId(), email, tokenHash: `l-${userId}`, expiresAt: new Date(Date.now() + DAY) } });
+    await db.accessLog.create({ data: { ip: '1.1.1.1', userId, kind: 'http', method: 'GET', route: '/api/me', status: 200 } });
     return { userId, email, machineId, projectId, tabId, taskId, ticketId, integrationId, attachmentId, tokenId };
   }
 
@@ -124,6 +128,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
 
   async function cleanup(...userIds: string[]) {
     for (const id of userIds) await repo.purge(id).catch(() => undefined);
+    await db.accessLog.deleteMany({ where: { userId: { in: userIds } } });
   }
 
   it('deletes every row of the account and of what it owns, and nothing of anyone else', async () => {
@@ -140,7 +145,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
       expect(purged?.machine_ids).toEqual([a.machineId]);
       expect(purged?.attachment_ids).toEqual([a.attachmentId]);
 
-      expect(await rowsPointingAt(a.userId)).toEqual({});
+      // The access records outlive the account until their 6 months are over (Marco Civil, art. 15; TER-744).
+      expect(await rowsPointingAt(a.userId)).toEqual({ 'access_logs.user_id': 1 });
       expect(await db.user.count({ where: { id: a.userId } })).toBe(0);
       expect(await db.machine.count({ where: { id: a.machineId } })).toBe(0);
       expect(await db.project.count({ where: { id: a.projectId } })).toBe(0);

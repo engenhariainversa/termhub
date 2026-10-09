@@ -76,9 +76,14 @@ export const pushConversationId = (data: unknown): string | null => dataString(d
 /** The tab an "aba terminou" push names (`data.tab_id`, TER-925), or `null`. */
 export const pushTabId = (data: unknown): string | null => dataString(data, 'tab_id');
 
-/** Where a tapped push goes: the tab it names (its session screen), else its conversation, else
- * nowhere (the app just opens). */
+/** The AI account an "o login expirou" push names (`data.kind: 'ai_login'`, TER-1047), or `null`. */
+export const pushAiLoginAccountId = (data: unknown): string | null => (dataString(data, 'kind') === 'ai_login' ? dataString(data, 'account_id') : null);
+
+/** Where a tapped push goes: an expired AI login's "Refazer login" modal, else the tab it names (its
+ * session screen), else its conversation, else nowhere (the app just opens). */
 export function pushRoute(data: unknown): string | null {
+  const accountId = pushAiLoginAccountId(data);
+  if (accountId) return `/ai-login/${encodeURIComponent(accountId)}`;
   const tabId = pushTabId(data);
   if (tabId) return `/session/${tabId}`;
   const conversationId = pushConversationId(data);

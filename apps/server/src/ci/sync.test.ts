@@ -151,6 +151,20 @@ describe('syncProjectCi', () => {
     expect(events).toEqual([expect.objectContaining({ kind: 'deploy_ok', task_id: 'owner' })]);
   });
 
+  it('TER-1049: with automation on, looks for blocked runs to adopt right after linking the PRs; off, never', async () => {
+    const on = setup({ automation: { enabled: true } });
+    const blockedSince = vi.fn(async () => []);
+    Object.assign(on.deps.repos, { automationRuns: { blockedSince } });
+    await syncProjectCi(on.deps, 'p1');
+    expect(blockedSince).toHaveBeenCalledWith('p1', new Date(Date.parse('2026-09-27T12:00:00Z') - 7 * 24 * 3600_000));
+    expect(on.replaceLinks.mock.invocationCallOrder[0]).toBeLessThan(blockedSince.mock.invocationCallOrder[0]!);
+    const off = setup();
+    const notCalled = vi.fn(async () => []);
+    Object.assign(off.deps.repos, { automationRuns: { blockedSince: notCalled } });
+    await syncProjectCi(off.deps, 'p1');
+    expect(notCalled).not.toHaveBeenCalled();
+  });
+
   it('with automation off, never reads release workflows', async () => {
     const { deps, listWatched } = setup({ automation: { release_workflows: ['publish-agent.yml'] } });
     await syncProjectCi(deps, 'p1');

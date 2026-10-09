@@ -190,6 +190,16 @@ export class UsersRepository {
     await this.db.user.update({ where: { id: userId }, data: { chatCodexReplies: enabled } });
   }
 
+  /** The token count the chat's context meter measures against (TER-1038); null = the model's window. */
+  async chatContextLimit(userId: string): Promise<number | null> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatContextLimit: true } });
+    return u?.chatContextLimit ?? null;
+  }
+
+  async setChatContextLimit(userId: string, limit: number | null): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { chatContextLimit: limit } });
+  }
+
   /** "Avisar quando uma aba terminar" (TER-925): off unless the person turned it on. */
   async pushTabFinished(userId: string): Promise<boolean> {
     const u = await this.db.user.findUnique({ where: { id: userId }, select: { pushTabFinished: true } });
