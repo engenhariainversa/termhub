@@ -9,7 +9,7 @@ import type { AiProvider, User } from '../db/repositories/types.js';
 import type { PushTestKind, PushTestResponse } from '@termhub/mobile-api';
 import { HttpError } from '../lib/errors.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
-import { aiLoginRequiredText, automationEscalationText, confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
+import { aiLoginRequiredText, automationEscalationText, automationReleaseText, confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
 import { escalationReasonText } from '../automation/escalation-text.js';
 import { heldQuestion } from '../automation/question-hold.js';
@@ -258,6 +258,9 @@ export class MobilePushService {
    * resumes). In memory: the event is published only in the process that recorded it. */
   private readonly escalations = new Set<string>();
 
+  /** Releases already pushed, by project, workflow and version. In memory, like `escalations`. */
+  private readonly releases = new Set<string>();
+
   /** The live subscription's unsubscribe, so a second `start()` never subscribes twice. */
   private stop: (() => void) | null = null;
 
@@ -275,6 +278,7 @@ export class MobilePushService {
     const unsubscribeAutomation = automationBus.subscribe((e) => {
       const fail = (err: unknown) => this.deps.log.warn({ err: failureLabel(err), userId: e.owner_id, runId: e.run_id }, 'mobile push failed');
       if (e.kind === 'escalated') void this.escalated(e).catch(fail);
+      else if (e.kind === 'release_ok') void this.released(e).catch(fail);
       else if (e.kind === 'run_resumed' && e.run_id) void this.runResumed(e.owner_id, e.run_id).catch(fail);
     });
     const stop = () => {
@@ -504,6 +508,26 @@ export class MobilePushService {
       await repos.devices.listActiveWithPush(e.owner_id),
       `escalation:${key}`,
     );
+  }
+
+  /**
+   * A release workflow delivered a new version after an automatic merge (TER-1055): "<workflow> publicou a
+   * versão <v>" to every device of the owner, once per project, workflow and version. A release without a
+   * version (an OTA of the app version phones already have) is not pushed: its chat line is enough.
+   */
+  private async released(e: PublishedAutomationEvent): Promise<void> {
+    const { version, workflow } = e.payload;
+    if (typeof version !== 'string' || typeof workflow !== 'string') return;
+    const key = `${e.project_id}:${workflow}:${version}`;
+    if (this.releases.has(key)) return;
+    if (this.releases.size > 10_000) this.releases.clear();
+    this.releases.add(key);
+    const { repos } = this.deps;
+    const ctx = await this.names(e.owner_id, e.project_id, null, null);
+    if (!ctx.projectName) return; // not the owner's project
+    const conversation = await repos.chat.findLatestActiveForProject(e.project_id, e.owner_id);
+    const data = { kind: 'automation_release', project_id: e.project_id, ...(conversation ? { conversation_id: conversation.id } : {}) };
+    await this.deliver(e.owner_id, 'reply', (locale) => automationReleaseText(ctx, workflow, version, locale), data, await repos.devices.listActiveWithPush(e.owner_id), `release:${key}`);
   }
 
   /** The run went on: its escalation may be pushed again next time, and its rows are handled (TER-923). */
