@@ -235,7 +235,7 @@ describe('every template in Spanish (TER-406)', () => {
       alphaInviteMail('a@b.c', { ...opts, locale: 'es' }),
       deletionRequestedMail('a@b.c', { scheduledAt: at, appUrl }, 'es'),
       deletionCancelledMail('a@b.c', { appUrl }, 'es'),
-      accountDeletedMail('a@b.c', 'es'),
+      accountDeletedMail('a@b.c', { backupRetentionDays: 30 }, 'es'),
       deletionLinkMail('a@b.c', { link: 'https://termhub.dev/excluir-conta/?token=abc', ttlMinutes: 30 }, 'es'),
     ];
     for (const m of mails) {
