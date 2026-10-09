@@ -7,7 +7,7 @@ import type { Machine } from '../lib/types';
 export const POLL_MS = 3000;
 const POLL_MAX_MS = 90_000;
 
-type Versions = { current: string | null; latest: string | null; online: boolean; updateAvailable: boolean };
+type Versions = { current: string | null; latest: string | null; online: boolean; updateAvailable: boolean; min: string | null; belowMin: boolean };
 
 /** Machine form: the agent's version, the update button and the auto-update switch. */
 export function AgentUpdateCard({ machine }: { machine: Machine }) {
@@ -24,7 +24,14 @@ export function AgentUpdateCard({ machine }: { machine: Machine }) {
 
   const load = async (): Promise<Versions> => {
     const s = await api.machines.status(machine.id);
-    const next = { current: s.agent_version ?? null, latest: s.latest_agent_version ?? null, online: s.online, updateAvailable: !!s.update_available };
+    const next = {
+      current: s.agent_version ?? null,
+      latest: s.latest_agent_version ?? null,
+      online: s.online,
+      updateAvailable: !!s.update_available,
+      min: s.min_agent_version ?? null,
+      belowMin: !!s.below_min_version,
+    };
     setV(next);
     return next;
   };
@@ -138,6 +145,11 @@ export function AgentUpdateCard({ machine }: { machine: Machine }) {
       <p className="mt-1 text-fg-dim">
         {t('Sem terminal aberto e sem ferramenta trabalhando, o servidor instala novas versões do agente sozinho. As sessões do tmux continuam vivas: os terminais reconectam depois da atualização.')}
       </p>
+      {v?.belowMin && v.min && (
+        <p className="mt-1 font-medium text-danger" role="alert">
+          {t('Este agente está abaixo da versão mínima do termhub (v{{min}}). Ele é atualizado assim que a máquina ficar ociosa, mesmo com a atualização automática desligada.', { min: v.min })}
+        </p>
+      )}
       {note && <p className="mt-1 text-fg-muted">{note}</p>}
       {error && <p className="mt-1 text-danger">{error}</p>}
     </div>

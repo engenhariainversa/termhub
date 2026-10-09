@@ -109,6 +109,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             agent_version: r.agent_version !== undefined ? r.agent_version : next.agent_version,
             agent_last_seen_at: r.last_seen_at !== undefined ? r.last_seen_at : next.agent_last_seen_at,
             update_available: r.online ? (r.update_available ?? next.update_available) : false,
+            below_min_version: r.below_min_version ?? next.below_min_version,
           };
         }),
       );

@@ -159,8 +159,9 @@ export class MachinesRepository {
   }
 
   /** Agent machines that opted into automatic updates (the scheduler checks online/idle itself). */
-  async listAutoUpdate(): Promise<Machine[]> {
-    const rows = await this.db.machine.findMany({ where: { type: 'agent', agentAutoUpdate: true }, include: withOwner });
+  /** Every agent machine, of every owner: the auto-update scheduler reads the switch and the minimum version itself (TER-1056). */
+  async listAgentMachines(): Promise<Machine[]> {
+    const rows = await this.db.machine.findMany({ where: { type: 'agent' }, include: withOwner });
     return rows.map(mapMachine);
   }
 

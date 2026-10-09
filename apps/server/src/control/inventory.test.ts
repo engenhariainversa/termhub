@@ -3,13 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../terminal/machine-exec.js', () => ({ listTmuxSessions: vi.fn() }));
 vi.mock('../agent/registry.js', () => {
   // by default nobody is on the way: the wait answers what `isOnline` says
-  const agents = { isOnline: vi.fn(), awaitHandover: vi.fn(async (m: { id: string }) => agents.isOnline(m.id) as boolean) };
+  const agents = { isOnline: vi.fn(), info: vi.fn((): { agent_version: string } | null => null), awaitHandover: vi.fn(async (m: { id: string }) => agents.isOnline(m.id) as boolean) };
   return { agents };
 });
 // inventory -> tickets.ts -> tasks.ts -> config.js (same pattern as control/tasks.test.ts)
 vi.mock('../config.js', () => ({ config: { publicUrl: 'https://app.test' } }));
 
 import { agents } from '../agent/registry.js';
+import { setLatestAgentRelease } from '../agent/latest-version.js';
+import { MIN_AGENT_VERSION } from '../agent/min-version.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ProjectGroup } from '../db/repositories/project-groups.js';
 import type { AiAccount, Machine, Project, Tab } from '../db/repositories/types.js';
@@ -106,6 +108,7 @@ function ctx(grants: string[] = ['machines:read', 'projects:read', 'terminals:re
 
 beforeEach(() => {
   vi.mocked(agents.isOnline).mockImplementation((id: string) => id === 'm1');
+  vi.mocked(agents.info).mockReturnValue(null);
   vi.mocked(listTmuxSessions).mockClear().mockResolvedValue(new Set(['th-t1']));
 });
 
@@ -150,6 +153,26 @@ describe('listMachines', () => {
     vi.mocked(c.repos.machines.list).mockResolvedValue([machine({ id: 'm1' }), machine({ id: 'm3', type: 'ssh', host: 'box' })]);
     const r = await listMachines(c);
     expect(r.machines.map((m) => m.online)).toEqual([false, null]);
+  });
+
+  // TER-1056: the concierge could not tell which machines were behind.
+  it('carries the agent version, whether an update is available and whether it is below the minimum', async () => {
+    setLatestAgentRelease({ version: '9.0.0', integrity: `sha512-${'A'.repeat(86)}==` });
+    vi.mocked(agents.isOnline).mockReturnValue(true);
+    vi.mocked(agents.info).mockImplementation((id: string) => (id === 'live' ? { agent_version: '0.19.0' } : null));
+    const c = ctx();
+    vi.mocked(c.repos.machines.list).mockResolvedValue([
+      machine({ id: 'live', agent_version: '0.18.0' }),
+      machine({ id: 'gone', agent_version: '9.0.0' }),
+      machine({ id: 'm2', type: 'local' }),
+    ]);
+    const r = await listMachines(c);
+    expect(r).toMatchObject({ latest_agent_version: '9.0.0', min_agent_version: MIN_AGENT_VERSION });
+    expect(r.machines[0]).toMatchObject({ agent_version: '0.19.0', update_available: true, below_min_version: true });
+    // offline: the last version seen, and nothing to update now
+    expect(r.machines[1]).toMatchObject({ agent_version: '9.0.0', update_available: false, below_min_version: false });
+    expect(r.machines[2]).not.toHaveProperty('agent_version');
+    setLatestAgentRelease(null);
   });
 });
 

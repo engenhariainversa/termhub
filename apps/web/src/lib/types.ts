@@ -152,6 +152,8 @@ export interface Machine {
   agent_credential?: 'key' | 'bearer' | null;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
+  /** TER-1056, server-computed: the agent is older than the server's minimum (it updates itself once idle, switch or not) */
+  below_min_version?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */
   is_local: boolean;
   /** null = orphan (visible only to admins viewing "all") */

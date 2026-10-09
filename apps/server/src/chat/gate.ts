@@ -68,6 +68,8 @@ const writeTools = new Set([
   // TER-1023: rewrites the hooks' entries in the machine's config files (the person's own are kept, an
   // uninstall gives them back). Always a card: no grant or default covers it.
   'install_machine_hooks',
+  // TER-1056: installs a newer agent and restarts it (tmux sessions survive). Always a card: no grant or default covers it.
+  'update_machine_agent',
 ]);
 
 // close_tab stays irreversible. control/terminals.ts skips its per-token ownership check for a gated
