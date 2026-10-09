@@ -18,12 +18,16 @@ jobs:
           cache: npm
       - name: Testes do smoke test e do rollback automático (deploy/)
         run: bash deploy/post-deploy.test.sh
+      - name: Testes do backup do banco (deploy/)
+        run: bash deploy/db-backup.test.sh
       - name: Testes do ensure-secrets (deploy/)
         run: bash deploy/ensure-secrets.test.sh
       - name: Instalar dependências
         run: npm ci
       - name: Gerar Prisma Client
         run: npm run prisma:generate
+      - name: Backup do banco de ponta a ponta (Docker, gpg, pg_dump, pg_restore)
+        run: bash deploy/db-backup.e2e.sh
       - name: Generated Prisma client is committed
         run: |
           stale="$(git status --porcelain -- apps/server/src/generated)"

@@ -255,6 +255,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     },
     appUrl: config.publicUrl,
     pageUrl: config.accountDeletionUrl,
+    backupRetentionDays: config.backupRetentionDays,
     log: fastify.log.child({ mod: 'account-deletion' }),
   });
   // "Exportar meus dados" (TER-741): archives on the chat-files volume, so both colors see them.
