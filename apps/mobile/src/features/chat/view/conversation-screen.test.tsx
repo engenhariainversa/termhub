@@ -1065,10 +1065,67 @@ describe('Conversa: the reading position holds when rows arrive (TER-1001)', () 
     ] as const;
   }
 
-  it('the list keeps its first visible row in place, and follows the end only within 80 px of it', async () => {
+  it('the list keeps its first visible row in place only while the reader is more than 80 px from the end (TER-1057)', async () => {
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
-    expect(screen.getByTestId('conversation-thread').props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0, autoscrollToTopThreshold: 80 });
+    const list = () => screen.getByTestId('conversation-thread');
+    // At the end the inverted list follows on its own: no anchoring to throw it off.
+    expect(list().props.maintainVisibleContentPosition).toBeUndefined();
+    await fireEvent.scroll(list(), scrollTo(600));
+    expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 });
+    await fireEvent.scroll(list(), scrollTo(40));
+    expect(list().props.maintainVisibleContentPosition).toBeUndefined();
+  });
+
+  /** Rows and gate cards arriving together, as the socket's events would. */
+  function addTurn(rows: ChatMessage[], cards: TChatAction[]) {
+    const s = useChatStore.getState();
+    const slot = s.conversations['p-termhub']!;
+    useChatStore.setState({ conversations: { ...s.conversations, 'p-termhub': { ...slot, messages: [...slot.messages, ...rows], actions: [...slot.actions, ...cards] } } });
+  }
+  const settled = (id: string, created_at: string): TChatAction => ({
+    id,
+    tool: 'send_input',
+    args: { tab_id: 't-app', text: 'oi' },
+    class: 'write',
+    status: 'executed',
+    machine_id: 'm-jarvis',
+    project_id: 'p-termhub',
+    tab_id: 't-app',
+    grant_id: 'g1',
+    summary: 'digitar `oi` na aba App',
+    created_at,
+  });
+  type Entry = { kind: string; message?: { id: string }; action?: { id: string }; actions?: { id: string }[] };
+
+  it.each([
+    ['at the end', 0],
+    ['scrolled up', 600],
+  ])('%s, a turn folding its cards into the accordion keeps the card row and moves nothing (TER-1057)', async (_where, y) => {
+    const [toOffset, toIndex, toEnd] = spyScrolls();
+    await render(<ConversationScreen />);
+    const reading = await screen.findByText(SEEDED_USER, undefined, LOAD);
+    const list = () => screen.getByTestId('conversation-thread');
+    await fireEvent.scroll(list(), scrollTo(y));
+
+    // The answer of the turn, then one call it ran: the card sits alone above the answer.
+    await act(async () => addTurn([assistantRow('m-turn', { text: 'Rodando.', created_at: at(10) })], [settled('a-one', at(20))]));
+    const keys = () => (list().props.data as Entry[]).map((e) => list().props.keyExtractor(e) as string);
+    expect((list().props.data as Entry[])[1]).toMatchObject({ kind: 'action', action: { id: 'a-one' } });
+    const before = keys();
+
+    // A second call: the two fold into one accordion, in the very same row; then a new message arrives.
+    await act(async () => addTurn([], [settled('a-two', at(30))]));
+    expect((list().props.data as Entry[])[1]).toMatchObject({ kind: 'action_trail', actions: [{ id: 'a-one' }, { id: 'a-two' }] });
+    expect(keys()).toEqual(before);
+    await act(async () => addTurn([assistantRow('m-next', { text: 'Pronto.', created_at: at(40) })], []));
+    expect(keys().slice(1)).toEqual(before);
+
+    expect(toOffset).not.toHaveBeenCalled();
+    expect(toIndex).not.toHaveBeenCalled();
+    expect(toEnd).not.toHaveBeenCalled();
+    expect(screen.getByText(SEEDED_USER)).toBe(reading);
+    expect(list().props.maintainVisibleContentPosition).toEqual(y > 80 ? { minIndexForVisible: 0 } : undefined);
   });
 
   it('scrolled up, three rows arrive: nothing scrolls, nothing on screen remounts, and "↓ 3 novas mensagens" takes the reader to the end', async () => {
@@ -1119,7 +1176,7 @@ describe('Conversa: the reading position holds when rows arrive (TER-1001)', () 
     await act(async () => addRows([assistantRow('m-end', { text: 'chegou', created_at: at(10) })], []));
     expect(screen.getByText('chegou')).toBeTruthy();
     expect(screen.queryByTestId('conversation-unread')).toBeNull();
-    // Following the end is the scroll view's own (`autoscrollToTopThreshold`): the screen does not jump.
+    // Following the end is the inverted list's own (offset 0 is the end): the screen does not jump.
     expect(toOffset).not.toHaveBeenCalled();
     expect(screen.getByText(SEEDED_USER)).toBe(shown);
   });
