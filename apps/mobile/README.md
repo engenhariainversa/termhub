@@ -100,6 +100,14 @@ Copy `.env.example` to `.env` for `expo start`: it points the app at `https://te
 
 Builds are made locally on a Mac, without EAS: iOS goes to TestFlight, Android to Firebase App Distribution (next section). `ios/` and `android/` are generated each time and never committed.
 
+**Automatic, on the Mac hulk.** A merge to `main` that changes the native app (`app.json`, `app.config.js`, the app's `package.json` or `plugins/**`) runs the "Mobile TestFlight (hulk)" workflow (`.github/workflows/mobile-testflight.yml`) on a self-hosted runner on hulk, the Mac that holds the Apple credentials. It runs `scripts/testflight.sh`, which ships `expo.version` once:
+
+- a version already uploaded from hulk (`~/.termhub/testflight/ios-<version>` there) is skipped and the run cancels itself, so a native change without a version bump builds nothing: bump `expo.version` (CLAUDE.md, "Mobile OTA updates");
+- otherwise it runs `scripts/ios-release.sh --upload` with `BUILD_NUMBER` set to the UTC date and time (`YYYYMMDDHHMM`, the same convention as step 2 below), so `app.json`'s `ios.buildNumber` is not rewritten;
+- it stops at TestFlight. Adding the build to the testers' group (step 5) and submitting for App Store review stay manual.
+
+To ship again by hand: Actions → "Mobile TestFlight (hulk)" → Run workflow (with `force` to upload a version that already went, under a new build number), or `bash apps/mobile/scripts/testflight.sh [--force]` from a clean checkout of `main` on the Mac. Runner setup: `docs/automation/runbook.md`, "TestFlight on hulk". The steps below are what the script does, and remain the way to build on any other Mac.
+
 Prerequisites on the Mac: Xcode, CocoaPods, Node 22, and an Apple ID of team **8020 DIGITAL LTDA (`S873WHF2TZ`)** signed in to Xcode → Settings → Accounts with a role that may use cloud-managed distribution certificates (Admin or Account Holder). The distribution certificate is cloud-managed, so its private key is not in the keychain: Xcode signs the export through Apple, and `-allowProvisioningUpdates` creates or refreshes the App Store provisioning profile for `dev.termhub.app`.
 
 1. From an up-to-date `main`: `npm ci`, then `npm run build:contract -w @termhub/mobile`, `npm run typecheck -w @termhub/mobile` and `npm test -w @termhub/mobile`. If the typecheck rejects a route that exists under `app/` (e.g. `"/chat-grants"`), `apps/mobile/.expo/types/router.d.ts` is a stale generated file from an older checkout: delete it and run the typecheck again.

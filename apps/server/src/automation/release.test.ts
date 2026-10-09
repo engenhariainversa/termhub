@@ -218,6 +218,22 @@ describe('followMerged: release workflows', () => {
     expect(root.events[0].payload).toMatchObject({ version: '0.19.0' });
   });
 
+  it("reads an app's store version from the Expo app.json the PR changed under release_paths (TER-1055)", async () => {
+    const pkgs = {
+      'package.json': JSON.stringify({ version: '1.0.0', private: true }),
+      'apps/agent/package.json': JSON.stringify({ name: '@termhub/mobile', version: '0.6.0', private: true }),
+      'apps/agent/app.json': JSON.stringify({ expo: { name: 'termhub', version: '0.6.1' } }),
+    };
+    const app = world({ byCommit: { m1: [publish()] }, files: ['apps/agent/package.json', 'apps/agent/app.json'], pkgs });
+    await followMerged(app.deps, app.ctx, pr({ deploy_state: 'passed' }));
+    expect(app.events[0].payload).toMatchObject({ version: '0.6.1' });
+    expect(app.messages).toEqual(['Publicado publish-agent.yml 0.6.1']);
+
+    const outside = world({ byCommit: { m1: [publish()] }, files: ['apps/web/app.json'], pkgs: { ...pkgs, 'apps/web/app.json': pkgs['apps/agent/app.json'] } });
+    await followMerged(outside.deps, outside.ctx, pr({ deploy_state: 'passed' }));
+    expect(outside.events[0].payload).not.toHaveProperty('version');
+  });
+
   it('a cancelled release is not a failure', async () => {
     const w = world({ byCommit: { m1: [publish({ conclusion: 'cancelled' })] }, headSha: null });
     await followMerged(w.deps, w.ctx, pr({ deploy_state: 'passed' }));
