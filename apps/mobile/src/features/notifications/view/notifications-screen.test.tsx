@@ -69,6 +69,22 @@ describe('Notificações', () => {
     expect(mockPush).toHaveBeenCalledWith('/chat/general');
   });
 
+  it('an expired AI login row opens its "Refazer login" modal (TER-1047)', async () => {
+    await render(<NotificationsScreen />);
+    await screen.findByText('termhub precisa de você', undefined, LOAD);
+
+    await act(async () =>
+      useNotificationsStore.setState({
+        items: [{ id: 'n2', kind: 'confirmation', title: 'Login do Codex expirou', body: 'jarvis: toque para refazer o login', data: { kind: 'ai_login', account_id: 'acc-3' }, created_at: new Date().toISOString(), read_at: null }],
+        unread: 1,
+      }),
+    );
+    const row = await screen.findByRole('button', { name: 'Login do Codex expirou' }, LOAD);
+    await act(async () => fireEvent.press(row));
+
+    expect(mockPush).toHaveBeenCalledWith('/ai-login/acc-3');
+  });
+
   it('offers the notification primer on focus while the permission is undecided', async () => {
     stores.permissions.setState({ pushPrimerOpen: false, pushPrimerDismissals: 0 });
     await render(<NotificationsScreen />);

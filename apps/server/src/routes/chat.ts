@@ -106,7 +106,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // The trail comes from here, not from live events (which only update what is already on
     // screen): a reload must see every pending/decided action exactly as the server has it,
     // including an old denied row sitting beside a newer pending one for the same proposal.
-    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows] = await Promise.all([
+    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows, context_limit] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       // The state, not a rendered sentence: which machine will run the next message, or which of the
@@ -125,6 +125,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       deps.service.openAnswerIds(conversation.id),
       // Usage-limit cards (TER-589): their own list, like suggestions, for the apps that parse tab_questions strictly.
       repos.tabLimitNotices.listByConversation(conversation.id),
+      // What the context meter measures against (TER-1038): null = the model's window.
+      repos.users.chatContextLimit(request.scope.user.id),
     ]);
     // Scoped to this request's own user: a card must never resolve a name this user cannot see.
     const actions = await describeActions(repos, rows, request.scope.user.id);
@@ -145,6 +147,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       compacting: deps.service.isCompacting(conversation.id),
       // The rows a screen opened in the middle of a run shows as being answered (spec 2026-09-29).
       open_answer_ids: openAnswersIn(messages, open),
+      context_limit,
     };
   });
 
@@ -217,6 +220,12 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
   app.post('/reset', { config: { action: 'update' } }, async (request) => {
     const { project_id } = resetBody.parse(request.body ?? {});
     return { conversation: await deps.service.reset(request.scope.user, project_id ?? null) };
+  });
+
+  /** "Apagar conversa" (TER-743): deletes the scope's active conversation for good and answers the fresh one. */
+  app.post('/delete', { config: { action: 'delete' } }, async (request) => {
+    const { project_id } = resetBody.parse(request.body ?? {});
+    return { conversation: await deps.service.deleteConversation(request.scope.user, project_id ?? null) };
   });
 
   /** Per-project chat status for the sidebar's 💬: answering now, and questions waiting on the user. */

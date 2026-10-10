@@ -75,6 +75,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.markSeen /
     expect(secondSeen!.state_seen_at).not.toBe(firstSeen!.state_seen_at);
   });
 
+  it('promptedSince (TER-1051): a main-thread prompt submitted after the time counts; earlier ones and other events do not', async () => {
+    await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
+    const since = new Date(Date.now() + 1);
+    await new Promise((r) => setTimeout(r, 5));
+    await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'pronto', meta: { event: 'Stop' } });
+    await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit', subagent: true } });
+    expect(await repo.promptedSince(tabId, since)).toBe(false);
+    await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
+    expect(await repo.promptedSince(tabId, since)).toBe(true);
+  });
+
   it('clearState also clears state_seen_at', async () => {
     await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: null });
     await repo.markSeen(tabId);

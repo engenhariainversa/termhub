@@ -111,7 +111,8 @@ export class AccountDeletionRepository {
         await tx.waitlistEntry.deleteMany({ where: { email } });
         await tx.accountDeletionLink.deleteMany({ where: { email } });
         // The rest cascades from the user row: sessions, API tokens, chat (conversations, messages,
-        // actions, attachments, live runs, grants), memory, decisions, groups, devices, notifications, daily automation summaries.
+        // actions, attachments, live runs, grants), memory, decisions, groups, devices, notifications, daily automation summaries,
+        // data export requests (their zip files go with the export job's sweep).
         await tx.user.delete({ where: { id: userId } });
 
         return { user: mapUser(row), machine_ids: machineIds, attachment_ids: attachments.map((a) => a.id) };

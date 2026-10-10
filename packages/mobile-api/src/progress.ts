@@ -136,6 +136,8 @@ export const automationFeedEvent = z.object({
   paused: z.boolean().nullable().default(null),
   /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
   tool: z.string().nullable().default(null),
+  /** TER-1043: a decision automatic work took alone, "<question> → <choice>" in the agent's words (decided_by_recommendation) */
+  summary: z.string().nullable().optional(),
 });
 
 export const progressResponse = z.object({

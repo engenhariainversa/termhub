@@ -3,18 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sdk = vi.hoisted(() => ({
   initializeApp: vi.fn(() => ({ app: true })),
-  getAnalytics: vi.fn(() => ({ analytics: true })),
+  initializeAnalytics: vi.fn(() => ({ analytics: true })),
   isSupported: vi.fn(async () => true),
   logEvent: vi.fn(),
   setAnalyticsCollectionEnabled: vi.fn(),
+  setDefaultEventParameters: vi.fn(),
 }));
 
 vi.mock('firebase/app', () => ({ initializeApp: sdk.initializeApp }));
 vi.mock('firebase/analytics', () => ({
-  getAnalytics: sdk.getAnalytics,
+  initializeAnalytics: sdk.initializeAnalytics,
   isSupported: sdk.isSupported,
   logEvent: sdk.logEvent,
   setAnalyticsCollectionEnabled: sdk.setAnalyticsCollectionEnabled,
+  setDefaultEventParameters: sdk.setDefaultEventParameters,
 }));
 
 const ENV = {
@@ -55,6 +57,13 @@ describe('pagePath', () => {
     const { pagePath } = await load();
     expect(pagePath('/projects/ck9x2abc')).toBe('/projects/:id');
     expect(pagePath('/projects/ck9x2abc/terminals')).toBe('/projects/:id/terminals');
+  });
+
+  it('replaces card refs and office project ids', async () => {
+    const { pagePath } = await load();
+    expect(pagePath('/project/TER-583')).toBe('/project/:ref');
+    expect(pagePath('/office/ck9x2abc')).toBe('/office/:projectId');
+    expect(pagePath('/office')).toBe('/office');
   });
 
   it('leaves paths without ids untouched', async () => {
@@ -103,12 +112,26 @@ describe('with config', () => {
     expect(sdk.logEvent).toHaveBeenCalledWith({ analytics: true }, 'login', undefined);
   });
 
-  it('sends page_view with the normalised path', async () => {
+  it('turns off the automatic page_view and starts on the normalised location', async () => {
+    const a = await load();
+    a.trackPageView('/project/TER-1'); // before consent: nothing is sent, but the route is kept
+    a.initAnalytics();
+    await settle();
+    expect(sdk.logEvent).not.toHaveBeenCalled();
+    expect(sdk.initializeAnalytics).toHaveBeenCalledWith(
+      { app: true },
+      { config: { send_page_view: false, page_location: `${window.location.origin}/project/:ref` } },
+    );
+  });
+
+  it('sends page_view with the normalised path and location', async () => {
     const a = await load();
     a.initAnalytics();
     a.trackPageView('/projects/abc/terminals');
     await settle();
-    expect(sdk.logEvent).toHaveBeenCalledWith({ analytics: true }, 'page_view', { page_path: '/projects/:id/terminals' });
+    const page_location = `${window.location.origin}/projects/:id/terminals`;
+    expect(sdk.logEvent).toHaveBeenCalledWith({ analytics: true }, 'page_view', { page_path: '/projects/:id/terminals', page_location });
+    expect(sdk.setDefaultEventParameters).toHaveBeenCalledWith({ page_location });
   });
 
   it('stops collecting and logging once consent is withdrawn', async () => {

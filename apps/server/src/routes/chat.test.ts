@@ -70,6 +70,7 @@ function build(opts: {
     resumeAfterDecision,
     afterDecisions: vi.fn(),
     reset,
+    deleteConversation: vi.fn(async () => ({ id: 'c_new', project_id: 'p1' })),
     hostFor: opts.hostFor ?? vi.fn(async () => ({ kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null })),
     projectStatuses: vi.fn(async () => [{ project_id: 'p1', busy: true, pending_confirmations: 1 }]),
     subagentsFor: opts.subagentsFor ?? vi.fn(async () => []),
@@ -93,6 +94,7 @@ function build(opts: {
     chatActions: { decide, findByIdForUser, listByConversation, failPendingTabGone: vi.fn(async (id: string) => ({ action: { ...pendingAction, id, status: 'failed', error_code: 'TAB_GONE' }, user_id: 'u1' })) },
     tabQuestions: { listByConversation: vi.fn(async () => opts.tabQuestions ?? []) },
     tabLimitNotices: { listByConversation: vi.fn(async () => []) },
+    users: { chatContextLimit: vi.fn(async (): Promise<number | null> => null) },
     tabs: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === fixturesOwner ? tabs.filter((t) => ids.includes(t.id)) : [])) },
     projects: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === fixturesOwner ? projects.filter((p) => ids.includes(p.id)) : [])) },
     // Both the trail's machine names and the host's own machine, owner-scoped exactly like the
@@ -520,6 +522,15 @@ it('POST /reset is a 409 while busy', async () => {
   const { app } = build({ reset: vi.fn(async () => { throw new HttpError(409, 'ocupado', 'CHAT_BUSY'); }) });
   const res = await app.inject({ method: 'POST', url: '/chat/reset', payload: {} });
   expect(res.statusCode).toBe(409);
+});
+
+it('POST /delete deletes the scope\'s conversation and answers the fresh one', async () => {
+  const { app, service } = build();
+  const res = await app.inject({ method: 'POST', url: '/chat/delete', payload: { project_id: 'p1' } });
+  expect(res.statusCode).toBe(200);
+  expect(res.json().conversation.id).toBe('c_new');
+  expect(service.deleteConversation).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'p1');
+  expect(service.reset).not.toHaveBeenCalled();
 });
 
 it('GET /projects lists per-project status', async () => {

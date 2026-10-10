@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyTurnEnd } from './turn-end.js';
+import { classifyBackgroundTurnEnd, classifyTurnEnd } from './turn-end.js';
 
 // Last messages of real turns (October 2026), trimmed where long. A finished turn reports; a waiting one
 // asks, offers, or leaves something to the person. In doubt the tab keeps waiting (TER-972).
@@ -129,5 +129,36 @@ describe('classifyTurnEnd — a turn that ends with a report is finished, not wa
   it('reads accents loosely: "voce decide" and "nao consegui" count too', () => {
     expect(classifyTurnEnd('voce decide qual entra primeiro.')).toBe('waiting_input');
     expect(classifyTurnEnd('nao consegui conectar no banco.')).toBe('waiting_input');
+  });
+});
+
+describe('classifyBackgroundTurnEnd (TER-1053)', () => {
+  it.each([
+    'Aguardando o CI do #940.',
+    'Vou aguardar os testes e sigo.',
+    'Os três agentes estão rodando em segundo plano; consolido quando terminarem.',
+    'Disparei a build em background.',
+    'Vou acompanhar o deploy e te aviso.',
+    'Waiting for the build to finish.',
+    "I'll check back once it finishes.",
+    'The tests are still running in the background.',
+  ])('waits on its work: %s', (message) => {
+    expect(classifyBackgroundTurnEnd(message)).toBe('waiting_background');
+  });
+
+  it('a blank message says nothing and keeps the wait on the work', () => {
+    expect(classifyBackgroundTurnEnd(null)).toBe('waiting_background');
+    expect(classifyBackgroundTurnEnd('  ')).toBe('waiting_background');
+  });
+
+  it('any other message is read as the end of the work: a report is finished, a request waits for the person', () => {
+    expect(classifyBackgroundTurnEnd(TER_912)).toBe('finished');
+    expect(classifyBackgroundTurnEnd('O PR está aberto, e parei aqui como pedido. Não editei o #849, e espero a próxima etapa.')).toBe('finished');
+    expect(classifyBackgroundTurnEnd(TER_851)).toBe('waiting_input');
+    expect(classifyBackgroundTurnEnd('PR aberto. Posso criar o link se quiser.')).toBe('waiting_input');
+  });
+
+  it('a waiting word inside code or a URL is not read', () => {
+    expect(classifyBackgroundTurnEnd('Deploy feito com `npm run watching`.')).toBe('finished');
   });
 });

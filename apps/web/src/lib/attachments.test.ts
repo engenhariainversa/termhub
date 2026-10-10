@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, checkFile, formatBytes, kindFromNameAndMime, patchMessageAttachment, thumbSize } from './attachments';
+import { ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, canRetryAttachment, checkFile, formatBytes, kindFromNameAndMime, patchMessageAttachment, thumbSize } from './attachments';
 import type { ChatAttachment, ChatMessage } from './types';
 
 const att = (over: Partial<ChatAttachment> = {}): ChatAttachment => ({
@@ -70,6 +70,18 @@ describe('attachmentStatusText', () => {
     expect(attachmentStatusText(att({ status: 'failed', error_code: 'TRANSCRIPTION_FAILED' }))).toBe('falhou: transcrição falhou');
     expect(attachmentStatusText(att({ status: 'failed', error_code: null }))).toBe('falhou: erro');
     expect(attachmentStatusText(att({ status: 'ready' }))).toBeNull();
+  });
+
+  it('an unavailable transcription says why, and only it can be tried again (TER-1035)', () => {
+    const clip = (reason: string | null) => att({ kind: 'audio', status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE', meta: reason ? { reason } : null });
+    expect(attachmentStatusText(clip('refused'))).toBe('falhou: o serviço de transcrição recusou o acesso');
+    expect(attachmentStatusText(clip('unreachable'))).toBe('falhou: serviço de transcrição fora do ar');
+    expect(attachmentStatusText(clip('not_configured'))).toBe('falhou: transcrição desligada neste servidor');
+    expect(attachmentStatusText(clip(null))).toBe('falhou: transcrição indisponível');
+    expect(canRetryAttachment(clip('refused'))).toBe(true);
+    expect(canRetryAttachment(att({ kind: 'audio', status: 'failed', error_code: 'TRANSCRIPTION_FAILED' }))).toBe(false);
+    expect(canRetryAttachment(att({ status: 'failed', error_code: 'ATTACHMENT_INVALID' }))).toBe(false);
+    expect(canRetryAttachment(att({ kind: 'audio', status: 'ready' }))).toBe(false);
   });
 });
 

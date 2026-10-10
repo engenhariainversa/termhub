@@ -6,7 +6,7 @@ const publish = vi.fn();
 vi.mock('./bus.js', () => ({ monitorBus: { publish: (...a: unknown[]) => publish(...a) } }));
 vi.mock('../chat/agent-exited.js', () => ({ AGENT_EXITED_TEXT: 'Agente encerrado sem terminar o turno', notifyAgentExited: vi.fn() }));
 
-const { STALE_WORKING_MS, sweepStaleWorking } = await import('./stale-working.js');
+const { BACKGROUND_TIMEOUT_MINUTES, STALE_WORKING_MS, sweepStaleWorking } = await import('./stale-working.js');
 
 const AT = '2026-09-30T05:16:45.106Z';
 const tab = (over: Partial<Tab> = {}): Tab => ({ id: 't1', project_id: 'p1', name: 't', kind: 'terminal', tmux_session: 'th-t1', state: 'working', state_tool: 'claude', state_at: AT, ...over }) as Tab;
@@ -17,18 +17,27 @@ const PROMPT = '● Pronto.\n\n✻ Brewed for 3s\n\n─────────�
 const BUSY = '● Rodando\n\n✢ Catapulting… (14s · ↓ 145 tokens)\n\n────────────\n❯ \n────────────';
 const QUESTION = ' ☐ Pet\nDo you prefer cats or dogs?\n❯ 1. Cats\n  2. Dogs\n\nEnter to select · ↑/↓ to navigate · Esc to cancel';
 
-function setup(tabs: Tab[], screen: string, opts: { online?: boolean; machine?: Machine; pane?: 'shell' | 'busy' | 'dead' | null } = {}) {
+function setup(tabs: Tab[], screen: string, opts: { online?: boolean; machine?: Machine; pane?: 'shell' | 'busy' | 'dead' | null; answer?: { text: string; stale: boolean } | null } = {}) {
   const recordEvent = vi.fn(async (_id: string, ev: { kind: Tab['state'] }) => ({ tab: tab({ state: ev.kind }), event: {}, rearm: null }));
+  const readLastAnswer = vi.fn(async () => (opts.answer === undefined ? { text: 'Pronto.', at: AT, tool: 'claude', stale: false } : opts.answer));
   const repos = {
-    tabs: { listStaleWorking: vi.fn(async () => tabs), recordEvent },
+    tabs: { listStaleWorking: vi.fn(async () => tabs), recordEvent, readLastAnswer },
     machines: { findById: vi.fn(async () => opts.machine ?? machine()) },
   } as unknown as Repositories;
   const capture = vi.fn(async () => screen);
   // null by default: an agent older than 0.14.0 cannot tell, and the screen decides alone (TER-615)
   const foreground = vi.fn(async () => (opts.pane === undefined ? null : opts.pane));
   const exited = vi.fn(async () => {});
-  const deps = { capture, foreground, exited, isOnline: () => opts.online ?? true, checked: new Map<string, { stateAt: string; at: number }>() };
-  return { repos, recordEvent, capture, foreground, exited, deps };
+  const deps = {
+    capture,
+    foreground,
+    exited,
+    isOnline: () => opts.online ?? true,
+    checked: new Map<string, { stateAt: string; at: number }>(),
+    backgroundTimeoutMs: BACKGROUND_TIMEOUT_MINUTES * 60_000,
+    screens: new Map<string, string>(),
+  };
+  return { repos, recordEvent, readLastAnswer, capture, foreground, exited, deps };
 }
 
 describe('sweepStaleWorking — a tab the hooks left working (TER-615)', () => {
@@ -182,5 +191,88 @@ describe('sweepStaleWorking — background work (TER-644)', () => {
     await sweepStaleWorking(gone.repos, log() as never, now, gone.deps);
     expect(gone.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'idle', meta: { event: 'AgentExited', pane: 'shell' }, ifStateAt: AT }));
     expect(gone.exited).toHaveBeenCalled();
+  });
+});
+
+describe('sweepStaleWorking — a background wait that never reports (TER-1053)', () => {
+  const TIMEOUT = BACKGROUND_TIMEOUT_MINUTES * 60_000;
+  const start = Date.parse(AT) + TIMEOUT + 1;
+  // what the hung tab showed: the turn done, a Monitor left running, the input box with the next suggestion
+  const DONE = '  O CI do #940 ainda não foi verificado.\n\n✻ Crunched for 2m 3s · done 5:27 PM · 1 monitor still running\n────────────\n❯ cita o #940 no #849\n────────────\n  ⏵⏵ auto mode on · 1 monitor · ← for agents';
+  const waiting = (over: Partial<Tab> = {}) => tab({ state: 'waiting_background', state_text: 'O PR está aberto, e parei aqui.', ...over });
+
+  /** Two sweeps one STALE_WORKING_MS apart: the screen is compared across them. */
+  async function twice(s: ReturnType<typeof setup>, l = log()) {
+    await sweepStaleWorking(s.repos, l as never, new Date(start), s.deps);
+    await sweepStaleWorking(s.repos, l as never, new Date(start + STALE_WORKING_MS), s.deps);
+    return l;
+  }
+
+  it('past the timeout, back at its prompt on a screen that did not move: finished, keeping its text, and it alerts', async () => {
+    publish.mockClear();
+    const s = setup([waiting()], DONE, { pane: 'busy', answer: { text: 'O PR está aberto, e parei aqui como pedido.', stale: false } });
+    await sweepStaleWorking(s.repos, log() as never, new Date(start), s.deps);
+    // the first read only takes the screen's digest
+    expect(s.recordEvent).not.toHaveBeenCalled();
+    const l = log();
+    await sweepStaleWorking(s.repos, l as never, new Date(start + STALE_WORKING_MS), s.deps);
+    expect(s.capture).toHaveBeenCalledTimes(2);
+    expect(s.recordEvent).toHaveBeenCalledWith('t1', { kind: 'finished', tool: 'claude', text: 'O PR está aberto, e parei aqui.', meta: { event: 'BackgroundTimeout', screen: 'prompt' }, ifStateAt: AT });
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(l.info).toHaveBeenCalledWith({ tabId: 't1', machineId: 'm1', kind: 'finished', recorded: true }, 'monitor: background wait timed out');
+    // metadata only: neither the screen nor the answer is logged
+    expect(JSON.stringify(l.info.mock.calls)).not.toMatch(/PR|monitor still/);
+  });
+
+  it('a last answer that asks something becomes a wait for the person', async () => {
+    const s = setup([waiting()], DONE, { answer: { text: 'Posso criar o link se ele quiser.', stale: false } });
+    await twice(s);
+    expect(s.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'waiting_input', meta: { event: 'BackgroundTimeout', screen: 'prompt' } }));
+  });
+
+  it('before the timeout, the screen is not even read', async () => {
+    const s = setup([waiting()], DONE);
+    await sweepStaleWorking(s.repos, log() as never, new Date(Date.parse(AT) + STALE_WORKING_MS + 1), s.deps);
+    expect(s.capture).not.toHaveBeenCalled();
+  });
+
+  it('a screen that moved, a turn running, or Claude Code still waiting on its agents: nothing changes', async () => {
+    const moving = setup([waiting()], DONE);
+    moving.capture.mockResolvedValueOnce(DONE).mockResolvedValueOnce(`${DONE}\n● Monitor event`);
+    await twice(moving);
+    expect(moving.recordEvent).not.toHaveBeenCalled();
+
+    for (const screen of ['● Rodando\n\n✢ Catapulting… (14s · ↓ 145 tokens)\n\n────────────\n❯ \n────────────', '● Aguardando.\n\n✻ Waiting for 1 background agent to finish\n\n────────────\n❯ \n────────────']) {
+      const s = setup([waiting()], screen);
+      await twice(s);
+      expect(s.recordEvent).not.toHaveBeenCalled();
+    }
+  });
+
+  it('no answer, or one older than a turn since: nothing changes', async () => {
+    for (const answer of [null, { text: 'Pronto.', stale: true }]) {
+      const s = setup([waiting()], DONE, { answer });
+      await twice(s);
+      expect(s.recordEvent).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a timeout of 0 turns it off, and a Codex tab is never read', async () => {
+    const off = setup([waiting()], DONE);
+    off.deps.backgroundTimeoutMs = 0;
+    await twice(off);
+    expect(off.capture).not.toHaveBeenCalled();
+
+    const codex = setup([waiting({ state_tool: 'codex' })], DONE);
+    await twice(codex);
+    expect(codex.capture).not.toHaveBeenCalled();
+  });
+
+  it('a hook that landed meanwhile wins: nothing is published', async () => {
+    publish.mockClear();
+    const s = setup([waiting()], DONE);
+    s.recordEvent.mockResolvedValueOnce({ tab: waiting(), event: null, rearm: null } as never);
+    await twice(s);
+    expect(publish).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,7 @@
 /** The city in PixiJS: one block per project (a building), its desks on one floor. Knows nothing about tabs, the API or React. */
+// Pixi compiles shaders and uniform uploads with `new Function` unless this polyfill is loaded first;
+// the server's Content-Security-Policy has no 'unsafe-eval' (TER-579).
+import 'pixi.js/unsafe-eval';
 import { Application, CanvasSource, Container, ImageSource, Rectangle, Texture, UPDATE_PRIORITY, type Graphics } from 'pixi.js';
 import { BLOCK_MARGIN, blockBounds, cityBounds, floorOnCity, layoutCity, type CityLayout, type PlacedBlock } from '../layout/city';
 import { depthOf, toScreen } from '../layout/iso';
@@ -25,6 +28,9 @@ const BLOCK_TOP = WALL_H + SIGN_H;
 
 /** And under it, for the building sign that hangs over the block's front corner. */
 const BLOCK_BOTTOM = SIGN_H + 32;
+
+/** Below this zoom a desk's monitors are a few pixels wide: their animation (TER-1048) holds still. */
+const ANIMATE_MIN_SCALE = 0.6;
 
 /** What is left of an unlit building's furniture and people. Its markers keep their full strength. */
 const UNLIT_ALPHA = 0.45;
@@ -398,8 +404,10 @@ export class OfficeScene {
     this.world.scale.set(view.scale);
     this.world.position.set(view.x, view.y);
     const t = performance.now() / 1000;
+    // a monitor narrower than a few pixels shows nothing of its animation: hold the frame, redraw nothing
+    const animate = view.scale >= ANIMATE_MIN_SCALE;
     for (const { view: desk, overlay, buildingId } of this.desks.values()) {
-      desk.update();
+      desk.update(t, animate);
       overlay.place(view, deskLabelsVisible(this.target, view.scale, buildingId), t, this.reducedMotion);
     }
     // `place` turns a sign off again when its anchor has left the viewport

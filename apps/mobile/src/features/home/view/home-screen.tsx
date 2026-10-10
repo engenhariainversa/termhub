@@ -1,6 +1,8 @@
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
+import { AiLoginBanner } from '@/features/ai-login/view/ai-login-banner';
+import { useAiLoginStore } from '@/features/ai-login/viewmodel/useAiLoginStore';
 import { FavoriteSheet } from '@/features/chat/view/favorite-sheet';
 import { ProjectRow } from '@/features/chat/view/project-row';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
@@ -24,15 +26,18 @@ export function HomeScreen() {
   const loadProjects = useChatStore((s) => s.loadProjects);
   const setFavorite = useChatStore((s) => s.setFavorite);
   const refreshStatuses = usePermissionsStore((s) => s.refreshStatuses);
+  const loadAiLogins = useAiLoginStore((s) => s.load);
   const [sheetFor, setSheetFor] = useState<string | null>(null);
 
   // On every focus: a pin changed in Chats, or on the web, shows up when the person comes back;
-  // the OS statuses are re-read so the ad card follows a change made in the system settings.
+  // the OS statuses are re-read so the ad card follows a change made in the system settings, and the
+  // AI logins so an expired one shows its red warning (TER-1047).
   useFocusEffect(
     useCallback(() => {
       void loadProjects();
       void refreshStatuses();
-    }, [loadProjects, refreshStatuses]),
+      void loadAiLogins();
+    }, [loadProjects, refreshStatuses, loadAiLogins]),
   );
 
   const favorites = favoriteProjects(projects);
@@ -43,6 +48,7 @@ export function HomeScreen() {
       <View className="gap-3 px-6 pb-2 pt-4">
         <AppText variant="title">{t('Home')}</AppText>
         {error ? <Banner tone="danger" text={error} /> : null}
+        <AiLoginBanner />
         <AdConsentCard />
         {favorites.length > 0 ? <AppText variant="muted">{t('Favoritos')}</AppText> : null}
       </View>

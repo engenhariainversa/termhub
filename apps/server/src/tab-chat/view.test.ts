@@ -23,7 +23,9 @@ describe('tabSummaryOf', () => {
       activity: 'coding',
       activity_verb: 'Moonwalking',
       availability: 'ready',
+      auto_ref: null,
     });
+    expect(tabSummaryOf(tab(), project, machine, 'ready', 'TH-12').auto_ref).toBe('TH-12');
   });
 
   it('a tab waiting on its own background work travels as working, flagged', () => {

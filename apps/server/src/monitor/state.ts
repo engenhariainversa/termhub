@@ -3,7 +3,7 @@ import { isClaudeSessionId, isClaudeTranscriptPath } from '@termhub/machine-ops'
 import { QUESTION_MAX, parseAskUserQuestion, parseCodexUserInput, parsePermissionTool, sliceUnits, toolUseIdOf, type TabQuestionInput } from '../chat/tab-question-payload.js';
 import type { Tab, TabActivity, TabState } from '../db/repositories/types.js';
 import { activityOf } from './activity.js';
-import { classifyTurnEnd } from './turn-end.js';
+import { classifyBackgroundTurnEnd, classifyTurnEnd } from './turn-end.js';
 
 /** Tools whose hooks we understand (the hook script names itself). */
 export const HOOK_TOOLS = ['claude', 'codex', 'cursor'] as const;
@@ -35,9 +35,10 @@ export interface Interpreted {
    */
   keepsWaitText?: true;
   /**
-   * Only on a Claude `Stop`, only when > 0: how many of its `background_tasks` still run (a `Monitor`, a
-   * `run_in_background` shell). The tab is not blocked — the next task notification wakes it — so no suggestion
-   * card opens for this Stop (spec 2026-09-26 TER-203 §3). The count is all that leaves the payload.
+   * Only on a Claude `Stop` read as `waiting_background`: how many of its `background_tasks` still run (a
+   * `Monitor`, a `run_in_background` shell). The tab is not blocked — the next task notification wakes it — so
+   * no suggestion card opens for this Stop (spec 2026-09-26 TER-203 §3). The count is all that leaves the
+   * payload. A Stop whose message ends the work anyway (TER-1053) keeps the count in `meta` only.
    */
   backgroundTasks?: number;
   /**
@@ -181,7 +182,12 @@ function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
       // `finished` when its whole last message is a report that asks nothing, else a wait (TER-972).
       const background = runningBackgroundTasks(ev.background_tasks);
       if (background === 0) return withAnswer({ kind: classifyTurnEnd(raw), text, meta: { event: name } }, raw);
-      return withAnswer({ kind: 'waiting_background', text, meta: { event: name, background_tasks: background }, backgroundTasks: background }, raw);
+      // Background work that never ends (a Monitor) would hold the tab for ever: only a message that says it
+      // waits on that work keeps it waiting on it; any other is the end of the work, background or not (TER-1053).
+      const kind = classifyBackgroundTurnEnd(raw);
+      const meta = { event: name, background_tasks: background };
+      if (kind !== 'waiting_background') return withAnswer({ kind, text, meta }, raw);
+      return withAnswer({ kind, text, meta, backgroundTasks: background }, raw);
     }
     case 'StopFailure': {
       // An API error ended the turn (spec 2026-09-26 account swap). On a usage limit Claude Code does

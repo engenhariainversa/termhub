@@ -1,7 +1,6 @@
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Text, View } from 'react-native';
 import { MessageBubble } from '@/features/chat/view/message-bubble';
 import { Composer } from '@/features/chat/view/composer';
 import { TabQuestionCard } from '@/features/chat/view/tab-question-card';
@@ -10,7 +9,7 @@ import type { PickedFile } from '@/features/chat/viewmodel/attachments';
 import { useTranslation } from '@/i18n';
 import { kindFromNameAndMime, type TChatAttachment, type TTabQuestion, type TTabQuestionAnswerBody, type TTabSuggestion } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
-import { AppText, Banner, Button, EmptyState, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
+import { AppText, Banner, Button, EmptyState, KeyboardInsetView, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
 import { availabilityText } from '../model/availability-text';
 import { TAB_CHAT_MSG } from '../model/messages';
 import { buildRows, type Row } from '../model/timeline';
@@ -83,10 +82,6 @@ export function SessionView({ tabId }: { tabId: string }) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [screenOpen, setScreenOpen] = useState(false);
-  const insets = useSafeAreaInsets();
-  const bodyRef = useRef<View>(null);
-  const [bodyTop, setBodyTop] = useState<number | null>(null);
-  const measureBody = useCallback(() => bodyRef.current?.measureInWindow((_x, y) => setBodyTop(y)), []);
 
   const working = tab?.state === 'working' && !tab.background;
   const rows = useMemo(() => buildRows(items, tab?.state === 'working'), [items, tab?.state]);
@@ -169,59 +164,58 @@ export function SessionView({ tabId }: { tabId: string }) {
 
   return (
     <Screen padded={false} width="full">
-      <View ref={bodyRef} className="flex-1" onLayout={measureBody}>
-        <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={bodyTop ?? insets.top}>
-          <SessionHeader tab={tab} availability={availability} mode={mode} onBack={goBack} onMenu={() => setMenuOpen(true)} />
-          {status === 'error' && error ? (
-            <View className="px-4 pt-3">
-              <Banner tone="danger" text={error} />
+      {/* The composer sits on the keyboard, the same way as the chat's (TER-1022). */}
+      <KeyboardInsetView testID="session-body">
+        <SessionHeader tab={tab} availability={availability} mode={mode} onBack={goBack} onMenu={() => setMenuOpen(true)} />
+        {status === 'error' && error ? (
+          <View className="px-4 pt-3">
+            <Banner tone="danger" text={error} />
+          </View>
+        ) : null}
+        {status === 'loading' ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator />
+          </View>
+        ) : entries.length === 0 ? (
+          <View className="flex-1">{status === 'ready' ? <EmptyState title={t('Nenhuma mensagem ainda')} hint={t('Escreva abaixo para falar com o Claude nesta aba.')} /> : null}</View>
+        ) : (
+          <FlatList
+            testID="session-thread"
+            inverted
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            data={entries}
+            keyExtractor={entryKey}
+            renderItem={renderItem}
+            contentContainerClassName="gap-3 px-4 py-4"
+            contentContainerStyle={READABLE_COLUMN}
+            // Inverted: the end is the top of the conversation, where the earlier page goes.
+            onEndReached={() => void loadEarlier()}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={loadingEarlier ? <ActivityIndicator /> : null}
+          />
+        )}
+        <View style={READABLE_COLUMN}>
+          {degraded ? <AppText variant="muted" className="px-4 pt-2 text-xs">{TAB_CHAT_MSG.degraded}</AppText> : null}
+          {why ? (
+            <View testID="session-availability" className="flex-row items-center gap-2 px-4 pt-2">
+              <AppText variant="muted" className="flex-1">
+                {why}
+              </AppText>
+              {SCREEN_ONLY.has(availability) ? <Button label={t('Ver tela')} variant="ghost" onPress={() => setScreenOpen(true)} /> : null}
             </View>
           ) : null}
-          {status === 'loading' ? (
-            <View className="flex-1 items-center justify-center">
-              <ActivityIndicator />
-            </View>
-          ) : entries.length === 0 ? (
-            <View className="flex-1">{status === 'ready' ? <EmptyState title={t('Nenhuma mensagem ainda')} hint={t('Escreva abaixo para falar com o Claude nesta aba.')} /> : null}</View>
-          ) : (
-            <FlatList
-              testID="session-thread"
-              inverted
-              keyboardDismissMode="interactive"
-              keyboardShouldPersistTaps="handled"
-              data={entries}
-              keyExtractor={entryKey}
-              renderItem={renderItem}
-              contentContainerClassName="gap-3 px-4 py-4"
-              contentContainerStyle={READABLE_COLUMN}
-              // Inverted: the end is the top of the conversation, where the earlier page goes.
-              onEndReached={() => void loadEarlier()}
-              onEndReachedThreshold={0.3}
-              ListFooterComponent={loadingEarlier ? <ActivityIndicator /> : null}
-            />
-          )}
-          <View style={READABLE_COLUMN}>
-            {degraded ? <AppText variant="muted" className="px-4 pt-2 text-xs">{TAB_CHAT_MSG.degraded}</AppText> : null}
-            {why ? (
-              <View testID="session-availability" className="flex-row items-center gap-2 px-4 pt-2">
-                <AppText variant="muted" className="flex-1">
-                  {why}
-                </AppText>
-                {SCREEN_ONLY.has(availability) ? <Button label={t('Ver tela')} variant="ghost" onPress={() => setScreenOpen(true)} /> : null}
-              </View>
-            ) : null}
-            <Composer
-              sending={sending}
-              onSend={onSend}
-              uploadAttachment={uploadAttachment}
-              deleteAttachment={deleteAttachment}
-              disabled={BLOCKED.has(availability)}
-              onInterrupt={working ? () => void act('interrupt') : undefined}
-            />
-            {status !== 'error' && error ? <Text className="px-4 pb-2 text-xs text-app-danger">{error}</Text> : null}
-          </View>
-        </KeyboardAvoidingView>
-      </View>
+          <Composer
+            sending={sending}
+            onSend={onSend}
+            uploadAttachment={uploadAttachment}
+            deleteAttachment={deleteAttachment}
+            disabled={BLOCKED.has(availability)}
+            onInterrupt={working ? () => void act('interrupt') : undefined}
+          />
+          {status !== 'error' && error ? <Text className="px-4 pb-2 text-xs text-app-danger">{error}</Text> : null}
+        </View>
+      </KeyboardInsetView>
       <SessionMenu open={menuOpen} onClose={() => setMenuOpen(false)} onChoose={onMenu} />
       <RawScreenSheet open={screenOpen} onClose={() => setScreenOpen(false)} load={loadScreen} />
     </Screen>

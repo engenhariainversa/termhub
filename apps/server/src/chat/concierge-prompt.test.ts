@@ -36,6 +36,11 @@ it('tells the concierge to start agents on cards with start_agent and task_id, a
   expect(ORCHESTRATOR_PROMPT).toContain('link_tab_task');
 });
 
+// TER-1023: the concierge set a machine up by asking the person for an install command.
+it('tells the concierge to set up the monitor hooks with its own tools', () => {
+  expect(ORCHESTRATOR_PROMPT).toMatch(/get_machine_hooks, install_machine_hooks; never ask for a command/);
+});
+
 it('goes first, with the project prompt after it, and fits the protocol cap with the longest project prompt', () => {
   expect(streamedSystemPrompt(null)).toBe(ORCHESTRATOR_PROMPT);
   expect(streamedSystemPrompt('projeto')).toBe(`${ORCHESTRATOR_PROMPT}\n\nprojeto`);

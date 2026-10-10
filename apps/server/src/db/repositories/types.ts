@@ -16,6 +16,7 @@ import { parseLocale, type Locale } from '../../i18n/index.js';
 
 export type UserRole = 'owner' | 'member';
 export type MachineType = 'local' | 'ssh' | 'agent';
+export type AgentCredential = 'key' | 'bearer' | null;
 export type ProjectStatus = 'active' | 'paused' | 'archived';
 export type TaskStatus = 'backlog' | 'todo' | 'doing' | 'done';
 /** Kind of card (spec 2026-09-24 §3): epics group work, subtasks are a checklist inside a story or task. */
@@ -92,8 +93,16 @@ export interface Machine {
   agent_last_seen_at: string | null;
   /** newer agent versions are installed automatically while the machine has no open terminal */
   agent_auto_update: boolean;
+  /**
+   * TER-1017: how the agent proves itself. `key` = a device key paired through a single-use token;
+   * `bearer` = the permanent token of agents paired before (works until the machine is paired again);
+   * null = nothing usable yet (a pairing token not used, or local/ssh). Optional only for test fixtures.
+   */
+  agent_credential?: AgentCredential;
   /** swap a tab's Claude to another account of this machine by itself on a usage limit (opt-in) */
   claude_auto_swap: boolean;
+  /** TER-735: false = termhub never reads the AI CLI credential on this machine (no usage bars) */
+  ai_usage_query: boolean;
   /** R6: false = the dispatcher never places automatic runs here */
   automation_allowed: boolean;
   /** the user's own computer: the web app shows it only in the browser that added it */
@@ -329,7 +338,9 @@ export const mapMachine = (m: PrismaMachine & { owner?: { name: string } | null 
   agent_version: m.agentVersion ?? null,
   agent_last_seen_at: m.agentLastSeenAt?.toISOString() ?? null,
   agent_auto_update: m.agentAutoUpdate,
+  agent_credential: m.agentPublicKey ? 'key' : m.agentTokenHash ? 'bearer' : null,
   claude_auto_swap: m.claudeAutoSwap,
+  ai_usage_query: m.aiUsageQuery,
   automation_allowed: m.automationAllowed,
   is_local: m.isLocal,
   owner_id: m.ownerId,

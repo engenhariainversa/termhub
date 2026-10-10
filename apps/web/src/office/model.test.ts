@@ -38,6 +38,12 @@ describe('buildCityModel: desks', () => {
     expect(m.needsYou).toBe(2);
   });
 
+  it('carries the automatic run card onto its desk, and none on a manual tab or the public city', () => {
+    const c = city([building('p1', [tab('a', { state: 'working', state_at: AT }), tab('b')])]);
+    expect(buildCityModel(c, none, (id) => (id === 'a' ? 'TER-7' : undefined)).buildings[0].desks.map((d) => d.auto)).toEqual(['TER-7', null]);
+    expect(desks(c).map((d) => d.auto)).toEqual([null, null]);
+  });
+
   it('keeps the hand up but drops the marker once the tab was seen', () => {
     const seen = tab('i', { state: 'waiting_input', state_at: AT, state_seen_at: '2026-09-21T10:05:00.000Z' });
     const d = desks(city([building('p1', [seen])]))[0];

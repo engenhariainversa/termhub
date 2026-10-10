@@ -35,6 +35,7 @@ const LANGUAGE_OPTIONS: { value: Locale | null; label: string; translated: boole
   { value: null, label: tk('Automático'), translated: true },
   { value: 'pt-BR', label: 'Português (Brasil)', translated: false },
   { value: 'en', label: 'English', translated: false },
+  { value: 'es', label: 'Español', translated: false },
 ];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -233,7 +234,9 @@ export function SettingsScreen() {
           <AppText variant="muted">
             {Application.nativeApplicationVersion} ({Application.nativeBuildVersion})
           </AppText>
-          <AppText variant="muted">{updateLabel(runningUpdate().updateId, runningUpdate().isEmbeddedLaunch)}</AppText>
+          <AppText variant="muted" selectable>
+            {updateLabel(runningUpdate())}
+          </AppText>
           <AppText variant="muted">{server}</AppText>
         </Section>
 
