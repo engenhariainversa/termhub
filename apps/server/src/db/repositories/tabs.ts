@@ -11,9 +11,10 @@ export const MAX_WORKING_INTERVAL_S = 7200;
 
 /**
  * States that mean a tool is mid-task in that tab — as opposed to `idle`, `error` or never seen. `finished`
- * counts like `waiting_input`: the agent is still open at its prompt (TER-972).
+ * counts like `waiting_input`: the agent is still open at its prompt (TER-972), and so do `blocked`,
+ * `auth_required` and `trust_prompt` (TER-1046).
  */
-const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background', 'finished'];
+const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background', 'finished', 'blocked', 'auth_required', 'trust_prompt'];
 
 const metaOf = (meta: unknown): Record<string, unknown> => (meta && typeof meta === 'object' && !Array.isArray(meta) ? (meta as Record<string, unknown>) : {});
 
@@ -144,6 +145,21 @@ export class TabsRepository {
     return rows.map(mapTab);
   }
 
+  /**
+   * Terminal tabs with a tmux session that never reported a state, opened between `since` and `before`
+   * (TER-1046), newest first, at most `limit`: Claude Code's folder trust dialog and its login error come
+   * before any hook, so the monitor reads their screen (monitor/stale-working.ts). A plain shell tab stays
+   * on this list until it ages out of the window.
+   */
+  async listUnreported(since: Date, before: Date, limit = 100): Promise<Tab[]> {
+    const rows = await this.db.tab.findMany({
+      where: { kind: 'terminal', tmuxSession: { not: null }, state: null, createdAt: { gte: since, lt: before } },
+      orderBy: [{ createdAt: 'desc' }],
+      take: limit,
+    });
+    return rows.map(mapTab);
+  }
+
   /** Every tab on one machine. */
   async listByMachine(machineId: string): Promise<Tab[]> {
     const rows = await this.db.tab.findMany({ where: { machineId }, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] });
@@ -209,10 +225,12 @@ export class TabsRepository {
       answer?: string;
       /**
        * Only for a state read off the screen (monitor/stale-working.ts): the tab's `state_at` when the
-       * screen was captured. The event is dropped unless the tab is still `working` (or
-       * `waiting_background`) since then — a hook that landed meanwhile knows better than the capture.
+       * screen was captured (null for a tab that never reported). The event is dropped unless the tab is
+       * still in one of `ifStateIn` (default `working` or `waiting_background`) since then — a hook that
+       * landed meanwhile knows better than the capture.
        */
-      ifStateAt?: string;
+      ifStateAt?: string | null;
+      ifStateIn?: readonly (TabState | null)[];
     },
   ): Promise<{ tab: Tab; event: TabEvent | null; rearm: Rearm | null }> {
     const [e, t, rearm] = await this.db.$transaction(async (tx) => {
@@ -235,8 +253,9 @@ export class TabsRepository {
         seenAgeMs: current?.stateSeenAt ? at.getTime() - current.stateSeenAt.getTime() : null,
       };
       const incoming = { kind: event.kind, name: eventName(event.meta), continuesWait: !!event.continuesWait, keepsWaitText: !!event.keepsWaitText, subagent: subagentOf(event.meta) };
-      const stillWorking = current?.state === 'working' || current?.state === 'waiting_background';
-      const outdated = event.ifStateAt !== undefined && (!stillWorking || current?.stateAt?.toISOString() !== event.ifStateAt);
+      const expected: readonly (TabState | null)[] = event.ifStateIn ?? ['working', 'waiting_background'];
+      const unchanged = expected.includes((current?.state ?? null) as TabState | null) && (current?.stateAt?.toISOString() ?? null) === event.ifStateAt;
+      const outdated = event.ifStateAt !== undefined && !unchanged;
       const outcome = outdated ? ({ action: 'drop' } as const) : decideWait(now, history, incoming);
       if (outcome.action === 'drop') {
         return [null, await tx.tab.findUniqueOrThrow({ where: { id: tabId } }), null] as const;

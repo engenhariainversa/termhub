@@ -45,5 +45,9 @@
   "{{ref}} parou: {{reason}}": "{{ref}} se detuvo: {{reason}}",
   "Um card": "Una tarjeta",
   "Login do {{provider}} expirou": "El login de {{provider}} expiró",
-  "{{machine}}: toque para refazer o login": "{{machine}}: toca para rehacer el login"
+  "{{machine}}: toque para refazer o login": "{{machine}}: toca para rehacer el login",
+  "uma máquina": "una máquina",
+  "Login expirado em {{machine}}": "Login caducado en {{machine}}",
+  "A conta {{account}} precisa de /login. Abra a aba {{tab}} e entre de novo.": "La cuenta {{account}} necesita /login. Abre la pestaña {{tab}} e inicia sesión de nuevo.",
+  "O Claude Code precisa de /login. Abra a aba {{tab}} e entre de novo.": "Claude Code necesita /login. Abre la pestaña {{tab}} e inicia sesión de nuevo."
 }

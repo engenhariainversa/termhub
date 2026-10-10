@@ -64,5 +64,8 @@
   "{{count}} ferramentas_one": "{{count}} herramienta",
   "{{count}} ferramentas_other": "{{count}} herramientas",
   "{{count}} imagens_one": "{{count}} imagen",
-  "{{count}} imagens_other": "{{count}} imágenes"
+  "{{count}} imagens_other": "{{count}} imágenes",
+  "Login expirado: rode /login": "Login caducado: ejecuta /login",
+  "Pergunta se a pasta é confiável": "Pregunta si la carpeta es de confianza",
+  "Bloqueado": "Bloqueado"
 }

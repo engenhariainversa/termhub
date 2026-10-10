@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Machine, MonitorItem, Tab } from './types';
-import { emptyMonitorHint, entersNeedsYou, needsYouByProject, needsYouText, optimisticSeenAt, shouldMarkSeen, tabDotClass, tabNeedsYou } from './needs-you';
+import { emptyMonitorHint, entersNeedsYou, needsYouByProject, needsYouText, optimisticSeenAt, shouldMarkSeen, tabDotClass, tabDotIcon, tabNeedsYou } from './needs-you';
 import { isTabOnScreen, setTabsOnScreen } from './visible-tabs';
 
 const T1 = '2026-01-01T00:00:00.000Z';
@@ -118,10 +118,23 @@ describe('tabDotClass', () => {
     expect(tabDotClass(false, tab({ state: 'waiting_background', state_at: T1 }))).toBe('bg-fg-dim');
   });
 
-  it('is green, never orange nor pulsing, once the agent finished with a report (TER-972)', () => {
+  it('is neutral with a check, never orange nor pulsing, once the agent finished with a report (TER-972, TER-1046)', () => {
     expect(tabNeedsYou(tab({ state: 'finished', state_at: T1 }))).toBe(false);
-    expect(tabDotClass(true, tab({ state: 'finished', state_at: T1 }))).toBe('bg-ok');
+    expect(tabDotClass(true, tab({ state: 'finished', state_at: T1 }))).toBe('bg-fg-dim');
     expect(tabDotClass(false, tab({ state: 'finished', state_at: T1 }))).toBe('bg-fg-dim');
+    expect(tabDotIcon(tab({ state: 'finished' }))).toBe('check');
+  });
+
+  it('a blocked run is grey with a lock and never needs you; a login is red and needs you; the trust dialog is orange (TER-1046)', () => {
+    expect(tabNeedsYou(tab({ state: 'blocked', state_at: T1 }))).toBe(false);
+    expect(tabDotClass(true, tab({ state: 'blocked', state_at: T1 }))).toBe('bg-fg-dim');
+    expect(tabDotIcon(tab({ state: 'blocked' }))).toBe('lock');
+    expect(tabNeedsYou(tab({ state: 'auth_required', state_at: T1 }))).toBe(true);
+    expect(tabDotClass(true, tab({ state: 'auth_required', state_at: T1 }))).toBe('bg-danger tab-dot-blink');
+    expect(tabDotClass(true, tab({ state: 'auth_required', state_at: T1, state_seen_at: T1 }))).toBe('bg-danger');
+    expect(tabNeedsYou(tab({ state: 'trust_prompt', state_at: T1 }))).toBe(true);
+    expect(tabDotClass(true, tab({ state: 'trust_prompt', state_at: T1 }))).toBe('bg-attention tab-dot-blink');
+    expect(tabDotIcon(tab({ state: 'waiting_input' }))).toBeNull();
   });
 
   it('is not orange once the tab has been seen', () => {

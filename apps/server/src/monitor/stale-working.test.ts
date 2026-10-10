@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, Tab } from '../db/repositories/types.js';
@@ -6,7 +7,7 @@ const publish = vi.fn();
 vi.mock('./bus.js', () => ({ monitorBus: { publish: (...a: unknown[]) => publish(...a) } }));
 vi.mock('../chat/agent-exited.js', () => ({ AGENT_EXITED_TEXT: 'Agente encerrado sem terminar o turno', notifyAgentExited: vi.fn() }));
 
-const { BACKGROUND_TIMEOUT_MINUTES, STALE_WORKING_MS, sweepStaleWorking } = await import('./stale-working.js');
+const { BACKGROUND_TIMEOUT_MINUTES, STALE_WORKING_MS, UNREPORTED_AFTER_MS, UNREPORTED_RECHECK_MS, sweepStaleWorking, sweepUnreported } = await import('./stale-working.js');
 
 const AT = '2026-09-30T05:16:45.106Z';
 const tab = (over: Partial<Tab> = {}): Tab => ({ id: 't1', project_id: 'p1', name: 't', kind: 'terminal', tmux_session: 'th-t1', state: 'working', state_tool: 'claude', state_at: AT, ...over }) as Tab;
@@ -21,7 +22,7 @@ function setup(tabs: Tab[], screen: string, opts: { online?: boolean; machine?: 
   const recordEvent = vi.fn(async (_id: string, ev: { kind: Tab['state'] }) => ({ tab: tab({ state: ev.kind }), event: {}, rearm: null }));
   const readLastAnswer = vi.fn(async () => (opts.answer === undefined ? { text: 'Pronto.', at: AT, tool: 'claude', stale: false } : opts.answer));
   const repos = {
-    tabs: { listStaleWorking: vi.fn(async () => tabs), recordEvent, readLastAnswer },
+    tabs: { listStaleWorking: vi.fn(async () => tabs), listUnreported: vi.fn(async () => tabs), recordEvent, readLastAnswer },
     machines: { findById: vi.fn(async () => opts.machine ?? machine()) },
   } as unknown as Repositories;
   const capture = vi.fn(async () => screen);
@@ -194,6 +195,50 @@ describe('sweepStaleWorking — background work (TER-644)', () => {
   });
 });
 
+describe('sweepStaleWorking / sweepUnreported — the trust dialog and the login error (TER-1046)', () => {
+  const now = new Date(Date.parse(AT) + STALE_WORKING_MS + 1);
+  const LOGIN = readFileSync(new URL('./fixtures/claude-screens/login-expired-2.1.289.txt', import.meta.url), 'utf8');
+  const TRUST = readFileSync(new URL('./fixtures/claude-screens/trust-2.1.289.txt', import.meta.url), 'utf8');
+
+  it('a working tab back at its prompt on the login error is auth_required', async () => {
+    const { repos, recordEvent, deps } = setup([tab()], LOGIN);
+    await sweepStaleWorking(repos, log() as never, now, deps);
+    expect(recordEvent).toHaveBeenCalledWith('t1', { kind: 'auth_required', tool: 'claude', text: 'Login da conta expirou: rode /login nesta aba', meta: { event: 'ScreenCheck', screen: 'auth' }, ifStateAt: AT });
+  });
+
+  it('a tab that never reported, with Claude Code on the trust dialog, is trust_prompt; with the login error, auth_required', async () => {
+    publish.mockClear();
+    const unreported = tab({ state: null, state_at: null, state_tool: null });
+    const trust = setup([unreported], TRUST, { pane: 'busy' });
+    const l = log();
+    await sweepUnreported(trust.repos, l as never, now, trust.deps);
+    expect(trust.repos.tabs.listUnreported).toHaveBeenCalledWith(expect.any(Date), new Date(now.getTime() - UNREPORTED_AFTER_MS));
+    expect(trust.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'trust_prompt', tool: 'claude', meta: { event: 'ScreenCheck', screen: 'trust' }, ifStateAt: null, ifStateIn: [null] }));
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(l.info.mock.calls)).not.toContain('trust this folder');
+
+    const login = setup([unreported], LOGIN, { pane: 'busy' });
+    await sweepUnreported(login.repos, log() as never, now, login.deps);
+    expect(login.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'auth_required', ifStateIn: [null] }));
+  });
+
+  it('a plain shell or an ordinary prompt stays unreported, and is read again only after the recheck delay', async () => {
+    const unreported = tab({ state: null, state_at: null, state_tool: null });
+    const shell = setup([unreported], 'pedro@jarvis:~$ ', { pane: 'shell' });
+    await sweepUnreported(shell.repos, log() as never, now, shell.deps);
+    expect(shell.capture).not.toHaveBeenCalled();
+    expect(shell.recordEvent).not.toHaveBeenCalled();
+
+    const prompt = setup([unreported], PROMPT, { pane: 'busy' });
+    await sweepUnreported(prompt.repos, log() as never, now, prompt.deps);
+    await sweepUnreported(prompt.repos, log() as never, new Date(now.getTime() + 60_000), prompt.deps);
+    expect(prompt.capture).toHaveBeenCalledTimes(1);
+    expect(prompt.recordEvent).not.toHaveBeenCalled();
+    await sweepUnreported(prompt.repos, log() as never, new Date(now.getTime() + UNREPORTED_RECHECK_MS), prompt.deps);
+    expect(prompt.capture).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('sweepStaleWorking — a background wait that never reports (TER-1053)', () => {
   const TIMEOUT = BACKGROUND_TIMEOUT_MINUTES * 60_000;
   const start = Date.parse(AT) + TIMEOUT + 1;
@@ -225,7 +270,7 @@ describe('sweepStaleWorking — a background wait that never reports (TER-1053)'
   });
 
   it('a last answer that asks something becomes a wait for the person', async () => {
-    const s = setup([waiting()], DONE, { answer: { text: 'Posso criar o link se ele quiser.', stale: false } });
+    const s = setup([waiting()], DONE, { answer: { text: 'Quer que eu crie o link?', stale: false } });
     await twice(s);
     expect(s.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'waiting_input', meta: { event: 'BackgroundTimeout', screen: 'prompt' } }));
   });

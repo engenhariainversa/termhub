@@ -32,6 +32,13 @@ it('names an agent that finished with a report as concluído, never as waiting f
   expect(stateLabel('idle')).toBe('parado');
 });
 
+it('names a blocked run, an expired login and the trust dialog from their flags (TER-1046)', () => {
+  expect(stateLabel('idle', false, false, { blocked: true })).toBe('bloqueado');
+  expect(stateLabel('error', false, false, { auth_required: true })).toBe('login expirado');
+  expect(stateLabel('waiting_input', false, false, { trust_prompt: true })).toBe('confiar na pasta?');
+  expect(stateLabel('error')).toBe('erro');
+});
+
 const p = (over: Partial<TPullRequestBadge>): TPullRequestBadge => ({
   number: 7, url: 'u', title: 't', state: 'open', draft: false, ci_state: 'passed',
   ci_summary: { total: 2, passed: 2, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, ...over,
