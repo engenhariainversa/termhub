@@ -33,3 +33,6 @@ Three things together, in `apps/mobile/src/features/chat/view/conversation-scree
 arrive (TER-1001)" asserts no scroll call while scrolled up, the very same text element before and
 after rows arrive or a send is accepted, and the `maintainVisibleContentPosition` prop. On a device:
 scroll up, have the chat answer, and the visible line must not move.
+
+See also `2026-10-08-mobile-chat-jumps-up-when-a-turn-regroups-its-cards.md` (TER-1057): the anchoring
+now only runs while the reader is scrolled up.
