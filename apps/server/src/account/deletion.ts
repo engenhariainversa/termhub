@@ -41,6 +41,8 @@ export interface AccountDeletionDeps {
   appUrl: string;
   /** The public deletion page; its confirmation link carries `?token=…`. */
   pageUrl: string;
+  /** How long database backups are kept (BACKUP_RETENTION_DAYS, TER-745); null when the instance does not say. */
+  backupRetentionDays?: number | null;
   log: FastifyBaseLogger;
   now?: () => Date;
 }
@@ -110,7 +112,9 @@ export class AccountDeletionService {
     for (const id of machine_ids) this.deps.disconnectMachine(id);
     this.deps.ownerGone(userId, machine_ids);
     await this.deps.access.remove(user.email).catch((err: unknown) => this.deps.log.warn({ err: errText(err), userId }, 'account deletion: cloudflare access removal failed'));
-    if (opts.notify !== false) await this.mail(accountDeletedMail(user.email, localeOf(user.locale)), userId);
+    if (opts.notify !== false) {
+      await this.mail(accountDeletedMail(user.email, { backupRetentionDays: this.deps.backupRetentionDays }, localeOf(user.locale)), userId);
+    }
     return true;
   }
 
