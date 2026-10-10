@@ -8,6 +8,10 @@ import { createAiLogin } from './ai-login.js';
 // Every tmux call goes to a private socket (TMUX_PATH wrapper, like tmux.real.test.ts) and every CLI is
 // a fake script under a temp dir, called by absolute path: the real `claude` / `codex` logins and the
 // real ~/.claude* / ~/.codex are never touched.
+//
+// A fake CLI whose output a test reads after it exits sleeps a moment before exiting: tmux may mark the
+// pane dead before it has read the last bytes off the pty, and a shell script that prints and exits at
+// once then loses its final line (the error). The real CLIs (Node) take far longer to exit.
 const SOCKET = `termhub-login-test-${process.pid}`;
 
 const hasTmux = (() => {
@@ -34,6 +38,7 @@ if [ "$1" = auth ] && [ "$2" = login ]; then
   if [ "$code" = good-code ]; then touch "$dir/logged-in"; echo "Login successful."; exit 0; fi
   echo "Invalid code: $code"
   echo "OAuth error: invalid_grant"
+  sleep 0.3
   exit 1
 fi
 exit 2
@@ -61,6 +66,7 @@ exit 2
 
 const FAILING_CLAUDE = `#!/bin/sh
 echo "error: network unreachable"
+sleep 0.3
 exit 1
 `;
 
