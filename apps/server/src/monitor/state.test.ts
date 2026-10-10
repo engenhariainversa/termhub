@@ -471,9 +471,14 @@ describe('claude StopFailure', () => {
   it('a usage limit without a message still says so', () => {
     expect(interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'rate_limit' })).toMatchObject({ text: 'Limite de uso da conta atingido' });
   });
-  it('any other API error is an error state', () => {
+  it('a login that expired needs the person to log in again (TER-1046)', () => {
     const i = interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'authentication_failed' });
-    expect(i).toMatchObject({ kind: 'error', text: 'Erro da API do Claude (authentication_failed)', meta: { event: 'StopFailure', error: 'authentication_failed' } });
+    expect(i).toMatchObject({ kind: 'auth_required', text: 'Login da conta expirou: rode /login nesta aba (authentication_failed)', meta: { event: 'StopFailure', error: 'authentication_failed' } });
+    expect(isRateLimit(i)).toBe(false);
+  });
+  it('any other API error is an error state', () => {
+    const i = interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'server_error' });
+    expect(i).toMatchObject({ kind: 'error', text: 'Erro da API do Claude (server_error)', meta: { event: 'StopFailure', error: 'server_error' } });
     expect(isRateLimit(i)).toBe(false);
   });
   it('an unknown error value is not echoed', () => {
@@ -675,9 +680,13 @@ describe('a claude Stop that ends with a report is finished, not a wait (TER-972
     expect(i?.backgroundTasks).toBeUndefined();
   });
 
-  it('a message that ends in a question, or offers something, still waits for the person', () => {
+  it('a message that ends in a question still waits for the person; an offer is part of the report (TER-1046)', () => {
     expect(stop('Deploy feito. Quer que eu feche a aba?')?.kind).toBe('waiting_input');
-    expect(stop('Deploy feito. Se quiser, posso abrir o PR do próximo card.')?.kind).toBe('waiting_input');
+    expect(stop('Deploy feito. Se quiser, posso abrir o PR do próximo card.')?.kind).toBe('finished');
+  });
+
+  it("Claude Code's login error is auth_required, keeping its text (TER-1046)", () => {
+    expect(stop('Login expired · Please run /login')).toMatchObject({ kind: 'auth_required', text: 'Login expired · Please run /login' });
   });
 
   it('a Stop with no last message still waits for the person', () => {
@@ -711,11 +720,11 @@ describe('a claude Stop that ends with a report is finished, not a wait (TER-972
       'O CI do #940, do #849 e do #851 ainda não foi verificado.',
     ].join('\n');
     const i = stop(last, [{ id: 'm1', type: 'monitor', status: 'running' }]);
-    // it offers something ("Posso…"), so it waits for the person, which alerts — never "still working"
-    expect(i?.kind).toBe('waiting_input');
+    // an offer ("Posso…") is a report (TER-1046): finished, which reaches the person — never "still working"
+    expect(i?.kind).toBe('finished');
     expect(i?.backgroundTasks).toBeUndefined();
-    // the same report without the offer is finished
-    expect(stop(last.replace(' Posso criar o link se ele quiser.', ''), [{ id: 'm1', type: 'monitor', status: 'running' }])?.kind).toBe('finished');
+    // the same report with a direct question waits for the person
+    expect(stop(last.replace(' Posso criar o link se ele quiser.', ' Quer que eu crie o link?'), [{ id: 'm1', type: 'monitor', status: 'running' }])?.kind).toBe('waiting_input');
   });
 
   it('a subagent Stop is classified the same way and keeps no answer', () => {
@@ -734,6 +743,13 @@ describe('a claude Stop that ends with a report is finished, not a wait (TER-972
     const at = '2026-10-05T15:00:00.000Z';
     expect(NEEDS_YOU).not.toContain('finished');
     expect(needsYou({ state: 'finished', state_at: at, state_seen_at: null })).toBe(false);
-    expect(AT_PROMPT).toEqual(['waiting_input', 'finished']);
+    expect(AT_PROMPT).toEqual(['waiting_input', 'finished', 'blocked']);
+  });
+
+  it('a login that expired and the trust dialog need the person; a blocked run does not (TER-1046)', () => {
+    const at = '2026-10-08T15:00:00.000Z';
+    expect(needsYou({ state: 'auth_required', state_at: at, state_seen_at: null })).toBe(true);
+    expect(needsYou({ state: 'trust_prompt', state_at: at, state_seen_at: null })).toBe(true);
+    expect(needsYou({ state: 'blocked', state_at: at, state_seen_at: null })).toBe(false);
   });
 });

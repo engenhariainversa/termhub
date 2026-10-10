@@ -9,15 +9,16 @@ const PULSE_HALF_MS = 750;
 /** One turn of the automatic run's ring. */
 const RING_TURN_MS = 1200;
 
-type DotTab = Pick<TTabSummary, 'availability' | 'needs_you' | 'state' | 'finished' | 'auto_ref'>;
+type DotTab = Pick<TTabSummary, 'availability' | 'needs_you' | 'state' | 'finished' | 'auto_ref'> & Partial<Pick<TTabSummary, 'blocked'>>;
 
 /** The dot's colour: the accent while it works, the danger tone when it needs the person or failed, the
- * ok tone once it finished with a report (TER-972). */
+ * ok tone once it finished with a report (TER-972), the muted tone for a blocked automatic run (TER-1046). */
 export function dotClass(tab: DotTab): string {
   if (tab.availability !== 'ready') return 'bg-app-muted';
   if (tab.needs_you || tab.state === 'error') return 'bg-app-danger';
   if (tab.state === 'working') return 'bg-app-accent';
   if (tab.state === 'idle' && tab.finished) return 'bg-app-ok';
+  if (tab.state === 'idle' && tab.blocked) return 'bg-app-muted';
   return 'bg-app-border';
 }
 
