@@ -34,6 +34,7 @@
   "Sua conta do termhub voltou ao normal. Nada foi apagado.": "Your termhub account is back to normal. Nothing was erased.",
   "Sua conta do termhub foi excluída": "Your termhub account was deleted",
   "Concluímos a exclusão da sua conta e de todos os dados ligados a ela.": "We finished deleting your account and all the data tied to it.",
+  "As cópias de segurança do banco de dados que ainda têm esses dados são apagadas em até {{days}} dias.": "The database backups that still hold this data are deleted within {{days}} days.",
   "Guardamos só o que a lei exige, como os registros de acesso (6 meses). Este é o último e-mail que você recebe do termhub.": "We keep only what the law requires, such as access logs (6 months). This is the last e-mail you get from termhub.",
   "Confirme a exclusão da sua conta do termhub": "Confirm the deletion of your termhub account",
   "Alguém pediu, na página de exclusão do termhub, para excluir a conta deste e-mail.": "Someone asked, on termhub's deletion page, to delete the account of this e-mail.",

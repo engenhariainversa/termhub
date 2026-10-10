@@ -91,6 +91,8 @@
   "Deploy concluído ({{epic}}): {{url}}": "Despliegue terminado ({{epic}}): {{url}}",
   "Publicado {{package}} {{version}}": "Publicado {{package}} {{version}}",
   "Publicado {{package}}": "Publicado {{package}}",
+  "{{project}}: versão {{version}} publicada": "{{project}}: versión {{version}} publicada",
+  "{{workflow}} publicou a versão {{version}}.": "{{workflow}} publicó la versión {{version}}.",
   "Conta {{account}} no limite até {{time}}": "Cuenta {{account}} en su límite hasta {{time}}",
   "Conta {{account}} no limite": "Cuenta {{account}} en su límite",
   "Conta {{account}} voltou a funcionar": "La cuenta {{account}} volvió a funcionar",
