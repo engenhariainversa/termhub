@@ -429,5 +429,7 @@
   "Remove os hooks, encerra as sessões de terminal das tabs desta máquina e remove o serviço e a credencial do agente. O pacote npm continua instalado (npm rm -g @termhub/agent).": "Quita los hooks, cierra las sesiones de terminal de las pestañas de esta máquina y quita el servicio y la credencial del agente. El paquete npm sigue instalado (npm rm -g @termhub/agent).",
   "O agente continua instalado na máquina. Para removê-lo, rode nela:": "El agente sigue instalado en la máquina. Para quitarlo, ejecuta en ella:",
   "Chave do dispositivo: o agente prova que a tem a cada conexão.": "Clave del dispositivo: el agente demuestra que la tiene en cada conexión.",
-  "Token permanente (antigo). Atualize o agente e use Parear de novo para trocá-lo por uma chave do dispositivo.": "Token permanente (antiguo). Actualiza el agente y usa Emparejar de nuevo para cambiarlo por una clave del dispositivo."
+  "Token permanente (antigo). Atualize o agente e use Parear de novo para trocá-lo por uma chave do dispositivo.": "Token permanente (antiguo). Actualiza el agente y usa Emparejar de nuevo para cambiarlo por una clave del dispositivo.",
+  "Agente abaixo da versão mínima do termhub — ele se atualiza quando a máquina ficar ociosa; abra a máquina para atualizar agora": "Agente por debajo de la versión mínima de termhub — se actualiza cuando la máquina quede inactiva; abre la máquina para actualizar ahora",
+  "Este agente está abaixo da versão mínima do termhub (v{{min}}). Ele é atualizado assim que a máquina ficar ociosa, mesmo com a atualização automática desligada.": "Este agente está por debajo de la versión mínima de termhub (v{{min}}). Se actualiza en cuanto la máquina quede inactiva, aunque la actualización automática esté desactivada."
 }

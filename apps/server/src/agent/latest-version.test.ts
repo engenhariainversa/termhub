@@ -4,6 +4,10 @@ import type { Repositories } from '../db/repositories/index.js';
 import { agents } from './registry.js';
 import {
   autoUpdateTick,
+  CONNECT_CHECK_DELAY_MS,
+  requestAgentUpdate,
+  resetUpdateRequests,
+  startAgentUpdateScheduler,
   fetchLatestAgentVersion,
   isOutdated,
   latestAgentRelease,
@@ -159,17 +163,21 @@ describe('autoUpdateTick', () => {
     agents.attach(id, conn as never);
     return rpc;
   }
-  const machine = (id: string) => ({ id, type: 'agent', agent_auto_update: true }) as never;
-  /** `busy`: how many tabs of that machine have a tool mid-task (working / waiting on input or permission). */
-  const repos = (ids: string[], busy: Record<string, number> = {}) =>
+  const machine = (id: string, auto = true) => ({ id, type: 'agent', agent_auto_update: auto }) as never;
+  /** `busy`: how many tabs of that machine have a tool mid-task (working / waiting on input or permission); `off`: switch off. */
+  const repos = (ids: string[], busy: Record<string, number> = {}, off: string[] = []) =>
     ({
-      machines: { listAutoUpdate: async () => ids.map(machine) },
+      machines: {
+        listAgentMachines: async () => ids.map((id) => machine(id, !off.includes(id))),
+        findById: async (id: string) => (ids.includes(id) ? machine(id, !off.includes(id)) : undefined),
+      },
       tabs: { countBusyByMachine: async (id: string) => busy[id] ?? 0 },
     }) as unknown as Repositories;
 
   afterEach(() => {
     agents.reset();
     resetAutoUpdateAttempts();
+    resetUpdateRequests();
   });
 
   it('updates only online, outdated, idle machines that know the RPC — once per version', async () => {
@@ -206,5 +214,59 @@ describe('autoUpdateTick', () => {
     setLatestAgentRelease(release('0.2.5'));
     await expect(autoUpdateTick(repos(['idle']), log)).resolves.toBeUndefined();
     expect(log.warn).toHaveBeenCalled();
+  });
+
+  // TER-1056: a machine stuck on an old agent because its switch was off (the default then).
+  it('updates an agent below the minimum version even with the switch off; above it, the switch decides', async () => {
+    setLatestAgentRelease(release('9.0.0'));
+    const below = attach('below', '0.19.0', 0);
+    const above = attach('above', '8.0.0', 0);
+    await autoUpdateTick(repos(['below', 'above'], {}, ['below', 'above']), log);
+    expect(below).toHaveBeenCalledWith('agent.update', { version: '9.0.0', integrity: INTEGRITY }, 180_000);
+    expect(above).not.toHaveBeenCalled();
+  });
+
+  it('still waits for an agent below the minimum to be idle', async () => {
+    setLatestAgentRelease(release('9.0.0'));
+    const working = attach('working', '0.19.0', 0);
+    const watched = attach('watched', '0.19.0', 1);
+    await autoUpdateTick(repos(['working', 'watched'], { working: 1 }, ['working', 'watched']), log);
+    expect(working).not.toHaveBeenCalled();
+    expect(watched).not.toHaveBeenCalled();
+  });
+
+  it('updates a machine the person asked for once it is idle, switch off, once', async () => {
+    setLatestAgentRelease(release('9.0.0'));
+    const rpc = attach('asked', '8.0.0', 0);
+    await autoUpdateTick(repos(['asked'], {}, ['asked']), log);
+    expect(rpc).not.toHaveBeenCalled();
+    requestAgentUpdate('asked');
+    await autoUpdateTick(repos(['asked'], {}, ['asked']), log);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    // the request is spent: no second try
+    await autoUpdateTick(repos(['asked'], {}, ['asked']), log);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands a restarting update to onUpdated with the target version', async () => {
+    setLatestAgentRelease(release('9.0.0'));
+    attach('idle', '8.0.0', 0);
+    const onUpdated = vi.fn();
+    await autoUpdateTick(repos(['idle']), log, onUpdated);
+    expect(onUpdated).toHaveBeenCalledWith(expect.objectContaining({ id: 'idle' }), '9.0.0');
+  });
+
+  it('runs a machine\'s turn shortly after its agent connects: an agent below the minimum is updated on connection', async () => {
+    vi.useFakeTimers();
+    setLatestAgentRelease(release('9.0.0'));
+    const stop = startAgentUpdateScheduler(repos(['late'], {}, ['late']), log, undefined, {
+      fetchJson: json(500, null) as never,
+      verify: async (v: string) => release(v),
+    });
+    const rpc = attach('late', '0.19.0', 0);
+    expect(rpc).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(CONNECT_CHECK_DELAY_MS);
+    expect(rpc).toHaveBeenCalledWith('agent.update', { version: '9.0.0', integrity: INTEGRITY }, 180_000);
+    stop();
   });
 });

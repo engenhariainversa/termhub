@@ -48,8 +48,12 @@ describe('machineTitle', () => {
 
 describe('agentVersionBadge', () => {
   it('shows the version, and marks it when a newer agent is available', () => {
-    expect(agentVersionBadge(agentMachine({ agent_version: '0.2.1' }))).toEqual({ text: 'v0.2.1', title: 'agente v0.2.1', outdated: false });
-    expect(agentVersionBadge(agentMachine({ agent_version: '0.2.1', update_available: true }))).toEqual({ text: 'v0.2.1 ↑', title: 'Nova versão do agente disponível — abra a máquina para atualizar', outdated: true });
+    expect(agentVersionBadge(agentMachine({ agent_version: '0.2.1' }))).toEqual({ text: 'v0.2.1', title: 'agente v0.2.1', outdated: false, critical: false });
+    expect(agentVersionBadge(agentMachine({ agent_version: '0.2.1', update_available: true }))).toEqual({ text: 'v0.2.1 ↑', title: 'Nova versão do agente disponível — abra a máquina para atualizar', outdated: true, critical: false });
+  });
+  // TER-1056: an agent below the server's minimum is shown in red, ahead of the plain update hint.
+  it('marks an agent below the minimum version as critical', () => {
+    expect(agentVersionBadge(agentMachine({ agent_version: '0.19.0', update_available: true, below_min_version: true }))).toMatchObject({ text: 'v0.19.0 !', outdated: true, critical: true });
   });
   it('is null without a reported version or for non-agent machines', () => {
     expect(agentVersionBadge(agentMachine({ agent_version: null }))).toBeNull();

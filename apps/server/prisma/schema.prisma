@@ -213,8 +213,8 @@ model Machine {
   agentPairedAt         DateTime?          @map("agent_paired_at")
   agentVersion          String?            @map("agent_version")
   agentLastSeenAt       DateTime?          @map("agent_last_seen_at")
-  /// Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts)
-  agentAutoUpdate       Boolean            @default(false) @map("agent_auto_update")
+  /// Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts); on by default (TER-1056)
+  agentAutoUpdate       Boolean            @default(true) @map("agent_auto_update")
   /// Swap a tab's Claude to another account of this machine by itself when it hits a usage limit (on by default, TER-587).
   claudeAutoSwap        Boolean            @default(true) @map("claude_auto_swap")
   /// TER-735: show the AI accounts' usage of this machine; when false, termhub never reads the AI CLI credential on it.
