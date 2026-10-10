@@ -171,6 +171,8 @@ export const api = {
         last_seen_at?: string | null;
         latest_agent_version?: string | null;
         update_available?: boolean;
+        min_agent_version?: string;
+        below_min_version?: boolean;
       }>('GET', `/machines/${id}/status`),
     /** installs the latest @termhub/agent through the agent; `restarting` = poll the status until the version changes */
     updateAgent: (id: string) => request<{ installed_version: string | null; restart: 'service' | 'manual'; restarting: boolean }>('POST', `/machines/${id}/agent/update`, {}),
