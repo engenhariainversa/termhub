@@ -44,7 +44,10 @@ export function machineFormTabs(m: Pick<Machine, 'type' | 'os' | 'capabilities'>
 }
 
 /** The warning a tab carries as a badge, so it shows without opening the tab. */
-export function machineTabBadge(tab: MachineFormTab, m: Machine): { text: string; title: string } | null {
+export function machineTabBadge(tab: MachineFormTab, m: Machine): { text: string; title: string; critical?: boolean } | null {
+  if (tab === 'agent' && m.below_min_version) {
+    return { text: tk('desatualizado'), title: tk('Agente abaixo da versão mínima do termhub — ele se atualiza quando a máquina ficar ociosa; abra a máquina para atualizar agora'), critical: true };
+  }
   if (tab === 'agent' && m.update_available) {
     return { text: tk('nova versão'), title: tk('Nova versão do agente disponível — abra a máquina para atualizar') };
   }
@@ -364,7 +367,7 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
                   >
                     {t(TAB_LABEL[key])}
                     {badge && (
-                      <span className="rounded-full bg-warn/10 px-1.5 text-[10px] text-warn" title={t(badge.title)}>
+                      <span className={`rounded-full px-1.5 text-[10px] ${badge.critical ? 'bg-danger/10 text-danger' : 'bg-warn/10 text-warn'}`} title={t(badge.title)}>
                         {t(badge.text)}
                       </span>
                     )}

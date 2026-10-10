@@ -110,5 +110,11 @@
   "Esta ferramenta só funciona no chat do termhub: ela lê o contexto da própria conversa.": "This tool only works in the termhub chat: it reads the conversation's own context.",
   "Só a pessoa refaz o login de uma conta de IA, nunca um agente numa aba": "Only the person redoes an AI account's login, never an agent in a tab",
   "Só a dona da máquina pode refazer o login": "Only the machine's owner can redo the login",
-  "Sem permissão para escrever nas abas": "No permission to type into tabs"
+  "Sem permissão para escrever nas abas": "No permission to type into tabs",
+  "Atualizar o agente reinicia o agente na máquina e precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.": "Updating the agent restarts the agent on the machine and needs the person's confirmation in the chat. Nothing was changed: propose the call again.",
+  "Agente desconectado: ele atualiza quando voltar, se estiver abaixo da versão mínima ou com a atualização automática ligada.": "Agent disconnected: it updates when it comes back, if it is below the minimum version or has auto-update on.",
+  "Este agente é antigo demais para se atualizar sozinho; rode na máquina: npm i -g @termhub/agent@latest": "This agent is too old to update itself; run on the machine: npm i -g @termhub/agent@latest",
+  "Este chat roda nesta máquina: a atualização fica para quando a resposta terminar e a máquina estiver ociosa (alguns minutos).": "This chat runs on this machine: the update waits until the answer is over and the machine is idle (a few minutes).",
+  "Instalado; reinicie o agente na máquina (termhub-agent run ou o serviço).": "Installed; restart the agent on the machine (termhub-agent run or the service).",
+  "Passe machine_id ou all: true (um dos dois).": "Pass machine_id or all: true (one of the two)."
 }

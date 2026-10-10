@@ -75,7 +75,7 @@ time the new agent starts.
 ## Updates
 
 The agent updates itself when the server asks it to (the update button in Máquinas, or hourly on
-machines with auto-update on): it installs the new version with npm and, when it runs as a service,
+machines with auto-update on, the default; also below the server's minimum version): it installs the new version with npm and, when it runs as a service,
 restarts into it. The server first verifies each release against its npm provenance (signed by this
 repository's publish workflow) and sends the tarball's SHA-512 with the request; since 0.22.0 the
 agent downloads the tarball into a private temp dir, checks it against that SHA-512 and installs only

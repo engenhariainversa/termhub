@@ -373,6 +373,41 @@ lost its CLI login on the machine (TER-1047, spec `docs/superpowers/specs/2026-1
   types `continue` into each. Automatic runs escalated because of the login are not resumed by this; unblock
   them as in section 9.
 
+## 9b. Keeping the machines' agents up to date (TER-1056)
+
+A machine on an old agent misses whatever needs a newer one (the screen login needs 0.26.0, the hooks read
+0.21.0, the worktree RPC 0.18.0). The server keeps them current:
+
+- **Auto-update is on by default.** New machines start with "Atualizar automaticamente quando ociosa" on, and
+  the migration `20261016090000_agent_auto_update_default_on` turned it on once for every agent machine.
+  The server, not the agent, watches npm: it reads the latest `@termhub/agent` hourly (and right after boot),
+  verifies its provenance (TER-584, `docs/security-and-network.md`), and every 10 minutes, plus 30 s after an
+  agent connects, updates each machine that wants it. Only while the machine is idle: no channel open (a
+  terminal attached or a chat answering there) and no tab with a tool working or waiting. The agent
+  restarts as a service; the tmux sessions survive and open terminals reconnect.
+- **Minimum version.** `MIN_AGENT_VERSION` in `apps/server/src/agent/min-version.ts` (0.27.0 today). An agent
+  below it is updated on its next idle turn even with the switch off, and Máquinas shows it in red
+  ("vX.Y.Z !", "desatualizado" on the Agente tab, a notice in the agent card) until it reconnects on a newer
+  version. To force a critical fix out: in the PR that bumps `apps/agent/package.json`, raise
+  `MIN_AGENT_VERSION` to that version. CI publishes the agent and deploys the server from the same merge; the
+  server installs only a verified release, so the red notice stays until npm has finished processing it.
+- **From the chat.** `list_machines` answers `agent_version`, `update_available` and `below_min_version` per
+  agent machine (plus `latest_agent_version` and `min_agent_version`). `update_machine_agent` with
+  `machine_id`, or `all: true`, runs the Atualizar button behind a confirmation card, waits up to 2 minutes
+  for the agent to come back, and answers each machine's status and the versions before and after. The
+  machine the chat itself runs on answers `scheduled`: updating it on the spot would cut the conversation,
+  so the scheduler updates it once the answer is over and it is idle, switch or not. Automatic tabs never
+  call it.
+- **After an update** (button, chat or auto-update): once the agent is back on the new version, the monitor
+  hooks are installed again if termhub had installed them there and the forwarding script or our entries
+  changed (`hooks: reinstalled`); hooks termhub never installed are left alone. A machine still dialing
+  with the legacy permanent token answers `repair_suggested: true`: offer "Parear de novo" on its agent tab
+  (TER-1017) to trade it for a device key.
+- Stuck: an agent older than 0.2.1 cannot update itself (`too_old`); `restart_needed` means the agent does
+  not run as a service, so someone restarts it on the machine; `not_back` means it did not reconnect within
+  2 minutes (check `termhub-agent doctor` there). The fallback is always `npm i -g @termhub/agent@latest` on
+  the machine.
+
 ## 10. After a failed deploy or release
 
 A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no
@@ -443,3 +478,8 @@ None by default: automation is off until a project turns it on, the default leve
 TER-1043 (section 7a) raises autonomy for everyone who has automation on: their runs now decide product
 and technical questions alone and record them, instead of waiting. The project setting "Parar em decisões
 de produto" (off by default) brings the old behaviour back per project.
+
+TER-1056 (section 9b) changes every machine, automation or not: agents now update themselves while idle by
+default (the switch was off by default before, and the migration turned it on once for every agent
+machine). Anyone who does not want it turns the switch off per machine; an agent below the minimum version
+is updated anyway.

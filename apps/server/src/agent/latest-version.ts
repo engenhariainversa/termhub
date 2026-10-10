@@ -1,8 +1,10 @@
 import { httpJson } from '../lib/http-json.js';
 import type { Repositories } from '../db/repositories/index.js';
+import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { AgentClosedError, AgentRpcError } from './connection.js';
 import { toHttpError, versionAtLeast } from './errors.js';
+import { MIN_AGENT_VERSION } from './min-version.js';
 import { agents } from './registry.js';
 import { verifyAgentRelease, type ReleaseVerifyDeps, type VerifiedRelease } from './release-verify.js';
 import { msg } from '../i18n/index.js';
@@ -195,43 +197,105 @@ export function resetAutoUpdateAttempts(): void {
   attempted.clear();
 }
 
+/** Machines the person asked to update (the concierge's update_machine_agent) while they were not idle: the next idle tick updates them, switch or not. */
+const requested = new Set<string>();
+
+/** Tests only. */
+export function resetUpdateRequests(): void {
+  requested.clear();
+}
+
+/** Asks the scheduler to update this machine as soon as it is idle, whatever its auto-update switch says. */
+export function requestAgentUpdate(machineId: string): void {
+  requested.add(machineId);
+  // an auto-update that failed on this release must not hold back the person's own request
+  attempted.delete(machineId);
+}
+
+/** True when the connected agent's version is plain x.y.z and older than `MIN_AGENT_VERSION` (TER-1056). */
+export function belowMinimum(version: string | null | undefined): boolean {
+  return isOutdated(version, MIN_AGENT_VERSION);
+}
+
+/** Called after an update the scheduler started, with the version it installs (the server wires the hooks refresh here). */
+export type OnAgentUpdated = (machine: Machine, target: string) => void;
+
 /**
- * Installs the latest agent on opted-in machines that are online, outdated, new enough to know
- * the RPC and idle. Idle means both no terminal attached *and* no tool mid-task on the machine:
- * the update restarts the agent, which drops its socket for a few seconds, and a tool working (or
- * waiting for its person) inside a detached tmux session opens no channel to notice.
+ * One machine's turn: installs the latest verified agent when the machine wants it — its auto-update
+ * switch is on, its agent is below `MIN_AGENT_VERSION` (the switch does not hold that back), or the person
+ * asked for it — and it is online, outdated, new enough to know the RPC and idle. Idle means both no
+ * channel open (a terminal attached, or a chat answering there) *and* no tool mid-task on the machine: the
+ * update restarts the agent, which drops its socket for a few seconds, and a tool working (or waiting for
+ * its person) inside a detached tmux session opens no channel to notice. Each release is tried once per machine.
  */
-export async function autoUpdateTick(repos: Pick<Repositories, 'machines' | 'tabs'>, log: VersionLog): Promise<void> {
+export async function autoUpdateMachine(repos: Pick<Repositories, 'tabs'>, m: Machine, log: VersionLog, onUpdated?: OnAgentUpdated): Promise<void> {
   const release = cached;
-  if (!release) return;
+  if (!release || m.type !== 'agent') return;
   const latest = release.version;
-  const machines = await repos.machines.listAutoUpdate();
-  for (const m of machines) {
-    const info = agents.info(m.id);
-    if (!info || !isOutdated(info.agent_version, latest)) continue;
-    if (!versionAtLeast(info.agent_version, MIN_SELF_UPDATE_VERSION)) continue;
-    // Any open channel: a terminal, or a chat answering on this machine (see `openChannels`).
-    if (agents.openChannels(m.id) > 0) continue;
-    if ((await repos.tabs.countBusyByMachine(m.id)) > 0) continue;
-    if (attempted.get(m.id) === latest) continue;
-    attempted.set(m.id, latest);
-    try {
-      const r = await runAgentUpdate(m.id, release, log);
-      log.info({ machineId: m.id, from: info.agent_version, to: latest, restart: r.restart }, 'agent auto-update');
-    } catch (err) {
-      log.warn({ machineId: m.id, to: latest, err: (err as Error).message }, 'agent auto-update failed');
-    }
+  const info = agents.info(m.id);
+  if (!info || !isOutdated(info.agent_version, latest)) {
+    if (info) requested.delete(m.id);
+    return;
+  }
+  const forced = belowMinimum(info.agent_version);
+  if (!m.agent_auto_update && !forced && !requested.has(m.id)) return;
+  if (!versionAtLeast(info.agent_version, MIN_SELF_UPDATE_VERSION)) return;
+  if (agents.openChannels(m.id) > 0) return;
+  if ((await repos.tabs.countBusyByMachine(m.id)) > 0) return;
+  if (attempted.get(m.id) === latest) return;
+  attempted.set(m.id, latest);
+  requested.delete(m.id);
+  try {
+    const r = await runAgentUpdate(m.id, release, log);
+    log.info({ machineId: m.id, from: info.agent_version, to: latest, restart: r.restart, forced }, 'agent auto-update');
+    if (r.restarting) onUpdated?.(m, latest);
+  } catch (err) {
+    log.warn({ machineId: m.id, to: latest, err: (err as Error).message }, 'agent auto-update failed');
   }
 }
 
-/** Boot-time wiring: the npm poller (each refresh runs a tick) plus a tick every AUTO_UPDATE_MS. Only verified releases are installed. */
-export function startAgentUpdateScheduler(repos: Pick<Repositories, 'machines' | 'tabs'>, log: VersionLog): () => void {
-  const tick = () => autoUpdateTick(repos, log).catch((err) => log.warn({ err: (err as Error).message }, 'agent auto-update tick failed'));
-  const stopPoll = startAgentVersionPoller(log, tick);
+/** Every agent machine's turn (`autoUpdateMachine`), one after the other. */
+export async function autoUpdateTick(repos: Pick<Repositories, 'machines' | 'tabs'>, log: VersionLog, onUpdated?: OnAgentUpdated): Promise<void> {
+  if (!cached) return;
+  for (const m of await repos.machines.listAgentMachines()) await autoUpdateMachine(repos, m, log, onUpdated);
+}
+
+/** How long after an agent connects its own turn runs: its terminals and the busy states have time to come back first. */
+export const CONNECT_CHECK_DELAY_MS = 30_000;
+
+/**
+ * Boot-time wiring: the npm poller (each refresh runs a tick), a tick every AUTO_UPDATE_MS, and a turn for
+ * each agent shortly after it connects — that is how an agent below the minimum is told to update on
+ * connection. Only verified releases are installed.
+ */
+export function startAgentUpdateScheduler(
+  repos: Pick<Repositories, 'machines' | 'tabs'>,
+  log: VersionLog,
+  onUpdated?: OnAgentUpdated,
+  pollerDeps: PollerDeps = {},
+): () => void {
+  const fail = (err: unknown) => log.warn({ err: (err as Error).message }, 'agent auto-update tick failed');
+  const tick = () => autoUpdateTick(repos, log, onUpdated).catch(fail);
+  const stopPoll = startAgentVersionPoller(log, tick, pollerDeps);
   const timer = setInterval(() => void tick(), AUTO_UPDATE_MS);
   timer.unref();
+  const pending = new Set<ReturnType<typeof setTimeout>>();
+  const onOnline = (machineId: string) => {
+    const t = setTimeout(() => {
+      pending.delete(t);
+      void repos.machines
+        .findById(machineId)
+        .then((m) => (m ? autoUpdateMachine(repos, m, log, onUpdated) : undefined))
+        .catch(fail);
+    }, CONNECT_CHECK_DELAY_MS);
+    t.unref();
+    pending.add(t);
+  };
+  agents.on('online', onOnline);
   return () => {
     stopPoll();
     clearInterval(timer);
+    agents.off('online', onOnline);
+    pending.forEach(clearTimeout);
   };
 }

@@ -26,7 +26,8 @@ export const ORCHESTRATOR_PROMPT = [
   // TER-499: Progresso shows a card's agents from the tab linked to it; only these two calls make that link.
   '- Agents on cards: to put an agent on a card, call start_agent with task_id: the tab is linked to the card and shows in Progresso. Pick the account with list_ai_accounts (default: true = the machine\'s own login); when a machine has several and the person has not said which to use, ask — unless the project\'s setup lists AI accounts: then omit account_id (and model) and start_agent picks the project\'s account by its priority and its default model. Never start an agent by typing its CLI into a tab you opened with open_tab. Link an agent started by hand to its card with link_tab_task.',
   // TER-1023: the hooks are set up through the agent, not a command the person types.
-  '- Machine hooks setup: get_machine_hooks, install_machine_hooks; never ask for a command.',
+  // TER-1056: and an agent that is behind is updated the same way.
+  '- Machines: get_machine_hooks, install_machine_hooks, update_machine_agent; no commands.',
 ].join('\n');
 
 /** The `append_system_prompt` of a streamed run: the orchestrator's rules, then the project's focus. */
