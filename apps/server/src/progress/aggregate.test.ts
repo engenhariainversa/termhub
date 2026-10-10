@@ -183,6 +183,13 @@ describe('automatic tabs and the feed', () => {
     expect(feedOf([row('1', 'run_blocked', { code: 'X', reason: 'agent_exited' })], 'pt-BR')[0].reason_text).toBeNull();
   });
 
+  it('says a run_done took over a blocked run, in the reader language; any other run_done has no reason (TER-1049)', () => {
+    const adopted = { via: 'pull_request_after_blocked', pr_url: 'https://x/pr/9' };
+    expect(feedOf([row('1', 'run_done', adopted)], 'pt-BR')[0].reason_text).toBe('PR aberto depois do bloqueio; o automático acompanha até o merge');
+    expect(feedOf([row('1', 'run_done', adopted)], 'en')[0].reason_text).toBe('PR opened after the block; automatic work follows it until the merge');
+    expect(feedOf([row('1', 'run_done', { via: 'pull_request' })], 'pt-BR')[0].reason_text).toBeNull();
+  });
+
   it('names the branch a merge landed on', () => {
     expect(feedOf([row('1', 'merged', { base: 'main', branch: 'zzz' })], 'pt-BR')[0].branch).toBe('main');
   });

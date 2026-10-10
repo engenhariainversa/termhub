@@ -288,6 +288,21 @@ export class ChatActionsRepository {
     });
   }
 
+  /** Closed rows (no longer pending or approved) of these tools: the ones a secret argument can leave (TER-1047). */
+  async listClosedByTools(tools: readonly string[], limit = 500): Promise<ChatAction[]> {
+    const rows = await this.db.chatAction.findMany({
+      where: { tool: { in: [...tools] }, status: { notIn: OPEN_STATUSES } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return rows.map(mapAction);
+  }
+
+  /** Overwrites a row's `args`, for redacting a secret once the row is closed; only a closed row is touched. */
+  async replaceClosedArgs(id: string, args: unknown): Promise<void> {
+    await this.db.chatAction.updateMany({ where: { id, status: { notIn: OPEN_STATUSES } }, data: { args: args as never } });
+  }
+
   /**
    * The oldest decided (approved or denied) action for a conversation that has not yet been
    * re-injected — a decision made while a run held the lock, so `resumeAfterDecision`'s own attempt

@@ -1,25 +1,33 @@
 import { createContext, useContext } from 'react';
 
-export type Lang = 'pt' | 'en';
+export type Lang = 'pt' | 'en' | 'es';
+export const LANGS: Lang[] = ['pt', 'en', 'es'];
 export const LANG_KEY = 'termhub:lang';
 
-/** The `<html lang>` / `hreflang` code of each language. */
-export const HTML_LANG: Record<Lang, string> = { pt: 'pt-BR', en: 'en' };
+export const isLang = (v: unknown): v is Lang => v === 'pt' || v === 'en' || v === 'es';
+
+/** The `<html lang>` / `hreflang` code of each language (also the date locale). */
+export const HTML_LANG: Record<Lang, string> = { pt: 'pt-BR', en: 'en', es: 'es' };
+
+/** The `og:locale` of each language. */
+export const OG_LOCALE: Record<Lang, string> = { pt: 'pt_BR', en: 'en_US', es: 'es_LA' };
 
 /** Each language's name written in that language, so anyone can find their own in the switch. */
-export const LANG_NAMES: Record<Lang, string> = { pt: 'Português (Brasil)', en: 'English' };
+export const LANG_NAMES: Record<Lang, string> = { pt: 'Português (Brasil)', en: 'English', es: 'Español' };
 
 export function detectLang(): Lang {
-  // ?lang=pt|en wins (shareable links), then the saved choice, then the browser language
+  // ?lang=pt|en|es wins (shareable links), then the saved choice, then the browser language
   const q = new URLSearchParams(window.location.search).get('lang');
-  if (q === 'pt' || q === 'en') return q;
+  if (isLang(q)) return q;
   try {
     const saved = localStorage.getItem(LANG_KEY);
-    if (saved === 'pt' || saved === 'en') return saved;
+    if (isLang(saved)) return saved;
   } catch {
     /* ignore */
   }
-  return /^pt\b/i.test(navigator.language) ? 'pt' : 'en';
+  if (/^pt\b/i.test(navigator.language)) return 'pt';
+  if (/^es\b/i.test(navigator.language)) return 'es';
+  return 'en';
 }
 
 const pt = {
@@ -871,7 +879,429 @@ const en: typeof pt = {
   },
 };
 
-export const DICT: Record<Lang, typeof pt> = { pt, en };
+const es: typeof pt = {
+  meta: {
+    title: 'termhub — las terminales de tus máquinas, en el navegador',
+    description: 'Las terminales de todas tus máquinas en el navegador, organizadas por máquina, proyecto y pestaña. Cada pestaña es una sesión tmux persistente. Self-hosted y open source (MIT).',
+  },
+  nav: { features: 'Funciones', agents: 'Agentes', how: 'Cómo funciona', compare: 'Comparar', cloud: 'Cloud', faq: 'FAQ', security: 'Seguridad', github: 'GitHub', app: 'Abrir la app' },
+  hero: {
+    badge: 'self-hosted · open source · MIT',
+    title_a: 'Las terminales de tus máquinas, ',
+    title_b: 'en el navegador',
+    lead: 'Cada pestaña es una sesión tmux que sobrevive al navegador y al cambio de computadora. Un chat y la app en el celular siguen a tus agentes estés donde estés. Self-hosted, MIT.',
+    cta: 'Unirme a la lista de espera',
+    cta_hint: 'termhub Cloud en beta gratuita · acceso por orden de inscripción',
+    repo: 'Ver en GitHub',
+    keys: { tab: 'nueva pestaña', switch: 'cambia', paste: 'pega una imagen en Claude' },
+  },
+  mock: { prompt: 'corrige el bug del login y abre el PR', status: 'Conectado', hint: 'la app usa el mouse · ⌥ + arrastrar selecciona' },
+  carousel: {
+    label: 'Lo que ves en termhub',
+    tabs: ['Terminal', 'Hardware', 'Simulador iOS', 'Kanban'],
+    hardware: {
+      caption: 'jarvis · actualizado cada 5 s',
+      kpis: [
+        { label: 'CPU', value: '23%', pct: 23 },
+        { label: 'Memoria', value: '11,2 / 32 GB', pct: 35 },
+        { label: 'Disco', value: '412 GB libres', pct: 58 },
+        { label: 'Temp', value: '46 °C', pct: 46 },
+      ],
+      procs_head: ['proceso', 'cpu', 'mem'],
+      procs: [
+        { name: 'node server.js', cpu: '12,4%', mem: '820 MB' },
+        { name: 'claude', cpu: '6,1%', mem: '540 MB' },
+        { name: 'postgres', cpu: '3,8%', mem: '310 MB' },
+        { name: 'tmux: server', cpu: '1,2%', mem: '48 MB' },
+        { name: 'sshd', cpu: '0,4%', mem: '12 MB' },
+      ],
+    },
+    ios: {
+      screen_title: 'Ajustes',
+      rows: ['Red', 'Notificaciones', 'Privacidad'],
+      button: 'Continuar',
+      actions: ['Toque y gestos', 'Teclado', 'Inicio · Bloquear · Volumen', 'Captura de pantalla'],
+      caption: 'iPhone 16e · WDA · 25 fps en la LAN',
+    },
+    kanban: {
+      columns: [
+        { title: 'Backlog', cards: [{ text: 'Reintento de SSH', chip: '' }, { text: 'Exportar notas', chip: '' }] },
+        { title: 'Por hacer', cards: [{ text: 'Sincronización de tickets', chip: 'LIN-42' }, { text: 'Atajos de pestaña', chip: '' }] },
+        { title: 'En curso', cards: [{ text: 'Simulador iOS', chip: '' }] },
+        { title: 'Hecho', cards: [{ text: 'Pegar imagen', chip: '' }, { text: 'Kanban por proyecto', chip: '' }, { text: 'Inicio de sesión por e-mail', chip: '' }] },
+      ],
+    },
+  },
+  numbers: [
+    { value: '1', label: 'docker compose para levantar todo' },
+    { value: '3', label: 'pasos hasta la primera terminal' },
+    { value: '0', label: 'tokens de IA almacenados' },
+  ],
+  features: {
+    link: 'Ver funciones',
+    title: 'Un lugar para tu día en la terminal',
+    lead: 'Todo lo que vuelves a abrir cada mañana, ya abierto.',
+    items: [
+      { title: 'Terminales que no mueren', text: 'Cada pestaña es una sesión tmux en la máquina de destino. Cierra el navegador, cambia de computadora, vuelve mañana: el shell sigue donde lo dejaste.' },
+      { title: 'Máquinas › Proyectos › Pestañas', text: 'Conecta tus máquinas con el agente, organiza por proyecto con la carpeta correcta y abre todas las pestañas que necesites. Un explorador de carpetas y discos te ayuda a elegir el directorio.' },
+      { title: 'Hecho para agentes de IA', text: 'Pega imágenes y arrastra archivos directo a la terminal de Claude Code, dicta el prompt por voz y entérate al instante cuando un agente se detiene esperándote: la pestaña muestra un punto y el inicio lista todo lo que espera tu respuesta.' },
+      { title: 'Un chat que opera tus máquinas', text: 'Pregunta qué se está ejecutando, pídele que abra una pestaña, que responda a un agente o que cree una tarjeta. El chat se ejecuta en una máquina tuya, con tu propia cuenta de Claude, pide confirmación antes de escribir o cambiar algo y recuerda las respuestas que ya diste.' },
+      { title: 'Terminal global por MCP', text: 'Conecta Claude Code a termhub con un token de API y una sesión puede leer pantallas, abrir pestañas, ejecutar comandos y mover tarjetas en todas tus máquinas. Alcances por token, revocación en cualquier momento.' },
+      { title: 'App en el celular', text: 'iPhone, iPad y Android: conversa con el chat, responde a las preguntas de los agentes y aprueba acciones desde donde estés. Dispositivos aprobados por ti, con PIN y una clave atada al celular. En beta.' },
+      { title: 'Tablero, notas y tickets', text: 'Épicas, historias, tareas y subtareas con número (APP-12), columnas que tú nombras, notas en markdown con guardado automático y sincronización de tickets de Linear, Jira y GitHub.' },
+      { title: 'Límites de tus cuentas de IA', text: 'Ve cuánto queda de las ventanas de uso de Claude, ChatGPT y Gemini, leído del login de las CLI en tus máquinas. No se almacena ningún token.' },
+      { title: 'Hardware en vivo', text: 'CPU, memoria, discos, temperaturas y procesos de cada máquina, actualizados cada 5 segundos. Simulador iOS en pantalla, con toque y teclado.' },
+    ],
+  },
+  how: {
+    link: 'Ver cómo instalar',
+    title: 'Cómo funciona',
+    steps: [
+      { title: 'Levántalo con Docker', text: 'docker compose --profile prod up -d. Postgres, e-mail de inicio de sesión y la app. Publícalo en tu LAN o por un Cloudflare Tunnel.' },
+      { title: 'Conecta la máquina', text: 'npm i -g @termhub/agent y el comando de conexión que muestra la app, con el token ya completado. La máquina se conecta por un WebSocket de salida: sin abrir puertos ni configurar SSH.' },
+      { title: 'Abre una terminal', text: 'Elige la máquina y la carpeta del proyecto, y listo. ⌘T abre otra pestaña, ⌘1..9 cambia entre ellas. Todo sigue ejecutándose cuando cierras la pestaña.' },
+    ],
+    stack_label: 'Stack',
+    stack: 'Node.js + Fastify, WebSocket, node-pty y Postgres en el servidor. React, Vite y xterm.js en el navegador. Inicio de sesión con código por e-mail, contraseña o Google, compatible con Cloudflare Access. El contenido de las terminales nunca se registra en los logs.',
+  },
+  cloud: {
+    badge: 'beta gratuita',
+    title: 'termhub Cloud',
+    lead: 'La misma experiencia, sin servidor que mantener: tus máquinas se conectan a termhub Cloud y accedes desde cualquier lugar. Está en beta gratuita: inscríbete para recibir el acceso.',
+    perks: ['Sin Docker, sin proxy, sin túnel: conecta la máquina y listo', 'Inicio de sesión y allowlist listos, con equipos y permisos', 'App en el celular para seguir y responder a los agentes', 'Gratis durante la beta, con acceso por orden de inscripción'],
+    form: {
+      title: 'Unirme a la beta gratuita',
+      first: 'Nombre',
+      last: 'Apellido',
+      email: 'E-mail (Gmail)',
+      email_placeholder: 'tu@gmail.com',
+      email_why: '¿Por qué Gmail?',
+      email_tooltip: 'Tu e-mail se registra en Cloudflare Access para darte acceso a termhub Cloud, y Access exige una cuenta de Google. Usa una dirección @gmail.com.',
+      email_invalid: 'Usa una dirección @gmail.com.',
+      phone: 'Teléfono',
+      ddi: 'País',
+      ddd: 'Área',
+      number: 'número',
+      linkedin: 'LinkedIn (opcional)',
+      github: 'GitHub (opcional)',
+      handle_hint: 'usuario o URL del perfil',
+      submit: 'Quiero participar en la beta',
+      sending: 'Enviando…',
+      done_title: 'Inscripción recibida',
+      done_text: 'Ya estás inscrito. Te avisaremos por e-mail cuando tu acceso a la beta esté listo.',
+      already: 'Este e-mail ya está inscrito en la beta.',
+      error: 'No se pudo enviar ahora. Reintenta en unos instantes.',
+      privacy: 'Usamos tus datos solo para el acceso a la beta de termhub Cloud.',
+    },
+  },
+  agents: {
+    title: 'Funciona con cualquier agente',
+    lead: 'termhub es una terminal de verdad: si se ejecuta en el shell, se ejecuta aquí. Sin plugin que instalar ni integración que esperar.',
+    items: ['Claude Code', 'Codex', 'Gemini CLI', 'Antigravity', 'Cursor CLI', 'Copilot CLI', 'OpenCode', 'Aider'],
+    any: 'cualquier CLI',
+    note: 'Para Claude, Codex, Gemini y Antigravity, la app también muestra cuánto queda de las ventanas de uso, leído del login de la CLI en la máquina. No se almacena ningún token.',
+  },
+  compare: {
+    title: 'termhub comparado',
+    lead: 'Dónde encaja frente a un runtime de agentes en la terminal, un IDE de agentes de escritorio, un canvas de agentes, SSH + tmux armado a mano y un IDE con IA.',
+    columns: [
+      { name: 'termhub', hint: '' },
+      { name: 'Runtime de agentes en la terminal', hint: 'p. ej.: herdr' },
+      { name: 'IDE de agentes de escritorio', hint: 'p. ej.: Orca' },
+      { name: 'Canvas de agentes de escritorio', hint: 'p. ej.: Maestri' },
+      { name: 'SSH + tmux a mano', hint: '' },
+      { name: 'IDE con IA', hint: 'p. ej.: Cursor' },
+    ],
+    rows: [
+      { label: 'Funciona en el navegador; nada que instalar en el dispositivo de acceso', cells: ['yes', 'no', 'no', 'no', 'no', 'no'] },
+      { label: 'Varias máquinas en un solo panel', cells: ['yes', 'partial', 'partial', 'partial', 'partial', 'partial'] },
+      { label: 'Las sesiones sobreviven al cerrar la interfaz y al cambiar de computadora', cells: ['yes', 'yes', 'partial', 'partial', 'yes', 'no'] },
+      { label: 'Acceso remoto por defecto, celular incluido', cells: ['yes', 'partial', 'partial', 'partial', 'partial', 'no'] },
+      { label: 'Estado de cada agente (trabajando, esperándote, listo)', cells: ['yes', 'yes', 'yes', 'partial', 'no', 'partial'] },
+      { label: 'API/MCP para que un agente controle las terminales', cells: ['yes', 'yes', 'yes', 'no', 'partial', 'no'] },
+      { label: 'Chat que opera las máquinas, con confirmación por acción', cells: ['yes', 'no', 'no', 'no', 'no', 'partial'] },
+      { label: 'App nativa en el celular', cells: ['yes', 'no', 'partial', 'no', 'no', 'no'] },
+      { label: 'Equipos, roles y permisos por recurso', cells: ['yes', 'no', 'no', 'no', 'no', 'partial'] },
+      { label: 'Self-hosted y open source', cells: ['yes', 'yes', 'yes', 'no', 'yes', 'no'] },
+      { label: 'Límites de las cuentas de IA (Claude, Codex, Gemini)', cells: ['yes', 'no', 'yes', 'yes', 'no', 'no'] },
+    ],
+    legend: { yes: 'sí', no: 'no', partial: 'parcial' },
+    note: 'Con base en las páginas públicas de los productos, revisadas el 30 de septiembre de 2026 (herdr: herdr.dev/compare; Orca: onorca.dev; Maestri: themaestri.app; Cursor: cursor.com/docs). "Parcial" = existe, pero depende de configuración extra o de una app adicional.',
+  },
+  faq: {
+    title: 'Preguntas frecuentes',
+    items: [
+      { q: '¿Qué es termhub?', a: 'Un panel en el navegador para las terminales de tus máquinas. Conectas cada máquina con el agente de termhub, organizas por proyecto y abres pestañas; cada pestaña es una sesión tmux en la máquina, que sigue ejecutándose cuando cierras el navegador.' },
+      { q: '¿Necesito instalar algo en la computadora que uso para acceder?', a: 'No. Basta con un navegador: funciona en la laptop, en la tablet y en el celular. La instalación queda del otro lado: el servidor de termhub (un docker compose) y, en cada máquina a la que quieres acceder, el agente (@termhub/agent) con tmux.' },
+      { q: '¿Cómo conecto una máquina?', a: 'Instala el agente con npm i -g @termhub/agent (necesita Node 20+ y tmux; en Linux, también make, g++ y python3, porque npm compila node-pty — la pantalla Agregar máquina muestra el comando completo para Linux y macOS), genera un token en Máquinas › Agregar máquina y ejecuta el termhub-agent connect que muestra la app. Después, termhub-agent service install deja el agente ejecutándose en segundo plano (launchd en macOS, systemd en Linux). La conexión sale de la máquina por WebSocket: no hace falta abrir puertos, configurar SSH ni estar en la misma red.' },
+      { q: '¿Es seguro? ¿Dónde quedan las credenciales?', a: 'El agente abre una conexión de salida hacia el servidor, así que ningún puerto queda expuesto en la máquina. El token de la máquina aparece una sola vez y el servidor guarda solo su hash. El servidor no ejecuta comandos sueltos en la máquina: solo pide operaciones de una lista cerrada (abrir una terminal, listar sesiones…), y quien escribe en una terminal eres tú, o el chat después de que lo apruebas. Para mostrar los límites de las cuentas de IA, el login de la CLI se lee en la máquina al momento de la consulta y se usa solo para eso: no se almacena ningún token de IA y el contenido de las terminales nunca se registra en los logs. Detalles para el equipo de TI en termhub.dev/security.' },
+      { q: '¿Funciona con Claude Code?', a: 'Sí, y fue hecho pensando en él: pega imágenes y arrastra archivos directo a la terminal, dicta el prompt por voz (la transcripción se ejecuta en tu servidor) y selecciona y copia incluso cuando la app usa el mouse. Codex, Gemini CLI, Antigravity o cualquier otra CLI funcionan igual, porque es una terminal de verdad.' },
+      { q: '¿Cómo sé cuándo el agente de IA me necesita?', a: 'Instala los hooks del monitor en la máquina, con un clic en la app. Cuando Claude Code o Codex termina de responder o se detiene esperando un permiso, la pestaña muestra un punto naranja, el proyecto se marca en la barra lateral y aparece un aviso en la esquina de la pantalla. El inicio lista todo lo que te está esperando, agrupado por máquina.' },
+      { q: '¿Funciona en Windows?', a: 'Para acceder, sí: basta con abrir el navegador. Como máquina de destino, el agente funciona en macOS y Linux y necesita tmux; en Windows, usa WSL.' },
+      { q: '¿Es gratis?', a: 'Sí. termhub es open source bajo licencia MIT: ejecútalo en tu red con tantas máquinas y usuarios como quieras. termhub Cloud, alojado por nosotros, está en beta gratuita y después será la opción paga para quien no quiera mantener un servidor.' },
+      { q: '¿Qué es termhub Cloud?', a: 'La misma experiencia sin servidor que mantener: conectas tus máquinas con el agente y accedes desde cualquier lugar, con inicio de sesión, equipos y permisos listos. Está en beta gratuita, y el acceso se libera por orden de inscripción.' },
+      { q: '¿Cómo contribuir?', a: 'El código está en GitHub. Issues, PRs e ideas son bienvenidos; el README explica cómo ejecutarlo en desarrollo.' },
+    ],
+  },
+  cta: { title: 'Ejecútalo en tu red hoy', lead: 'Un docker compose, un usuario creado desde la CLI, y las terminales de tus máquinas en el navegador.', install: 'Instalar', app: 'Abrir la app' },
+  cookies: {
+    title: 'Cookies',
+    text: 'Usamos Google Analytics para medir las visitas a este sitio. Solo se carga si aceptas.',
+    accept: 'Aceptar',
+    decline: 'Rechazar',
+  },
+  lang_switch: { label: 'Idioma' },
+  footer: { docs: 'Documentación', security: 'Seguridad', brand: 'Marca', deleteAccount: 'Eliminar cuenta', coffee: '☕ Buy me a coffee', cookies: 'Cookies', made: 'hecho en Goiânia' },
+  brand: {
+    meta: {
+      title: 'Marca termhub — logo, colores y tipografía',
+      description: 'Símbolo, logotipo, paleta y tipografía de termhub para descargar, con las reglas de uso. SVG y PNG en un solo .zip.',
+    },
+    back: 'Inicio',
+    title: 'Marca',
+    lead: '¿Vas a escribir, presentar o hacer un video sobre termhub? Aquí está todo lo que necesitas: símbolo, logotipo, colores y tipografía, listos para usar.',
+    download_all: 'Descargar todo (.zip)',
+    download_hint: 'SVG, PNG en varios tamaños y un README con los colores.',
+    mark: {
+      title: 'Símbolo',
+      text: 'La ventana de terminal con el prompt. Es el ícono de la app y el favicon; úsalo cuando el espacio sea pequeño o cuadrado (avatar, ícono, favicon).',
+    },
+    logo: {
+      title: 'Logotipo',
+      text: 'Símbolo + wordmark + tagline. Prefiere esta versión siempre que haya espacio horizontal. La versión para fondo claro cambia solo el color del texto; el símbolo siempre es oscuro.',
+      on_dark: 'sobre fondo oscuro',
+      on_light: 'sobre fondo claro',
+    },
+    social: {
+      title: 'Redes sociales',
+      text: 'Artes 4:3 (1600×1200) listas para LinkedIn e Instagram. Haz clic para descargar.',
+      items: [
+        { file: 'termhub-social-logo.png', label: 'Logotipo' },
+        { file: 'termhub-social-tagline-pt.png', label: 'Tagline (pt)' },
+        { file: 'termhub-social-tagline-en.png', label: 'Tagline (en)' },
+      ],
+    },
+    colors: {
+      title: 'Colores',
+      text: 'El morado del degradado es el único acento: aparece en el prompt del símbolo, en el “hub” del wordmark y en los botones. El resto de la paleta son tonos de superficie.',
+      items: [
+        { name: 'Degradado (CTA)', value: '#5b63d3 → #7c87f7', role: 'prompt, “hub”, botones' },
+        { name: 'Accent', value: '#98a4f7', role: 'enlaces y acentos pequeños' },
+        { name: 'Canvas', value: '#0f101a', role: 'fondo de la página y del símbolo' },
+        { name: 'Surface', value: '#151621', role: 'tarjetas' },
+        { name: 'Border', value: '#1f2433', role: 'bordes y contornos' },
+        { name: 'Text', value: '#e6e8ee', role: 'wordmark, títulos' },
+        { name: 'Frost', value: '#c9d3ee', role: 'texto secundario' },
+        { name: 'Muted', value: '#646e87', role: 'texto de apoyo' },
+      ],
+    },
+    type: {
+      title: 'Tipografía',
+      text: 'Dos familias, ambas libres: Inter para la interfaz y el texto, JetBrains Mono para el wordmark y todo lo que es terminal.',
+      items: [
+        { name: 'Inter', role: 'Interfaz y texto', sample: 'Las terminales de tus máquinas, en el navegador.', mono: false },
+        { name: 'JetBrains Mono', role: 'Wordmark y terminal', sample: 'termhub $ tmux attach -t proyecto', mono: true },
+      ],
+    },
+    rules: {
+      title: 'Uso',
+      dos: ['Usa los archivos originales, sin redibujarlos.', 'Deja alrededor un margen de al menos la altura de los puntos de la ventana.', 'Sobre fondo claro, usa la versión “sobre fondo claro”.'],
+      donts: ['No lo recolorees, no lo gires ni lo estires.', 'No pongas el símbolo dentro de otra forma.', 'No escribas “TermHub” ni “Term Hub”: siempre es termhub, en minúsculas.'],
+      dos_title: 'Haz',
+      donts_title: 'Evita',
+    },
+    files: { svg: 'SVG', png: 'PNG' },
+  },
+  security: {
+    meta: {
+      title: 'Seguridad de termhub — para equipos de TI',
+      description: 'Cómo se conecta termhub a las máquinas: solo conexiones de salida por el 443, ningún puerto abierto, los dominios que hay que permitir en el firewall y el checklist del equipo de TI.',
+    },
+    back: 'Inicio',
+    nav: { highlights: 'Destacados', how: 'Arquitectura', domains: 'Dominios', checklist: 'Checklist' },
+    badge: 'seguridad · para equipos de TI',
+    title_a: 'Terminales remotas que tu ',
+    title_b: 'equipo de TI aprueba',
+    lead: 'El agente de termhub solo abre conexiones de salida por el puerto 443, no abre ningún puerto en la máquina y se ejecuta con el usuario de quien lo instaló. Aquí está todo lo que tu red necesita permitir y cómo se controla cada acceso.',
+    cta_doc: 'Guía técnica completa',
+    cta_cloud: 'Unirme a la beta de Cloud',
+    highlights: {
+      title: 'La seguridad como función',
+      lead: 'Cada punto de abajo es comportamiento del código abierto de termhub, que puedes auditar en GitHub.',
+      items: [
+        { title: 'Solo conexiones de salida por el 443', text: 'El agente se conecta al servidor por un WebSocket con TLS (wss://) y mantiene la conexión abierta. Las terminales, el estado de las pestañas y los comandos viajan por ella.' },
+        { title: 'Ningún puerto abierto en la máquina', text: 'El agente no escucha en ningún puerto de red. Sin SSH, sin VPN, sin redirección de puertos y sin reglas de entrada en el firewall.' },
+        { title: 'Lista cerrada de operaciones', text: 'El servidor no envía comandos sueltos al agente: solo llama operaciones de una lista fija (abrir una terminal, listar sesiones, leer el hardware…), con los parámetros validados en ambos extremos.' },
+        { title: 'Confirmación humana', text: 'El chat de termhub solo actúa después de que apruebas una tarjeta. Ejecutar un comando, eliminar una tarjeta o responder a una solicitud de permiso de un agente siempre piden confirmación. Cada aprobación vale una sola vez y expira.' },
+        { title: 'Revocación inmediata', text: 'Cambiar el token de una máquina o eliminarla corta la conexión al instante. Los tokens de API y los celulares también se revocan con un clic.' },
+        { title: 'Secretos nunca en texto plano', text: 'Las sesiones, los tokens de API y los de las máquinas se guardan solo como hash (SHA-256). Las contraseñas usan argon2id. Los tokens de integración (GitHub, Jira, Linear) se cifran con AES-256-GCM.' },
+        { title: 'Se ejecuta como tu usuario', text: 'El agente es un servicio de usuario (systemd --user en Linux, LaunchAgent en macOS). No necesita root, y la configuración queda en un archivo 0600.' },
+        { title: 'El contenido de la terminal fuera de los logs', text: 'Los logs del servidor guardan solo metadatos (pestaña, máquina, tamaño) y ocultan cookies y encabezados de autorización. El flujo de la terminal no se graba en el servidor.' },
+        { title: 'Celular con una clave atada al dispositivo', text: 'La app firma cada solicitud con una clave P-256 guardada en el almacén de claves del sistema (Keychain o Keystore), con el estándar DPoP, después de que apruebas el dispositivo en la web. Token de 15 minutos y PIN para renovarlo.' },
+      ],
+    },
+    how: {
+      title: 'Cómo funciona',
+      lead: 'Tres piezas, y todas las conexiones parten del lado de quien usa.',
+      nodes: [
+        { name: 'Navegador y celular', host: 'app.termhub.dev · termhub.dev', text: 'La app web solo llama a su propio origen: ningún script, CDN ni fuente de terceros. El celular solo se comunica con termhub.dev.' },
+        { name: 'termhub Cloud', host: 'TLS en el borde', text: 'Sirve la app, la API y los WebSockets. Recibe las conexiones; nunca abre una conexión hacia dentro de tu red.' },
+        { name: 'Agente en la máquina', host: 'wss://app.termhub.dev/agent/ws', text: 'Un WebSocket de salida, con ping cada 20 s y reconexión automática. Cada terminal es una sesión tmux en la propia máquina.' },
+      ],
+      note: 'Los hooks del monitor (opcionales) avisan cuando un agente de IA te está esperando: un curl de salida a termhub.dev por cada evento. En las llamadas a herramientas va solo el nombre de la herramienta, nunca su entrada.',
+    },
+    ports: {
+      title: 'Puertos y protocolos',
+      head: ['Dónde', 'Entrada', 'Salida'],
+      rows: [
+        { where: 'Máquina con el agente', inbound: 'ninguna', outbound: 'TCP 443 (HTTPS y WSS)' },
+        { where: 'Navegador', inbound: 'ninguna', outbound: 'TCP 443 (HTTPS y WSS)' },
+        { where: 'Celular', inbound: 'ninguna', outbound: 'TCP 443 (HTTPS y WSS)' },
+      ],
+      notes: [
+        'Permite el upgrade de WebSocket (Connection: Upgrade) hacia app.termhub.dev y termhub.dev.',
+        'Toda conexión envía un ping cada 30 s o menos: los proxies que cierran conexiones inactivas después de 60 s no estorban.',
+        'Con inspección TLS (MITM), deja fuera los hosts de termhub: el agente valida los certificados con la lista predeterminada de Node.js.',
+      ],
+    },
+    domains: {
+      title: 'Dominios que hay que permitir',
+      lead: 'La lista completa, separada entre lo obligatorio y lo que depende de la función.',
+      required_label: 'Obligatorios',
+      optional_label: 'Opcionales, por función',
+      head: ['Host', 'Para qué'],
+      required: [
+        { host: 'app.termhub.dev', why: 'App web, API y WebSockets del navegador; conexión del agente (/agent/ws).' },
+        { host: 'termhub.dev', why: 'Eventos de los hooks, endpoint MCP del chat y de las pestañas de agente, API y WebSocket de la app del celular.' },
+        { host: 'registry.npmjs.org', why: 'Instalar y actualizar el agente (npm i -g @termhub/agent).' },
+        { host: '*.cloudflareaccess.com · accounts.google.com', why: 'Inicio de sesión en el navegador: termhub Cloud está detrás de Cloudflare Access, con login de Google.' },
+      ],
+      optional: [
+        { host: 'Espejos de tu gestor de paquetes', why: 'Instalar tmux con el comando de instalación (brew, apt-get, dnf o pacman).' },
+        { host: 'Hosts de las CLI de IA que ya usas', why: 'Claude Code, Codex, Gemini… se ejecutan en las pestañas como en cualquier terminal; termhub no agrega hosts para ellas.' },
+        { host: 'github.com', why: 'Solo en macOS, la primera vez que configuras el visor del Simulador iOS.' },
+      ],
+    },
+    agent: {
+      title: 'Lo que instala el agente',
+      items: [
+        'El paquete @termhub/agent desde npm, publicado por GitHub Actions con npm provenance (puedes verificar de qué commit vino cada versión).',
+        'El archivo ~/.termhub/config.json (0600) con la dirección del servidor y el token de la máquina.',
+        'Un servicio de usuario: systemd --user en Linux o LaunchAgent en macOS. Sin root.',
+        'Opcional, desde la app: los hooks del monitor en ~/.termhub/bin y las entradas en la configuración de Claude Code, Codex y Cursor. La app también los quita.',
+      ],
+    },
+    checklist: {
+      title: 'Checklist del equipo de TI',
+      items: [
+        'Salida TCP 443 con upgrade de WebSocket hacia app.termhub.dev, termhub.dev y registry.npmjs.org; en el navegador, también Cloudflare Access y accounts.google.com.',
+        'Ninguna regla de entrada en las máquinas: sin SSH, VPN ni redirección de puertos.',
+        'Hosts de termhub fuera de la inspección TLS.',
+        'Salida directa o proxy transparente: el agente todavía no usa un proxy explícito (HTTPS_PROXY).',
+        'En la máquina: macOS o Linux (Windows por WSL), Node.js 20+, tmux y una cuenta de usuario común; en Linux, también las herramientas de compilación (make, g++, python3).',
+      ],
+      test_label: 'Prueba en la máquina',
+      test_hint: '"✓ Servidor" en doctor y "conectado ✓" en status prueban que el token, el TLS y el WebSocket pasaron por la red. El curl responde 401 cuando el host de los hooks está permitido.',
+    },
+    limits: {
+      title: 'Lo que todavía no tenemos',
+      lead: 'Para que decidas con la información completa: estos puntos están en nuestro roadmap y no existen hoy.',
+      items: [
+        'Soporte para proxy HTTP(S) explícito y para una CA corporativa adicional en el agente.',
+        'SSO corporativo (SAML u OIDC genérico), SCIM y autenticación multifactor.',
+        'Registro de auditoría de inicios de sesión, permisos y tokens, con exportación. Hoy quedan registradas las acciones del chat, con quién las aprobó, y los eventos de los celulares.',
+        'Expiración de sesión por inactividad y "cerrar sesión en todos los dispositivos".',
+        'Plazo de retención y cifrado a nivel de aplicación para los mensajes del chat y los adjuntos.',
+      ],
+    },
+    cta: {
+      title: 'Llévalo a tu equipo de seguridad',
+      lead: 'La guía técnica incluye la arquitectura, cada host y puerto, el modelo de amenazas y dónde está cada afirmación en el código.',
+    },
+  },
+  deleteAccount: {
+    meta: {
+      title: 'Eliminar tu cuenta de termhub',
+      description: 'Cómo eliminar tu cuenta de termhub y tus datos, desde la app, la app web o esta página, sin instalar nada: qué se elimina, qué se guarda y por cuánto tiempo.',
+    },
+    back: 'Inicio',
+    nav: { form: 'Solicitar eliminación', data: 'Tus datos', timeline: 'Plazos' },
+    badge: 'cuenta · eliminación de datos',
+    title: 'Eliminar tu cuenta de termhub',
+    lead: 'termhub es desarrollado por Engenharia Inversa. Puedes eliminar tu cuenta y los datos vinculados a ella en cualquier momento, desde la app o desde esta página, sin necesidad de instalar nada.',
+    ways: {
+      title: 'Tres formas de eliminarla',
+      items: [
+        { where: 'En la app del celular', how: 'Ajustes → Eliminar mi cuenta.' },
+        { where: 'En la app web (app.termhub.dev)', how: 'Perfil → Eliminar mi cuenta.' },
+        { where: 'En esta página', how: 'Ingresa el e-mail de la cuenta y confirma con el enlace que te enviamos.' },
+      ],
+    },
+    form: {
+      title: 'Solicitar la eliminación por e-mail',
+      lead: 'Enviamos un enlace de confirmación al e-mail de la cuenta. La eliminación solo comienza cuando abres el enlace y confirmas.',
+      email: 'E-mail de la cuenta',
+      email_placeholder: 'tu@ejemplo.com',
+      email_invalid: 'Ingresa un e-mail válido.',
+      submit: 'Enviar enlace de confirmación',
+      sending: 'Enviando…',
+      sent_title: 'Revisa tu e-mail',
+      sent_text: 'Si existe una cuenta con este e-mail, enviamos un enlace para confirmar la eliminación. El enlace es válido por 30 minutos.',
+      again: 'Usar otro e-mail',
+      rate_limited: 'Demasiadas solicitudes desde esta dirección. Reintenta más tarde.',
+      error: 'No se pudo enviar ahora. Reintenta en unos instantes.',
+    },
+    confirm: {
+      title: 'Confirmar la eliminación de la cuenta',
+      lead: 'Al confirmar, tu cuenta se desactiva al instante y se cierran todas las sesiones. Los datos se eliminan definitivamente después de 30 días; hasta entonces, iniciar sesión en termhub te permite cancelar.',
+      submit: 'Confirmar eliminación de la cuenta',
+      sending: 'Confirmando…',
+      cancel: 'No quiero eliminarla',
+      done_title: 'Solicitud de eliminación confirmada',
+      done_text: (date: string) => `Tu cuenta fue desactivada y se eliminará definitivamente el ${date}. Hasta entonces, iniciar sesión en termhub te permite cancelar.`,
+      done_email: 'También te enviamos un e-mail que confirma la solicitud, con esa fecha.',
+      invalid_title: 'Este enlace ya no es válido',
+      invalid_text: 'El enlace no es válido, ya se usó o pasaron más de 30 minutos. Solicita uno nuevo abajo.',
+      last_admin: 'Esta cuenta es la única administradora de termhub. Haz administradora a otra persona antes de eliminar la cuenta.',
+      rate_limited: 'Demasiadas solicitudes desde esta dirección. Reintenta más tarde.',
+      error: 'No se pudo confirmar ahora. Reintenta en unos instantes.',
+    },
+    deleted: {
+      title: 'Qué se elimina',
+      lead: 'Al terminar los 30 días, eliminamos la cuenta y todo lo vinculado a ella:',
+      items: [
+        'Máquinas registradas.',
+        'Proyectos, con sus tarjetas, notas y tickets.',
+        'Pestañas de terminal y su historial.',
+        'Conversaciones del chat y los adjuntos enviados.',
+        'Memoria del asistente.',
+        'Integraciones y sus tokens.',
+        'Cuentas de IA conectadas.',
+        'Tokens de API.',
+        'Celulares y dispositivos vinculados.',
+        'Notificaciones.',
+        'Sesiones abiertas.',
+      ],
+    },
+    kept: {
+      title: 'Qué se guarda, y por cuánto tiempo',
+      items: [
+        'Registros de acceso (dirección IP, fecha y hora): se guardan por 6 meses, como exige el Marco Civil da Internet de Brasil (Ley 12.965/2014, art. 15), y después se eliminan.',
+        'Registros fiscales y de facturación, cuando existan: se guardan por el plazo que exige la ley.',
+      ],
+    },
+    timeline: {
+      title: 'Plazos',
+      items: [
+        { when: 'Al instante', what: 'La cuenta se desactiva y se cierran todas las sesiones. Te enviamos un e-mail que confirma la solicitud, con la fecha de eliminación.' },
+        { when: 'Durante 30 días', what: 'Iniciar sesión en termhub con tu cuenta te permite cancelar la eliminación; no se elimina nada antes de eso.' },
+        { when: 'Después de 30 días', what: 'La cuenta y los datos listados arriba se eliminan definitivamente. No se puede deshacer.' },
+      ],
+    },
+  },
+};
+
+export const DICT: Record<Lang, typeof pt> = { pt, en, es };
 export type Dict = typeof pt;
 
 export const LangContext = createContext<{ lang: Lang; t: Dict; setLang: (l: Lang) => void }>({ lang: 'pt', t: pt, setLang: () => {} });

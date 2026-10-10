@@ -174,6 +174,8 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       const tools = Array.isArray(args.tools) ? args.tools.filter((x): x is string => typeof x === 'string') : [];
       return `instalar ou atualizar os hooks do termhub (${tools.length ? tools.join(', ') : 'Claude Code, Codex e Cursor que estiverem lá'}), mexendo nos arquivos de configuração deles`;
     }
+    case 'update_machine_agent':
+      return args.all === true ? 'atualizar o agente do termhub em todas as máquinas (o agente reinicia; as sessões do tmux continuam)' : 'atualizar o agente do termhub na máquina (o agente reinicia; as sessões do tmux continuam)';
     case 'resume_automation_run':
       return 'retomar o trabalho automático de um card';
     case 'automation_merge': {
@@ -203,6 +205,11 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
     }
     case 'create_integration':
       return `criar a integração do GitHub "${asString(args.name)}" com o login do gh (\`gh auth token\`)`;
+    // TER-1047: the card never shows the pasted code, only what is being done.
+    case 'start_ai_login':
+      return 'refazer o login de uma conta de IA na máquina (abre uma sessão de login escondida e devolve o link)';
+    case 'submit_ai_login_code':
+      return typeof args.code === 'string' ? 'concluir o login de uma conta de IA com o código que você colou' : 'concluir o login de uma conta de IA';
     case 'set_project_repo': {
       // The integration is named from the owner-scoped list `describeActions` read: another owner's
       // id reads exactly like one that does not exist.

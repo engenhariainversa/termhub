@@ -67,7 +67,7 @@ const timeZoneBodySchema = z.object({
 });
 
 /** null = automatic (the browser's language; pt-BR for e-mails and push). */
-const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en']).nullable() });
+const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en', 'es']).nullable() });
 
 /**
  * Whether a failed sign-in goes to the security trail: every wrong password or code does, and the one

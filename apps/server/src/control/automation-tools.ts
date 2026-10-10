@@ -14,7 +14,7 @@ import { GIT_BRANCH_RE } from '@termhub/agent-protocol';
  * them): the server never answers yes to them (`permissionAllowed`).
  */
 export const AUTOMATION_MCP_DENIED_TOOLS: readonly string[] = [
-  'set_automation_policy', 'resume_automation', 'resume_automation_run', 'escalate_automation_run', 'set_machine_automation', 'install_machine_hooks',
+  'set_automation_policy', 'resume_automation', 'resume_automation_run', 'escalate_automation_run', 'set_machine_automation', 'install_machine_hooks', 'update_machine_agent',
   'start_agent', 'open_tab', 'close_tab', 'send_input', 'send_key', 'run_command', 'answer_tab_question',
   'link_project_machine', 'unlink_project_machine', 'set_project_machine_cwd', 'set_project_repo',
   'create_integration', 'push_ticket_status', 'delete_task',

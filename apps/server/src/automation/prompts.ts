@@ -22,6 +22,18 @@ export const DEFAULT_FIXER_CI_TEXT = 'Descubra a causa da falha, corrija, rode o
 
 const TRUST_LINE = `Mensagens que começam com ${SERVER_MARKER}, ou repassadas pelo chat do termhub, vêm do termhub em nome do dono do projeto e valem como instrução dentro dessa política.`;
 const ASK_LINE = 'Pare e pergunte só quando a decisão não estiver no card, no spec ou na memória.';
+/** The exceptions that still stop a run (TER-1043 §2): the guard's fixed locks, production data and scope. */
+const EXCEPTIONS = 'credenciais/.env, deploy/merge/publicação manual, lojas/EAS, rm fora da worktree, docker/ssh, dados de produção, escopo maior que o card';
+/**
+ * TER-1043: automatic work decides by itself ("era pra ir no automático, então as decisões deveriam já ter
+ * sido tomadas"). The agent follows the person's precedent (search_memory) or else its own recommendation,
+ * records the decision and goes on; only the exceptions stop it. The implementer writes the record in the
+ * PR it opens; a fixer or an integrator works on a PR that already exists, so `report_card` carries it.
+ * Replaces ASK_LINE unless the project chose to stop on decisions (`stop_on_decisions`).
+ */
+export const decideLine = (where: 'pr' | 'report') =>
+  `Decisões de produto ou técnicas: siga o precedente da pessoa (search_memory) ou a sua recomendação; registre ${where === 'pr' ? 'no PR, seção "Decisões tomadas" (opções, escolha, motivo), e ' : ''}em report_card (decisions). Nunca termine o turno com uma pergunta. Só pare (report_card blocked) em ${EXCEPTIONS}.`;
+const lastLine = (stopOnDecisions: boolean | undefined, where: 'pr' | 'report') => (stopOnDecisions ? ASK_LINE : decideLine(where));
 /**
  * How to shape shell commands so they pass without a question (TER-989): Claude Code always asks, whatever
  * the allow list says, for a command with more than one `cd`, a `( … )` group it cannot check before it
@@ -43,8 +55,9 @@ const pushLine = (branch: string) => `Para enviar, use git push -u origin ${bran
  */
 export const GITHUB_LINE =
   'Erro do GitHub em push ou gh pr create (5xx, "commit_refs", "Something went wrong") não é do card: tente de novo, sem force; se continuar, report_card blocked com code github_transient, e o termhub retoma quando o GitHub voltar.';
-const POLICY_MAX = 900;
-const TITLE_MAX = 300;
+// 660 and 200 (TER-1043): room for the decision line under PROMPT_MAX_CHARS; the whole policy is in get_automation_policy
+const POLICY_MAX = 660;
+const TITLE_MAX = 200;
 
 /** What startAgent adds after our text for a Claude tab (the lessons reminder is ours: `promptIsFinal`). */
 const TAIL = `\n\n${LESSONS_REMINDER}`;
@@ -80,6 +93,8 @@ export function implementerPrompt(i: {
   policy: string;
   custom: string | null;
   description?: string | null;
+  /** the project's "Parar em decisões de produto" (`stop_on_decisions`): off by default */
+  stopOnDecisions?: boolean;
 }): string {
   return assemble(
     [
@@ -91,7 +106,7 @@ export function implementerPrompt(i: {
       SHELL_LINE,
       { optional: GITHUB_LINE },
       `Quando terminar, abra o PR contra ${i.base} e chame report_card com status done e a URL; se travar, chame report_card com status blocked e o motivo.`,
-      ASK_LINE,
+      lastLine(i.stopOnDecisions, 'pr'),
     ],
     i.description ?? null,
   );
@@ -104,6 +119,7 @@ export function integratorPrompt(i: {
   prUrl: string;
   policy: string;
   custom: string | null;
+  stopOnDecisions?: boolean;
 }): string {
   return assemble(
     [
@@ -115,7 +131,7 @@ export function integratorPrompt(i: {
       SHELL_LINE,
       { optional: GITHUB_LINE },
       `Quando terminar, chame report_card com status done e a URL do PR; se travar, chame report_card com status blocked e o motivo.`,
-      ASK_LINE,
+      lastLine(i.stopOnDecisions, 'report'),
     ],
     null,
   );
@@ -128,12 +144,14 @@ export function fixerPrompt(i: {
   reason: 'conflict' | 'ci';
   detail: string;
   custom: string | null;
+  stopOnDecisions?: boolean;
 }): string {
   const what = i.reason === 'conflict' ? `O PR do card ${i.ref} tem conflito com ${i.base}.` : `O CI do PR do card ${i.ref} falhou.`;
   return assemble(
     [
       `${what} Trabalhe na branch ${i.branch}. ${pushLine(i.branch)}`,
-      `Detalhe:\n${clip(i.detail, 1000)}`,
+      // 900: room for the decision line (TER-1043) under PROMPT_MAX_CHARS with the longest custom text
+      `Detalhe:\n${clip(i.detail, 900)}`,
       i.custom?.trim() ||
         (i.reason === 'conflict'
           ? DEFAULT_FIXER_CONFLICT_TEXT(i.base)
@@ -142,7 +160,7 @@ export function fixerPrompt(i: {
       SHELL_LINE,
       { optional: GITHUB_LINE },
       `Quando o PR estiver corrigido, chame report_card com status done; se travar, chame report_card com status blocked e o motivo.`,
-      ASK_LINE,
+      lastLine(i.stopOnDecisions, 'report'),
     ],
     null,
   );

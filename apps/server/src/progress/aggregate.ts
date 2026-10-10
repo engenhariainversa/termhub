@@ -2,7 +2,7 @@ import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, Prog
 import type { TabState } from '../db/repositories/types.js';
 import type { AutomationEvent } from '../db/repositories/index.js';
 import { escalationEventText } from '../automation/escalation-text.js';
-import type { Locale } from '../i18n/index.js';
+import { t, type Locale } from '../i18n/index.js';
 import { NEEDS_YOU, contractStateOf } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
 
@@ -229,7 +229,12 @@ const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 /** Why a start failed (TER-987), in the reader's language when the event has it: null for any other block. */
 function startFailureOf(p: Record<string, unknown>, locale: Locale): string | null {
   if (p.stage !== 'start') return null;
-  return (locale === 'en' ? str(p.message_en) : null) ?? str(p.message);
+  return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
+}
+
+/** A blocked run a PR from its branch took over (TER-1049, follower's ADOPTED_VIA): what its `run_done` line says. */
+function adoptedOf(p: Record<string, unknown>, locale: Locale): string | null {
+  return p.via === 'pull_request_after_blocked' ? t(locale, 'PR aberto depois do bloqueio; o automático acompanha até o merge') : null;
 }
 
 /**
@@ -259,9 +264,11 @@ export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): A
       url: str(p.url) ?? str(p.pr_url),
       until: str(p.until),
       paused: typeof p.paused === 'boolean' ? p.paused : null,
-      reason_text: e.kind === 'escalated' ? escalationEventText(p, locale) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : null,
+      reason_text: e.kind === 'escalated' ? escalationEventText(p, locale) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : e.kind === 'run_done' ? adoptedOf(p, locale) : null,
       // the tool a permission_auto_approved / guard_blocked line names (TER-993)
       tool: str(p.tool),
+      // the decision a decided_by_recommendation line names (TER-1043)
+      summary: str(p.summary),
     };
   });
 }

@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CLOSE } from '@termhub/agent-protocol';
+import { CLOSE, PAIRING_TTL_MS } from '@termhub/agent-protocol';
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError, badRequest, conflict, forbidden, localizedOf } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
@@ -12,7 +12,9 @@ import { browseMachine, makeDirectory } from '../terminal/machine-fs.js';
 import { collectHardware } from '../system/hardware.js';
 import { newAgentToken } from '../agent/token.js';
 import { agents } from '../agent/registry.js';
-import { AGENT_UNINSTALL_MIN_VERSION, isOutdated, latestAgentRelease, latestAgentVersion, MIN_SELF_UPDATE_VERSION, runAgentUpdate } from '../agent/latest-version.js';
+import { AGENT_UNINSTALL_MIN_VERSION, belowMinimum, isOutdated, latestAgentRelease, latestAgentVersion, MIN_SELF_UPDATE_VERSION, runAgentUpdate } from '../agent/latest-version.js';
+import { MIN_AGENT_VERSION } from '../agent/min-version.js';
+import { followAgentUpdate } from '../agent/after-update.js';
 import { AgentClosedError } from '../agent/connection.js';
 import { agentRpc, requireAgentVersion, requireNetCheckCapable, requireSimCapable, toHttpError } from '../agent/errors.js';
 import { config } from '../config.js';
@@ -86,6 +88,12 @@ function updateAvailable(m: Machine): boolean {
   return !!info && isOutdated(info.agent_version, latestAgentVersion());
 }
 
+/** TER-1056: the connected agent (or, offline, the last one seen) is older than the server's minimum: the screens show it in red. */
+function belowMinVersion(m: Machine): boolean {
+  if (m.type !== 'agent') return false;
+  return belowMinimum(agents.info(m.id)?.agent_version ?? m.agent_version);
+}
+
 export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
   /**
    * Machines in the caller's scope (own, or the "view as" target / all for admins), each with the
@@ -102,35 +110,45 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
       machines: machines.map((m) => ({
         ...m,
         update_available: updateAvailable(m),
+        below_min_version: belowMinVersion(m),
         hooks_installed_at: hooks[m.id] ?? null,
         tabs: counts[m.id]?.tabs ?? 0,
         tabs_reporting: counts[m.id]?.reporting ?? 0,
       })),
       latest_agent_version: latestAgentVersion(),
+      min_agent_version: MIN_AGENT_VERSION,
     };
   });
 
-  /** New machines are agent-only: mints the enrollment token, shown to the caller this once. */
+  /**
+   * New machines are agent-only: mints the pairing token, shown to the caller this once. It is single use
+   * and expires after `PAIRING_TTL_MS`; `connect` trades it for a device key (TER-1017).
+   */
   app.post('/', async (request, reply) => {
     const body = createBody.parse(request.body);
     if (body.type !== 'agent') throw badRequest('Novas máquinas usam o agente; SSH e local não podem mais ser adicionados');
     const { token, hash } = newAgentToken();
+    const expiresAt = new Date(Date.now() + PAIRING_TTL_MS);
     const machine = await repos.machines.create({ ...body, subtitle: body.subtitle ?? null, host: null, ssh_user: null, owner_id: request.scope.createAs });
-    await repos.machines.rotateAgentToken(machine.id, hash);
+    await repos.machines.startAgentPairing(machine.id, hash, expiresAt);
     await audit(repos, request, 'machine.create', { target: { type: 'machine', id: machine.id, label: machine.name }, meta: { owner_id: machine.owner_id } });
-    return reply.code(201).send({ machine, agent_token: token });
+    return reply.code(201).send({ machine, agent_token: token, agent_token_expires_at: expiresAt.toISOString() });
   });
 
-  /** Rotates an agent machine's enrollment token and kicks the current connection (if any). */
+  /**
+   * "Pair again": mints a new pairing token, revokes the device key (or the legacy bearer token) and
+   * kicks the current connection (if any). The path keeps its old name so older web builds still work.
+   */
   app.post('/:id/agent-token', { config: { action: 'update' } }, async (request) => {
     const { id } = idParam.parse(request.params);
     const machine = await scoped(repos, request).machine(id);
     if (machine.type !== 'agent') throw badRequest('Máquina não usa agente');
     const { token, hash } = newAgentToken();
-    await repos.machines.rotateAgentToken(id, hash);
+    const expiresAt = new Date(Date.now() + PAIRING_TTL_MS);
+    await repos.machines.startAgentPairing(id, hash, expiresAt);
     agents.disconnect(id, CLOSE.UNAUTHORIZED, 'rotated');
     await audit(repos, request, 'machine.agent_token_rotate', { target: { type: 'machine', id, label: machine.name } });
-    return { agent_token: token };
+    return { agent_token: token, agent_token_expires_at: expiresAt.toISOString() };
   });
 
   app.get('/:id', async (request) => {
@@ -210,6 +228,8 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
         checked_at,
         latest_agent_version: latestAgentVersion(),
         update_available: updateAvailable(machine),
+        min_agent_version: MIN_AGENT_VERSION,
+        below_min_version: belowMinVersion(machine),
       };
     }
     if (status.online) await repos.machines.setDetected(id, status.os, status.capabilities);
@@ -333,7 +353,10 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     if (!info) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
     if (!isOutdated(info.agent_version, latest.version)) throw conflict(msg('O agente já está na versão {{version}}', { version: info.agent_version }));
     requireAgentVersion(machine, MIN_SELF_UPDATE_VERSION);
-    return runAgentUpdate(machine.id, latest, request.log);
+    const r = await runAgentUpdate(machine.id, latest, request.log);
+    // TER-1056: once the agent is back on the new version, the hooks are refreshed if they changed
+    if (r.restarting) void followAgentUpdate(repos, machine, latest.version, app.log);
+    return r;
   });
 
   /** The `?uninstall=1` part of DELETE /:id; throws (nothing deleted yet) when the hooks or the agent could not be removed. */

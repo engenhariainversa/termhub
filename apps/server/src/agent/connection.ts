@@ -9,6 +9,7 @@ import {
   encodeFrame,
   type AgentMessage,
   type ClaudeOpenParams,
+  type HandshakeMessage,
   type HelloMessage,
   type RpcError,
   type RpcMethod,
@@ -280,6 +281,12 @@ export class AgentConnection extends EventEmitter {
       if (!this.channels.has(ch)) return ch;
     }
     throw new ChannelLimitError('too many channels');
+  }
+
+  /** A handshake message (`challenge`, `paired`), sent before any session attaches. See `@termhub/agent-protocol` auth.ts. */
+  sendHandshake(msg: HandshakeMessage): void {
+    if (this.closing) return;
+    this.socket.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify(msg)));
   }
 
   private sendControl(msg: ServerMessage): void {

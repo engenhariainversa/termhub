@@ -15,12 +15,13 @@ import { cardBranchName, removeWorkspace as removeWorkspaceFn, targetOf, type en
 import { budgetReached } from './budget.js';
 import { automationBus, dispatchTriggers, recordEvent } from './events.js';
 import { SLOT_FREE_REASONS, START_FAILED } from './escalation-text.js';
-import { escalateRun } from './follower.js';
+import { defaultType, escalateRun } from './follower.js';
+import { openCardTab, type CardTab } from './card-tab.js';
 import { interruptRuns, isPaused, type PressEscape } from './pause.js';
 import { clearWaiting, noteWaiting, placeRun, type Placement, type PlacementDeps, type TickStarts } from './placement.js';
 import { policyText } from './policy.js';
 import { startPermission } from './permission.js';
-import { implementerPrompt } from './prompts.js';
+import { implementerPrompt, serverMessage } from './prompts.js';
 import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { integrateEpic } from './integrator.js';
 import { eligibilityQueue } from './queue.js';
@@ -61,6 +62,9 @@ export interface DispatcherDeps {
   closeTab?: (ctx: ControlContext, tabId: string) => Promise<void>;
   /** Escape in a tab ("Pausar e interromper"); default: the tab's own session. */
   pressEscape?: PressEscape;
+  /** Types a fixer's prompt into the card's open tab it takes over (TER-1051), as the project's owner.
+   *  Default: the follower's `defaultType`. */
+  type?: (ctx: ControlContext, tabId: string, text: string) => Promise<void>;
   /** Told of each running run this instance took over from a silent one: the follower looks at its tab now
    *  (a stop that happened while nobody followed the run would otherwise wait for the next state change). */
   onTakeOver?: (run: AutomationRun) => void;
@@ -84,8 +88,9 @@ export interface TriggeredRun {
 }
 
 /** `started`; `taken`: the card has an active run, or this trigger already had its run; `waiting`: no place
- *  (or the ceiling) now, nothing written; `halted`: draining, paused, automation off, or the card is gone. */
-export type TriggeredStart = 'started' | 'taken' | 'waiting' | 'halted';
+ *  (or the ceiling) now, nothing written; `halted`: draining, paused, automation off, or the card is gone;
+ *  `tab_busy`: a fixer whose card has a tab open that is busy or in use (TER-1051), nothing written. */
+export type TriggeredStart = 'started' | 'taken' | 'waiting' | 'halted' | 'tab_busy';
 
 export interface Dispatcher {
   /** One pass over every project with automatic work on. Concurrent calls share the pass in progress. */
@@ -119,14 +124,14 @@ const START_FAILURE_TEXT_MAX = 300;
 
 /**
  * Why a start failed, for the person (TER-987): the message of one of our own errors (a ControlError or an
- * HttpError says what to fix), in pt-BR (`message`) and English (`message_en`), the feed picks the reader's.
+ * HttpError says what to fix), in pt-BR (`message`), English (`message_en`) and Spanish (`message_es`); the feed picks the reader's.
  * Anything else (a bug, the database) has no message fit to show: nothing, the code says it.
  */
-function startFailureText(e: unknown): { message: string; message_en: string } | null {
+function startFailureText(e: unknown): { message: string; message_en: string; message_es: string } | null {
   const localized = (e as { localized?: unknown } | null)?.localized;
   if (!(localized instanceof LocalizedText)) return null;
   const clip = (s: string) => (s.length <= START_FAILURE_TEXT_MAX ? s : `${s.slice(0, START_FAILURE_TEXT_MAX - 1)}…`);
-  return { message: clip(t('pt-BR', localized)), message_en: clip(t('en', localized)) };
+  return { message: clip(t('pt-BR', localized)), message_en: clip(t('en', localized)), message_es: clip(t('es', localized)) };
 }
 
 /**
@@ -312,6 +317,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
           policy: policyText(automation, repo?.deploy_workflow ?? null),
           custom: automation.prompts.implementer,
           description: task.description,
+          stopOnDecisions: automation.stop_on_decisions,
         });
       // the agent's questions become cards in the owner's project chat (spec §9.1, §9.3): make sure it
       // has one, or a question would have nowhere to go (review I1)
@@ -417,6 +423,13 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     if (max !== null && (await repos.automationRuns.countOccupyingSlots(project.id, SLOT_FREE_REASONS)) >= max) return 'waiting';
     const run = await repos.automationRuns.claim({ project_id: project.id, task_id: task.id, role: i.role, instance, trigger_sha: i.triggerSha });
     if (!run) return 'taken';
+    // TER-1051: the worktree is per card, so a fixer goes into the card's open tab, or waits for it
+    const open = i.role === 'fixer' ? await openCardTab(repos, task.id) : null;
+    if (open) {
+      if (open.free) return takeOverTab(controlContextFor(repos, owner), project, run, task, open, i);
+      await release(run);
+      return 'tab_busy';
+    }
     const place = await placeRun(deps, project, setup.data, tickStarts);
     if ('waiting' in place) {
       // no row is kept: the next CI sync asks again (the trigger is still free)
@@ -431,6 +444,47 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     });
     inflight.add(p);
     log.info({ runId: run.id, taskId: task.id, role: i.role }, 'automation: triggered run claimed');
+    return 'started';
+  }
+
+  /**
+   * A fixer in the tab an earlier run of the card left free at its prompt (TER-1051): the run points at it
+   * (its machine, account, worktree and allow list) and the fixer's prompt is typed there, marked as the
+   * server's. A pause found right before typing, or a tab that cannot be typed into, lets the claim go: the
+   * next sync asks again.
+   */
+  async function takeOverTab(ctx: ControlContext, project: Project, run: AutomationRun, task: Task, open: CardTab, i: TriggeredRun): Promise<TriggeredStart> {
+    const { tab, run: prev } = open;
+    const account = tab.ai_account_id ?? prev.account_id;
+    const patch: AutomationRunPatch = { status: 'starting', tab_id: tab.id, machine_id: tab.machine_id, account_id: account, branch: i.branch, worktree_path: prev.worktree_path };
+    if (prev.allowed_tools) patch.allowed_tools = prev.allowed_tools;
+    if (!(await write(run, patch))) return 'taken';
+    // D24: the last check before anything is typed
+    if (halted() || (await isPaused(repos, project.owner_id, project.id))) {
+      await release(run);
+      return 'halted';
+    }
+    try {
+      await (deps.type ?? defaultType)(ctx, tab.id, serverMessage(i.prompt));
+    } catch (e) {
+      log.warn({ runId: run.id, taskId: task.id, tabId: tab.id, code: errorCode(e) }, 'automation: fixer prompt not typed into the card tab');
+      await release(run);
+      return 'waiting';
+    }
+    const at = deps.now();
+    await repos.automationRuns.noteTyped(run.id, at);
+    if (!(await write(run, { status: 'running', started_at: at }))) {
+      log.warn({ runId: run.id, taskId: task.id, tabId: tab.id }, 'automation: run taken over by another instance while it started');
+      return 'started';
+    }
+    await recordEvent(repos, {
+      project_id: project.id,
+      task_id: task.id,
+      run_id: run.id,
+      kind: 'run_started',
+      payload: { tab_id: tab.id, machine_id: tab.machine_id, account_id: account, branch: i.branch, reused_tab: true },
+    }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_started not recorded'));
+    log.info({ runId: run.id, taskId: task.id, tabId: tab.id, machineId: tab.machine_id }, 'automation: fixer took over the card tab');
     return 'started';
   }
 

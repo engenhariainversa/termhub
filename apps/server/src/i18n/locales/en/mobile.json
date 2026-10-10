@@ -47,5 +47,7 @@
   "Login expirado em {{machine}}": "Login expired on {{machine}}",
   "A conta {{account}} precisa de /login. Abra a aba {{tab}} e entre de novo.": "Account {{account}} needs /login. Open tab {{tab}} and sign in again.",
   "O Claude Code precisa de /login. Abra a aba {{tab}} e entre de novo.": "Claude Code needs /login. Open tab {{tab}} and sign in again.",
-  "Um card": "A card"
+  "Um card": "A card",
+  "Login do {{provider}} expirou": "{{provider}} login expired",
+  "{{machine}}: toque para refazer o login": "{{machine}}: tap to redo the login"
 }

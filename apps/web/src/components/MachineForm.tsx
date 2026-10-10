@@ -44,7 +44,10 @@ export function machineFormTabs(m: Pick<Machine, 'type' | 'os' | 'capabilities'>
 }
 
 /** The warning a tab carries as a badge, so it shows without opening the tab. */
-export function machineTabBadge(tab: MachineFormTab, m: Machine): { text: string; title: string } | null {
+export function machineTabBadge(tab: MachineFormTab, m: Machine): { text: string; title: string; critical?: boolean } | null {
+  if (tab === 'agent' && m.below_min_version) {
+    return { text: tk('desatualizado'), title: tk('Agente abaixo da versão mínima do termhub — ele se atualiza quando a máquina ficar ociosa; abra a máquina para atualizar agora'), critical: true };
+  }
   if (tab === 'agent' && m.update_available) {
     return { text: tk('nova versão'), title: tk('Nova versão do agente disponível — abra a máquina para atualizar') };
   }
@@ -157,7 +160,7 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
 
   const rotateToken = async () => {
     if (!machine) return;
-    if (!window.confirm(t('Gerar um novo token? O agente atual será desconectado.'))) return;
+    if (!window.confirm(t('Parear de novo? O acesso atual do agente é revogado e ele será desconectado.'))) return;
     setRotating(true);
     setError(null);
     try {
@@ -313,12 +316,16 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
             <NetworkCheckCard machine={machine} />
             <div className="rounded-md border border-line bg-bg p-2 text-xs">
               <div className="flex items-center gap-2">
-                <p className="font-medium text-fg-muted">{t('Token do agente')}</p>
+                <p className="font-medium text-fg-muted">{t('Credencial do agente')}</p>
                 <button type="button" className="btn-ghost ml-auto border border-line px-2 py-0.5" disabled={rotating} onClick={() => void rotateToken()}>
-                  {rotating ? t('Gerando…') : t('Rotacionar token')}
+                  {rotating ? t('Gerando…') : t('Parear de novo')}
                 </button>
               </div>
-              <p className="mt-1 text-fg-dim">{t('Gera um token novo e desconecta o agente atual; os passos para reconectar aparecem em seguida.')}</p>
+              {live?.agent_credential === 'key' && <p className="mt-1 text-fg-muted">{t('Chave do dispositivo: o agente prova que a tem a cada conexão.')}</p>}
+              {live?.agent_credential === 'bearer' && (
+                <p className="mt-1 text-warn">{t('Token permanente (antigo). Atualize o agente e use Parear de novo para trocá-lo por uma chave do dispositivo.')}</p>
+              )}
+              <p className="mt-1 text-fg-dim">{t('Gera um token de pareamento novo (uso único, vale 15 minutos), revoga o acesso atual e desconecta o agente; os passos para reconectar aparecem em seguida.')}</p>
             </div>
           </>
         );
@@ -360,7 +367,7 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
                   >
                     {t(TAB_LABEL[key])}
                     {badge && (
-                      <span className="rounded-full bg-warn/10 px-1.5 text-[10px] text-warn" title={t(badge.title)}>
+                      <span className={`rounded-full px-1.5 text-[10px] ${badge.critical ? 'bg-danger/10 text-danger' : 'bg-warn/10 text-warn'}`} title={t(badge.title)}>
                         {t(badge.text)}
                       </span>
                     )}

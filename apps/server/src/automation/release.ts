@@ -82,24 +82,27 @@ function runSource(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPullRequest, follo
 }
 
 /**
- * The `version` of the package a release publishes: the `package.json` files the PR changed under
- * `automation.release_paths` (the first one with a public version), else the root one. Null when none is
- * readable or public.
+ * The `version` a release publishes: the `package.json` files the PR changed under
+ * `automation.release_paths` (the first one with a public version), then the Expo `app.json` files it
+ * changed there (`expo.version`, the app's store version: TER-1055), else the root `package.json`. Null
+ * when none is readable or public.
  */
 async function versionAt(deps: DeliveryDeps, c: DeliveryCtx, sha: string, number: number): Promise<string | null> {
   const read = async (path: string): Promise<string | null> => {
     try {
       const text = await deps.github.fileAt(c.token, c.repo, path, sha);
-      const pkg = text ? (JSON.parse(text) as { version?: unknown; private?: unknown }) : null;
-      return pkg && pkg.private !== true && typeof pkg.version === 'string' ? pkg.version.slice(0, 100) : null;
+      const json = text ? (JSON.parse(text) as { version?: unknown; private?: unknown; expo?: { version?: unknown } }) : null;
+      if (!json) return null;
+      const version = path.endsWith('app.json') ? json.expo?.version : json.private !== true ? json.version : null;
+      return typeof version === 'string' ? version.slice(0, 100) : null;
     } catch {
       return null;
     }
   };
   const changed = await deps.github.prFiles(c.token, c.repo, number).catch(() => [] as string[]);
   const globs = c.setup.automation.release_paths;
-  const candidates = changed.filter((f) => f.endsWith('/package.json') && globs.some((g) => globMatches(g, f)));
-  for (const path of [...candidates, 'package.json']) {
+  const released = (name: string) => changed.filter((f) => (f === name || f.endsWith(`/${name}`)) && globs.some((g) => globMatches(g, f)));
+  for (const path of [...released('package.json'), ...released('app.json'), 'package.json']) {
     const v = await read(path);
     if (v) return v;
   }

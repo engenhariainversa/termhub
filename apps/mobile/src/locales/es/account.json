@@ -1,0 +1,20 @@
+{
+  "Excluir minha conta": "Eliminar mi cuenta",
+  "Sua conta é desativada agora e excluída de vez em {{days}} dias.": "Tu cuenta se desactiva ahora y se elimina definitivamente en {{days}} días.",
+  "O que é apagado: máquinas, projetos (com cards, notas e tickets), abas, chat e anexos, memória, integrações, contas de IA, tokens de API, aparelhos (este também, no fim) e notificações.": "Qué se elimina: máquinas, proyectos (con tarjetas, notas y tickets), pestañas, chat y adjuntos, memoria, integraciones, cuentas de IA, tokens de API, dispositivos (este también, al final) y notificaciones.",
+  "O que fica, porque a lei pede: registros de acesso por 6 meses e dados fiscais, quando houver.": "Qué se conserva, porque la ley lo exige: registros de acceso por 6 meses y datos fiscales, si los hay.",
+  "Durante esses {{days}} dias, você pode cancelar a exclusão por este app ou entrando no termhub. Um e-mail confirma o pedido com a data final.": "Durante esos {{days}} días, puedes cancelar la eliminación desde esta app o iniciando sesión en termhub. Un correo confirma la solicitud con la fecha final.",
+  "Confirmar exclusão": "Confirmar eliminación",
+  "Voltar": "Volver",
+  "Exclusão agendada": "Eliminación programada",
+  "Sua conta será excluída em {{date}}.": "Tu cuenta se eliminará el {{date}}.",
+  "Sua conta está marcada para exclusão.": "Tu cuenta está marcada para eliminación.",
+  "Até lá ela fica desativada: o chat, os avisos e o resto do termhub param. Se mudar de ideia, cancele a exclusão e tudo volta como estava.": "Hasta entonces queda desactivada: el chat, los avisos y el resto de termhub se detienen. Si cambias de opinión, cancela la eliminación y todo vuelve a como estaba.",
+  "Cancelar exclusão": "Cancelar eliminación",
+  "Sair e remover este aparelho": "Cerrar sesión y quitar este dispositivo",
+  "Remover este aparelho": "Quitar este dispositivo",
+  "Este aparelho perde o acesso agora. Para cancelar a exclusão depois, entre no termhub pelo navegador.": "Este dispositivo pierde el acceso ahora. Para cancelar la eliminación después, inicia sesión en termhub desde el navegador.",
+  "Remover": "Quitar",
+  "Cancelar": "Cancelar",
+  "Não foi possível falar com o servidor. Tente de novo.": "No se pudo conectar con el servidor. Reintenta."
+}

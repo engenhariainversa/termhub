@@ -15,6 +15,7 @@ import { decodeGroupDrag, decodeProjectDrag, encodeProjectDrag, GROUP_MIME, PROJ
 import { loadCollapsedGroups, loadCollapsedProjects, saveCollapsedGroups, saveCollapsedProjects } from '../lib/sidebar-prefs';
 import type { Project, ProjectGroup, Tab } from '../lib/types';
 import { GroupHeader } from './GroupHeader';
+import { AiLoginWarnings } from './AiLoginWarnings';
 import { MainNav } from './MainNav';
 import { ProfileButton } from './ProfileButton';
 import { ProjectForm } from './ProjectForm';
@@ -423,6 +424,7 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
         {sections.map(renderSection)}
       </nav>
 
+      <AiLoginWarnings className="border-t border-line px-2 py-2" />
       <MainNav variant="list" />
       <ProfileButton variant="row" />
 

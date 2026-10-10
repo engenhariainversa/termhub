@@ -1,9 +1,10 @@
+import { generateKeyPairSync, sign } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import type { FastifyBaseLogger } from 'fastify';
-import { CLOSE, CONTROL_CHANNEL, MAX_FRAME, PROTOCOL_VERSION, decodeFrame, encodeFrame } from '@termhub/agent-protocol';
+import { CLOSE, CONTROL_CHANNEL, MAX_FRAME, PROTOCOL_VERSION, decodeFrame, encodeFrame, proofMessage } from '@termhub/agent-protocol';
 import type { AuthContext } from '../auth/index.js';
 import { createUpgradeRouter } from '../ws/router.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -13,6 +14,9 @@ import { AgentRegistry } from './registry.js';
 import { registerAgentWs } from './ws.js';
 
 const GOOD = 'thb_ag_' + 'a'.repeat(43);
+const PAIRING = 'thb_ag_' + 'p'.repeat(43);
+const deviceKeys = generateKeyPairSync('ed25519');
+const devicePublic = deviceKeys.publicKey.export({ format: 'der', type: 'spki' }).toString('base64');
 
 const machine = { id: 'm1', name: 'mini', type: 'agent' } as unknown as Machine;
 
@@ -44,9 +48,16 @@ function shutdown(server: http.Server): Promise<void> {
   });
 }
 
+/** Control messages each socket received, collected from the start: the server's `challenge` can land
+ *  before `open()` resolves and a listener attached after it would miss it. */
+const inbox = new WeakMap<WebSocket, Record<string, unknown>[]>();
+
 function open(url: string, headers?: Record<string, string>): Promise<{ ws?: WebSocket; statusCode?: number }> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url, { headers });
+    const received: Record<string, unknown>[] = [];
+    inbox.set(ws, received);
+    ws.on('message', (data: Buffer) => received.push(JSON.parse(decodeFrame(data).payload.toString('utf8'))));
     const timer = setTimeout(() => {
       ws.terminate();
       reject(new Error('timeout waiting for upgrade response'));
@@ -76,7 +87,16 @@ function waitClose(ws: WebSocket): Promise<{ code: number; reason: string }> {
 
 describe('registerAgentWs', () => {
   let server: http.Server;
-  let repos: { machines: { findByAgentTokenHash: ReturnType<typeof vi.fn>; touchAgent: ReturnType<typeof vi.fn> } };
+  let repos: {
+    machines: {
+      findByAgentTokenHash: ReturnType<typeof vi.fn>;
+      findByPairingHash: ReturnType<typeof vi.fn>;
+      completeAgentPairing: ReturnType<typeof vi.fn>;
+      findDeviceKey: ReturnType<typeof vi.fn>;
+      findById: ReturnType<typeof vi.fn>;
+      touchAgent: ReturnType<typeof vi.fn>;
+    };
+  };
   let registry: AgentRegistry;
   let port: number;
   let log: FastifyBaseLogger;
@@ -98,6 +118,10 @@ describe('registerAgentWs', () => {
     repos = {
       machines: {
         findByAgentTokenHash: vi.fn(async (h: string) => (h === hashAgentToken(GOOD) ? machine : undefined)),
+        findByPairingHash: vi.fn(async (h: string) => (h === hashAgentToken(PAIRING) ? machine : undefined)),
+        completeAgentPairing: vi.fn(async () => true),
+        findDeviceKey: vi.fn(async (id: string) => (id === 'm1' ? { machine, publicKey: devicePublic } : undefined)),
+        findById: vi.fn(async () => machine),
         touchAgent: vi.fn(async () => {}),
       },
     };
@@ -370,5 +394,109 @@ describe('registerAgentWs', () => {
     await start();
     await open(`ws://127.0.0.1:${port}/agent/ws`);
     await vi.waitFor(() => expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ reason: 'malformed-token' }), 'agent upgrade rejected'));
+  });
+
+  describe('pairing token and device key (TER-1017)', () => {
+    /** The first control message the server sends, parsed. */
+    const nextControl = async (ws: WebSocket): Promise<Record<string, unknown>> => {
+      const received = inbox.get(ws)!;
+      await vi.waitFor(() => expect(received.length).toBeGreaterThan(0));
+      return received.shift()!;
+    };
+
+    it('a pairing dial trades the token for the key, answers paired and hangs up 1000 "paired"', async () => {
+      await start();
+      const ws = (await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: `Bearer ${PAIRING}` })).ws!;
+      const reply = nextControl(ws);
+      const closed = waitClose(ws);
+      ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify({ ...goodHello, probe: true, pair: { public_key: devicePublic } })));
+      expect(await reply).toEqual({ type: 'paired', machine_id: 'm1', machine_name: 'mini' });
+      expect(await closed).toEqual({ code: 1000, reason: 'paired' });
+      expect(repos.machines.completeAgentPairing).toHaveBeenCalledWith('m1', hashAgentToken(PAIRING), devicePublic);
+      expect(registry.isOnline('m1')).toBe(false);
+    });
+
+    it('a pairing token whose burn loses (used, expired, rotated) → 4401 "pairing"', async () => {
+      repos.machines.completeAgentPairing.mockResolvedValueOnce(false);
+      await start();
+      const ws = (await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: `Bearer ${PAIRING}` })).ws!;
+      ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify({ ...goodHello, pair: { public_key: devicePublic } })));
+      expect(await waitClose(ws)).toEqual({ code: CLOSE.UNAUTHORIZED, reason: 'pairing' });
+    });
+
+    it('an old agent dialing with a pairing token is told to update (4409 "protocol") and the token stays unused', async () => {
+      await start();
+      const ws = (await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: `Bearer ${PAIRING}` })).ws!;
+      ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify(goodHello)));
+      expect(await waitClose(ws)).toEqual({ code: CLOSE.CONFLICT, reason: 'protocol' });
+      expect(repos.machines.completeAgentPairing).not.toHaveBeenCalled();
+      expect(registry.isOnline('m1')).toBe(false);
+    });
+
+    it('a pairing hello with something other than an Ed25519 key is refused', async () => {
+      await start();
+      const rsa = generateKeyPairSync('rsa', { modulusLength: 1024 }).publicKey.export({ format: 'der', type: 'spki' }).toString('base64');
+      const ws = (await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: `Bearer ${PAIRING}` })).ws!;
+      ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify({ ...goodHello, pair: { public_key: rsa.slice(0, 200) } })));
+      expect((await waitClose(ws)).code).toBe(CLOSE.VIOLATION);
+      expect(repos.machines.completeAgentPairing).not.toHaveBeenCalled();
+    });
+
+    const deviceDial = async (sigFor: (nonce: string, ts: number) => string, machineId = 'm1') => {
+      const ws = (await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: `TermhubDevice ${machineId}` })).ws!;
+      const challenge = await nextControl(ws);
+      expect(challenge.type).toBe('challenge');
+      const ts = Date.now();
+      ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify({ ...goodHello, proof: { machine_id: machineId, ts, sig: sigFor(challenge.nonce as string, ts) } })));
+      return ws;
+    };
+    const goodSig = (nonce: string, ts: number) => sign(null, proofMessage(nonce, 'm1', ts), deviceKeys.privateKey).toString('base64');
+
+    it('a device dial that signs the challenge attaches the machine', async () => {
+      await start();
+      const ws = await deviceDial(goodSig);
+      await vi.waitFor(() => expect(registry.isOnline('m1')).toBe(true));
+      expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ machineId: 'm1', credential: 'key' }), 'agent connected');
+      ws.terminate();
+    });
+
+    it('a signature from another key → 4401 "proof", never attached', async () => {
+      await start();
+      const other = generateKeyPairSync('ed25519').privateKey;
+      const ws = await deviceDial((nonce, ts) => sign(null, proofMessage(nonce, 'm1', ts), other).toString('base64'));
+      expect(await waitClose(ws)).toEqual({ code: CLOSE.UNAUTHORIZED, reason: 'proof' });
+      expect(registry.isOnline('m1')).toBe(false);
+    });
+
+    it('a signature over another nonce (a replayed proof) → 4401 "proof"', async () => {
+      await start();
+      const ws = await deviceDial((_nonce, ts) => goodSig('some-earlier-nonce-value', ts));
+      expect(await waitClose(ws)).toEqual({ code: CLOSE.UNAUTHORIZED, reason: 'proof' });
+    });
+
+    it('a device dial with no proof in the hello → 4401 "proof"', async () => {
+      await start();
+      const ws = (await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: 'TermhubDevice m1' })).ws!;
+      await nextControl(ws);
+      ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify(goodHello)));
+      expect(await waitClose(ws)).toEqual({ code: CLOSE.UNAUTHORIZED, reason: 'proof' });
+    });
+
+    it('a machine with no device key (revoked by "pair again") is refused at the upgrade', async () => {
+      await start();
+      const res = await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: 'TermhubDevice m2' });
+      expect(res.statusCode).toBe(401);
+      await vi.waitFor(() => expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ reason: 'unknown-device' }), 'agent upgrade rejected'));
+    });
+
+    it('a device probe answers probe-ok without attaching', async () => {
+      await start();
+      const ws = (await open(`ws://127.0.0.1:${port}/agent/ws`, { Authorization: 'TermhubDevice m1' })).ws!;
+      const challenge = await nextControl(ws);
+      const ts = Date.now();
+      ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify({ ...goodHello, probe: true, proof: { machine_id: 'm1', ts, sig: goodSig(challenge.nonce as string, ts) } })));
+      expect(await waitClose(ws)).toEqual({ code: 1000, reason: 'probe-ok' });
+      expect(registry.isOnline('m1')).toBe(false);
+    });
   });
 });

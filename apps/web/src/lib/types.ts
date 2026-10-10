@@ -28,8 +28,8 @@ export interface User {
   last_login_at: string | null;
   /** the address of this user's public city (`/city/@<nickname>`); null until claimed */
   nickname: string | null;
-  /** the language the person picked ('pt-BR' | 'en'); null = automatic; absent on servers older than the i18n release */
-  locale?: 'pt-BR' | 'en' | null;
+  /** the language the person picked ('pt-BR' | 'en' | 'es'); null = automatic; absent on servers older than the i18n release */
+  locale?: 'pt-BR' | 'en' | 'es' | null;
   /** store-review mode: while in the future, this account's mobile device requests auto-approve */
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until; only the user-admin routes (/api/users) send it */
@@ -69,6 +69,23 @@ export interface AccountDeletionStatus {
   pending: boolean;
   requested_at: string | null;
   scheduled_at: string | null;
+}
+
+/** "Exportar meus dados" (TER-741): an archive request and where it stands. */
+export interface DataExport {
+  id: string;
+  status: 'pending' | 'running' | 'ready' | 'failed' | 'expired';
+  bytes: number | null;
+  created_at: string;
+  completed_at: string | null;
+  /** The download works until then (7 days after it is ready). */
+  expires_at: string | null;
+}
+
+export interface DataExportStatus {
+  export: DataExport | null;
+  /** When another request may be made; null = now. */
+  next_allowed_at: string | null;
 }
 
 /** Side effects of an invite (the user row is created regardless). */
@@ -127,8 +144,16 @@ export interface Machine {
   /** TER-735: the AI accounts' usage is queried on this machine (the credential never leaves it); off = no bars */
   ai_usage_query: boolean;
   automation_allowed: boolean;
+  /**
+   * TER-1017: how the agent proves itself. `key` = device key paired through a single-use token; `bearer` =
+   * the permanent token of agents paired before (valid until the machine is paired again); null = not paired.
+   * Absent from servers before it.
+   */
+  agent_credential?: 'key' | 'bearer' | null;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
+  /** TER-1056, server-computed: the agent is older than the server's minimum (it updates itself once idle, switch or not) */
+  below_min_version?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */
   is_local: boolean;
   /** null = orphan (visible only to admins viewing "all") */
@@ -405,6 +430,8 @@ export interface AutomationFeedEvent {
   paused: boolean | null;
   /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
   tool: string | null;
+  /** TER-1043: the decision a decided_by_recommendation line names; absent from an older server */
+  summary?: string | null;
 }
 export interface ProgressResponse {
   epics: EpicProgress[];
@@ -578,6 +605,8 @@ export interface ProjectAutomation {
   allowed_tools: string[] | null;
   max_parallel: number | null;
   resume_max: number;
+  /** TER-1043: "Parar em decisões de produto"; off (the default) = the agent decides and records it. Absent from an older server */
+  stop_on_decisions?: boolean;
   fix_attempts: number;
   /** TER-1025: re-runs of a deploy that failed on GitHub's side before the project is paused (0 = pause at once) */
   deploy_retries: number;
@@ -952,6 +981,52 @@ export interface AiAccountUsage {
    * turned off (Máquinas › the machine); 'agent_outdated' = the machine's agent predates the `ai.usage` RPC.
    */
   reason?: 'disabled' | 'agent_outdated';
+}
+
+/** TER-1047: whether an account's CLI is logged in on its machine (GET /ai-accounts/login-status). */
+export type AiLoginState = 'ok' | 'login_required' | 'unknown';
+
+export interface AiLoginStatusRow {
+  account_id: string;
+  label: string;
+  provider: AiProvider;
+  machine_id: string;
+  machine_name: string | null;
+  state: AiLoginState;
+  checked_at: string | null;
+  /** the login can be redone from the modal (Claude/Codex on an agent machine with the `ai_login` capability) */
+  supported: boolean;
+}
+
+/** POST /ai-accounts/:id/login */
+export interface AiLoginStart {
+  login_id: string;
+  /** the page to open in a browser; null when `logged_in` */
+  url: string | null;
+  /** Codex's one-time device code to type on that page; null for Claude */
+  user_code: string | null;
+  /** true (Claude): paste the code the page shows back; false (Codex): just confirm once authorized */
+  needs_code: boolean;
+  expires_at: string;
+  /** the CLI already finished the login on the machine (its own browser took it, TER-1054): nothing to open */
+  logged_in: boolean;
+  /** with `logged_in`: the account's tabs still showing the login error */
+  stuck_tabs: AiLoginStuckTab[];
+}
+
+export interface AiLoginStuckTab {
+  id: string;
+  name: string;
+  project_id: string;
+}
+
+/** POST /ai-accounts/:id/login/:loginId/submit */
+export interface AiLoginSubmitResult {
+  ok: boolean;
+  /** why it did not finish; never the code */
+  message: string | null;
+  /** after a successful login: the account's tabs still showing the login error */
+  stuck_tabs: AiLoginStuckTab[];
 }
 
 /** Brand names: shown as is in every language. */

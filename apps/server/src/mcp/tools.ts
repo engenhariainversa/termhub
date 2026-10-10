@@ -8,6 +8,7 @@ import { TAB_TOKEN_TOOLS } from './tab-token.js';
 import { listProjectGroups } from '../control/groups.js';
 import { find, listAiAccounts, listMachines, listProjects, listTabs } from '../control/inventory.js';
 import { setAccountExclusive } from '../control/account-exclusive.js';
+import { startAiLogin, submitAiLogin } from '../control/ai-login.js';
 import { ANSWER_DEFAULT_CHARS, ANSWER_MAX_CHARS, readLastAnswer, readScreen, SCREEN_MAX_LINES, WAIT_MAX_SECONDS, waitForState } from '../control/screen.js';
 import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendInput, sendKey } from '../control/terminals.js';
 import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
@@ -16,7 +17,8 @@ import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, T
 import { automationQueue } from '../automation/queue.js';
 import { policyText } from '../automation/policy.js';
 import { listAutomationEvents } from '../automation/events.js';
-import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun } from '../automation/follower.js';
+import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun, tabMayReport } from '../automation/follower.js';
+import { DECISIONS_MAX } from '../automation/decisions-taken.js';
 import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { setAutomationPolicy, setMachineAutomation } from '../automation/setup-tools.js';
 import { AUTONOMY_LEVELS } from '../setup/schema.js';
@@ -28,6 +30,7 @@ import { recordLesson } from '../control/lessons.js';
 import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
+import { updateMachineAgent } from '../control/agent-update.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
@@ -95,7 +98,7 @@ export function parseArgs(tool: ToolDef, args: unknown): { ok: true; value: Reco
 export const TOOLS: ToolDef[] = [
   {
     name: 'list_machines',
-    description: 'List your machines: id, name, subtitle (your own note about the machine, e.g. "MacBook do escritório"; null if none), type (agent/local/ssh), OS, whether it is online now, and installed tools (claude, codex, tmux, …).',
+    description: 'List your machines: id, name, subtitle (your own note about the machine, e.g. "MacBook do escritório"; null if none), type (agent/local/ssh), OS, whether it is online now, and installed tools (claude, codex, tmux, …). Agent machines also carry agent_version (the connected agent, or the last one seen), update_available (a newer verified release can be installed now: update_machine_agent) and below_min_version (older than the minimum the server requires: it updates itself once idle, but tell the person); the answer has latest_agent_version and min_agent_version.',
     scope: 'read', resource: 'machines', action: 'read', input: {},
     run: (ctx) => listMachines(ctx),
   },
@@ -136,6 +139,31 @@ export const TOOLS: ToolDef[] = [
     scope: 'terminals', resource: 'ai_accounts', action: 'update',
     input: { account_id: id, project_id: id.nullable(), confirm: z.boolean().optional() },
     run: (ctx, a) => setAccountExclusive(ctx, a as { account_id: string; project_id: string | null; confirm?: boolean }, ctx.token?.gated ? 'chat' : 'mcp'),
+  },
+  {
+    name: 'start_ai_login',
+    description:
+      "Redo the CLI login of an AI account (Claude or Codex) whose login expired, without going to the machine: the machine's agent (0.26.0 or newer) starts the CLI's login in a hidden session and this answers the url the person opens in a browser, the user_code to type there (Codex) and needs_code. Claude (needs_code: true): the person signs in and copies the code the page shows; send it with submit_ai_login_code. Codex (needs_code: false): the person types user_code on the page and authorizes; then call submit_ai_login_code without code. logged_in: true means the CLI already finished on the machine (its own browser took the login): there is no url and nothing to submit; stuck_tabs lists that account's tabs still showing the login error. The flow expires at expires_at (15 min). Only the machine's owner can do it; agent tabs cannot call it. Gemini and Antigravity accounts are refused with the manual instruction.",
+    scope: 'terminals', resource: 'ai_accounts', action: 'update',
+    input: { account_id: id },
+    run: async (ctx, a) => {
+      const started = await startAiLogin(ctx, a as { account_id: string });
+      const instruction = started.logged_in
+        ? 'The login already finished on the machine: tell the person it is done. If stuck_tabs is not empty, ask before typing continue into them (send_input).'
+        : started.needs_code
+          ? 'Give the person the url to open and sign in. Ask them for the code the page shows, then call submit_ai_login_code with login_id and code. Never repeat the code back.'
+          : 'Give the person the url and the user_code to type on that page. Once they say it is authorized, call submit_ai_login_code with login_id and no code.';
+      return { ...started, instruction };
+    },
+  },
+  {
+    name: 'submit_ai_login_code',
+    description:
+      "Finish a login started by start_ai_login: code is what the login page showed (Claude), omitted for Codex — and for a Claude login the person finished in the machine's own browser instead. Waits up to about 45 s for the CLI to confirm. ok: true means the account is logged in again; stuck_tabs then lists that account's tabs still showing the login error — ask the person before typing continue into them (send_input). ok: false carries message; for Codex the person may finish authorizing and you call it again, for Claude start over with start_ai_login. Agent tabs cannot call it.",
+    scope: 'terminals', resource: 'ai_accounts', action: 'update',
+    strict: true,
+    input: { login_id: id, code: z.string().trim().min(1).max(2000).optional() },
+    run: (ctx, a) => submitAiLogin(ctx, { login_id: (a as { login_id: string }).login_id, code: (a as { code?: string }).code ?? null }),
   },
   {
     name: 'find',
@@ -332,13 +360,23 @@ export const TOOLS: ToolDef[] = [
     run: (ctx, a) => installMachineHooks(ctx, a as { machine_id: string; tools?: HookTool[] }),
   },
   {
+    name: 'update_machine_agent',
+    description:
+      "Update the termhub agent of one machine (machine_id) or of every agent machine of the person (all: true), as the Atualizar button of the machine screen does: installs the newest release the server verified, the agent restarts as a service (tmux sessions survive, open terminals reconnect), and the call waits for it to come back. Pass exactly one of machine_id and all. It restarts the agent, so it always asks the person first. Answers per machine status (updated, current, scheduled, offline, too_old, restart_needed, not_back, failed), the version before and after, below_min_version, hooks (reinstalled when termhub's hooks there changed, current, not_installed, failed) and repair_suggested (the machine still uses the legacy token: offer a new pairing on Máquinas). The machine this chat runs on answers scheduled: it updates once your answer is over and it is idle. Use list_machines (agent_version, update_available, below_min_version) to see who is behind.",
+    scope: 'terminals', resource: 'machines', action: 'update',
+    strict: true,
+    input: { machine_id: id.optional(), all: z.literal(true).optional() },
+    run: (ctx, a) => updateMachineAgent(ctx, a as { machine_id?: string; all?: boolean }),
+  },
+  {
     name: 'report_card',
     description:
-      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. Call it once, at the end.",
+      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. decisions: every product or technical decision you took alone (question, options, choice, reason; pt-BR, short) — they go to the feed, the daily summary and the memory for the person to review. Call it once, at the end. If your run already ended blocked and you then finished the work by hand in this tab, status done with pr_url still hands the PR over: termhub follows it once it is linked to the card.",
     // Preflight F-8: scope `read` and no grant check — a documented exception, not a widening: `allowedIf`
-    // admits only a tab token whose own tab has an active run, and the tool writes that run's status only.
+    // admits only a tab token whose own tab has an active run, or whose latest run ended blocked and may still
+    // be adopted (spike TER-1031 §5.4), and the tool writes that run's status only.
     scope: 'read', resource: 'tasks', action: 'read',
-    allowedIf: tabHasActiveRun,
+    allowedIf: tabMayReport,
     grantText: 'de uma aba com trabalho automático em andamento',
     strict: true,
     input: {
@@ -346,8 +384,19 @@ export const TOOLS: ToolDef[] = [
       pr_url: z.string().trim().url().max(500).optional(),
       reason: z.string().trim().min(1).max(500).optional(),
       code: z.enum(['github_transient']).optional(),
+      decisions: z
+        .array(
+          z.object({
+            question: z.string().trim().min(1).max(300),
+            options: z.string().trim().min(1).max(300).optional(),
+            choice: z.string().trim().min(1).max(300),
+            reason: z.string().trim().min(1).max(500),
+          }).strict(),
+        )
+        .max(DECISIONS_MAX)
+        .optional(),
     },
-    run: (ctx, a) => reportCard(ctx, a as { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient' }),
+    run: (ctx, a) => reportCard(ctx, a as Parameters<typeof reportCard>[1]),
   },
   {
     name: 'escalate_automation_run',
@@ -400,7 +449,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_automation_events',
     description:
-      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses, and changes to what it may do (automation_on/off, setup_changed, cards tagged/untagged, machine_opt_in/out, each with via: chat, mcp, web or app). Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons (a run_blocked with stage start also has message, the failure's reason in pt-BR, message_en, attempt of max_attempts, and retry_at or untagged), and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
+      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses, and changes to what it may do (automation_on/off, setup_changed, cards tagged/untagged, machine_opt_in/out, each with via: chat, mcp, web or app). Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons (a run_blocked with stage start also has message, the failure's reason in pt-BR, message_en and message_es, attempt of max_attempts, and retry_at or untagged), and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
     scope: 'read', resource: 'projects', action: 'read',
     input: { project_id: id, before: z.string().datetime({ offset: true }).optional(), limit: z.number().int().min(1).max(AUTOMATION_EVENTS_PAGE_MAX).optional() },
     run: async (ctx, a) => {

@@ -19,7 +19,7 @@ import type { ChatLiveRun, SaveLiveRunInput, StoredTurn } from '../db/repositori
 import { chatBus, type ChatEvent } from './bus.js';
 import { HttpError } from '../lib/errors.js';
 import type { SubagentStatus } from './stream.js';
-import { ChatService, CANCEL_TIMEOUT_MS, purgeExpiredActions, type RunnerClient, type RunnerInput } from './service.js';
+import { ChatService, CANCEL_TIMEOUT_MS, purgeExpiredActions, scrubSecretArgs, type RunnerClient, type RunnerInput } from './service.js';
 import { RESUME_WINDOW_MS, STALE_MS } from './resume.js';
 import { ORCHESTRATOR_PROMPT, streamedSystemPrompt } from './concierge-prompt.js';
 import { messageRefLine } from './message-ref.js';
@@ -1889,6 +1889,33 @@ describe('purgeExpiredActions', () => {
     const cutoff = expireOlderThan.mock.calls[0][0] as Date;
     expect(before - cutoff.getTime()).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000 - 1000);
     expect(before - cutoff.getTime()).toBeLessThan(24 * 60 * 60 * 1000 + 5000);
+  });
+
+  it('redacts the login code of closed submit_ai_login_code rows (TER-1047)', async () => {
+    const expireOlderThan = vi.fn(async () => 1);
+    const listClosedByTools = vi.fn(async () => [
+      action({ id: 'a1', tool: 'submit_ai_login_code', status: 'denied', args: { login_id: 'l1', code: 'secret-code' } }),
+      action({ id: 'a2', tool: 'submit_ai_login_code', status: 'executed', args: { login_id: 'l2', code: '[redacted]' } }),
+      action({ id: 'a3', tool: 'submit_ai_login_code', status: 'expired', args: { login_id: 'l3' } }),
+    ]);
+    const replaceClosedArgs = vi.fn(async () => undefined);
+    const repos = { chatActions: { expireOlderThan, listClosedByTools, replaceClosedArgs } } as unknown as Repositories;
+
+    await purgeExpiredActions(repos);
+
+    expect(listClosedByTools).toHaveBeenCalledWith(['submit_ai_login_code']);
+    expect(replaceClosedArgs).toHaveBeenCalledTimes(1);
+    expect(replaceClosedArgs).toHaveBeenCalledWith('a1', { login_id: 'l1', code: '[redacted]' });
+  });
+});
+
+describe('scrubSecretArgs', () => {
+  it('leaves rows of tools without secrets alone and never throws', async () => {
+    const replaceClosedArgs = vi.fn(async () => { throw new Error('db down'); });
+    const repos = { chatActions: { replaceClosedArgs } } as unknown as Repositories;
+    expect(await scrubSecretArgs(repos, [action()])).toBe(0);
+    expect(replaceClosedArgs).not.toHaveBeenCalled();
+    expect(await scrubSecretArgs(repos, [action({ tool: 'submit_ai_login_code', args: { login_id: 'l1', code: 'x' } })])).toBe(0);
   });
 });
 

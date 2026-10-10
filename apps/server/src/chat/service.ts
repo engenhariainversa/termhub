@@ -21,7 +21,7 @@ import { streamedSystemPrompt } from './concierge-prompt.js';
 import { defaultEmbedder } from './embeddings.js';
 import { exclusiveConflict, hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
 import { auditBlocked, exclusiveError } from '../ai/exclusive.js';
-import { DEFAULT_ALLOW_KINDS, GRANTABLE_TOOL, STANDING_GRANT_BUDGETS, TAB_TERMINAL_GRANT, type StandingGrantKind } from './gate.js';
+import { DEFAULT_ALLOW_KINDS, GRANTABLE_TOOL, redactSecretArgs, SECRET_ARGS, STANDING_GRANT_BUDGETS, TAB_TERMINAL_GRANT, type StandingGrantKind } from './gate.js';
 import { LiveRun, type LiveTurn } from './live-run.js';
 import { accountSystemPrompt, projectSystemPrompt } from './project-prompt.js';
 import { RESUME_WINDOW_MS, STALE_MS, resumeNote } from './resume.js';
@@ -198,7 +198,30 @@ export const CANCEL_TIMEOUT_MS = 30_000;
  * use for, and it can be unit-tested the same way.
  */
 export async function purgeExpiredActions(repos: Repositories, now = new Date()): Promise<number> {
-  return repos.chatActions.expireOlderThan(new Date(now.getTime() - ACTION_TTL_MS));
+  const count = await repos.chatActions.expireOlderThan(new Date(now.getTime() - ACTION_TTL_MS));
+  // Denied and just-expired rows close here, not in the gate's execute(): their secrets go now.
+  await scrubSecretArgs(repos);
+  return count;
+}
+
+/**
+ * Redacts the secret arguments (`SECRET_ARGS`) of closed rows (TER-1047). Given `rows`, only those; else
+ * every closed row of a tool that has secrets. Never throws: a failed scrub is retried by the next sweep.
+ */
+export async function scrubSecretArgs(repos: Repositories, rows?: ChatAction[]): Promise<number> {
+  try {
+    const closed = rows ?? (await repos.chatActions.listClosedByTools(Object.keys(SECRET_ARGS)));
+    let scrubbed = 0;
+    for (const row of closed) {
+      const redacted = redactSecretArgs(row.tool, row.args);
+      if (redacted === row.args) continue;
+      await repos.chatActions.replaceClosedArgs(row.id, redacted);
+      scrubbed++;
+    }
+    return scrubbed;
+  } catch {
+    return 0;
+  }
 }
 
 /**

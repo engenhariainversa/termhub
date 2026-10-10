@@ -21,7 +21,7 @@ import { SCREEN_STATE_LINES, claudeScreenState } from '../monitor/screen-state.j
 import { STALE_WORKING_MS } from '../monitor/stale-working.js';
 import { permissionDialogVisible } from './permission-dialog.js';
 import { resurfaceCards } from './resurface.js';
-import { ACTION_TTL_MS } from './service.js';
+import { ACTION_TTL_MS, scrubSecretArgs } from './service.js';
 import { standingProjectOf } from './standing-project.js';
 import { subagentOrigins } from './subagent-origin.js';
 
@@ -317,6 +317,7 @@ async function execute(ctx: ControlContext, call: GatedCall, row: ChatAction): P
   const stale = await staleApproval(ctx, call, row);
   if (stale) {
     await ctx.repos.chatActions.markExecuted(row.id, false, stale.code, Date.now() - started);
+    await scrubSecretArgs(ctx.repos, [row]);
     publishStatus(ctx, row, 'failed', stale.code);
     return { ok: false, ...stale };
   }
@@ -327,11 +328,13 @@ async function execute(ctx: ControlContext, call: GatedCall, row: ChatAction): P
     const approval = row.grant_id === null && decidedAt && Number.isFinite(decidedAt.getTime()) ? { actionId: row.id, approvedAt: decidedAt } : undefined;
     const value = await call.run(approval);
     await ctx.repos.chatActions.markExecuted(row.id, true, null, Date.now() - started);
+    await scrubSecretArgs(ctx.repos, [row]);
     publishStatus(ctx, row, 'executed', null);
     return { ok: true, value };
   } catch (err) {
     const code = err instanceof ControlError || err instanceof HttpError ? (err.code ?? 'ERROR') : 'INTERNAL';
     await ctx.repos.chatActions.markExecuted(row.id, false, code, Date.now() - started);
+    await scrubSecretArgs(ctx.repos, [row]);
     publishStatus(ctx, row, 'failed', code);
     throw err; // the caller turns it into the same answer any other failed tool call gets
   }
