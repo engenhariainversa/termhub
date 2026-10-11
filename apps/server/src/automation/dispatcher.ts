@@ -349,12 +349,20 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     await markRunning(ctx, project, run, task, place, tabId, branch, true);
   }
 
+  /** A version of the Terms in force that the owner has not accepted (TER-742); none registered = false. */
+  async function legalPending(ownerId: string): Promise<boolean> {
+    return (await repos.legal.statusFor(ownerId)).pending.length > 0;
+  }
+
   async function dispatchProject(projectId: string, enabledSetup: ProjectSetupData): Promise<void> {
     const project = await repos.projects.findById(projectId);
     if (!project?.owner_id) return;
     if (await isPaused(repos, project.owner_id, projectId)) return;
     const owner = await repos.users.findById(project.owner_id);
     if (!owner) return;
+    // TER-742: while the owner has not accepted the Terms in force, their tokens and the MCP refuse every
+    // call, so an agent started now could not report back: no new start until they accept.
+    if (await legalPending(owner.id)) return;
     // TER-892: a day's budget reached stops the new starts (the runs going on finish their turn)
     if (await budgetReached(repos, projectId, enabledSetup.automation, deps.now(), log)) return;
     // D12: automation acts as the project's owner.
@@ -417,6 +425,8 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     if (!project?.owner_id || (await isPaused(repos, project.owner_id, project.id))) return 'halted';
     const [owner, setup, task] = await Promise.all([repos.users.findById(project.owner_id), repos.projectSetup.get(project.id), repos.tasks.findById(i.taskId)]);
     if (!owner || !setup.data.automation.enabled || !task || task.project_id !== project.id) return 'halted';
+    // TER-742: the trigger waits for the owner to accept the Terms, like a reached budget
+    if (await legalPending(owner.id)) return 'waiting';
     // R8: no new fixer or integrator run once the day's budget is reached; the trigger stays free for tomorrow
     if (await budgetReached(repos, project.id, setup.data.automation, deps.now(), log)) return 'waiting';
     const max = setup.data.automation.max_parallel;

@@ -1,6 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../generated/prisma/client.js';
+import { serializeAutomationDb } from '../../../test/automation-db-lock.js';
 import { newId } from '../../lib/ids.js';
 import { SYSTEM_ROLE_IDS } from './roles.js';
 import { LegalRepository } from './legal.js';
@@ -11,6 +12,9 @@ const DAY = 24 * 60 * 60 * 1000;
 // The database is shared with the other suites: every row here carries a unique version string and is
 // removed afterwards, and the assertions only look at this test's own rows.
 describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('LegalRepository (Postgres)', () => {
+  // A version in force here leaves every owner with a pending acceptance, and the dispatcher starts nothing
+  // for them (TER-742): run apart from the automation DB files.
+  serializeAutomationDb();
   let db: PrismaClient;
   let repo: LegalRepository;
   const versionIds: string[] = [];

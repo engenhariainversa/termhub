@@ -12,6 +12,7 @@ const DAY = 24 * 60 * 60 * 1000;
 describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository (Postgres)', () => {
   let db: PrismaClient;
   let repo: AccountDeletionRepository;
+  const legalVersionIds: string[] = [];
 
   beforeAll(() => {
     db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
@@ -19,6 +20,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
   });
 
   afterAll(async () => {
+    await db?.legalAcceptance.deleteMany({ where: { versionId: { in: legalVersionIds } } });
+    await db?.legalDocumentVersion.deleteMany({ where: { id: { in: legalVersionIds } } });
     await db?.$disconnect();
   });
 
@@ -99,10 +102,12 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     await db.featureFlagOverride.create({ data: { flag: 'subscriptions', userId, enabled: true } });
     // An export request (TER-741): the row cascades with the user; its file is swept by the export job.
     await db.dataExport.create({ data: { id: newId(), userId } });
-    // An acceptance of the Terms (TER-742) cascades with the user; the version row is no one's and stays.
+    // An acceptance of the Terms (TER-742) cascades with the user; the version row is no one's and stays
+    // until afterAll. It asks no acceptance: one in force would hold the dispatcher of the parallel suites.
     const legalVersion = await db.legalDocumentVersion.create({
-      data: { id: newId(), document: 'terms', version: `t-${userId}`, effectiveAt: new Date(), url: 'https://termhub.dev/termos' },
+      data: { id: newId(), document: 'terms', version: `t-${userId}`, effectiveAt: new Date(), url: 'https://termhub.dev/termos', requiresAcceptance: false },
     });
+    legalVersionIds.push(legalVersion.id);
     await db.legalAcceptance.create({ data: { id: newId(), userId, versionId: legalVersion.id, channel: 'web' } });
     await db.session.create({ data: { id: newId(), userId, tokenHash: `s-${userId}`, expiresAt: new Date(Date.now() + DAY) } });
     await db.loginCode.create({ data: { id: newId(), email, codeHash: 'c', expiresAt: new Date(Date.now() + DAY) } });

@@ -286,6 +286,7 @@ function build(opts: { gated: boolean; conversationId?: string }) {
       ),
       delete: vi.fn(async (id: string) => tabs.delete(id)),
     },
+    legal: { statusFor: vi.fn(async () => ({ pending: [], upcoming: [] })) },
   } as unknown as Repositories;
 
   const app = Fastify();
