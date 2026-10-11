@@ -3,6 +3,7 @@ symptom: "E: Could not get lock /var/lib/apt/lists/lock. It is held by process 1
 tags: [agent, install, apt, lock, linux, onboarding]
 evidence: fixed
 card: TER-1058
+pr: https://github.com/engenhariainversa/termhub/pull/482
 agent: claude
 date: 2026-10-10
 ---
