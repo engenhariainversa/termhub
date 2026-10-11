@@ -83,5 +83,8 @@
   "Flag não encontrada": "Flag no encontrada",
   "Login não encontrado ou expirado": "Login no encontrado o expirado",
   "Refazer login pela tela só funciona com Claude e Codex. Faça o login na própria máquina: {{hint}}": "Rehacer el login desde la pantalla solo funciona con Claude y Codex. Haz el login en la propia máquina: {{hint}}",
-  "A máquina não mostrou a página de login": "La máquina no mostró la página de login"
+  "A máquina não mostrou a página de login": "La máquina no mostró la página de login",
+  "Esta versão não está aguardando o seu aceite. Recarregue a página e tente de novo.": "Esta versión no está esperando tu aceptación. Recarga la página e inténtalo de nuevo.",
+  "Uma nova versão que pede aceite só pode valer daqui a 30 dias ou mais, para dar tempo do aviso.": "Una nueva versión que pide aceptación solo puede entrar en vigor dentro de 30 días o más, para dar tiempo al aviso.",
+  "Esse documento já tem uma versão com esse número.": "Ese documento ya tiene una versión con ese número."
 }

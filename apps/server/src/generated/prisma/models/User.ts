@@ -405,6 +405,7 @@ export type UserWhereInput = {
   automationSummaries?: Prisma.AutomationSummaryListRelationFilter
   featureFlagOverrides?: Prisma.FeatureFlagOverrideListRelationFilter
   dataExports?: Prisma.DataExportListRelationFilter
+  legalAcceptances?: Prisma.LegalAcceptanceListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -455,6 +456,7 @@ export type UserOrderByWithRelationInput = {
   automationSummaries?: Prisma.AutomationSummaryOrderByRelationAggregateInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideOrderByRelationAggregateInput
   dataExports?: Prisma.DataExportOrderByRelationAggregateInput
+  legalAcceptances?: Prisma.LegalAcceptanceOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -508,6 +510,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   automationSummaries?: Prisma.AutomationSummaryListRelationFilter
   featureFlagOverrides?: Prisma.FeatureFlagOverrideListRelationFilter
   dataExports?: Prisma.DataExportListRelationFilter
+  legalAcceptances?: Prisma.LegalAcceptanceListRelationFilter
 }, "id" | "email" | "nickname" | "googleId">
 
 export type UserOrderByWithAggregationInput = {
@@ -623,6 +626,7 @@ export type UserCreateInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -672,6 +676,7 @@ export type UserUncheckedCreateInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -721,6 +726,7 @@ export type UserUpdateInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -770,6 +776,7 @@ export type UserUncheckedUpdateInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -1311,6 +1318,20 @@ export type UserUpdateOneRequiredWithoutAutomationSummariesNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutAutomationSummariesInput, Prisma.UserUpdateWithoutAutomationSummariesInput>, Prisma.UserUncheckedUpdateWithoutAutomationSummariesInput>
 }
 
+export type UserCreateNestedOneWithoutLegalAcceptancesInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutLegalAcceptancesInput, Prisma.UserUncheckedCreateWithoutLegalAcceptancesInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutLegalAcceptancesInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutLegalAcceptancesNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutLegalAcceptancesInput, Prisma.UserUncheckedCreateWithoutLegalAcceptancesInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutLegalAcceptancesInput
+  upsert?: Prisma.UserUpsertWithoutLegalAcceptancesInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutLegalAcceptancesInput, Prisma.UserUpdateWithoutLegalAcceptancesInput>, Prisma.UserUncheckedUpdateWithoutLegalAcceptancesInput>
+}
+
 export type UserCreateNestedOneWithoutDataExportsInput = {
   create?: Prisma.XOR<Prisma.UserCreateWithoutDataExportsInput, Prisma.UserUncheckedCreateWithoutDataExportsInput>
   connectOrCreate?: Prisma.UserCreateOrConnectWithoutDataExportsInput
@@ -1385,6 +1406,7 @@ export type UserCreateWithoutRoleRefInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutRoleRefInput = {
@@ -1433,6 +1455,7 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutRoleRefInput = {
@@ -1539,6 +1562,7 @@ export type UserCreateWithoutSessionsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSessionsInput = {
@@ -1587,6 +1611,7 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSessionsInput = {
@@ -1651,6 +1676,7 @@ export type UserUpdateWithoutSessionsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSessionsInput = {
@@ -1699,6 +1725,7 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutMachinesInput = {
@@ -1747,6 +1774,7 @@ export type UserCreateWithoutMachinesInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutMachinesInput = {
@@ -1795,6 +1823,7 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutMachinesInput = {
@@ -1859,6 +1888,7 @@ export type UserUpdateWithoutMachinesInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutMachinesInput = {
@@ -1907,6 +1937,7 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutProjectsInput = {
@@ -1955,6 +1986,7 @@ export type UserCreateWithoutProjectsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutProjectsInput = {
@@ -2003,6 +2035,7 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutProjectsInput = {
@@ -2067,6 +2100,7 @@ export type UserUpdateWithoutProjectsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutProjectsInput = {
@@ -2115,6 +2149,7 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutIntegrationsInput = {
@@ -2163,6 +2198,7 @@ export type UserCreateWithoutIntegrationsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutIntegrationsInput = {
@@ -2211,6 +2247,7 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutIntegrationsInput = {
@@ -2275,6 +2312,7 @@ export type UserUpdateWithoutIntegrationsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutIntegrationsInput = {
@@ -2323,6 +2361,7 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutUploadsInput = {
@@ -2371,6 +2410,7 @@ export type UserCreateWithoutUploadsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutUploadsInput = {
@@ -2419,6 +2459,7 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutUploadsInput = {
@@ -2483,6 +2524,7 @@ export type UserUpdateWithoutUploadsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutUploadsInput = {
@@ -2531,6 +2573,7 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutApiTokensInput = {
@@ -2579,6 +2622,7 @@ export type UserCreateWithoutApiTokensInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutApiTokensInput = {
@@ -2627,6 +2671,7 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutApiTokensInput = {
@@ -2691,6 +2736,7 @@ export type UserUpdateWithoutApiTokensInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutApiTokensInput = {
@@ -2739,6 +2785,7 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutChatConversationsInput = {
@@ -2787,6 +2834,7 @@ export type UserCreateWithoutChatConversationsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutChatConversationsInput = {
@@ -2835,6 +2883,7 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutChatConversationsInput = {
@@ -2899,6 +2948,7 @@ export type UserUpdateWithoutChatConversationsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutChatConversationsInput = {
@@ -2947,6 +2997,7 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutChatAttachmentsInput = {
@@ -2995,6 +3046,7 @@ export type UserCreateWithoutChatAttachmentsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutChatAttachmentsInput = {
@@ -3043,6 +3095,7 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutChatAttachmentsInput = {
@@ -3107,6 +3160,7 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
@@ -3155,6 +3209,7 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutStandingGrantsInput = {
@@ -3203,6 +3258,7 @@ export type UserCreateWithoutStandingGrantsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutStandingGrantsInput = {
@@ -3251,6 +3307,7 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutStandingGrantsInput = {
@@ -3315,6 +3372,7 @@ export type UserUpdateWithoutStandingGrantsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutStandingGrantsInput = {
@@ -3363,6 +3421,7 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutChatDefaultRestrictionsInput = {
@@ -3411,6 +3470,7 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
@@ -3459,6 +3519,7 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutChatDefaultRestrictionsInput = {
@@ -3523,6 +3584,7 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
@@ -3571,6 +3633,7 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutChatDecisionsInput = {
@@ -3619,6 +3682,7 @@ export type UserCreateWithoutChatDecisionsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutChatDecisionsInput = {
@@ -3667,6 +3731,7 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutChatDecisionsInput = {
@@ -3731,6 +3796,7 @@ export type UserUpdateWithoutChatDecisionsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutChatDecisionsInput = {
@@ -3779,6 +3845,7 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutMemoryItemsInput = {
@@ -3827,6 +3894,7 @@ export type UserCreateWithoutMemoryItemsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutMemoryItemsInput = {
@@ -3875,6 +3943,7 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutMemoryItemsInput = {
@@ -3928,6 +3997,7 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
@@ -3976,6 +4046,7 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutVerifiedMemoryItemsInput = {
@@ -4040,6 +4111,7 @@ export type UserUpdateWithoutMemoryItemsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutMemoryItemsInput = {
@@ -4088,6 +4160,7 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserUpsertWithoutVerifiedMemoryItemsInput = {
@@ -4147,6 +4220,7 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
@@ -4195,6 +4269,7 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutProjectGroupsInput = {
@@ -4243,6 +4318,7 @@ export type UserCreateWithoutProjectGroupsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutProjectGroupsInput = {
@@ -4291,6 +4367,7 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutProjectGroupsInput = {
@@ -4355,6 +4432,7 @@ export type UserUpdateWithoutProjectGroupsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutProjectGroupsInput = {
@@ -4403,6 +4481,7 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutDeviceRequestsInput = {
@@ -4451,6 +4530,7 @@ export type UserCreateWithoutDeviceRequestsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutDeviceRequestsInput = {
@@ -4499,6 +4579,7 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutDeviceRequestsInput = {
@@ -4563,6 +4644,7 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
@@ -4611,6 +4693,7 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutDevicesInput = {
@@ -4659,6 +4742,7 @@ export type UserCreateWithoutDevicesInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutDevicesInput = {
@@ -4707,6 +4791,7 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutDevicesInput = {
@@ -4771,6 +4856,7 @@ export type UserUpdateWithoutDevicesInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutDevicesInput = {
@@ -4819,6 +4905,7 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutNotificationsInput = {
@@ -4867,6 +4954,7 @@ export type UserCreateWithoutNotificationsInput = {
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutNotificationsInput = {
@@ -4915,6 +5003,7 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutNotificationsInput = {
@@ -4979,6 +5068,7 @@ export type UserUpdateWithoutNotificationsInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutNotificationsInput = {
@@ -5027,6 +5117,7 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutAutomationSummariesInput = {
@@ -5075,6 +5166,7 @@ export type UserCreateWithoutAutomationSummariesInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutAutomationSummariesInput = {
@@ -5123,6 +5215,7 @@ export type UserUncheckedCreateWithoutAutomationSummariesInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutAutomationSummariesInput = {
@@ -5187,6 +5280,7 @@ export type UserUpdateWithoutAutomationSummariesInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAutomationSummariesInput = {
@@ -5233,6 +5327,219 @@ export type UserUncheckedUpdateWithoutAutomationSummariesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
+  dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutLegalAcceptancesInput = {
+  id: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+  nickname?: string | null
+  cityShortUrlPartner?: string | null
+  cityShortUrlCustom?: string | null
+  passwordHash?: string | null
+  googleId?: string | null
+  role?: $Enums.UserRole
+  invitedAt?: Date | string | null
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  reviewEnabledUntil?: Date | string | null
+  reviewEnabledBy?: string | null
+  chatSuggestions?: boolean
+  chatAutodecide?: boolean
+  chatCodexReplies?: boolean
+  pushTabFinished?: boolean
+  chatContextLimit?: number | null
+  deletionRequestedAt?: Date | string | null
+  deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
+  locale?: string | null
+  roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+  machines?: Prisma.MachineCreateNestedManyWithoutOwnerInput
+  projects?: Prisma.ProjectCreateNestedManyWithoutOwnerInput
+  integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
+  uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
+  apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
+  projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
+  deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
+  chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
+  verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
+  standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
+  automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
+  dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutLegalAcceptancesInput = {
+  id: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+  nickname?: string | null
+  cityShortUrlPartner?: string | null
+  cityShortUrlCustom?: string | null
+  passwordHash?: string | null
+  googleId?: string | null
+  role?: $Enums.UserRole
+  roleId?: string | null
+  invitedAt?: Date | string | null
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  reviewEnabledUntil?: Date | string | null
+  reviewEnabledBy?: string | null
+  chatSuggestions?: boolean
+  chatAutodecide?: boolean
+  chatCodexReplies?: boolean
+  pushTabFinished?: boolean
+  chatContextLimit?: number | null
+  deletionRequestedAt?: Date | string | null
+  deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
+  locale?: string | null
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+  machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
+  projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
+  integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
+  uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
+  apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
+  projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
+  deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
+  verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
+  automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
+  dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutLegalAcceptancesInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutLegalAcceptancesInput, Prisma.UserUncheckedCreateWithoutLegalAcceptancesInput>
+}
+
+export type UserUpsertWithoutLegalAcceptancesInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutLegalAcceptancesInput, Prisma.UserUncheckedUpdateWithoutLegalAcceptancesInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutLegalAcceptancesInput, Prisma.UserUncheckedCreateWithoutLegalAcceptancesInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutLegalAcceptancesInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutLegalAcceptancesInput, Prisma.UserUncheckedUpdateWithoutLegalAcceptancesInput>
+}
+
+export type UserUpdateWithoutLegalAcceptancesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nickname?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlPartner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlCustom?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  googleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  invitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  reviewEnabledUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+  machines?: Prisma.MachineUpdateManyWithoutOwnerNestedInput
+  projects?: Prisma.ProjectUpdateManyWithoutOwnerNestedInput
+  integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
+  uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
+  apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
+  projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
+  deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
+  chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
+  verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
+  automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
+  dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutLegalAcceptancesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nickname?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlPartner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlCustom?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  googleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  roleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  reviewEnabledUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+  machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
+  projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
+  integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
+  uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
+  apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
+  projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
+  deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
+  verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
+  automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
 }
@@ -5283,6 +5590,7 @@ export type UserCreateWithoutDataExportsInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutDataExportsInput = {
@@ -5331,6 +5639,7 @@ export type UserUncheckedCreateWithoutDataExportsInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutDataExportsInput = {
@@ -5395,6 +5704,7 @@ export type UserUpdateWithoutDataExportsInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutDataExportsInput = {
@@ -5443,6 +5753,7 @@ export type UserUncheckedUpdateWithoutDataExportsInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutFeatureFlagOverridesInput = {
@@ -5491,6 +5802,7 @@ export type UserCreateWithoutFeatureFlagOverridesInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutFeatureFlagOverridesInput = {
@@ -5539,6 +5851,7 @@ export type UserUncheckedCreateWithoutFeatureFlagOverridesInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutFeatureFlagOverridesInput = {
@@ -5603,6 +5916,7 @@ export type UserUpdateWithoutFeatureFlagOverridesInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutFeatureFlagOverridesInput = {
@@ -5651,6 +5965,7 @@ export type UserUncheckedUpdateWithoutFeatureFlagOverridesInput = {
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyRoleRefInput = {
@@ -5727,6 +6042,7 @@ export type UserUpdateWithoutRoleRefInput = {
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutRoleRefInput = {
@@ -5775,6 +6091,7 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateManyWithoutRoleRefInput = {
@@ -5831,6 +6148,7 @@ export type UserCountOutputType = {
   automationSummaries: number
   featureFlagOverrides: number
   dataExports: number
+  legalAcceptances: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -5854,6 +6172,7 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   automationSummaries?: boolean | UserCountOutputTypeCountAutomationSummariesArgs
   featureFlagOverrides?: boolean | UserCountOutputTypeCountFeatureFlagOverridesArgs
   dataExports?: boolean | UserCountOutputTypeCountDataExportsArgs
+  legalAcceptances?: boolean | UserCountOutputTypeCountLegalAcceptancesArgs
 }
 
 /**
@@ -6006,6 +6325,13 @@ export type UserCountOutputTypeCountDataExportsArgs<ExtArgs extends runtime.Type
   where?: Prisma.DataExportWhereInput
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountLegalAcceptancesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.LegalAcceptanceWhereInput
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -6055,6 +6381,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   automationSummaries?: boolean | Prisma.User$automationSummariesArgs<ExtArgs>
   featureFlagOverrides?: boolean | Prisma.User$featureFlagOverridesArgs<ExtArgs>
   dataExports?: boolean | Prisma.User$dataExportsArgs<ExtArgs>
+  legalAcceptances?: boolean | Prisma.User$legalAcceptancesArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -6170,6 +6497,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   automationSummaries?: boolean | Prisma.User$automationSummariesArgs<ExtArgs>
   featureFlagOverrides?: boolean | Prisma.User$featureFlagOverridesArgs<ExtArgs>
   dataExports?: boolean | Prisma.User$dataExportsArgs<ExtArgs>
+  legalAcceptances?: boolean | Prisma.User$legalAcceptancesArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -6203,6 +6531,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     automationSummaries: Prisma.$AutomationSummaryPayload<ExtArgs>[]
     featureFlagOverrides: Prisma.$FeatureFlagOverridePayload<ExtArgs>[]
     dataExports: Prisma.$DataExportPayload<ExtArgs>[]
+    legalAcceptances: Prisma.$LegalAcceptancePayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -6699,6 +7028,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   automationSummaries<T extends Prisma.User$automationSummariesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$automationSummariesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationSummaryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   featureFlagOverrides<T extends Prisma.User$featureFlagOverridesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$featureFlagOverridesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$FeatureFlagOverridePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   dataExports<T extends Prisma.User$dataExportsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$dataExportsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DataExportPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  legalAcceptances<T extends Prisma.User$legalAcceptancesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$legalAcceptancesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$LegalAcceptancePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -7651,6 +7981,30 @@ export type User$dataExportsArgs<ExtArgs extends runtime.Types.Extensions.Intern
   take?: number
   skip?: number
   distinct?: Prisma.DataExportScalarFieldEnum | Prisma.DataExportScalarFieldEnum[]
+}
+
+/**
+ * User.legalAcceptances
+ */
+export type User$legalAcceptancesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the LegalAcceptance
+   */
+  select?: Prisma.LegalAcceptanceSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the LegalAcceptance
+   */
+  omit?: Prisma.LegalAcceptanceOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.LegalAcceptanceInclude<ExtArgs> | null
+  where?: Prisma.LegalAcceptanceWhereInput
+  orderBy?: Prisma.LegalAcceptanceOrderByWithRelationInput | Prisma.LegalAcceptanceOrderByWithRelationInput[]
+  cursor?: Prisma.LegalAcceptanceWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.LegalAcceptanceScalarFieldEnum | Prisma.LegalAcceptanceScalarFieldEnum[]
 }
 
 /**

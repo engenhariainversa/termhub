@@ -51,6 +51,7 @@ import { AutomationRunsRepository } from './automation-runs.js';
 import { ViewAsAuditRepository } from './view-as-audit.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
+import { LegalRepository } from './legal.js';
 import { AccessLogsRepository } from './access-logs.js';
 import { SecurityEventsRepository } from './security-events.js';
 import { FeatureFlagsRepository } from './feature-flags.js';
@@ -109,6 +110,7 @@ export interface Repositories {
   tabUsage: TabUsageRepository;
   accessLogs: AccessLogsRepository;
   aiAccountExhaustions: AiAccountExhaustionsRepository;
+  legal: LegalRepository;
   securityEvents: SecurityEventsRepository;
   featureFlags: FeatureFlagsRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
@@ -170,6 +172,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     tabUsage: new TabUsageRepository(db),
     accessLogs: new AccessLogsRepository(db),
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
+    legal: new LegalRepository(db),
     securityEvents: new SecurityEventsRepository(db),
     featureFlags: new FeatureFlagsRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
@@ -211,4 +214,6 @@ export type { UsageCursor, UsageTokens, UsageWrite, UsageSum } from './tab-usage
 export type { AutomationEvent, AutomationEventKind, AutomationEventPayload, AutomationEventInput } from './automation-events.js';
 export { ACCESS_LOG_RETENTION_MS, type AccessLogInput } from './access-logs.js';
 export { AUTOMATION_EVENT_RETENTION_MS, AUTOMATION_EVENTS_PAGE_MAX } from './automation-events.js';
+export type { LegalVersion, LegalStatus, LegalDocument, LegalChannel } from './legal.js';
+export { LEGAL_NOTICE_MS } from './legal.js';
 export { VIEW_AS_AUDIT_RETENTION_MS } from './view-as-audit.js';

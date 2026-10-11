@@ -15,6 +15,7 @@ vi.mock('./api', () => ({
       setLocale: vi.fn(async () => null),
       config: vi.fn(async () => null),
     },
+    legal: { status: vi.fn(async () => ({ pending: [], upcoming: [] })) },
   },
   ApiError: class ApiError extends Error {},
 }));
@@ -110,5 +111,38 @@ describe('AuthProvider language', () => {
       await expect(auth().setLocale('en')).rejects.toThrow('offline');
     });
     expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBeNull();
+  });
+});
+
+describe('AuthProvider legal status', () => {
+  const version = {
+    id: 'v1',
+    document: 'terms' as const,
+    version: '1',
+    effective_at: '2026-10-01T00:00:00.000Z',
+    url: 'https://termhub.dev/termos/',
+    requires_acceptance: true,
+    summary: null,
+  };
+
+  it('keeps `legal` from /auth/me, and empty lists when an older server sends none', async () => {
+    vi.mocked(api.auth.me).mockResolvedValueOnce({ user: user as never, view_as: null, legal: { pending: [version], upcoming: [] } });
+    const auth = mount();
+    await act(async () => {});
+    expect(auth().legal.pending).toEqual([version]);
+    cleanup();
+    vi.mocked(api.auth.me).mockResolvedValueOnce({ user: user as never, view_as: null });
+    const older = mount();
+    await act(async () => {});
+    expect(older().legal).toEqual({ pending: [], upcoming: [] });
+  });
+
+  it('loads the status after a login, before the app shows', async () => {
+    vi.mocked(api.legal.status).mockResolvedValueOnce({ pending: [version], upcoming: [] });
+    const auth = mount();
+    await act(async () => {});
+    await act(() => auth().verifyCode('a@b.c', '123456'));
+    expect(api.legal.status).toHaveBeenCalled();
+    expect(auth().legal.pending).toEqual([version]);
   });
 });
